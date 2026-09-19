@@ -1,4 +1,4 @@
-Você vai revisar o repositório "jangada", enviado abaixo arquivo por arquivo.
+Você vai revisar o repositório "jangada".
 É uma configuração de Arch Linux com Hyprland 0.55 ou mais novo (configuração
 em Lua, API hl.*), organizada para o trabalho com agentes de IA. Leia primeiro
 README.md e AGENTS.md, que definem as regras do projeto.

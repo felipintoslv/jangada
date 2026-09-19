@@ -6,3 +6,6 @@ mapeamento/
 revisao/*.log
 revisao/*.parcial
 revisao/antigas/
+
+# Resposta completa em JSON das revisões pelo agy.
+revisao/*.json
