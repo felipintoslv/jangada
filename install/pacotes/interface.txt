@@ -1,0 +1,24 @@
+# Hyprland e componentes da interface (modo "componentes").
+hyprland
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+hyprpolkitagent
+hyprlock
+hypridle
+waybar
+fuzzel
+mako
+swaybg
+matugen            # geração de cores; pode estar no AUR como matugen ou matugen-bin
+wl-clipboard
+cliphist
+grim
+slurp
+brightnessctl
+playerctl
+wireplumber
+ttf-jetbrains-mono-nerd
+noto-fonts
+noto-fonts-emoji
+# Terminal: o jangada-terminal aceita ghostty, kitty, foot ou alacritty.
+ghostty

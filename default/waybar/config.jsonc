@@ -1,0 +1,55 @@
+// Barra do jangada (modo "componentes").
+{
+  "layer": "top",
+  "position": "top",
+  "height": 28,
+  "spacing": 6,
+  "modules-left": ["hyprland/workspaces", "custom/agentes"],
+  "modules-center": ["clock"],
+  "modules-right": ["tray", "pulseaudio", "network", "battery"],
+
+  "hyprland/workspaces": {
+    "format": "{name}",
+    "on-click": "activate",
+    "show-special": true,
+    "special-visible-only": true
+  },
+
+  "custom/agentes": {
+    "exec": "$JANGADA_PATH/bin/jangada-agentes --waybar",
+    "return-type": "json",
+    "interval": 3,
+    "format": "{}",
+    "on-click": "$JANGADA_PATH/bin/jangada-agentes --janela",
+    "on-click-right": "$JANGADA_PATH/bin/jangada-agentes --painel",
+    "tooltip": true
+  },
+
+  "clock": {
+    "format": "{:%a %d/%m  %H:%M}",
+    "tooltip-format": "<tt>{calendar}</tt>",
+    "locale": "pt_BR.UTF-8"
+  },
+
+  "pulseaudio": {
+    "format": "{icon} {volume}%",
+    "format-muted": "󰝟",
+    "format-icons": { "default": ["󰕿", "󰖀", "󰕾"] },
+    "on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+  },
+
+  "network": {
+    "format-wifi": "󰤨 {essid}",
+    "format-ethernet": "󰈀",
+    "format-disconnected": "󰤭",
+    "tooltip-format": "{ifname} {ipaddr}"
+  },
+
+  "battery": {
+    "format": "{icon} {capacity}%",
+    "format-icons": ["󰁺", "󰁼", "󰁾", "󰂀", "󰁹"],
+    "states": { "aviso": 25, "critico": 10 }
+  },
+
+  "tray": { "spacing": 8 }
+}

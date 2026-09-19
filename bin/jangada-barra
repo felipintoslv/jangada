@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Inicia (ou reinicia) a waybar com a configuração do jangada.
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+cfg="$JANGADA_CONFIG/waybar/config.jsonc"
+[[ -f "$cfg" ]] || cfg="$JANGADA_PATH/default/waybar/config.jsonc"
+estilo="$JANGADA_CONFIG/waybar/style.css"
+
+pkill -x waybar 2>/dev/null && sleep 0.3
+if [[ -f "$estilo" ]]; then
+  exec waybar -c "$cfg" -s "$estilo"
+else
+  exec waybar -c "$cfg"
+fi

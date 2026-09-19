@@ -1,0 +1,8 @@
+# Utilitários de base usados pelos próprios scripts do jangada.
+git
+jq
+fzf
+libnotify          # notify-send
+pacman-contrib     # checkupdates
+inotify-tools
+lua                # checagem de sintaxe dos arquivos .lua

@@ -1,0 +1,13 @@
+# Ferramentas de terminal (também aproveitadas pelos agentes).
+ripgrep
+fd
+bat
+eza
+zoxide
+lazygit
+git-delta
+btop
+fastfetch
+tmux
+mise
+shellcheck

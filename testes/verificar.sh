@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Verificações estáticas do repositório. Não instala nem executa nada do jangada.
+# Requer: shellcheck, luac (pacote lua), jq, python3.
+set -uo pipefail
+export LC_ALL=C.UTF-8
+cd "$(dirname "$0")/.." || exit 1
+falhas=0
+passo() { printf '\n== %s\n' "$*"; }
+falha() { printf 'XX %s\n' "$*"; falhas=$((falhas + 1)); }
+
+passo "sintaxe bash"
+for f in install.sh install/*.sh bin/* shell/jangada.sh migrations/*.sh; do
+  [[ -f "$f" ]] || continue
+  bash -n "$f" || falha "bash -n: $f"
+done
+
+passo "shellcheck"
+if command -v shellcheck >/dev/null; then
+  shellcheck -x -S warning install.sh install/*.sh bin/* || falha "shellcheck"
+  shellcheck -s sh -S warning shell/jangada.sh || falha "shellcheck shell/jangada.sh"
+else
+  echo "shellcheck ausente; etapa ignorada"
+fi
+
+passo "sintaxe Lua"
+luac_bin="$(command -v luac || command -v luac5.4 || command -v luac5.3 || true)"
+if [[ -n "$luac_bin" ]]; then
+  for f in default/hypr/*.lua config/hypr/*.lua; do
+    "$luac_bin" -p "$f" || falha "luac: $f"
+  done
+else
+  echo "luac ausente; etapa ignorada"
+fi
+
+passo "execução da configuração Lua com API imitada"
+lua_bin="$(command -v lua5.4 || command -v lua || true)"
+if [[ -n "$lua_bin" ]]; then
+  "$lua_bin" testes/simular-hypr.lua "$PWD" || falha "simulação da configuração Lua"
+  tmp_cfg="$(mktemp -d)"; mkdir -p "$tmp_cfg/jangada"
+  echo "JANGADA_INTERFACE=noctalia" >"$tmp_cfg/jangada/jangada.conf"
+  "$lua_bin" testes/simular-hypr.lua "$PWD" "$tmp_cfg" || falha "simulação no modo noctalia"
+  rm -rf "$tmp_cfg"
+fi
+
+passo "JSON"
+jq empty default/claude/hooks.json || falha "hooks.json"
+# config.jsonc tem comentários; remove as linhas de comentário antes de validar.
+sed 's#^[[:space:]]*//.*##' default/waybar/config.jsonc | jq empty || falha "waybar/config.jsonc"
+
+passo "TOML"
+python3 -c 'import tomllib,sys; tomllib.load(open(sys.argv[1],"rb"))' default/matugen/config.toml || falha "matugen/config.toml"
+
+passo "modelos do matugen referenciados existem"
+python3 - <<'PY' || falha "modelos do matugen"
+import tomllib, os, sys
+cfg = tomllib.load(open("default/matugen/config.toml", "rb"))
+faltando = [t["input_path"] for t in cfg["templates"].values()
+            if not os.path.exists(os.path.join("default/matugen", t["input_path"]))]
+if faltando:
+    print("faltando:", faltando); sys.exit(1)
+PY
+
+passo "comandos citados na configuração do Hyprland existem em bin/"
+for c in $(grep -ho 'j\.cmd("[a-z-]*"' default/hypr/*.lua | sed 's/j\.cmd("//; s/"//' | sort -u); do
+  [[ -x "bin/$c" ]] || falha "bin/$c citado mas ausente"
+done
+
+printf '\n'
+((falhas == 0)) && echo "tudo certo" || echo "$falhas falha(s)"
+exit $((falhas > 0))

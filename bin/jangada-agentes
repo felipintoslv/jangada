@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+# Lista as sessões de agentes, com estado, e permite abrir ou encerrar.
+#
+# Uso:
+#   jangada-agentes            seletor interativo (Enter abre, Ctrl+X encerra)
+#   jangada-agentes --janela   o seletor num terminal flutuante
+#   jangada-agentes --painel   mostra ou esconde o painel (workspace especial "agentes")
+#   jangada-agentes --monitor  tabela atualizada a cada 2 segundos (conteúdo do painel)
+#   jangada-agentes --waybar   saída JSON para o módulo da barra
+#   jangada-agentes --focar S  foca a janela da sessão S ou abre uma nova
+#   jangada-agentes --lista    lista simples: estado, sessão, diretório
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+estado_dir="$JANGADA_ESTADO/agentes"
+mkdir -p "$estado_dir"
+
+sessoes_vivas() { "${JANGADA_TMUX[@]}" list-sessions -F '#S' 2>/dev/null || true; }
+
+# Uma linha por sessão viva: estado<TAB>sessão<TAB>diretório<TAB>atualizado
+listar() {
+  local s arq estado dir atualizado
+  while read -r s; do
+    [[ -n "$s" ]] || continue
+    arq="$estado_dir/$s.json"
+    if [[ -f "$arq" ]]; then
+      estado="$(jq -r '.estado // "ativo"' "$arq")"
+      dir="$(jq -r '.dir // ""' "$arq")"
+      atualizado="$(jq -r '.atualizado // ""' "$arq")"
+    else
+      estado="ativo"; dir=""; atualizado=""
+    fi
+    printf '%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado"
+  done < <(sessoes_vivas)
+}
+
+# Remove arquivos de estado de sessões que já não existem.
+limpar_orfaos() {
+  local arq s vivas
+  vivas="$(sessoes_vivas)"
+  for arq in "$estado_dir"/*.json; do
+    [[ -e "$arq" ]] || continue
+    s="$(basename "$arq" .json)"
+    grep -qxF "$s" <<<"$vivas" || rm -f "$arq"
+  done
+}
+
+focar() {
+  local s="$1" endereco=""
+  if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    endereco="$(hyprctl clients -j | jq -r --arg s "$s" 'map(select(.title == $s)) | .[0].address // empty')"
+  fi
+  if [[ -n "$endereco" ]]; then
+    hyprctl dispatch "hl.dsp.focus({ window = \"address:$endereco\" })" >/dev/null
+  else
+    setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente \
+      -e "${JANGADA_TMUX[@]}" attach -t "=$s" >/dev/null 2>&1
+  fi
+}
+
+icone() {
+  case "$1" in
+    aguardando) printf '󰂞' ;;
+    trabalhando) printf '󰑮' ;;
+    concluido) printf '󰄬' ;;
+    *) printf '󰚩' ;;
+  esac
+}
+
+case "${1:-}" in
+  --lista)
+    listar
+    ;;
+  --waybar)
+    limpar_orfaos
+    linhas="$(listar)"
+    if [[ -z "$linhas" ]]; then
+      jq -cn '{text:"󰚩 0", tooltip:"nenhum agente ativo", class:"vazio"}'
+      exit 0
+    fi
+    total="$(wc -l <<<"$linhas")"
+    aguardando="$(awk -F'\t' '$1=="aguardando"' <<<"$linhas" | wc -l)"
+    trabalhando="$(awk -F'\t' '$1=="trabalhando"' <<<"$linhas" | wc -l)"
+    classe="ativo"
+    ((trabalhando > 0)) && classe="trabalhando"
+    ((aguardando > 0)) && classe="aguardando"
+    texto="󰚩 $total"
+    ((aguardando > 0)) && texto+="  󰂞 $aguardando"
+    dica="$(awk -F'\t' '{printf "%s  %s\n", $1, $2}' <<<"$linhas")"
+    jq -cn --arg t "$texto" --arg d "$dica" --arg c "$classe" '{text:$t, tooltip:$d, class:$c}'
+    ;;
+  --focar)
+    focar "${2:?informe a sessão}"
+    ;;
+  --janela)
+    exec "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.lista -e "$0"
+    ;;
+  --painel)
+    if ! hyprctl clients -j | jq -e 'any(.class == "org.jangada.painel")' >/dev/null; then
+      setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.painel -e "$0" --monitor >/dev/null 2>&1
+      sleep 0.4
+    fi
+    hyprctl dispatch 'hl.dsp.workspace.toggle_special("agentes")' >/dev/null
+    ;;
+  --monitor)
+    while true; do
+      clear
+      printf 'AGENTES  (%s)\n\n' "$(date +%H:%M:%S)"
+      limpar_orfaos
+      linhas="$(listar)"
+      if [[ -z "$linhas" ]]; then
+        echo "nenhum agente ativo. SUPER+A inicia um."
+      else
+        while IFS=$'\t' read -r estado s dir atualizado; do
+          printf '%s  %-12s %-32s %s\n' "$(icone "$estado")" "$estado" "$s" "${atualizado:11:8}"
+        done <<<"$linhas"
+      fi
+      sleep 2
+    done
+    ;;
+  "")
+    limpar_orfaos
+    escolha="$(listar | awk -F'\t' '{printf "%s\t%s\t%s\n", $1, $2, $3}' | fzf \
+      --delimiter '\t' --with-nth 1,2 --prompt 'agente > ' --reverse \
+      --header 'Enter: abrir   Ctrl+X: encerrar' \
+      --expect ctrl-x \
+      --preview 'tmux -L jangada capture-pane -p -t ={2} 2>/dev/null | tail -40')" || exit 0
+    tecla="$(head -1 <<<"$escolha")"
+    s="$(sed -n 2p <<<"$escolha" | cut -f2)"
+    [[ -n "$s" ]] || exit 0
+    if [[ "$tecla" == "ctrl-x" ]]; then
+      exec "$JANGADA_PATH/bin/jangada-agente-fim" "$s"
+    fi
+    focar "$s"
+    ;;
+  -h|--ajuda)
+    sed -n '2,12s/^# \{0,1\}//p' "$0"
+    ;;
+  *)
+    echo "opção desconhecida: $1" >&2; exit 1
+    ;;
+esac

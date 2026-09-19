@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Carrega as preferências do jangada. Uso em outros scripts:
+#   source "$(dirname "$0")/jangada-config"
+# Executado diretamente, mostra os valores efetivos.
+
+JANGADA_PATH="${JANGADA_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+JANGADA_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/jangada"
+JANGADA_ESTADO="${XDG_STATE_HOME:-$HOME/.local/state}/jangada"
+
+# Valores padrão, substituídos pelo arquivo do usuário se ele existir.
+JANGADA_INTERFACE=componentes
+JANGADA_TERMINAL=
+JANGADA_AGENTE=claude
+JANGADA_AGENTE_ARGS=
+JANGADA_PROJETOS="$HOME/Projetos"
+JANGADA_WORKTREES="$HOME/.local/share/jangada-worktrees"
+JANGADA_PAPEL=
+
+if [[ -f "$JANGADA_CONFIG/jangada.conf" ]]; then
+  # Lê só linhas CHAVE=valor com chaves JANGADA_*, sem executar o arquivo.
+  while IFS='=' read -r _chave _valor; do
+    [[ "$_chave" =~ ^JANGADA_[A-Z_]+$ ]] || continue
+    _valor="${_valor/#\$HOME/$HOME}"
+    _valor="${_valor/#\~/$HOME}"
+    printf -v "$_chave" '%s' "$_valor"
+  done < <(sed -e 's/#.*//' -e 's/[[:space:]]*$//' "$JANGADA_CONFIG/jangada.conf")
+  unset _chave _valor
+fi
+
+export JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_INTERFACE JANGADA_TERMINAL \
+  JANGADA_AGENTE JANGADA_AGENTE_ARGS JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL
+
+# Socket próprio do tmux para as sessões de agentes, separado do tmux pessoal.
+# shellcheck disable=SC2034  # usado pelos scripts que carregam este arquivo
+JANGADA_TMUX=(tmux -L jangada -f "$JANGADA_PATH/default/tmux/agentes.conf")
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  for _v in JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_INTERFACE JANGADA_TERMINAL \
+    JANGADA_AGENTE JANGADA_AGENTE_ARGS JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL; do
+    printf '%s=%s\n' "$_v" "${!_v}"
+  done
+fi

@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Confere a instalação: pacotes, snapshots, sessão, hooks e erros do Hyprland.
+# Não altera nada.
+set -uo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+falhas=0
+ok()    { printf ' ok  %s\n' "$*"; }
+falha() { printf ' XX  %s\n' "$*"; falhas=$((falhas + 1)); }
+nota()  { printf ' --  %s\n' "$*"; }
+
+echo "== comandos"
+for c in Hyprland hyprctl waybar fuzzel mako hyprlock hypridle swaybg matugen tmux fzf jq git notify-send cliphist grim slurp; do
+  command -v "$c" >/dev/null 2>&1 && ok "$c" || falha "$c ausente"
+done
+if [[ "$JANGADA_INTERFACE" == "noctalia" ]]; then
+  command -v qs >/dev/null 2>&1 && ok "qs (Noctalia)" || falha "qs ausente, mas JANGADA_INTERFACE=noctalia"
+fi
+command -v "$JANGADA_AGENTE" >/dev/null 2>&1 && ok "agente: $JANGADA_AGENTE" || falha "agente $JANGADA_AGENTE ausente"
+
+echo "== versão do Hyprland"
+if command -v hyprctl >/dev/null 2>&1; then
+  v="$(Hyprland --version 2>/dev/null | head -1)"
+  nota "${v:-desconhecida}"
+  nota "o jangada usa configuração em Lua, que exige Hyprland 0.55 ou mais novo"
+fi
+
+echo "== snapshots"
+if [[ "$(findmnt -no FSTYPE /)" == "btrfs" ]]; then
+  [[ -f /etc/snapper/configs/root ]] && ok "snapper configurado" || falha "snapper sem configuração para /"
+  pacman -Qq snap-pac >/dev/null 2>&1 && ok "snap-pac" || falha "snap-pac ausente"
+else
+  nota "raiz não é btrfs; sem snapshots"
+fi
+
+echo "== sessão e configuração"
+[[ -f /usr/share/wayland-sessions/jangada.desktop ]] && ok "sessão jangada registrada" || falha "sessão jangada não registrada"
+for f in hypr/hyprland.lua hypr/cores.lua waybar/style.css waybar/cores.css mako/config fuzzel/fuzzel.ini hyprlock/hyprlock.conf; do
+  [[ -f "$JANGADA_CONFIG/$f" ]] && ok "$f" || falha "$JANGADA_CONFIG/$f ausente"
+done
+if command -v luac >/dev/null 2>&1; then
+  for f in "$JANGADA_PATH"/default/hypr/*.lua "$JANGADA_CONFIG"/hypr/*.lua; do
+    luac -p "$f" 2>/dev/null || falha "erro de sintaxe Lua: $f"
+  done
+fi
+
+echo "== hooks do Claude Code"
+if [[ -f "$HOME/.claude/settings.json" ]]; then
+  grep -q jangada-hook-claude "$HOME/.claude/settings.json" && ok "hooks instalados" || falha "hooks ausentes (rode ./install.sh 50)"
+else
+  nota "$HOME/.claude/settings.json não existe"
+fi
+
+if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+  echo "== erros de configuração do Hyprland"
+  erros="$(hyprctl configerrors 2>/dev/null | sed '/^[[:space:]]*$/d')"
+  [[ -z "$erros" ]] && ok "nenhum" || { falha "há erros:"; printf '%s\n' "$erros"; }
+fi
+
+echo
+((falhas == 0)) && echo "tudo certo" || echo "$falhas problema(s) encontrado(s)"
+exit $((falhas > 0))

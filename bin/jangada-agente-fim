@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Encerra uma sessão de agente e remove o worktree, conferindo alterações pendentes.
+# O ramo agente/<nome> é mantido; apague-o com git branch -d quando quiser.
+#
+# Uso: jangada-agente-fim SESSAO
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+s="${1:?informe a sessão (veja jangada-agentes --lista)}"
+arq="$JANGADA_ESTADO/agentes/$s.json"
+
+worktree=""; ramo=""; base=""; raiz=""
+if [[ -f "$arq" ]]; then
+  worktree="$(jq -r '.worktree // ""' "$arq")"
+  ramo="$(jq -r '.ramo // ""' "$arq")"
+  base="$(jq -r '.base // ""' "$arq")"
+  raiz="$(jq -r '.raiz // ""' "$arq")"
+fi
+
+confirmar() {
+  local r
+  read -r -p "$1 [s/N] " r
+  [[ "${r,,}" == s* ]]
+}
+
+forcar=0
+if [[ -n "$worktree" && -d "$worktree" ]]; then
+  pendentes="$(git -C "$worktree" status --porcelain)"
+  if [[ -n "$pendentes" ]]; then
+    echo "alterações não salvas em commit no worktree $worktree:"
+    printf '%s\n' "$pendentes" | head -20
+    confirmar "descartar essas alterações e remover o worktree?" || { echo "nada foi feito"; exit 1; }
+    forcar=1
+  fi
+  if [[ -n "$base" && -n "$ramo" ]]; then
+    novos="$(git -C "$raiz" log --oneline "$base..$ramo" 2>/dev/null || true)"
+    if [[ -n "$novos" ]]; then
+      echo "commits no ramo $ramo que não estão em $base (continuarão no ramo):"
+      printf '%s\n' "$novos" | head -20
+    fi
+  fi
+fi
+
+"${JANGADA_TMUX[@]}" kill-session -t "=$s" 2>/dev/null || true
+
+if [[ -n "$worktree" && -d "$worktree" ]]; then
+  if ((forcar)); then
+    git -C "$raiz" worktree remove --force "$worktree"
+  else
+    git -C "$raiz" worktree remove "$worktree"
+  fi
+  echo "worktree removido: $worktree"
+  [[ -n "$ramo" ]] && echo "ramo mantido: $ramo (apague com: git -C $raiz branch -d $ramo)"
+fi
+
+rm -f "$arq"
+echo "sessão encerrada: $s"

@@ -1,0 +1,44 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "@JANGADA_PATH@/bin/jangada-hook-claude trabalhando"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "@JANGADA_PATH@/bin/jangada-hook-claude trabalhando"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "@JANGADA_PATH@/bin/jangada-hook-claude aguardando"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "@JANGADA_PATH@/bin/jangada-hook-claude concluido"
+          }
+        ]
+      }
+    ]
+  }
+}

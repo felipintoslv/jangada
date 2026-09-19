@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Atualiza o jangada e o sistema, avisando quando o conjunto do Hyprland muda.
+#
+# Ordem: git pull do repositório, lista de atualizações, confirmação quando
+# houver mudança no Hyprland, pacman -Syu (snap-pac cria os snapshots),
+# AUR, migrações e, por fim, recarga com conferência de erros.
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+# Pacotes do conjunto Hyprland. Atualizar só parte deles causa quebras
+# (bibliotecas com versões incompatíveis), por isso o jangada não os fixa com
+# IgnorePkg: avisa e deixa você decidir antes de atualizar tudo junto.
+conjunto_hypr='^(hyprland|aquamarine|hyprutils|hyprlang|hyprgraphics|hyprcursor|hyprwire|hyprtoolkit|hyprland-guiutils|hyprlock|hypridle|hyprpolkitagent|xdg-desktop-portal-hyprland|quickshell|noctalia-shell)$'
+
+echo "==> repositório jangada"
+if [[ -z "$(git -C "$JANGADA_PATH" status --porcelain)" ]]; then
+  git -C "$JANGADA_PATH" pull --ff-only || echo "!! não foi possível atualizar o repositório (siga com o sistema)"
+else
+  echo "!! há alterações locais em $JANGADA_PATH; git pull não executado"
+fi
+
+echo "==> atualizações disponíveis"
+atualizacoes="$(checkupdates 2>/dev/null || true)"
+if [[ -z "$atualizacoes" ]]; then
+  echo "nenhuma atualização nos repositórios oficiais"
+else
+  printf '%s\n' "$atualizacoes"
+  hypr="$(awk '{print $1}' <<<"$atualizacoes" | grep -E "$conjunto_hypr" || true)"
+  if [[ -n "$hypr" ]]; then
+    echo
+    echo "!! esta atualização muda o conjunto do Hyprland:"
+    grep -E "^($(paste -sd'|' <<<"$hypr")) " <<<"$atualizacoes" | sed 's/^/   /'
+    echo "   notas de versão: https://github.com/hyprwm/Hyprland/releases"
+    read -r -p "continuar com a atualização completa? [s/N] " r
+    [[ "${r,,}" == s* ]] || { echo "atualização cancelada"; exit 0; }
+  fi
+fi
+
+if [[ "$(findmnt -no FSTYPE /)" != "btrfs" ]] || ! pacman -Qq snap-pac >/dev/null 2>&1; then
+  echo "!! sem snap-pac em btrfs: esta atualização não terá snapshot automático"
+fi
+
+echo "==> pacman -Syu"
+sudo pacman -Syu
+
+for aur in paru yay; do
+  if command -v "$aur" >/dev/null 2>&1; then
+    echo "==> AUR ($aur)"
+    "$aur" -Sua || echo "!! falha na atualização do AUR"
+    break
+  fi
+done
+
+echo "==> migrações"
+"$JANGADA_PATH/bin/jangada-migrar"
+
+if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+  echo "==> recarregando o Hyprland"
+  "$JANGADA_PATH/bin/jangada-recarregar" || echo "!! há erros de configuração; veja acima"
+fi
+
+# Os módulos do kernel em execução somem de /usr/lib/modules quando o kernel é atualizado.
+if [[ ! -d "/usr/lib/modules/$(uname -r)" ]]; then
+  echo "!! o kernel foi atualizado; reinicie quando puder"
+fi

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Inicia a sessão jangada (chamado pelo gerenciador de login).
+# Usa uma configuração própria, separada de ~/.config/hypr.
+JANGADA_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export JANGADA_PATH
+export PATH="$JANGADA_PATH/bin:$PATH"
+
+cfg="${XDG_CONFIG_HOME:-$HOME/.config}/jangada/hypr/hyprland.lua"
+if [[ ! -f "$cfg" ]]; then
+  # Sem configuração do usuário, usa o modelo do repositório para não ficar sem sessão.
+  cfg="$JANGADA_PATH/config/hypr/hyprland.lua"
+fi
+
+if command -v start-hyprland >/dev/null 2>&1; then
+  exec start-hyprland -- --config "$cfg"
+else
+  exec Hyprland --config "$cfg"
+fi

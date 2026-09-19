@@ -1,0 +1,48 @@
+/* Estilo base da barra. As variáveis de cor vêm de cores.css (matugen). */
+* {
+  font-family: "JetBrainsMono Nerd Font", sans-serif;
+  font-size: 13px;
+  min-height: 0;
+}
+
+window#waybar {
+  background: alpha(@superficie, 0.92);
+  color: @texto;
+}
+
+#workspaces button {
+  padding: 0 8px;
+  color: @texto_suave;
+  border-radius: 6px;
+}
+
+#workspaces button.active {
+  color: @texto_primario;
+  background: @primaria;
+}
+
+#custom-agentes {
+  padding: 0 10px;
+  border-radius: 6px;
+}
+
+#custom-agentes.aguardando {
+  color: @texto_primario;
+  background: @atencao;
+}
+
+#custom-agentes.trabalhando {
+  color: @primaria;
+}
+
+#custom-agentes.vazio {
+  color: @texto_suave;
+}
+
+#clock, #pulseaudio, #network, #battery, #tray {
+  padding: 0 8px;
+}
+
+#battery.critico {
+  color: @atencao;
+}

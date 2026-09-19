@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Gera as cores a partir de um papel de parede (ou de uma cor) e recarrega a interface.
+#
+# Uso:
+#   jangada-tema imagem.jpg     usa a imagem como papel de parede e fonte das cores
+#   jangada-tema --cor "#hex"   gera as cores a partir de uma cor
+#   jangada-tema --escolher     escolhe uma imagem em ~/Imagens/Papeis (ou ~/Pictures/Wallpapers)
+#   jangada-tema --aplicar-papel  só aplica o papel de parede salvo (usado no início da sessão)
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+matugen_cfg="$JANGADA_PATH/default/matugen/config.toml"
+conf_usuario="$JANGADA_CONFIG/jangada.conf"
+
+aplicar_papel() {
+  local img="${1:-$JANGADA_PAPEL}"
+  [[ -n "$img" && -f "$img" ]] || return 0
+  pkill -x swaybg 2>/dev/null || true
+  setsid -f swaybg -m fill -i "$img" >/dev/null 2>&1
+}
+
+salvar_papel() {
+  local img="$1"
+  [[ -f "$conf_usuario" ]] || return 0
+  if grep -q '^JANGADA_PAPEL=' "$conf_usuario"; then
+    sed -i "s|^JANGADA_PAPEL=.*|JANGADA_PAPEL=$img|" "$conf_usuario"
+  else
+    printf 'JANGADA_PAPEL=%s\n' "$img" >>"$conf_usuario"
+  fi
+}
+
+recarregar() {
+  pgrep -x waybar >/dev/null && pkill -SIGUSR2 -x waybar || true
+  pgrep -x mako >/dev/null && makoctl reload || true
+  [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] && hyprctl reload >/dev/null || true
+}
+
+escolher() {
+  local pasta
+  for pasta in "$HOME/Imagens/Papeis" "$HOME/Pictures/Wallpapers" "$HOME/Imagens" "$HOME/Pictures"; do
+    [[ -d "$pasta" ]] && break
+  done
+  find "$pasta" -maxdepth 2 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) \
+    | sort | fuzzel --dmenu --prompt "papel de parede: " --config "$JANGADA_CONFIG/fuzzel/fuzzel.ini"
+}
+
+command -v matugen >/dev/null 2>&1 || { echo "matugen não instalado" >&2; exit 1; }
+
+case "${1:-}" in
+  --aplicar-papel)
+    aplicar_papel
+    ;;
+  --cor)
+    matugen color hex "${2:?informe a cor, ex.: #4f8fba}" -c "$matugen_cfg" -m dark
+    recarregar
+    ;;
+  --escolher)
+    img="$(escolher)" || exit 0
+    [[ -n "$img" ]] && exec "$0" "$img"
+    ;;
+  "" | -h | --ajuda)
+    sed -n '2,9s/^# \{0,1\}//p' "$0"
+    ;;
+  *)
+    img="$(realpath "$1")"
+    [[ -f "$img" ]] || { echo "arquivo não encontrado: $1" >&2; exit 1; }
+    matugen image "$img" -c "$matugen_cfg" -m dark --source-color-index 0
+    salvar_papel "$img"
+    aplicar_papel "$img"
+    recarregar
+    ;;
+esac

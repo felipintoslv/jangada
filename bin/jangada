@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Atalho para os comandos jangada-*: "jangada agente" executa "jangada-agente".
+set -euo pipefail
+dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if (($# == 0)) || [[ "$1" == "-h" || "$1" == "ajuda" ]]; then
+  echo "uso: jangada <comando> [argumentos]"
+  echo
+  echo "comandos disponíveis:"
+  for c in "$dir"/jangada-*; do
+    nome="$(basename "$c")"
+    resumo="$(sed -n '2s/^# //p' "$c")"
+    printf '  %-16s %s\n' "${nome#jangada-}" "$resumo"
+  done
+  exit 0
+fi
+
+alvo="$dir/jangada-$1"
+[[ -x "$alvo" ]] || { echo "comando desconhecido: $1" >&2; exit 1; }
+shift
+exec "$alvo" "$@"

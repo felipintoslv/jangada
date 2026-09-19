@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Menu central do jangada (fuzzel no modo "componentes").
+# Uso: jangada-menu [area-transferencia]
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+menu() {
+  fuzzel --dmenu --prompt "${1:-jangada} > " --config "$JANGADA_CONFIG/fuzzel/fuzzel.ini" 2>/dev/null \
+    || fuzzel --dmenu --prompt "${1:-jangada} > "
+}
+b="$JANGADA_PATH/bin"
+term() { setsid -f "$b/jangada-terminal" -e bash -c "$1; echo; read -r -p 'Enter para fechar'" >/dev/null 2>&1; }
+
+if [[ "${1:-}" == "area-transferencia" ]]; then
+  cliphist list | menu "copiar" | cliphist decode | wl-copy
+  exit 0
+fi
+
+opcao="$(printf '%s\n' \
+  "Novo agente" \
+  "Lista de agentes" \
+  "Painel de agentes" \
+  "Atualizar sistema" \
+  "Verificar sistema" \
+  "Snapshot manual" \
+  "Trocar papel de parede" \
+  "Recarregar configuração" \
+  "Área de transferência" \
+  "Bloquear" \
+  "Sair da sessão" | menu)" || exit 0
+
+case "$opcao" in
+  "Novo agente") exec "$b/jangada-agente" --janela ;;
+  "Lista de agentes") exec "$b/jangada-agentes" --janela ;;
+  "Painel de agentes") exec "$b/jangada-agentes" --painel ;;
+  "Atualizar sistema") term "$b/jangada-update" ;;
+  "Verificar sistema") term "$b/jangada-verificar" ;;
+  "Snapshot manual") term "read -r -p 'descrição: ' d; $b/jangada-snapshot \"\$d\"" ;;
+  "Trocar papel de parede") exec "$b/jangada-tema" --escolher ;;
+  "Recarregar configuração") exec "$b/jangada-recarregar" ;;
+  "Área de transferência") exec "$0" area-transferencia ;;
+  "Bloquear") exec "$b/jangada-bloquear" ;;
+  "Sair da sessão") hyprctl dispatch 'hl.dsp.exit()' ;;
+esac

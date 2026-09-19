@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Cria um snapshot manual da raiz com o snapper. Uso: jangada-snapshot "descrição"
+set -euo pipefail
+command -v snapper >/dev/null 2>&1 || { echo "snapper não instalado" >&2; exit 1; }
+[[ -f /etc/snapper/configs/root ]] || { echo "snapper sem configuração para /" >&2; exit 1; }
+desc="${1:-manual (jangada)}"
+sudo snapper -c root create --type single --cleanup-algorithm number --description "$desc" --print-number

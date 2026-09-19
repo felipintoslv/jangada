@@ -1,0 +1,13 @@
+-- Ajustes pessoais, carregados depois dos padrões do jangada.
+--
+-- Exemplos:
+--
+-- Trocar o layout do teclado:
+-- hl.config({ input = { kb_layout = "us", kb_variant = "intl" } })
+--
+-- Trocar um atalho padrão:
+-- hl.unbind("SUPER + W")
+-- j.atalho("SUPER + Q", "Fechar janela", hl.dsp.window.close())
+--
+-- Abrir um programa ao iniciar:
+-- j.ao_iniciar("nm-applet")
