@@ -1,3 +1,8 @@
 # Inventários gerados por jangada-mapear contêm dados pessoais da máquina.
 # Para versionar um mapa de propósito, use: git add -f mapeamento/<pasta>
 mapeamento/
+
+# Registros e tentativas da revisão com o Gemini.
+revisao/*.log
+revisao/*.parcial
+revisao/antigas/

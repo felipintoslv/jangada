@@ -42,17 +42,33 @@ if [[ -n "$worktree" && -d "$worktree" ]]; then
   fi
 fi
 
-"${JANGADA_TMUX[@]}" kill-session -t "=$s" 2>/dev/null || true
-
-if [[ -n "$worktree" && -d "$worktree" ]]; then
-  if ((forcar)); then
-    git -C "$raiz" worktree remove --force "$worktree"
-  else
-    git -C "$raiz" worktree remove "$worktree"
+# A limpeza encerra a sessão, remove o worktree e apaga o estado, nessa ordem:
+# o agente para antes de a pasta dele sumir. Quando o comando é chamado de
+# dentro da própria sessão, encerrar a sessão mataria este script no meio;
+# nesse caso a limpeza continua num processo separado, com registro em arquivo.
+limpar() {
+  "${JANGADA_TMUX[@]}" kill-session -t "=$s" 2>/dev/null || true
+  if [[ -n "$worktree" && -d "$worktree" ]]; then
+    if ((forcar)); then
+      git -C "$raiz" worktree remove --force "$worktree"
+    else
+      git -C "$raiz" worktree remove "$worktree"
+    fi
+    echo "worktree removido: $worktree"
+    [[ -n "$ramo" ]] && echo "ramo mantido: $ramo (apague com: git -C $raiz branch -d $ramo)"
   fi
-  echo "worktree removido: $worktree"
-  [[ -n "$ramo" ]] && echo "ramo mantido: $ramo (apague com: git -C $raiz branch -d $ramo)"
+  rm -f "$arq"
+  echo "sessão encerrada: $s"
+}
+
+if [[ "${JANGADA_SESSAO:-}" == "$s" ]]; then
+  registro="$JANGADA_ESTADO/agentes/fim-$s.log"
+  echo "encerrando a partir da própria sessão; registro em $registro"
+  export s worktree ramo raiz arq forcar
+  export -f limpar
+  # shellcheck disable=SC1090,SC2016
+  setsid -f bash -c 'sleep 0.5; source "$1"; limpar' _ "$JANGADA_PATH/bin/jangada-config" >"$registro" 2>&1
+  exit 0
 fi
 
-rm -f "$arq"
-echo "sessão encerrada: $s"
+limpar

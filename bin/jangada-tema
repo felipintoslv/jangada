@@ -41,6 +41,10 @@ escolher() {
   for pasta in "$HOME/Imagens/Papeis" "$HOME/Pictures/Wallpapers" "$HOME/Imagens" "$HOME/Pictures"; do
     [[ -d "$pasta" ]] && break
   done
+  if [[ ! -d "$pasta" ]]; then
+    notify-send -a jangada "Papel de parede" "nenhuma pasta de imagens encontrada (crie ~/Imagens/Papeis)" 2>/dev/null || true
+    return 1
+  fi
   find "$pasta" -maxdepth 2 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) \
     | sort | fuzzel --dmenu --prompt "papel de parede: " --config "$JANGADA_CONFIG/fuzzel/fuzzel.ini"
 }

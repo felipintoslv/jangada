@@ -76,6 +76,8 @@ if ((eh_git)) && [[ -n "$nome" ]]; then
   worktree="$JANGADA_WORKTREES/$repo/$nome"
   ramo="agente/$nome"
   base="$(git -C "$raiz" rev-parse --abbrev-ref HEAD)"
+  # Remove registros de worktrees cujas pastas foram apagadas à mão.
+  git -C "$raiz" worktree prune
   if [[ -d "$worktree" ]]; then
     echo "reaproveitando worktree existente: $worktree"
   elif git -C "$raiz" show-ref --verify --quiet "refs/heads/$ramo"; then
@@ -106,7 +108,7 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
   ((${#extras[@]})) && cmd_agente+=" $(printf '%q ' "${extras[@]}")"
 
   "${JANGADA_TMUX[@]}" new-session -d -s "$sessao" -c "$dir" -e "JANGADA_SESSAO=$sessao"
-  "${JANGADA_TMUX[@]}" send-keys -t "=$sessao" "$cmd_agente" Enter
+  "${JANGADA_TMUX[@]}" send-keys -t "=$sessao:" "$cmd_agente" Enter
 fi
 
 # Dentro de outro tmux, anexar aninhado confunde; abre numa janela nova.

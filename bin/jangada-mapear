@@ -22,7 +22,7 @@ tem() { command -v "$1" >/dev/null 2>&1; }
 grava() { local arq="$1"; shift; "$@" >"$arq" 2>&1 || echo "(comando falhou: $*)" >>"$arq"; }
 
 # Arquivos que nunca são copiados.
-ignorar_regex='(\.pem|\.key|id_rsa|id_ed25519|credentials|\.credentials\.json|auth\.json|oauth|cookies|\.sqlite|\.db|history|\.log)$'
+ignorar_regex='((^|/)id_(rsa|dsa|ecdsa|ed25519)(\.pub)?|\.pem|\.key|\.p12|\.env(\.[^/]*)?|\.netrc|\.pgpass|credentials|\.credentials\.json|auth\.json|oauth|cookies|\.sqlite|\.db|history|\.log)$'
 limite_bytes=$((2 * 1024 * 1024))
 
 # Copia um arquivo ou pasta de configuração, respeitando as exclusões.

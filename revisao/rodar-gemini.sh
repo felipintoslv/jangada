@@ -1,28 +1,18 @@
 #!/bin/sh
-# Envia o repositório ao Gemini CLI para revisão e grava a resposta em
-# revisao/gemini-<data>.md. Apenas lê os arquivos; não executa nada do jangada.
-# Compatível com o sh do macOS e do Linux.
-#
-# Uso (na raiz do repositório): sh revisao/rodar-gemini.sh [modelo]
-set -eu
-cd "$(dirname "$0")/.."
+# O Gemini CLI foi aposentado pelo Google em 18/06/2026 e substituído pelo
+# Antigravity CLI (comando agy), que não tem modo não interativo documentado.
+# A revisão passa a ser feita dentro do agy; este script só mostra como.
+cat <<'TXT'
+Revisão com o Antigravity CLI:
 
-command -v gemini >/dev/null 2>&1 || { echo "gemini CLI não encontrado"; exit 1; }
+  cd <pasta do jangada> && agy
 
-saida="revisao/gemini-$(date +%Y%m%d-%H%M).md"
-pacote="$(mktemp)"
-trap 'rm -f "$pacote"' EXIT
+Depois, peça ao agente:
 
-# Junta todos os arquivos versionados (menos as próprias revisões) num texto só.
-git ls-files | grep -v '^revisao/gemini-' | while IFS= read -r f; do
-  printf '\n===== ARQUIVO: %s =====\n' "$f"
-  cat "$f"
-done >"$pacote"
+  Leia revisao/PROMPT_GEMINI.md e siga as instruções, revisando todos os
+  arquivos do repositório, inclusive bin/ e install/. Não altere nenhum
+  arquivo; grave apenas a resposta em revisao/gemini-<AAAAMMDD-HHMM>.md.
 
-echo "enviando $(wc -l <"$pacote" | tr -d ' ') linhas ao Gemini..."
-if [ $# -ge 1 ]; then
-  gemini -m "$1" -p "$(cat revisao/PROMPT_GEMINI.md)" <"$pacote" >"$saida"
-else
-  gemini -p "$(cat revisao/PROMPT_GEMINI.md)" <"$pacote" >"$saida"
-fi
-echo "revisão gravada em $saida"
+Use /model para escolher o modelo mais forte do plano e mantenha a aprovação
+de ferramentas em modo de revisão (toolPermission: "request-review").
+TXT

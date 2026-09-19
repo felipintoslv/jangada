@@ -125,7 +125,7 @@ case "${1:-}" in
       --delimiter '\t' --with-nth 1,2 --prompt 'agente > ' --reverse \
       --header 'Enter: abrir   Ctrl+X: encerrar' \
       --expect ctrl-x \
-      --preview 'tmux -L jangada capture-pane -p -t ={2} 2>/dev/null | tail -40')" || exit 0
+      --preview 'tmux -L jangada capture-pane -p -t ={2}: 2>/dev/null | tail -40')" || exit 0
     tecla="$(head -1 <<<"$escolha")"
     s="$(sed -n 2p <<<"$escolha" | cut -f2)"
     [[ -n "$s" ]] || exit 0

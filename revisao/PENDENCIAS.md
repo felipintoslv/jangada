@@ -18,13 +18,21 @@ Registro da revisão feita pelo Claude antes da revisão cruzada com o Gemini.
 | Mesclagem dos hooks em `~/.claude/settings.json` já existente | hooks antigos preservados |
 | `jangada-mapear` com segredos falsos | chaves mascaradas; `.credentials.json` ignorado |
 
+## Revisões cruzadas
+
+| Arquivo | Resultado |
+|---|---|
+| gemini-20260919-1850.md | revisão superficial (modelo flash-lite); avaliação em avaliacao-gemini-20260919-1850.md |
+| gemini-20260919-2038.md | revisão completa pelo Antigravity; 7 de 8 apontamentos aceitos, 1 rejeitado com base no código do Hyprland; avaliação em avaliacao-gemini-20260919-2038.md |
+
 ## O que só pode ser confirmado no desktop
 
 1. **API Lua do Hyprland.** A imitação só confere a estrutura. Confirmar com
    `hyprctl configerrors` depois de entrar na sessão, em especial:
    `workspace = "special:agentes silent"` na regra do painel,
    `hl.dsp.focus({ window = "address:..." })` no `jangada-agentes --focar` e
-   `hyprctl dispatch 'hl.dsp.dpms(...)'` no hypridle.
+   `hyprctl dispatch 'hl.dsp.dpms(...)'` no hypridle. Já confirmado no código:
+   com configuração em Lua, `hyprctl dispatch` aceita só expressões Lua.
 2. **Nomes de pacotes.** Não foi possível consultar os repositórios do Arch
    daqui. O instalador lista os que não encontrar, sem interromper. Os mais
    incertos: `matugen` (pode estar só no AUR, como `matugen-bin`),

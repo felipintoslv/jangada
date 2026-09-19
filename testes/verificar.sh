@@ -48,9 +48,14 @@ jq empty default/claude/hooks.json || falha "hooks.json"
 sed 's#^[[:space:]]*//.*##' default/waybar/config.jsonc | jq empty || falha "waybar/config.jsonc"
 
 passo "TOML"
-python3 -c 'import tomllib,sys; tomllib.load(open(sys.argv[1],"rb"))' default/matugen/config.toml || falha "matugen/config.toml"
+if python3 -c 'import tomllib' 2>/dev/null; then
+  python3 -c 'import tomllib,sys; tomllib.load(open(sys.argv[1],"rb"))' default/matugen/config.toml || falha "matugen/config.toml"
+else
+  echo "python sem tomllib (exige 3.11 ou mais novo); etapas de TOML ignoradas"
+fi
 
 passo "modelos do matugen referenciados existem"
+if python3 -c 'import tomllib' 2>/dev/null; then
 python3 - <<'PY' || falha "modelos do matugen"
 import tomllib, os, sys
 cfg = tomllib.load(open("default/matugen/config.toml", "rb"))
@@ -59,6 +64,7 @@ faltando = [t["input_path"] for t in cfg["templates"].values()
 if faltando:
     print("faltando:", faltando); sys.exit(1)
 PY
+fi
 
 passo "comandos citados na configuração do Hyprland existem em bin/"
 for c in $(grep -ho 'j\.cmd("[a-z-]*"' default/hypr/*.lua | sed 's/j\.cmd("//; s/"//' | sort -u); do

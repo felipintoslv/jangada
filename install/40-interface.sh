@@ -37,10 +37,11 @@ DesktopNames=Hyprland"
 if [[ -f "$_sessao" ]] && [[ "$(cat "$_sessao")" == "$_conteudo" ]]; then
   ok "sessão já registrada: $_sessao"
 else
+  copia_seguranca "$_sessao"
   if simulando; then
     info "[simulação] gravaria $_sessao"
   else
-    printf '%s\n' "$_conteudo" | sudo tee "$_sessao" >/dev/null
+    printf '%s\n' "$_conteudo" | como_root tee "$_sessao" >/dev/null
   fi
   ok "sessão registrada: $_sessao"
 fi

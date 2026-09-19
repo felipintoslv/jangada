@@ -32,6 +32,12 @@ else
       como_root mount -a
       como_root chmod 750 /.snapshots
     else
+      # Uma pasta /.snapshots vazia e não montada também impede o snapper.
+      # Só é removida se estiver vazia; com conteúdo, a instalação para.
+      if [[ -e /.snapshots ]]; then
+        como_root rmdir /.snapshots \
+          || morrer "/.snapshots existe, não está montado e não está vazio; confira com 'sudo btrfs subvolume list /' antes de seguir"
+      fi
       como_root snapper -c root create-config /
     fi
   fi
