@@ -127,7 +127,19 @@ jq -n --arg sessao "$sessao" --arg dir "$dir" --arg raiz "$raiz" --arg worktree 
     desde:$agora, atualizado:$agora}' \
   >"$estado_dir/$sessao.json"
 
+# O estado só é descartado quando o ciclo termina mal: interrompido, ou morto
+# antes de gravar o resultado. Terminando normalmente o arquivo fica com
+# "concluido" ou "aguardando", que é o que acende o ícone no jangada-agentes.
+# O painel ainda recolhe o arquivo quando vê que o pid morreu, mas não faz
+# sentido o próprio script apagar o que acabou de escrever.
+#
+# Só EXIT, de propósito. Um trap em INT ou TERM não encerra nada: o bash roda
+# o handler e segue na linha seguinte, então o Ctrl+C apagaria o estado e
+# deixaria o ciclo rodando. Sem trap próprio, o sinal encerra o script pelo
+# comportamento padrão e o EXIT dispara em seguida.
+concluiu=0
 limpar_saida() {
+  ((concluiu)) && return 0
   rm -f "$estado_dir/$sessao.json" 2>/dev/null || true
 }
 trap limpar_saida EXIT
@@ -152,13 +164,10 @@ atualizar_estado() {
   fi
 }
 
-extrair_resposta() {
-  local arq="$1"
-  if command -v jq >/dev/null 2>&1; then
-    jq -r '.response // empty' "$arq" 2>/dev/null
-  else
-    python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(d.get('response',''))" "$arq" 2>/dev/null
-  fi
+# O jq já é obrigatório acima, na gravação do estado, então não há alternativa
+# a manter aqui.
+extrair_campo() {
+  jq -r "$2 // empty" "$1" 2>/dev/null || true
 }
 
 echo ""
@@ -174,6 +183,7 @@ echo ""
 rodada=1
 aprovado=0
 parecer=""
+ultimo_parecer=""
 
 while ((rodada <= limite)); do
   echo ""
@@ -265,8 +275,20 @@ seguido de uma lista numerada e clara com cada item que o Claude deve corrigir:
     break
   fi
 
-  parecer="$(extrair_resposta "$json_revisao")"
-  echo "$parecer" >"$estado_dir/parecer-$sessao-r$rodada.md"
+  status_agy="$(extrair_campo "$json_revisao" .status)"
+  if [[ "$status_agy" != "SUCCESS" ]]; then
+    echo "o agy não concluiu (status: ${status_agy:-desconhecido}); consulte $log_revisao" >&2
+    break
+  fi
+
+  parecer="$(extrair_campo "$json_revisao" .response)"
+  if [[ -z "$parecer" ]]; then
+    echo "o agy concluiu, mas a resposta veio vazia; consulte $log_revisao" >&2
+    break
+  fi
+
+  ultimo_parecer="$estado_dir/parecer-$sessao-r$rodada.md"
+  printf '%s\n' "$parecer" >"$ultimo_parecer"
 
   echo ""
   echo "Resultado da revisão:"
@@ -283,25 +305,43 @@ seguido de uma lista numerada e clara com cada item que o Claude deve corrigir:
   fi
 done
 
+# Onde o trabalho ficou. Sem isto o worktree some de vista: os commits estão
+# num ramo agente/<nome>, fora da árvore principal, e nada dizia como integrar.
+resumo_local() {
+  echo " Repositório: $raiz"
+  if [[ -n "$worktree" ]]; then
+    echo " Worktree:    $worktree"
+    echo " Ramo:        $ramo"
+    echo " Integrar:    git -C '$raiz' merge $ramo"
+    echo " Remover:     git -C '$raiz' worktree remove '$worktree'"
+  else
+    echo " Ramo:        ${ramo:-trabalho direto no repositório}"
+  fi
+  if [[ -n "$ultimo_parecer" ]]; then
+    echo " Parecer:     $ultimo_parecer"
+  else
+    echo " Parecer:     nenhum; a revisão não chegou a ser gravada"
+  fi
+}
+
 if ((aprovado)); then
   atualizar_estado "concluido" "Aprovado pelo Antigravity"
+  concluiu=1
   echo ""
   echo "======================================================="
   echo " Sucesso! Tarefa concluída e aprovada."
-  echo " Repositório: $raiz"
-  [[ -n "$ramo" ]] && echo " Ramo:        $ramo"
-  echo " Parecer:     $estado_dir/parecer-$sessao-r$rodada.md"
+  resumo_local
   echo "======================================================="
   if command -v notify-send >/dev/null 2>&1; then
     notify-send -a "jangada-par" -u normal "Tarefa concluída e aprovada" "$sessao finalizada com sucesso."
   fi
 else
   atualizar_estado "aguardando" "Ciclo encerrado com pendências"
+  concluiu=1
   echo ""
   echo "======================================================="
   echo " Ciclo finalizado com pendências ou limite atingido."
-  echo " Verifique os apontamentos em:"
-  echo " $estado_dir/parecer-$sessao-r$((rodada > limite ? limite : rodada)).md"
+  resumo_local
   echo "======================================================="
   if command -v notify-send >/dev/null 2>&1; then
     notify-send -a "jangada-par" -u critical "Tarefa requer conferência" "$sessao possui itens pendentes."
