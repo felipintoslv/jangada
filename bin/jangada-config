@@ -33,10 +33,10 @@ export JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_INTERFACE JANGADA_TERM
   JANGADA_AGENTE JANGADA_AGENTE_ARGS JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL \
   JANGADA_GPU
 
-# Dispositivos DRM com saída de vídeo conectada, em caminho estável
-# (/dev/dri/by-path, porque a numeração de /dev/dri/cardN muda entre partidas).
-# Numa máquina com duas GPUs, o aquamarine pode escolher a que não tem monitor
-# ligado; a sessão sobe sem imagem e sem terminal para consertar.
+# Dispositivos DRM com saída de vídeo conectada, um por linha, em caminho
+# estável (/dev/dri/by-path, porque a numeração de /dev/dri/cardN muda entre
+# partidas). Numa máquina com duas GPUs, o aquamarine pode escolher a que não
+# tem monitor ligado; a sessão sobe sem imagem e sem terminal para consertar.
 gpu_das_saidas() {
   local _st _card _pci _dev
   local -a _achados=()
@@ -51,17 +51,36 @@ gpu_das_saidas() {
     [[ " ${_achados[*]:-} " == *" $_dev "* ]] || _achados+=("$_dev")
   done
   ((${#_achados[@]})) || return 1
-  local IFS=:
-  printf '%s\n' "${_achados[*]}"
+  printf '%s\n' "${_achados[@]}"
 }
 
-# Driver do kernel em uso por um dispositivo de /dev/dri/by-path.
+# Valor de AQ_DRM_DEVICES para os dispositivos recebidos. O aquamarine separa
+# essa lista por ":", e o nome em /dev/dri/by-path traz ":" no endereço PCI:
+# entregue como está, um caminho vira três caminhos inválidos, o aquamarine não
+# encontra GPU nenhuma e o Hyprland aborta antes de abrir a tela. Por isso cada
+# dispositivo é resolvido para o /dev/dri/cardN correspondente, que não tem ":".
+gpu_para_aquamarine() {
+  local _dev _real
+  local -a _reais=()
+  for _dev in "$@"; do
+    [[ -n "$_dev" ]] || continue
+    _real="$(readlink -f "$_dev" 2>/dev/null)" || continue
+    [[ -e "$_real" ]] || continue
+    [[ "$_real" == *:* ]] && continue
+    [[ " ${_reais[*]:-} " == *" $_real "* ]] || _reais+=("$_real")
+  done
+  ((${#_reais[@]})) || return 1
+  local IFS=:
+  printf '%s\n' "${_reais[*]}"
+}
+
+# Driver do kernel em uso por um dispositivo DRM, dado em /dev/dri/by-path ou
+# já resolvido em /dev/dri/cardN.
 driver_da_gpu() {
-  # A lista vem separada por ":", mas o endereço PCI também tem ":";
-  # o primeiro dispositivo termina no primeiro "-card".
-  local _dev="${1%%-card*}-card" _pci _drv
-  _pci="${_dev##*/pci-}"; _pci="${_pci%-card}"
-  _drv="$(readlink -f "/sys/bus/pci/devices/$_pci/driver" 2>/dev/null)" || return 1
+  local _real _drv
+  _real="$(readlink -f "${1:-}" 2>/dev/null)" || return 1
+  [[ -e "$_real" ]] || return 1
+  _drv="$(readlink -f "/sys/class/drm/${_real##*/}/device/driver" 2>/dev/null)" || return 1
   printf '%s\n' "${_drv##*/}"
 }
 

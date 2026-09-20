@@ -13,11 +13,10 @@ hl.env("XDG_SESSION_TYPE", "wayland")
 hl.env("XDG_CURRENT_DESKTOP", "Hyprland")
 hl.env("XDG_SESSION_DESKTOP", "Hyprland")
 
--- Escolha da GPU. O jangada-sessao já define AQ_DRM_DEVICES antes de o
--- compositor subir, inclusive detectando a placa com monitor ligado. Aqui fica
--- a segunda linha de defesa, para quem inicia o Hyprland à mão: vale só o que
--- estiver escrito em JANGADA_GPU, porque a configuração não sonda o sistema.
-local gpu = j.conf.JANGADA_GPU
-if gpu and gpu ~= "" and (os.getenv("AQ_DRM_DEVICES") or "") == "" then
-  hl.env("AQ_DRM_DEVICES", gpu)
-end
+-- Escolha da GPU. Fica toda no jangada-sessao, que define AQ_DRM_DEVICES antes
+-- de o compositor subir. Aqui não dá para repetir: o valor precisa do
+-- /dev/dri/cardN resolvido a partir do caminho de /dev/dri/by-path, cujo
+-- endereço PCI tem ":", que é o separador da lista do aquamarine. A
+-- configuração não sonda o sistema, e de todo modo o backend já escolheu a
+-- placa quando ela é lida. Quem inicia o Hyprland à mão deve chamar
+-- jangada-sessao, ou exportar AQ_DRM_DEVICES antes.

@@ -39,6 +39,40 @@ sessão menos `default.hypr.inicio` (esse módulo roda
 | `hl.dsp.exit()` do `jangada-menu` | encerrou a instância |
 | Instalação real das etapas 10, 20 e 40 | concluída; `jangada-verificar` diz tudo certo |
 
+## Primeira entrada na sessão (19/09/2026): AQ_DRM_DEVICES quebrado
+
+As três tentativas de entrar pelo SDDM voltaram à tela de login. O Hyprland
+abortava em `CCompositor::initServer` menos de um segundo depois, com
+`std::__throw_bad_variant_access`. O relatório em
+`~/.cache/hyprland/hyprlandCrashReport*.txt` mostra a causa:
+
+```
+drm: Explicit device list /dev/dri/by-path/pci-0000:01:00.0-card
+ERR: drm: Failed to canonicalize path /dev/dri/by-path/pci-0000
+ERR: drm: Failed to canonicalize path 01
+ERR: drm: Failed to canonicalize path 00.0-card
+ERR: drm: Found no gpus to use, cannot continue
+CRIT: Cannot open backend: no allocator available
+```
+
+O aquamarine separa a lista de `AQ_DRM_DEVICES` por `:`, e o nome em
+`/dev/dri/by-path` traz `:` no endereço PCI. O caminho vira três caminhos
+inválidos, nenhuma GPU é encontrada e o compositor morre antes de abrir a
+tela. Correção: `gpu_para_aquamarine`, em `bin/jangada-config`, resolve cada
+dispositivo para o `/dev/dri/cardN` correspondente antes de exportar a
+variável. O `by-path` continua sendo o que se escreve em `JANGADA_GPU`, porque
+a numeração de `cardN` muda entre partidas; a resolução acontece na hora de
+subir a sessão. O `jangada-sessao` também volta para a detecção automática
+quando o caminho do `jangada.conf` não existe mais, e o `jangada-verificar`
+passou a mostrar o valor resolvido em vez de dar por boa a lista quebrada. O
+trecho equivalente em `default/hypr/ambiente.lua` foi removido: a configuração
+não resolve links, e o backend já escolheu a placa quando ela é lida.
+
+Lição para os próximos testes: o Hyprland aninhado usa o backend Wayland e
+nunca toca no DRM, então não serve para conferir nada da escolha de GPU. Para
+isso, ou se entra pelo SDDM, ou se roda `jangada-sessao` num terminal virtual
+livre (`Ctrl+Alt+F3`), onde a mensagem de erro fica à vista.
+
 ## Revisões cruzadas
 
 | Arquivo | Resultado |

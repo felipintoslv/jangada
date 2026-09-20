@@ -48,19 +48,25 @@ if command -v luac >/dev/null 2>&1; then
 fi
 
 echo "== GPU da sessão"
-_gpu="$JANGADA_GPU"; _origem="JANGADA_GPU no jangada.conf"
-if [[ -z "$_gpu" ]]; then
-  _gpu="$(gpu_das_saidas || true)"; _origem="detecção pela saída conectada"
+mapfile -t _conectadas < <(gpu_das_saidas)
+if [[ -n "$JANGADA_GPU" ]]; then
+  _gpu="$JANGADA_GPU"; _origem="JANGADA_GPU no jangada.conf"
+else
+  _gpu="${_conectadas[0]:-}"; _origem="detecção pela saída conectada"
 fi
-_conectadas="$(gpu_das_saidas || true)"
 if [[ -z "$_gpu" ]]; then
   falha "nenhum dispositivo DRM com saída conectada; a sessão pode subir sem imagem"
 else
   _drv="$(driver_da_gpu "$_gpu" || echo desconhecido)"
-  if [[ -n "$_conectadas" && "$_conectadas" != *"${_gpu%%-card*}-card"* ]]; then
-    falha "$_gpu ($_origem, driver $_drv) não tem monitor ligado; com saída conectada: $_conectadas"
+  # O que a sessão vai mesmo passar ao aquamarine, já resolvido em /dev/dri/cardN.
+  _aq="$(gpu_para_aquamarine "$_gpu" || true)"
+  _aq_conectadas="$(gpu_para_aquamarine "${_conectadas[@]:-}" || true)"
+  if [[ -z "$_aq" ]]; then
+    falha "$_gpu ($_origem) não resolve para um dispositivo de /dev/dri"
+  elif [[ -n "$_aq_conectadas" && ":$_aq_conectadas:" != *":$_aq:"* ]]; then
+    falha "$_gpu ($_origem, driver $_drv) não tem monitor ligado; com saída conectada: ${_conectadas[*]}"
   else
-    ok "$_gpu ($_origem, driver $_drv)"
+    ok "$_gpu ($_origem, driver $_drv); AQ_DRM_DEVICES=$_aq"
   fi
 fi
 
