@@ -5,6 +5,29 @@ JANGADA_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export JANGADA_PATH
 export PATH="$JANGADA_PATH/bin:$PATH"
 
+# shellcheck source=bin/jangada-config
+source "$JANGADA_PATH/bin/jangada-config"
+
+# Escolha da GPU antes de o compositor subir. Com duas placas, o aquamarine
+# pode pegar a que não tem monitor ligado: a sessão sobe sem imagem e sem
+# terminal para consertar. JANGADA_GPU no jangada.conf sobrepõe a detecção.
+if [[ -z "${AQ_DRM_DEVICES:-}" ]]; then
+  if [[ -n "$JANGADA_GPU" ]]; then
+    export AQ_DRM_DEVICES="$JANGADA_GPU"
+  else
+    _gpu="$(gpu_das_saidas)" && export AQ_DRM_DEVICES="$_gpu"
+  fi
+fi
+
+# Ajustes exigidos pelo driver proprietário, aplicados só quando é ele que
+# conduz a sessão. GBM_BACKEND fica de fora de propósito: ele quebra Firefox e
+# aplicativos Electron, e o driver atual não precisa dele.
+if [[ -n "${AQ_DRM_DEVICES:-}" ]] && [[ "$(driver_da_gpu "$AQ_DRM_DEVICES")" == nvidia ]]; then
+  export LIBVA_DRIVER_NAME=nvidia
+  export __GLX_VENDOR_LIBRARY_NAME=nvidia
+  export NVD_BACKEND=direct
+fi
+
 cfg="${XDG_CONFIG_HOME:-$HOME/.config}/jangada/hypr/hyprland.lua"
 if [[ ! -f "$cfg" ]]; then
   # Sem configuração do usuário, usa o modelo do repositório para não ficar sem sessão.

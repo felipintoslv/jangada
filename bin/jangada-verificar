@@ -45,6 +45,23 @@ if command -v luac >/dev/null 2>&1; then
   done
 fi
 
+echo "== GPU da sessão"
+_gpu="$JANGADA_GPU"; _origem="JANGADA_GPU no jangada.conf"
+if [[ -z "$_gpu" ]]; then
+  _gpu="$(gpu_das_saidas || true)"; _origem="detecção pela saída conectada"
+fi
+_conectadas="$(gpu_das_saidas || true)"
+if [[ -z "$_gpu" ]]; then
+  falha "nenhum dispositivo DRM com saída conectada; a sessão pode subir sem imagem"
+else
+  _drv="$(driver_da_gpu "$_gpu" || echo desconhecido)"
+  if [[ -n "$_conectadas" && "$_conectadas" != *"${_gpu%%-card*}-card"* ]]; then
+    falha "$_gpu ($_origem, driver $_drv) não tem monitor ligado; com saída conectada: $_conectadas"
+  else
+    ok "$_gpu ($_origem, driver $_drv)"
+  fi
+fi
+
 echo "== hooks do Claude Code"
 if [[ -f "$HOME/.claude/settings.json" ]]; then
   grep -q jangada-hook-claude "$HOME/.claude/settings.json" && ok "hooks instalados" || falha "hooks ausentes (rode ./install.sh 50)"

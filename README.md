@@ -45,6 +45,10 @@ JANGADA_SIMULAR=1 ./install.sh   # confere o que será feito
 
 Depois, encerre a sessão atual e escolha **jangada** no gerenciador de login.
 
+### Máquinas com duas GPUs
+
+O `jangada-sessao` define `AQ_DRM_DEVICES` antes de o compositor subir, escolhendo a placa que tem monitor ligado. Sem isso, o aquamarine pode pegar a outra e a sessão sobe sem imagem, sem terminal para consertar. Quando a placa escolhida é NVIDIA, a sessão também define `LIBVA_DRIVER_NAME`, `__GLX_VENDOR_LIBRARY_NAME` e `NVD_BACKEND`; `GBM_BACKEND` fica de fora de propósito, porque quebra Firefox e Electron. Para forçar outra placa, preencha `JANGADA_GPU` no `jangada.conf` com um caminho de `/dev/dri/by-path`. O `jangada-verificar` mostra qual foi escolhida e reclama se ela não tiver monitor ligado.
+
 ## Comandos
 
 | Comando | Função |

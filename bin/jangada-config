@@ -15,6 +15,8 @@ JANGADA_AGENTE_ARGS=
 JANGADA_PROJETOS="$HOME/Projetos"
 JANGADA_WORKTREES="$HOME/.local/share/jangada-worktrees"
 JANGADA_PAPEL=
+# Dispositivo DRM que conduz a sessão. Vazio = detectar pela saída conectada.
+JANGADA_GPU=
 
 if [[ -f "$JANGADA_CONFIG/jangada.conf" ]]; then
   # Lê só linhas CHAVE=valor com chaves JANGADA_*, sem executar o arquivo.
@@ -28,7 +30,40 @@ if [[ -f "$JANGADA_CONFIG/jangada.conf" ]]; then
 fi
 
 export JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_INTERFACE JANGADA_TERMINAL \
-  JANGADA_AGENTE JANGADA_AGENTE_ARGS JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL
+  JANGADA_AGENTE JANGADA_AGENTE_ARGS JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL \
+  JANGADA_GPU
+
+# Dispositivos DRM com saída de vídeo conectada, em caminho estável
+# (/dev/dri/by-path, porque a numeração de /dev/dri/cardN muda entre partidas).
+# Numa máquina com duas GPUs, o aquamarine pode escolher a que não tem monitor
+# ligado; a sessão sobe sem imagem e sem terminal para consertar.
+gpu_das_saidas() {
+  local _st _card _pci _dev
+  local -a _achados=()
+  for _st in /sys/class/drm/card*-*/status; do
+    [[ -r "$_st" ]] || continue
+    [[ "$(<"$_st")" == connected ]] || continue
+    _card="${_st#/sys/class/drm/}"; _card="${_card%%-*}"
+    _pci="$(readlink -f "/sys/class/drm/$_card/device" 2>/dev/null)" || continue
+    _pci="${_pci##*/}"
+    _dev="/dev/dri/by-path/pci-$_pci-card"
+    [[ -e "$_dev" ]] || continue
+    [[ " ${_achados[*]:-} " == *" $_dev "* ]] || _achados+=("$_dev")
+  done
+  ((${#_achados[@]})) || return 1
+  local IFS=:
+  printf '%s\n' "${_achados[*]}"
+}
+
+# Driver do kernel em uso por um dispositivo de /dev/dri/by-path.
+driver_da_gpu() {
+  # A lista vem separada por ":", mas o endereço PCI também tem ":";
+  # o primeiro dispositivo termina no primeiro "-card".
+  local _dev="${1%%-card*}-card" _pci _drv
+  _pci="${_dev##*/pci-}"; _pci="${_pci%-card}"
+  _drv="$(readlink -f "/sys/bus/pci/devices/$_pci/driver" 2>/dev/null)" || return 1
+  printf '%s\n' "${_drv##*/}"
+}
 
 # Socket próprio do tmux para as sessões de agentes, separado do tmux pessoal.
 # shellcheck disable=SC2034  # usado pelos scripts que carregam este arquivo
@@ -36,7 +71,8 @@ JANGADA_TMUX=(tmux -L jangada -f "$JANGADA_PATH/default/tmux/agentes.conf")
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   for _v in JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_INTERFACE JANGADA_TERMINAL \
-    JANGADA_AGENTE JANGADA_AGENTE_ARGS JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL; do
+    JANGADA_AGENTE JANGADA_AGENTE_ARGS JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL \
+    JANGADA_GPU; do
     printf '%s=%s\n' "$_v" "${!_v}"
   done
 fi

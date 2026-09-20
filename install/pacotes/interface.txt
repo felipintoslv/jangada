@@ -17,6 +17,8 @@ slurp
 brightnessctl
 playerctl
 wireplumber
+pipewire-pulse     # áudio dos programas que falam PulseAudio
+qt6-wayland        # Qt nativo em Wayland (Quickshell, Noctalia, apps Qt)
 ttf-jetbrains-mono-nerd
 noto-fonts
 noto-fonts-emoji
