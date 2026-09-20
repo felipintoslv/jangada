@@ -8,9 +8,7 @@
      4px   (1 unidade)   espaço entre módulos, em "spacing" do config.jsonc
      8px   (2 unidades)  folga interna dos módulos e border-radius, igual ao
                          rounding das janelas (aparencia.lua)
-     28px  (7 unidades)  altura da barra deitada, em "height" do config.jsonc
-     32px  (8 unidades)  largura da barra em pé, no arquivo que o jangada-barra
-                         gera para as bordas esquerda e direita
+     32px  (8 unidades)  altura da barra (config.jsonc) e largura da barra em pé
 
    Fora da escala fica só o corpo do texto, 13px, que é medida de fonte. */
 * {
@@ -20,14 +18,33 @@
 }
 
 window#waybar {
-  background: alpha(@superficie, 0.92);
+  background: transparent;
   color: @texto;
+}
+
+/* Ilhas flutuantes: esquerda, centro e direita agrupados em cápsulas independentes */
+.modules-left,
+.modules-center,
+.modules-right {
+  background: alpha(@superficie, 0.92);
+  border: 1px solid alpha(@texto, 0.12);
+  border-radius: 8px;
+  padding: 0 4px;
+  margin-top: 4px;
+}
+
+.modules-left {
+  margin-left: 8px;
+}
+
+.modules-right {
+  margin-right: 8px;
 }
 
 #workspaces button {
   padding: 0 8px;
   color: @texto_suave;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 #workspaces button.active {
@@ -37,16 +54,20 @@ window#waybar {
 
 #custom-agentes {
   padding: 0 8px;
-  border-radius: 8px;
+  border-radius: 6px;
+  margin: 2px 2px;
 }
 
 #custom-agentes.aguardando {
   color: @texto_primario;
   background: @atencao;
+  font-weight: bold;
 }
 
 #custom-agentes.trabalhando {
   color: @primaria;
+  background: alpha(@primaria, 0.16);
+  border: 1px solid alpha(@primaria, 0.35);
 }
 
 /* Ciclo encerrado e aprovado: fica aceso até alguém encerrar a sessão. Usa as
@@ -55,10 +76,12 @@ window#waybar {
 #custom-agentes.concluido {
   color: @texto_primario;
   background: @primaria;
+  font-weight: bold;
 }
 
 #custom-agentes.ativo {
   color: @texto;
+  background: alpha(@texto, 0.08);
 }
 
 #custom-agentes.vazio {
@@ -123,4 +146,11 @@ window#waybar.vertical #mpris,
 window#waybar.vertical #idle_inhibitor,
 window#waybar.vertical #custom-atualizacoes {
   padding: 8px 0;
+}
+
+window#waybar.vertical .modules-left,
+window#waybar.vertical .modules-center,
+window#waybar.vertical .modules-right {
+  margin: 4px 2px;
+  padding: 4px 0;
 }

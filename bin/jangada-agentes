@@ -189,7 +189,7 @@ case "${1:-}" in
     limpar_orfaos
     linhas="$(listar)"
     if [[ -z "$linhas" ]]; then
-      jq -cn '{text:"󰚩 0", tooltip:"nenhum agente ativo", class:"vazio"}'
+      jq -cn '{text:"󰚩 0", tooltip:"nenhum agente ativo\n\nSUPER+A: novo agente\nSUPER+P: tarefa em par\nSUPER+SHIFT+A: lista de agentes", class:"vazio"}'
       exit 0
     fi
     total="$(wc -l <<<"$linhas")"
@@ -203,9 +203,31 @@ case "${1:-}" in
     ((trabalhando > 0)) && classe="trabalhando"
     ((aguardando > 0)) && classe="aguardando"
     texto="󰚩 $total"
+    ((trabalhando > 0)) && texto+="  󰑮 $trabalhando"
     ((aguardando > 0)) && texto+="  󰂞 $aguardando"
     ((concluido > 0)) && texto+="  󰄬 $concluido"
-    dica="$(awk -F'\t' '{printf "%s  %s\n", $1, $2}' <<<"$linhas")"
+    dica="󰚩 Sessões de agentes ($total):"
+    while IFS=$'\t' read -r est s _resto; do
+      [[ -n "$s" ]] || continue
+      arq="$estado_dir/$s.json"
+      tarefa=""
+      ramo=""
+      if [[ -f "$arq" ]]; then
+        tarefa="$(jq -r '(.tarefa // "") | split("\n")[0] | if length > 50 then .[0:47] + "..." else . end' "$arq" 2>/dev/null || true)"
+        ramo="$(jq -r '.ramo // empty' "$arq" 2>/dev/null || true)"
+      fi
+      simb="●"
+      case "$est" in
+        aguardando) simb="󰂞" ;;
+        trabalhando) simb="󰑮" ;;
+        concluido) simb="󰄬" ;;
+        *) simb="●" ;;
+      esac
+      dica+=$'\n\n'"$simb $s [$est]"
+      [[ -n "$ramo" ]] && dica+=$'\n   ramo: '"$ramo"
+      [[ -n "$tarefa" ]] && dica+=$'\n   tarefa: '"$tarefa"
+    done <<<"$linhas"
+    dica+=$'\n\nClique: lista de agentes · Direito: painel'
     jq -cn --arg t "$texto" --arg d "$dica" --arg c "$classe" '{text:$t, tooltip:$d, class:$c}'
     ;;
   --focar)

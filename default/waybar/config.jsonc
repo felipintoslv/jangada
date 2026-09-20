@@ -2,7 +2,7 @@
 {
   "layer": "top",
   "position": "top",
-  "height": 28,
+  "height": 32,
   "spacing": 4,
   "modules-left": ["hyprland/workspaces", "custom/agentes", "hyprland/window"],
   "modules-center": ["clock"],
@@ -82,7 +82,7 @@
   },
 
   "clock": {
-    "format": "{:%a %d/%m  %H:%M}",
+    "format": "{:L%A %d/%m  %H:%M}",
     "tooltip-format": "<tt>{calendar}</tt>",
     "locale": "pt_BR.UTF-8",
     "on-click": "$JANGADA_PATH/bin/jangada-calendario"
