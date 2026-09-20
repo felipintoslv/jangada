@@ -1,4 +1,16 @@
-/* Estilo base da barra. As variáveis de cor vêm de cores.css (matugen). */
+/* Estilo base da barra. As variáveis de cor vêm de cores.css (matugen); nenhum
+   valor de cor é escrito aqui.
+
+   Escala de medidas. O CSS do GTK tem @define-color, mas não tem variável de
+   tamanho, então a escala fica neste comentário e todo número do arquivo sai
+   dela. A unidade é 4px, a mesma de gaps_in em default/hypr/aparencia.lua:
+
+     4px   (1 unidade)   espaço entre módulos, em "spacing" do config.jsonc
+     8px   (2 unidades)  folga interna dos módulos e border-radius, igual ao
+                         rounding das janelas (aparencia.lua)
+     28px  (7 unidades)  altura da barra, em "height" do config.jsonc
+
+   Fora da escala fica só o corpo do texto, 13px, que é medida de fonte. */
 * {
   font-family: "JetBrainsMono Nerd Font", sans-serif;
   font-size: 13px;
@@ -13,7 +25,7 @@ window#waybar {
 #workspaces button {
   padding: 0 8px;
   color: @texto_suave;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
 #workspaces button.active {
@@ -22,8 +34,8 @@ window#waybar {
 }
 
 #custom-agentes {
-  padding: 0 10px;
-  border-radius: 6px;
+  padding: 0 8px;
+  border-radius: 8px;
 }
 
 #custom-agentes.aguardando {

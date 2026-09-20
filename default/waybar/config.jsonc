@@ -3,7 +3,7 @@
   "layer": "top",
   "position": "top",
   "height": 28,
-  "spacing": 6,
+  "spacing": 4,
   "modules-left": ["hyprland/workspaces", "custom/agentes", "hyprland/window"],
   "modules-center": ["clock"],
   "modules-right": [
