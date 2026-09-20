@@ -234,6 +234,11 @@ extrair_campo() {
   jq -r "$2 // empty" "$1" 2>/dev/null || true
 }
 
+# O mesmo, para a saída que veio por cano e está numa variável.
+extrair_texto() {
+  jq -r "$2 // empty" <<<"$1" 2>/dev/null || true
+}
+
 # Começo de um dos canais do agy, recortado: a resposta inteira não cabe na
 # tela e o que distingue uma recusa de uma saída vazia está nas primeiras
 # linhas.
@@ -250,11 +255,23 @@ canal_agy() {
 
 # Sem isto a falha aponta para um log que quase sempre está vazio, e não sobra
 # nenhuma pista do que o revisor respondeu.
+# O arquivo de erro do ciclo quase sempre fica vazio porque o agy reabre o
+# próprio erro para o diretório de log dele. O diagnóstico aponta para lá.
+log_proprio_agy() {
+  local dir="$HOME/.gemini/antigravity-cli/log"
+  [[ -d "$dir" ]] || return 0
+  find "$dir" -maxdepth 1 -type f -name 'cli-*.log' -printf '%T@ %p\n' 2>/dev/null \
+    | sort -rn | head -1 | cut -d' ' -f2-
+}
+
 diagnostico_agy() {
+  local proprio
   canal_agy "saída" "$json_revisao"
   canal_agy "erro" "$log_revisao"
   campo "Arquivos:" "$json_revisao"
   campo "" "$log_revisao"
+  proprio="$(log_proprio_agy)"
+  [[ -n "$proprio" ]] && campo "Log do agy:" "$proprio"
 }
 
 echo ""
@@ -380,19 +397,30 @@ seguido de uma lista numerada e clara com cada item que o Claude deve corrigir:
   args_agy=(-p "$prompt_agy" --output-format json --effort "$esforco" --add-dir "$dir")
   [[ -n "$modelo" ]] && args_agy+=(--model "$modelo")
 
-  # O agy às vezes sai com código 0 sem escrever nada, nem na saída nem no
-  # erro, e aí não há status para ler. Aconteceu duas vezes em 20/09/2026, em
-  # ciclos diferentes, e repetir o mesmo pedido resolveu nas duas, então a
-  # chamada vai em duas tentativas antes de a rodada ser abandonada.
+  # A captura vai por cano, em substituição de comando, e não por arquivo.
+  # O agy reabre a própria saída e o próprio erro para o diretório de log
+  # dele, e guarda o descritor original para escrever o JSON só no fim. Com a
+  # saída redirecionada para um arquivo, esse descritor aponta para um caminho
+  # que pode deixar de existir durante os minutos em que o agy trabalha, e o
+  # resultado acaba escrito num arquivo já sem nome: o ciclo lê um caminho que
+  # não existe mais, vê status vazio e desiste. Um cano não pode ser apagado.
+  # O arquivo continua sendo gravado depois da chamada, só para diagnóstico.
+  #
+  # A repetição fica: o agy também já saiu com código 0 e resposta vazia, duas
+  # vezes em 20/09/2026, e repetir o mesmo pedido resolveu nas duas.
   falha_agy=""
   for tentativa in 1 2; do
     info "Executando Antigravity CLI... (tentativa $tentativa)"
-    if ! agy "${args_agy[@]}" </dev/null >"$json_revisao" 2>"$log_revisao"; then
-      falha_agy="a execução do agy terminou com erro"
+    saida_agy=""
+    if saida_agy="$(agy "${args_agy[@]}" </dev/null 2>"$log_revisao")"; then
+      falha_agy=""
     else
-      status_agy="$(extrair_campo "$json_revisao" .status)"
+      falha_agy="a execução do agy terminou com erro"
+    fi
+    printf '%s' "$saida_agy" >"$json_revisao" 2>/dev/null || true
+    if [[ -z "$falha_agy" ]]; then
+      status_agy="$(extrair_texto "$saida_agy" .status)"
       if [[ "$status_agy" == "SUCCESS" ]]; then
-        falha_agy=""
         break
       fi
       falha_agy="o agy não concluiu (status: ${status_agy:-desconhecido})"
@@ -409,7 +437,7 @@ seguido de uma lista numerada e clara com cada item que o Claude deve corrigir:
     break
   fi
 
-  parecer="$(extrair_campo "$json_revisao" .response)"
+  parecer="$(extrair_texto "$saida_agy" .response)"
   if [[ -z "$parecer" ]]; then
     erro "o agy concluiu, mas a resposta veio vazia; consulte $log_revisao"
     break
