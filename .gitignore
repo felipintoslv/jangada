@@ -9,3 +9,6 @@ revisao/antigas/
 
 # Resposta completa em JSON das revisões pelo agy.
 revisao/*.json
+
+# Clones de referência para comparações (não entram no commit).
+referencia/
