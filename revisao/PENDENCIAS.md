@@ -90,20 +90,46 @@ livre (`Ctrl+Alt+F3`), onde a mensagem de erro fica à vista.
 2. ~~**Nomes de pacotes.**~~ Resolvido na instalação real: o `matugen` veio do
    AUR como `matugen-bin` 4.1.0 e os demais nomes existem. Foram acrescentados
    `pipewire-pulse` e `qt6-wayland`, que faltavam na lista da interface.
-3. **Noctalia.** O comando do lançador (`qs -c noctalia-shell ipc call launcher toggle`)
-   e o início (`qs -c noctalia-shell`) seguem a documentação conhecida, mas
-   dependem da versão instalada. O `jangada-mapear` registra a versão.
-   Verificado em 20/09/2026, sem conseguir testar: o binário `qs` do pacote
-   `noctalia-qs` 0.0.12-1, do AUR, não abre. Ele sai com
-   `undefined symbol ... Qt_6_PRIVATE_API` desde que o `qt6-base` passou de
-   6.11.1 para 6.11.2, no mesmo dia. O pacote é do AUR e usa a API privada do
-   Qt, então precisa ser recompilado a cada mudança de versão do Qt; enquanto
-   isso não acontece, nem o lançador nem o início do Noctalia podem ser
-   conferidos, e `JANGADA_INTERFACE=noctalia` fica sem barra e sem lançador.
+3. **Noctalia.** Verificado em 20/09/2026: o `qs -c noctalia-shell` não funciona
+   mais, e a causa não é a versão instalada. O Noctalia saiu do AUR e entrou nos
+   repositórios oficiais como `extra/noctalia` 5.1.0-1, que é uma reescrita
+   nativa: as dependências do pacote não têm Qt nem Quickshell, e ele entrega um
+   binário só, `/usr/bin/noctalia`, sem `qs`. Os pacotes `noctalia-qs` 0.0.12-1 e
+   `noctalia-shell` 4.7.7-1, que esta máquina ainda tem instalados, deixaram de
+   existir no AUR, e `yay -Si` não devolve nada para nenhum dos dois. O `qs`
+   instalado sai com `undefined symbol ... Qt_6_PRIVATE_API` desde que o
+   `qt6-base` passou de 6.11.1 para 6.11.2, no mesmo dia; recompilar não resolve,
+   porque não há mais pacote para recompilar. Quem precisar do `qs` para outra
+   coisa usa `extra/quickshell` 0.3.1-1, que ocupa `/usr/bin/qs` e
+   `/usr/bin/quickshell`, os mesmos dois caminhos do `noctalia-qs`: instalar um
+   sem remover o outro dá conflito de arquivos.
+
+   A migração para o 5.x troca `qs -c noctalia-shell ipc call <alvo> <ação>` por
+   `noctalia msg <comando>`, conforme a documentação do projeto:
+
+   | uso | comando |
+   |-----|---------|
+   | iniciar a shell | `noctalia` |
+   | lançador | `noctalia msg panel-toggle launcher` |
+   | configurações | `noctalia msg settings-toggle` |
+   | bloquear a tela | `noctalia msg session lock` |
+   | menu de sessão | `noctalia msg panel-toggle session` |
+
+   O emoji deixou de ser comando próprio e virou um provedor do lançador,
+   acionado por prefixo de busca, configurável em
+   `[shell.launcher.providers.emoji]`.
+
+   Cinco pontos do jangada dependem da troca: `default/hypr/atalhos.lua:8`,
+   `default/hypr/inicio.lua:20`, `bin/jangada-verificar:18`, o regex
+   `conjunto_hypr` em `bin/jangada-update:14` e a busca do QML em
+   `bin/jangada-mapear:146`. Nenhum arquivo de `install/pacotes/` declara
+   quickshell ou noctalia, então instalação nova não herda o problema. Até a
+   troca ser feita, `JANGADA_INTERFACE=noctalia` fica sem barra e sem lançador.
+
    O `jangada-update` avisa quando o conjunto do Hyprland muda, mas não avisa
-   neste caso: o que quebrou foi um pacote do AUR ligado ao Qt, e o conjunto
-   observado é só o do Hyprland. Registrado aqui, sem alterar o
-   `jangada-update`.
+   neste caso: ele compara versões de pacotes instalados, e nem um pacote que
+   sumiu do AUR nem um binário quebrado por atualização do `qt6-base` aparecem
+   nessa comparação. Registrado aqui, sem alterar o `jangada-update`.
 4. ~~**Terminal.**~~ Resolvido: `hyprctl clients` mostrou as classes
    `org.jangada.agente`, `org.jangada.painel` e `org.jangada.lista` em janelas
    separadas, cada uma com a sua regra aplicada.
