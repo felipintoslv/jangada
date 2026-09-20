@@ -39,10 +39,11 @@ window#waybar {
   color: @texto_suave;
 }
 
-#clock, #pulseaudio, #network, #battery, #tray {
+#clock, #pulseaudio, #network, #cpu, #memory, #temperature, #battery, #tray {
   padding: 0 8px;
 }
 
+#temperature.critical,
 #battery.critico {
   color: @atencao;
 }

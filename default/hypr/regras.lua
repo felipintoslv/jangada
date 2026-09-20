@@ -29,6 +29,15 @@ hl.window_rule({
   center = true,
 })
 
+-- Monitor de sistema (btop/htop): janela flutuante no centro.
+hl.window_rule({
+  name = "monitor-sistema",
+  match = { class = "^org\\.jangada\\.monitor$" },
+  float = true,
+  size = "1150 720",
+  center = true,
+})
+
 -- Janelas de agentes: borda de outra cor para distinguir dos terminais comuns.
 hl.window_rule({
   name = "janela-agente",

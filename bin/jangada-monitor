@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Abre o monitor do sistema (btop ou htop) em janela flutuante.
+#
+# Uso: jangada-monitor
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+mon="htop"
+if command -v btop >/dev/null 2>&1; then
+  mon="btop"
+elif command -v htop >/dev/null 2>&1; then
+  mon="htop"
+fi
+
+exec "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.monitor --titulo "Monitor do Sistema" -e "$mon"

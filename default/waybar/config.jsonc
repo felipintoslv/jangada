@@ -6,7 +6,15 @@
   "spacing": 6,
   "modules-left": ["hyprland/workspaces", "custom/agentes"],
   "modules-center": ["clock"],
-  "modules-right": ["tray", "pulseaudio", "network", "battery"],
+  "modules-right": [
+    "tray",
+    "cpu",
+    "memory",
+    "temperature",
+    "network",
+    "pulseaudio",
+    "battery"
+  ],
 
   "hyprland/workspaces": {
     "format": "{name}",
@@ -31,18 +39,51 @@
     "locale": "pt_BR.UTF-8"
   },
 
+  "cpu": {
+    "interval": 2,
+    "format": " {usage}%",
+    "tooltip": true,
+    "on-click": "$JANGADA_PATH/bin/jangada-monitor"
+  },
+
+  "memory": {
+    "interval": 2,
+    "format": " {percentage}%",
+    "tooltip-format": "RAM: {used:0.1f}GiB / {total:0.1f}GiB ({percentage}%)\nSwap: {swapUsed:0.1f}GiB / {swapTotal:0.1f}GiB",
+    "on-click": "$JANGADA_PATH/bin/jangada-monitor"
+  },
+
+  "temperature": {
+    "interval": 2,
+    "hwmon-path": [
+      "/sys/class/hwmon/hwmon3/temp1_input",
+      "/sys/class/hwmon/hwmon2/temp1_input",
+      "/sys/class/hwmon/hwmon4/temp1_input",
+      "/sys/class/hwmon/hwmon5/temp1_input",
+      "/sys/class/hwmon/hwmon6/temp1_input",
+      "/sys/class/thermal/thermal_zone0/temp"
+    ],
+    "critical-threshold": 80,
+    "format": " {temperatureC}°C",
+    "format-critical": "󰈸 {temperatureC}°C",
+    "tooltip": true,
+    "on-click": "$JANGADA_PATH/bin/jangada-monitor"
+  },
+
+  "network": {
+    "interval": 2,
+    "format-wifi": "󰤨 {essid}",
+    "format-ethernet": "󰈀 {bandwidthDownBits}",
+    "format-disconnected": "󰤭",
+    "tooltip-format": "{ifname} · IP: {ipaddr}\n⬇ {bandwidthDownBytes}  ⬆ {bandwidthUpBytes}",
+    "on-click": "$JANGADA_PATH/bin/jangada-monitor"
+  },
+
   "pulseaudio": {
     "format": "{icon} {volume}%",
     "format-muted": "󰝟",
     "format-icons": { "default": ["󰕿", "󰖀", "󰕾"] },
     "on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
-  },
-
-  "network": {
-    "format-wifi": "󰤨 {essid}",
-    "format-ethernet": "󰈀",
-    "format-disconnected": "󰤭",
-    "tooltip-format": "{ifname} {ipaddr}"
   },
 
   "battery": {
