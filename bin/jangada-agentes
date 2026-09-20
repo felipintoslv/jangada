@@ -48,21 +48,20 @@ vencido() {
   (( agora - marca > guardar_horas * 3600 ))
 }
 
-# Uma linha por sessão viva: estado<TAB>sessão<TAB>diretório<TAB>atualizado
+# Uma linha por sessão: estado<TAB>sessão<TAB>diretório<TAB>atualizado<TAB>ramo<TAB>tarefa
 listar() {
-  local s arq estado dir atualizado vivas pid
+  local s arq vivas pid dados estado dir atualizado ramo tarefa
   vivas="$(sessoes_vivas)"
   while read -r s; do
     [[ -n "$s" ]] || continue
     arq="$estado_dir/$s.json"
     if [[ -f "$arq" ]]; then
-      estado="$(jq -r '.estado // "ativo"' "$arq" 2>/dev/null || echo "ativo")"
-      dir="$(jq -r '.dir // ""' "$arq" 2>/dev/null || echo "")"
-      atualizado="$(jq -r '.atualizado // ""' "$arq" 2>/dev/null || echo "")"
+      dados="$(jq -r '[ (.estado // "ativo"), (.dir // ""), (.atualizado // ""), (.ramo // ""), ((.tarefa // "") | split("\n") | (.[0] // "") | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;") | if length > 50 then .[0:47] + "..." else . end) ] | @tsv' "$arq" 2>/dev/null || printf 'ativo\t\t\t\t\t')"
     else
-      estado="ativo"; dir=""; atualizado=""
+      dados="$(printf 'ativo\t\t\t\t\t')"
     fi
-    printf '%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado"
+    IFS=$'\t' read -r estado dir atualizado ramo tarefa <<<"$dados"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado" "$ramo" "$tarefa"
   done <<<"$vivas"
 
   for arq in "$estado_dir"/*.json; do
@@ -70,15 +69,14 @@ listar() {
     s="$(basename "$arq" .json)"
     grep -qxF "$s" <<<"$vivas" && continue
     pid="$(jq -r '.pid // empty' "$arq" 2>/dev/null || true)"
-    estado="$(jq -r '.estado // "ativo"' "$arq" 2>/dev/null || echo "ativo")"
-    dir="$(jq -r '.dir // ""' "$arq" 2>/dev/null || echo "")"
-    atualizado="$(jq -r '.atualizado // ""' "$arq" 2>/dev/null || echo "")"
+    dados="$(jq -r '[ (.estado // "ativo"), (.dir // ""), (.atualizado // ""), (.ramo // ""), ((.tarefa // "") | split("\n") | (.[0] // "") | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;") | if length > 50 then .[0:47] + "..." else . end) ] | @tsv' "$arq" 2>/dev/null || printf 'ativo\t\t\t\t\t')"
+    IFS=$'\t' read -r estado dir atualizado ramo tarefa <<<"$dados"
     # Ou o processo ainda responde, ou o ciclo terminou e o resultado fica à
     # vista até alguém encerrar a sessão.
     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-      printf '%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado"
+      printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado" "$ramo" "$tarefa"
     elif estado_final "$estado" && ! vencido "$atualizado"; then
-      printf '%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado"
+      printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado" "$ramo" "$tarefa"
     fi
   done
 }
@@ -207,16 +205,13 @@ case "${1:-}" in
     ((aguardando > 0)) && texto+="  󰂞 $aguardando"
     ((concluido > 0)) && texto+="  󰄬 $concluido"
     dica="󰚩 Sessões de agentes ($total):"
-    while IFS=$'\t' read -r est s _resto; do
+    cont=0
+    while IFS=$'\t' read -r est s _dir _atz ramo tarefa; do
       [[ -n "$s" ]] || continue
-      arq="$estado_dir/$s.json"
-      tarefa=""
-      ramo=""
-      if [[ -f "$arq" ]]; then
-        tarefa="$(jq -r '(.tarefa // "") | split("\n")[0] | if length > 50 then .[0:47] + "..." else . end' "$arq" 2>/dev/null || true)"
-        ramo="$(jq -r '.ramo // empty' "$arq" 2>/dev/null || true)"
+      cont=$((cont + 1))
+      if ((cont > 10)); then
+        continue
       fi
-      simb="●"
       case "$est" in
         aguardando) simb="󰂞" ;;
         trabalhando) simb="󰑮" ;;
@@ -227,7 +222,10 @@ case "${1:-}" in
       [[ -n "$ramo" ]] && dica+=$'\n   ramo: '"$ramo"
       [[ -n "$tarefa" ]] && dica+=$'\n   tarefa: '"$tarefa"
     done <<<"$linhas"
-    dica+=$'\n\nClique: lista de agentes · Direito: painel'
+    if ((total > 10)); then
+      dica+=$'\n\n... e mais '"$((total - 10))"' sessões'
+    fi
+    dica+=$'\n\nClique: lista de agentes · Clique direito: painel'
     jq -cn --arg t "$texto" --arg d "$dica" --arg c "$classe" '{text:$t, tooltip:$d, class:$c}'
     ;;
   --focar)
@@ -255,7 +253,7 @@ case "${1:-}" in
       if [[ -z "$linhas" ]]; then
         echo "nenhum agente ativo. SUPER+A inicia um."
       else
-        while IFS=$'\t' read -r estado s dir atualizado; do
+        while IFS=$'\t' read -r estado s dir atualizado _resto; do
           printf '%s  %-12s %-32s %s\n' "$(icone "$estado")" "$estado" "$s" "${atualizado:11:8}"
         done <<<"$linhas"
         # O estado é o primeiro campo da linha.

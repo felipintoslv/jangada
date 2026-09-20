@@ -5,12 +5,11 @@
    tamanho, então a escala fica neste comentário e todo número do arquivo sai
    dela. A unidade é 4px, a mesma de gaps_in em default/hypr/aparencia.lua:
 
-     4px   (1 unidade)   espaço entre módulos, em "spacing" do config.jsonc
-     8px   (2 unidades)  folga interna dos módulos e border-radius, igual ao
-                         rounding das janelas (aparencia.lua)
+     4px   (1 unidade)   espaço entre módulos e margem vertical das ilhas
+     8px   (2 unidades)  folga interna, border-radius e margem lateral das ilhas
      32px  (8 unidades)  altura da barra (config.jsonc) e largura da barra em pé
 
-   Fora da escala fica só o corpo do texto, 13px, que é medida de fonte. */
+   Bordas de 1px são traço de contorno e 13px é a medida do corpo da fonte. */
 * {
   font-family: "JetBrainsMono Nerd Font", sans-serif;
   font-size: 13px;
@@ -22,7 +21,7 @@ window#waybar {
   color: @texto;
 }
 
-/* Ilhas flutuantes: esquerda, centro e direita agrupados em cápsulas independentes */
+/* Ilhas flutuantes: esquerda, centro e direita em cápsulas independentes. */
 .modules-left,
 .modules-center,
 .modules-right {
@@ -30,7 +29,7 @@ window#waybar {
   border: 1px solid alpha(@texto, 0.12);
   border-radius: 8px;
   padding: 0 4px;
-  margin-top: 4px;
+  margin: 4px 0;
 }
 
 .modules-left {
@@ -44,7 +43,7 @@ window#waybar {
 #workspaces button {
   padding: 0 8px;
   color: @texto_suave;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
 #workspaces button.active {
@@ -54,8 +53,7 @@ window#waybar {
 
 #custom-agentes {
   padding: 0 8px;
-  border-radius: 6px;
-  margin: 2px 2px;
+  border-radius: 8px;
 }
 
 #custom-agentes.aguardando {

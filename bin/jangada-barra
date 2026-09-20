@@ -84,7 +84,7 @@ CABECALHO
   // comporta texto, então os módulos que mostram número trocam para o ícone
   // sozinho, o relógio quebra em duas linhas e o título da janela sai. O
   // "height": 0 desfaz a altura fixa do config.jsonc, que deixaria a barra
-  // com 28px de comprimento. O "name" vira classe CSS: base.css usa
+  // com 32px de comprimento. O "name" vira classe CSS: base.css usa
   // window#waybar.vertical para trocar o eixo da folga interna.
   "name": "vertical",
   "width": 32,
