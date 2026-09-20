@@ -24,12 +24,18 @@ else
     # trocar o subvolume criado pelo que já existia.
     if mountpoint -q /.snapshots 2>/dev/null; then
       info "/.snapshots já é um subvolume montado; aplicando o procedimento padrão"
+      # O procedimento desmonta e remonta com "mount -a". Sem entrada no fstab,
+      # a remontagem não acontece e os snapshots atuais ficam inacessíveis.
+      findmnt --fstab /.snapshots >/dev/null 2>&1 \
+        || morrer "/.snapshots está montado mas não tem entrada em /etc/fstab; acrescente a entrada (confira com 'findmnt /.snapshots') antes de rodar esta etapa"
       como_root umount /.snapshots
       como_root rmdir /.snapshots
       como_root snapper -c root create-config /
       como_root btrfs subvolume delete /.snapshots
       como_root mkdir /.snapshots
       como_root mount -a
+      simulando || mountpoint -q /.snapshots \
+        || morrer "/.snapshots não voltou a ser montado por 'mount -a'; confira a entrada no /etc/fstab antes de seguir"
       como_root chmod 750 /.snapshots
     else
       # Uma pasta /.snapshots vazia e não montada também impede o snapper.
@@ -45,7 +51,7 @@ else
   copia_seguranca /etc/snapper/configs/root
   como_root install -m 0644 "$JANGADA_PATH/default/snapper/root" /etc/snapper/configs/root
   como_root systemctl disable --now snapper-timeline.timer || true
-  como_root systemctl enable --now snapper-cleanup.timer
+  como_root systemctl enable --now snapper-cleanup.timer || aviso "snapper-cleanup.timer não habilitado"
 
   case "$(carregador_boot)" in
     limine) como_root systemctl enable --now limine-snapper-sync.service || aviso "limine-snapper-sync não habilitado" ;;

@@ -97,17 +97,21 @@ mkdir -p "$estado_dir"
 if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
   ((snapshot)) && "$JANGADA_PATH/bin/jangada-snapshot" "antes do agente $sessao" || true
 
+  cmd_agente="$agente"
+  [[ -n "$JANGADA_AGENTE_ARGS" ]] && cmd_agente+=" $JANGADA_AGENTE_ARGS"
+  ((${#extras[@]})) && cmd_agente+=" $(printf '%q ' "${extras[@]}")"
+
+  # A sessão do tmux é criada antes do arquivo de estado. O jangada-agentes
+  # apaga o estado de sessões que não existem mais, e na ordem inversa haveria
+  # uma janela em que a barra apagaria o arquivo recém-gravado.
+  "${JANGADA_TMUX[@]}" new-session -d -s "$sessao" -c "$dir" -e "JANGADA_SESSAO=$sessao"
+
   jq -n --arg sessao "$sessao" --arg dir "$dir" --arg raiz "$raiz" --arg worktree "$worktree" \
     --arg ramo "$ramo" --arg base "$base" --arg agente "$agente" --arg agora "$(date -Is)" \
     '{sessao:$sessao, dir:$dir, raiz:$raiz, worktree:$worktree, ramo:$ramo, base:$base,
       agente:$agente, estado:"iniciado", mensagem:"", desde:$agora, atualizado:$agora}' \
     >"$estado_dir/$sessao.json"
 
-  cmd_agente="$agente"
-  [[ -n "$JANGADA_AGENTE_ARGS" ]] && cmd_agente+=" $JANGADA_AGENTE_ARGS"
-  ((${#extras[@]})) && cmd_agente+=" $(printf '%q ' "${extras[@]}")"
-
-  "${JANGADA_TMUX[@]}" new-session -d -s "$sessao" -c "$dir" -e "JANGADA_SESSAO=$sessao"
   "${JANGADA_TMUX[@]}" send-keys -t "=$sessao:" "$cmd_agente" Enter
 fi
 

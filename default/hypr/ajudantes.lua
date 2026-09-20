@@ -23,8 +23,10 @@ local function ler_conf()
   local arquivo = io.open(j.config .. "/jangada.conf", "r")
   if arquivo then
     for linha in arquivo:lines() do
-      linha = linha:gsub("#.*", "")
-      local chave, valor = linha:match("^%s*(JANGADA_[%u_]+)=(.-)%s*$")
+      -- A variável do for é constante a partir do Lua 5.5; o texto sem
+      -- comentário vai para uma local própria.
+      local texto = linha:gsub("#.*", "")
+      local chave, valor = texto:match("^%s*(JANGADA_[%u_]+)=(.-)%s*$")
       if chave then
         valor = valor:gsub("^%$HOME", home):gsub("^~", home)
         valores[chave] = valor

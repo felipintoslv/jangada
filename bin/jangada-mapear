@@ -14,6 +14,9 @@ C="${XDG_CONFIG_HOME:-$HOME/.config}"
 host="$(cat /etc/hostname 2>/dev/null || uname -n)"
 saida="${1:-$JANGADA_PATH/mapeamento/$host-$(date +%Y%m%d-%H%M)}"
 mkdir -p "$saida"/{config,sistema,hyprland,noctalia,agentes}
+# Caminho absoluto: o restante do script roda dentro de "$saida", e a máscara
+# de dados sensíveis percorre "$saida" de novo, o que falharia se fosse relativo.
+saida="$(realpath "$saida")"
 cd "$saida" || exit 1
 
 log() { printf '==> %s\n' "$*"; }
