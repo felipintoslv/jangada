@@ -93,6 +93,17 @@ livre (`Ctrl+Alt+F3`), onde a mensagem de erro fica à vista.
 3. **Noctalia.** O comando do lançador (`qs -c noctalia-shell ipc call launcher toggle`)
    e o início (`qs -c noctalia-shell`) seguem a documentação conhecida, mas
    dependem da versão instalada. O `jangada-mapear` registra a versão.
+   Verificado em 20/09/2026, sem conseguir testar: o binário `qs` do pacote
+   `noctalia-qs` 0.0.12-1, do AUR, não abre. Ele sai com
+   `undefined symbol ... Qt_6_PRIVATE_API` desde que o `qt6-base` passou de
+   6.11.1 para 6.11.2, no mesmo dia. O pacote é do AUR e usa a API privada do
+   Qt, então precisa ser recompilado a cada mudança de versão do Qt; enquanto
+   isso não acontece, nem o lançador nem o início do Noctalia podem ser
+   conferidos, e `JANGADA_INTERFACE=noctalia` fica sem barra e sem lançador.
+   O `jangada-update` avisa quando o conjunto do Hyprland muda, mas não avisa
+   neste caso: o que quebrou foi um pacote do AUR ligado ao Qt, e o conjunto
+   observado é só o do Hyprland. Registrado aqui, sem alterar o
+   `jangada-update`.
 4. ~~**Terminal.**~~ Resolvido: `hyprctl clients` mostrou as classes
    `org.jangada.agente`, `org.jangada.painel` e `org.jangada.lista` em janelas
    separadas, cada uma com a sua regra aplicada.
@@ -100,6 +111,33 @@ livre (`Ctrl+Alt+F3`), onde a mensagem de erro fica à vista.
    conferida antes e a etapa 20 rodou de verdade; `jangada-verificar` confirma
    snapper configurado e snap-pac presente. Sem entradas de boot para
    snapshots, porque a máquina usa systemd-boot: a volta exige um live USB.
+
+## Benchmarking com a barra do Omarchy
+
+Os quinze itens propostos em `benchmark-waybar-omarchy.md`, seção 4, estão
+todos fechados. Os de 4.1 a 4.13 saíram nos commits do dia; 4.14 e 4.15 ficaram
+para o fim porque mexem na aparência inteira da barra.
+
+1. ~~**4.1 a 4.9 e 4.13.**~~ Resolvidos em 20/09/2026: classe `ativo` dos
+   agentes e estado `aviso` da bateria estilizados, clique na bateria, clique
+   direito da rede abrindo o `nmtui`, bandeja completa, inibidor de repouso,
+   lista de pacotes fechada, módulo de atualizações pendentes, módulo de mídia
+   e aviso quando falta o locale `pt_BR.UTF-8`.
+2. ~~**4.10 Janela em foco.**~~ Resolvido em 20/09/2026: `hyprland/window`
+   entre os agentes e o relógio, com `max-length` e `separate-outputs`.
+3. ~~**4.11 Menu de energia.**~~ Resolvido em 20/09/2026: `jangada-energia` no
+   clique da bateria, com perfil, bateria e sessão.
+4. ~~**4.12 Temperatura.**~~ Resolvido em 20/09/2026: `hwmon-path-abs` mais
+   `input-filename` no lugar do `hwmonN` fixo, com migração.
+5. ~~**4.14 Escala de medidas no CSS.**~~ Resolvido em 20/09/2026: a escala
+   está no topo de `default/waybar/base.css`, com unidade de 4px, folga interna
+   e raio de 8px, e o `spacing` do `config.jsonc` alinhado a ela. Falta a
+   conferência visual, que exige reiniciar a barra.
+6. ~~**4.15 Barra vertical e reposicionável.**~~ Resolvido em 20/09/2026:
+   `jangada-barra --posicao topo|base|esquerda|direita`, com a escolha em
+   `JANGADA_BARRA_POSICAO` e um conjunto de formatos só de ícone para as bordas
+   em pé. Falta a conferência visual e, com ela, confirmar que a mesclagem do
+   `include` da waybar preserva as chaves que não foram sobrescritas.
 
 ## Decisões tomadas nesta revisão
 
