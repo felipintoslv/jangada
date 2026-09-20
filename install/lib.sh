@@ -141,7 +141,12 @@ carregador_boot() {
     echo limine
   elif [[ -f /boot/grub/grub.cfg ]] || pacman -Qq grub >/dev/null 2>&1; then
     echo grub
-  elif tem_comando bootctl && bootctl is-installed >/dev/null 2>&1; then
+  elif [[ -d /boot/loader/entries || -d /efi/loader/entries \
+          || -d /boot/EFI/systemd || -d /efi/EFI/systemd ]] \
+     || { tem_comando bootctl && bootctl is-installed >/dev/null 2>&1; }; then
+    # O bootctl precisa de root para abrir a partição EFI e responde
+    # "Permission denied" para usuário comum, por isso o teste no sistema
+    # de arquivos vem antes.
     echo systemd-boot
   else
     echo desconhecido
