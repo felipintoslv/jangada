@@ -18,6 +18,27 @@ Registro da revisão feita pelo Claude antes da revisão cruzada com o Gemini.
 | Mesclagem dos hooks em `~/.claude/settings.json` já existente | hooks antigos preservados |
 | `jangada-mapear` com segredos falsos | chaves mascaradas; `.credentials.json` ignorado |
 
+## O que já foi testado no desktop (19/09/2026)
+
+Hyprland 0.56.0 aninhado dentro da sessão niri, com a mesma configuração da
+sessão menos `default.hypr.inicio` (esse módulo roda
+`dbus-update-activation-environment`, que trocaria o ambiente da sessão em uso).
+
+| Teste | Resultado |
+|---|---|
+| `hyprctl configerrors` | vazio |
+| Atalhos registrados (`hyprctl binds`) | 61, igual à API imitada |
+| Opções aplicadas | `kb_layout br`, `layout dwindle`, `rounding 8`, `border_size 2`, `gaps_in 4` |
+| Regra do painel (`workspace = "special:agentes silent"`) | janela `org.jangada.painel` foi para `special:agentes` sem roubar o foco |
+| Regra da lista (`float`, `size`, `center`) | flutuante e 1100x650; o monitor aninhado tinha 631 de largura, então a janela ficou em x=-235, que é o centro exato para uma janela mais larga que a tela |
+| Regra da borda (`tag = "+agente"`) | janela `org.jangada.agente` recebeu a etiqueta |
+| `hl.dsp.window.close()`, `hl.dsp.window.float({action="toggle"})` | funcionam |
+| `hl.dsp.workspace.toggle_special("agentes")` | funciona |
+| `hl.dsp.focus({ window = "address:0x..." })` do `jangada-agentes --focar` | foco trocou para a janela indicada |
+| `hl.dsp.dpms({ action = "disable" / "enable" })` do hypridle | `dpmsStatus` acompanhou |
+| `hl.dsp.exit()` do `jangada-menu` | encerrou a instância |
+| Instalação real das etapas 10, 20 e 40 | concluída; `jangada-verificar` diz tudo certo |
+
 ## Revisões cruzadas
 
 | Arquivo | Resultado |
@@ -27,25 +48,24 @@ Registro da revisão feita pelo Claude antes da revisão cruzada com o Gemini.
 
 ## O que só pode ser confirmado no desktop
 
-1. **API Lua do Hyprland.** A imitação só confere a estrutura. Confirmar com
-   `hyprctl configerrors` depois de entrar na sessão, em especial:
-   `workspace = "special:agentes silent"` na regra do painel,
-   `hl.dsp.focus({ window = "address:..." })` no `jangada-agentes --focar` e
-   `hyprctl dispatch 'hl.dsp.dpms(...)'` no hypridle. Já confirmado no código:
-   com configuração em Lua, `hyprctl dispatch` aceita só expressões Lua.
-2. **Nomes de pacotes.** Não foi possível consultar os repositórios do Arch
-   daqui. O instalador lista os que não encontrar, sem interromper. Os mais
-   incertos: `matugen` (pode estar só no AUR, como `matugen-bin`),
-   `ttf-jetbrains-mono-nerd`, `hyprpolkitagent`, `limine-snapper-sync`.
+1. ~~**API Lua do Hyprland.**~~ Resolvido em 19/09/2026 no Hyprland aninhado:
+   `configerrors` vazio e as três expressões duvidosas funcionando (ver a tabela
+   acima). Confirmado também que `hyprctl dispatch` aceita só expressões Lua:
+   `hyprctl dispatch exec foo` responde erro de sintaxe, e a forma certa é
+   `hyprctl dispatch 'hl.dsp.exec_cmd("foo")'`.
+2. ~~**Nomes de pacotes.**~~ Resolvido na instalação real: o `matugen` veio do
+   AUR como `matugen-bin` 4.1.0 e os demais nomes existem. Foram acrescentados
+   `pipewire-pulse` e `qt6-wayland`, que faltavam na lista da interface.
 3. **Noctalia.** O comando do lançador (`qs -c noctalia-shell ipc call launcher toggle`)
    e o início (`qs -c noctalia-shell`) seguem a documentação conhecida, mas
    dependem da versão instalada. O `jangada-mapear` registra a versão.
-4. **Terminal.** `ghostty --class=org.jangada.agente` abre uma instância
-   separada; confirmar que as regras de janela reconhecem a classe
-   (`hyprctl clients`).
-5. **Snapper com /.snapshots já montado.** O procedimento segue a wiki do Arch,
-   mas mexe em subvolume. Rodar primeiro com `JANGADA_SIMULAR=1 ./install.sh 20`
-   e conferir `sistema/subvolumes.txt` no mapa.
+4. ~~**Terminal.**~~ Resolvido: `hyprctl clients` mostrou as classes
+   `org.jangada.agente`, `org.jangada.painel` e `org.jangada.lista` em janelas
+   separadas, cada uma com a sua regra aplicada.
+5. ~~**Snapper com /.snapshots já montado.**~~ Resolvido: a simulação foi
+   conferida antes e a etapa 20 rodou de verdade; `jangada-verificar` confirma
+   snapper configurado e snap-pac presente. Sem entradas de boot para
+   snapshots, porque a máquina usa systemd-boot: a volta exige um live USB.
 
 ## Decisões tomadas nesta revisão
 
