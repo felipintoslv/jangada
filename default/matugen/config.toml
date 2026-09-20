@@ -26,3 +26,7 @@ output_path = "~/.config/jangada/fuzzel/fuzzel.ini"
 [templates.hyprlock]
 input_path = "./modelos/hyprlock.conf"
 output_path = "~/.config/jangada/hyprlock/hyprlock.conf"
+
+[templates.ghostty]
+input_path = "./modelos/ghostty"
+output_path = "~/.config/jangada/ghostty/cores"
