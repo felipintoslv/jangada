@@ -27,6 +27,7 @@ j.atalho(SUPER .. " + CTRL + A", "Painel de agentes", j.cmd("jangada-agentes", "
 -- Sessão
 j.atalho(SUPER .. " + CTRL + R", "Recarregar e mostrar erros", j.cmd("jangada-recarregar"))
 j.atalho(SUPER .. " + CTRL + T", "Trocar papel de parede e cores", j.cmd("jangada-tema", "--escolher"))
+j.atalho(SUPER .. " + CTRL + B", "Mover a barra para a próxima borda", j.cmd("jangada-barra", "--posicao ciclo"))
 
 -- Janelas
 j.atalho(SUPER .. " + W", "Fechar janela", hl.dsp.window.close())
