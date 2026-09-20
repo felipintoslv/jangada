@@ -45,13 +45,23 @@ trap "rm -rf '$tmp_dir'" EXIT INT TERM HUP
 export JANGADA_SHELL=1
 export JANGADA_PATH
 
+# O bloco do instalador no ~/.zshrc (ou ~/.bashrc) fixa JANGADA_PATH no caminho
+# instalado. Como o arquivo do usuário é carregado primeiro, sem reafirmar o
+# valor aqui um jangada-shell chamado de um clone carregaria as funções da
+# instalação, e não as do clone que o invocou.
+reafirmar_caminho() {
+  printf 'export JANGADA_PATH=%q\n' "$JANGADA_PATH"
+}
+
 # Detecta a shell do usuário
 sh_bin="${SHELL:-/bin/bash}"
 case "$sh_bin" in
   *zsh)
     # Prepara o arquivo de inicialização seguro para o zsh
-    cat << 'EOF' > "$tmp_dir/.zshrc"
-[[ -f "$HOME/.zshrc" ]] && source "$HOME/.zshrc"
+    {
+      echo '[[ -f "$HOME/.zshrc" ]] && source "$HOME/.zshrc"'
+      reafirmar_caminho
+      cat << 'EOF'
 if [[ -f "$JANGADA_PATH/shell/jangada-shell.sh" ]]; then
   source "$JANGADA_PATH/shell/jangada-shell.sh"
 fi
@@ -63,12 +73,15 @@ echo "Diretório atual: $PWD"
 echo "Digite 'ajuda' para listar os comandos. 'exit' para sair."
 echo ""
 EOF
+    } > "$tmp_dir/.zshrc"
     ZDOTDIR="$tmp_dir" zsh -i
     ;;
   *)
     # Fallback seguro para bash
-    cat << 'EOF' > "$tmp_dir/.bashrc"
-[[ -f "$HOME/.bashrc" ]] && source "$HOME/.bashrc"
+    {
+      echo '[[ -f "$HOME/.bashrc" ]] && source "$HOME/.bashrc"'
+      reafirmar_caminho
+      cat << 'EOF'
 if [[ -f "$JANGADA_PATH/shell/jangada-shell.sh" ]]; then
   source "$JANGADA_PATH/shell/jangada-shell.sh"
 fi
@@ -79,6 +92,7 @@ echo "Diretório atual: $PWD"
 echo "Digite 'ajuda' para listar os comandos. 'exit' para sair."
 echo ""
 EOF
+    } > "$tmp_dir/.bashrc"
     bash --rcfile "$tmp_dir/.bashrc" -i
     ;;
 esac

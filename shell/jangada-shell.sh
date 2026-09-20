@@ -6,6 +6,38 @@
 : "${JANGADA_PATH:=$HOME/.local/share/jangada}"
 : "${JANGADA_PROJETOS:=$HOME/Projetos}"
 
+# Pergunta de sim ou não que funciona nas duas shells. O "read -p" do bash pede
+# um coprocesso no zsh, e "${resposta,,}" é erro de sintaxe lá, então a pergunta
+# sai pelo printf e a resposta é comparada por padrão.
+_jangada_confirmar() {
+  local resposta=""
+  printf '%s [s/N] ' "$1" >&2
+  read -r resposta || return 1
+  case "$resposta" in
+    s*|S*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Ramo principal do repositório atual: o que o origin aponta, ou main, ou
+# master. Devolve vazio quando nenhum dos três existe.
+_jangada_ramo_base() {
+  local base=""
+  base="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+  base="${base#origin/}"
+  if [ -n "$base" ] && git rev-parse --verify --quiet "$base" >/dev/null 2>&1; then
+    printf '%s\n' "$base"
+    return 0
+  fi
+  for base in main master; do
+    if git rev-parse --verify --quiet "$base" >/dev/null 2>&1; then
+      printf '%s\n' "$base"
+      return 0
+    fi
+  done
+  return 1
+}
+
 # Atalhos diretos para os comandos do jangada
 par() {
   "$JANGADA_PATH/bin/jangada-par" "$@"
@@ -50,15 +82,25 @@ revisar() {
     return 1
   fi
 
-  local diff_txt="" base_ref="HEAD"
+  # "git diff -- X..HEAD" trata X..HEAD como caminho, não como intervalo, e
+  # devolve vazio: a auditoria saía sem diferença nenhuma. O intervalo vai sem
+  # o "--" e com três pontos, que compara a partir da base comum.
+  local diff_txt="" base_ref=""
   if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    # Tenta comparar com a branch base ou com HEAD~1
-    local main_branch
-    main_branch="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")"
-    if git rev-parse --verify --quiet "$main_branch" >/dev/null 2>&1; then
-      base_ref="$main_branch"
+    base_ref="$(_jangada_ramo_base || true)"
+    if [ -n "$base_ref" ]; then
+      diff_txt="$(git diff "$base_ref...HEAD" 2>/dev/null || true)"
     fi
-    diff_txt="$(git diff -- "$base_ref..HEAD" 2>/dev/null || git diff 2>/dev/null || true)"
+    # Sem ramo base, ou sem commit próprio, o que interessa é o que ainda não
+    # foi gravado em commit.
+    if [ -z "$diff_txt" ]; then
+      diff_txt="$(git diff HEAD 2>/dev/null || true)"
+    fi
+  fi
+
+  if [ -z "$diff_txt" ]; then
+    echo "aviso: nenhuma diferença encontrada; a auditoria vai olhar só os arquivos" >&2
+    diff_txt="(nenhuma diferença registrada)"
   fi
 
   echo "==> Enviando código para auditoria com Antigravity..."
@@ -80,77 +122,117 @@ Responda de forma concisa e estruturada com:
   agy -p "$prompt_rev" --effort high --add-dir .
 }
 
-# Exibe o diff da tarefa atual de forma segura
-diff_tarefa() {
+# Mostra o que a tarefa mudou em relação ao ramo base.
+#
+# O nome não é "diff": um alias com esse nome sobrescreve o diff(1) do sistema
+# dentro da subshell, e qualquer "diff a b" passaria a comparar outra coisa.
+mudancas() {
   if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "o diretório atual não é um repositório git" >&2
     return 1
   fi
-  local base_branch="main"
-  if ! git rev-parse --verify --quiet "$base_branch" >/dev/null 2>&1; then
-    base_branch="$(git rev-parse --abbrev-ref HEAD)"
+  local base
+  base="$(_jangada_ramo_base || true)"
+  if [ -z "$base" ]; then
+    echo "nenhum ramo base (main/master); mostrando o que não está em commit" >&2
+    git diff HEAD
+    return
   fi
-  git diff -- "$base_branch..HEAD"
+  if [ "$base" = "$(git rev-parse --abbrev-ref HEAD)" ]; then
+    git diff HEAD
+    return
+  fi
+  git diff "$base...HEAD"
 }
-alias diff="diff_tarefa"
 
-# Finaliza a tarefa do worktree e mescla na branch principal com segurança
+# Integra a tarefa do worktree no ramo principal.
+#
+# O merge acontece no repositório principal, não aqui: o worktree da tarefa e o
+# repositório principal são checkouts distintos do mesmo repositório, e um
+# "git checkout main" dentro do worktree falha com "already used by worktree".
 concluir() {
   if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "o diretório atual não é um repositório git" >&2
     return 1
   fi
 
-  local raiz ramo
-  raiz="$(git rev-parse --show-toplevel)"
+  local ramo base principal ramo_principal pendentes commits
   ramo="$(git rev-parse --abbrev-ref HEAD)"
+  if [ "$ramo" = "HEAD" ]; then
+    echo "HEAD está solto (detached); troque para o ramo da tarefa antes de concluir." >&2
+    return 1
+  fi
 
-  if [[ "$ramo" == "main" || "$ramo" == "master" ]]; then
-    echo "você já está na branch principal ($ramo). Escolha o worktree de uma tarefa para concluir."
+  base="$(_jangada_ramo_base || true)"
+  if [ -z "$base" ]; then
+    echo "não encontrei um ramo principal (main ou master) neste repositório." >&2
+    return 1
+  fi
+
+  if [ "$ramo" = "$base" ]; then
+    echo "você já está no ramo principal ($base). Entre no worktree de uma tarefa para concluir."
     return 0
   fi
 
-  # Verifica se há alterações pendentes não salvas
-  local pendentes
+  # A primeira entrada de "git worktree list" é sempre o worktree principal.
+  principal="$(git worktree list --porcelain | awk '/^worktree /{print substr($0, 10); exit}')"
+  if [ -z "$principal" ] || [ ! -d "$principal" ]; then
+    echo "não consegui localizar o repositório principal." >&2
+    return 1
+  fi
+
   pendentes="$(git status --porcelain)"
-  if [[ -n "$pendentes" ]]; then
-    echo "aviso: existem alterações não salvas no repositório:"
+  if [ -n "$pendentes" ]; then
+    echo "aviso: existem alterações não salvas no worktree:"
     printf '%s\n' "$pendentes" | head -10
     echo "faça commit das alterações antes de concluir."
     return 1
   fi
 
-  echo "Ramo da tarefa: $ramo"
-  echo "Repositório:    $raiz"
-  echo ""
-  echo "Commits a serem integrados:"
-  git log --oneline "main..$ramo" 2>/dev/null || git log -3 --oneline
-
-  local resposta
-  read -r -p "Deseja mesclar '$ramo' na branch principal? [s/N] " resposta
-  if [[ "${resposta,,}" != s* ]]; then
-    echo "operação cancelada."
+  commits="$(git log --oneline "$base..$ramo" 2>/dev/null || true)"
+  if [ -z "$commits" ]; then
+    echo "o ramo $ramo não tem nenhum commit além de $base; nada a integrar."
     return 0
   fi
 
-  # Executa o merge de forma segura
-  git checkout main
-  if git merge --no-ff -- "$ramo"; then
-    echo "merge realizado com sucesso."
-    read -r -p "Deseja excluir o ramo '$ramo'? [s/N] " resposta
-    if [[ "${resposta,,}" == s* ]]; then
-      git branch -d -- "$ramo"
-    fi
-  else
-    echo "ocorreram conflitos no merge; resolva-os manualmente."
+  echo "Ramo da tarefa:  $ramo"
+  echo "Integrar em:     $base ($principal)"
+  echo ""
+  echo "Commits a serem integrados:"
+  printf '%s\n' "$commits"
+  echo ""
+
+  _jangada_confirmar "Mesclar '$ramo' em '$base'?" || { echo "operação cancelada."; return 0; }
+
+  ramo_principal="$(git -C "$principal" rev-parse --abbrev-ref HEAD)"
+  if [ "$ramo_principal" != "$base" ]; then
+    echo "o repositório principal está em '$ramo_principal', não em '$base'." >&2
+    echo "troque para $base lá e rode de novo." >&2
+    return 1
   fi
+
+  if ! git -C "$principal" merge --no-ff "$ramo"; then
+    echo "ocorreram conflitos no merge; resolva-os em $principal." >&2
+    return 1
+  fi
+  echo "merge realizado com sucesso em $principal."
+
+  # O ramo só pode ser apagado depois que o worktree que o usa sumir; até lá o
+  # git recusa com "checked out at". Quem remove o worktree é o jangada-agente-fim.
+  echo "para remover o worktree e encerrar a sessão: fim <sessao> (ou Ctrl+X em 'agentes')"
 }
 
 # Seletor rápido de projetos com fzf
 trocar() {
+  if ! command -v fzf >/dev/null 2>&1; then
+    echo "erro: fzf não encontrado no PATH" >&2
+    return 1
+  fi
   local d
-  # shellcheck disable=SC2154
-  d="$("$JANGADA_PATH/bin/jangada-agente" --ajuda >/dev/null 2>&1 && {
+  # A lista não depende de nenhum comando do jangada: antes ela só era montada
+  # se "jangada-agente --ajuda" desse certo, e qualquer falha ali deixava o
+  # seletor mudo, sem dizer por quê.
+  d="$({
     command -v zoxide >/dev/null 2>&1 && zoxide query -l 2>/dev/null || true
     find "$JANGADA_PROJETOS" -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true
     find "$JANGADA_PROJETOS" -maxdepth 3 -type d -name .git -prune -printf '%h\n' 2>/dev/null || true
@@ -181,8 +263,8 @@ ajuda() {
   echo "  revisar           audita o código do diretório atual com Antigravity"
   echo "  status            lista as sessões de agentes ativas e seus estados"
   echo "  agentes           abre o seletor interativo de agentes ativos"
-  echo "  diff              mostra as alterações feitas no ramo atual"
-  echo "  concluir          mescla a tarefa atual na branch principal"
+  echo "  mudancas          mostra as alterações feitas no ramo atual"
+  echo "  concluir          integra a tarefa atual no ramo principal"
   echo "  trocar            muda rapidamente para outro projeto com fzf"
   echo "  tema [imagem]     escolhe ou aplica um papel de parede e recalcula as cores"
   echo "  audio [saida|ent] escolhe o dispositivo de áudio ativo (fones, microfone)"
