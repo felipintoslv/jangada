@@ -4,7 +4,7 @@
   "position": "top",
   "height": 28,
   "spacing": 6,
-  "modules-left": ["hyprland/workspaces", "custom/agentes"],
+  "modules-left": ["hyprland/workspaces", "custom/agentes", "hyprland/window"],
   "modules-center": ["clock"],
   "modules-right": [
     "mpris",
@@ -35,6 +35,17 @@
     "format": "{}",
     "on-click": "$JANGADA_PATH/bin/jangada-agentes --janela",
     "on-click-right": "$JANGADA_PATH/bin/jangada-agentes --painel",
+    "tooltip": true
+  },
+
+  // Título da janela em foco, entre os agentes e o relógio do centro. O
+  // max-length limita a largura tomada do centro; o título inteiro continua
+  // na dica. Sem janela em foco o texto fica vazio e a waybar recolhe o
+  // módulo. Com separate-outputs, cada monitor mostra a janela dele.
+  "hyprland/window": {
+    "format": "{title}",
+    "max-length": 35,
+    "separate-outputs": true,
     "tooltip": true
   },
 
