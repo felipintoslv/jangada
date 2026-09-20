@@ -21,6 +21,7 @@ networkmanager     # nmcli e nmtui, usados pelo jangada-rede e pelo módulo de r
 bluez              # serviço do bluetooth; o instalador não o liga, veja o README
 bluez-utils        # bluetoothctl, usado pelo jangada-bluetooth
 python-pyqt6       # calendário do jangada-calendario
+power-profiles-daemon  # perfis de energia do jangada-energia; o serviço fica a cargo de quem instala
 pipewire-pulse     # áudio dos programas que falam PulseAudio
 qt6-wayland        # Qt nativo em Wayland (Quickshell, Noctalia, apps Qt)
 ttf-jetbrains-mono-nerd

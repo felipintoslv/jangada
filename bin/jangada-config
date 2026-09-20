@@ -84,6 +84,21 @@ driver_da_gpu() {
   printf '%s\n' "${_drv##*/}"
 }
 
+# Abre o fuzzel no modo dmenu com o tema do jangada, repassando os argumentos
+# recebidos. O "--config" só entra quando o arquivo existe. Cobrir a ausência
+# dele com "fuzzel --config ... || fuzzel" reabre o menu quando o usuário
+# cancela, porque o fuzzel sai com 1 nos dois casos: erro de configuração e
+# nenhuma seleção. Quem chama continua distinguindo cancelamento pelo código
+# de saída 1.
+jangada_fuzzel() {
+  local _cfg="$JANGADA_CONFIG/fuzzel/fuzzel.ini"
+  if [[ -r "$_cfg" ]]; then
+    fuzzel --dmenu --config "$_cfg" "$@"
+  else
+    fuzzel --dmenu "$@"
+  fi
+}
+
 # Socket próprio do tmux para as sessões de agentes, separado do tmux pessoal.
 # shellcheck disable=SC2034  # usado pelos scripts que carregam este arquivo
 JANGADA_TMUX=(tmux -L jangada -f "$JANGADA_PATH/default/tmux/agentes.conf")

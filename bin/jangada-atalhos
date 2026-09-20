@@ -39,9 +39,7 @@ case "${1:-}" in
   --lista) montar ;;
   -h|--ajuda) sed -n '2,6s/^# \{0,1\}//p' "$0" ;;
   "")
-    montar | fuzzel --dmenu --prompt "atalhos > " \
-      --config "$JANGADA_CONFIG/fuzzel/fuzzel.ini" 2>/dev/null \
-      || montar | fuzzel --dmenu --prompt "atalhos > "
+    montar | jangada_fuzzel --prompt "atalhos > "
     ;;
   *) echo "argumento desconhecido: $1" >&2; exit 1 ;;
 esac

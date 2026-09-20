@@ -52,8 +52,14 @@ window#waybar {
 }
 
 #clock, #pulseaudio, #network, #bluetooth, #cpu, #memory, #temperature, #battery, #tray,
-#mpris, #idle_inhibitor, #custom-atualizacoes {
+#mpris, #idle_inhibitor, #custom-atualizacoes, #window {
   padding: 0 8px;
+}
+
+/* Título da janela em foco. Fica em segundo plano na leitura, como o mpris:
+   o relógio do centro é o que precisa continuar legível ao lado dele. */
+#window {
+  color: @texto_suave;
 }
 
 /* Só aparece quando há atualização pendente, então pode chamar atenção. */

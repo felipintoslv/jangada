@@ -46,7 +46,7 @@ escolher() {
     return 1
   fi
   find "$pasta" -maxdepth 2 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) \
-    | sort | fuzzel --dmenu --prompt "papel de parede: " --config "$JANGADA_CONFIG/fuzzel/fuzzel.ini"
+    | sort | jangada_fuzzel --prompt "papel de parede: "
 }
 
 command -v matugen >/dev/null 2>&1 || { echo "matugen não instalado" >&2; exit 1; }

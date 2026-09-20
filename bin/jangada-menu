@@ -6,8 +6,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
 menu() {
-  fuzzel --dmenu --prompt "${1:-jangada} > " --config "$JANGADA_CONFIG/fuzzel/fuzzel.ini" 2>/dev/null \
-    || fuzzel --dmenu --prompt "${1:-jangada} > "
+  jangada_fuzzel --prompt "${1:-jangada} > "
 }
 b="$JANGADA_PATH/bin"
 term() { setsid -f "$b/jangada-terminal" -e bash -c "$1; echo; read -r -p 'Enter para fechar'" >/dev/null 2>&1; }

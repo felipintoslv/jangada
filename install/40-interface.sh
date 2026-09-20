@@ -57,6 +57,9 @@ fi
 if ! systemctl is-enabled bluetooth.service >/dev/null 2>&1; then
   aviso "serviço bluetooth não está habilitado; o módulo fica igual a um rádio desligado. Para ligar: sudo systemctl enable --now bluetooth"
 fi
+if ! systemctl is-enabled power-profiles-daemon.service >/dev/null 2>&1; then
+  aviso "power-profiles-daemon não está habilitado; o jangada-energia abre sem a parte de perfis. Para ligar: sudo systemctl enable --now power-profiles-daemon"
+fi
 if ! locale -a 2>/dev/null | grep -qiE '^pt_BR\.?utf-?8$'; then
   aviso "locale pt_BR.UTF-8 não está gerado; o relógio da barra cai para o formato do sistema. Para gerar: descomente a linha em /etc/locale.gen e rode sudo locale-gen"
 fi

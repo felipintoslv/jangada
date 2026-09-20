@@ -4,7 +4,7 @@
   "position": "top",
   "height": 28,
   "spacing": 6,
-  "modules-left": ["hyprland/workspaces", "custom/agentes"],
+  "modules-left": ["hyprland/workspaces", "custom/agentes", "hyprland/window"],
   "modules-center": ["clock"],
   "modules-right": [
     "mpris",
@@ -35,6 +35,17 @@
     "format": "{}",
     "on-click": "$JANGADA_PATH/bin/jangada-agentes --janela",
     "on-click-right": "$JANGADA_PATH/bin/jangada-agentes --painel",
+    "tooltip": true
+  },
+
+  // Título da janela em foco, entre os agentes e o relógio do centro. O
+  // max-length limita a largura tomada do centro; o título inteiro continua
+  // na dica. Sem janela em foco o texto fica vazio e a waybar recolhe o
+  // módulo. Com separate-outputs, cada monitor mostra a janela dele.
+  "hyprland/window": {
+    "format": "{title}",
+    "max-length": 35,
+    "separate-outputs": true,
     "tooltip": true
   },
 
@@ -93,14 +104,21 @@
 
   "temperature": {
     "interval": 2,
-    "hwmon-path": [
-      "/sys/class/hwmon/hwmon3/temp1_input",
-      "/sys/class/hwmon/hwmon2/temp1_input",
-      "/sys/class/hwmon/hwmon4/temp1_input",
-      "/sys/class/hwmon/hwmon5/temp1_input",
-      "/sys/class/hwmon/hwmon6/temp1_input",
-      "/sys/class/thermal/thermal_zone0/temp"
+    // A numeração de /sys/class/hwmon/hwmonN sai na ordem em que os módulos
+    // do kernel registram os sensores e muda entre partidas, então caminho
+    // fixo podia acabar lendo a placa de vídeo, um disco NVMe ou a placa de
+    // rede. O hwmon-path-abs aponta o diretório do dispositivo, que vem da
+    // topologia do barramento e não muda, e a waybar resolve o hwmonN de
+    // dentro dele. Vence o primeiro da lista que existir: sensor de pacote
+    // da Intel, do AMD e o do ThinkPad. Sem nenhum deles, cai no
+    // thermal-zone 0, que é /sys/class/thermal/thermal_zone0/temp.
+    "hwmon-path-abs": [
+      "/sys/devices/platform/coretemp.0/hwmon",
+      "/sys/devices/pci0000:00/0000:00:18.3/hwmon",
+      "/sys/devices/platform/thinkpad_hwmon/hwmon"
     ],
+    "input-filename": "temp1_input",
+    "thermal-zone": 0,
     "critical-threshold": 80,
     "format": " {temperatureC}°C",
     "format-critical": "󰈸 {temperatureC}°C",
@@ -115,7 +133,7 @@
     "format-disconnected": "󰤭",
     "tooltip-format": "{ifname} · IP: {ipaddr}\n⬇ {bandwidthDownBytes}  ⬆ {bandwidthUpBytes}",
     "on-click": "$JANGADA_PATH/bin/jangada-rede",
-    "on-click-right": "$JANGADA_PATH/bin/jangada-monitor"
+    "on-click-right": "$JANGADA_PATH/bin/jangada-rede tui"
   },
 
   "bluetooth": {
@@ -159,7 +177,7 @@
     "format-icons": ["󰁺", "󰁼", "󰁾", "󰂀", "󰁹"],
     "states": { "aviso": 25, "critico": 10 },
     "tooltip-format": "{capacity}% · {timeTo}",
-    "on-click": "$JANGADA_PATH/bin/jangada-monitor"
+    "on-click": "$JANGADA_PATH/bin/jangada-energia"
   },
 
   // show-passive-items mostra também o que está em repouso, que é o caso de

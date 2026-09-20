@@ -8,9 +8,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
 menu_fuzzel() {
-  local prompt="${1:-bluetooth}"
-  fuzzel --dmenu --prompt "$prompt > " --config "$JANGADA_CONFIG/fuzzel/fuzzel.ini" 2>/dev/null \
-    || fuzzel --dmenu --prompt "$prompt > "
+  jangada_fuzzel --prompt "${1:-bluetooth} > "
 }
 
 esta_ligado() {

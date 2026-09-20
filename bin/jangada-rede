@@ -8,9 +8,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
 menu_fuzzel() {
-  local prompt="${1:-rede}"
-  fuzzel --dmenu --prompt "$prompt > " --config "$JANGADA_CONFIG/fuzzel/fuzzel.ini" 2>/dev/null \
-    || fuzzel --dmenu --prompt "$prompt > "
+  jangada_fuzzel --prompt "${1:-rede} > "
 }
 
 obter_cabeada() {
@@ -66,7 +64,7 @@ conectar_wifi() {
     return 0
   fi
 
-  senha="$(fuzzel --dmenu --password --prompt "senha para $ssid > " --config "$JANGADA_CONFIG/fuzzel/fuzzel.ini" 2>/dev/null || true)"
+  senha="$(jangada_fuzzel --password --prompt "senha para $ssid > " || true)"
   [[ -n "$senha" ]] || return 0
 
   if nmcli device wifi connect "$ssid" password "$senha" >/dev/null 2>&1; then
