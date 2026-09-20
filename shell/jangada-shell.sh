@@ -103,11 +103,30 @@ revisar() {
     diff_txt="(nenhuma diferença registrada)"
   fi
 
+  # O prompt inteiro vai num pedido só e o modelo do agy corta em 1 milhão de
+  # tokens. O teto é o mesmo do DIFF_MAX do jangada-par.
+  if [ "${#diff_txt}" -gt 200000 ]; then
+    echo "aviso: diff de ${#diff_txt} caracteres; enviando os primeiros 200000" >&2
+    diff_txt="${diff_txt:0:200000}
+[... diff truncado aqui pelo revisar; leia os arquivos para ver o resto ...]"
+  fi
+
   echo "==> Enviando código para auditoria com Antigravity..."
   local prompt_rev="Você é o auditor de qualidade e segurança do Jangada.
 Analise os arquivos e as alterações recentes neste diretório.
 Diferenças recentes (git diff):
 $diff_txt
+
+Como trabalhar nesta execução:
+1. Não altere, crie nem apague arquivos, e não execute comandos. Em modo não
+   interativo o agy não tem como pedir permissão: o pedido é recusado sozinho
+   e a execução termina sem produzir saída. Leia os arquivos com a sua
+   ferramenta de leitura, a partir de $PWD.
+2. Leia apenas arquivos de texto, e comece pelos que aparecem no diff. Não
+   abra PDF, docx, xlsx, imagem, parquet, zip nem qualquer outro binário: a
+   ferramenta de leitura carrega o arquivo inteiro no contexto, e um só
+   arquivo grande estoura o limite de tokens e derruba a auditoria.
+3. Responda apenas com o texto da auditoria, no formato pedido abaixo.
 
 Avalie:
 1. Segurança: Há injeção de comandos, credenciais expostas ou permissões perigosas?
