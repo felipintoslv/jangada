@@ -10,13 +10,22 @@ source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 s="${1:?informe a sessão (veja jangada-agentes --lista)}"
 arq="$JANGADA_ESTADO/agentes/$s.json"
 
-worktree=""; ramo=""; base=""; raiz=""
+worktree=""; ramo=""; base=""; raiz=""; estado=""
 if [[ -f "$arq" ]]; then
   worktree="$(jq -r '.worktree // ""' "$arq")"
   ramo="$(jq -r '.ramo // ""' "$arq")"
   base="$(jq -r '.base // ""' "$arq")"
   raiz="$(jq -r '.raiz // ""' "$arq")"
+  estado="$(jq -r '.estado // ""' "$arq")"
 fi
+
+# Ciclo que já terminou fica no painel depois de o processo sair, então o pid
+# do arquivo pode ter sido reaproveitado pelo sistema. Nesse caso encerrar a
+# sessão é só arrumar a lista, e matar o pid mataria um processo alheio.
+matar_pid=1
+case "$estado" in
+  concluido|aguardando) matar_pid=0 ;;
+esac
 
 confirmar() {
   local r
@@ -49,7 +58,7 @@ fi
 limpar() {
   local pid
   pid="$(jq -r '.pid // empty' "$arq" 2>/dev/null || true)"
-  if [[ -n "$pid" ]]; then
+  if ((matar_pid)) && [[ -n "$pid" ]]; then
     kill "$pid" 2>/dev/null || true
   fi
   "${JANGADA_TMUX[@]}" kill-session -t "=$s" 2>/dev/null || true
@@ -69,7 +78,7 @@ limpar() {
 if [[ "${JANGADA_SESSAO:-}" == "$s" ]]; then
   registro="$JANGADA_ESTADO/agentes/fim-$s.log"
   echo "encerrando a partir da própria sessão; registro em $registro"
-  export s worktree ramo raiz arq forcar
+  export s worktree ramo raiz arq forcar matar_pid
   export -f limpar
   # shellcheck disable=SC1090,SC2016
   setsid -f bash -c 'sleep 0.5; source "$1"; limpar' _ "$JANGADA_PATH/bin/jangada-config" >"$registro" 2>&1

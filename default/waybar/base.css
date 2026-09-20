@@ -35,6 +35,14 @@ window#waybar {
   color: @primaria;
 }
 
+/* Ciclo encerrado e aprovado: fica aceso até alguém encerrar a sessão. Usa as
+   cores que já existem, para não depender de um token novo do matugen que um
+   cores.css antigo não teria. */
+#custom-agentes.concluido {
+  color: @texto_primario;
+  background: @primaria;
+}
+
 #custom-agentes.vazio {
   color: @texto_suave;
 }

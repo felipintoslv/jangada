@@ -9,6 +9,11 @@
 #   jangada-agentes --waybar   saída JSON para o módulo da barra
 #   jangada-agentes --focar S  foca a janela da sessão S ou abre uma nova
 #   jangada-agentes --lista    lista simples: estado, sessão, diretório
+#
+# Sessões terminadas em "concluido" ou "aguardando" continuam na lista depois de
+# o processo sair: são o resultado do ciclo, não um processo vivo. Saem com
+# Ctrl+X no seletor, que encerra e remove o worktree, ou sozinhas depois de
+# JANGADA_AGENTES_GUARDAR horas (padrão 24).
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
@@ -16,7 +21,31 @@ source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 estado_dir="$JANGADA_ESTADO/agentes"
 mkdir -p "$estado_dir"
 
+# Horas que um estado final continua visível depois de o processo sair.
+guardar_horas="${JANGADA_AGENTES_GUARDAR:-24}"
+
 sessoes_vivas() { "${JANGADA_TMUX[@]}" list-sessions -F '#S' 2>/dev/null || true; }
+
+# Estado de ciclo encerrado. O jangada-par não abre sessão no tmux e o processo
+# dele sai assim que grava o resultado, então sem esta distinção o painel
+# recolheria o "concluido" antes de alguém ver.
+estado_final() {
+  case "$1" in
+    concluido|aguardando) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Um estado final velho demais para continuar ocupando o painel. Sem data, ou
+# com data ilegível, conta como vencido: é resto de versão antiga do arquivo.
+vencido() {
+  local quando="$1" marca agora
+  [[ -n "$quando" ]] || return 0
+  marca="$(date -d "$quando" +%s 2>/dev/null)" || return 0
+  [[ -n "$marca" ]] || return 0
+  agora="$(date +%s)"
+  (( agora - marca > guardar_horas * 3600 ))
+}
 
 # Uma linha por sessão viva: estado<TAB>sessão<TAB>diretório<TAB>atualizado
 listar() {
@@ -40,18 +69,24 @@ listar() {
     s="$(basename "$arq" .json)"
     grep -qxF "$s" <<<"$vivas" && continue
     pid="$(jq -r '.pid // empty' "$arq" 2>/dev/null || true)"
+    estado="$(jq -r '.estado // "ativo"' "$arq" 2>/dev/null || echo "ativo")"
+    dir="$(jq -r '.dir // ""' "$arq" 2>/dev/null || echo "")"
+    atualizado="$(jq -r '.atualizado // ""' "$arq" 2>/dev/null || echo "")"
+    # Ou o processo ainda responde, ou o ciclo terminou e o resultado fica à
+    # vista até alguém encerrar a sessão.
     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-      estado="$(jq -r '.estado // "ativo"' "$arq" 2>/dev/null || echo "ativo")"
-      dir="$(jq -r '.dir // ""' "$arq" 2>/dev/null || echo "")"
-      atualizado="$(jq -r '.atualizado // ""' "$arq" 2>/dev/null || echo "")"
+      printf '%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado"
+    elif estado_final "$estado" && ! vencido "$atualizado"; then
       printf '%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado"
     fi
   done
 }
 
-# Remove arquivos de estado de sessões que já não existem.
+# Remove arquivos de estado de sessões que já não existem. Um ciclo que terminou
+# em "concluido" ou "aguardando" não é órfão: é resultado, e fica até alguém
+# encerrar a sessão no seletor ou até vencer o prazo.
 limpar_orfaos() {
-  local arq s vivas pid
+  local arq s vivas pid estado atualizado
   vivas="$(sessoes_vivas)"
   for arq in "$estado_dir"/*.json; do
     [[ -e "$arq" ]] || continue
@@ -61,6 +96,11 @@ limpar_orfaos() {
     fi
     pid="$(jq -r '.pid // empty' "$arq" 2>/dev/null || true)"
     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      continue
+    fi
+    estado="$(jq -r '.estado // ""' "$arq" 2>/dev/null || true)"
+    atualizado="$(jq -r '.atualizado // ""' "$arq" 2>/dev/null || true)"
+    if estado_final "$estado" && ! vencido "$atualizado"; then
       continue
     fi
     rm -f "$arq"
@@ -103,11 +143,16 @@ case "${1:-}" in
     total="$(wc -l <<<"$linhas")"
     aguardando="$(awk -F'\t' '$1=="aguardando"' <<<"$linhas" | wc -l)"
     trabalhando="$(awk -F'\t' '$1=="trabalhando"' <<<"$linhas" | wc -l)"
+    concluido="$(awk -F'\t' '$1=="concluido"' <<<"$linhas" | wc -l)"
+    # Precedência do que pede atenção: quem espera resposta vem antes de quem
+    # está rodando, e o que já terminou bem fica por último.
     classe="ativo"
+    ((concluido > 0)) && classe="concluido"
     ((trabalhando > 0)) && classe="trabalhando"
     ((aguardando > 0)) && classe="aguardando"
     texto="󰚩 $total"
     ((aguardando > 0)) && texto+="  󰂞 $aguardando"
+    ((concluido > 0)) && texto+="  󰄬 $concluido"
     dica="$(awk -F'\t' '{printf "%s  %s\n", $1, $2}' <<<"$linhas")"
     jq -cn --arg t "$texto" --arg d "$dica" --arg c "$classe" '{text:$t, tooltip:$d, class:$c}'
     ;;
@@ -136,6 +181,11 @@ case "${1:-}" in
         while IFS=$'\t' read -r estado s dir atualizado; do
           printf '%s  %-12s %-32s %s\n' "$(icone "$estado")" "$estado" "$s" "${atualizado:11:8}"
         done <<<"$linhas"
+        # O estado é o primeiro campo da linha.
+        if grep -qE '^(concluido|aguardando)' <<<"$linhas"; then
+          printf '\nciclo encerrado fica na lista. Ctrl+X no seletor encerra a\n'
+          printf 'sessão e remove o worktree; sozinho, sai em %sh.\n' "$guardar_horas"
+        fi
       fi
       sleep 2
     done
@@ -156,7 +206,7 @@ case "${1:-}" in
     focar "$s"
     ;;
   -h|--ajuda)
-    sed -n '2,12s/^# \{0,1\}//p' "$0"
+    sed -n '2,16s/^# \{0,1\}//p' "$0"
     ;;
   *)
     echo "opção desconhecida: $1" >&2; exit 1
