@@ -1,0 +1,430 @@
+#!/usr/bin/env bash
+# Calendário interativo do Jangada com memória de eventos marcados.
+#
+# Uso: jangada-calendario
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+exec python3 - "$@" << 'PYEOF'
+import sys
+import os
+import json
+import re
+import datetime
+import calendar
+from PyQt6.QtWidgets import (
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QPushButton, QLineEdit, QListWidget, QListWidgetItem,
+    QGridLayout, QFrame, QScrollArea, QMessageBox
+)
+from PyQt6.QtCore import Qt, QDate, QSize
+from PyQt6.QtGui import QFont, QColor, QPalette, QKeyEvent
+
+CONFIG_DIR = os.path.expanduser("~/.config/jangada")
+EVENTOS_FILE = os.path.join(CONFIG_DIR, "eventos.json")
+CORES_FILE = os.path.join(CONFIG_DIR, "waybar/cores.css")
+
+MESES_PT = [
+    "", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+]
+DIAS_SEMANA_PT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+DIAS_SEMANA_COMPLETO = [
+    "Segunda-feira", "Terça-feira", "Quarta-feira",
+    "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"
+]
+
+def carregar_cores():
+    cores = {
+        "superficie": "#14171a",
+        "texto": "#e0e3e8",
+        "texto_suave": "#9da4ae",
+        "primaria": "#95cdf7",
+        "texto_primario": "#00344e",
+        "atencao": "#cec0e8",
+        "borda": "#262b32",
+    }
+    if os.path.exists(CORES_FILE):
+        try:
+            with open(CORES_FILE, "r", encoding="utf-8") as f:
+                for linha in f:
+                    m = re.search(r"@define-color\s+([a-zA-Z0-9_]+)\s+(#[0-9a-fA-F]+);", linha)
+                    if m:
+                        cores[m.group(1)] = m.group(2)
+        except Exception:
+            pass
+    return cores
+
+def carregar_eventos():
+    if not os.path.exists(CONFIG_DIR):
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+    if os.path.exists(EVENTOS_FILE):
+        try:
+            with open(EVENTOS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def salvar_eventos(eventos):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    try:
+        with open(EVENTOS_FILE, "w", encoding="utf-8") as f:
+            json.dump(eventos, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Erro ao salvar eventos: {e}", file=sys.stderr)
+
+class CalendarioJangada(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.cores = carregar_cores()
+        self.eventos = carregar_eventos()
+        
+        hoje = datetime.date.today()
+        self.ano_atual = hoje.year
+        self.mes_atual = hoje.month
+        self.data_selecionada = hoje
+        
+        self.init_ui()
+        self.atualizar_calendario()
+        self.atualizar_painel_eventos()
+
+    def init_ui(self):
+        self.setWindowTitle("Calendário Jangada")
+        self.setObjectName("CalendarioWindow")
+        self.resize(740, 520)
+        self.setStyleSheet(f"""
+            QWidget#CalendarioWindow {{
+                background-color: {self.cores['superficie']};
+                color: {self.cores['texto']};
+                font-family: 'JetBrainsMono Nerd Font', 'JetBrains Mono', sans-serif;
+            }}
+            QLabel {{
+                color: {self.cores['texto']};
+            }}
+            QPushButton {{
+                background-color: transparent;
+                color: {self.cores['texto']};
+                border: 1px solid transparent;
+                border-radius: 6px;
+                padding: 5px;
+                font-size: 13px;
+            }}
+            QPushButton:hover {{
+                background-color: rgba(255, 255, 255, 0.08);
+            }}
+            QLineEdit {{
+                background-color: rgba(255, 255, 255, 0.05);
+                color: {self.cores['texto']};
+                border: 1px solid {self.cores.get('borda', '#333')};
+                border-radius: 6px;
+                padding: 7px 10px;
+                font-size: 13px;
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {self.cores['primaria']};
+            }}
+            QListWidget {{
+                background-color: rgba(255, 255, 255, 0.02);
+                border: 1px solid {self.cores.get('borda', '#333')};
+                border-radius: 6px;
+                padding: 4px;
+                color: {self.cores['texto']};
+            }}
+            QListWidget::item {{
+                padding: 6px 8px;
+                border-radius: 4px;
+            }}
+            QListWidget::item:hover {{
+                background-color: rgba(255, 255, 255, 0.06);
+            }}
+        """)
+
+        layout_principal = QHBoxLayout(self)
+        layout_principal.setContentsMargins(18, 18, 18, 18)
+        layout_principal.setSpacing(20)
+
+        # Painel Esquerdo: Mês e Grade
+        painel_esquerdo = QVBoxLayout()
+        painel_esquerdo.setSpacing(10)
+
+        # Cabeçalho do Mês
+        header_layout = QHBoxLayout()
+        self.btn_anterior = QPushButton("◀")
+        self.btn_anterior.setFixedSize(32, 32)
+        self.btn_anterior.clicked.connect(self.mes_anterior)
+
+        self.lbl_mes_ano = QLabel("")
+        self.lbl_mes_ano.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_mes_ano.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {self.cores['primaria']};")
+
+        self.btn_proximo = QPushButton("▶")
+        self.btn_proximo.setFixedSize(32, 32)
+        self.btn_proximo.clicked.connect(self.mes_proximo)
+
+        self.btn_hoje = QPushButton("Hoje")
+        self.btn_hoje.setFixedHeight(30)
+        self.btn_hoje.setStyleSheet("background: rgba(255,255,255,0.06); padding: 4px 10px; font-weight: bold;")
+        self.btn_hoje.clicked.connect(self.ir_para_hoje)
+
+        header_layout.addWidget(self.btn_anterior)
+        header_layout.addWidget(self.lbl_mes_ano, 1)
+        header_layout.addWidget(self.btn_proximo)
+        header_layout.addWidget(self.btn_hoje)
+        painel_esquerdo.addLayout(header_layout)
+
+        # Grade de dias
+        self.grid_dias = QGridLayout()
+        self.grid_dias.setSpacing(4)
+
+        # Cabeçalhos da semana
+        for col, dia_nome in enumerate(DIAS_SEMANA_PT):
+            lbl = QLabel(dia_nome)
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl.setStyleSheet(f"font-size: 11px; font-weight: bold; color: {self.cores['texto_suave']}; padding: 4px;")
+            self.grid_dias.addWidget(lbl, 0, col)
+
+        # Matriz de 6 linhas x 7 colunas de botões
+        self.botoes_dias = []
+        for lin in range(1, 7):
+            linha_botoes = []
+            for col in range(7):
+                btn = QPushButton("")
+                btn.setFixedSize(44, 38)
+                btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                self.grid_dias.addWidget(btn, lin, col)
+                linha_botoes.append(btn)
+            self.botoes_dias.append(linha_botoes)
+
+        painel_esquerdo.addLayout(self.grid_dias)
+        layout_principal.addLayout(painel_esquerdo, 5)
+
+        # Divisor vertical
+        linha_div = QFrame()
+        linha_div.setFrameShape(QFrame.Shape.VLine)
+        linha_div.setStyleSheet(f"color: {self.cores.get('borda', '#333')};")
+        layout_principal.addWidget(linha_div)
+
+        # Painel Direito: Detalhes do Dia e Eventos
+        painel_direito = QVBoxLayout()
+        painel_direito.setSpacing(10)
+
+        self.lbl_data_selecionada = QLabel("")
+        self.lbl_data_selecionada.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {self.cores['primaria']};")
+        painel_direito.addWidget(self.lbl_data_selecionada)
+
+        lbl_eventos_tit = QLabel("Eventos marcados:")
+        lbl_eventos_tit.setStyleSheet(f"font-size: 12px; color: {self.cores['texto_suave']};")
+        painel_direito.addWidget(lbl_eventos_tit)
+
+        self.lista_eventos = QListWidget()
+        painel_direito.addWidget(self.lista_eventos, 1)
+
+        # Linha para adicionar novo evento
+        add_layout = QHBoxLayout()
+        self.txt_novo_evento = QLineEdit()
+        self.txt_novo_evento.setPlaceholderText("Novo evento (ex: 14:00 Reunião)...")
+        self.txt_novo_evento.returnPressed.connect(self.adicionar_evento)
+
+        self.btn_add_evento = QPushButton("+ Adicionar")
+        self.btn_add_evento.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.cores['primaria']};
+                color: {self.cores['texto_primario']};
+                font-weight: bold;
+                padding: 7px 12px;
+            }}
+            QPushButton:hover {{
+                background-color: {self.cores['texto']};
+            }}
+        """)
+        self.btn_add_evento.clicked.connect(self.adicionar_evento)
+
+        self.btn_remover_evento = QPushButton("Remover")
+        self.btn_remover_evento.setStyleSheet(f"""
+            QPushButton {{
+                background-color: rgba(255, 255, 255, 0.08);
+                color: {self.cores['texto_suave']};
+                padding: 7px 10px;
+            }}
+            QPushButton:hover {{
+                background-color: rgba(230, 80, 80, 0.3);
+                color: #ff8888;
+            }}
+        """)
+        self.btn_remover_evento.clicked.connect(self.remover_evento_selecionado)
+
+        add_layout.addWidget(self.txt_novo_evento, 1)
+        add_layout.addWidget(self.btn_add_evento)
+        add_layout.addWidget(self.btn_remover_evento)
+        painel_direito.addLayout(add_layout)
+
+        # Rodapé com próximos eventos
+        self.lbl_proximos = QLabel("")
+        self.lbl_proximos.setStyleSheet(f"font-size: 11px; color: {self.cores['texto_suave']}; margin-top: 4px;")
+        painel_direito.addWidget(self.lbl_proximos)
+
+        layout_principal.addLayout(painel_direito, 6)
+
+    def mes_anterior(self):
+        if self.mes_atual == 1:
+            self.mes_atual = 12
+            self.ano_atual -= 1
+        else:
+            self.mes_atual -= 1
+        self.atualizar_calendario()
+
+    def mes_proximo(self):
+        if self.mes_atual == 12:
+            self.mes_atual = 1
+            self.ano_atual += 1
+        else:
+            self.mes_atual += 1
+        self.atualizar_calendario()
+
+    def ir_para_hoje(self):
+        hoje = datetime.date.today()
+        self.ano_atual = hoje.year
+        self.mes_atual = hoje.month
+        self.data_selecionada = hoje
+        self.atualizar_calendario()
+        self.atualizar_painel_eventos()
+
+    def atualizar_calendario(self):
+        self.lbl_mes_ano.setText(f"{MESES_PT[self.mes_atual]} {self.ano_atual}")
+        
+        hoje = datetime.date.today()
+        cal = calendar.Calendar(firstweekday=0)
+        dias_mes = list(cal.itermonthdates(self.ano_atual, self.mes_atual))
+
+        idx = 0
+        for lin in range(6):
+            for col in range(7):
+                btn = self.botoes_dias[lin][col]
+                if idx < len(dias_mes):
+                    data = dias_mes[idx]
+                    btn.setVisible(True)
+                    
+                    chave_data = data.strftime("%Y-%m-%d")
+                    tem_eventos = bool(self.eventos.get(chave_data))
+                    
+                    texto_dia = str(data.day)
+                    if tem_eventos:
+                        texto_dia += " •"
+
+                    btn.setText(texto_dia)
+                    btn.disconnect()
+                    btn.clicked.connect(lambda checked, d=data: self.selecionar_dia(d))
+
+                    eh_mes_atual = (data.month == self.mes_atual)
+                    eh_hoje = (data == hoje)
+                    eh_selecionado = (data == self.data_selecionada)
+
+                    estilo = "border-radius: 6px; font-size: 13px; "
+                    if eh_selecionado:
+                        estilo += f"background-color: {self.cores['primaria']}; color: {self.cores['texto_primario']}; font-weight: bold;"
+                    elif eh_hoje:
+                        estilo += f"border: 2px solid {self.cores['primaria']}; color: {self.cores['primaria']}; font-weight: bold;"
+                        if tem_eventos:
+                            estilo += " background-color: rgba(255, 255, 255, 0.08);"
+                    elif tem_eventos:
+                        estilo += f"background-color: rgba(255, 255, 255, 0.08); color: {self.cores['atencao']}; font-weight: bold;"
+                    elif eh_mes_atual:
+                        estilo += f"color: {self.cores['texto']};"
+                    else:
+                        estilo += "color: rgba(255, 255, 255, 0.22);"
+
+                    btn.setStyleSheet(f"QPushButton {{ {estilo} }} QPushButton:hover {{ background-color: rgba(255,255,255,0.15); }}")
+                    idx += 1
+                else:
+                    btn.setVisible(False)
+
+    def selecionar_dia(self, data):
+        self.data_selecionada = data
+        if data.month != self.mes_atual or data.year != self.ano_atual:
+            self.ano_atual = data.year
+            self.mes_atual = data.month
+        self.atualizar_calendario()
+        self.atualizar_painel_eventos()
+
+    def atualizar_painel_eventos(self):
+        d = self.data_selecionada
+        dia_sem = DIAS_SEMANA_COMPLETO[d.weekday()]
+        dia_txt = f"{dia_sem}, {d.day} de {MESES_PT[d.month]} de {d.year}"
+        self.lbl_data_selecionada.setText(dia_txt)
+
+        self.lista_eventos.clear()
+        chave = d.strftime("%Y-%m-%d")
+        evs = self.eventos.get(chave, [])
+
+        if not evs:
+            item = QListWidgetItem("Nenhum evento para este dia.")
+            item.setFlags(Qt.ItemFlag.NoItemFlags)
+            item.setForeground(QColor(self.cores['texto_suave']))
+            self.lista_eventos.addItem(item)
+        else:
+            for ev in evs:
+                item = QListWidgetItem(f"󰸗  {ev}")
+                self.lista_eventos.addItem(item)
+
+        hoje = datetime.date.today()
+        proximos = []
+        for i in range(1, 15):
+            futura = hoje + datetime.timedelta(days=i)
+            ch = futura.strftime("%Y-%m-%d")
+            if ch in self.eventos and self.eventos[ch]:
+                for ev in self.eventos[ch]:
+                    proximos.append(f"{futura.day}/{futura.month}: {ev}")
+                    if len(proximos) >= 2:
+                        break
+            if len(proximos) >= 2:
+                break
+
+        if proximos:
+            self.lbl_proximos.setText("Próximos: " + " · ".join(proximos))
+        else:
+            self.lbl_proximos.setText("Nenhum evento nos próximos 14 dias.")
+
+    def adicionar_evento(self):
+        texto = self.txt_novo_evento.text().strip()
+        if not texto:
+            return
+        chave = self.data_selecionada.strftime("%Y-%m-%d")
+        if chave not in self.eventos:
+            self.eventos[chave] = []
+        self.eventos[chave].append(texto)
+        salvar_eventos(self.eventos)
+        self.txt_novo_evento.clear()
+        self.atualizar_calendario()
+        self.atualizar_painel_eventos()
+
+    def remover_evento_selecionado(self):
+        linha = self.lista_eventos.currentRow()
+        chave = self.data_selecionada.strftime("%Y-%m-%d")
+        evs = self.eventos.get(chave, [])
+        if 0 <= linha < len(evs):
+            del evs[linha]
+            if not evs:
+                del self.eventos[chave]
+            salvar_eventos(self.eventos)
+            self.atualizar_calendario()
+            self.atualizar_painel_eventos()
+
+    def keyPressEvent(self, event: QKeyEvent):
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()
+        else:
+            super().keyPressEvent(event)
+
+def main():
+    app = QApplication(sys.argv)
+    app.setApplicationName("jangada-calendario")
+    app.setDesktopFileName("org.jangada.calendario")
+    win = CalendarioJangada()
+    win.show()
+    sys.exit(app.exec())
+
+if __name__ == "__main__":
+    main()
+PYEOF

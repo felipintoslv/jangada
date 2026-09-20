@@ -38,6 +38,15 @@ hl.window_rule({
   center = true,
 })
 
+-- Calendário interativo: janela flutuante no centro.
+hl.window_rule({
+  name = "calendario",
+  match = { class = "^org\\.jangada\\.calendario$" },
+  float = true,
+  size = "760 540",
+  center = true,
+})
+
 -- Janelas de agentes: borda de outra cor para distinguir dos terminais comuns.
 hl.window_rule({
   name = "janela-agente",

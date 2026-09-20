@@ -47,10 +47,15 @@ window#waybar {
   color: @texto_suave;
 }
 
-#clock, #pulseaudio, #network, #cpu, #memory, #temperature, #battery, #tray {
+#clock, #pulseaudio, #network, #bluetooth, #cpu, #memory, #temperature, #battery, #tray {
   padding: 0 8px;
 }
 
+#bluetooth.disabled {
+  color: @texto_suave;
+}
+
+#pulseaudio.microfone.source-muted,
 #temperature.critical,
 #battery.critico {
   color: @atencao;

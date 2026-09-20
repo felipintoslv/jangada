@@ -24,6 +24,10 @@ opcao="$(printf '%s\n' \
   "Lista de agentes" \
   "Painel de agentes" \
   "Monitor do sistema" \
+  "Dispositivos de áudio" \
+  "Bluetooth" \
+  "Rede e conexões" \
+  "Calendário" \
   "Atualizar sistema" \
   "Verificar sistema" \
   "Snapshot manual" \
@@ -41,6 +45,10 @@ case "$opcao" in
   "Lista de agentes") exec "$b/jangada-agentes" --janela ;;
   "Painel de agentes") exec "$b/jangada-agentes" --painel ;;
   "Monitor do sistema") exec "$b/jangada-monitor" ;;
+  "Dispositivos de áudio") exec "$b/jangada-audio" ;;
+  "Bluetooth") exec "$b/jangada-bluetooth" ;;
+  "Rede e conexões") exec "$b/jangada-rede" ;;
+  "Calendário") exec "$b/jangada-calendario" ;;
   "Atualizar sistema") term "$b/jangada-update" ;;
   "Verificar sistema") term "$b/jangada-verificar" ;;
   "Snapshot manual") term "read -r -p 'descrição: ' d; $b/jangada-snapshot \"\$d\"" ;;

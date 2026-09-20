@@ -12,7 +12,9 @@
     "memory",
     "temperature",
     "network",
+    "bluetooth",
     "pulseaudio",
+    "pulseaudio#microfone",
     "battery"
   ],
 
@@ -36,7 +38,8 @@
   "clock": {
     "format": "{:%a %d/%m  %H:%M}",
     "tooltip-format": "<tt>{calendar}</tt>",
-    "locale": "pt_BR.UTF-8"
+    "locale": "pt_BR.UTF-8",
+    "on-click": "$JANGADA_PATH/bin/jangada-calendario"
   },
 
   "cpu": {
@@ -76,14 +79,44 @@
     "format-ethernet": "󰈀 {bandwidthDownBits}",
     "format-disconnected": "󰤭",
     "tooltip-format": "{ifname} · IP: {ipaddr}\n⬇ {bandwidthDownBytes}  ⬆ {bandwidthUpBytes}",
-    "on-click": "$JANGADA_PATH/bin/jangada-monitor"
+    "on-click": "$JANGADA_PATH/bin/jangada-rede",
+    "on-click-right": "$JANGADA_PATH/bin/jangada-monitor"
+  },
+
+  "bluetooth": {
+    "format": "󰂯",
+    "format-disabled": "󰂲",
+    "format-connected": "󰂱 {num_connections}",
+    "tooltip-format": "{controller_alias}\t{controller_address}\n\n{num_connections} conectado(s)",
+    "tooltip-format-connected": "{controller_alias}\t{controller_address}\n\n{num_connections} conectado(s)\n\n{device_enumerate}",
+    "tooltip-format-enumerate-connected": "{device_alias}\t{device_address}",
+    "on-click": "$JANGADA_PATH/bin/jangada-bluetooth",
+    "on-click-right": "$JANGADA_PATH/bin/jangada-bluetooth menu"
   },
 
   "pulseaudio": {
     "format": "{icon} {volume}%",
     "format-muted": "󰝟",
-    "format-icons": { "default": ["󰕿", "󰖀", "󰕾"] },
-    "on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+    "format-icons": {
+      "headphone": "",
+      "hands-free": "",
+      "headset": "󰋋",
+      "default": ["󰕿", "󰖀", "󰕾"]
+    },
+    "scroll-step": 5,
+    "on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+    "on-click-right": "$JANGADA_PATH/bin/jangada-audio saida",
+    "tooltip-format": "{desc} · {volume}%"
+  },
+
+  "pulseaudio#microfone": {
+    "format": "{format_source}",
+    "format-source": " {volume}%",
+    "format-source-muted": "",
+    "on-click": "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle",
+    "on-click-right": "$JANGADA_PATH/bin/jangada-audio entrada",
+    "scroll-step": 5,
+    "tooltip-format": "{source_desc} · {volume}%"
   },
 
   "battery": {

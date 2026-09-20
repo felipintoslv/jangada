@@ -27,6 +27,22 @@ fim() {
   "$JANGADA_PATH/bin/jangada-agente-fim" "$@"
 }
 
+audio() {
+  "$JANGADA_PATH/bin/jangada-audio" "$@"
+}
+
+bluetooth() {
+  "$JANGADA_PATH/bin/jangada-bluetooth" "$@"
+}
+
+rede() {
+  "$JANGADA_PATH/bin/jangada-rede" "$@"
+}
+
+calendario() {
+  "$JANGADA_PATH/bin/jangada-calendario" "$@"
+}
+
 # Auditoria com Antigravity no diretório atual
 revisar() {
   if ! command -v agy >/dev/null 2>&1; then
@@ -169,6 +185,10 @@ ajuda() {
   echo "  concluir          mescla a tarefa atual na branch principal"
   echo "  trocar            muda rapidamente para outro projeto com fzf"
   echo "  tema [imagem]     escolhe ou aplica um papel de parede e recalcula as cores"
+  echo "  audio [saida|ent] escolhe o dispositivo de áudio ativo (fones, microfone)"
+  echo "  bluetooth         gerencia conexões de dispositivos Bluetooth"
+  echo "  rede              gerencia conexões cabeada (Ethernet) e Wi-Fi"
+  echo "  calendario        abre o calendário interativo com seus eventos"
   echo "  fim <sessao>      encerra uma sessão de agente e limpa o worktree"
   echo "  ajuda             exibe esta lista de comandos"
   echo "  exit              sai do jangada shell e volta ao terminal normal"
