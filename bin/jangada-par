@@ -41,6 +41,10 @@ erro()   { printf '%s%s !!%s %s\n' "$c_forte" "$c_erro" "$c_fim" "$*" >&2; }
 janela=0; projeto=""; nome=""; direto=0; snapshot=0; limite=2
 modelo=""; esforco="high"; tarefa=""
 
+# Teto do diff que vai no prompt do revisor, em caracteres. O prompt inteiro
+# segue num pedido só, e o modelo do agy recusa acima de 1 milhão de tokens.
+DIFF_MAX=200000
+
 while (($#)); do
   case "$1" in
     --janela) janela=1; shift ;;
@@ -283,10 +287,20 @@ Diretrizes para esta rodada:
 
   # Verifica se foram criadas alterações
   diff_conteudo=""
+  arquivos_tocados=""
   if git -C "$dir" rev-parse --show-toplevel >/dev/null 2>&1; then
     eh_git=1
     ponto_base="${base:-HEAD~1}"
     diff_conteudo="$(git -C "$dir" diff "$ponto_base..HEAD" 2>/dev/null || git -C "$dir" diff HEAD~1..HEAD 2>/dev/null || git -C "$dir" status -s 2>/dev/null || true)"
+    arquivos_tocados="$(git -C "$dir" diff --name-only "$ponto_base..HEAD" 2>/dev/null || true)"
+  fi
+
+  # O prompt inteiro vai num pedido só, e o modelo do agy corta em 1 milhão de
+  # tokens. Um diff de arquivo gerado, ou de binário, passa disso sozinho.
+  if ((${#diff_conteudo} > DIFF_MAX)); then
+    aviso "diff de ${#diff_conteudo} caracteres; enviando os primeiros $DIFF_MAX ao revisor"
+    diff_conteudo="${diff_conteudo:0:DIFF_MAX}
+[... diff truncado aqui pelo jangada-par; leia os arquivos para ver o resto ...]"
   fi
 
   if [[ -z "$diff_conteudo" ]]; then
@@ -305,7 +319,10 @@ $tarefa
 
 Ramo de trabalho: ${ramo:-direto no repositório}
 
-Diferenças e arquivos modificados:
+Arquivos alterados nesta rodada:
+${arquivos_tocados:-(nenhum arquivo alterado; confira o estado do diretório)}
+
+Diferenças:
 $diff_conteudo
 
 Como trabalhar nesta execução:
@@ -313,7 +330,11 @@ Como trabalhar nesta execução:
    interativo o agy não tem como pedir permissão, o pedido é recusado e a
    resposta volta vazia. Leia os arquivos com a sua ferramenta de leitura, a
    partir de $dir.
-2. Responda apenas com o texto da revisão, no formato pedido abaixo.
+2. Leia apenas arquivos de texto, e comece pelos alterados acima. Não abra PDF,
+   docx, xlsx, imagem, parquet, zip nem qualquer outro binário: a ferramenta de
+   leitura carrega o arquivo inteiro no contexto, e um só arquivo grande estoura
+   o limite de tokens do modelo e derruba a revisão.
+3. Responda apenas com o texto da revisão, no formato pedido abaixo.
 
 Avalie com rigor:
 1. A tarefa foi atendida de maneira completa e correta?
