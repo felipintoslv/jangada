@@ -27,6 +27,7 @@ opcao="$(printf '%s\n' \
   "Trocar papel de parede" \
   "Recarregar configuração" \
   "Área de transferência" \
+  "Atalhos do teclado" \
   "Bloquear" \
   "Sair da sessão" | menu)" || exit 0
 
@@ -40,6 +41,7 @@ case "$opcao" in
   "Trocar papel de parede") exec "$b/jangada-tema" --escolher ;;
   "Recarregar configuração") exec "$b/jangada-recarregar" ;;
   "Área de transferência") exec "$0" area-transferencia ;;
+  "Atalhos do teclado") exec "$b/jangada-atalhos" ;;
   "Bloquear") exec "$b/jangada-bloquear" ;;
   "Sair da sessão") hyprctl dispatch 'hl.dsp.exit()' ;;
 esac

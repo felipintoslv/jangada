@@ -60,6 +60,7 @@ O `jangada-sessao` define `AQ_DRM_DEVICES` antes de o compositor subir, escolhen
 | `jangada-agente` | escolhe um projeto, cria um worktree e abre um agente numa sessão tmux |
 | `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir ou encerrar |
 | `jangada-agente-fim` | encerra uma sessão e remove o worktree, com conferência de alterações pendentes |
+| `jangada-atalhos` | mostra todos os atalhos ativos, lidos do próprio Hyprland (`--lista` para o terminal) |
 | `jangada-menu` | menu central com as ações acima |
 | `jangada-logo` | mostra o símbolo do jangada com as informações do sistema (fastfetch; neofetch como alternativa) |
 | `jangada-mapear` | inventário da configuração atual da máquina (Hyprland, Noctalia, terminal, agentes), sem alterar nada |
@@ -75,8 +76,12 @@ O `jangada-sessao` define `AQ_DRM_DEVICES` antes de o compositor subir, escolhen
 | `SUPER + CTRL + A` | painel de agentes (workspace especial) |
 | `SUPER + Esc` | menu jangada |
 | `SUPER + CTRL + R` | recarregar e mostrar erros de configuração |
+| `SUPER + /` | mostra todos os atalhos ativos, pesquisáveis |
 
-A lista completa está em `default/hypr/atalhos.lua`.
+A lista completa aparece no `SUPER + /`, que lê os atalhos do próprio Hyprland
+e por isso inclui também os que você definiu em
+`~/.config/jangada/hypr/usuario.lua`. Os padrões estão em
+`default/hypr/atalhos.lua`.
 
 ## Estado
 
