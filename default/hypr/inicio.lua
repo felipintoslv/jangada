@@ -9,8 +9,11 @@ hl.on("hyprland.start", function()
   hl.exec_cmd("wl-paste --type text --watch cliphist store")
   hl.exec_cmd("wl-paste --type image --watch cliphist store")
 
-  -- Bloqueio e suspensão por inatividade.
-  hl.exec_cmd("hypridle -c " .. j.path .. "/default/hypridle/hypridle.conf")
+  -- Bloqueio e suspensão por inatividade. O hypridle 0.1.7 aceita "-c" na linha
+  -- de comando mas ignora o valor: ele só lê <XDG_CONFIG_HOME>/hypr/hypridle.conf.
+  -- Por isso apontamos o XDG_CONFIG_HOME dele para a pasta do jangada, em vez de
+  -- escrever em ~/.config/hypr, que a sessão não toca.
+  hl.exec_cmd("env XDG_CONFIG_HOME=" .. j.path .. "/default/hypridle hypridle")
 
   if j.interface() == "noctalia" then
     -- O Noctalia cuida de barra, notificações, lançador e papel de parede.
