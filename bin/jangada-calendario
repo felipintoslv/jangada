@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Calendário interativo do Jangada com memória de eventos marcados.
 #
-# Uso: jangada-calendario
+# Uso:
+#   jangada-calendario                       abre o calendário gráfico
+#   jangada-calendario add [data] "evento"   adiciona um compromisso (ex: add amanhã "14h Reunião")
+#   jangada-calendario listar                lista os compromissos agendados
+#   jangada-calendario importar arquivo.ics  importa eventos de um arquivo iCalendar
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
@@ -11,6 +15,7 @@ import sys
 import os
 import json
 import re
+import subprocess
 import datetime
 import calendar
 from PyQt6.QtWidgets import (
@@ -74,6 +79,137 @@ def salvar_eventos(eventos):
             json.dump(eventos, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"Erro ao salvar eventos: {e}", file=sys.stderr)
+
+def normalizar_data(texto_data):
+    hoje = datetime.date.today()
+    txt = texto_data.strip().lower()
+    if txt in ["hoje", "today"]:
+        return hoje.strftime("%Y-%m-%d")
+    if txt in ["amanha", "amanhã", "tomorrow"]:
+        return (hoje + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    if txt in ["depois de amanha", "depois de amanhã"]:
+        return (hoje + datetime.timedelta(days=2)).strftime("%Y-%m-%d")
+    m = re.match(r"^(\d{1,2})/(\d{1,2})(?:/(\d{4}))?$", txt)
+    if m:
+        dia = int(m.group(1))
+        mes = int(m.group(2))
+        ano = int(m.group(3)) if m.group(3) else hoje.year
+        return datetime.date(ano, mes, dia).strftime("%Y-%m-%d")
+    m = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", txt)
+    if m:
+        return datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3))).strftime("%Y-%m-%d")
+    return None
+
+def cli_adicionar(args):
+    if not args:
+        print("Uso: jangada-calendario add [data] 'descrição do evento'", file=sys.stderr)
+        sys.exit(1)
+    data_str = None
+    texto = None
+    if len(args) == 1:
+        data_str = datetime.date.today().strftime("%Y-%m-%d")
+        texto = args[0]
+    else:
+        d = normalizar_data(args[0])
+        if d:
+            data_str = d
+            texto = " ".join(args[1:])
+        else:
+            d2 = normalizar_data(args[-1])
+            if d2:
+                data_str = d2
+                texto = " ".join(args[:-1])
+            else:
+                data_str = datetime.date.today().strftime("%Y-%m-%d")
+                texto = " ".join(args)
+
+    eventos = carregar_eventos()
+    if data_str not in eventos:
+        eventos[data_str] = []
+    eventos[data_str].append(texto)
+    salvar_eventos(eventos)
+
+    ano, mes, dia = map(int, data_str.split("-"))
+    print(f"✔ Compromisso adicionado em {dia:02d}/{mes:02d}/{ano}: {texto}")
+    # O texto do evento vem do usuário: vai como argumento, não interpolado
+    # numa linha de comando, senão um apóstrofo na descrição quebra a chamada.
+    try:
+        subprocess.run(
+            ["notify-send", "-a", "jangada", "-u", "low", "Calendário",
+             f"Evento agendado para {dia:02d}/{mes:02d}: {texto}"],
+            check=False,
+        )
+    except FileNotFoundError:
+        pass
+
+def cli_listar():
+    eventos = carregar_eventos()
+    if not eventos:
+        print("Nenhum evento registrado no calendário.")
+        return
+    hoje = datetime.date.today()
+    hoje_str = hoje.strftime("%Y-%m-%d")
+    amanha_str = (hoje + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+
+    chaves_ordenadas = sorted(eventos.keys())
+    print("\n📅 Compromissos no calendário:\n")
+    total = 0
+    for ch in chaves_ordenadas:
+        evs = eventos[ch]
+        if not evs:
+            continue
+        ano, mes, dia = map(int, ch.split("-"))
+        sufixo = ""
+        if ch == hoje_str:
+            sufixo = " (Hoje)"
+        elif ch == amanha_str:
+            sufixo = " (Amanhã)"
+
+        print(f"  {dia:02d}/{mes:02d}/{ano}{sufixo}:")
+        for ev in evs:
+            print(f"    • {ev}")
+            total += 1
+    print(f"\nTotal: {total} compromisso(s) registrado(s).\n")
+
+def cli_importar(args):
+    if not args:
+        print("Uso: jangada-calendario importar caminho/arquivo.ics", file=sys.stderr)
+        sys.exit(1)
+    caminho = os.path.expanduser(args[0])
+    if not os.path.exists(caminho):
+        print(f"Arquivo não encontrado: {caminho}", file=sys.stderr)
+        sys.exit(1)
+
+    eventos = carregar_eventos()
+    adicionados = 0
+    with open(caminho, "r", encoding="utf-8", errors="ignore") as f:
+        em_vevent = False
+        data_evento = None
+        resumo = None
+        for linha in f:
+            linha = linha.strip()
+            if linha == "BEGIN:VEVENT":
+                em_vevent = True
+                data_evento = None
+                resumo = None
+            elif linha == "END:VEVENT":
+                if data_evento and resumo:
+                    if data_evento not in eventos:
+                        eventos[data_evento] = []
+                    if resumo not in eventos[data_evento]:
+                        eventos[data_evento].append(resumo)
+                        adicionados += 1
+                em_vevent = False
+            elif em_vevent:
+                if linha.startswith("DTSTART"):
+                    m = re.search(r"(\d{4})(\d{2})(\d{2})", linha)
+                    if m:
+                        data_evento = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+                elif linha.startswith("SUMMARY:"):
+                    resumo = linha[8:].strip()
+
+    salvar_eventos(eventos)
+    print(f"✔ {adicionados} evento(s) importados com sucesso para o calendário.")
 
 class CalendarioJangada(QWidget):
     def __init__(self):
@@ -178,14 +314,12 @@ class CalendarioJangada(QWidget):
         self.grid_dias = QGridLayout()
         self.grid_dias.setSpacing(4)
 
-        # Cabeçalhos da semana
         for col, dia_nome in enumerate(DIAS_SEMANA_PT):
             lbl = QLabel(dia_nome)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl.setStyleSheet(f"font-size: 11px; font-weight: bold; color: {self.cores['texto_suave']}; padding: 4px;")
             self.grid_dias.addWidget(lbl, 0, col)
 
-        # Matriz de 6 linhas x 7 colunas de botões
         self.botoes_dias = []
         for lin in range(1, 7):
             linha_botoes = []
@@ -200,7 +334,6 @@ class CalendarioJangada(QWidget):
         painel_esquerdo.addLayout(self.grid_dias)
         layout_principal.addLayout(painel_esquerdo, 5)
 
-        # Divisor vertical
         linha_div = QFrame()
         linha_div.setFrameShape(QFrame.Shape.VLine)
         linha_div.setStyleSheet(f"color: {self.cores.get('borda', '#333')};")
@@ -221,7 +354,6 @@ class CalendarioJangada(QWidget):
         self.lista_eventos = QListWidget()
         painel_direito.addWidget(self.lista_eventos, 1)
 
-        # Linha para adicionar novo evento
         add_layout = QHBoxLayout()
         self.txt_novo_evento = QLineEdit()
         self.txt_novo_evento.setPlaceholderText("Novo evento (ex: 14:00 Reunião)...")
@@ -260,7 +392,6 @@ class CalendarioJangada(QWidget):
         add_layout.addWidget(self.btn_remover_evento)
         painel_direito.addLayout(add_layout)
 
-        # Rodapé com próximos eventos
         self.lbl_proximos = QLabel("")
         self.lbl_proximos.setStyleSheet(f"font-size: 11px; color: {self.cores['texto_suave']}; margin-top: 4px;")
         painel_direito.addWidget(self.lbl_proximos)
@@ -417,7 +548,34 @@ class CalendarioJangada(QWidget):
         else:
             super().keyPressEvent(event)
 
+AJUDA = """Calendário do jangada.
+
+Uso:
+  jangada-calendario                       abre o calendário gráfico
+  jangada-calendario add [data] "evento"   adiciona um compromisso
+  jangada-calendario listar                lista os compromissos agendados
+  jangada-calendario importar arquivo.ics  importa eventos de um arquivo iCalendar
+
+A data aceita hoje, amanhã, depois de amanhã, dd/mm, dd/mm/aaaa ou aaaa-mm-dd.
+Sem data, o compromisso vai para hoje."""
+
 def main():
+    args = sys.argv[1:]
+    if args:
+        cmd = args[0].lower()
+        if cmd in ["-h", "--ajuda", "ajuda", "help"]:
+            print(AJUDA)
+            return
+        elif cmd in ["add", "adicionar", "novo"]:
+            cli_adicionar(args[1:])
+            return
+        elif cmd in ["listar", "ls", "eventos"]:
+            cli_listar()
+            return
+        elif cmd in ["importar", "import"]:
+            cli_importar(args[1:])
+            return
+
     app = QApplication(sys.argv)
     app.setApplicationName("jangada-calendario")
     app.setDesktopFileName("org.jangada.calendario")
