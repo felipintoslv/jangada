@@ -1,4 +1,18 @@
-/* Estilo base da barra. As variáveis de cor vêm de cores.css (matugen). */
+/* Estilo base da barra. As variáveis de cor vêm de cores.css (matugen); nenhum
+   valor de cor é escrito aqui.
+
+   Escala de medidas. O CSS do GTK tem @define-color, mas não tem variável de
+   tamanho, então a escala fica neste comentário e todo número do arquivo sai
+   dela. A unidade é 4px, a mesma de gaps_in em default/hypr/aparencia.lua:
+
+     4px   (1 unidade)   espaço entre módulos, em "spacing" do config.jsonc
+     8px   (2 unidades)  folga interna dos módulos e border-radius, igual ao
+                         rounding das janelas (aparencia.lua)
+     28px  (7 unidades)  altura da barra deitada, em "height" do config.jsonc
+     32px  (8 unidades)  largura da barra em pé, no arquivo que o jangada-barra
+                         gera para as bordas esquerda e direita
+
+   Fora da escala fica só o corpo do texto, 13px, que é medida de fonte. */
 * {
   font-family: "JetBrainsMono Nerd Font", sans-serif;
   font-size: 13px;
@@ -13,7 +27,7 @@ window#waybar {
 #workspaces button {
   padding: 0 8px;
   color: @texto_suave;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
 #workspaces button.active {
@@ -22,8 +36,8 @@ window#waybar {
 }
 
 #custom-agentes {
-  padding: 0 10px;
-  border-radius: 6px;
+  padding: 0 8px;
+  border-radius: 8px;
 }
 
 #custom-agentes.aguardando {
@@ -89,4 +103,24 @@ window#waybar {
 /* Aviso e crítico usam a mesma cor; o negrito é o que separa os dois. */
 #battery.critico {
   font-weight: bold;
+}
+
+/* Barra em pé (jangada-barra --posicao esquerda|direita). O que limita passa a
+   ser a largura, então a folga interna troca de eixo. A classe vem do "name"
+   da configuração que o jangada-barra gera. */
+window#waybar.vertical #workspaces button,
+window#waybar.vertical #custom-agentes,
+window#waybar.vertical #clock,
+window#waybar.vertical #pulseaudio,
+window#waybar.vertical #network,
+window#waybar.vertical #bluetooth,
+window#waybar.vertical #cpu,
+window#waybar.vertical #memory,
+window#waybar.vertical #temperature,
+window#waybar.vertical #battery,
+window#waybar.vertical #tray,
+window#waybar.vertical #mpris,
+window#waybar.vertical #idle_inhibitor,
+window#waybar.vertical #custom-atualizacoes {
+  padding: 8px 0;
 }
