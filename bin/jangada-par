@@ -120,6 +120,24 @@ if ((eh_git)) && ((!direto)) && [[ -z "$nome" ]]; then
 fi
 nome="$(slug "$nome")"
 
+sessao="$repo"
+[[ -n "$nome" ]] && sessao="$repo--$nome"
+
+estado_dir="$JANGADA_ESTADO/agentes"
+mkdir -p "$estado_dir"
+
+# Duas execuções com o mesmo nome de sessão disputam o mesmo arquivo de estado
+# e apagam os arquivos uma da outra. A conferência vem antes de mexer no
+# worktree, no trap e na primeira gravação: assim a segunda execução sai sem
+# tocar em nada da primeira.
+if [[ -f "$estado_dir/$sessao.json" ]]; then
+  pid_antigo="$(jq -r '.pid // empty' "$estado_dir/$sessao.json" 2>/dev/null || true)"
+  if [[ -n "$pid_antigo" ]] && kill -0 "$pid_antigo" 2>/dev/null; then
+    erro "já existe um ciclo em par na sessão $sessao (pid $pid_antigo); encerre-o antes"
+    exit 1
+  fi
+fi
+
 dir="$raiz"; worktree=""; ramo=""; base=""
 if ((eh_git)) && [[ -n "$nome" ]]; then
   worktree="$JANGADA_WORKTREES/$repo/$nome"
@@ -136,18 +154,13 @@ if ((eh_git)) && [[ -n "$nome" ]]; then
   dir="$worktree"
 fi
 
-sessao="$repo"
-[[ -n "$nome" ]] && sessao="$repo--$nome"
-
-estado_dir="$JANGADA_ESTADO/agentes"
-mkdir -p "$estado_dir"
-
-# Restos de uma execução anterior com o mesmo nome de sessão. Reaproveitando um
-# worktree, o parecer da rodada 1 de ontem ficaria no meio dos desta vez e o
-# resumo final apontaria para ele como se fosse atual.
-rm -f "$estado_dir/revisao-$sessao-r"*.json \
-      "$estado_dir/revisao-$sessao-r"*.log \
-      "$estado_dir/parecer-$sessao-r"*.md 2>/dev/null || true
+# Restos de execuções anteriores com o mesmo nome de sessão. Só o que é
+# descartável: o JSON bruto do agy e os logs sem conteúdo. Os pareceres ficam,
+# são o que o revisor escreveu, e o resumo final aponta para o desta vez.
+rm -f "$estado_dir/revisao-$sessao-r"*.json 2>/dev/null || true
+for _log in "$estado_dir/revisao-$sessao-r"*.log; do
+  [[ -s "$_log" ]] || rm -f "$_log"
+done
 
 agora="$(date -Is)"
 jq -n --arg sessao "$sessao" --arg dir "$dir" --arg raiz "$raiz" --arg worktree "$worktree" \
@@ -173,7 +186,7 @@ limpar_saida() {
   # Os temporários do atualizar_estado somem sempre; o arquivo de estado, só
   # quando o ciclo não chegou a gravar um resultado.
   rm -f "$estado_dir/$sessao.json."?????? 2>/dev/null || true
-  ((concluiu)) && return 0
+  if ((concluiu)); then return 0; fi
   rm -f "$estado_dir/$sessao.json" 2>/dev/null || true
 }
 trap limpar_saida EXIT
@@ -181,23 +194,34 @@ trap limpar_saida EXIT
 atualizar_estado() {
   local est="$1" msg="$2"
   local arq="$estado_dir/$sessao.json"
-  # Ao lado do alvo, não em /tmp: assim o mv é atômico, por ficar no mesmo
-  # sistema de arquivos, e um resto de processo morto cai onde o trap olha.
   local tmp
-  tmp="$(mktemp "$arq.XXXXXX")"
+  # Escreve no temporário e troca com mv, nos dois ramos: o painel nunca lê um
+  # arquivo pela metade. O temporário fica ao lado do alvo porque o mv só é
+  # atômico dentro do mesmo sistema de arquivos, e porque um resto de processo
+  # morto cai onde o trap de saída olha.
+  tmp="$(mktemp "$arq.XXXXXX" 2>/dev/null)" || {
+    aviso "não consegui criar o temporário do estado em $estado_dir"
+    return 0
+  }
   if [[ -f "$arq" ]]; then
     jq --arg e "$est" --arg m "$msg" --arg a "$(date -Is)" \
-      '.estado = $e | .mensagem = $m | .atualizado = $a' \
-      "$arq" >"$tmp" 2>/dev/null && mv "$tmp" "$arq" || rm -f "$tmp"
+      '.estado = $e | .mensagem = $m | .atualizado = $a' "$arq" >"$tmp" 2>/dev/null
   else
     jq -n --arg sessao "$sessao" --arg dir "$dir" --arg raiz "$raiz" --arg worktree "$worktree" \
       --arg ramo "$ramo" --arg base "$base" --arg agente "par" --arg tarefa "$tarefa" \
       --arg pid "$$" --arg agora "$(date -Is)" --arg e "$est" --arg m "$msg" \
       '{sessao:$sessao, dir:$dir, raiz:$raiz, worktree:$worktree, ramo:$ramo, base:$base,
         agente:$agente, tarefa:$tarefa, pid:($pid|tonumber), estado:$e, mensagem:$m,
-        desde:$agora, atualizado:$agora}' >"$arq" 2>/dev/null || true
+        desde:$agora, atualizado:$agora}' >"$tmp" 2>/dev/null
+  fi || {
     rm -f "$tmp"
-  fi
+    aviso "não consegui gravar o estado da sessão $sessao"
+    return 0
+  }
+  mv "$tmp" "$arq" 2>/dev/null || {
+    rm -f "$tmp"
+    aviso "não consegui trocar o arquivo de estado $arq"
+  }
 }
 
 # O jq já é obrigatório acima, na gravação do estado, então não há alternativa
@@ -284,7 +308,14 @@ Ramo de trabalho: ${ramo:-direto no repositório}
 Diferenças e arquivos modificados:
 $diff_conteudo
 
-Por favor, inspecione os arquivos no diretório e avalie com rigor:
+Como trabalhar nesta execução:
+1. Não altere, crie nem apague arquivos, e não execute comandos. No modo não
+   interativo o agy não tem como pedir permissão, o pedido é recusado e a
+   resposta volta vazia. Leia os arquivos com a sua ferramenta de leitura, a
+   partir de $dir.
+2. Responda apenas com o texto da revisão, no formato pedido abaixo.
+
+Avalie com rigor:
 1. A tarefa foi atendida de maneira completa e correta?
 2. Existem bugs, problemas de sintaxe, contratos quebrados ou regressões?
 3. O código segue as convenções do repositório?
@@ -379,9 +410,6 @@ resumo_local() {
 if ((aprovado)); then
   atualizar_estado "concluido" "Aprovado pelo Antigravity"
   concluiu=1
-  # Aprovado, o ciclo está fechado e os logs do agy viram ruído. Os pareceres
-  # ficam: são o que o revisor escreveu, e o resumo abaixo aponta para eles.
-  rm -f "$estado_dir/revisao-$sessao-r"*.log 2>/dev/null || true
   echo ""
   regua "$c_ok"
   titulo "${c_ok}✓ Sucesso! Tarefa concluída e aprovada.${c_fim}"
