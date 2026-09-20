@@ -6,3 +6,4 @@ libnotify          # notify-send
 pacman-contrib     # checkupdates
 inotify-tools
 lua                # checagem de sintaxe dos arquivos .lua
+less               # paginador do git, usado pelo mudancas do jangada shell
