@@ -7,7 +7,10 @@
   "modules-left": ["hyprland/workspaces", "custom/agentes"],
   "modules-center": ["clock"],
   "modules-right": [
+    "mpris",
     "tray",
+    "custom/atualizacoes",
+    "idle_inhibitor",
     "cpu",
     "memory",
     "temperature",
@@ -33,6 +36,38 @@
     "on-click": "$JANGADA_PATH/bin/jangada-agentes --janela",
     "on-click-right": "$JANGADA_PATH/bin/jangada-agentes --painel",
     "tooltip": true
+  },
+
+  // Vazio quando não há atualização: a waybar recolhe o módulo sozinha, e
+  // assim o espaço só é ocupado quando há o que fazer.
+  "custom/atualizacoes": {
+    "exec": "$JANGADA_PATH/bin/jangada-atualizacoes --waybar",
+    "return-type": "json",
+    "interval": 3600,
+    "format": "{}",
+    "on-click": "$JANGADA_PATH/bin/jangada-terminal --titulo 'jangada update' -e $JANGADA_PATH/bin/jangada-update",
+    "tooltip": true
+  },
+
+  // Segura o repouso enquanto estiver ligado. Convive com o hypridle: o que
+  // este módulo faz é pedir a inibição pelo protocolo do Wayland.
+  "idle_inhibitor": {
+    "format": "{icon}",
+    "format-icons": { "activated": "󰅶", "deactivated": "󰛊" },
+    "tooltip-format-activated": "repouso inibido",
+    "tooltip-format-deactivated": "repouso automático"
+  },
+
+  "mpris": {
+    "format": "{player_icon} {title}",
+    "format-paused": "{status_icon} {title}",
+    "player-icons": { "default": "󰐊" },
+    "status-icons": { "paused": "󰏤" },
+    "max-length": 40,
+    "tooltip-format": "{title}\n{artist}\n{album}",
+    "on-click": "playerctl play-pause",
+    "on-scroll-up": "playerctl next",
+    "on-scroll-down": "playerctl previous"
   },
 
   "clock": {
@@ -122,8 +157,12 @@
   "battery": {
     "format": "{icon} {capacity}%",
     "format-icons": ["󰁺", "󰁼", "󰁾", "󰂀", "󰁹"],
-    "states": { "aviso": 25, "critico": 10 }
+    "states": { "aviso": 25, "critico": 10 },
+    "tooltip-format": "{capacity}% · {timeTo}",
+    "on-click": "$JANGADA_PATH/bin/jangada-monitor"
   },
 
-  "tray": { "spacing": 8 }
+  // show-passive-items mostra também o que está em repouso, que é o caso de
+  // vários aplicativos em bandeja logo depois de abrir.
+  "tray": { "spacing": 8, "icon-size": 16, "show-passive-items": true }
 }

@@ -46,3 +46,17 @@ else
   ok "sessão registrada: $_sessao"
 fi
 unset _sessao _conteudo
+
+# Serviços e locale que a barra usa, sem mexer em nenhum dos dois. Ligar o
+# NetworkManager numa máquina que já usa outro gerenciador de rede derruba a
+# conexão, e gerar locale escreve em /etc: as duas coisas ficam para quem
+# instala decidir.
+if ! systemctl is-enabled NetworkManager.service >/dev/null 2>&1; then
+  aviso "NetworkManager não está habilitado; o módulo de rede da barra e o jangada-rede ficam sem dados. Para ligar: sudo systemctl enable --now NetworkManager"
+fi
+if ! systemctl is-enabled bluetooth.service >/dev/null 2>&1; then
+  aviso "serviço bluetooth não está habilitado; o módulo fica igual a um rádio desligado. Para ligar: sudo systemctl enable --now bluetooth"
+fi
+if ! locale -a 2>/dev/null | grep -qiE '^pt_BR\.?utf-?8$'; then
+  aviso "locale pt_BR.UTF-8 não está gerado; o relógio da barra cai para o formato do sistema. Para gerar: descomente a linha em /etc/locale.gen e rode sudo locale-gen"
+fi

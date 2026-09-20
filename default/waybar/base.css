@@ -43,12 +43,30 @@ window#waybar {
   background: @primaria;
 }
 
+#custom-agentes.ativo {
+  color: @texto;
+}
+
 #custom-agentes.vazio {
   color: @texto_suave;
 }
 
-#clock, #pulseaudio, #network, #bluetooth, #cpu, #memory, #temperature, #battery, #tray {
+#clock, #pulseaudio, #network, #bluetooth, #cpu, #memory, #temperature, #battery, #tray,
+#mpris, #idle_inhibitor, #custom-atualizacoes {
   padding: 0 8px;
+}
+
+/* Só aparece quando há atualização pendente, então pode chamar atenção. */
+#custom-atualizacoes.pendente {
+  color: @atencao;
+}
+
+#idle_inhibitor.activated {
+  color: @atencao;
+}
+
+#mpris {
+  color: @texto_suave;
 }
 
 #bluetooth.disabled {
@@ -57,6 +75,12 @@ window#waybar {
 
 #pulseaudio.microfone.source-muted,
 #temperature.critical,
+#battery.aviso,
 #battery.critico {
   color: @atencao;
+}
+
+/* Aviso e crítico usam a mesma cor; o negrito é o que separa os dois. */
+#battery.critico {
+  font-weight: bold;
 }
