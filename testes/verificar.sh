@@ -18,6 +18,8 @@ passo "shellcheck"
 if command -v shellcheck >/dev/null; then
   shellcheck -x -S warning install.sh install/*.sh bin/* || falha "shellcheck"
   shellcheck -s sh -S warning shell/jangada.sh || falha "shellcheck shell/jangada.sh"
+  # As funções da subshell não estavam sendo conferidas por ninguém.
+  shellcheck -S warning shell/jangada-shell.sh || falha "shellcheck shell/jangada-shell.sh"
 else
   echo "shellcheck ausente; etapa ignorada"
 fi

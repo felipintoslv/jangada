@@ -59,6 +59,7 @@ case "$sh_bin" in
   *zsh)
     # Prepara o arquivo de inicialização seguro para o zsh
     {
+      # shellcheck disable=SC2016  # a expansão é do arquivo gerado, não daqui
       echo '[[ -f "$HOME/.zshrc" ]] && source "$HOME/.zshrc"'
       reafirmar_caminho
       cat << 'EOF'
@@ -79,6 +80,7 @@ EOF
   *)
     # Fallback seguro para bash
     {
+      # shellcheck disable=SC2016  # a expansão é do arquivo gerado, não daqui
       echo '[[ -f "$HOME/.bashrc" ]] && source "$HOME/.bashrc"'
       reafirmar_caminho
       cat << 'EOF'
