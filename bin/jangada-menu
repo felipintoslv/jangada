@@ -18,6 +18,7 @@ if [[ "${1:-}" == "area-transferencia" ]]; then
 fi
 
 opcao="$(printf '%s\n' \
+  "Jangada Shell (Console de agentes)" \
   "Novo agente" \
   "Tarefa em par (Claude + Antigravity)" \
   "Lista de agentes" \
@@ -33,6 +34,7 @@ opcao="$(printf '%s\n' \
   "Sair da sessão" | menu)" || exit 0
 
 case "$opcao" in
+  "Jangada Shell (Console de agentes)") exec "$b/jangada-shell" --janela ;;
   "Novo agente") exec "$b/jangada-agente" --janela ;;
   "Tarefa em par (Claude + Antigravity)") exec "$b/jangada-par" --janela ;;
   "Lista de agentes") exec "$b/jangada-agentes" --janela ;;

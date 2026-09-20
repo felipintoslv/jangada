@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Inicia a subshell enriquecida do jangada com atalhos de agentes e projetos.
+#
+# Uso: jangada-shell [opções] [diretório]
+#   --janela      abre num terminal novo
+#   -h, --ajuda   mostra esta mensagem
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+janela=0
+destino=""
+
+while (($#)); do
+  case "$1" in
+    --janela) janela=1; shift ;;
+    -h|--ajuda) sed -n '2,6s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    *)
+      if [[ -z "$destino" && -d "$1" ]]; then
+        destino="$(realpath "$1")"; shift
+      else
+        echo "argumento desconhecido ou diretório inexistente: $1" >&2; exit 1
+      fi
+      ;;
+  esac
+done
+
+if ((janela)); then
+  args=()
+  [[ -n "$destino" ]] && args+=("$destino")
+  exec "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente --titulo "Jangada Shell" -e "$0" "${args[@]}"
+fi
+
+[[ -n "$destino" ]] && cd -- "$destino"
+
+# Cria ambiente temporário estritamente protegido para a subshell
+antigo_umask="$(umask)"
+umask 077
+tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/jangada-sh-XXXXXX")"
+umask "$antigo_umask"
+chmod 700 "$tmp_dir"
+# shellcheck disable=SC2064
+trap "rm -rf '$tmp_dir'" EXIT INT TERM HUP
+
+export JANGADA_SHELL=1
+export JANGADA_PATH
+
+# Detecta a shell do usuário
+sh_bin="${SHELL:-/bin/bash}"
+case "$sh_bin" in
+  *zsh)
+    # Prepara o arquivo de inicialização seguro para o zsh
+    cat << 'EOF' > "$tmp_dir/.zshrc"
+[[ -f "$HOME/.zshrc" ]] && source "$HOME/.zshrc"
+if [[ -f "$JANGADA_PATH/shell/jangada-shell.sh" ]]; then
+  source "$JANGADA_PATH/shell/jangada-shell.sh"
+fi
+
+# Banner inicial
+echo ""
+echo "⛵ Jangada Shell — Console de Agentes"
+echo "Diretório atual: $PWD"
+echo "Digite 'ajuda' para listar os comandos. 'exit' para sair."
+echo ""
+EOF
+    ZDOTDIR="$tmp_dir" zsh -i
+    ;;
+  *)
+    # Fallback seguro para bash
+    cat << 'EOF' > "$tmp_dir/.bashrc"
+[[ -f "$HOME/.bashrc" ]] && source "$HOME/.bashrc"
+if [[ -f "$JANGADA_PATH/shell/jangada-shell.sh" ]]; then
+  source "$JANGADA_PATH/shell/jangada-shell.sh"
+fi
+
+echo ""
+echo "⛵ Jangada Shell — Console de Agentes"
+echo "Diretório atual: $PWD"
+echo "Digite 'ajuda' para listar os comandos. 'exit' para sair."
+echo ""
+EOF
+    bash --rcfile "$tmp_dir/.bashrc" -i
+    ;;
+esac
