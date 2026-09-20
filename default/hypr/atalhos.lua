@@ -20,6 +20,7 @@ j.atalho(SUPER .. " + CTRL + L", "Bloquear a tela", j.cmd("jangada-bloquear"))
 
 -- Agentes
 j.atalho(SUPER .. " + A", "Novo agente", j.cmd("jangada-agente", "--janela"))
+j.atalho(SUPER .. " + P", "Tarefa em par (Claude + Antigravity)", j.cmd("jangada-par", "--janela"))
 j.atalho(SUPER .. " + SHIFT + A", "Lista de agentes", j.cmd("jangada-agentes", "--janela"))
 j.atalho(SUPER .. " + CTRL + A", "Painel de agentes", j.cmd("jangada-agentes", "--painel"))
 

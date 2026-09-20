@@ -58,6 +58,7 @@ O `jangada-sessao` define `AQ_DRM_DEVICES` antes de o compositor subir, escolhen
 | `jangada-snapshot "descrição"` | cria um snapshot manual do sistema |
 | `jangada-tema [imagem]` | gera as cores a partir de um papel de parede e recarrega a interface |
 | `jangada-agente` | escolhe um projeto, cria um worktree e abre um agente numa sessão tmux |
+| `jangada-par` | executa tarefa em par (Claude implementa, Antigravity revisa e Claude corrige) |
 | `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir ou encerrar |
 | `jangada-agente-fim` | encerra uma sessão e remove o worktree, com conferência de alterações pendentes |
 | `jangada-atalhos` | mostra todos os atalhos ativos, lidos do próprio Hyprland (`--lista` para o terminal) |
@@ -72,6 +73,7 @@ O `jangada-sessao` define `AQ_DRM_DEVICES` antes de o compositor subir, escolhen
 | `SUPER + Enter` | terminal |
 | `SUPER + Espaço` | lançador de aplicativos |
 | `SUPER + A` | novo agente |
+| `SUPER + P` | tarefa em par (Claude + Antigravity) |
 | `SUPER + SHIFT + A` | lista de agentes |
 | `SUPER + CTRL + A` | painel de agentes (workspace especial) |
 | `SUPER + Esc` | menu jangada |

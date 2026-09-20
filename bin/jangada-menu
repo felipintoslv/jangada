@@ -19,6 +19,7 @@ fi
 
 opcao="$(printf '%s\n' \
   "Novo agente" \
+  "Tarefa em par (Claude + Antigravity)" \
   "Lista de agentes" \
   "Painel de agentes" \
   "Atualizar sistema" \
@@ -33,6 +34,7 @@ opcao="$(printf '%s\n' \
 
 case "$opcao" in
   "Novo agente") exec "$b/jangada-agente" --janela ;;
+  "Tarefa em par (Claude + Antigravity)") exec "$b/jangada-par" --janela ;;
   "Lista de agentes") exec "$b/jangada-agentes" --janela ;;
   "Painel de agentes") exec "$b/jangada-agentes" --painel ;;
   "Atualizar sistema") term "$b/jangada-update" ;;

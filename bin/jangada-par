@@ -1,0 +1,309 @@
+#!/usr/bin/env bash
+# Protocolo de trabalho em par: Claude implementa, Antigravity revisa e Claude corrige.
+#
+# Uso: jangada-par [opções] ["tarefa a executar"]
+#   --janela          abre num terminal novo (usado pelo atalho SUPER+P)
+#   --projeto DIR     pula o seletor e usa este diretório
+#   --nome NOME       nome curto da tarefa (ramo e pasta do worktree)
+#   --direto          trabalha direto no repositório, sem criar worktree
+#   --limite N        máximo de rodadas de revisão (padrão: 2)
+#   --modelo MODELO   modelo do agy para a revisão
+#   --esforco NÍVEL   esforço de raciocínio do agy: low, medium, high (padrão: high)
+#   --snapshot        cria um snapshot do sistema antes de iniciar
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+janela=0; projeto=""; nome=""; direto=0; snapshot=0; limite=2
+modelo=""; esforco="high"; tarefa=""
+
+while (($#)); do
+  case "$1" in
+    --janela) janela=1; shift ;;
+    --projeto) projeto="$2"; shift 2 ;;
+    --nome) nome="$2"; shift 2 ;;
+    --direto) direto=1; shift ;;
+    --snapshot) snapshot=1; shift ;;
+    --limite) limite="$2"; shift 2 ;;
+    --modelo) modelo="$2"; shift 2 ;;
+    --esforco) esforco="$2"; shift 2 ;;
+    -h|--ajuda) sed -n '2,12s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    --) shift; tarefa="$*"; break ;;
+    *)
+      if [[ -z "$tarefa" ]]; then
+        tarefa="$1"; shift
+      else
+        tarefa+=" $1"; shift
+      fi
+      ;;
+  esac
+done
+
+# Vindo de atalho gráfico, abre dentro de uma janela de terminal.
+if ((janela)); then
+  args=()
+  [[ -n "$projeto" ]] && args+=(--projeto "$projeto")
+  [[ -n "$nome" ]] && args+=(--nome "$nome")
+  ((direto)) && args+=(--direto)
+  ((snapshot)) && args+=(--snapshot)
+  args+=(--limite "$limite")
+  [[ -n "$modelo" ]] && args+=(--modelo "$modelo")
+  args+=(--esforco "$esforco")
+  [[ -n "$tarefa" ]] && args+=(-- "$tarefa")
+  exec "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente --titulo "Jangada Par" -e "$0" "${args[@]}"
+fi
+
+slug() { tr '[:upper:]' '[:lower:]' <<<"$1" | sed -e 's/[^a-z0-9_-]\+/-/g' -e 's/^-\+//' -e 's/-\+$//'; }
+
+listar_projetos() {
+  {
+    command -v zoxide >/dev/null 2>&1 && zoxide query -l 2>/dev/null || true
+    if [[ -d "$JANGADA_PROJETOS" ]]; then
+      find "$JANGADA_PROJETOS" -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true
+      find "$JANGADA_PROJETOS" -maxdepth 3 -type d -name .git -prune -printf '%h\n' 2>/dev/null || true
+    fi
+  } | awk '!visto[$0]++' | while read -r d; do [[ -d "$d" ]] && printf '%s\n' "$d"; done || true
+}
+
+if [[ -z "$projeto" ]]; then
+  projeto="$(listar_projetos | fzf --prompt 'projeto > ' --height 60% --reverse \
+    --preview 'git -C {} log --oneline -8 2>/dev/null; echo; ls {}' )" || true
+  [[ -n "$projeto" ]] || exit 0
+fi
+projeto="$(realpath "$projeto")"
+[[ -d "$projeto" ]] || { echo "diretório não encontrado: $projeto" >&2; exit 1; }
+
+eh_git=0
+raiz="$projeto"
+if git -C "$projeto" rev-parse --show-toplevel >/dev/null 2>&1; then
+  eh_git=1
+  raiz="$(git -C "$projeto" rev-parse --show-toplevel)"
+fi
+repo="$(slug "$(basename "$raiz")")"
+
+if [[ -z "$tarefa" ]]; then
+  echo ""
+  echo "PROJETO: $raiz"
+  echo "Digite o pedido ou tarefa que deseja realizar:"
+  read -r -p "tarefa > " tarefa
+  [[ -n "$tarefa" ]] || { echo "tarefa vazia; encerrando" >&2; exit 1; }
+fi
+
+if ((eh_git)) && ((!direto)) && [[ -z "$nome" ]]; then
+  sugestao="$(slug "$(printf '%.30s' "$tarefa")")"
+  read -r -p "nome do ramo [padrão: $sugestao]: " nome
+  [[ -z "$nome" ]] && nome="$sugestao"
+fi
+nome="$(slug "$nome")"
+
+dir="$raiz"; worktree=""; ramo=""; base=""
+if ((eh_git)) && [[ -n "$nome" ]]; then
+  worktree="$JANGADA_WORKTREES/$repo/$nome"
+  ramo="agente/$nome"
+  base="$(git -C "$raiz" rev-parse --abbrev-ref HEAD)"
+  git -C "$raiz" worktree prune
+  if [[ -d "$worktree" ]]; then
+    echo "reaproveitando worktree existente: $worktree"
+  elif git -C "$raiz" show-ref --verify --quiet "refs/heads/$ramo"; then
+    git -C "$raiz" worktree add "$worktree" "$ramo"
+  else
+    git -C "$raiz" worktree add -b "$ramo" "$worktree" HEAD
+  fi
+  dir="$worktree"
+fi
+
+sessao="$repo"
+[[ -n "$nome" ]] && sessao="$repo--$nome"
+
+estado_dir="$JANGADA_ESTADO/agentes"
+mkdir -p "$estado_dir"
+
+agora="$(date -Is)"
+jq -n --arg sessao "$sessao" --arg dir "$dir" --arg raiz "$raiz" --arg worktree "$worktree" \
+  --arg ramo "$ramo" --arg base "$base" --arg agente "par" --arg tarefa "$tarefa" \
+  --arg pid "$$" --arg agora "$agora" \
+  '{sessao:$sessao, dir:$dir, raiz:$raiz, worktree:$worktree, ramo:$ramo, base:$base,
+    agente:$agente, tarefa:$tarefa, pid:($pid|tonumber), estado:"trabalhando", mensagem:"iniciando ciclo em par",
+    desde:$agora, atualizado:$agora}' \
+  >"$estado_dir/$sessao.json"
+
+limpar_saida() {
+  rm -f "$estado_dir/$sessao.json" 2>/dev/null || true
+}
+trap limpar_saida EXIT
+
+atualizar_estado() {
+  local est="$1" msg="$2"
+  local arq="$estado_dir/$sessao.json"
+  local tmp
+  tmp="$(mktemp)"
+  if [[ -f "$arq" ]]; then
+    jq --arg e "$est" --arg m "$msg" --arg a "$(date -Is)" \
+      '.estado = $e | .mensagem = $m | .atualizado = $a' \
+      "$arq" >"$tmp" 2>/dev/null && mv "$tmp" "$arq" || rm -f "$tmp"
+  else
+    jq -n --arg sessao "$sessao" --arg dir "$dir" --arg raiz "$raiz" --arg worktree "$worktree" \
+      --arg ramo "$ramo" --arg base "$base" --arg agente "par" --arg tarefa "$tarefa" \
+      --arg pid "$$" --arg agora "$(date -Is)" --arg e "$est" --arg m "$msg" \
+      '{sessao:$sessao, dir:$dir, raiz:$raiz, worktree:$worktree, ramo:$ramo, base:$base,
+        agente:$agente, tarefa:$tarefa, pid:($pid|tonumber), estado:$e, mensagem:$m,
+        desde:$agora, atualizado:$agora}' >"$arq" 2>/dev/null || true
+    rm -f "$tmp"
+  fi
+}
+
+extrair_resposta() {
+  local arq="$1"
+  if command -v jq >/dev/null 2>&1; then
+    jq -r '.response // empty' "$arq" 2>/dev/null
+  else
+    python3 -c "import json, sys; d=json.load(open(sys.argv[1])); print(d.get('response',''))" "$arq" 2>/dev/null
+  fi
+}
+
+echo ""
+echo "======================================================="
+echo " Jangada: Protocolo em Par (Claude + Antigravity)"
+echo " Projeto: $dir"
+echo " Tarefa:  $tarefa"
+echo "======================================================="
+echo ""
+
+((snapshot)) && "$JANGADA_PATH/bin/jangada-snapshot" "antes do par $sessao" || true
+
+rodada=1
+aprovado=0
+parecer=""
+
+while ((rodada <= limite)); do
+  echo ""
+  echo "-------------------------------------------------------"
+  echo " [Rodada $rodada de $limite] Fase do Claude Code"
+  echo "-------------------------------------------------------"
+  atualizar_estado "trabalhando" "Rodada $rodada: Claude implementando"
+
+  if ((rodada == 1)); then
+    prompt_claude="Você está trabalhando no projeto em: $dir
+Tarefa a executar:
+$tarefa
+
+Diretrizes:
+1. Implemente a solução de forma limpa, direta e completa.
+2. Crie ou atualize testes e documentação correspondentes se necessário.
+3. Verifique a execução antes de concluir.
+4. Faça commit das alterações no git ao terminar."
+  else
+    prompt_claude="Você está refinando o trabalho anterior para a tarefa:
+$tarefa
+
+O revisor Antigravity analisou seu commit anterior e apontou as seguintes correções:
+$parecer
+
+Diretrizes para esta rodada:
+1. Analise cada um dos apontamentos da revisão e aplique as correções necessárias.
+2. Certifique-se de não quebrar outros pontos do projeto.
+3. Teste o código alterado.
+4. Faça commit das correções no git ao terminar."
+  fi
+
+  echo "Executando Claude Code..."
+  if ! (cd "$dir" && claude -p "$prompt_claude" --dangerously-skip-permissions); then
+    echo "aviso: Claude encerrou com aviso ou limite atingido" >&2
+  fi
+
+  # Verifica se foram criadas alterações
+  diff_conteudo=""
+  if git -C "$dir" rev-parse --show-toplevel >/dev/null 2>&1; then
+    eh_git=1
+    ponto_base="${base:-HEAD~1}"
+    diff_conteudo="$(git -C "$dir" diff "$ponto_base..HEAD" 2>/dev/null || git -C "$dir" diff HEAD~1..HEAD 2>/dev/null || git -C "$dir" status -s 2>/dev/null || true)"
+  fi
+
+  if [[ -z "$diff_conteudo" ]]; then
+    echo "nenhuma alteração encontrada no repositório; mantendo verificação dos arquivos"
+  fi
+
+  echo ""
+  echo "-------------------------------------------------------"
+  echo " [Rodada $rodada de $limite] Fase do Antigravity (Revisão)"
+  echo "-------------------------------------------------------"
+  atualizar_estado "trabalhando" "Rodada $rodada: Antigravity revisando"
+
+  prompt_agy="Você é o revisor técnico no protocolo de trabalho em par do Jangada.
+O agente Claude implementou a seguinte tarefa no projeto:
+$tarefa
+
+Ramo de trabalho: ${ramo:-direto no repositório}
+
+Diferenças e arquivos modificados:
+$diff_conteudo
+
+Por favor, inspecione os arquivos no diretório e avalie com rigor:
+1. A tarefa foi atendida de maneira completa e correta?
+2. Existem bugs, problemas de sintaxe, contratos quebrados ou regressões?
+3. O código segue as convenções do repositório?
+
+Formato obrigatório da sua resposta:
+- Se o código estiver aprovado e pronto para uso, inicie sua resposta exatamente com:
+STATUS: APROVADO
+seguido de um resumo objetivo do que foi verificado e aprovado.
+
+- Se forem necessárias correções, inicie sua resposta exatamente com:
+STATUS: REVISAR
+seguido de uma lista numerada e clara com cada item que o Claude deve corrigir:
+1. [Arquivo e contexto]: [o que está incorreto e a instrução precisa de correção]
+2. ..."
+
+  json_revisao="$estado_dir/revisao-$sessao-r$rodada.json"
+  log_revisao="$estado_dir/revisao-$sessao-r$rodada.log"
+  args_agy=(-p "$prompt_agy" --output-format json --effort "$esforco" --add-dir "$dir")
+  [[ -n "$modelo" ]] && args_agy+=(--model "$modelo")
+
+  echo "Executando Antigravity CLI..."
+  if ! agy "${args_agy[@]}" </dev/null >"$json_revisao" 2>"$log_revisao"; then
+    echo "falha na execução do agy; consulte $log_revisao" >&2
+    break
+  fi
+
+  parecer="$(extrair_resposta "$json_revisao")"
+  echo "$parecer" >"$estado_dir/parecer-$sessao-r$rodada.md"
+
+  echo ""
+  echo "Resultado da revisão:"
+  echo "$parecer"
+  echo ""
+
+  if grep -qi "^STATUS:[[:space:]]*APROVADO" <<<"$parecer"; then
+    aprovado=1
+    echo "==> Aprovado pelo Antigravity na rodada $rodada!"
+    break
+  else
+    echo "==> Antigravity solicitou correções para a próxima rodada."
+    ((rodada++))
+  fi
+done
+
+if ((aprovado)); then
+  atualizar_estado "concluido" "Aprovado pelo Antigravity"
+  echo ""
+  echo "======================================================="
+  echo " Sucesso! Tarefa concluída e aprovada."
+  echo " Repositório: $raiz"
+  [[ -n "$ramo" ]] && echo " Ramo:        $ramo"
+  echo " Parecer:     $estado_dir/parecer-$sessao-r$rodada.md"
+  echo "======================================================="
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send -a "jangada-par" -u normal "Tarefa concluída e aprovada" "$sessao finalizada com sucesso."
+  fi
+else
+  atualizar_estado "aguardando" "Ciclo encerrado com pendências"
+  echo ""
+  echo "======================================================="
+  echo " Ciclo finalizado com pendências ou limite atingido."
+  echo " Verifique os apontamentos em:"
+  echo " $estado_dir/parecer-$sessao-r$((rodada > limite ? limite : rodada)).md"
+  echo "======================================================="
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send -a "jangada-par" -u critical "Tarefa requer conferência" "$sessao possui itens pendentes."
+  fi
+fi
