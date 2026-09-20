@@ -170,7 +170,7 @@
     "format-icons": ["󰁺", "󰁼", "󰁾", "󰂀", "󰁹"],
     "states": { "aviso": 25, "critico": 10 },
     "tooltip-format": "{capacity}% · {timeTo}",
-    "on-click": "$JANGADA_PATH/bin/jangada-monitor"
+    "on-click": "$JANGADA_PATH/bin/jangada-energia"
   },
 
   // show-passive-items mostra também o que está em repouso, que é o caso de
