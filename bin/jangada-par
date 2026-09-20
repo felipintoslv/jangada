@@ -10,9 +10,33 @@
 #   --modelo MODELO   modelo do agy para a revisão
 #   --esforco NÍVEL   esforço de raciocínio do agy: low, medium, high (padrão: high)
 #   --snapshot        cria um snapshot do sistema antes de iniciar
+# Defina NO_COLOR para desligar as cores.
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+# Cores da saída. Os códigos são os mesmos de install/lib.sh, repetidos aqui
+# porque o jangada-config não carrega aquele arquivo. Fora de um terminal, ou
+# com NO_COLOR definido, ficam vazias e a saída vai limpa para o log.
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+  c_forte=$'\e[1m'; c_fraco=$'\e[2m'; c_info=$'\e[36m'
+  c_ok=$'\e[32m';  c_aviso=$'\e[33m'; c_erro=$'\e[31m'; c_fim=$'\e[0m'
+else
+  c_forte=""; c_fraco=""; c_info=""; c_ok=""; c_aviso=""; c_erro=""; c_fim=""
+fi
+
+_linha="======================================================="
+_meia="-------------------------------------------------------"
+
+regua()  { printf '%s%s%s\n' "${1:-$c_fraco}" "$_linha" "$c_fim"; }
+traco()  { printf '%s%s%s\n' "$c_fraco" "$_meia" "$c_fim"; }
+titulo() { printf ' %s%s%s\n' "$c_forte" "$*" "$c_fim"; }
+campo()  { printf ' %s%-12s%s %s\n' "$c_forte" "$1" "$c_fim" "$2"; }
+info()   { printf '%s==>%s %s\n' "$c_info" "$c_fim" "$*"; }
+bom()    { printf '%s%s==>%s %s\n' "$c_forte" "$c_ok" "$c_fim" "$*"; }
+alerta() { printf '%s%s==>%s %s\n' "$c_forte" "$c_erro" "$c_fim" "$*"; }
+aviso()  { printf '%s%s !!%s %s\n' "$c_forte" "$c_aviso" "$c_fim" "$*" >&2; }
+erro()   { printf '%s%s !!%s %s\n' "$c_forte" "$c_erro" "$c_fim" "$*" >&2; }
 
 janela=0; projeto=""; nome=""; direto=0; snapshot=0; limite=2
 modelo=""; esforco="high"; tarefa=""
@@ -27,7 +51,7 @@ while (($#)); do
     --limite) limite="$2"; shift 2 ;;
     --modelo) modelo="$2"; shift 2 ;;
     --esforco) esforco="$2"; shift 2 ;;
-    -h|--ajuda) sed -n '2,12s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    -h|--ajuda) sed -n '2,13s/^# \{0,1\}//p' "$0"; exit 0 ;;
     --) shift; tarefa="$*"; break ;;
     *)
       if [[ -z "$tarefa" ]]; then
@@ -71,7 +95,7 @@ if [[ -z "$projeto" ]]; then
   [[ -n "$projeto" ]] || exit 0
 fi
 projeto="$(realpath "$projeto")"
-[[ -d "$projeto" ]] || { echo "diretório não encontrado: $projeto" >&2; exit 1; }
+[[ -d "$projeto" ]] || { erro "diretório não encontrado: $projeto"; exit 1; }
 
 eh_git=0
 raiz="$projeto"
@@ -83,10 +107,10 @@ repo="$(slug "$(basename "$raiz")")"
 
 if [[ -z "$tarefa" ]]; then
   echo ""
-  echo "PROJETO: $raiz"
-  echo "Digite o pedido ou tarefa que deseja realizar:"
+  campo "PROJETO:" "$raiz"
+  titulo "Digite o pedido ou tarefa que deseja realizar:"
   read -r -p "tarefa > " tarefa
-  [[ -n "$tarefa" ]] || { echo "tarefa vazia; encerrando" >&2; exit 1; }
+  [[ -n "$tarefa" ]] || { erro "tarefa vazia; encerrando"; exit 1; }
 fi
 
 if ((eh_git)) && ((!direto)) && [[ -z "$nome" ]]; then
@@ -103,7 +127,7 @@ if ((eh_git)) && [[ -n "$nome" ]]; then
   base="$(git -C "$raiz" rev-parse --abbrev-ref HEAD)"
   git -C "$raiz" worktree prune
   if [[ -d "$worktree" ]]; then
-    echo "reaproveitando worktree existente: $worktree"
+    info "reaproveitando worktree existente: $worktree"
   elif git -C "$raiz" show-ref --verify --quiet "refs/heads/$ramo"; then
     git -C "$raiz" worktree add "$worktree" "$ramo"
   else
@@ -117,6 +141,13 @@ sessao="$repo"
 
 estado_dir="$JANGADA_ESTADO/agentes"
 mkdir -p "$estado_dir"
+
+# Restos de uma execução anterior com o mesmo nome de sessão. Reaproveitando um
+# worktree, o parecer da rodada 1 de ontem ficaria no meio dos desta vez e o
+# resumo final apontaria para ele como se fosse atual.
+rm -f "$estado_dir/revisao-$sessao-r"*.json \
+      "$estado_dir/revisao-$sessao-r"*.log \
+      "$estado_dir/parecer-$sessao-r"*.md 2>/dev/null || true
 
 agora="$(date -Is)"
 jq -n --arg sessao "$sessao" --arg dir "$dir" --arg raiz "$raiz" --arg worktree "$worktree" \
@@ -139,6 +170,9 @@ jq -n --arg sessao "$sessao" --arg dir "$dir" --arg raiz "$raiz" --arg worktree 
 # comportamento padrão e o EXIT dispara em seguida.
 concluiu=0
 limpar_saida() {
+  # Os temporários do atualizar_estado somem sempre; o arquivo de estado, só
+  # quando o ciclo não chegou a gravar um resultado.
+  rm -f "$estado_dir/$sessao.json."?????? 2>/dev/null || true
   ((concluiu)) && return 0
   rm -f "$estado_dir/$sessao.json" 2>/dev/null || true
 }
@@ -147,8 +181,10 @@ trap limpar_saida EXIT
 atualizar_estado() {
   local est="$1" msg="$2"
   local arq="$estado_dir/$sessao.json"
+  # Ao lado do alvo, não em /tmp: assim o mv é atômico, por ficar no mesmo
+  # sistema de arquivos, e um resto de processo morto cai onde o trap olha.
   local tmp
-  tmp="$(mktemp)"
+  tmp="$(mktemp "$arq.XXXXXX")"
   if [[ -f "$arq" ]]; then
     jq --arg e "$est" --arg m "$msg" --arg a "$(date -Is)" \
       '.estado = $e | .mensagem = $m | .atualizado = $a' \
@@ -171,11 +207,11 @@ extrair_campo() {
 }
 
 echo ""
-echo "======================================================="
-echo " Jangada: Protocolo em Par (Claude + Antigravity)"
-echo " Projeto: $dir"
-echo " Tarefa:  $tarefa"
-echo "======================================================="
+regua "$c_info"
+titulo "Jangada: Protocolo em Par (Claude + Antigravity)"
+campo "Projeto:" "$dir"
+campo "Tarefa:" "$tarefa"
+regua "$c_info"
 echo ""
 
 ((snapshot)) && "$JANGADA_PATH/bin/jangada-snapshot" "antes do par $sessao" || true
@@ -187,9 +223,9 @@ ultimo_parecer=""
 
 while ((rodada <= limite)); do
   echo ""
-  echo "-------------------------------------------------------"
-  echo " [Rodada $rodada de $limite] Fase do Claude Code"
-  echo "-------------------------------------------------------"
+  traco
+  titulo "[Rodada $rodada de $limite] Fase do Claude Code"
+  traco
   atualizar_estado "trabalhando" "Rodada $rodada: Claude implementando"
 
   if ((rodada == 1)); then
@@ -216,9 +252,9 @@ Diretrizes para esta rodada:
 4. Faça commit das correções no git ao terminar."
   fi
 
-  echo "Executando Claude Code..."
+  info "Executando Claude Code..."
   if ! (cd "$dir" && claude -p "$prompt_claude" --dangerously-skip-permissions); then
-    echo "aviso: Claude encerrou com aviso ou limite atingido" >&2
+    aviso "Claude encerrou com aviso ou limite atingido"
   fi
 
   # Verifica se foram criadas alterações
@@ -230,13 +266,13 @@ Diretrizes para esta rodada:
   fi
 
   if [[ -z "$diff_conteudo" ]]; then
-    echo "nenhuma alteração encontrada no repositório; mantendo verificação dos arquivos"
+    aviso "nenhuma alteração encontrada no repositório; mantendo verificação dos arquivos"
   fi
 
   echo ""
-  echo "-------------------------------------------------------"
-  echo " [Rodada $rodada de $limite] Fase do Antigravity (Revisão)"
-  echo "-------------------------------------------------------"
+  traco
+  titulo "[Rodada $rodada de $limite] Fase do Antigravity (Revisão)"
+  traco
   atualizar_estado "trabalhando" "Rodada $rodada: Antigravity revisando"
 
   prompt_agy="Você é o revisor técnico no protocolo de trabalho em par do Jangada.
@@ -269,38 +305,54 @@ seguido de uma lista numerada e clara com cada item que o Claude deve corrigir:
   args_agy=(-p "$prompt_agy" --output-format json --effort "$esforco" --add-dir "$dir")
   [[ -n "$modelo" ]] && args_agy+=(--model "$modelo")
 
-  echo "Executando Antigravity CLI..."
+  info "Executando Antigravity CLI..."
   if ! agy "${args_agy[@]}" </dev/null >"$json_revisao" 2>"$log_revisao"; then
-    echo "falha na execução do agy; consulte $log_revisao" >&2
+    erro "falha na execução do agy; consulte $log_revisao"
     break
   fi
 
   status_agy="$(extrair_campo "$json_revisao" .status)"
   if [[ "$status_agy" != "SUCCESS" ]]; then
-    echo "o agy não concluiu (status: ${status_agy:-desconhecido}); consulte $log_revisao" >&2
+    erro "o agy não concluiu (status: ${status_agy:-desconhecido}); consulte $log_revisao"
     break
   fi
 
   parecer="$(extrair_campo "$json_revisao" .response)"
   if [[ -z "$parecer" ]]; then
-    echo "o agy concluiu, mas a resposta veio vazia; consulte $log_revisao" >&2
+    erro "o agy concluiu, mas a resposta veio vazia; consulte $log_revisao"
     break
   fi
 
   ultimo_parecer="$estado_dir/parecer-$sessao-r$rodada.md"
   printf '%s\n' "$parecer" >"$ultimo_parecer"
 
+  # O JSON bruto já foi lido por inteiro, e a resposta virou o parecer acima:
+  # manter os dois é guardar a mesma coisa duas vezes. O log só interessa
+  # quando tem conteúdo, e nas falhas acima ele fica preservado pelo break.
+  rm -f "$json_revisao"
+  [[ -s "$log_revisao" ]] || rm -f "$log_revisao"
+
+  aprovado_nesta=0
+  grep -qi "^STATUS:[[:space:]]*APROVADO" <<<"$parecer" && aprovado_nesta=1
+
   echo ""
-  echo "Resultado da revisão:"
-  echo "$parecer"
+  titulo "Resultado da revisão"
+  # A primeira linha é o veredito. Pinta só ela, verde ou vermelho, e deixa o
+  # corpo do parecer sem cor, que é onde estão os caminhos e trechos de código.
+  if ((aprovado_nesta)); then
+    printf '%s%s%s%s\n' "$c_forte" "$c_ok" "$(head -n1 <<<"$parecer")" "$c_fim"
+  else
+    printf '%s%s%s%s\n' "$c_forte" "$c_erro" "$(head -n1 <<<"$parecer")" "$c_fim"
+  fi
+  tail -n +2 <<<"$parecer"
   echo ""
 
-  if grep -qi "^STATUS:[[:space:]]*APROVADO" <<<"$parecer"; then
+  if ((aprovado_nesta)); then
     aprovado=1
-    echo "==> Aprovado pelo Antigravity na rodada $rodada!"
+    bom "Aprovado pelo Antigravity na rodada $rodada!"
     break
   else
-    echo "==> Antigravity solicitou correções para a próxima rodada."
+    alerta "Antigravity solicitou correções para a próxima rodada."
     ((rodada++))
   fi
 done
@@ -308,30 +360,33 @@ done
 # Onde o trabalho ficou. Sem isto o worktree some de vista: os commits estão
 # num ramo agente/<nome>, fora da árvore principal, e nada dizia como integrar.
 resumo_local() {
-  echo " Repositório: $raiz"
+  campo "Repositório:" "$raiz"
   if [[ -n "$worktree" ]]; then
-    echo " Worktree:    $worktree"
-    echo " Ramo:        $ramo"
-    echo " Integrar:    git -C '$raiz' merge $ramo"
-    echo " Remover:     git -C '$raiz' worktree remove '$worktree'"
+    campo "Worktree:" "$worktree"
+    campo "Ramo:" "$ramo"
+    campo "Integrar:" "git -C '$raiz' merge $ramo"
+    campo "Remover:" "git -C '$raiz' worktree remove '$worktree'"
   else
-    echo " Ramo:        ${ramo:-trabalho direto no repositório}"
+    campo "Ramo:" "${ramo:-trabalho direto no repositório}"
   fi
   if [[ -n "$ultimo_parecer" ]]; then
-    echo " Parecer:     $ultimo_parecer"
+    campo "Parecer:" "$ultimo_parecer"
   else
-    echo " Parecer:     nenhum; a revisão não chegou a ser gravada"
+    campo "Parecer:" "${c_aviso}nenhum; a revisão não chegou a ser gravada${c_fim}"
   fi
 }
 
 if ((aprovado)); then
   atualizar_estado "concluido" "Aprovado pelo Antigravity"
   concluiu=1
+  # Aprovado, o ciclo está fechado e os logs do agy viram ruído. Os pareceres
+  # ficam: são o que o revisor escreveu, e o resumo abaixo aponta para eles.
+  rm -f "$estado_dir/revisao-$sessao-r"*.log 2>/dev/null || true
   echo ""
-  echo "======================================================="
-  echo " Sucesso! Tarefa concluída e aprovada."
+  regua "$c_ok"
+  titulo "${c_ok}✓ Sucesso! Tarefa concluída e aprovada.${c_fim}"
   resumo_local
-  echo "======================================================="
+  regua "$c_ok"
   if command -v notify-send >/dev/null 2>&1; then
     notify-send -a "jangada-par" -u normal "Tarefa concluída e aprovada" "$sessao finalizada com sucesso."
   fi
@@ -339,10 +394,10 @@ else
   atualizar_estado "aguardando" "Ciclo encerrado com pendências"
   concluiu=1
   echo ""
-  echo "======================================================="
-  echo " Ciclo finalizado com pendências ou limite atingido."
+  regua "$c_erro"
+  titulo "${c_erro}✗ Ciclo finalizado com pendências ou limite atingido.${c_fim}"
   resumo_local
-  echo "======================================================="
+  regua "$c_erro"
   if command -v notify-send >/dev/null 2>&1; then
     notify-send -a "jangada-par" -u critical "Tarefa requer conferência" "$sessao possui itens pendentes."
   fi
