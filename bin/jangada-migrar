@@ -5,6 +5,7 @@ set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
+JANGADA_SIMULAR="${JANGADA_SIMULAR:-0}"
 feitas="$JANGADA_ESTADO/migracoes"
 mkdir -p "$feitas"
 n=0
@@ -14,11 +15,17 @@ for m in "$JANGADA_PATH"/migrations/*.sh; do
   [[ -e "$feitas/$nome" ]] && continue
   echo "==> migração $nome"
   if bash "$m"; then
-    touch "$feitas/$nome"
+    # Em simulação a marca não é gravada. Gravar faria a execução seguinte, a
+    # de verdade, pular uma migração que nunca chegou a ser aplicada.
+    [[ "$JANGADA_SIMULAR" == "1" ]] || touch "$feitas/$nome"
     n=$((n + 1))
   else
     echo "migração $nome falhou; corrija e rode jangada-migrar de novo" >&2
     exit 1
   fi
 done
-echo "migrações aplicadas: $n"
+if [[ "$JANGADA_SIMULAR" == "1" ]]; then
+  echo "migrações que seriam aplicadas: $n"
+else
+  echo "migrações aplicadas: $n"
+fi
