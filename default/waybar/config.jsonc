@@ -115,7 +115,7 @@
     "format-disconnected": "󰤭",
     "tooltip-format": "{ifname} · IP: {ipaddr}\n⬇ {bandwidthDownBytes}  ⬆ {bandwidthUpBytes}",
     "on-click": "$JANGADA_PATH/bin/jangada-rede",
-    "on-click-right": "$JANGADA_PATH/bin/jangada-monitor"
+    "on-click-right": "$JANGADA_PATH/bin/jangada-rede tui"
   },
 
   "bluetooth": {
