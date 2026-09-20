@@ -234,6 +234,29 @@ extrair_campo() {
   jq -r "$2 // empty" "$1" 2>/dev/null || true
 }
 
+# Começo de um dos canais do agy, recortado: a resposta inteira não cabe na
+# tela e o que distingue uma recusa de uma saída vazia está nas primeiras
+# linhas.
+canal_agy() {
+  local rotulo="$1" arq="$2"
+  if [[ -s "$arq" ]]; then
+    printf ' %s%s do agy:%s\n' "$c_forte" "$rotulo" "$c_fim"
+    head -c 600 "$arq" | sed 's/^/   /'
+    printf '\n'
+  else
+    printf ' %s%s do agy: vazia%s\n' "$c_fraco" "$rotulo" "$c_fim"
+  fi
+}
+
+# Sem isto a falha aponta para um log que quase sempre está vazio, e não sobra
+# nenhuma pista do que o revisor respondeu.
+diagnostico_agy() {
+  canal_agy "saída" "$json_revisao"
+  canal_agy "erro" "$log_revisao"
+  campo "Arquivos:" "$json_revisao"
+  campo "" "$log_revisao"
+}
+
 echo ""
 regua "$c_info"
 titulo "Jangada: Protocolo em Par (Claude + Antigravity)"
@@ -357,15 +380,32 @@ seguido de uma lista numerada e clara com cada item que o Claude deve corrigir:
   args_agy=(-p "$prompt_agy" --output-format json --effort "$esforco" --add-dir "$dir")
   [[ -n "$modelo" ]] && args_agy+=(--model "$modelo")
 
-  info "Executando Antigravity CLI..."
-  if ! agy "${args_agy[@]}" </dev/null >"$json_revisao" 2>"$log_revisao"; then
-    erro "falha na execução do agy; consulte $log_revisao"
-    break
-  fi
+  # O agy às vezes sai com código 0 sem escrever nada, nem na saída nem no
+  # erro, e aí não há status para ler. Aconteceu duas vezes em 20/09/2026, em
+  # ciclos diferentes, e repetir o mesmo pedido resolveu nas duas, então a
+  # chamada vai em duas tentativas antes de a rodada ser abandonada.
+  falha_agy=""
+  for tentativa in 1 2; do
+    info "Executando Antigravity CLI... (tentativa $tentativa)"
+    if ! agy "${args_agy[@]}" </dev/null >"$json_revisao" 2>"$log_revisao"; then
+      falha_agy="a execução do agy terminou com erro"
+    else
+      status_agy="$(extrair_campo "$json_revisao" .status)"
+      if [[ "$status_agy" == "SUCCESS" ]]; then
+        falha_agy=""
+        break
+      fi
+      falha_agy="o agy não concluiu (status: ${status_agy:-desconhecido})"
+    fi
+    if ((tentativa < 2)); then
+      aviso "$falha_agy; repetindo a chamada em 5s"
+      sleep 5
+    fi
+  done
 
-  status_agy="$(extrair_campo "$json_revisao" .status)"
-  if [[ "$status_agy" != "SUCCESS" ]]; then
-    erro "o agy não concluiu (status: ${status_agy:-desconhecido}); consulte $log_revisao"
+  if [[ -n "$falha_agy" ]]; then
+    erro "$falha_agy"
+    diagnostico_agy
     break
   fi
 
