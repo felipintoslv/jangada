@@ -74,6 +74,11 @@ fi
   for f in /boot/limine.conf /boot/limine/limine.conf /boot/EFI/limine/limine.conf /boot/grub/grub.cfg; do
     [[ -f "$f" ]] && echo "encontrado: $f"
   done
+  # O bootctl precisa de root para abrir a partição EFI, por isso as pastas
+  # do systemd-boot são conferidas antes dele.
+  for d in /boot/loader/entries /efi/loader/entries /boot/EFI/systemd /efi/EFI/systemd; do
+    [[ -d "$d" ]] && echo "encontrado: $d"
+  done
   tem bootctl && bootctl is-installed 2>/dev/null && echo "systemd-boot instalado"
   pacman -Q limine grub 2>/dev/null
 } >sistema/boot.txt
