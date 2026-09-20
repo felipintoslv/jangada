@@ -41,6 +41,8 @@ for f in hypr/hyprland.lua hypr/cores.lua waybar/style.css waybar/cores.css mako
 done
 if command -v luac >/dev/null 2>&1; then
   for f in "$JANGADA_PATH"/default/hypr/*.lua "$JANGADA_CONFIG"/hypr/*.lua; do
+    # Sem a pasta do usuário o glob não expande e sobra o próprio padrão.
+    [[ -f "$f" ]] || continue
     luac -p "$f" 2>/dev/null || falha "erro de sintaxe Lua: $f"
   done
 fi
