@@ -47,6 +47,11 @@ fi
 # dentro da própria sessão, encerrar a sessão mataria este script no meio;
 # nesse caso a limpeza continua num processo separado, com registro em arquivo.
 limpar() {
+  local pid
+  pid="$(jq -r '.pid // empty' "$arq" 2>/dev/null || true)"
+  if [[ -n "$pid" ]]; then
+    kill "$pid" 2>/dev/null || true
+  fi
   "${JANGADA_TMUX[@]}" kill-session -t "=$s" 2>/dev/null || true
   if [[ -n "$worktree" && -d "$worktree" ]]; then
     if ((forcar)); then

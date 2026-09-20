@@ -20,40 +20,61 @@ sessoes_vivas() { "${JANGADA_TMUX[@]}" list-sessions -F '#S' 2>/dev/null || true
 
 # Uma linha por sessão viva: estado<TAB>sessão<TAB>diretório<TAB>atualizado
 listar() {
-  local s arq estado dir atualizado
+  local s arq estado dir atualizado vivas pid
+  vivas="$(sessoes_vivas)"
   while read -r s; do
     [[ -n "$s" ]] || continue
     arq="$estado_dir/$s.json"
     if [[ -f "$arq" ]]; then
-      estado="$(jq -r '.estado // "ativo"' "$arq")"
-      dir="$(jq -r '.dir // ""' "$arq")"
-      atualizado="$(jq -r '.atualizado // ""' "$arq")"
+      estado="$(jq -r '.estado // "ativo"' "$arq" 2>/dev/null || echo "ativo")"
+      dir="$(jq -r '.dir // ""' "$arq" 2>/dev/null || echo "")"
+      atualizado="$(jq -r '.atualizado // ""' "$arq" 2>/dev/null || echo "")"
     else
       estado="ativo"; dir=""; atualizado=""
     fi
     printf '%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado"
-  done < <(sessoes_vivas)
+  done <<<"$vivas"
+
+  for arq in "$estado_dir"/*.json; do
+    [[ -e "$arq" ]] || continue
+    s="$(basename "$arq" .json)"
+    grep -qxF "$s" <<<"$vivas" && continue
+    pid="$(jq -r '.pid // empty' "$arq" 2>/dev/null || true)"
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      estado="$(jq -r '.estado // "ativo"' "$arq" 2>/dev/null || echo "ativo")"
+      dir="$(jq -r '.dir // ""' "$arq" 2>/dev/null || echo "")"
+      atualizado="$(jq -r '.atualizado // ""' "$arq" 2>/dev/null || echo "")"
+      printf '%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado"
+    fi
+  done
 }
 
 # Remove arquivos de estado de sessões que já não existem.
 limpar_orfaos() {
-  local arq s vivas
+  local arq s vivas pid
   vivas="$(sessoes_vivas)"
   for arq in "$estado_dir"/*.json; do
     [[ -e "$arq" ]] || continue
     s="$(basename "$arq" .json)"
-    grep -qxF "$s" <<<"$vivas" || rm -f "$arq"
+    if grep -qxF "$s" <<<"$vivas"; then
+      continue
+    fi
+    pid="$(jq -r '.pid // empty' "$arq" 2>/dev/null || true)"
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      continue
+    fi
+    rm -f "$arq"
   done
 }
 
 focar() {
   local s="$1" endereco=""
   if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
-    endereco="$(hyprctl clients -j | jq -r --arg s "$s" 'map(select(.title == $s)) | .[0].address // empty')"
+    endereco="$(hyprctl clients -j 2>/dev/null | jq -r --arg s "$s" 'map(select(.title == $s or (.title | test($s)))) | .[0].address // empty' 2>/dev/null || true)"
   fi
   if [[ -n "$endereco" ]]; then
     hyprctl dispatch "hl.dsp.focus({ window = \"address:$endereco\" })" >/dev/null
-  else
+  elif "${JANGADA_TMUX[@]}" has-session -t "=$s" 2>/dev/null; then
     setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente \
       -e "${JANGADA_TMUX[@]}" attach -t "=$s" >/dev/null 2>&1
   fi

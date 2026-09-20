@@ -44,16 +44,18 @@ slug() { tr '[:upper:]' '[:lower:]' <<<"$1" | sed -e 's/[^a-z0-9_-]\+/-/g' -e 's
 
 listar_projetos() {
   {
-    command -v zoxide >/dev/null 2>&1 && zoxide query -l 2>/dev/null
+    command -v zoxide >/dev/null 2>&1 && zoxide query -l 2>/dev/null || true
     if [[ -d "$JANGADA_PROJETOS" ]]; then
-      find "$JANGADA_PROJETOS" -maxdepth 3 -type d -name .git -prune -printf '%h\n' 2>/dev/null
+      find "$JANGADA_PROJETOS" -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true
+      find "$JANGADA_PROJETOS" -maxdepth 3 -type d -name .git -prune -printf '%h\n' 2>/dev/null || true
     fi
-  } | awk '!visto[$0]++' | while read -r d; do [[ -d "$d" ]] && printf '%s\n' "$d"; done
+  } | awk '!visto[$0]++' | while read -r d; do [[ -d "$d" ]] && printf '%s\n' "$d"; done || true
 }
 
 if [[ -z "$projeto" ]]; then
   projeto="$(listar_projetos | fzf --prompt 'projeto > ' --height 60% --reverse \
-    --preview 'git -C {} log --oneline -8 2>/dev/null; echo; ls {}' )" || exit 0
+    --preview 'git -C {} log --oneline -8 2>/dev/null; echo; ls {}' )" || true
+  [[ -n "$projeto" ]] || exit 0
 fi
 projeto="$(realpath "$projeto")"
 [[ -d "$projeto" ]] || { echo "diretório não encontrado: $projeto" >&2; exit 1; }
