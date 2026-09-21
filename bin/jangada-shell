@@ -28,7 +28,9 @@ done
 if ((janela)); then
   args=()
   [[ -n "$destino" ]] && args+=("$destino")
-  exec "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente --titulo "Jangada Shell" -e "$0" "${args[@]}"
+  # Um console por destino basta: sem destino, foca o que já estiver aberto.
+  [[ -z "$destino" ]] && jangada_focar_classe org.jangada.shell && exit 0
+  exec "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.shell --titulo "Jangada Shell" -e "$0" "${args[@]}"
 fi
 
 [[ -n "$destino" ]] && cd -- "$destino"

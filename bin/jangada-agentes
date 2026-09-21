@@ -454,6 +454,8 @@ case "${1:-}" in
     # on-click antes de rodar o exec do módulo de novo, então um terminal em
     # primeiro plano congelava o contador da barra onde houve o clique
     # enquanto a lista ficasse aberta.
+    # Se a lista já está aberta, o atalho só a traz para a frente.
+    jangada_focar_classe org.jangada.lista && exit 0
     setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.lista -e "$0" >/dev/null 2>&1
     ;;
   --painel)

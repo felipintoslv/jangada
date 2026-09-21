@@ -152,6 +152,16 @@ jangada_perfis() {
   return 0
 }
 
+# Foca a primeira janela da classe CLASSE e devolve 0; devolve 1 se não houver
+# nenhuma (ou se não houver Hyprland). Serve para "abrir ou focar".
+jangada_focar_classe() {
+  local _end
+  _end="$(hyprctl clients -j 2>/dev/null \
+    | jq -r --arg c "$1" 'first(.[] | select(.class == $c) | .address) // empty' 2>/dev/null)"
+  [[ -n "$_end" ]] || return 1
+  hyprctl dispatch "hl.dsp.focus({ window = \"address:$_end\" })" >/dev/null
+}
+
 # Socket próprio do tmux para as sessões de agentes, separado do tmux pessoal.
 # shellcheck disable=SC2034  # usado pelos scripts que carregam este arquivo
 JANGADA_TMUX=(tmux -L jangada -f "$JANGADA_PATH/default/tmux/agentes.conf")

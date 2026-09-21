@@ -92,6 +92,9 @@ else
   echo "git ou jq ausente; etapa ignorada"
 fi
 
+passo "importação da configuração do niri"
+testes/importar.sh || falha "testes/importar.sh"
+
 printf '\n'
 ((falhas == 0)) && echo "tudo certo" || echo "$falhas falha(s)"
 exit $((falhas > 0))

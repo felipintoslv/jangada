@@ -47,10 +47,11 @@ hl.window_rule({
   center = true,
 })
 
--- Janelas de agentes: borda de outra cor para distinguir dos terminais comuns.
+-- Janelas de agentes e do Jangada Shell: borda de outra cor para distinguir
+-- dos terminais comuns.
 hl.window_rule({
   name = "janela-agente",
-  match = { class = "^org\\.jangada\\.agente$" },
+  match = { class = "^org\\.jangada\\.(agente|shell)$" },
   tag = "+agente",
 })
 
