@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+# Configura o SDDM para exibir exclusivamente o Jangada como opção de login
+# e aplica a identidade visual (xilogravura cordel) na tela de login.
+#
+# Uso:
+#   jangada-sddm [aplicar|restaurar|status]
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+SESSIONS_DIR="/usr/share/wayland-sessions"
+BACKUP_DIR="$SESSIONS_DIR/desativados"
+SDDM_CONF_DIR="/etc/sddm.conf.d"
+SDDM_CONF_FILE="$SDDM_CONF_DIR/jangada.conf"
+THEME_BG="/usr/share/sddm/themes/catppuccin-mocha-blue/backgrounds/wall.png"
+
+obter_papel() {
+  local papel=""
+  if [[ -f "$JANGADA_CONFIG/jangada.conf" ]]; then
+    papel="$(sed -n 's/^JANGADA_PAPEL=//p' "$JANGADA_CONFIG/jangada.conf" | tr -d '"' | tr -d "'")"
+  fi
+  if [[ -z "$papel" || ! -f "$papel" ]]; then
+    papel="$HOME/Pictures/Wallpapers/jangada-cordel-4k.png"
+  fi
+  if [[ ! -f "$papel" ]]; then
+    papel="$HOME/Pictures/Wallpapers/jangada-cordel.jpg"
+  fi
+  printf '%s\n' "$papel"
+}
+
+exigir_root() {
+  if [[ $EUID -ne 0 ]]; then
+    if [[ -t 0 ]]; then
+      echo "==> Solicitando privilégios de administrador (sudo)..."
+      exec sudo "$0" "$@"
+    else
+      echo "erro: jangada-sddm precisa ser executado como root (ou com sudo em terminal interativo)" >&2
+      exit 1
+    fi
+  fi
+}
+
+mostrar_status() {
+  echo "⛵ Estado das sessões no SDDM:"
+  echo ""
+  echo "Sessões ativas em $SESSIONS_DIR:"
+  for f in "$SESSIONS_DIR"/*.desktop; do
+    if [[ -f "$f" ]]; then
+      local nome
+      nome="$(sed -n 's/^Name=//p' "$f" | head -1)"
+      echo "  • $(basename "$f") (Nome: ${nome:-desconhecido})"
+    fi
+  done
+
+  echo ""
+  if [[ -d "$BACKUP_DIR" ]] && compgen -G "$BACKUP_DIR/*.desktop" >/dev/null; then
+    echo "Sessões desativadas em $BACKUP_DIR:"
+    for f in "$BACKUP_DIR"/*.desktop; do
+      local nome
+      nome="$(sed -n 's/^Name=//p' "$f" | head -1)"
+      echo "  - $(basename "$f") (Nome: ${nome:-desconhecido})"
+    done
+  else
+    echo "Nenhuma sessão desativada em $BACKUP_DIR."
+  fi
+
+  echo ""
+  echo "Configuração do SDDM:"
+  if [[ -f "$SDDM_CONF_FILE" ]]; then
+    echo "  Arquivo $SDDM_CONF_FILE ativo:"
+    sed 's/^/    /' "$SDDM_CONF_FILE"
+  else
+    echo "  Arquivo $SDDM_CONF_FILE não existe."
+  fi
+
+  if [[ -f "$THEME_BG" ]]; then
+    echo ""
+    echo "Papel de parede do SDDM:"
+    echo "  $THEME_BG ($(file -b "$THEME_BG" 2>/dev/null || true))"
+  fi
+}
+
+aplicar() {
+  exigir_root "$@"
+
+  echo "==> Configurando Jangada como sessão exclusiva do SDDM..."
+
+  mkdir -p "$BACKUP_DIR"
+  mkdir -p "$SDDM_CONF_DIR"
+
+  # Mover todas as outras sessões Wayland para o diretório de desativados
+  local movidos=0
+  for f in "$SESSIONS_DIR"/*.desktop; do
+    [[ -f "$f" ]] || continue
+    local base
+    base="$(basename "$f")"
+    if [[ "$base" != "jangada.desktop" ]]; then
+      echo "  -> Desativando sessão: $base"
+      mv -f "$f" "$BACKUP_DIR/$base"
+      movidos=$((movidos + 1))
+    fi
+  done
+
+  # Garantir jangada.desktop na pasta de sessões
+  local jangada_desktop="$SESSIONS_DIR/jangada.desktop"
+  cat <<EOF > "$jangada_desktop"
+[Desktop Entry]
+Name=jangada
+Comment=Hyprland com a configuração jangada
+Exec=$JANGADA_PATH/bin/jangada-sessao
+Type=Application
+DesktopNames=Hyprland
+EOF
+  chmod 644 "$jangada_desktop"
+
+  # Configurar o arquivo do SDDM
+  cat <<EOF > "$SDDM_CONF_FILE"
+[Autologin]
+Session=jangada.desktop
+
+[Theme]
+Current=catppuccin-mocha-blue
+
+[Wayland]
+SessionDir=$SESSIONS_DIR
+EOF
+  chmod 644 "$SDDM_CONF_FILE"
+
+  # Atualizar o papel de parede do tema SDDM
+  local papel
+  papel="$(obter_papel)"
+  if [[ -f "$papel" ]] && [[ -d "$(dirname "$THEME_BG")" ]]; then
+    if [[ ! -f "$THEME_BG.orig" && -f "$THEME_BG" ]]; then
+      cp -a "$THEME_BG" "$THEME_BG.orig"
+    fi
+    cp -f "$papel" "$THEME_BG"
+    chmod 644 "$THEME_BG"
+    echo "  -> Papel de parede cordel copiado para o tema SDDM: $THEME_BG"
+  fi
+
+  echo "✓ Configuração concluída com sucesso!"
+  echo "✓ Jangada é a única opção de login disponível no SDDM."
+}
+
+restaurar() {
+  exigir_root "$@"
+
+  echo "==> Restaurando sessões anteriores do SDDM..."
+
+  if [[ -d "$BACKUP_DIR" ]]; then
+    for f in "$BACKUP_DIR"/*.desktop; do
+      [[ -f "$f" ]] || continue
+      local base
+      base="$(basename "$f")"
+      echo "  -> Reativando sessão: $base"
+      mv -f "$f" "$SESSIONS_DIR/$base"
+    done
+    rmdir "$BACKUP_DIR" 2>/dev/null || true
+  fi
+
+  if [[ -f "$SDDM_CONF_FILE" ]]; then
+    rm -f "$SDDM_CONF_FILE"
+    echo "  -> Removido $SDDM_CONF_FILE"
+  fi
+
+  if [[ -f "$THEME_BG.orig" ]]; then
+    mv -f "$THEME_BG.orig" "$THEME_BG"
+    echo "  -> Papel de parede original do SDDM restaurado."
+  fi
+
+  echo "✓ Sessões e configurações anteriores restauradas."
+}
+
+case "${1:-aplicar}" in
+  status)
+    mostrar_status
+    ;;
+  restaurar)
+    restaurar "$@"
+    ;;
+  aplicar)
+    aplicar "$@"
+    ;;
+  -h|--ajuda)
+    sed -n '2,6s/^# \{0,1\}//p' "$0"
+    ;;
+  *)
+    echo "uso: jangada-sddm [aplicar|restaurar|status]" >&2
+    exit 1
+    ;;
+esac

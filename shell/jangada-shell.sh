@@ -272,6 +272,49 @@ tema() {
   fi
 }
 
+# Gestão de energia, sessão e atalhos rápidos
+energia() {
+  "$JANGADA_PATH/bin/jangada-energia" "$@"
+}
+
+desligar() {
+  if _jangada_confirmar "Deseja realmente desligar o computador?"; then
+    systemctl poweroff
+  fi
+}
+
+reiniciar() {
+  if _jangada_confirmar "Deseja realmente reiniciar o computador?"; then
+    systemctl reboot
+  fi
+}
+
+suspender() {
+  systemctl suspend
+}
+
+bloquear() {
+  "$JANGADA_PATH/bin/jangada-bloquear" "$@"
+}
+
+sair() {
+  if _jangada_confirmar "Deseja realmente sair da sessão?"; then
+    hyprctl dispatch 'hl.dsp.exit()' 2>/dev/null || true
+  fi
+}
+
+menu() {
+  "$JANGADA_PATH/bin/jangada-menu" "$@"
+}
+
+sddm() {
+  "$JANGADA_PATH/bin/jangada-sddm" "$@"
+}
+
+login() {
+  "$JANGADA_PATH/bin/jangada-sddm" "$@"
+}
+
 # Ajuda dos comandos do jangada shell
 ajuda() {
   echo ""
@@ -290,6 +333,14 @@ ajuda() {
   echo "  bluetooth         gerencia conexões de dispositivos Bluetooth"
   echo "  rede              gerencia conexões cabeada (Ethernet) e Wi-Fi"
   echo "  calendario        abre o calendário interativo com seus eventos"
+  echo "  energia           gerencia perfis de consumo e estado de energia"
+  echo "  bloquear          bloqueia a tela com hyprlock"
+  echo "  suspender         suspende a máquina imediatamente"
+  echo "  reiniciar         reinicia o computador (com confirmação)"
+  echo "  desligar          desliga o computador (com confirmação)"
+  echo "  sair              encerra a sessão do Jangada (com confirmação)"
+  echo "  sddm [aplicar]    configura Jangada como sessão exclusiva no SDDM"
+  echo "  menu              abre o menu central do Jangada (fuzzel)"
   echo "  fim <sessao>      encerra uma sessão de agente e limpa o worktree"
   echo "  ajuda             exibe esta lista de comandos"
   echo "  exit              sai do jangada shell e volta ao terminal normal"
