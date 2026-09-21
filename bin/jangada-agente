@@ -73,7 +73,7 @@ if ((eh_git)) && ((!direto)) && [[ -z "$nome" ]]; then
 fi
 nome="$(slug "$nome")"
 
-dir="$raiz"; worktree=""; ramo=""; base=""
+dir="$raiz"; worktree=""; ramo=""; base=""; worktree_novo=0
 if ((eh_git)) && [[ -n "$nome" ]]; then
   worktree="$JANGADA_WORKTREES/$repo/$nome"
   ramo="agente/$nome"
@@ -83,10 +83,15 @@ if ((eh_git)) && [[ -n "$nome" ]]; then
   if [[ -d "$worktree" ]]; then
     echo "reaproveitando worktree existente: $worktree"
   elif git -C "$raiz" show-ref --verify --quiet "refs/heads/$ramo"; then
+    worktree_novo=1
     git -C "$raiz" worktree add "$worktree" "$ramo"
   else
+    worktree_novo=1
     git -C "$raiz" worktree add -b "$ramo" "$worktree" HEAD
   fi
+  # Só num worktree recém-criado: o reaproveitado já tem o que precisa, e o
+  # que o agente mudou ali não pode ser sobrescrito.
+  ((worktree_novo)) && "$JANGADA_PATH/bin/jangada-worktree-preparar" "$raiz" "$worktree"
   dir="$worktree"
 fi
 
