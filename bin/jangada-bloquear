@@ -7,7 +7,25 @@ papeis="${cfg%/*}/papeis.conf"
 pidof hyprlock >/dev/null && exit 0
 [[ -f "$cfg" ]] || exec hyprlock
 if [[ -s "$papeis" ]]; then
-  junto="${XDG_RUNTIME_DIR:-/tmp}/jangada-hyprlock.conf"
-  cat "$cfg" "$papeis" >"$junto" && exec hyprlock -c "$junto"
+  dir="${XDG_RUNTIME_DIR:-/tmp/jangada-$UID}"
+  [[ -d "$dir" ]] || mkdir -m 700 "$dir"
+  junto="$dir/jangada-hyprlock.conf"
+  # O hyprlock desenha todos os fundos que valem para uma tela, um sobre o
+  # outro. O fundo geral (sem "monitor =") fica só com a cor, para servir a
+  # uma tela ligada depois, e a imagem de cada tela vem do papeis.conf.
+  awk '
+    /^background[[:space:]]*\{/ { bloco = 1; n = 0; geral = 1 }
+    bloco {
+      linha[++n] = $0
+      if ($0 ~ /^[[:space:]]*monitor[[:space:]]*=/) geral = 0
+      if ($0 ~ /^[[:space:]]*\}/) {
+        for (i = 1; i <= n; i++)
+          if (!geral || linha[i] !~ /^[[:space:]]*(path|blur_passes|blur_size)[[:space:]]*=/) print linha[i]
+        bloco = 0
+      }
+      next
+    }
+    { print }
+  ' "$cfg" | cat - "$papeis" >"$junto" && exec hyprlock -c "$junto"
 fi
 exec hyprlock -c "$cfg"

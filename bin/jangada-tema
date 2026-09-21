@@ -38,13 +38,6 @@ papel_para_tela() {
     printf '%s\n' "$img"
     return 0
   fi
-  chave="$(printf '%s %s' "$img" "$(stat -c %Y "$img")" | sha1sum | cut -c1-12)"
-  saida="$cache_papel/$chave-${lt}x$at-$modo.png"
-  if [[ -f "$saida" ]]; then
-    printf '%s\n' "$saida"
-    return 0
-  fi
-  mkdir -p "$cache_papel"
   # Tela mais larga que a imagem: a figura ocupa a altura toda e as laterais
   # são completadas. Mais alta: ocupa a largura e completa em cima e embaixo.
   if (( lt * ai > at * li )); then
@@ -54,10 +47,19 @@ papel_para_tela() {
     larg=$lt; alt=$(( (ai * lt + li / 2) / li ))
     lado=$(( (at - alt) / 2 )); resto=$(( at - alt - lado ))
   fi
-  # O espelho só funciona enquanto a faixa a refletir cabe na figura.
-  if [[ "$modo" == espelho ]] && (( resto > (larg < alt ? larg : alt) )); then
+  # O espelho só funciona enquanto a faixa a refletir cabe na figura: nas
+  # laterais a faixa se mede pela largura da figura, em cima e embaixo pela
+  # altura.
+  if [[ "$modo" == espelho ]] && (( resto > (larg < lt ? larg : alt) )); then
     modo=desfoque
   fi
+  chave="$(printf '%s %s' "$img" "$(stat -c %Y "$img")" | sha1sum | cut -c1-12)"
+  saida="$cache_papel/$chave-${lt}x$at-$modo.png"
+  if [[ -f "$saida" ]]; then
+    printf '%s\n' "$saida"
+    return 0
+  fi
+  mkdir -p "$cache_papel"
   med="${larg}x$alt"
   case "$modo" in
     espelho)
@@ -97,8 +99,10 @@ telas() {
     | @tsv'
 }
 
-# Blocos de fundo do hyprlock para as telas que receberam versão própria. O
-# jangada-bloquear junta este arquivo ao hyprlock.conf gerado pelo matugen.
+# Blocos de fundo do hyprlock, um por tela, com a versão sem corte ou com a
+# própria imagem. O jangada-bloquear junta este arquivo ao hyprlock.conf gerado
+# pelo matugen e tira a imagem do fundo geral, para que cada tela desenhe e
+# desfoque uma imagem só.
 gravar_papeis_hyprlock() {
   local nome caminho
   mkdir -p "$(dirname "$papeis_hyprlock")"
@@ -115,12 +119,14 @@ aplicar_papel() {
   local img="${1:-$JANGADA_PAPEL}" nome lt at caminho linha
   local -a args=()
   [[ -n "$img" && -f "$img" ]] || return 0
+  # No Noctalia o papel de parede é dele; um swaybg disputaria o fundo.
+  [[ "$JANGADA_INTERFACE" == noctalia ]] && return 0
   args=(-o '*' -i "$img" -m fill)
   if command -v magick >/dev/null; then
     while IFS=$'\t' read -r nome lt at; do
       [[ -n "$nome" ]] || continue
       caminho="$(papel_para_tela "$img" "$lt" "$at")" || caminho="$img"
-      [[ "$caminho" == "$img" ]] || printf '%s\t%s\n' "$nome" "$caminho"
+      printf '%s\t%s\n' "$nome" "$caminho"
     done < <(telas) | gravar_papeis_hyprlock
     # O laço acima roda num subshell por causa do pipe, então os argumentos do
     # swaybg são lidos de volta do arquivo que ele gravou.
@@ -128,16 +134,22 @@ aplicar_papel() {
       [[ "$linha" =~ ^[[:space:]]+monitor\ =\ (.*)$ ]] && nome="${BASH_REMATCH[1]}"
       [[ "$linha" =~ ^[[:space:]]+path\ =\ (.*)$ ]] && args+=(-o "$nome" -i "${BASH_REMATCH[1]}" -m fill)
     done <"$papeis_hyprlock"
+  else
+    # Sem o ImageMagick não há versões por tela; um arquivo antigo faria o
+    # bloqueio mostrar o papel de parede anterior.
+    : >"$papeis_hyprlock" 2>/dev/null || true
   fi
   pkill -x swaybg 2>/dev/null || true
   setsid -f swaybg "${args[@]}" >/dev/null 2>&1
 }
 
 salvar_papel() {
-  local img="$1"
+  local img="$1" seguro
   [[ -f "$conf_usuario" ]] || return 0
+  # Barra invertida, "|" e "&" teriam sentido especial na substituição do sed.
+  seguro="${img//\\/\\\\}"; seguro="${seguro//|/\\|}"; seguro="${seguro//&/\\&}"
   if grep -q '^JANGADA_PAPEL=' "$conf_usuario"; then
-    sed -i "s|^JANGADA_PAPEL=.*|JANGADA_PAPEL=$img|" "$conf_usuario"
+    sed -i "s|^JANGADA_PAPEL=.*|JANGADA_PAPEL=$seguro|" "$conf_usuario"
   else
     printf 'JANGADA_PAPEL=%s\n' "$img" >>"$conf_usuario"
   fi
@@ -156,7 +168,9 @@ aviso_sddm() {
   local papel="${1:-}" instalado=/usr/share/sddm/themes/jangada/theme.conf.user
   local gerado="$JANGADA_CONFIG/sddm/theme.conf.user"
   [[ -f "$instalado" && -f "$gerado" ]] || return 0
-  if ! grep -qxFf "$gerado" "$instalado" \
+  # As linhas de cor são comparadas uma a uma: "[General]" existe nos dois
+  # arquivos, e procurar qualquer linha em comum sempre acharia essa.
+  if [[ "$(grep '^cor_' "$gerado")" != "$(grep '^cor_' "$instalado")" ]] \
     || ! grep -qxF "papel_origem=$papel" "$instalado" \
     || ! grep -qxF "ajuste=$JANGADA_PAPEL_AJUSTE" "$instalado"; then
     echo "a tela de login ainda usa o tema anterior; para atualizá-la: jangada-sddm aplicar"

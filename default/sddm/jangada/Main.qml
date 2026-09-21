@@ -88,6 +88,7 @@ Rectangle {
     readonly property string ajuste: config.ajuste || "espelho"
     readonly property real proporcaoFigura: figura.implicitHeight > 0 ? figura.implicitWidth / figura.implicitHeight : width / height
     readonly property bool telaMaisLarga: width / height > proporcaoFigura
+    readonly property bool temFigura: Boolean(config.fundo)
 
     Item {
         id: fundo
@@ -111,7 +112,7 @@ Rectangle {
             anchors.fill: parent
             color: "black"
             opacity: 0.4
-            visible: ajuste === "desfoque" || ajuste === "espelho"
+            visible: temFigura && (ajuste === "desfoque" || ajuste === "espelho")
         }
 
         Image {
@@ -157,11 +158,16 @@ Rectangle {
     // Véu sobre a figura, para a caixa se destacar. O fundo não passa por
     // desfoque: o MultiEffect sobre um item composto (camada) não acompanha o
     // redimensionamento da janela e chegou a mostrar a figura ampliada e
-    // cortada. Imagens simples não têm esse problema.
+    // cortada. Imagens simples não têm esse problema. No ajuste "cor" o véu
+    // cobre só a figura, para a borda ficar na mesma cor da área de trabalho.
     Rectangle {
-        anchors.fill: parent
+        x: ajuste === "cor" ? figura.x : 0
+        y: ajuste === "cor" ? figura.y : 0
+        width: ajuste === "cor" ? figura.width : parent.width
+        height: ajuste === "cor" ? figura.height : parent.height
         color: "black"
         opacity: 0.25
+        visible: temFigura
     }
 
     Text {
