@@ -175,7 +175,7 @@ proximo() {
 # "=" (como o "-t =sessao:" do tmux) dispara a expansão de igual e o comando
 # morre antes de rodar, com "zsh:1: <nome da sessao>".
 previa() {
-  local s="$1" arq estado msg parecer=""
+  local s="$1" arq estado msg
   arq="$estado_dir/$s.json"
 
   # Sessão viva: o que está na tela do agente.
@@ -202,23 +202,34 @@ previa() {
   ' "$arq" 2>/dev/null || true
   echo "(sessão encerrada; Ctrl+X remove o worktree e mantém o ramo)"
 
-  # Ciclo em par: o que resta de útil é o parecer da última rodada.
-  # Glob em vez de ls: sem correspondência o padrão volta literal, e o teste de
-  # existência descarta esse caso. A ordenação por versão mantém r10 depois de
-  # r2, que a ordem de texto do glob inverteria.
-  local -a pareceres=()
-  local arq_p
-  for arq_p in "$estado_dir/parecer-$s-r"*.md; do
-    [[ -e "$arq_p" ]] && pareceres+=("$arq_p")
-  done
-  if ((${#pareceres[@]})); then
-    parecer="$(printf '%s\n' "${pareceres[@]}" | sort -V | tail -1)"
-  fi
+  # Ciclo em par: o que resta de útil é o parecer da última rodada e a
+  # avaliação que o Claude fez dele, quando houver.
+  local parecer avaliacao
+  parecer="$(mais_recente "$estado_dir/parecer-$s-r")"
+  avaliacao="$(mais_recente "$estado_dir/avaliacao-$s-r")"
   if [[ -n "$parecer" ]]; then
     echo ""
     echo "--- $(basename "$parecer") ---"
     head -60 "$parecer"
   fi
+  if [[ -n "$avaliacao" ]]; then
+    echo ""
+    echo "--- $(basename "$avaliacao") ---"
+    head -60 "$avaliacao"
+  fi
+}
+
+# Arquivo PREFIXO<n>.md de maior n. Glob em vez de ls: sem correspondência o
+# padrão volta literal, e o teste de existência descarta esse caso. A ordenação
+# por versão mantém r10 depois de r2, que a ordem de texto do glob inverteria.
+mais_recente() {
+  local -a achados=()
+  local a
+  for a in "$1"*.md; do
+    [[ -e "$a" ]] && achados+=("$a")
+  done
+  ((${#achados[@]})) || return 0
+  printf '%s\n' "${achados[@]}" | sort -V | tail -1
 }
 
 icone() {

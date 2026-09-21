@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Protocolo de trabalho em par: Claude implementa, Antigravity revisa e Claude corrige.
+# Protocolo de trabalho em par: Claude implementa, Antigravity revisa, Claude avalia o parecer e aplica o que aceitar.
 #
 # Uso: jangada-par [opções] ["tarefa a executar"]
 #   --janela          abre num terminal novo (usado pelo atalho SUPER+P)
@@ -290,6 +290,60 @@ diagnostico_agy() {
   [[ -n "$proprio" ]] && campo "Log do agy:" "$proprio"
 }
 
+# Fase de avaliação: o Claude confere cada apontamento do parecer da rodada N
+# no código antes de mexer em qualquer coisa, decide o que aceitar e implementa
+# só isso. O revisor erra (já apontou como fatal um "(( x )) && ..." que o
+# set -e não interrompe), e aplicar tudo às cegas troca código certo por
+# código errado. A resposta final do Claude é a própria avaliação, gravada em
+# avaliacao-<sessão>-rN.md e entregue ao revisor na rodada seguinte.
+avaliar_parecer() {
+  local n="$1" prompt_avaliacao
+  ultima_avaliacao="$estado_dir/avaliacao-$sessao-r$n.md"
+  atualizar_estado "trabalhando" "Rodada $((n + 1)): Claude avaliando o parecer da rodada $n"
+  prompt_avaliacao="Você está no protocolo em par do Jangada, no projeto em: $dir
+Tarefa original:
+$tarefa
+
+O revisor Antigravity analisou o seu trabalho (rodada $n) e respondeu:
+---
+$parecer
+---
+
+O revisor pode estar errado. Antes de alterar qualquer coisa:
+1. Para cada apontamento, confira no código se ele procede. Quando der, teste a
+   afirmação (rode o trecho, o teste ou um exemplo mínimo) em vez de confiar no
+   texto do revisor.
+2. Dê um veredito a cada um: ACEITO, ACEITO EM PARTE ou REJEITADO, com o motivo
+   verificado. Rejeite o que estiver errado, o que for só gosto pessoal sem
+   ganho e o que fugir da tarefa.
+3. Implemente só o que aceitou (no caso de ACEITO EM PARTE, só a parte
+   aceita), teste e faça commit. Se rejeitar tudo, não faça commit.
+
+A sua resposta final será gravada como a avaliação e enviada ao revisor. Ela
+deve conter só isto, em Markdown:
+
+# Avaliação do parecer da rodada $n
+
+| Nº | Apontamento | Veredito | Motivo | Ação |
+|---|---|---|---|---|
+| 1 | resumo curto | ACEITO | o que foi verificado | o que foi alterado |
+
+Depois da tabela, um parágrafo curto por item rejeitado com a evidência (o
+comando rodado e o resultado, ou o trecho de código que desmente o apontamento)."
+
+  info "Executando Claude Code (avaliação do parecer da rodada $n)..."
+  # O tee mostra a avaliação na tela e grava o arquivo. Sem saída, o arquivo
+  # fica vazio e é descartado, para o revisor não receber uma avaliação em branco.
+  if ! (cd "$dir" && claude -p "$prompt_avaliacao" --dangerously-skip-permissions) | tee "$ultima_avaliacao"; then
+    aviso "Claude encerrou com aviso ou limite atingido"
+  fi
+  if [[ ! -s "$ultima_avaliacao" ]]; then
+    rm -f "$ultima_avaliacao"
+    ultima_avaliacao=""
+    aviso "a avaliação do parecer da rodada $n veio vazia"
+  fi
+}
+
 echo ""
 regua "$c_info"
 titulo "Jangada: Protocolo em Par (Claude + Antigravity)"
@@ -304,6 +358,10 @@ rodada=1
 aprovado=0
 parecer=""
 ultimo_parecer=""
+ultima_avaliacao=""
+# 1 quando o último parecer pediu correções: se o limite de rodadas chega nesse
+# estado, o Claude ainda avalia esse parecer, mas o resultado não volta ao revisor.
+pendente=0
 
 while ((rodada <= limite)); do
   echo ""
@@ -322,23 +380,12 @@ Diretrizes:
 2. Crie ou atualize testes e documentação correspondentes se necessário.
 3. Verifique a execução antes de concluir.
 4. Faça commit das alterações no git ao terminar."
+    info "Executando Claude Code..."
+    if ! (cd "$dir" && claude -p "$prompt_claude" --dangerously-skip-permissions); then
+      aviso "Claude encerrou com aviso ou limite atingido"
+    fi
   else
-    prompt_claude="Você está refinando o trabalho anterior para a tarefa:
-$tarefa
-
-O revisor Antigravity analisou seu commit anterior e apontou as seguintes correções:
-$parecer
-
-Diretrizes para esta rodada:
-1. Analise cada um dos apontamentos da revisão e aplique as correções necessárias.
-2. Certifique-se de não quebrar outros pontos do projeto.
-3. Teste o código alterado.
-4. Faça commit das correções no git ao terminar."
-  fi
-
-  info "Executando Claude Code..."
-  if ! (cd "$dir" && claude -p "$prompt_claude" --dangerously-skip-permissions); then
-    aviso "Claude encerrou com aviso ou limite atingido"
+    avaliar_parecer "$((rodada - 1))"
   fi
 
   # Verifica se foram criadas alterações
@@ -370,6 +417,20 @@ Diretrizes para esta rodada:
   traco
   atualizar_estado "trabalhando" "Rodada $rodada: Antigravity revisando"
 
+  # Na rodada 2 em diante o revisor recebe a avaliação que o Claude fez do
+  # parecer anterior. Sem ela o revisor repete o apontamento rejeitado e o
+  # ciclo gasta rodadas numa discussão que não avança.
+  secao_avaliacao() {
+    [[ -n "$ultima_avaliacao" && -s "$ultima_avaliacao" ]] || return 0
+    printf '\nNa rodada anterior você fez apontamentos, e o Claude avaliou cada um\n'
+    printf 'antes de implementar (o diff acima já traz o que ele aceitou):\n---\n'
+    cat "$ultima_avaliacao"
+    printf -- '---\nNão repita um apontamento rejeitado com justificativa verificada. Se\n'
+    printf 'discordar da rejeição, repita o item só com evidência nova (trecho de\n'
+    printf 'código, linha, caso concreto que falha). Confira também se o que foi\n'
+    printf 'aceito ficou bem implementado.\n'
+  }
+
   montar_prompt_agy() {
     prompt_agy="Você é o revisor técnico no protocolo de trabalho em par do Jangada.
 O agente Claude implementou a seguinte tarefa no projeto:
@@ -382,7 +443,7 @@ ${arquivos_tocados:-(nenhum arquivo alterado; confira o estado do diretório)}
 
 Diferenças:
 $diff_conteudo
-
+$(secao_avaliacao)
 Como trabalhar nesta execução:
 1. Não altere, crie nem apague arquivos, e não execute comandos. No modo não
    interativo o agy não tem como pedir permissão, o pedido é recusado e a
@@ -513,13 +574,32 @@ seguido de uma lista numerada e clara com cada item que o Claude deve corrigir:
 
   if ((aprovado_nesta)); then
     aprovado=1
+    pendente=0
     bom "Aprovado pelo Antigravity na rodada $rodada!"
     break
   else
-    alerta "Antigravity solicitou correções para a próxima rodada."
+    pendente=1
+    if ((rodada < limite)); then
+      alerta "Antigravity solicitou correções para a próxima rodada."
+    else
+      alerta "Antigravity solicitou correções, e o limite de $limite rodada(s) foi atingido."
+    fi
     ((rodada++))
   fi
 done
+
+# Limite atingido com correções pedidas: o Claude ainda avalia o último parecer
+# e aplica o que aceitar, mas essas correções não passam por nova revisão, e o
+# ciclo termina como pendente para a conferência humana.
+sem_revisao=0
+if ((pendente)) && ((!aprovado)) && [[ -n "$ultimo_parecer" ]]; then
+  echo ""
+  traco
+  titulo "[Avaliação final] Claude avalia o parecer da rodada $limite"
+  traco
+  avaliar_parecer "$limite"
+  sem_revisao=1
+fi
 
 # Onde o trabalho ficou. Sem isto o worktree some de vista: os commits estão
 # num ramo agente/<nome>, fora da árvore principal, e nada dizia como integrar.
@@ -528,8 +608,8 @@ resumo_local() {
   if [[ -n "$worktree" ]]; then
     campo "Worktree:" "$worktree"
     campo "Ramo:" "$ramo"
-    campo "Integrar:" "git -C '$raiz' merge $ramo"
-    campo "Remover:" "git -C '$raiz' worktree remove '$worktree'"
+    campo "Integrar:" "jangada-agente-fim --integrar $sessao"
+    campo "Descartar:" "jangada-agente-fim $sessao"
   else
     campo "Ramo:" "${ramo:-trabalho direto no repositório}"
   fi
@@ -538,6 +618,9 @@ resumo_local() {
   else
     campo "Parecer:" "${c_aviso}nenhum; a revisão não chegou a ser gravada${c_fim}"
   fi
+  [[ -n "$ultima_avaliacao" ]] && campo "Avaliação:" "$ultima_avaliacao"
+  ((sem_revisao)) && campo "Atenção:" "${c_aviso}as correções da avaliação final não passaram por nova revisão${c_fim}"
+  return 0
 }
 
 if ((aprovado)); then
@@ -552,7 +635,11 @@ if ((aprovado)); then
     notify-send -a "jangada-par" -u normal "Tarefa concluída e aprovada" "$sessao finalizada com sucesso."
   fi
 else
-  atualizar_estado "aguardando" "Ciclo encerrado com pendências"
+  if ((sem_revisao)); then
+    atualizar_estado "aguardando" "Limite atingido; correções da avaliação final sem nova revisão"
+  else
+    atualizar_estado "aguardando" "Ciclo encerrado com pendências"
+  fi
   concluiu=1
   echo ""
   regua "$c_erro"

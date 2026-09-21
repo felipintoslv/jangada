@@ -16,7 +16,7 @@ done
 
 passo "shellcheck"
 if command -v shellcheck >/dev/null; then
-  shellcheck -x -S warning install.sh install/*.sh bin/* || falha "shellcheck"
+  shellcheck -x -S warning install.sh install/*.sh bin/* testes/*.sh || falha "shellcheck"
   shellcheck -s sh -S warning shell/jangada.sh || falha "shellcheck shell/jangada.sh"
   # As funções da subshell não estavam sendo conferidas por ninguém.
   shellcheck -S warning shell/jangada-shell.sh || falha "shellcheck shell/jangada-shell.sh"
@@ -84,6 +84,13 @@ passo "comandos citados na configuração do Hyprland existem em bin/"
 for c in $(grep -ho 'j\.cmd("[a-z-]*"' default/hypr/*.lua | sed 's/j\.cmd("//; s/"//' | sort -u); do
   [[ -x "bin/$c" ]] || falha "bin/$c citado mas ausente"
 done
+
+passo "fluxo do jangada-par com claude e agy falsos"
+if command -v git >/dev/null && command -v jq >/dev/null; then
+  testes/par.sh || falha "testes/par.sh"
+else
+  echo "git ou jq ausente; etapa ignorada"
+fi
 
 printf '\n'
 ((falhas == 0)) && echo "tudo certo" || echo "$falhas falha(s)"
