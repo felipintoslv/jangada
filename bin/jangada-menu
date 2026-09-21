@@ -31,6 +31,7 @@ opcao="$(printf '%s\n' \
   "Calendário" \
   "Atualizar sistema" \
   "Verificar sistema" \
+  "Diagnosticar com agente" \
   "Snapshot manual" \
   "Trocar papel de parede" \
   "Configurar tela de login (SDDM)" \
@@ -60,6 +61,7 @@ case "$opcao" in
   "Calendário") exec "$b/jangada-calendario" ;;
   "Atualizar sistema") term "$b/jangada-update" ;;
   "Verificar sistema") term "$b/jangada-verificar" ;;
+  "Diagnosticar com agente") exec "$b/jangada-verificar" --agente ;;
   "Snapshot manual") term "read -r -p 'descrição: ' d; $b/jangada-snapshot \"\$d\"" ;;
   "Trocar papel de parede") exec "$b/jangada-tema" --escolher ;;
   "Configurar tela de login (SDDM)") term "$b/jangada-sddm aplicar" ;;

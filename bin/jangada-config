@@ -29,6 +29,12 @@ JANGADA_TEMA_ESQUEMA=scheme-fidelity
 JANGADA_BARRA_POSICAO=topo
 # Dispositivo DRM que conduz a sessão. Vazio = detectar pela saída conectada.
 JANGADA_GPU=
+# Cópia de trabalho do jangada (onde se edita e faz commit), usada pelo
+# jangada-verificar --agente. Vazio = $JANGADA_PROJETOS/jangada, se existir.
+JANGADA_REPO=
+# Ramo que o jangada-update acompanha na cópia instalada: main (tudo o que
+# entrou) ou estavel (só o que foi marcado como testado).
+JANGADA_CANAL=main
 
 if [[ -f "$JANGADA_CONFIG/jangada.conf" ]]; then
   # Lê só linhas CHAVE=valor com chaves JANGADA_*, sem executar o arquivo.
@@ -40,10 +46,14 @@ if [[ -f "$JANGADA_CONFIG/jangada.conf" ]]; then
   done < <(sed -e 's/#.*//' -e 's/[[:space:]]*$//' "$JANGADA_CONFIG/jangada.conf")
   unset _chave _valor
 fi
+if [[ -z "$JANGADA_REPO" && -d "$JANGADA_PROJETOS/jangada/.git" ]]; then
+  JANGADA_REPO="$JANGADA_PROJETOS/jangada"
+fi
 
 export JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_INTERFACE JANGADA_TERMINAL \
   JANGADA_AGENTE JANGADA_AGENTE_ARGS JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL \
-  JANGADA_PAPEL_AJUSTE JANGADA_TEMA_ESQUEMA JANGADA_BARRA_POSICAO JANGADA_GPU
+  JANGADA_PAPEL_AJUSTE JANGADA_TEMA_ESQUEMA JANGADA_BARRA_POSICAO JANGADA_GPU \
+  JANGADA_REPO JANGADA_CANAL
 
 # Dispositivos DRM com saída de vídeo conectada, um por linha, em caminho
 # estável (/dev/dri/by-path, porque a numeração de /dev/dri/cardN muda entre
@@ -149,7 +159,8 @@ JANGADA_TMUX=(tmux -L jangada -f "$JANGADA_PATH/default/tmux/agentes.conf")
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   for _v in JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_INTERFACE JANGADA_TERMINAL \
     JANGADA_AGENTE JANGADA_AGENTE_ARGS JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL \
-    JANGADA_PAPEL_AJUSTE JANGADA_TEMA_ESQUEMA JANGADA_BARRA_POSICAO JANGADA_GPU; do
+    JANGADA_PAPEL_AJUSTE JANGADA_TEMA_ESQUEMA JANGADA_BARRA_POSICAO JANGADA_GPU \
+  JANGADA_REPO JANGADA_CANAL; do
     printf '%s=%s\n' "$_v" "${!_v}"
   done
 fi

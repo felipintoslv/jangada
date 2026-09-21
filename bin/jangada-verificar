@@ -1,9 +1,74 @@
 #!/usr/bin/env bash
 # Confere a instalação: pacotes, snapshots, sessão, hooks e erros do Hyprland.
 # Não altera nada.
+#
+# Uso: jangada-verificar [--diagnostico | --agente]
+#   --diagnostico  só grava o diagnóstico descrito abaixo e mostra o caminho
+#   --agente  junta o resultado, os erros de configuração, o último relatório
+#             de falha e o fim do log do Hyprland num diagnóstico, e abre um
+#             agente com ele na cópia de trabalho do jangada (JANGADA_REPO)
 set -uo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+case "${1:-}" in
+  -h|--ajuda) sed -n '2,9s/^# \{0,1\}//p' "$0"; exit 0 ;;
+  --agente|--diagnostico)
+    data="$(date +%Y%m%d-%H%M)"
+    diag="$JANGADA_ESTADO/diagnostico-$data.md"
+    mkdir -p "$JANGADA_ESTADO"
+    {
+      echo "# Diagnóstico do jangada ($data, $(uname -n))"
+      echo
+      echo "## jangada-verificar"
+      echo '```'
+      "$0" 2>&1
+      echo '```'
+      if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+        echo
+        echo "## hyprctl configerrors"
+        echo '```'
+        hyprctl configerrors 2>&1 | sed '/^[[:space:]]*$/d'
+        echo '```'
+        _log="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hypr/$HYPRLAND_INSTANCE_SIGNATURE/hyprland.log"
+        if [[ -r "$_log" ]]; then
+          echo
+          echo "## fim do hyprland.log"
+          echo '```'
+          tail -n 80 "$_log"
+          echo '```'
+        fi
+      fi
+      _crash="$(ls -t "$HOME"/.cache/hyprland/hyprlandCrashReport*.txt 2>/dev/null | head -1 || true)"
+      if [[ -n "$_crash" ]]; then
+        echo
+        echo "## último relatório de falha: $_crash ($(date -r "$_crash" '+%d/%m %H:%M'))"
+        echo '```'
+        head -n 60 "$_crash"
+        echo '```'
+      fi
+    } >"$diag"
+    echo "diagnóstico gravado em $diag"
+    [[ "$1" == --diagnostico ]] && exit 0
+    # Nunca na cópia instalada: o jangada-update recusa atualizar com
+    # alterações locais, e o conserto tem de virar commit na cópia de trabalho.
+    if [[ -z "$JANGADA_REPO" || ! -d "$JANGADA_REPO/.git" ]]; then
+      echo "JANGADA_REPO não aponta para uma cópia de trabalho do jangada; defina em jangada.conf" >&2
+      exit 1
+    fi
+    prompt="Diagnóstico de problemas no jangada nesta máquina. Leia o diagnóstico em
+$diag, identifique a causa de cada falha e proponha o conserto. Siga o
+AGENTS.md: o conserto vai na cópia de trabalho ($JANGADA_REPO, neste worktree),
+nunca em $JANGADA_PATH; ajuste só desta máquina vai em ~/.config/jangada. Antes
+de alterar, explique o que encontrou e o que pretende mudar."
+    janela=()
+    [[ -t 0 ]] || janela=(--janela)
+    exec "$JANGADA_PATH/bin/jangada-agente" "${janela[@]}" --projeto "$JANGADA_REPO" \
+      --nome "diagnostico-$data" --prompt "$prompt"
+    ;;
+  "") ;;
+  *) echo "opção desconhecida: $1" >&2; exit 1 ;;
+esac
 
 falhas=0
 ok()    { printf ' ok  %s\n' "$*"; }
