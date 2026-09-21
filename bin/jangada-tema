@@ -57,6 +57,9 @@ case "${1:-}" in
     ;;
   --cor)
     matugen color hex "${2:?informe a cor, ex.: #4f8fba}" -c "$matugen_cfg" -m dark
+    # Sem imagem, o matugen escreve "path = Null" no hyprlock.conf; o hyprlock
+    # tentaria abrir um arquivo chamado Null. Sem a linha, ele usa a cor.
+    sed -i '/^[[:space:]]*path = Null$/d' "$JANGADA_CONFIG/hyprlock/hyprlock.conf" 2>/dev/null || true
     recarregar
     ;;
   --escolher)

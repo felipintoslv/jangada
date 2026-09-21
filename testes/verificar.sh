@@ -68,6 +68,18 @@ if faltando:
 PY
 fi
 
+passo "tema de login (QML)"
+qmllint_bin="$(command -v qmllint6 || { [[ -x /usr/lib/qt6/bin/qmllint ]] && echo /usr/lib/qt6/bin/qmllint; } || true)"
+if [[ -n "$qmllint_bin" ]]; then
+  # sddm, config, userModel e sessionModel vêm do SDDM em tempo de execução.
+  "$qmllint_bin" --unqualified disable default/sddm/jangada/Main.qml || falha "qmllint: default/sddm/jangada/Main.qml"
+else
+  echo "qmllint ausente; etapa ignorada"
+fi
+for chave in MainScript=Main.qml ConfigFile=theme.conf QtVersion=6; do
+  grep -qx "$chave" default/sddm/jangada/metadata.desktop || falha "metadata.desktop sem $chave"
+done
+
 passo "comandos citados na configuração do Hyprland existem em bin/"
 for c in $(grep -ho 'j\.cmd("[a-z-]*"' default/hypr/*.lua | sed 's/j\.cmd("//; s/"//' | sort -u); do
   [[ -x "bin/$c" ]] || falha "bin/$c citado mas ausente"

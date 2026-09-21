@@ -36,6 +36,10 @@ fi
 
 echo "== sessão e configuração"
 [[ -f /usr/share/wayland-sessions/jangada.desktop ]] && ok "sessão jangada registrada" || falha "sessão jangada não registrada"
+if [[ -f /etc/sddm.conf.d/zz-jangada.conf ]]; then
+  [[ -f /usr/local/share/jangada/sessoes/jangada.desktop ]] && ok "SDDM mostra só a sessão jangada" \
+    || falha "SDDM restrito ao jangada, mas a sessão sumiu; rode jangada-sddm aplicar"
+fi
 for f in hypr/hyprland.lua hypr/cores.lua waybar/style.css waybar/cores.css mako/config fuzzel/fuzzel.ini hyprlock/hyprlock.conf; do
   [[ -f "$JANGADA_CONFIG/$f" ]] && ok "$f" || falha "$JANGADA_CONFIG/$f ausente"
 done

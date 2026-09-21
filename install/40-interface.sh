@@ -47,6 +47,18 @@ else
 fi
 unset _sessao _conteudo
 
+# Tela de login: só o jangada, com o tema no estilo do menu. Outras sessões
+# continuam instaladas; o jangada-sddm restaurar as traz de volta.
+if tem_comando sddm; then
+  if [[ -f /etc/sddm.conf.d/zz-jangada.conf ]]; then
+    ok "SDDM já mostra só o jangada (jangada-sddm aplicar atualiza o tema)"
+  elif confirmar "Deixar o jangada como única sessão no SDDM, com o tema do jangada?" n; then
+    "$JANGADA_PATH/bin/jangada-sddm" aplicar || aviso "não foi possível configurar o SDDM"
+  else
+    info "SDDM mantido; para mostrar só o jangada depois: jangada-sddm aplicar"
+  fi
+fi
+
 # Serviços e locale que a barra usa, sem mexer em nenhum dos dois. Ligar o
 # NetworkManager numa máquina que já usa outro gerenciador de rede derruba a
 # conexão, e gerar locale escreve em /etc: as duas coisas ficam para quem

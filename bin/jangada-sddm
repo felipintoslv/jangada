@@ -1,191 +1,178 @@
 #!/usr/bin/env bash
-# Configura o SDDM para exibir exclusivamente o Jangada como opção de login
-# e aplica a identidade visual (xilogravura cordel) na tela de login.
+# Deixa o jangada como única sessão no SDDM e aplica o tema de login do
+# jangada, com as cores do menu (fuzzel) e o papel de parede atual.
 #
 # Uso:
-#   jangada-sddm [aplicar|restaurar|status]
+#   jangada-sddm aplicar     instala o tema e mostra só a sessão jangada
+#   jangada-sddm restaurar   volta a mostrar todas as sessões e o tema anterior
+#   jangada-sddm status      mostra o estado atual
+#   jangada-sddm testar      abre o tema numa janela, sem alterar o sistema
+#
+# Nenhum arquivo de sessão de outro pacote é movido ou apagado: o SDDM passa
+# a ler as sessões de um diretório próprio, que só contém o jangada.
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+# shellcheck source=install/lib.sh
+source "$JANGADA_PATH/install/lib.sh"
 
-SESSIONS_DIR="/usr/share/wayland-sessions"
-BACKUP_DIR="$SESSIONS_DIR/desativados"
-SDDM_CONF_DIR="/etc/sddm.conf.d"
-SDDM_CONF_FILE="$SDDM_CONF_DIR/jangada.conf"
-THEME_BG="/usr/share/sddm/themes/catppuccin-mocha-blue/backgrounds/wall.png"
+TEMA_ORIGEM="$JANGADA_PATH/default/sddm/jangada"
+TEMA_DESTINO="/usr/share/sddm/themes/jangada"
+SESSOES="/usr/local/share/jangada/sessoes"
+SESSOES_X11="/usr/local/share/jangada/sessoes-x11"
+# Os arquivos de /etc/sddm.conf.d são lidos em ordem alfabética e o último
+# vence. O prefixo garante que este venha depois do kde_settings.conf, que o
+# Plasma grava com o tema escolhido nas configurações dele.
+CONF="/etc/sddm.conf.d/zz-jangada.conf"
+FUZZEL_INI="$JANGADA_CONFIG/fuzzel/fuzzel.ini"
 
-obter_papel() {
-  local papel=""
-  if [[ -f "$JANGADA_CONFIG/jangada.conf" ]]; then
-    papel="$(sed -n 's/^JANGADA_PAPEL=//p' "$JANGADA_CONFIG/jangada.conf" | tr -d '"' | tr -d "'")"
-  fi
-  if [[ -z "$papel" || ! -f "$papel" ]]; then
-    papel="$HOME/Pictures/Wallpapers/jangada-cordel-4k.png"
-  fi
-  if [[ ! -f "$papel" ]]; then
-    papel="$HOME/Pictures/Wallpapers/jangada-cordel.jpg"
-  fi
-  printf '%s\n' "$papel"
+# Cor do [colors] do fuzzel.ini (RRGGBBAA) no formato do Qt (#AARRGGBB).
+# O segundo argumento, se dado, substitui a transparência.
+cor_fuzzel() {
+  local valor
+  [[ -r "$FUZZEL_INI" ]] || return 1
+  valor="$(sed -n "/^\[colors\]/,/^\[/s/^$1=//p" "$FUZZEL_INI" | head -n1)"
+  [[ "$valor" =~ ^[0-9a-fA-F]{8}$ ]] || return 1
+  printf '#%s%s\n' "${2:-${valor:6:2}}" "${valor:0:6}"
 }
 
-exigir_root() {
-  if [[ $EUID -ne 0 ]]; then
-    if [[ -t 0 ]]; then
-      echo "==> Solicitando privilégios de administrador (sudo)..."
-      exec sudo "$0" "$@"
-    else
-      echo "erro: jangada-sddm precisa ser executado como root (ou com sudo em terminal interativo)" >&2
-      exit 1
-    fi
-  fi
+conteudo_sessao() {
+  printf '%s\n' \
+    "[Desktop Entry]" \
+    "Name=jangada" \
+    "Comment=Hyprland com a configuração jangada" \
+    "Exec=$JANGADA_PATH/bin/jangada-sessao" \
+    "Type=Application" \
+    "DesktopNames=Hyprland"
 }
 
-mostrar_status() {
-  echo "⛵ Estado das sessões no SDDM:"
-  echo ""
-  echo "Sessões ativas em $SESSIONS_DIR:"
-  for f in "$SESSIONS_DIR"/*.desktop; do
-    if [[ -f "$f" ]]; then
-      local nome
-      nome="$(sed -n 's/^Name=//p' "$f" | head -1)"
-      echo "  • $(basename "$f") (Nome: ${nome:-desconhecido})"
-    fi
-  done
+conteudo_conf() {
+  printf '%s\n' \
+    "# Gravado pelo jangada-sddm. Para desfazer: jangada-sddm restaurar" \
+    "[Theme]" \
+    "Current=jangada" \
+    "" \
+    "[Wayland]" \
+    "SessionDir=$SESSOES" \
+    "" \
+    "[X11]" \
+    "SessionDir=$SESSOES_X11"
+}
 
-  echo ""
-  if [[ -d "$BACKUP_DIR" ]] && compgen -G "$BACKUP_DIR/*.desktop" >/dev/null; then
-    echo "Sessões desativadas em $BACKUP_DIR:"
-    for f in "$BACKUP_DIR"/*.desktop; do
-      local nome
-      nome="$(sed -n 's/^Name=//p' "$f" | head -1)"
-      echo "  - $(basename "$f") (Nome: ${nome:-desconhecido})"
+# Monta o tema em um diretório: arquivos do repositório, papel de parede e
+# theme.conf.user com as cores atuais do fuzzel.
+preparar_tema() {
+  local destino="$1" ext="" chave cor
+  cp "$TEMA_ORIGEM"/* "$destino/"
+  if [[ -n "$JANGADA_PAPEL" && -f "$JANGADA_PAPEL" ]]; then
+    ext="${JANGADA_PAPEL##*.}"
+    cp "$JANGADA_PAPEL" "$destino/fundo.${ext,,}"
+  fi
+  {
+    echo "# Gerado pelo jangada-sddm a partir do fuzzel.ini. Não edite."
+    echo "[General]"
+    [[ -n "$ext" ]] && echo "fundo=fundo.${ext,,}"
+    cor="$(cor_fuzzel background ff)" && echo "cor_tela=$cor"
+    for chave in caixa:background texto:text destaque:match selecao:selection \
+      texto_selecao:selection-text borda:border; do
+      cor="$(cor_fuzzel "${chave#*:}")" && echo "cor_${chave%%:*}=$cor"
     done
-  else
-    echo "Nenhuma sessão desativada em $BACKUP_DIR."
-  fi
+  } >"$destino/theme.conf.user"
+  chmod -R a+rX "$destino"
+}
 
-  echo ""
-  echo "Configuração do SDDM:"
-  if [[ -f "$SDDM_CONF_FILE" ]]; then
-    echo "  Arquivo $SDDM_CONF_FILE ativo:"
-    sed 's/^/    /' "$SDDM_CONF_FILE"
+# Grava a entrada padrão num arquivo de sistema, com cópia de segurança
+# quando o arquivo já existe com outro conteúdo.
+gravar_root() {
+  local arquivo="$1" conteudo
+  conteudo="$(cat)"
+  if [[ -f "$arquivo" ]] && [[ "$(cat "$arquivo")" == "$conteudo" ]]; then
+    ok "sem mudança: $arquivo"
+    return 0
+  fi
+  copia_seguranca "$arquivo"
+  if simulando; then
+    info "[simulação] gravaria $arquivo"
   else
-    echo "  Arquivo $SDDM_CONF_FILE não existe."
+    printf '%s\n' "$conteudo" | como_root tee "$arquivo" >/dev/null
   fi
-
-  if [[ -f "$THEME_BG" ]]; then
-    echo ""
-    echo "Papel de parede do SDDM:"
-    echo "  $THEME_BG ($(file -b "$THEME_BG" 2>/dev/null || true))"
-  fi
+  ok "gravado: $arquivo"
 }
 
 aplicar() {
-  exigir_root "$@"
+  [[ $EUID -ne 0 ]] || morrer "execute como usuário comum; o comando pede sudo quando precisa"
+  tem_comando sddm || morrer "sddm não está instalado"
+  [[ -r "$FUZZEL_INI" ]] || aviso "sem $FUZZEL_INI; o tema usa as cores padrão (rode jangada-tema)"
 
-  echo "==> Configurando Jangada como sessão exclusiva do SDDM..."
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+  preparar_tema "$tmp"
+  info "tema de login em $TEMA_DESTINO"
+  como_root rm -rf "$TEMA_DESTINO"
+  como_root cp -r "$tmp" "$TEMA_DESTINO"
+  como_root chmod 755 "$TEMA_DESTINO"
 
-  mkdir -p "$BACKUP_DIR"
-  mkdir -p "$SDDM_CONF_DIR"
+  info "sessões visíveis no SDDM: só o jangada"
+  como_root mkdir -p "$SESSOES" "$SESSOES_X11" "$(dirname "$CONF")"
+  conteudo_sessao | gravar_root "$SESSOES/jangada.desktop"
+  conteudo_conf | gravar_root "$CONF"
 
-  # Mover todas as outras sessões Wayland para o diretório de desativados
-  local movidos=0
-  for f in "$SESSIONS_DIR"/*.desktop; do
-    [[ -f "$f" ]] || continue
-    local base
-    base="$(basename "$f")"
-    if [[ "$base" != "jangada.desktop" ]]; then
-      echo "  -> Desativando sessão: $base"
-      mv -f "$f" "$BACKUP_DIR/$base"
-      movidos=$((movidos + 1))
-    fi
-  done
-
-  # Garantir jangada.desktop na pasta de sessões
-  local jangada_desktop="$SESSIONS_DIR/jangada.desktop"
-  cat <<EOF > "$jangada_desktop"
-[Desktop Entry]
-Name=jangada
-Comment=Hyprland com a configuração jangada
-Exec=$JANGADA_PATH/bin/jangada-sessao
-Type=Application
-DesktopNames=Hyprland
-EOF
-  chmod 644 "$jangada_desktop"
-
-  # Configurar o arquivo do SDDM
-  cat <<EOF > "$SDDM_CONF_FILE"
-[Autologin]
-Session=jangada.desktop
-
-[Theme]
-Current=catppuccin-mocha-blue
-
-[Wayland]
-SessionDir=$SESSIONS_DIR
-EOF
-  chmod 644 "$SDDM_CONF_FILE"
-
-  # Atualizar o papel de parede do tema SDDM
-  local papel
-  papel="$(obter_papel)"
-  if [[ -f "$papel" ]] && [[ -d "$(dirname "$THEME_BG")" ]]; then
-    if [[ ! -f "$THEME_BG.orig" && -f "$THEME_BG" ]]; then
-      cp -a "$THEME_BG" "$THEME_BG.orig"
-    fi
-    cp -f "$papel" "$THEME_BG"
-    chmod 644 "$THEME_BG"
-    echo "  -> Papel de parede cordel copiado para o tema SDDM: $THEME_BG"
-  fi
-
-  echo "✓ Configuração concluída com sucesso!"
-  echo "✓ Jangada é a única opção de login disponível no SDDM."
+  ok "o SDDM mostra só o jangada na próxima tela de login"
+  info "para desfazer: jangada-sddm restaurar"
 }
 
 restaurar() {
-  exigir_root "$@"
-
-  echo "==> Restaurando sessões anteriores do SDDM..."
-
-  if [[ -d "$BACKUP_DIR" ]]; then
-    for f in "$BACKUP_DIR"/*.desktop; do
-      [[ -f "$f" ]] || continue
-      local base
-      base="$(basename "$f")"
-      echo "  -> Reativando sessão: $base"
-      mv -f "$f" "$SESSIONS_DIR/$base"
-    done
-    rmdir "$BACKUP_DIR" 2>/dev/null || true
+  [[ $EUID -ne 0 ]] || morrer "execute como usuário comum; o comando pede sudo quando precisa"
+  if [[ -f "$CONF" ]]; then
+    como_root rm -f "$CONF"
+    ok "removido: $CONF"
   fi
-
-  if [[ -f "$SDDM_CONF_FILE" ]]; then
-    rm -f "$SDDM_CONF_FILE"
-    echo "  -> Removido $SDDM_CONF_FILE"
+  if [[ -d "$SESSOES" || -d "$SESSOES_X11" ]]; then
+    como_root rm -f "$SESSOES/jangada.desktop"
+    como_root rmdir --ignore-fail-on-non-empty "$SESSOES" "$SESSOES_X11" "$(dirname "$SESSOES")"
+    ok "removido: $(dirname "$SESSOES")"
   fi
-
-  if [[ -f "$THEME_BG.orig" ]]; then
-    mv -f "$THEME_BG.orig" "$THEME_BG"
-    echo "  -> Papel de parede original do SDDM restaurado."
-  fi
-
-  echo "✓ Sessões e configurações anteriores restauradas."
+  ok "o SDDM volta a mostrar todas as sessões e o tema configurado antes"
+  info "o tema continua instalado em $TEMA_DESTINO e pode ser escolhido de novo"
 }
 
-case "${1:-aplicar}" in
-  status)
-    mostrar_status
-    ;;
-  restaurar)
-    restaurar "$@"
-    ;;
-  aplicar)
-    aplicar "$@"
-    ;;
-  -h|--ajuda)
-    sed -n '2,6s/^# \{0,1\}//p' "$0"
-    ;;
+status() {
+  local f
+  if [[ -f "$CONF" ]]; then
+    ok "exclusividade ativa ($CONF)"
+    echo "   sessões visíveis:"
+    for f in "$SESSOES"/*.desktop; do
+      [[ -f "$f" ]] && echo "     $(sed -n 's/^Name=//p' "$f" | head -n1) ($f)"
+    done
+  else
+    info "exclusividade inativa: o SDDM mostra todas as sessões instaladas"
+  fi
+  if [[ -f "$TEMA_DESTINO/Main.qml" ]]; then
+    ok "tema instalado em $TEMA_DESTINO"
+  else
+    info "tema não instalado"
+  fi
+}
+
+testar() {
+  local greeter
+  greeter="$(command -v sddm-greeter-qt6 || command -v sddm-greeter || true)"
+  [[ -n "$greeter" ]] || morrer "sddm-greeter não encontrado"
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+  preparar_tema "$tmp"
+  info "abrindo o tema em modo de teste; os botões de energia não agem nesse modo"
+  "$greeter" --test-mode --theme "$tmp"
+}
+
+case "${1:-}" in
+  aplicar) aplicar ;;
+  restaurar) restaurar ;;
+  status) status ;;
+  testar) testar ;;
+  "" | -h | --ajuda) sed -n '2,12s/^# \{0,1\}//p' "$0" ;;
   *)
-    echo "uso: jangada-sddm [aplicar|restaurar|status]" >&2
+    echo "uso: jangada-sddm aplicar|restaurar|status|testar" >&2
     exit 1
     ;;
 esac

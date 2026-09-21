@@ -311,10 +311,6 @@ sddm() {
   "$JANGADA_PATH/bin/jangada-sddm" "$@"
 }
 
-login() {
-  "$JANGADA_PATH/bin/jangada-sddm" "$@"
-}
-
 # Ajuda dos comandos do jangada shell
 ajuda() {
   echo ""
@@ -338,9 +334,9 @@ ajuda() {
   echo "  suspender         suspende a máquina imediatamente"
   echo "  reiniciar         reinicia o computador (com confirmação)"
   echo "  desligar          desliga o computador (com confirmação)"
-  echo "  sair              encerra a sessão do Jangada (com confirmação)"
-  echo "  sddm [aplicar]    configura Jangada como sessão exclusiva no SDDM"
-  echo "  menu              abre o menu central do Jangada (fuzzel)"
+  echo "  sair              encerra a sessão do jangada (com confirmação)"
+  echo "  sddm <ação>       tela de login: aplicar, restaurar, status ou testar"
+  echo "  menu              abre o menu central do jangada (fuzzel)"
   echo "  fim <sessao>      encerra uma sessão de agente e limpa o worktree"
   echo "  ajuda             exibe esta lista de comandos"
   echo "  exit              sai do jangada shell e volta ao terminal normal"
