@@ -8,7 +8,18 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
 s="${1:?informe a sessão (veja jangada-agentes --lista)}"
+case "$s" in
+  -h|--ajuda) sed -n '2,5s/^# \{0,1\}//p' "$0"; exit 0 ;;
+  -*) echo "opção desconhecida: $s" >&2; exit 1 ;;
+esac
 arq="$JANGADA_ESTADO/agentes/$s.json"
+
+# Sem arquivo de estado e sem sessão no tmux não há o que encerrar. Sem esta
+# conferência um nome errado terminava em "sessão encerrada" sem ter feito nada.
+if [[ ! -f "$arq" ]] && ! "${JANGADA_TMUX[@]}" has-session -t "=$s" 2>/dev/null; then
+  echo "sessão não encontrada: $s (veja jangada-agentes --lista)" >&2
+  exit 1
+fi
 
 worktree=""; ramo=""; base=""; raiz=""; estado=""
 if [[ -f "$arq" ]]; then
