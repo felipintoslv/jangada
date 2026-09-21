@@ -152,3 +152,30 @@ carregador_boot() {
     echo desconhecido
   fi
 }
+
+# Liga a skill do jangada em ~/.claude/skills/jangada, apontando para o
+# repositório instalado: o jangada-update a atualiza junto com o resto. Um link
+# antigo do jangada (outro JANGADA_PATH) é trocado; uma pasta ou link alheio
+# com o mesmo nome fica como está, com aviso.
+ligar_skill_claude() {
+  local origem="$JANGADA_PATH/default/claude/skills/jangada"
+  local destino="$HOME/.claude/skills/jangada" atual
+  [[ -f "$origem/SKILL.md" ]] || { aviso "skill não encontrada em $origem"; return 0; }
+  if [[ -L "$destino" ]]; then
+    atual="$(readlink "$destino")"
+    if [[ "$atual" == "$origem" ]]; then
+      ok "skill do Claude Code já ligada: $destino"
+      return 0
+    fi
+    if [[ "$atual" != */default/claude/skills/jangada ]]; then
+      aviso "$destino aponta para $atual, que não é do jangada; mantido"
+      return 0
+    fi
+  elif [[ -e "$destino" ]]; then
+    aviso "$destino já existe e não é um link do jangada; mantido"
+    return 0
+  fi
+  executar mkdir -p "$(dirname "$destino")"
+  executar ln -sfn "$origem" "$destino"
+  ok "skill do Claude Code ligada: $destino -> $origem"
+}

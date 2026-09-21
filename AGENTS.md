@@ -25,3 +25,6 @@ com agentes de IA. Leia o README.md antes de alterar qualquer coisa.
 7. **Textos.** Documentação e mensagens em português, sem travessões, sem
    adjetivação desnecessária e sem estrangeirismos quando houver termo em
    português de uso corrente.
+8. **Pegadinhas resolvidas.** Um comportamento inesperado de ferramenta que
+   custou investigação (API do Hyprland, waybar, agy) vai também para a skill
+   em `default/claude/skills/jangada/`, no guia do assunto.
