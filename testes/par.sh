@@ -27,6 +27,7 @@ echo "$n" >"$FALSO_DIR/claude.n"
 printf '%s' "$prompt" >"$FALSO_DIR/claude-$n.prompt"
 echo "linha $n" >>arquivo.txt
 git add arquivo.txt && git commit -qm "commit $n"
+[[ -n "${FALSO_SOLTO:-}" ]] && echo "sem commit $n" >"solto-$n.txt"
 if [[ "$prompt" == *"Avaliação do parecer"* ]]; then
   printf '# Avaliação do parecer\n\n| 1 | nome ruim | REJEITADO | MARCA-REJEICAO | nenhuma |\n'
 fi
@@ -49,12 +50,14 @@ git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -q --allow-empty -
 
 rodar_par() {
   local nome="$1" limite="$2"
+  local -a alvo=(--nome "$nome")
+  [[ "$nome" == direto ]] && alvo=(--direto)
   rm -f "$tmp/falso/"*.n "$tmp/falso/"*.prompt
-  env PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" NO_COLOR=1 \
+  env PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" NO_COLOR=1 FALSO_SOLTO="${FALSO_SOLTO:-}" \
     XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" \
     JANGADA_PATH="$repo_jangada" GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t \
     GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t \
-    "$repo_jangada/bin/jangada-par" --projeto "$tmp/projeto" --nome "$nome" \
+    "$repo_jangada/bin/jangada-par" --projeto "$tmp/projeto" "${alvo[@]}" \
     --limite "$limite" "tarefa de teste" </dev/null >"$tmp/saida-$nome.log" 2>&1
 }
 estado_de() { jq -r "$2" "$tmp/estado/jangada/agentes/projeto--$1.json" 2>/dev/null; }
@@ -80,6 +83,16 @@ conferir "caso 2: mensagem avisa que faltou revisão" \
   bash -c '[[ "$1" == *"sem nova revisão"* ]]' _ "$(estado_de dois .mensagem)"
 conferir "caso 2: avaliação final gravada" test -s "$tmp/estado/jangada/agentes/avaliacao-projeto--dois-r1.md"
 conferir "caso 2: agy chamado uma vez só" [ "$(cat "$tmp/falso/agy.n")" = 1 ]
+
+# Caso 3: direto no repositório, com arquivo deixado sem commit. Na rodada 2 o
+# revisor vê desde o início do ciclo (antes via só o último commit, HEAD~1) e
+# vê o arquivo solto.
+printf '%s\n' 'STATUS: REVISAR\n1. nome ruim' 'STATUS: APROVADO\ntudo certo' >"$tmp/falso/agy-respostas"
+FALSO_SOLTO=1 rodar_par direto 2
+conferir "caso 3: rodada 2 mostra o commit da rodada 1" grep -q '^+linha 1$' "$tmp/falso/agy-2.prompt"
+conferir "caso 3: arquivo sem commit listado ao revisor" grep -q 'solto-.*sem commit' "$tmp/falso/agy-2.prompt"
+conferir "caso 3: aviso de alteração sem commit" grep -q 'sem commit' "$tmp/saida-direto.log"
+git -C "$tmp/projeto" clean -qf
 
 if ((falhas)); then
   echo "$falhas falha(s); saídas em $tmp (mantido)"

@@ -192,6 +192,17 @@ escolher() {
 
 command -v matugen >/dev/null 2>&1 || { echo "matugen não instalado" >&2; exit 1; }
 
+# O config.toml grava em ~/.config/jangada. Com XDG_CONFIG_HOME em outro lugar
+# (dotfiles, testes), uma cópia temporária troca o destino; os modelos, que são
+# relativos ao arquivo original, viram caminhos absolutos na cópia.
+if [[ "$JANGADA_CONFIG" != "$HOME/.config/jangada" ]]; then
+  cfg_tmp="$(mktemp --suffix .toml)"
+  trap 'rm -f "$cfg_tmp"' EXIT
+  sed -e "s|\"~/.config/jangada/|\"$JANGADA_CONFIG/|" \
+      -e "s|\"\./modelos/|\"$JANGADA_PATH/default/matugen/modelos/|" "$matugen_cfg" >"$cfg_tmp"
+  matugen_cfg="$cfg_tmp"
+fi
+
 case "${1:-}" in
   --aplicar-papel)
     aplicar_papel

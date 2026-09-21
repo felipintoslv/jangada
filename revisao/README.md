@@ -34,8 +34,8 @@ formato que o `jangada-par` usa em `avaliacao-<sessao>-rN.md`.
 | 21/09/2026 | [benchmark-agentes.md](benchmark-agentes.md) | comparação | gerenciadores de agentes e camadas de Hyprland | itens A a L e seção 4 com situação na seção 7 |
 | 21/09/2026 | [gemini-20260921-0909-itens1a3.md](gemini-20260921-0909-itens1a3.md) | parecer | itens A, B e D do benchmark | ver avaliação |
 | 21/09/2026 | [avaliacao-gemini-20260921-0909-itens1a3.md](avaliacao-gemini-20260921-0909-itens1a3.md) | avaliação | do parecer acima | aplicada em 04e61a6 e 37ed61a |
-| 21/09/2026 | [gemini-20260921-fechamento.md](gemini-20260921-fechamento.md) | parecer | commits db70c2d em diante (itens C, E a L e seção 4) | ver avaliação |
-| 21/09/2026 | [avaliacao-gemini-20260921-fechamento.md](avaliacao-gemini-20260921-fechamento.md) | avaliação | do parecer acima | ver arquivo |
+| 21/09/2026 | [gemini-20260921-fechamento.md](gemini-20260921-fechamento.md) | parecer | commits db70c2d..f026c23 (itens C, E a L e seção 4) | 15 apontamentos |
+| 21/09/2026 | [avaliacao-gemini-20260921-fechamento.md](avaliacao-gemini-20260921-fechamento.md) | avaliação | do parecer acima | 7 aceitos, 6 em parte, 2 rejeitados |
 
 ## Outros documentos
 

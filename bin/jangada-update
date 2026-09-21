@@ -62,23 +62,37 @@ fi
 log_pacman=/var/log/pacman.log
 linhas_antes="$(wc -l <"$log_pacman" 2>/dev/null || echo 0)"
 
+# Uma falha do pacman não interrompe o script: é justamente quando um hook do
+# mkinitcpio ou do dkms falha que a conferência da imagem de boot, mais abaixo,
+# precisa rodar. O que depende da atualização completa (AUR, migrações,
+# recarga) fica para depois do conserto.
+falhou=""
 echo "==> pacman -Syu"
-sudo pacman -Syu
+sudo pacman -Syu || falhou="pacman"
 
-for aur in paru yay; do
-  if command -v "$aur" >/dev/null 2>&1; then
-    echo "==> AUR ($aur)"
-    "$aur" -Sua || echo "!! falha na atualização do AUR"
-    break
+if [[ -z "$falhou" ]]; then
+  for aur in paru yay; do
+    if command -v "$aur" >/dev/null 2>&1; then
+      echo "==> AUR ($aur)"
+      "$aur" -Sua || falhou="AUR"
+      break
+    fi
+  done
+fi
+
+if [[ -z "$falhou" ]]; then
+  echo "==> migrações"
+  "$JANGADA_PATH/bin/jangada-migrar"
+  if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    echo "==> recarregando o Hyprland"
+    "$JANGADA_PATH/bin/jangada-recarregar" || echo "!! há erros de configuração; veja acima"
   fi
-done
-
-echo "==> migrações"
-"$JANGADA_PATH/bin/jangada-migrar"
-
-if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
-  echo "==> recarregando o Hyprland"
-  "$JANGADA_PATH/bin/jangada-recarregar" || echo "!! há erros de configuração; veja acima"
+else
+  # Pacote do AUR compilado contra a versão anterior de uma biblioteca do
+  # repositório oficial pode não abrir mais: recarregar agora trocaria uma
+  # sessão que funciona por uma quebrada.
+  echo "!! a atualização pelo $falhou falhou; migrações e recarga do Hyprland não foram feitas"
+  echo "   o sistema pode estar com atualização parcial: resolva e rode jangada-update de novo"
 fi
 
 # Os módulos do kernel em execução somem de /usr/lib/modules quando o kernel é atualizado.
@@ -120,3 +134,4 @@ fi
 ((reiniciar)) && echo "!! reinicie quando puder"
 
 "$JANGADA_PATH/bin/jangada-gancho" pos-update
+[[ -z "$falhou" ]]

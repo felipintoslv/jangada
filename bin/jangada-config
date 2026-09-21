@@ -30,7 +30,8 @@ JANGADA_BARRA_POSICAO=topo
 # Dispositivo DRM que conduz a sessão. Vazio = detectar pela saída conectada.
 JANGADA_GPU=
 # Cópia de trabalho do jangada (onde se edita e faz commit), usada pelo
-# jangada-verificar --agente. Vazio = $JANGADA_PROJETOS/jangada, se existir.
+# jangada-verificar --agente. Vazio = $JANGADA_PROJETOS/jangada, se existir,
+# ou o origin da cópia instalada, se for uma pasta local.
 JANGADA_REPO=
 # Ramo que o jangada-update acompanha na cópia instalada: main (tudo o que
 # entrou) ou estavel (só o que foi marcado como testado).
@@ -48,6 +49,13 @@ if [[ -f "$JANGADA_CONFIG/jangada.conf" ]]; then
 fi
 if [[ -z "$JANGADA_REPO" && -d "$JANGADA_PROJETOS/jangada/.git" ]]; then
   JANGADA_REPO="$JANGADA_PROJETOS/jangada"
+fi
+# Máquina com os projetos em outra pasta: a cópia instalada foi clonada da de
+# trabalho, então o origin dela, quando é uma pasta local, é a cópia de trabalho.
+if [[ -z "$JANGADA_REPO" && -f "$JANGADA_PATH/.git/config" ]]; then
+  _origem="$(git config -f "$JANGADA_PATH/.git/config" remote.origin.url 2>/dev/null || true)"
+  [[ "$_origem" == /* && -d "$_origem/.git" ]] && JANGADA_REPO="$_origem"
+  unset _origem
 fi
 
 export JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_INTERFACE JANGADA_TERMINAL \
@@ -150,6 +158,20 @@ jangada_perfis() {
     [[ -e "$_a" ]] && basename "$_a" .conf
   done
   return 0
+}
+
+# Aplica um filtro do jq ao arquivo de estado ARQ, gravando em TMP e trocando
+# com mv, sob uma trava da pasta. O hook do Claude Code roda em paralelo quando
+# há ferramentas em paralelo, e o painel marca sessões interrompidas: sem a
+# trava, quem lê antes e grava depois apaga o campo que o outro gravou.
+# Uso: jangada_alterar_estado ARQ TMP ARGUMENTOS_DO_JQ...
+jangada_alterar_estado() {
+  local arq="$1" tmp="$2"
+  shift 2
+  (
+    flock -w 5 9 || exit 1
+    jq "$@" "$arq" >"$tmp" 2>/dev/null && mv "$tmp" "$arq"
+  ) 9>"$(dirname "$arq")/.trava"
 }
 
 # Foca a primeira janela da classe CLASSE e devolve 0; devolve 1 se não houver

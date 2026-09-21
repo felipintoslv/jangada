@@ -24,7 +24,8 @@ Estados: `iniciado`, `trabalhando`, `aguardando`, `concluido`, `interrompido`.
 `interrompido` é a sessão cujo tmux sumiu (reinício, queda do servidor) com
 worktree ainda presente. Ela fica guardada por 168 horas; `--restaurar` (ou o
 `--focar` nela) recria a sessão tmux e retoma a conversa com
-`claude --resume <conversa>`, ou `--continue` se o id faltar. O ambiente de um
+`claude --resume <conversa>`; sem o id, `--continue` num worktree e conversa
+nova direto no repositório. O ambiente de um
 perfil é relido de `~/.config/jangada/agentes/NOME.conf` na restauração, nunca
 guardado no estado.
 
@@ -32,11 +33,16 @@ guardado no estado.
 
 `default/claude/hooks.json` é mesclado em `~/.claude/settings.json` pela
 instalação e pela migração, por evento, sem duplicar (a chave é o comando sem
-o caminho até `/bin/`). Eventos: `UserPromptSubmit` (trabalhando),
+o caminho até `/bin/`). Eventos: `UserPromptSubmit` e `PostToolUse` (trabalhando),
 `Notification` (aguardando; `auth_success` é ignorado e `idle_prompt` vira
 concluído sem aviso), `Stop` (concluído), `SessionStart` (iniciado) e
 `SessionEnd` (concluído; `reason=clear` não muda o estado). Todo evento grava
 `conversa` com o `session_id`. `jangada-verificar` confere cada evento.
+A `mensagem` vem de `.message` (Notification), `.last_assistant_message`
+(Stop) ou `.prompt` (UserPromptSubmit), primeira linha; o `PostToolUse`
+mantém a anterior. Toda alteração do arquivo passa por
+`jangada_alterar_estado` (`bin/jangada-config`), que usa `flock` em
+`agentes/.trava`: os hooks rodam em paralelo.
 
 `aguardando` e `concluido` são resultado, não processo: continuam no painel
 depois de o processo sair, até o `Ctrl+X` do seletor ou até vencer
@@ -73,11 +79,20 @@ do terminal é o nome da sessão (`set-titles-string "#S"`), e é por ele que o
   (`MAX_ARG_STRLEN`). Acima de `PROMPT_BYTES_MAX` (126000 bytes) o diff vai
   cortado no prompt e inteiro num arquivo que o agy lê pela pasta liberada em
   `--add-dir`.
+- A avaliação anterior também tem teto (`AVALIACAO_MAX`, 30000 bytes), com
+  a íntegra liberada do mesmo jeito.
+- O JSON bruto do agy (`revisao-<sessao>-rN.json`) fica na pasta de estado
+  quando a chamada falha. `jangada-agentes` ignora `revisao-*` na lista e na
+  limpeza de órfãos; antes a barra o apagava segundos depois.
+- O revisor erra sobre `set -e`: falha dentro de uma lista `a && b && c`, fora
+  do último comando, não encerra o script. Teste com `bash -c` antes de aceitar.
 
 ## Fluxo do `jangada-par`
 
 1. Claude implementa e faz commit.
-2. agy revisa o diff e responde `STATUS: APROVADO` ou `STATUS: REVISAR` com
+2. agy revisa o diff desde o início do ciclo (merge-base no worktree, HEAD
+   inicial no modo direto) até a árvore de trabalho, com o que ficou sem
+   commit listado, e responde `STATUS: APROVADO` ou `STATUS: REVISAR` com
    apontamentos numerados; o parecer fica em `parecer-<sessao>-rN.md`.
 3. Com REVISAR, o Claude **avalia** cada apontamento (verifica no código,
    testa quando dá) e responde com uma tabela: ACEITO, ACEITO EM PARTE ou

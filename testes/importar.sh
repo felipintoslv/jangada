@@ -32,8 +32,12 @@ output "DP-1" {
 output "eDP-1" {
     off
 }
+output HDMI-A-1 {
+    scale auto
+}
 environment {
     LIBVA_DRIVER_NAME "nvidia"
+    EDITOR "nvim"
     DISPLAY null
 }
 spawn-at-startup "xwayland-satellite"
@@ -75,6 +79,9 @@ conferir "largura de coluna vira resize repetido" tem "$u" 'repeating = true'
 conferir "monitor com modo, escala, posição e rotação" \
   tem "$m" 'hl.monitor({ output = "DP-1", mode = "2560x1440@144", position = "1920x0", scale = 1.5, transform = 1 })'
 conferir "monitor desligado" tem "$m" 'output = "eDP-1", disabled = true'
+conferir "monitor sem aspas (KDL 2) e escala auto" tem "$m" 'output = "HDMI-A-1", mode = "preferred", position = "auto", scale = "auto"'
+conferir "variável de driver sai comentada" tem "$u" '-- hl.env("LIBVA_DRIVER_NAME", "nvidia")'
+conferir "variável comum fica ativa" tem "$u" 'hl.env("EDITOR", "nvim")'
 conferir "terminal no jangada.conf" tem "$tmp/saida/jangada.conf.importado" 'JANGADA_TERMINAL=kitty'
 if command -v luac >/dev/null; then
   conferir "usuario.lua.importado é Lua válido" luac -p "$u"

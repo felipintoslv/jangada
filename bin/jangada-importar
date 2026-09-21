@@ -333,7 +333,8 @@ TRANSFORM = {"normal": 0, "90": 1, "180": 2, "270": 3, "flipped": 4,
              "flipped-90": 5, "flipped-180": 6, "flipped-270": 7}
 monitores = []
 for cab, corpo in blocos("output"):
-    nome = textos(cab)
+    # O KDL 2 aceita nome sem aspas (output DP-1 { ... }).
+    nome = textos(cab) or cab.split()[:1]
     if not nome:
         continue
     campos = [f"output = {lua_str(nome[0])}"]
@@ -346,7 +347,7 @@ for cab, corpo in blocos("output"):
     pos = re.search(r'position\s+x=(-?\d+)\s+y=(-?\d+)', corpo)
     campos.append(f'position = {lua_str(pos.group(1) + "x" + pos.group(2)) if pos else lua_str("auto")}')
     esc = valor(corpo, "scale")
-    campos.append(f"scale = {esc if esc else lua_str('auto')}")
+    campos.append(f"scale = {esc if esc and re.fullmatch(r'\d+(\.\d+)?', esc) else lua_str('auto')}")
     rot = valor(corpo, "transform")
     if rot in TRANSFORM and TRANSFORM[rot]:
         campos.append(f"transform = {TRANSFORM[rot]}")
@@ -365,8 +366,19 @@ if entrada:
     u += ["-- Teclado", "hl.config({", "  input = {"]
     u += ["    " + e for e in entrada]
     u += ["  },", "})", ""]
+# Variáveis de driver valem para a placa desta máquina, e o jangada já escolhe
+# a GPU sozinho (JANGADA_GPU): elas saem comentadas, para decidir caso a caso.
+GPU_ENV = re.compile(r"^(LIBVA_DRIVER_NAME|__GLX_VENDOR_LIBRARY_NAME|GBM_BACKEND|NVD_BACKEND|"
+                     r"__NV_|VDPAU_DRIVER|WLR_|AQ_DRM_DEVICES|DRI_PRIME)")
 if ambiente:
-    u += ["-- Ambiente"] + [f"hl.env({lua_str(n)}, {lua_str(v)})" for n, v in ambiente] + [""]
+    u += ["-- Ambiente"]
+    for n, v in ambiente:
+        linha = f"hl.env({lua_str(n)}, {lua_str(v)})"
+        if GPU_ENV.match(n):
+            u.append(f"-- {linha}  -- driver de vídeo: confira se vale nesta máquina")
+        else:
+            u.append(linha)
+    u.append("")
 if inicio:
     u += ["-- Programas ao iniciar"] + [f"j.ao_iniciar({lua_cmd(c)})" for c in inicio] + [""]
 if inicio_pulado:

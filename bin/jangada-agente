@@ -107,8 +107,13 @@ if ((eh_git)) && ((!direto)) && [[ -z "$nome" ]]; then
       read -r -p "nome da tarefa [padrão: $sugestao]: " nome
     fi
     [[ -n "$nome" ]] || nome="$sugestao"
-  else
+  elif [[ -t 0 ]]; then
     read -r -p "nome da tarefa (vazio = trabalhar direto no repositório): " nome
+  else
+    # Sem terminal o read chega ao fim da entrada e o set -e encerraria o
+    # script sem dizer por quê.
+    echo "sem terminal para perguntar o nome da tarefa; use --nome, --prompt ou --direto" >&2
+    exit 1
   fi
 fi
 nome="$(slug "$nome")"

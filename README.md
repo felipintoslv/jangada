@@ -78,7 +78,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 
 | Comando | Função |
 |---|---|
-| `jangada-update` | atualiza o repositório no ramo de `JANGADA_CANAL`, mostra se o conjunto do Hyprland mudou, atualiza o sistema, aplica migrações, confere initramfs e driver NVIDIA e roda o gancho `pos-update` |
+| `jangada-update` | atualiza o repositório no ramo de `JANGADA_CANAL`, mostra se o conjunto do Hyprland mudou, atualiza o sistema, aplica migrações, confere initramfs e driver NVIDIA e roda o gancho `pos-update`. Se o pacman ou o AUR falhar, a conferência da imagem de boot roda mesmo assim, e as migrações e a recarga do Hyprland ficam para depois do conserto |
 | `jangada-verificar` | confere pacotes, snapshots, sessão, hooks e erros de configuração do Hyprland; `--diagnostico` grava um relatório e `--agente` abre um agente com ele no repositório do jangada |
 | `jangada-migrar` | aplica as migrações pendentes (o `jangada-update` já chama) |
 | `jangada-snapshot "descrição"` | cria um snapshot manual do sistema |
@@ -161,7 +161,23 @@ carrega quando a tarefa envolve a sessão, mesmo aberto em outro projeto.
    integrar e mantém o ramo.
 5. Depois de reiniciar, as sessões que ficaram sem tmux aparecem como
    interrompidas: `Enter` no seletor ou `jangada-agentes --restaurar` reabre
-   cada uma na mesma pasta e na mesma conversa (`claude --resume`).
+   cada uma na mesma pasta e na mesma conversa (`claude --resume`). Sem o id
+   da conversa, o worktree usa `--continue`; direto no repositório abre uma
+   conversa nova, porque a mais recente da pasta pode ser de outro agente.
+
+Detalhes que valem para o dia a dia:
+
+- O revisor do par recebe o diff desde o início do ciclo até a árvore de
+  trabalho: o que o Claude deixar sem commit também chega a ele, e o par
+  avisa na tela. O prompt vai inteiro num argumento, com teto de
+  `PROMPT_BYTES_MAX` bytes; o diff e a avaliação anterior (`AVALIACAO_MAX`)
+  são cortados antes, e a íntegra fica legível pelo revisor.
+- O `--integrar` recusa mesclar se o repositório principal tiver alterações
+  sem commit.
+- Os arquivos de estado são alterados sob uma trava
+  (`~/.local/state/jangada/agentes/.trava`), porque os hooks do Claude Code
+  rodam em paralelo.
+- O `jangada-agente` sem terminal exige `--nome`, `--prompt` ou `--direto`.
 
 Perfis de agente (outra conta, outro modelo, outro programa) ficam em
 `~/.config/jangada/agentes/NOME.conf`; veja `default/agentes/exemplo.conf`.
@@ -180,7 +196,7 @@ placa de vídeo, usuário ou caminho de uma máquina específica.
 | Posição, escala e modo dos monitores | `~/.config/jangada/hypr/monitores.lua` |
 | Teclado, atalhos e programas pessoais | `~/.config/jangada/hypr/usuario.lua` |
 | Fonte da barra por monitor | `~/.config/jangada/waybar/style.css` (`window#waybar.NOME`) |
-| Terminal, interface, GPU forçada, pastas de projetos | `~/.config/jangada/jangada.conf` |
+| Terminal, interface, GPU forçada, pastas de projetos (`JANGADA_PROJETOS`, `JANGADA_REPO`) | `~/.config/jangada/jangada.conf` |
 | Canal de atualização | `JANGADA_CANAL` no `jangada.conf` |
 | Perfis de agente e ganchos | `~/.config/jangada/agentes/`, `~/.config/jangada/ganchos/` |
 
@@ -191,7 +207,7 @@ Roteiro para uma máquina nova:
    trabalho) e rodar `bin/jangada-mapear`.
 2. `JANGADA_SIMULAR=1 ./install.sh`, conferir, e `./install.sh`.
 3. `jangada-importar` (se a máquina usava niri) e copiar o que servir dos
-   arquivos `.importado`.
+   arquivos `.importado`. Variáveis de driver de vídeo vêm comentadas.
 4. Ajustar `monitores.lua` com os nomes de `hyprctl monitors`.
 5. `jangada-verificar` e entrar na sessão **jangada**.
 
@@ -223,9 +239,16 @@ instalar, rode `JANGADA_PATH=$PWD bin/...`.
 | `testes/verificar.sh` | shellcheck, sintaxe Lua, JSON e TOML, comandos citados na configuração, fluxo do `jangada-par` com claude e agy falsos, `jangada-importar` com um config.kdl de exemplo |
 | `testes/aninhado.sh` | sobe um Hyprland aninhado com a configuração (`--sem-usuario` só os padrões) e confere `configerrors` e o número de atalhos |
 
+Os testes nunca tocam a configuração real: rodam com `XDG_CONFIG_HOME` e
+`XDG_STATE_HOME` temporários, e o `jangada-tema` respeita o
+`XDG_CONFIG_HOME` também nas saídas do matugen.
+
 Mudança que exige ajuste numa instalação existente ganha uma migração em
 `migrations/` (ver `migrations/README.md`). As revisões cruzadas e as
-avaliações estão indexadas em `revisao/README.md`.
+avaliações estão indexadas em `revisao/README.md`; a última auditoria
+(`revisao/avaliacao-gemini-20260921-fechamento.md`) cobre os commits do
+fechamento do benchmark, com 13 dos 15 apontamentos aplicados no todo ou em
+parte.
 
 ## Estado
 

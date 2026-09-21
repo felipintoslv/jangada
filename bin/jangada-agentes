@@ -80,6 +80,14 @@ guardado() {
   fi
 }
 
+# Arquivo de estado de sessão. O jangada-par grava na mesma pasta o JSON bruto
+# do agy (revisao-<sessão>-rN.json), que fica para diagnóstico quando a chamada
+# falha; tratado como sessão, ele aparecia na lista e a barra o apagava como
+# órfão segundos depois.
+eh_estado() {
+  [[ -e "$1" && "$(basename "$1")" != revisao-* ]]
+}
+
 # Uma linha por sessão: estado<TAB>sessão<TAB>diretório<TAB>atualizado<TAB>ramo<TAB>tarefa
 listar() {
   local s arq vivas pid dados estado dir atualizado ramo tarefa
@@ -97,7 +105,7 @@ listar() {
   done <<<"$vivas"
 
   for arq in "$estado_dir"/*.json; do
-    [[ -e "$arq" ]] || continue
+    eh_estado "$arq" || continue
     s="$(basename "$arq" .json)"
     grep -qxF "$s" <<<"$vivas" && continue
     pid="$(jq -r '.pid // empty' "$arq" 2>/dev/null || true)"
@@ -120,7 +128,7 @@ limpar_orfaos() {
   local arq s vivas pid estado atualizado
   vivas="$(sessoes_vivas)"
   for arq in "$estado_dir"/*.json; do
-    [[ -e "$arq" ]] || continue
+    eh_estado "$arq" || continue
     s="$(basename "$arq" .json)"
     if grep -qxF "$s" <<<"$vivas"; then
       continue
@@ -153,15 +161,14 @@ restauravel() {
   [[ -n "$agente" && "$agente" != par && -n "$dir" && -d "$dir" ]]
 }
 
+# A trava é a mesma do jangada-hook-claude: leitura, alteração e troca do
+# arquivo acontecem sem outro processo no meio, senão um sobrescreve o campo
+# que o outro acabou de gravar.
 marcar() {
   local arq="$1" tmp
   tmp="$(mktemp "$arq.XXXXXX")" || return 0
-  if jq --arg e "$2" --arg m "$3" --arg a "$(date -Is)" \
-       '.estado = $e | .mensagem = $m | .atualizado = $a' "$arq" >"$tmp" 2>/dev/null; then
-    mv "$tmp" "$arq"
-  else
-    rm -f "$tmp"
-  fi
+  jangada_alterar_estado "$arq" "$tmp" --arg e "$2" --arg m "$3" --arg a "$(date -Is)" \
+    '.estado = $e | .mensagem = $m | .atualizado = $a' || rm -f "$tmp"
 }
 
 # Reabre a sessão S no tmux: na mesma pasta, com o mesmo agente e, no Claude
@@ -181,10 +188,15 @@ restaurar() {
   cmd="$(jq -r '.comando // ""' "$arq")"
   [[ -n "$cmd" ]] || { cmd="$agente"; [[ -n "$JANGADA_AGENTE_ARGS" ]] && cmd+=" $JANGADA_AGENTE_ARGS"; }
   if [[ "$(basename "${agente%% *}")" == claude ]]; then
+    # O --continue retoma a conversa mais recente da pasta. Num worktree ela é
+    # desta sessão; direto no repositório pode ser de outro agente ou de uma
+    # conversa aberta à mão, e aí é melhor começar uma nova.
     if [[ -n "$conversa" ]]; then
       cmd+=" --resume $(printf '%q' "$conversa")"
-    else
+    elif [[ -n "$(jq -r '.worktree // ""' "$arq")" ]]; then
       cmd+=" --continue"
+    else
+      echo "$s: sem o id da conversa e sem worktree próprio; abrindo conversa nova" >&2
     fi
   fi
   # O ambiente do perfil é relido do arquivo, e não guardado no estado: pode

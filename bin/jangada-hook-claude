@@ -14,7 +14,13 @@
 
   entrada="$(cat 2>/dev/null || true)"
   campo() { jq -r "$1 // \"\"" <<<"$entrada" 2>/dev/null || true; }
-  mensagem="$(campo .message)"
+  # Só o Notification traz .message. No Stop vale o fim da última resposta
+  # (last_assistant_message, nas versões que o enviam) e no UserPromptSubmit o
+  # pedido. O PostToolUse não traz nenhum dos três e mantém a mensagem que já
+  # estava no estado.
+  mensagem="$(jq -r '(.message // .last_assistant_message // .prompt // "")
+    | split("\n") | map(select(test("\\S"))) | (.[0] // "")
+    | if length > 120 then .[0:117] + "..." else . end' <<<"$entrada" 2>/dev/null || true)"
   cwd="$(campo .cwd)"
   conversa="$(campo .session_id)"
   tipo="$(campo .notification_type)"
@@ -22,6 +28,11 @@
   # O que cada evento significa para o painel. Estado vazio: só registra a
   # conversa, sem mudar o estado nem avisar.
   estado="$evento"; avisar=1
+  if [[ -z "$mensagem" ]]; then
+    case "$evento" in
+      concluido) mensagem="turno concluído" ;;
+    esac
+  fi
   case "$evento" in
     aguardando)
       # O Claude Code 2.1 diz o motivo da notificação. Só pedido de permissão
@@ -45,7 +56,8 @@
       if [[ "$(campo .reason)" == clear ]]; then
         estado=""
       else
-        estado="concluido"; mensagem="Claude encerrado ($(campo .reason))"
+        motivo="$(campo .reason)"
+        estado="concluido"; mensagem="Claude encerrado${motivo:+ ($motivo)}"
       fi
       ;;
   esac
@@ -62,10 +74,12 @@
     tmp="$(mktemp "$arq.XXXXXX")"
     # A conversa é gravada em todo evento: instalações sem o SessionStart
     # também ficam com o id para o --restaurar.
-    jq --arg e "$estado" --arg m "$mensagem" --arg a "$agora" --arg c "$conversa" '
+    jangada_alterar_estado "$arq" "$tmp" \
+      --arg e "$estado" --arg m "$mensagem" --arg a "$agora" --arg c "$conversa" '
       (if $c != "" then .conversa = $c else . end)
-      | (if $e != "" then .estado = $e | .mensagem = $m | .atualizado = $a else . end)
-    ' "$arq" >"$tmp" && mv "$tmp" "$arq"
+      | (if $e != "" then .estado = $e | .atualizado = $a else . end)
+      | (if $e != "" and $m != "" then .mensagem = $m else . end)
+    '
     rm -f "$tmp"
   fi
   nome="${sessao:-$(basename "${cwd:-$PWD}")}"

@@ -51,6 +51,12 @@ DIFF_MAX=200000
 # cobre o que o cálculo não vê.
 PROMPT_BYTES_MAX=126000
 
+# Teto da avaliação da rodada anterior no prompt do revisor, em bytes. O corte
+# do diff abaixo só mexe no diff; uma avaliação com saída de teste longa
+# estouraria o limite sozinha. Acima do teto vai o começo, e o arquivo inteiro
+# fica legível pelo revisor.
+AVALIACAO_MAX=30000
+
 # Tamanho em bytes, não em caracteres: com locale UTF-8, ${#x} conta
 # caracteres, e um acento ocupa 2 bytes no argumento.
 bytes() { local LC_ALL=C; printf '%s' "${#1}"; }
@@ -179,6 +185,10 @@ if ((eh_git)) && [[ -n "$nome" ]]; then
   ((worktree_novo)) && "$JANGADA_PATH/bin/jangada-worktree-preparar" "$raiz" "$worktree"
   dir="$worktree"
 fi
+# Ponto de partida do diff no trabalho direto no repositório, onde não há ramo
+# base: sem ele a rodada 2 comparava com HEAD~1 e o revisor via só o último commit.
+inicio=""
+((eh_git)) && inicio="$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)"
 
 # Restos de execuções anteriores com o mesmo nome de sessão. Só o que é
 # descartável: o JSON bruto do agy, o diff salvo para ele e os logs sem
@@ -400,9 +410,22 @@ Diretrizes:
   arquivos_tocados=""
   if git -C "$dir" rev-parse --show-toplevel >/dev/null 2>&1; then
     eh_git=1
-    ponto_base="${base:-HEAD~1}"
-    diff_conteudo="$(git -C "$dir" diff "$ponto_base..HEAD" 2>/dev/null || git -C "$dir" diff HEAD~1..HEAD 2>/dev/null || git -C "$dir" status -s 2>/dev/null || true)"
-    arquivos_tocados="$(git -C "$dir" diff --name-only "$ponto_base..HEAD" 2>/dev/null || true)"
+    # No worktree o ponto é onde o ramo saiu da base (a base pode ter andado
+    # desde então); direto no repositório, o HEAD do início do ciclo.
+    ponto_base=""
+    [[ -n "$base" ]] && ponto_base="$(git -C "$dir" merge-base "$base" HEAD 2>/dev/null || true)"
+    [[ -n "$ponto_base" ]] || ponto_base="${inicio:-HEAD~1}"
+    # Sem "..HEAD" o diff vai até a árvore de trabalho: o que o Claude deixou
+    # sem commit também chega ao revisor, em vez de ficar no disco sem ninguém ver.
+    diff_conteudo="$(git -C "$dir" diff "$ponto_base" 2>/dev/null || git -C "$dir" status -s 2>/dev/null || true)"
+    arquivos_tocados="$(git -C "$dir" diff --name-only "$ponto_base" 2>/dev/null || true)"
+    soltos="$(git -C "$dir" status --porcelain 2>/dev/null || true)"
+    if [[ -n "$soltos" ]]; then
+      aviso "há alterações sem commit em $dir; elas vão ao revisor, mas não estão no ramo:"
+      printf '%s\n' "$soltos" | head -20
+      novos_soltos="$(awk '$1 == "??" { print $2 " (novo, sem commit)" }' <<<"$soltos")"
+      [[ -n "$novos_soltos" ]] && arquivos_tocados+="${arquivos_tocados:+$'\n'}$novos_soltos"
+    fi
   fi
 
   # O prompt inteiro vai num pedido só, e o modelo do agy corta em 1 milhão de
@@ -431,7 +454,12 @@ Diretrizes:
     [[ -n "$ultima_avaliacao" && -s "$ultima_avaliacao" ]] || return 0
     printf '\nNa rodada anterior você fez apontamentos, e o Claude avaliou cada um\n'
     printf 'antes de implementar (o diff acima já traz o que ele aceitou):\n---\n'
-    cat "$ultima_avaliacao"
+    if (( $(wc -c <"$ultima_avaliacao") > AVALIACAO_MAX )); then
+      head -c "$AVALIACAO_MAX" "$ultima_avaliacao" | iconv -c -f UTF-8 -t UTF-8
+      printf '\n[... avaliação cortada pelo jangada-par; a íntegra está em %s ...]\n' "$ultima_avaliacao"
+    else
+      cat "$ultima_avaliacao"
+    fi
     printf -- '---\nNão repita um apontamento rejeitado com justificativa verificada. Se\n'
     printf 'discordar da rejeição, repita o item só com evidência nova (trecho de\n'
     printf 'código, linha, caso concreto que falha). Confira também se o que foi\n'
@@ -506,7 +534,9 @@ seguido de uma lista numerada e clara com cada item que o Claude deve corrigir:
   fi
 
   args_agy=(-p "$prompt_agy" --output-format json --effort "$esforco" --add-dir "$dir")
-  ((diff_cortado)) && args_agy+=(--add-dir "$estado_dir")
+  if ((diff_cortado)) || { [[ -s "$ultima_avaliacao" ]] && (( $(wc -c <"$ultima_avaliacao") > AVALIACAO_MAX )); }; then
+    args_agy+=(--add-dir "$estado_dir")
+  fi
   [[ -n "$modelo" ]] && args_agy+=(--model "$modelo")
 
   # A captura vai por cano, em substituição de comando, e não por arquivo.
