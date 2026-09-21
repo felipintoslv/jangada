@@ -1,6 +1,7 @@
 # Comparação do jangada com projetos semelhantes
 
-Documento de consulta, feito em 21/09/2026. Nada aqui foi aplicado.
+Documento de consulta, feito em 21/09/2026. A situação de cada item está na
+seção 7.
 
 Fonte: busca na API do GitHub (`search/repositories`, ordenada por estrelas)
 com os termos "claude code worktree tmux", "agents git worktree parallel",
@@ -244,3 +245,28 @@ escrever uma shell própria.
 5. C (prompt na criação)
 6. F e G (integrar num comando e restaurar depois de reiniciar)
 7. Fluxo: teste aninhado e `jangada-importar`
+
+## 7. Situação em 21/09/2026
+
+| Item | Situação | Onde |
+|---|---|---|
+| A. Arquivos ignorados no worktree | feito | `bin/jangada-worktree-preparar` (`.worktreeinclude`, `.jangada/links`, `.jangada/preparar.sh`) |
+| B. Pular para o agente que espera | feito | `jangada-agentes --proximo` (SUPER+N) e `--anterior` (SUPER+SHIFT+N) |
+| C. Tarefa já com o prompt | feito | `jangada-agente --prompt` e `--prompt-arquivo`; o nome sai das primeiras palavras |
+| D. Skill do jangada | feito | `default/claude/skills/jangada/` |
+| E. Hooks mais fiéis | feito | `SessionStart`, `SessionEnd`, tipo da notificação e `conversa` no estado |
+| F. Integrar e limpar num comando | feito | `jangada-agente-fim --integrar`; Alt+I no seletor |
+| G. Restaurar depois de reiniciar | feito | estado `interrompido` e `jangada-agentes --restaurar` (`claude --resume`) |
+| H. Perfis de agente | feito | `~/.config/jangada/agentes/NOME.conf` e `jangada-agente --perfil` |
+| I. Consumo na barra | feito | `jangada-consumo`, no tooltip do módulo de agentes |
+| J. Diagnóstico entregue ao agente | feito | `jangada-verificar --diagnostico` e `--agente`; entrada no menu |
+| K. Proteção durante a atualização | feito em parte | `jangada-update` confere mkinitcpio, dkms e a versão da NVIDIA e avisa quando é preciso reiniciar. **Adiado:** suspender a recarga automática do Hyprland durante o pacman. O pacman não toca em `~/.config/jangada` nem em `default/` (que só muda por `git pull`), então não há recarga disparada no meio da transação; o problema do Omarchy vem de pacotes que escrevem na configuração do Hyprland, o que o jangada não faz |
+| L. Ganchos do usuário | feito | `jangada-gancho`: `pos-tema`, `pos-agente-fim`, `pos-par`, `pos-update` |
+| Par com avaliação | feito (fora da lista original) | o Claude avalia cada apontamento do agy antes de implementar |
+| 4.1 Teste aninhado | feito | `testes/aninhado.sh` |
+| 4.2 `jangada-importar` | feito | lê o niri (atual ou de um mapeamento) e grava arquivos `.importado` |
+| 4.3 Pareceres com formato fixo | feito | `revisao/README.md` |
+| 4.4 Lançar ou focar | feito | `jangada-agentes --janela` e `jangada-shell --janela` |
+| 4.5 Canal de atualização | feito | `JANGADA_CANAL` (padrão `main`); ramo `estavel` criado no repositório |
+| 5. Barra em Quickshell | adiado | a waybar continua; o contrato de estado vale para qualquer barra |
+| 3.3 Não fazer | mantido | aprovação automática, coordenador, acesso remoto, kanban, contêiner, navegador |

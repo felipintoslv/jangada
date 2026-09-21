@@ -22,13 +22,24 @@ jangada/
 ├── config/                modelos copiados uma única vez para ~/.config/jangada
 ├── shell/                 integração com bash e zsh
 ├── migrations/            ajustes aplicados em ordem a cada atualização
-├── testes/                verificações estáticas (shellcheck, sintaxe Lua, JSON, TOML)
-└── revisao/               instruções e resultados das revisões cruzadas
+├── testes/                verificar.sh (estático + testes do par e do importar) e aninhado.sh
+├── mapeamento/            inventários do jangada-mapear (fora do git)
+└── revisao/               pareceres, avaliações e comparações; índice em revisao/README.md
 ```
 
 ## Antes de instalar: mapear a máquina
 
-No desktop, rode primeiro `bin/jangada-mapear`. Ele registra a configuração atual, inclusive as personalizações do Noctalia, em `mapeamento/` (fora do git). O roteiro de resgate está em `revisao/RESGATE.md`.
+Em cada máquina, rode primeiro `bin/jangada-mapear`. Ele registra a configuração atual, inclusive as personalizações do Noctalia, em `mapeamento/` (fora do git). O roteiro de resgate está em `revisao/RESGATE.md`.
+
+Quem vem do niri converte a configuração com `jangada-importar`, que lê `~/.config/niri/config.kdl` (ou uma pasta de mapeamento) e grava, sem sobrescrever nada:
+
+| Arquivo gerado | Conteúdo |
+|---|---|
+| `~/.config/jangada/hypr/usuario.lua.importado` | teclado, variáveis de ambiente, programas ao iniciar e atalhos; os que batem com um padrão do jangada saem comentados, e as ações sem equivalente (colunas, overview) ficam listadas |
+| `~/.config/jangada/hypr/monitores.lua.importado` | nome, modo, posição, escala e rotação de cada tela |
+| `~/.config/jangada/jangada.conf.importado` | o terminal do `Mod+Return` |
+
+Compare com `diff -u` e copie o que quiser para os arquivos sem a extensão.
 
 ## Interface
 
@@ -67,15 +78,19 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 
 | Comando | Função |
 |---|---|
-| `jangada-update` | atualiza o repositório, mostra se o conjunto do Hyprland mudou, atualiza o sistema e aplica migrações |
-| `jangada-verificar` | confere pacotes, snapshots, sessão e erros de configuração do Hyprland |
+| `jangada-update` | atualiza o repositório no ramo de `JANGADA_CANAL`, mostra se o conjunto do Hyprland mudou, atualiza o sistema, aplica migrações, confere initramfs e driver NVIDIA e roda o gancho `pos-update` |
+| `jangada-verificar` | confere pacotes, snapshots, sessão, hooks e erros de configuração do Hyprland; `--diagnostico` grava um relatório e `--agente` abre um agente com ele no repositório do jangada |
+| `jangada-migrar` | aplica as migrações pendentes (o `jangada-update` já chama) |
 | `jangada-snapshot "descrição"` | cria um snapshot manual do sistema |
 | `jangada-tema [imagem]` | gera as cores a partir de um papel de parede e recarrega a interface |
-| `jangada-agente` | escolhe um projeto, cria um worktree e abre um agente numa sessão tmux |
-| `jangada-par` | executa tarefa em par (Claude implementa, Antigravity revisa e Claude corrige) |
+| `jangada-agente` | escolhe um projeto, cria um worktree e abre um agente numa sessão tmux (`--prompt`, `--prompt-arquivo`, `--perfil`) |
+| `jangada-par` | tarefa em par: Claude implementa, Antigravity revisa, Claude avalia cada apontamento e aplica o que aceitar |
 | `jangada-shell` | inicia subshell enriquecida com comandos diretos de agentes e projetos |
-| `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir ou encerrar (`--proximo` foca o próximo que espera) |
-| `jangada-agente-fim` | encerra uma sessão e remove o worktree, com conferência de alterações pendentes |
+| `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir, integrar ou encerrar (`--proximo`, `--anterior`, `--restaurar`) |
+| `jangada-agente-fim` | encerra uma sessão e remove o worktree, com conferência de alterações pendentes; `--integrar` faz antes o merge na base e apaga o ramo |
+| `jangada-consumo` | tokens do Claude Code no bloco de 5 horas em andamento (também no tooltip da barra) |
+| `jangada-gancho` | roda os ganchos do usuário de um evento (chamado pelos outros comandos) |
+| `jangada-importar` | converte a configuração do niri em arquivos `.importado` |
 | `jangada-atalhos` | mostra todos os atalhos ativos, lidos do próprio Hyprland (`--lista` para o terminal) |
 | `jangada-sddm aplicar` | deixa o jangada como única sessão no SDDM, com o tema de login do jangada (`restaurar`, `status`, `testar`) |
 | `jangada-menu` | menu central com as ações acima, mais bloquear, suspender, reiniciar, desligar e sair |
@@ -93,6 +108,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `SUPER + SHIFT + A` | lista de agentes |
 | `SUPER + CTRL + A` | painel de agentes (workspace especial) |
 | `SUPER + N` | próximo agente que espera resposta; repetir percorre a fila |
+| `SUPER + SHIFT + N` | volta ao agente focado antes do atual |
 | `SUPER + Esc` | menu jangada |
 | `SUPER + CTRL + R` | recarregar e mostrar erros de configuração |
 | `SUPER + /` | mostra todos os atalhos ativos, pesquisáveis |
@@ -130,6 +146,91 @@ pegadinhas já resolvidas (`hyprctl dispatch` só com Lua, hypridle que ignora
 `-c`, on-click da waybar com `setsid -f`, agy sem terminal), e o Claude Code a
 carrega quando a tarefa envolve a sessão, mesmo aberto em outro projeto.
 
+## Ciclo de uma tarefa com agentes
+
+1. `SUPER + A` (ou `jangada-agente --prompt "..."`) abre um agente num
+   worktree `agente/<nome>`; `SUPER + P` abre uma tarefa em par.
+2. O estado aparece na barra e no painel (`SUPER + CTRL + A`) pelos hooks do
+   Claude Code: trabalhando, aguardando (notificação com botão que foca a
+   janela) ou concluído. `SUPER + N` pula para quem espera.
+3. No par, cada parecer do agy fica em `~/.local/state/jangada/agentes/parecer-*`
+   e a avaliação do Claude, apontamento por apontamento, em `avaliacao-*`. A
+   prévia do seletor mostra os dois.
+4. Para fechar: `jangada-agente-fim --integrar SESSAO` (ou `Alt+I` no seletor)
+   faz o merge na base, remove o worktree e apaga o ramo. `Ctrl+X` encerra sem
+   integrar e mantém o ramo.
+5. Depois de reiniciar, as sessões que ficaram sem tmux aparecem como
+   interrompidas: `Enter` no seletor ou `jangada-agentes --restaurar` reabre
+   cada uma na mesma pasta e na mesma conversa (`claude --resume`).
+
+Perfis de agente (outra conta, outro modelo, outro programa) ficam em
+`~/.config/jangada/agentes/NOME.conf`; veja `default/agentes/exemplo.conf`.
+Ganchos do usuário ficam em `~/.config/jangada/ganchos/EVENTO` ou
+`EVENTO.d/`, para os eventos `pos-update`, `pos-tema`, `pos-agente-fim` e
+`pos-par`. Um exemplo útil: `pos-tema` rodando `jangada-sddm aplicar`.
+
+## Várias máquinas
+
+O repositório é o mesmo em todas as máquinas; o que muda de uma para outra
+fica só em `~/.config/jangada`. Nenhum arquivo de `default/` cita monitor,
+placa de vídeo, usuário ou caminho de uma máquina específica.
+
+| O que muda por máquina | Onde fica |
+|---|---|
+| Posição, escala e modo dos monitores | `~/.config/jangada/hypr/monitores.lua` |
+| Teclado, atalhos e programas pessoais | `~/.config/jangada/hypr/usuario.lua` |
+| Fonte da barra por monitor | `~/.config/jangada/waybar/style.css` (`window#waybar.NOME`) |
+| Terminal, interface, GPU forçada, pastas de projetos | `~/.config/jangada/jangada.conf` |
+| Canal de atualização | `JANGADA_CANAL` no `jangada.conf` |
+| Perfis de agente e ganchos | `~/.config/jangada/agentes/`, `~/.config/jangada/ganchos/` |
+
+Roteiro para uma máquina nova:
+
+1. Clonar em `~/.local/share/jangada` a partir do remoto compartilhado (hoje
+   o repositório em `~/GoogleDrive/jangada`, o remoto `drive` da cópia de
+   trabalho) e rodar `bin/jangada-mapear`.
+2. `JANGADA_SIMULAR=1 ./install.sh`, conferir, e `./install.sh`.
+3. `jangada-importar` (se a máquina usava niri) e copiar o que servir dos
+   arquivos `.importado`.
+4. Ajustar `monitores.lua` com os nomes de `hyprctl monitors`.
+5. `jangada-verificar` e entrar na sessão **jangada**.
+
+A GPU é escolhida sozinha (a placa com monitor ligado), e as conferências de
+NVIDIA do `jangada-update` só rodam quando o módulo `nvidia` está carregado.
+
+### Canal de atualização
+
+`jangada-update` segue o ramo de `JANGADA_CANAL` (padrão `main`). A máquina
+onde o jangada é desenvolvido fica em `main`; as outras podem usar
+`JANGADA_CANAL=estavel`, que só avança quando a versão foi testada:
+
+```sh
+git -C ~/Projetos/jangada branch -f estavel main   # depois de testar
+git -C ~/Projetos/jangada push drive estavel
+```
+
+O `jangada-update` também tira a cópia instalada de um ramo `agente/...`, se
+ela tiver ficado num deles.
+
+## Desenvolvimento
+
+A cópia de trabalho fica em `~/Projetos/jangada` (`JANGADA_REPO`); a cópia
+instalada só recebe `git pull --ff-only`. Para testar a cópia de trabalho sem
+instalar, rode `JANGADA_PATH=$PWD bin/...`.
+
+| Teste | O que confere |
+|---|---|
+| `testes/verificar.sh` | shellcheck, sintaxe Lua, JSON e TOML, comandos citados na configuração, fluxo do `jangada-par` com claude e agy falsos, `jangada-importar` com um config.kdl de exemplo |
+| `testes/aninhado.sh` | sobe um Hyprland aninhado com a configuração (`--sem-usuario` só os padrões) e confere `configerrors` e o número de atalhos |
+
+Mudança que exige ajuste numa instalação existente ganha uma migração em
+`migrations/` (ver `migrations/README.md`). As revisões cruzadas e as
+avaliações estão indexadas em `revisao/README.md`.
+
 ## Estado
 
-Versão inicial, ainda não testada numa máquina real. Veja `revisao/` para as revisões feitas.
+Em uso diário no desktop desde 19/09/2026 (Hyprland 0.56, RTX 4060, dois
+monitores). Os itens do benchmark de gerenciadores de agentes estão feitos,
+com a situação de cada um em `revisao/benchmark-agentes.md` (seção 7). Ainda
+não foi instalado numa segunda máquina: a primeira instalação em outra
+máquina é o teste que falta para a portabilidade.

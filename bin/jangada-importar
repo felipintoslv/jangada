@@ -264,7 +264,7 @@ for _, corpo in blocos("binds"):
             if not args:
                 continue
             junto = " ".join(args)
-            if re.search(r"\bqs\b.*noctalia|noctalia-shell", junto):
+            if re.search(r"\bqs\b.*noctalia|noctalia-shell|\bnoctalia\s+msg\b", junto):
                 eq = next((v for k, v in NOCTALIA.items() if k in junto), None)
                 if not eq:
                     sem_par.append((tecla_n, "Noctalia: " + junto))
