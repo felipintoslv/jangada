@@ -224,5 +224,6 @@ case "${1:-}" in
     aplicar_papel "$img"
     recarregar
     aviso_sddm "$img"
+    "$JANGADA_PATH/bin/jangada-gancho" pos-tema "$img"
     ;;
 esac

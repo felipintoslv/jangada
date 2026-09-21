@@ -3,7 +3,10 @@
 #
 # Ordem: git pull do repositório, lista de atualizações, confirmação quando
 # houver mudança no Hyprland, pacman -Syu (snap-pac cria os snapshots),
-# AUR, migrações e, por fim, recarga com conferência de erros.
+# AUR, migrações e, por fim, recarga com conferência de erros. Depois confere
+# o initramfs e o driver NVIDIA e roda os ganchos pos-update do usuário.
+#
+# A cópia instalada acompanha o ramo JANGADA_CANAL (main ou estavel).
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
@@ -11,10 +14,23 @@ source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 # Pacotes do conjunto Hyprland. Atualizar só parte deles causa quebras
 # (bibliotecas com versões incompatíveis), por isso o jangada não os fixa com
 # IgnorePkg: avisa e deixa você decidir antes de atualizar tudo junto.
-conjunto_hypr='^(hyprland|aquamarine|hyprutils|hyprlang|hyprgraphics|hyprcursor|hyprwire|hyprtoolkit|hyprland-guiutils|hyprlock|hypridle|hyprpolkitagent|xdg-desktop-portal-hyprland|quickshell|noctalia-shell)$'
+# O Noctalia entra no pacote noctalia-shell, e em algumas máquinas no
+# noctalia-shell-git do AUR; os dois contam.
+conjunto_hypr='^(hyprland|aquamarine|hyprutils|hyprlang|hyprgraphics|hyprcursor|hyprwire|hyprtoolkit|hyprland-guiutils|hyprlock|hypridle|hyprpolkitagent|xdg-desktop-portal-hyprland|quickshell(-git)?|noctalia-shell(-git)?|noctalia-qs(-git)?)$'
 
-echo "==> repositório jangada"
+echo "==> repositório jangada (canal $JANGADA_CANAL)"
 if [[ -z "$(git -C "$JANGADA_PATH" status --porcelain)" ]]; then
+  git -C "$JANGADA_PATH" fetch --quiet origin || echo "!! não consegui buscar o repositório de origem"
+  ramo_atual="$(git -C "$JANGADA_PATH" rev-parse --abbrev-ref HEAD)"
+  if [[ "$ramo_atual" != "$JANGADA_CANAL" ]]; then
+    if git -C "$JANGADA_PATH" show-ref --verify --quiet "refs/heads/$JANGADA_CANAL"; then
+      git -C "$JANGADA_PATH" switch --quiet "$JANGADA_CANAL"
+    elif git -C "$JANGADA_PATH" show-ref --verify --quiet "refs/remotes/origin/$JANGADA_CANAL"; then
+      git -C "$JANGADA_PATH" switch --quiet --track "origin/$JANGADA_CANAL"
+    else
+      echo "!! o canal $JANGADA_CANAL não existe na origem; a cópia segue em $ramo_atual"
+    fi
+  fi
   git -C "$JANGADA_PATH" pull --ff-only || echo "!! não foi possível atualizar o repositório (siga com o sistema)"
 else
   echo "!! há alterações locais em $JANGADA_PATH; git pull não executado"
@@ -41,6 +57,11 @@ if [[ "$(findmnt -no FSTYPE /)" != "btrfs" ]] || ! pacman -Qq snap-pac >/dev/nul
   echo "!! sem snap-pac em btrfs: esta atualização não terá snapshot automático"
 fi
 
+# O pacman.log guarda a saída dos scriptlets (mkinitcpio, dkms): as linhas
+# novas depois da atualização mostram se a imagem de boot foi gerada inteira.
+log_pacman=/var/log/pacman.log
+linhas_antes="$(wc -l <"$log_pacman" 2>/dev/null || echo 0)"
+
 echo "==> pacman -Syu"
 sudo pacman -Syu
 
@@ -61,6 +82,41 @@ if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
 fi
 
 # Os módulos do kernel em execução somem de /usr/lib/modules quando o kernel é atualizado.
+reiniciar=0
 if [[ ! -d "/usr/lib/modules/$(uname -r)" ]]; then
   echo "!! o kernel foi atualizado; reinicie quando puder"
+  reiniciar=1
 fi
+
+echo "==> imagem de boot e módulos"
+erros_boot="$(tail -n +"$((linhas_antes + 1))" "$log_pacman" 2>/dev/null \
+  | grep -a 'ALPM-SCRIPTLET' | grep -aE '==> ERROR|errors were encountered|dkms.*(error|failed)|Error! ' || true)"
+if [[ -n "$erros_boot" ]]; then
+  echo "!! a atualização registrou erros na geração da imagem de boot ou dos módulos:"
+  printf '%s\n' "$erros_boot" | sed 's/^/   /'
+  echo "   confira antes de reiniciar (sudo mkinitcpio -P refaz as imagens)"
+else
+  echo "sem erros de mkinitcpio ou dkms nesta atualização"
+fi
+
+# Driver NVIDIA: depois de atualizar o nvidia-utils sem reiniciar, o módulo
+# carregado fica na versão antiga e as bibliotecas na nova. Jogos e o próprio
+# Hyprland falham com erros de versão até o reboot. O lib32 fora de passo tem o
+# mesmo efeito nos jogos de 32 bits.
+if [[ -r /sys/module/nvidia/version ]] && pacman -Qq nvidia-utils >/dev/null 2>&1; then
+  carregado="$(</sys/module/nvidia/version)"
+  instalado="$(pacman -Q nvidia-utils | awk '{print $2}')"; instalado="${instalado%-*}"
+  if [[ "$carregado" != "$instalado" ]]; then
+    echo "!! driver NVIDIA carregado $carregado, instalado $instalado; reinicie antes de abrir jogos"
+    reiniciar=1
+  else
+    echo "driver NVIDIA $carregado carregado e instalado"
+  fi
+  if pacman -Qq lib32-nvidia-utils >/dev/null 2>&1; then
+    lib32="$(pacman -Q lib32-nvidia-utils | awk '{print $2}')"; lib32="${lib32%-*}"
+    [[ "$lib32" == "$instalado" ]] || echo "!! lib32-nvidia-utils $lib32 diferente de nvidia-utils $instalado"
+  fi
+fi
+((reiniciar)) && echo "!! reinicie quando puder"
+
+"$JANGADA_PATH/bin/jangada-gancho" pos-update

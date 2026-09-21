@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Roda os ganchos do usuário para um evento do jangada.
+#
+# Uso: jangada-gancho EVENTO [argumentos]
+#
+# Procura ~/.config/jangada/ganchos/EVENTO e os executáveis em
+# ~/.config/jangada/ganchos/EVENTO.d/, em ordem de nome, e passa os
+# argumentos a cada um. Um gancho que falha gera aviso, mas não interrompe os
+# outros nem o comando que chamou. Eventos: pos-update, pos-tema,
+# pos-agente-fim (sessão) e pos-par (sessão, estado).
+set -uo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+evento="${1:-}"
+case "$evento" in
+  ""|-h|--ajuda) sed -n '2,10s/^# \{0,1\}//p' "$0"; exit 0 ;;
+esac
+shift
+[[ "$evento" =~ ^[a-z0-9-]+$ ]] || { echo "evento inválido: $evento" >&2; exit 1; }
+
+dir="$JANGADA_CONFIG/ganchos"
+ganchos=()
+[[ -x "$dir/$evento" && -f "$dir/$evento" ]] && ganchos+=("$dir/$evento")
+for g in "$dir/$evento.d"/*; do
+  [[ -f "$g" && -x "$g" ]] && ganchos+=("$g")
+done
+for g in "${ganchos[@]}"; do
+  "$g" "$@" || echo "!! gancho $g saiu com erro ($?)" >&2
+done
+exit 0

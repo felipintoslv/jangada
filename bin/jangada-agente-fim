@@ -130,6 +130,7 @@ limpar() {
   fi
   rm -f "$arq"
   echo "sessão encerrada: $s"
+  "$JANGADA_PATH/bin/jangada-gancho" pos-agente-fim "$s"
 }
 
 if [[ "${JANGADA_SESSAO:-}" == "$s" ]]; then

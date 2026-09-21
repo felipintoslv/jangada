@@ -657,3 +657,5 @@ else
     notify-send -a "jangada-par" -u critical "Tarefa requer conferência" "$sessao possui itens pendentes."
   fi
 fi
+
+"$JANGADA_PATH/bin/jangada-gancho" pos-par "$sessao" "$(jq -r '.estado // ""' "$estado_dir/$sessao.json" 2>/dev/null || true)"
