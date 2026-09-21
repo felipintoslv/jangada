@@ -12,12 +12,13 @@ apontamento, com teste de cada afirmação.
 |---|---|---|---|
 | 1 | `((worktree_novo)) && ...` abortaria o jangada-agente com `set -e` | **Rejeitado (incorreto)** | nenhuma; trocar por `if` é opcional |
 | 2 | `((copiados + ligados)) && echo` abortaria o preparo | **Rejeitado (incorreto)** | nenhuma; trocar por `if` é opcional |
-| 3 | `git ls-files` devolve caminho com acento entre aspas e em octal | Aceito, com outra correção | a decidir |
+| 3 | `git ls-files` devolve caminho com acento entre aspas e em octal | Aceito, com outra correção | corrigido (`-z`) |
 | 4 | Título da janela comparado por igualdade exata no `--proximo` | Rejeitado | nenhuma |
-| 5 | `reflink_provavel` falha entre subvolumes btrfs | Aceito em parte, com outra correção | a decidir |
+| 5 | `reflink_provavel` falha entre subvolumes btrfs | Aceito em parte, com outra correção | corrigido (UUID do `findmnt`) |
 
 Achado fora da revisão, anterior a estes commits: `listar` do
 `jangada-agentes` perde campos quando um deles vem vazio (detalhe no fim).
+Corrigido junto.
 
 ## Detalhes
 
@@ -82,3 +83,23 @@ gravados hoje sempre têm `dir`, então não aparece no uso normal. Surgiu nos
 testes do `--proximo`, com estados montados à mão. Correção possível: trocar a
 tabulação por um separador que não seja espaço em branco (`\x1f`) no jq e no
 `read`, ou ler cada campo com seu próprio `jq -r`.
+
+## Correções aplicadas (21/09/2026)
+
+Autorizadas pelo Felipe: 3, 5 e o achado do `listar`. Os apontamentos 1, 2 e
+4 ficaram como estão.
+
+- **3.** `git ls-files -z` com `mapfile -d ''`. Testado com `dados área/`,
+  `saída/`, `meu arquivo.env` e `dados"aspas`: os quatro copiados, `git
+  status` do worktree limpo.
+- **5.** `reflink_provavel` compara o UUID do sistema de arquivos
+  (`findmnt -no UUID -T`), com o `st_dev` como alternativa quando o `findmnt`
+  não responde. Testado: `~/Projetos` e `~/.local/share` dão sim; `~/Projetos`
+  e `/` (outro btrfs, outro disco) e `/tmp` (tmpfs) dão não. O caso de dois
+  subvolumes do mesmo btrfs não pôde ser testado nesta máquina.
+- **listar.** Os campos passam a ser separados por `\x1f` dentro do script
+  (no jq, no `read` de `listar` e nos dois laços que leem a saída: dica da
+  barra e `--monitor`). A saída de `--lista` continua em TSV, para awk, fzf e
+  fastfetch. O jq converte cada campo com `tostring`, porque o `gsub` falha em
+  número onde o `@tsv` aceitava. Testado com sessão sem `dir` (volta a
+  aparecer) e sem `ramo` (a tarefa fica no campo certo da dica).

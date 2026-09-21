@@ -55,14 +55,25 @@ caminho_seguro() {
   return 0
 }
 
-# Reflink só existe dentro da mesma partição btrfs (ou xfs com reflink). Nos
-# outros casos o cp --reflink=auto cai numa cópia comum, de tamanho inteiro.
+# Reflink só existe dentro do mesmo sistema de arquivos btrfs (ou xfs com
+# reflink). Nos outros casos o cp --reflink=auto cai numa cópia comum, de
+# tamanho inteiro. A comparação é pelo UUID do sistema de arquivos: no btrfs
+# cada subvolume tem st_dev e f_fsid próprios, mas o reflink funciona entre
+# subvolumes.
 reflink_provavel() {
-  [[ "$(stat -c %d "$raiz")" == "$(stat -c %d "$worktree")" ]] || return 1
+  local u1 u2
   case "$(stat -f -c %T "$raiz")" in
-    btrfs|xfs) return 0 ;;
+    btrfs|xfs) ;;
     *) return 1 ;;
   esac
+  u1="$(findmnt -no UUID -T "$raiz" 2>/dev/null || true)"
+  u2="$(findmnt -no UUID -T "$worktree" 2>/dev/null || true)"
+  if [[ -n "$u1" && -n "$u2" ]]; then
+    [[ "$u1" == "$u2" ]]
+  else
+    # Sem findmnt ou sem UUID: volta à comparação de dispositivo.
+    [[ "$(stat -c %d "$raiz")" == "$(stat -c %d "$worktree")" ]]
+  fi
 }
 
 copiados=0; ligados=0
@@ -70,8 +81,10 @@ copiados=0; ligados=0
 # 1. Cópia do que o .worktreeinclude pede.
 if [[ -f "$raiz/.worktreeinclude" ]]; then
   # --directory resume uma pasta inteiramente fora do git numa linha só
-  # ("dados/"), em vez de listar arquivo por arquivo.
-  mapfile -t candidatos < <(git -C "$raiz" ls-files --others --ignored --directory \
+  # ("dados/"), em vez de listar arquivo por arquivo. Sem -z, o git põe entre
+  # aspas e em octal todo nome com acento ("dados \303\241rea/"), e o
+  # check-ignore abaixo descartava a pasta sem aviso.
+  mapfile -d '' -t candidatos < <(git -C "$raiz" ls-files -z --others --ignored --directory \
     --exclude-from="$raiz/.worktreeinclude" 2>/dev/null || true)
   itens=()
   for c in "${candidatos[@]}"; do

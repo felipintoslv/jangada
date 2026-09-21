@@ -26,6 +26,15 @@ mkdir -p "$estado_dir"
 # Horas que um estado final continua visível depois de o processo sair.
 guardar_horas="${JANGADA_AGENTES_GUARDAR:-24}"
 
+# Separador interno dos campos. A tabulação não serve para o read: ela conta
+# como espaço em branco no IFS, então duas seguidas viram uma e um campo vazio
+# desloca os seguintes (com "dir" vazio, a data caía em "dir" e a sessão
+# sumia como vencida). A saída de listar continua em TSV, para awk e fzf.
+US=$'\x1f'
+
+# TSV de listar convertido para o separador interno, para ler com IFS="$US".
+campos() { tr '\t' "$US" <<<"$1"; }
+
 sessoes_vivas() { "${JANGADA_TMUX[@]}" list-sessions -F '#S' 2>/dev/null || true; }
 
 # Estado de ciclo encerrado. O jangada-par não abre sessão no tmux e o processo
@@ -57,11 +66,11 @@ listar() {
     [[ -n "$s" ]] || continue
     arq="$estado_dir/$s.json"
     if [[ -f "$arq" ]]; then
-      dados="$(jq -r '[ (.estado // "ativo"), (.dir // ""), (.atualizado // ""), (.ramo // ""), ((.tarefa // "") | split("\n") | (.[0] // "") | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;") | if length > 50 then .[0:47] + "..." else . end) ] | @tsv' "$arq" 2>/dev/null || printf 'ativo\t\t\t\t\t')"
+      dados="$(jq -r '[ (.estado // "ativo"), (.dir // ""), (.atualizado // ""), (.ramo // ""), ((.tarefa // "") | split("\n") | (.[0] // "") | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;") | if length > 50 then .[0:47] + "..." else . end) ] | map(tostring | gsub("[\t\n\u001f]"; " ")) | join("\u001f")' "$arq" 2>/dev/null || printf 'ativo%s%s%s%s' "$US" "$US" "$US" "$US")"
     else
-      dados="$(printf 'ativo\t\t\t\t\t')"
+      dados="$(printf 'ativo%s%s%s%s' "$US" "$US" "$US" "$US")"
     fi
-    IFS=$'\t' read -r estado dir atualizado ramo tarefa <<<"$dados"
+    IFS="$US" read -r estado dir atualizado ramo tarefa <<<"$dados"
     printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado" "$ramo" "$tarefa"
   done <<<"$vivas"
 
@@ -70,8 +79,8 @@ listar() {
     s="$(basename "$arq" .json)"
     grep -qxF "$s" <<<"$vivas" && continue
     pid="$(jq -r '.pid // empty' "$arq" 2>/dev/null || true)"
-    dados="$(jq -r '[ (.estado // "ativo"), (.dir // ""), (.atualizado // ""), (.ramo // ""), ((.tarefa // "") | split("\n") | (.[0] // "") | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;") | if length > 50 then .[0:47] + "..." else . end) ] | @tsv' "$arq" 2>/dev/null || printf 'ativo\t\t\t\t\t')"
-    IFS=$'\t' read -r estado dir atualizado ramo tarefa <<<"$dados"
+    dados="$(jq -r '[ (.estado // "ativo"), (.dir // ""), (.atualizado // ""), (.ramo // ""), ((.tarefa // "") | split("\n") | (.[0] // "") | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;") | if length > 50 then .[0:47] + "..." else . end) ] | map(tostring | gsub("[\t\n\u001f]"; " ")) | join("\u001f")' "$arq" 2>/dev/null || printf 'ativo%s%s%s%s' "$US" "$US" "$US" "$US")"
+    IFS="$US" read -r estado dir atualizado ramo tarefa <<<"$dados"
     # Ou o processo ainda responde, ou o ciclo terminou e o resultado fica à
     # vista até alguém encerrar a sessão.
     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
@@ -248,7 +257,7 @@ case "${1:-}" in
     ((concluido > 0)) && texto+="  󰄬 $concluido"
     dica="󰚩 Sessões de agentes ($total):"
     cont=0
-    while IFS=$'\t' read -r est s _dir _atz ramo tarefa; do
+    while IFS="$US" read -r est s _dir _atz ramo tarefa; do
       [[ -n "$s" ]] || continue
       cont=$((cont + 1))
       if ((cont > 10)); then
@@ -263,7 +272,7 @@ case "${1:-}" in
       dica+=$'\n\n'"$simb $s [$est]"
       [[ -n "$ramo" ]] && dica+=$'\n   ramo: '"$ramo"
       [[ -n "$tarefa" ]] && dica+=$'\n   tarefa: '"$tarefa"
-    done <<<"$linhas"
+    done < <(campos "$linhas")
     if ((total > 10)); then
       dica+=$'\n\n... e mais '"$((total - 10))"' sessões'
     fi
@@ -302,9 +311,9 @@ case "${1:-}" in
       if [[ -z "$linhas" ]]; then
         echo "nenhum agente ativo. SUPER+A inicia um."
       else
-        while IFS=$'\t' read -r estado s dir atualizado _resto; do
+        while IFS="$US" read -r estado s dir atualizado _resto; do
           printf '%s  %-12s %-32s %s\n' "$(icone "$estado")" "$estado" "$s" "${atualizado:11:8}"
-        done <<<"$linhas"
+        done < <(campos "$linhas")
         # O estado é o primeiro campo da linha.
         if grep -qE '^(concluido|aguardando)' <<<"$linhas"; then
           printf '\nciclo encerrado fica na lista. Ctrl+X no seletor encerra a\n'
