@@ -21,12 +21,6 @@ window#waybar {
   font-size: 13px;
 }
 
-/* O monitor 4K (DP-3) usa scale = 2 no Hyprland, dobrando o tamanho dos pixels
-   lógicos. Reduzimos para 11px para igualar o tamanho físico ao ultrawide. */
-window#waybar.DP-3 {
-  font-size: 11px;
-}
-
 /* Ilhas flutuantes: esquerda, centro e direita em cápsulas independentes. */
 .modules-left,
 .modules-center,
