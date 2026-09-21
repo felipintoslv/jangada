@@ -76,7 +76,17 @@ fi
 
 echo "== hooks do Claude Code"
 if [[ -f "$HOME/.claude/settings.json" ]]; then
-  grep -q jangada-hook-claude "$HOME/.claude/settings.json" && ok "hooks instalados" || falha "hooks ausentes (rode ./install.sh 50)"
+  # Evento por evento: uma instalação antiga tem só parte dos hooks, e o
+  # grep simples dava tudo certo.
+  _faltam="$(jq -r --slurpfile p "$JANGADA_PATH/default/claude/hooks.json" '
+    ($p[0].hooks | keys) - [(.hooks // {}) | to_entries[]
+      | select([.value[]?.hooks[]?.command // ""] | any(test("jangada-hook-claude"))) | .key]
+    | join(" ")' "$HOME/.claude/settings.json" 2>/dev/null || echo "?")"
+  if [[ -z "$_faltam" ]]; then
+    ok "hooks instalados em todos os eventos"
+  else
+    falha "hooks ausentes nos eventos: $_faltam (rode jangada-migrar ou ./install.sh 50)"
+  fi
 else
   nota "$HOME/.claude/settings.json não existe"
 fi

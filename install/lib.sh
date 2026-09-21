@@ -179,3 +179,46 @@ ligar_skill_claude() {
   executar ln -sfn "$origem" "$destino"
   ok "skill do Claude Code ligada: $destino -> $origem"
 }
+
+# Mescla os hooks do jangada (default/claude/hooks.json) em
+# ~/.claude/settings.json, evento por evento. Um hook já presente, reconhecido
+# pelo comando sem o caminho (a cópia instalada pode ter mudado de lugar), não
+# é duplicado; hooks alheios ficam como estão. Rodar de novo não muda nada, e
+# por isso a mesma função serve à instalação e às migrações que trazem hooks
+# novos.
+mesclar_hooks_claude() {
+  local cfg="$HOME/.claude/settings.json" novos tmp
+  executar mkdir -p "$HOME/.claude"
+  [[ -f "$cfg" ]] || { simulando || echo '{}' >"$cfg"; }
+  novos="$(sed "s|@JANGADA_PATH@|$JANGADA_PATH|g" "$JANGADA_PATH/default/claude/hooks.json")"
+  if simulando; then
+    info "[simulação] mesclaria os hooks do jangada em $cfg"
+    return 0
+  fi
+  tmp="$(mktemp)"
+  if ! jq --argjson novos "$novos" '
+      def chave: (.command // "") | sub("^.*/bin/"; "");
+      def comandos: [.[]?.hooks[]? | chave];
+      .hooks = (
+        (.hooks // {}) as $atuais
+        | reduce ($novos.hooks | keys[]) as $ev ($atuais;
+            (.[$ev] // []) as $lista
+            | .[$ev] = $lista + [
+                $novos.hooks[$ev][]
+                | select((.hooks | map(chave)) - ($lista | comandos) | length > 0)
+              ])
+      )' "$cfg" >"$tmp"; then
+    rm -f "$tmp"
+    aviso "não consegui ler $cfg; hooks não mesclados"
+    return 0
+  fi
+  # Compara o conteúdo, não o texto: o jq reformata o arquivo inteiro.
+  if [[ "$(jq -cS . "$tmp")" == "$(jq -cS . "$cfg")" ]]; then
+    rm -f "$tmp"
+    ok "hooks do Claude Code já instalados"
+    return 0
+  fi
+  copia_seguranca "$cfg"
+  mv "$tmp" "$cfg"
+  ok "hooks do Claude Code mesclados em $cfg"
+}

@@ -2,18 +2,53 @@
 # Hook do Claude Code: registra o estado da sessão e avisa quando o agente
 # pede atenção ou termina. Nunca falha, para não atrapalhar o agente.
 #
-# Uso (configurado em ~/.claude/settings.json): jangada-hook-claude trabalhando|aguardando|concluido
+# Uso (configurado em ~/.claude/settings.json):
+#   jangada-hook-claude trabalhando|aguardando|concluido|inicio|fim
 # Recebe o JSON do evento pela entrada padrão.
 
 {
-  estado="${1:-ativo}"
+  evento="${1:-ativo}"
   dir_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   # shellcheck source=bin/jangada-config
   source "$dir_bin/jangada-config"
 
   entrada="$(cat 2>/dev/null || true)"
-  mensagem="$(jq -r '.message // ""' <<<"$entrada" 2>/dev/null || true)"
-  cwd="$(jq -r '.cwd // ""' <<<"$entrada" 2>/dev/null || true)"
+  campo() { jq -r "$1 // \"\"" <<<"$entrada" 2>/dev/null || true; }
+  mensagem="$(campo .message)"
+  cwd="$(campo .cwd)"
+  conversa="$(campo .session_id)"
+  tipo="$(campo .notification_type)"
+
+  # O que cada evento significa para o painel. Estado vazio: só registra a
+  # conversa, sem mudar o estado nem avisar.
+  estado="$evento"; avisar=1
+  case "$evento" in
+    aguardando)
+      # O Claude Code 2.1 diz o motivo da notificação. Só pedido de permissão
+      # e pergunta ao usuário são espera de verdade; o idle_prompt chega um
+      # minuto depois do Stop, com o agente parado no prompt, e repetir o aviso
+      # crítico ali é ruído. Campo vazio (versões antigas): comportamento antigo.
+      case "$tipo" in
+        auth_success) exit 0 ;;
+        idle_prompt) estado="concluido"; avisar=0 ;;
+      esac
+      ;;
+    inicio)
+      # SessionStart também dispara no /clear e no --resume. O id novo substitui
+      # o anterior, que é o que o --restaurar precisa.
+      estado="iniciado"; avisar=0; mensagem=""
+      ;;
+    fim)
+      # SessionEnd: o Claude saiu. No /clear outra conversa começa em seguida,
+      # então nada muda no estado.
+      avisar=0
+      if [[ "$(campo .reason)" == clear ]]; then
+        estado=""
+      else
+        estado="concluido"; mensagem="Claude encerrado ($(campo .reason))"
+      fi
+      ;;
+  esac
 
   # A sessão vem da variável JANGADA_SESSAO, definida pelo jangada-agente ao
   # criar a sessão tmux. Agentes abertos fora dele só geram o aviso, sem estado.
@@ -24,15 +59,21 @@
     arq="$estado_dir/$sessao.json"
     agora="$(date -Is)"
     [[ -f "$arq" ]] || jq -n --arg s "$sessao" --arg d "${cwd:-$PWD}" '{sessao:$s, dir:$d}' >"$arq"
-    tmp="$(mktemp)"
-    jq --arg e "$estado" --arg m "$mensagem" --arg a "$agora" \
-      '.estado = $e | .mensagem = $m | .atualizado = $a' "$arq" >"$tmp" && mv "$tmp" "$arq"
+    tmp="$(mktemp "$arq.XXXXXX")"
+    # A conversa é gravada em todo evento: instalações sem o SessionStart
+    # também ficam com o id para o --restaurar.
+    jq --arg e "$estado" --arg m "$mensagem" --arg a "$agora" --arg c "$conversa" '
+      (if $c != "" then .conversa = $c else . end)
+      | (if $e != "" then .estado = $e | .mensagem = $m | .atualizado = $a else . end)
+    ' "$arq" >"$tmp" && mv "$tmp" "$arq"
+    rm -f "$tmp"
   fi
   nome="${sessao:-$(basename "${cwd:-$PWD}")}"
 
   # Avisos. A notificação com botão fica esperando em segundo plano; um clique
   # leva à janela do agente.
-  if [[ "$estado" == "aguardando" || "$estado" == "concluido" ]] && command -v notify-send >/dev/null 2>&1; then
+  if ((avisar)) && [[ "$estado" == "aguardando" || "$estado" == "concluido" ]] \
+     && command -v notify-send >/dev/null 2>&1; then
     if [[ "$estado" == "aguardando" ]]; then
       titulo="Agente aguardando: $nome"; urg=critical
     else

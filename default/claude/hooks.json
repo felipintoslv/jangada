@@ -39,6 +39,26 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "@JANGADA_PATH@/bin/jangada-hook-claude inicio"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "@JANGADA_PATH@/bin/jangada-hook-claude fim"
+          }
+        ]
+      }
     ]
   }
 }
