@@ -111,6 +111,37 @@ jangada_fuzzel() {
   fi
 }
 
+# Perfil de agente: ~/.config/jangada/agentes/NOME.conf, com linhas CHAVE=valor.
+# COMANDO e ARGS montam o comando; qualquer outra chave em maiúsculas vira
+# variável de ambiente da sessão (por exemplo ANTHROPIC_MODEL). O arquivo é
+# lido, não executado. Preenche PERFIL_COMANDO, PERFIL_ARGS e PERFIL_AMBIENTE
+# (lista de CHAVE=valor); falha se o perfil não existir.
+# shellcheck disable=SC2034  # PERFIL_* são lidas por quem carrega este arquivo
+jangada_perfil() {
+  local _arq="$JANGADA_CONFIG/agentes/$1.conf" _chave _valor
+  PERFIL_COMANDO=""; PERFIL_ARGS=""; PERFIL_AMBIENTE=()
+  [[ "$1" =~ ^[A-Za-z0-9_-]+$ && -r "$_arq" ]] || return 1
+  while IFS='=' read -r _chave _valor; do
+    [[ "$_chave" =~ ^[A-Z_][A-Z0-9_]*$ ]] || continue
+    _valor="${_valor/#\$HOME/$HOME}"
+    _valor="${_valor/#\~/$HOME}"
+    case "$_chave" in
+      COMANDO) PERFIL_COMANDO="$_valor" ;;
+      ARGS) PERFIL_ARGS="$_valor" ;;
+      *) PERFIL_AMBIENTE+=("$_chave=$_valor") ;;
+    esac
+  done < <(sed -e 's/^[[:space:]]*#.*//' -e 's/[[:space:]]*$//' "$_arq")
+  [[ -n "$PERFIL_COMANDO" ]] || PERFIL_COMANDO="$JANGADA_AGENTE"
+}
+
+jangada_perfis() {
+  local _a
+  for _a in "$JANGADA_CONFIG"/agentes/*.conf; do
+    [[ -e "$_a" ]] && basename "$_a" .conf
+  done
+  return 0
+}
+
 # Socket próprio do tmux para as sessões de agentes, separado do tmux pessoal.
 # shellcheck disable=SC2034  # usado pelos scripts que carregam este arquivo
 JANGADA_TMUX=(tmux -L jangada -f "$JANGADA_PATH/default/tmux/agentes.conf")

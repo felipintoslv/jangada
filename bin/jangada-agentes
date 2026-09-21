@@ -187,7 +187,15 @@ restaurar() {
       cmd+=" --continue"
     fi
   fi
-  "${JANGADA_TMUX[@]}" new-session -d -s "$s" -c "$dir" -e "JANGADA_SESSAO=$s"
+  # O ambiente do perfil é relido do arquivo, e não guardado no estado: pode
+  # trazer chave de API.
+  local -a amb=(-e "JANGADA_SESSAO=$s")
+  local perfil v
+  perfil="$(jq -r '.perfil // ""' "$arq")"
+  if [[ -n "$perfil" ]] && jangada_perfil "$perfil"; then
+    for v in "${PERFIL_AMBIENTE[@]}"; do amb+=(-e "$v"); done
+  fi
+  "${JANGADA_TMUX[@]}" new-session -d -s "$s" -c "$dir" "${amb[@]}"
   marcar "$arq" iniciado "restaurada"
   "${JANGADA_TMUX[@]}" send-keys -t "=$s:" "$cmd" Enter
   echo "restaurada: $s"
