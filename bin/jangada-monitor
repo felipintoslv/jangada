@@ -13,4 +13,6 @@ elif command -v htop >/dev/null 2>&1; then
   mon="htop"
 fi
 
-exec "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.monitor --titulo "Monitor do Sistema" -e "$mon"
+# Solto do processo que chamou: vindo de um clique na waybar, um terminal em
+# primeiro plano prende o módulo daquela barra até a janela fechar.
+setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.monitor --titulo "Monitor do Sistema" -e "$mon"

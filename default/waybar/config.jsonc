@@ -51,12 +51,16 @@
 
   // Vazio quando não há atualização: a waybar recolhe o módulo sozinha, e
   // assim o espaço só é ocupado quando há o que fazer.
+  // O terminal do update roda solto (setsid -f): em primeiro plano ele prendia
+  // o módulo da barra clicada até fechar. Solto, a contagem é refeita pelo
+  // sinal 8 quando o terminal fecha, e não só dali a uma hora.
   "custom/atualizacoes": {
     "exec": "$JANGADA_PATH/bin/jangada-atualizacoes --waybar",
     "return-type": "json",
     "interval": 3600,
+    "signal": 8,
     "format": "{}",
-    "on-click": "$JANGADA_PATH/bin/jangada-terminal --titulo 'jangada update' -e $JANGADA_PATH/bin/jangada-update",
+    "on-click": "setsid -f sh -c \"$JANGADA_PATH/bin/jangada-terminal --titulo 'jangada update' -e $JANGADA_PATH/bin/jangada-update; pkill -RTMIN+8 -x waybar\"",
     "tooltip": true
   },
 
