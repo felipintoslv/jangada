@@ -1,17 +1,24 @@
 #!/usr/bin/env bash
 # Encerra uma sessão de agente e remove o worktree, conferindo alterações pendentes.
 # O ramo agente/<nome> é mantido; apague-o com git branch -d quando quiser.
+# Com --integrar, antes mescla o ramo na base (merge --no-ff no repositório
+# principal) e, depois da limpeza, apaga o ramo já integrado.
 #
-# Uso: jangada-agente-fim SESSAO
+# Uso: jangada-agente-fim [--integrar] SESSAO
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
-s="${1:?informe a sessão (veja jangada-agentes --lista)}"
-case "$s" in
-  -h|--ajuda) sed -n '2,5s/^# \{0,1\}//p' "$0"; exit 0 ;;
-  -*) echo "opção desconhecida: $s" >&2; exit 1 ;;
-esac
+integrar=0; s=""
+while (($#)); do
+  case "$1" in
+    -h|--ajuda) sed -n '2,8s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    --integrar) integrar=1; shift ;;
+    -*) echo "opção desconhecida: $1" >&2; exit 1 ;;
+    *) [[ -z "$s" ]] || { echo "sessão repetida: $1" >&2; exit 1; }; s="$1"; shift ;;
+  esac
+done
+[[ -n "$s" ]] || { echo "informe a sessão (veja jangada-agentes --lista)" >&2; exit 1; }
 arq="$JANGADA_ESTADO/agentes/$s.json"
 
 # Sem arquivo de estado e sem sessão no tmux não há o que encerrar. Sem esta
@@ -44,6 +51,39 @@ confirmar() {
   [[ "${r,,}" == s* ]]
 }
 
+# Integração: as mesmas conferências da função concluir do shell, feitas antes
+# de qualquer limpeza. Se o merge falhar, nada é removido.
+apagar_ramo=0
+if ((integrar)); then
+  [[ -n "$ramo" && -n "$base" && -n "$raiz" ]] \
+    || { echo "a sessão $s não tem ramo próprio (trabalho direto no repositório); nada a integrar" >&2; exit 1; }
+  if [[ -n "$worktree" && -d "$worktree" && -n "$(git -C "$worktree" status --porcelain)" ]]; then
+    echo "alterações não salvas em commit no worktree $worktree:" >&2
+    git -C "$worktree" status --short | head -20 >&2
+    echo "faça commit delas (ou descarte) antes de integrar" >&2
+    exit 1
+  fi
+  atual="$(git -C "$raiz" rev-parse --abbrev-ref HEAD)"
+  if [[ "$atual" != "$base" ]]; then
+    echo "o repositório principal ($raiz) está em '$atual', não em '$base'; troque para $base e rode de novo" >&2
+    exit 1
+  fi
+  novos="$(git -C "$raiz" log --oneline "$base..$ramo" 2>/dev/null || true)"
+  if [[ -z "$novos" ]]; then
+    echo "o ramo $ramo não tem commits além de $base; nada a integrar"
+  else
+    echo "commits de $ramo a integrar em $base ($raiz):"
+    printf '%s\n' "$novos" | head -30
+    confirmar "mesclar e encerrar a sessão?" || { echo "nada foi feito"; exit 1; }
+    if ! git -C "$raiz" merge --no-ff -m "Integra $ramo" "$ramo"; then
+      echo "o merge falhou; resolva em $raiz (git merge --abort desfaz). A sessão foi mantida." >&2
+      exit 1
+    fi
+    echo "integrado em $base"
+  fi
+  apagar_ramo=1
+fi
+
 forcar=0
 if [[ -n "$worktree" && -d "$worktree" ]]; then
   pendentes="$(git -C "$worktree" status --porcelain)"
@@ -53,7 +93,7 @@ if [[ -n "$worktree" && -d "$worktree" ]]; then
     confirmar "descartar essas alterações e remover o worktree?" || { echo "nada foi feito"; exit 1; }
     forcar=1
   fi
-  if [[ -n "$base" && -n "$ramo" ]]; then
+  if ((!integrar)) && [[ -n "$base" && -n "$ramo" ]]; then
     novos="$(git -C "$raiz" log --oneline "$base..$ramo" 2>/dev/null || true)"
     if [[ -n "$novos" ]]; then
       echo "commits no ramo $ramo que não estão em $base (continuarão no ramo):"
@@ -80,7 +120,13 @@ limpar() {
       git -C "$raiz" worktree remove "$worktree"
     fi
     echo "worktree removido: $worktree"
-    [[ -n "$ramo" ]] && echo "ramo mantido: $ramo (apague com: git -C $raiz branch -d $ramo)"
+  fi
+  if ((apagar_ramo)); then
+    # -d, não -D: o git só apaga se o ramo estiver mesclado, o que confere a
+    # integração feita acima.
+    git -C "$raiz" branch -d "$ramo" && echo "ramo apagado: $ramo"
+  elif [[ -n "$ramo" && -n "$worktree" ]]; then
+    echo "ramo mantido: $ramo (apague com: git -C $raiz branch -d $ramo)"
   fi
   rm -f "$arq"
   echo "sessão encerrada: $s"
@@ -89,7 +135,7 @@ limpar() {
 if [[ "${JANGADA_SESSAO:-}" == "$s" ]]; then
   registro="$JANGADA_ESTADO/agentes/fim-$s.log"
   echo "encerrando a partir da própria sessão; registro em $registro"
-  export s worktree ramo raiz arq forcar matar_pid
+  export s worktree ramo raiz arq forcar matar_pid apagar_ramo
   export -f limpar
   # shellcheck disable=SC1090,SC2016
   setsid -f bash -c 'sleep 0.5; source "$1"; limpar' _ "$JANGADA_PATH/bin/jangada-config" >"$registro" 2>&1

@@ -11,11 +11,18 @@
 #   jangada-agentes --lista    lista simples: estado, sessão, diretório
 #   jangada-agentes --previa S conteúdo do painel de prévia da sessão S
 #   jangada-agentes --proximo  foca o próximo agente que espera (atalho SUPER+N)
+#   jangada-agentes --anterior volta ao agente focado antes do atual (SUPER+SHIFT+N)
+#   jangada-agentes --restaurar [S]  reabre as sessões interrompidas (ou só S)
 #
 # Sessões terminadas em "concluido" ou "aguardando" continuam na lista depois de
 # o processo sair: são o resultado do ciclo, não um processo vivo. Saem com
 # Ctrl+X no seletor, que encerra e remove o worktree, ou sozinhas depois de
 # JANGADA_AGENTES_GUARDAR horas (padrão 24).
+#
+# Sessão de agente cujo tmux morreu sem estado final (reboot, queda da sessão
+# gráfica) fica como "interrompido" por 7 dias: Enter no seletor, ou
+# --restaurar, reabre o agente na mesma pasta e, no Claude Code, na mesma
+# conversa (claude --resume).
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
@@ -25,6 +32,8 @@ mkdir -p "$estado_dir"
 
 # Horas que um estado final continua visível depois de o processo sair.
 guardar_horas="${JANGADA_AGENTES_GUARDAR:-24}"
+# O mesmo, para sessão interrompida: dá tempo de voltar de um fim de semana.
+guardar_interrompido_horas=168
 
 # Separador interno dos campos. A tabulação não serve para o read: ela conta
 # como espaço em branco no IFS, então duas seguidas viram uma e um campo vazio
@@ -50,12 +59,25 @@ estado_final() {
 # Um estado final velho demais para continuar ocupando o painel. Sem data, ou
 # com data ilegível, conta como vencido: é resto de versão antiga do arquivo.
 vencido() {
-  local quando="$1" marca agora
+  local quando="$1" horas="${2:-$guardar_horas}" marca agora
   [[ -n "$quando" ]] || return 0
   marca="$(date -d "$quando" +%s 2>/dev/null)" || return 0
   [[ -n "$marca" ]] || return 0
   agora="$(date +%s)"
-  (( agora - marca > guardar_horas * 3600 ))
+  (( agora - marca > horas * 3600 ))
+}
+
+# Estado guardado de uma sessão sem processo: final (resultado do ciclo) ou
+# interrompido (dá para restaurar), cada um com o seu prazo.
+guardado() {
+  local estado="$1" atualizado="$2"
+  if estado_final "$estado"; then
+    ! vencido "$atualizado"
+  elif [[ "$estado" == interrompido ]]; then
+    ! vencido "$atualizado" "$guardar_interrompido_horas"
+  else
+    return 1
+  fi
 }
 
 # Uma linha por sessão: estado<TAB>sessão<TAB>diretório<TAB>atualizado<TAB>ramo<TAB>tarefa
@@ -85,7 +107,7 @@ listar() {
     # vista até alguém encerrar a sessão.
     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
       printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado" "$ramo" "$tarefa"
-    elif estado_final "$estado" && ! vencido "$atualizado"; then
+    elif guardado "$estado" "$atualizado"; then
       printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado" "$ramo" "$tarefa"
     fi
   done
@@ -109,15 +131,103 @@ limpar_orfaos() {
     fi
     estado="$(jq -r '.estado // ""' "$arq" 2>/dev/null || true)"
     atualizado="$(jq -r '.atualizado // ""' "$arq" 2>/dev/null || true)"
-    if estado_final "$estado" && ! vencido "$atualizado"; then
+    if guardado "$estado" "$atualizado"; then
+      continue
+    fi
+    # Sessão de agente (sem pid; o do par tem) que estava em andamento quando o
+    # tmux morreu: vira interrompida em vez de sumir, para o --restaurar.
+    if [[ -z "$pid" ]] && [[ "$estado" != interrompido ]] && restauravel "$arq"; then
+      marcar "$arq" interrompido "tmux encerrado com o agente em $estado"
       continue
     fi
     rm -f "$arq"
   done
 }
 
+# Sessão que dá para reabrir: agente de terminal (o par não tem sessão no
+# tmux) com a pasta ainda no disco.
+restauravel() {
+  local arq="$1" agente dir
+  agente="$(jq -r '.agente // ""' "$arq" 2>/dev/null || true)"
+  dir="$(jq -r '.dir // ""' "$arq" 2>/dev/null || true)"
+  [[ -n "$agente" && "$agente" != par && -n "$dir" && -d "$dir" ]]
+}
+
+marcar() {
+  local arq="$1" tmp
+  tmp="$(mktemp "$arq.XXXXXX")" || return 0
+  if jq --arg e "$2" --arg m "$3" --arg a "$(date -Is)" \
+       '.estado = $e | .mensagem = $m | .atualizado = $a' "$arq" >"$tmp" 2>/dev/null; then
+    mv "$tmp" "$arq"
+  else
+    rm -f "$tmp"
+  fi
+}
+
+# Reabre a sessão S no tmux: na mesma pasta, com o mesmo agente e, no Claude
+# Code, na mesma conversa. Sem o id (instalação sem o hook novo) usa
+# --continue, que retoma a conversa mais recente daquela pasta.
+restaurar() {
+  local s="$1" arq agente dir conversa cmd
+  arq="$estado_dir/$s.json"
+  if "${JANGADA_TMUX[@]}" has-session -t "=$s" 2>/dev/null; then
+    return 0
+  fi
+  [[ -f "$arq" ]] || { echo "sem estado para $s" >&2; return 1; }
+  restauravel "$arq" || { echo "$s não pode ser restaurada (ciclo em par, ou pasta ausente)" >&2; return 1; }
+  agente="$(jq -r '.agente' "$arq")"
+  dir="$(jq -r '.dir' "$arq")"
+  conversa="$(jq -r '.conversa // ""' "$arq")"
+  cmd="$(jq -r '.comando // ""' "$arq")"
+  [[ -n "$cmd" ]] || { cmd="$agente"; [[ -n "$JANGADA_AGENTE_ARGS" ]] && cmd+=" $JANGADA_AGENTE_ARGS"; }
+  if [[ "$(basename "${agente%% *}")" == claude ]]; then
+    if [[ -n "$conversa" ]]; then
+      cmd+=" --resume $(printf '%q' "$conversa")"
+    else
+      cmd+=" --continue"
+    fi
+  fi
+  "${JANGADA_TMUX[@]}" new-session -d -s "$s" -c "$dir" -e "JANGADA_SESSAO=$s"
+  marcar "$arq" iniciado "restaurada"
+  "${JANGADA_TMUX[@]}" send-keys -t "=$s:" "$cmd" Enter
+  echo "restaurada: $s"
+}
+
+# Histórico de foco, para o --anterior: uma sessão por linha, a mais recente
+# no fim, sem repetição seguida.
+historico="$estado_dir/foco.historico"
+registrar_foco() {
+  local ultimo=""
+  [[ -f "$historico" ]] && ultimo="$(tail -n1 "$historico")"
+  [[ "$ultimo" == "$1" ]] && return 0
+  { [[ -f "$historico" ]] && tail -n 19 "$historico"; printf '%s\n' "$1"; } >"$historico.tmp" \
+    && mv "$historico.tmp" "$historico"
+}
+
+anterior() {
+  local atual="" s
+  [[ -f "$historico" ]] || { echo "nenhum agente focado ainda"; return 0; }
+  if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    atual="$(hyprctl activewindow -j 2>/dev/null | jq -r '.title // empty' 2>/dev/null || true)"
+  fi
+  # Da mais recente para a mais antiga: a primeira que ainda existe e não é a
+  # janela em foco. Assim, repetir o atalho alterna entre os dois últimos.
+  while read -r s; do
+    [[ -n "$s" && "$s" != "$atual" ]] || continue
+    "${JANGADA_TMUX[@]}" has-session -t "=$s" 2>/dev/null || continue
+    focar "$s"
+    return 0
+  done < <(tac "$historico")
+  notify-send -a jangada "Agentes" "nenhum agente anterior" 2>/dev/null || echo "nenhum agente anterior"
+}
+
 focar() {
   local s="$1" endereco=""
+  if [[ -f "$estado_dir/$s.json" ]] && ! "${JANGADA_TMUX[@]}" has-session -t "=$s" 2>/dev/null \
+     && restauravel "$estado_dir/$s.json"; then
+    restaurar "$s" >/dev/null || true
+  fi
+  "${JANGADA_TMUX[@]}" has-session -t "=$s" 2>/dev/null && registrar_foco "$s"
   if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
     endereco="$(hyprctl clients -j 2>/dev/null | jq -r --arg s "$s" 'map(select(.title == $s or (.title | test($s)))) | .[0].address // empty' 2>/dev/null || true)"
   fi
@@ -200,7 +310,11 @@ previa() {
     (if .worktree then "worktree: " + .worktree else empty end),
     (if .tarefa   then "tarefa:   " + ((.tarefa | split("\n") | .[0])[0:120]) else empty end)
   ' "$arq" 2>/dev/null || true
-  echo "(sessão encerrada; Ctrl+X remove o worktree e mantém o ramo)"
+  if restauravel "$arq"; then
+    echo "(sem processo; Enter restaura, Alt+I integra, Ctrl+X remove o worktree)"
+  else
+    echo "(sessão encerrada; Alt+I integra, Ctrl+X remove o worktree e mantém o ramo)"
+  fi
 
   # Ciclo em par: o que resta de útil é o parecer da última rodada e a
   # avaliação que o Claude fez dele, quando houver.
@@ -237,6 +351,7 @@ icone() {
     aguardando) printf '󰂞' ;;
     trabalhando) printf '󰑮' ;;
     concluido) printf '󰄬' ;;
+    interrompido) printf '󰜺' ;;
     *) printf '󰚩' ;;
   esac
 }
@@ -256,6 +371,7 @@ case "${1:-}" in
     aguardando="$(awk -F'\t' '$1=="aguardando"' <<<"$linhas" | wc -l)"
     trabalhando="$(awk -F'\t' '$1=="trabalhando"' <<<"$linhas" | wc -l)"
     concluido="$(awk -F'\t' '$1=="concluido"' <<<"$linhas" | wc -l)"
+    interrompido="$(awk -F'\t' '$1=="interrompido"' <<<"$linhas" | wc -l)"
     # Precedência do que pede atenção: quem espera resposta vem antes de quem
     # está rodando, e o que já terminou bem fica por último.
     classe="ativo"
@@ -266,6 +382,7 @@ case "${1:-}" in
     ((trabalhando > 0)) && texto+="  󰑮 $trabalhando"
     ((aguardando > 0)) && texto+="  󰂞 $aguardando"
     ((concluido > 0)) && texto+="  󰄬 $concluido"
+    ((interrompido > 0)) && texto+="  󰜺 $interrompido"
     dica="󰚩 Sessões de agentes ($total):"
     cont=0
     while IFS="$US" read -r est s _dir _atz ramo tarefa; do
@@ -278,6 +395,7 @@ case "${1:-}" in
         aguardando) simb="󰂞" ;;
         trabalhando) simb="󰑮" ;;
         concluido) simb="󰄬" ;;
+        interrompido) simb="󰜺" ;;
         *) simb="●" ;;
       esac
       dica+=$'\n\n'"$simb $s [$est]"
@@ -298,6 +416,22 @@ case "${1:-}" in
     ;;
   --proximo)
     proximo
+    ;;
+  --anterior)
+    anterior
+    ;;
+  --restaurar)
+    limpar_orfaos
+    if [[ -n "${2:-}" ]]; then
+      restaurar "$2"
+    else
+      n=0
+      while IFS=$'\t' read -r est s _resto; do
+        [[ "$est" == interrompido ]] || continue
+        restaurar "$s" && n=$((n + 1))
+      done < <(listar)
+      echo "sessões restauradas: $n"
+    fi
     ;;
   --janela)
     # Solto do processo que chamou, como no --painel. A waybar espera o fim do
@@ -338,19 +472,20 @@ case "${1:-}" in
     limpar_orfaos
     escolha="$(listar | awk -F'\t' '{printf "%s\t%s\t%s\n", $1, $2, $3}' | fzf \
       --delimiter '\t' --with-nth 1,2 --prompt 'agente > ' --reverse \
-      --header 'Enter: abrir   Ctrl+X: encerrar' \
-      --expect ctrl-x \
+      --header 'Enter: abrir (ou restaurar)   Alt+I: integrar e encerrar   Ctrl+X: encerrar' \
+      --expect ctrl-x,alt-i \
       --preview "'$0' --previa {2}")" || exit 0
     tecla="$(head -1 <<<"$escolha")"
     s="$(sed -n 2p <<<"$escolha" | cut -f2)"
     [[ -n "$s" ]] || exit 0
-    if [[ "$tecla" == "ctrl-x" ]]; then
-      exec "$JANGADA_PATH/bin/jangada-agente-fim" "$s"
-    fi
+    case "$tecla" in
+      ctrl-x) exec "$JANGADA_PATH/bin/jangada-agente-fim" "$s" ;;
+      alt-i) exec "$JANGADA_PATH/bin/jangada-agente-fim" --integrar "$s" ;;
+    esac
     focar "$s"
     ;;
   -h|--ajuda)
-    sed -n '2,18s/^# \{0,1\}//p' "$0"
+    sed -n '2,25s/^# \{0,1\}//p' "$0"
     ;;
   *)
     echo "opção desconhecida: $1" >&2; exit 1
