@@ -371,8 +371,15 @@ case "${1:-}" in
   --waybar)
     limpar_orfaos
     linhas="$(listar)"
+    # Consumo do Claude no bloco de 5 horas, com cache próprio de 60 s.
+    consumo=""
+    if [[ -d "$HOME/.claude/projects" ]]; then
+      consumo="$("$JANGADA_PATH/bin/jangada-consumo" --curto 2>/dev/null || true)"
+    fi
     if [[ -z "$linhas" ]]; then
-      jq -cn '{text:"󰚩 0", tooltip:"nenhum agente ativo\n\nSUPER+A: novo agente\nSUPER+P: tarefa em par\nSUPER+SHIFT+A: lista de agentes", class:"vazio"}'
+      dica=$'nenhum agente ativo\n\nSUPER+A: novo agente\nSUPER+P: tarefa em par\nSUPER+SHIFT+A: lista de agentes'
+      [[ -n "$consumo" ]] && dica+=$'\n\n'"$consumo"
+      jq -cn --arg d "$dica" '{text:"󰚩 0", tooltip:$d, class:"vazio"}'
       exit 0
     fi
     total="$(wc -l <<<"$linhas")"
@@ -413,6 +420,7 @@ case "${1:-}" in
     if ((total > 10)); then
       dica+=$'\n\n... e mais '"$((total - 10))"' sessões'
     fi
+    [[ -n "$consumo" ]] && dica+=$'\n\n'"$consumo"
     dica+=$'\n\nClique: lista de agentes · Clique direito: painel'
     jq -cn --arg t "$texto" --arg d "$dica" --arg c "$classe" '{text:$t, tooltip:$d, class:$c}'
     ;;
