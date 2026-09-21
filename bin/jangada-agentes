@@ -10,6 +10,7 @@
 #   jangada-agentes --focar S  foca a janela da sessão S ou abre uma nova
 #   jangada-agentes --lista    lista simples: estado, sessão, diretório
 #   jangada-agentes --previa S conteúdo do painel de prévia da sessão S
+#   jangada-agentes --proximo  foca o próximo agente que espera (atalho SUPER+N)
 #
 # Sessões terminadas em "concluido" ou "aguardando" continuam na lista depois de
 # o processo sair: são o resultado do ciclo, não um processo vivo. Saem com
@@ -116,6 +117,47 @@ focar() {
   elif "${JANGADA_TMUX[@]}" has-session -t "=$s" 2>/dev/null; then
     setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente \
       -e "${JANGADA_TMUX[@]}" attach -t "=$s" >/dev/null 2>&1
+  fi
+}
+
+# Próximo agente que pede atenção. Ordem: quem espera resposta, do mais antigo
+# para o mais novo, e depois quem terminou, do mais recente para o mais velho.
+# Sem estado guardado entre chamadas: se a janela em foco já é uma das
+# candidatas, vai para a seguinte, então apertar de novo percorre a fila.
+proximo() {
+  local linhas atual i n alvo=""
+  local -a fila=()
+  limpar_orfaos
+  linhas="$(listar)"
+  # "atualizado" vem de date -Is, que ordena como texto.
+  mapfile -t fila < <(
+    awk -F'\t' '$1=="aguardando" {print $4 "\t" $2}' <<<"$linhas" | sort | cut -f2
+    awk -F'\t' '$1=="concluido" {print $4 "\t" $2}' <<<"$linhas" | sort -r | cut -f2
+  )
+  n="${#fila[@]}"
+  if ((n == 0)) || [[ -z "${fila[0]}" ]]; then
+    notify-send -a jangada "Agentes" "nenhum agente esperando" 2>/dev/null || echo "nenhum agente esperando"
+    return 0
+  fi
+
+  atual=""
+  if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    atual="$(hyprctl activewindow -j 2>/dev/null | jq -r '.title // empty' 2>/dev/null || true)"
+  fi
+  alvo="${fila[0]}"
+  for ((i = 0; i < n; i++)); do
+    if [[ "${fila[i]}" == "$atual" ]]; then
+      alvo="${fila[(i + 1) % n]}"
+      break
+    fi
+  done
+
+  # Ciclo em par, ou agente cujo processo saiu: não há terminal para focar.
+  # O seletor mostra o resultado na prévia e oferece o Ctrl+X.
+  if "${JANGADA_TMUX[@]}" has-session -t "=$alvo" 2>/dev/null; then
+    focar "$alvo"
+  else
+    "$0" --janela
   fi
 }
 
@@ -234,6 +276,9 @@ case "${1:-}" in
   --previa)
     previa "${2:?informe a sessão}"
     ;;
+  --proximo)
+    proximo
+    ;;
   --janela)
     # Solto do processo que chamou, como no --painel. A waybar espera o fim do
     # on-click antes de rodar o exec do módulo de novo, então um terminal em
@@ -285,7 +330,7 @@ case "${1:-}" in
     focar "$s"
     ;;
   -h|--ajuda)
-    sed -n '2,16s/^# \{0,1\}//p' "$0"
+    sed -n '2,18s/^# \{0,1\}//p' "$0"
     ;;
   *)
     echo "opção desconhecida: $1" >&2; exit 1

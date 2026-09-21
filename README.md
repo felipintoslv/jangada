@@ -18,7 +18,7 @@ jangada/
 ├── install/               etapas numeradas, executadas em ordem
 │   └── pacotes/           listas de pacotes por grupo
 ├── bin/                   comandos jangada-* (entram no PATH)
-├── default/               padrões atualizáveis (hypr em Lua, waybar, matugen, tmux, hooks)
+├── default/               padrões atualizáveis (hypr em Lua, waybar, matugen, tmux, hooks e skill do Claude Code)
 ├── config/                modelos copiados uma única vez para ~/.config/jangada
 ├── shell/                 integração com bash e zsh
 ├── migrations/            ajustes aplicados em ordem a cada atualização
@@ -74,7 +74,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-agente` | escolhe um projeto, cria um worktree e abre um agente numa sessão tmux |
 | `jangada-par` | executa tarefa em par (Claude implementa, Antigravity revisa e Claude corrige) |
 | `jangada-shell` | inicia subshell enriquecida com comandos diretos de agentes e projetos |
-| `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir ou encerrar |
+| `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir ou encerrar (`--proximo` foca o próximo que espera) |
 | `jangada-agente-fim` | encerra uma sessão e remove o worktree, com conferência de alterações pendentes |
 | `jangada-atalhos` | mostra todos os atalhos ativos, lidos do próprio Hyprland (`--lista` para o terminal) |
 | `jangada-sddm aplicar` | deixa o jangada como única sessão no SDDM, com o tema de login do jangada (`restaurar`, `status`, `testar`) |
@@ -92,6 +92,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `SUPER + P` | tarefa em par (Claude + Antigravity) |
 | `SUPER + SHIFT + A` | lista de agentes |
 | `SUPER + CTRL + A` | painel de agentes (workspace especial) |
+| `SUPER + N` | próximo agente que espera resposta; repetir percorre a fila |
 | `SUPER + Esc` | menu jangada |
 | `SUPER + CTRL + R` | recarregar e mostrar erros de configuração |
 | `SUPER + /` | mostra todos os atalhos ativos, pesquisáveis |
@@ -100,6 +101,34 @@ A lista completa aparece no `SUPER + /`, que lê os atalhos do próprio Hyprland
 e por isso inclui também os que você definiu em
 `~/.config/jangada/hypr/usuario.lua`. Os padrões estão em
 `default/hypr/atalhos.lua`.
+
+## Worktrees dos agentes
+
+O `jangada-agente` e o `jangada-par` criam cada worktree a partir do último
+commit, então arquivos fora do git (`.Renviron`, `.env`, dados locais) ficam
+para trás. Ao criar um worktree novo, o `jangada-worktree-preparar` lê três
+arquivos opcionais na raiz do projeto:
+
+| Arquivo | Efeito |
+|---|---|
+| `.worktreeinclude` | padrões no formato do `.gitignore`; o que casar e for ignorado pelo git é copiado (mesmo formato do `--worktree` do Claude Code) |
+| `.jangada/links` | um caminho por linha; vira link simbólico para a pasta da raiz, sem cópia |
+| `.jangada/preparar.sh` | roda dentro do worktree por último, com `JANGADA_RAIZ` e `JANGADA_WORKTREE` no ambiente |
+
+A cópia usa `--reflink=auto`: em btrfs, na mesma partição, não ocupa espaço.
+Fora disso, uma cópia maior que `JANGADA_WORKTREE_COPIA_MAX` megabytes (padrão
+500) é recusada com aviso. Um link só é mantido se o git do worktree o ignorar;
+para pastas, escreva `/dados` no `.gitignore`, sem a barra final, porque o
+padrão `dados/` não cobre um link. Um worktree reaproveitado não é preparado de
+novo.
+
+## Skill do Claude Code
+
+A etapa de agentes liga `~/.claude/skills/jangada` a
+`default/claude/skills/jangada`. A skill reúne as regras do projeto e as
+pegadinhas já resolvidas (`hyprctl dispatch` só com Lua, hypridle que ignora
+`-c`, on-click da waybar com `setsid -f`, agy sem terminal), e o Claude Code a
+carrega quando a tarefa envolve a sessão, mesmo aberto em outro projeto.
 
 ## Estado
 
