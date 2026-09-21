@@ -91,7 +91,14 @@ if ((janela)); then
   exec "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente --titulo "Jangada Par" -e "$0" "${args[@]}"
 fi
 
-slug() { tr '[:upper:]' '[:lower:]' <<<"$1" | sed -e 's/[^a-z0-9_-]\+/-/g' -e 's/^-\+//' -e 's/-\+$//'; }
+# Nome seguro para ramo, pasta e sessão do tmux. Acentos viram a letra sem
+# acento antes do filtro: com locale UTF-8 o intervalo a-z do sed aceita "á",
+# e o ramo saía com acento.
+slug() {
+  { iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null <<<"$1" || printf '%s\n' "$1"; } \
+    | LC_ALL=C tr '[:upper:]' '[:lower:]' \
+    | LC_ALL=C sed -e 's/[^a-z0-9_-]\+/-/g' -e 's/^-\+//' -e 's/-\+$//'
+}
 
 listar_projetos() {
   {
