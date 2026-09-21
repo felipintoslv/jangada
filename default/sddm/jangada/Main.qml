@@ -3,13 +3,12 @@
 // de ações logo abaixo. Setas escolhem a ação, Enter executa. Digitar a senha
 // volta a seleção para "Entrar", para que Enter nunca desligue por engano.
 import QtQuick 2.15
-import QtQuick.Effects
 
 Rectangle {
     id: raiz
     width: 1920
     height: 1080
-    color: config.cor_tela || "#16130b"
+    color: config.cor_tela || "#141311"
 
     // Fonte medida numa tela de 1080 linhas e ampliada em telas maiores, para
     // que o 4K não mostre uma caixa minúscula.
@@ -17,12 +16,12 @@ Rectangle {
     readonly property real tamanhoFonte: (Number(config.tamanho) || 12) * 4 / 3 * escala
     readonly property string fonte: config.fonte || "JetBrainsMono Nerd Font"
 
-    readonly property color corCaixa: config.cor_caixa || "#f2222017"
-    readonly property color corTexto: config.cor_texto || "#e8e2d4"
-    readonly property color corDestaque: config.cor_destaque || "#dbc66f"
-    readonly property color corSelecao: config.cor_selecao || "#534600"
-    readonly property color corTextoSelecao: config.cor_texto_selecao || "#f8e287"
-    readonly property color corBorda: config.cor_borda || "#dbc66f"
+    readonly property color corCaixa: config.cor_caixa || "#f2211f1d"
+    readonly property color corTexto: config.cor_texto || "#e6e2de"
+    readonly property color corDestaque: config.cor_destaque || "#e6d9be"
+    readonly property color corSelecao: config.cor_selecao || "#c9bda3"
+    readonly property color corTextoSelecao: config.cor_texto_selecao || "#37301d"
+    readonly property color corBorda: config.cor_borda || "#e6d9be"
     readonly property color corErro: config.cor_erro || "#ffb4ab"
 
     // Só há uma sessão (o jangada-sddm restringe o diretório de sessões), mas
@@ -80,23 +79,89 @@ Rectangle {
         }
     }
 
-    Image {
-        id: papel
+    // Papel de parede montado para a proporção desta tela, como o jangada-tema
+    // faz na área de trabalho (o SDDM abre uma cópia do tema em cada tela). A
+    // figura aparece inteira e o espaço que sobra é completado conforme o
+    // ajuste: "espelho" reflete a borda da figura, "desfoque" usa a própria
+    // imagem ampliada e escurecida, "cor" deixa a cor de fundo do tema e
+    // "cobrir" amplia a figura até cobrir a tela, cortando o excesso.
+    readonly property string ajuste: config.ajuste || "espelho"
+    readonly property real proporcaoFigura: figura.implicitHeight > 0 ? figura.implicitWidth / figura.implicitHeight : width / height
+    readonly property bool telaMaisLarga: width / height > proporcaoFigura
+
+    Item {
+        id: fundo
         anchors.fill: parent
-        source: config.fundo || ""
-        fillMode: Image.PreserveAspectCrop
-        asynchronous: true
-        visible: false
+
+        // Fundo do desfoque: a imagem é carregada com 48 pixels de largura e
+        // ampliada com suavização, o que já a deixa borrada. Um MultiEffect
+        // aqui dentro, aninhado no desfoque geral da tela, fazia o greeter
+        // mostrar a figura ampliada e cortada.
+        Image {
+            anchors.fill: parent
+            source: config.fundo || ""
+            sourceSize.width: 48
+            fillMode: Image.PreserveAspectCrop
+            smooth: true
+            asynchronous: true
+            visible: ajuste === "desfoque" || ajuste === "espelho"
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            color: "black"
+            opacity: 0.4
+            visible: ajuste === "desfoque" || ajuste === "espelho"
+        }
+
+        Image {
+            id: figura
+            anchors.centerIn: parent
+            width: ajuste === "cobrir" ? parent.width : (telaMaisLarga ? parent.height * proporcaoFigura : parent.width)
+            height: ajuste === "cobrir" ? parent.height : (telaMaisLarga ? parent.height : parent.width / proporcaoFigura)
+            source: config.fundo || ""
+            fillMode: ajuste === "cobrir" ? Image.PreserveAspectCrop : Image.Stretch
+            asynchronous: true
+        }
+
+        // Faixas refletidas dos dois lados da figura (ou de cima e de baixo,
+        // numa tela mais alta que a imagem). Cada faixa mostra a figura
+        // espelhada inteira, alinhada pela borda que encosta nela, e corta o
+        // resto. Se a faixa for maior que a figura, o desfoque de baixo cobre
+        // o que faltar.
+        Repeater {
+            model: ajuste === "espelho" ? 2 : 0
+            delegate: Item {
+                required property int index
+                readonly property bool antes: index === 0
+                clip: true
+                x: telaMaisLarga ? (antes ? 0 : figura.x + figura.width) : 0
+                y: telaMaisLarga ? 0 : (antes ? 0 : figura.y + figura.height)
+                width: telaMaisLarga ? (antes ? figura.x : raiz.width - x) : raiz.width
+                height: telaMaisLarga ? raiz.height : (antes ? figura.y : raiz.height - y)
+
+                Image {
+                    width: figura.width
+                    height: figura.height
+                    x: telaMaisLarga && antes ? parent.width - width : 0
+                    y: !telaMaisLarga && antes ? parent.height - height : 0
+                    source: config.fundo || ""
+                    mirror: telaMaisLarga
+                    mirrorVertically: !telaMaisLarga
+                    asynchronous: true
+                }
+            }
+        }
     }
 
-    MultiEffect {
+    // Véu sobre a figura, para a caixa se destacar. O fundo não passa por
+    // desfoque: o MultiEffect sobre um item composto (camada) não acompanha o
+    // redimensionamento da janela e chegou a mostrar a figura ampliada e
+    // cortada. Imagens simples não têm esse problema.
+    Rectangle {
         anchors.fill: parent
-        source: papel
-        visible: papel.status === Image.Ready
-        blurEnabled: true
-        blur: 0.4
-        blurMax: 32
-        brightness: -0.1
+        color: "black"
+        opacity: 0.25
     }
 
     Text {

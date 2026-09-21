@@ -15,6 +15,15 @@ JANGADA_AGENTE_ARGS=
 JANGADA_PROJETOS="$HOME/Projetos"
 JANGADA_WORKTREES="$HOME/.local/share/jangada-worktrees"
 JANGADA_PAPEL=
+# Como o papel de parede ocupa uma tela de proporção diferente da imagem:
+# espelho (completa as laterais com o reflexo da borda), desfoque (com a
+# própria imagem ampliada e desfocada), cor (com a cor de fundo do tema) ou
+# cobrir (amplia até cobrir a tela e corta o que sobra).
+JANGADA_PAPEL_AJUSTE=espelho
+# Esquema do matugen usado pelo jangada-tema. O fidelity mantém a cor da
+# imagem; o tonal-spot, padrão do matugen, satura as cores de imagens quase
+# monocromáticas até virarem outra cor.
+JANGADA_TEMA_ESQUEMA=scheme-fidelity
 # Borda em que a barra fica: topo, base, esquerda ou direita. Gravado pelo
 # jangada-barra --posicao.
 JANGADA_BARRA_POSICAO=topo
@@ -34,7 +43,7 @@ fi
 
 export JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_INTERFACE JANGADA_TERMINAL \
   JANGADA_AGENTE JANGADA_AGENTE_ARGS JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL \
-  JANGADA_BARRA_POSICAO JANGADA_GPU
+  JANGADA_PAPEL_AJUSTE JANGADA_TEMA_ESQUEMA JANGADA_BARRA_POSICAO JANGADA_GPU
 
 # Dispositivos DRM com saída de vídeo conectada, um por linha, em caminho
 # estável (/dev/dri/by-path, porque a numeração de /dev/dri/cardN muda entre
@@ -109,7 +118,7 @@ JANGADA_TMUX=(tmux -L jangada -f "$JANGADA_PATH/default/tmux/agentes.conf")
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   for _v in JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_INTERFACE JANGADA_TERMINAL \
     JANGADA_AGENTE JANGADA_AGENTE_ARGS JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL \
-    JANGADA_BARRA_POSICAO JANGADA_GPU; do
+    JANGADA_PAPEL_AJUSTE JANGADA_TEMA_ESQUEMA JANGADA_BARRA_POSICAO JANGADA_GPU; do
     printf '%s=%s\n' "$_v" "${!_v}"
   done
 fi

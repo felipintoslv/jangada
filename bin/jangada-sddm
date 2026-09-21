@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Deixa o jangada como única sessão no SDDM e aplica o tema de login do
-# jangada, com as cores do menu (fuzzel) e o papel de parede atual.
+# jangada, com as cores geradas pelo jangada-tema e o papel de parede atual.
 #
 # Uso:
 #   jangada-sddm aplicar     instala o tema e mostra só a sessão jangada
@@ -24,17 +24,9 @@ SESSOES_X11="/usr/local/share/jangada/sessoes-x11"
 # vence. O prefixo garante que este venha depois do kde_settings.conf, que o
 # Plasma grava com o tema escolhido nas configurações dele.
 CONF="/etc/sddm.conf.d/zz-jangada.conf"
-FUZZEL_INI="$JANGADA_CONFIG/fuzzel/fuzzel.ini"
-
-# Cor do [colors] do fuzzel.ini (RRGGBBAA) no formato do Qt (#AARRGGBB).
-# O segundo argumento, se dado, substitui a transparência.
-cor_fuzzel() {
-  local valor
-  [[ -r "$FUZZEL_INI" ]] || return 1
-  valor="$(sed -n "/^\[colors\]/,/^\[/s/^$1=//p" "$FUZZEL_INI" | head -n1)"
-  [[ "$valor" =~ ^[0-9a-fA-F]{8}$ ]] || return 1
-  printf '#%s%s\n' "${2:-${valor:6:2}}" "${valor:0:6}"
-}
+# Cores da tela de login, geradas pelo matugen a partir do modelo
+# default/matugen/modelos/sddm.conf a cada jangada-tema.
+CORES="$JANGADA_CONFIG/sddm/theme.conf.user"
 
 conteudo_sessao() {
   printf '%s\n' \
@@ -60,23 +52,27 @@ conteudo_conf() {
 }
 
 # Monta o tema em um diretório: arquivos do repositório, papel de parede e
-# theme.conf.user com as cores atuais do fuzzel.
+# theme.conf.user com as cores do tema atual e o ajuste do papel de parede.
 preparar_tema() {
-  local destino="$1" ext="" chave cor
+  local destino="$1" ext=""
   cp "$TEMA_ORIGEM"/* "$destino/"
   if [[ -n "$JANGADA_PAPEL" && -f "$JANGADA_PAPEL" ]]; then
     ext="${JANGADA_PAPEL##*.}"
     cp "$JANGADA_PAPEL" "$destino/fundo.${ext,,}"
   fi
   {
-    echo "# Gerado pelo jangada-sddm a partir do fuzzel.ini. Não edite."
-    echo "[General]"
+    if [[ -r "$CORES" ]]; then
+      cat "$CORES"
+    else
+      echo "[General]"
+    fi
+    echo ""
+    echo "# Acrescentado pelo jangada-sddm."
     [[ -n "$ext" ]] && echo "fundo=fundo.${ext,,}"
-    cor="$(cor_fuzzel background ff)" && echo "cor_tela=$cor"
-    for chave in caixa:background texto:text destaque:match selecao:selection \
-      texto_selecao:selection-text borda:border; do
-      cor="$(cor_fuzzel "${chave#*:}")" && echo "cor_${chave%%:*}=$cor"
-    done
+    # A origem não é lida pelo tema; o jangada-tema compara com ela para
+    # avisar quando o login ficou com o papel de parede anterior.
+    echo "papel_origem=$JANGADA_PAPEL"
+    echo "ajuste=$JANGADA_PAPEL_AJUSTE"
   } >"$destino/theme.conf.user"
   chmod -R a+rX "$destino"
 }
@@ -102,7 +98,7 @@ gravar_root() {
 aplicar() {
   [[ $EUID -ne 0 ]] || morrer "execute como usuário comum; o comando pede sudo quando precisa"
   tem_comando sddm || morrer "sddm não está instalado"
-  [[ -r "$FUZZEL_INI" ]] || aviso "sem $FUZZEL_INI; o tema usa as cores padrão (rode jangada-tema)"
+  [[ -r "$CORES" ]] || aviso "sem $CORES; o tema usa as cores padrão (rode jangada-tema)"
 
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT

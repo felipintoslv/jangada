@@ -30,3 +30,7 @@ output_path = "~/.config/jangada/hyprlock/hyprlock.conf"
 [templates.ghostty]
 input_path = "./modelos/ghostty"
 output_path = "~/.config/jangada/ghostty/cores"
+
+[templates.sddm]
+input_path = "./modelos/sddm.conf"
+output_path = "~/.config/jangada/sddm/theme.conf.user"

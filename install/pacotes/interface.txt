@@ -9,6 +9,7 @@ waybar
 fuzzel
 mako
 swaybg
+imagemagick        # papel de parede sem corte em telas de outra proporção (jangada-tema)
 matugen            # geração de cores; pode estar no AUR como matugen ou matugen-bin
 wl-clipboard
 cliphist
