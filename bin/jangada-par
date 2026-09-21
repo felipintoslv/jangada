@@ -45,6 +45,16 @@ modelo=""; esforco="high"; tarefa=""
 # segue num pedido só, e o modelo do agy recusa acima de 1 milhão de tokens.
 DIFF_MAX=200000
 
+# Teto do prompt inteiro, em bytes. Ele vai como um argumento do agy, e o Linux
+# limita cada argumento a 131.072 bytes (MAX_ARG_STRLEN, 32 páginas): acima
+# disso o execve falha com "Lista de argumentos muito longa" (E2BIG). A folga
+# cobre o que o cálculo não vê.
+PROMPT_BYTES_MAX=126000
+
+# Tamanho em bytes, não em caracteres: com locale UTF-8, ${#x} conta
+# caracteres, e um acento ocupa 2 bytes no argumento.
+bytes() { local LC_ALL=C; printf '%s' "${#1}"; }
+
 while (($#)); do
   case "$1" in
     --janela) janela=1; shift ;;
@@ -159,9 +169,10 @@ if ((eh_git)) && [[ -n "$nome" ]]; then
 fi
 
 # Restos de execuções anteriores com o mesmo nome de sessão. Só o que é
-# descartável: o JSON bruto do agy e os logs sem conteúdo. Os pareceres ficam,
-# são o que o revisor escreveu, e o resumo final aponta para o desta vez.
-rm -f "$estado_dir/revisao-$sessao-r"*.json 2>/dev/null || true
+# descartável: o JSON bruto do agy, o diff salvo para ele e os logs sem
+# conteúdo. Os pareceres ficam, são o que o revisor escreveu, e o resumo final
+# aponta para o desta vez.
+rm -f "$estado_dir/revisao-$sessao-r"*.json "$estado_dir/revisao-$sessao-r"*.diff 2>/dev/null || true
 for _log in "$estado_dir/revisao-$sessao-r"*.log; do
   [[ -s "$_log" ]] || rm -f "$_log"
 done
@@ -337,6 +348,7 @@ Diretrizes para esta rodada:
 
   # O prompt inteiro vai num pedido só, e o modelo do agy corta em 1 milhão de
   # tokens. Um diff de arquivo gerado, ou de binário, passa disso sozinho.
+  diff_completo="$diff_conteudo"
   if ((${#diff_conteudo} > DIFF_MAX)); then
     aviso "diff de ${#diff_conteudo} caracteres; enviando os primeiros $DIFF_MAX ao revisor"
     diff_conteudo="${diff_conteudo:0:DIFF_MAX}
@@ -353,7 +365,8 @@ Diretrizes para esta rodada:
   traco
   atualizar_estado "trabalhando" "Rodada $rodada: Antigravity revisando"
 
-  prompt_agy="Você é o revisor técnico no protocolo de trabalho em par do Jangada.
+  montar_prompt_agy() {
+    prompt_agy="Você é o revisor técnico no protocolo de trabalho em par do Jangada.
 O agente Claude implementou a seguinte tarefa no projeto:
 $tarefa
 
@@ -391,10 +404,36 @@ STATUS: REVISAR
 seguido de uma lista numerada e clara com cada item que o Claude deve corrigir:
 1. [Arquivo e contexto]: [o que está incorreto e a instrução precisa de correção]
 2. ..."
+  }
+  montar_prompt_agy
 
+  # O diff inteiro fica num arquivo que o revisor pode ler; no prompt vai o
+  # pedaço que cabe no limite do argumento (PROMPT_BYTES_MAX).
   json_revisao="$estado_dir/revisao-$sessao-r$rodada.json"
   log_revisao="$estado_dir/revisao-$sessao-r$rodada.log"
+  diff_revisao="$estado_dir/revisao-$sessao-r$rodada.diff"
+  diff_cortado=0
+  if (( $(bytes "$prompt_agy") > PROMPT_BYTES_MAX )); then
+    printf '%s\n' "$diff_completo" >"$diff_revisao"
+    diff_inteiro="$diff_conteudo"
+    diff_conteudo=""
+    montar_prompt_agy
+    # 300 bytes para a nota de corte que substitui o fim do diff.
+    orcamento=$((PROMPT_BYTES_MAX - $(bytes "$prompt_agy") - 300))
+    ((orcamento < 0)) && orcamento=0
+    n=$orcamento
+    while ((n > 0)) && (( $(bytes "${diff_inteiro:0:n}") > orcamento )); do
+      n=$((n * 9 / 10))
+    done
+    aviso "prompt acima de $PROMPT_BYTES_MAX bytes; o diff vai cortado em $n caracteres, e inteiro em $diff_revisao"
+    diff_conteudo="${diff_inteiro:0:n}
+[... diff cortado aqui pelo jangada-par para caber no limite de argumento do agy; o diff completo está em $diff_revisao ...]"
+    montar_prompt_agy
+    diff_cortado=1
+  fi
+
   args_agy=(-p "$prompt_agy" --output-format json --effort "$esforco" --add-dir "$dir")
+  ((diff_cortado)) && args_agy+=(--add-dir "$estado_dir")
   [[ -n "$modelo" ]] && args_agy+=(--model "$modelo")
 
   # A captura vai por cano, em substituição de comando, e não por arquivo.
