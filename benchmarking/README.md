@@ -69,7 +69,7 @@ oficiais, coleções temáticas de dotfiles e módulos especializados:
 | hxreborn/waybar-claude-code | https://github.com/hxreborn/waybar-claude-code | 19 | MIT | Monitor de Claude Code em Go |
 | SirAllap/waybar-scripts-collection | https://github.com/SirAllap/waybar-scripts-collection | 17 | Sem licença explícita | Scripts de uso de Claude, GPU e calendário |
 | Marouan-chak/codexbar-waybar | https://github.com/Marouan-chak/codexbar-waybar | 12 | MIT | Ponte Waybar para CLI CodexBar com popover GTK4 |
-| raffaelemancuso/waybar-screenrecorder | https://github.com/raffaem/waybar-screenrecorder | 12 | MIT | Indicador de gravação de tela com sinais |
+| raffaem/waybar-screenrecorder | https://github.com/raffaem/waybar-screenrecorder | 12 | MIT | Indicador de gravação de tela com sinais |
 | kagetora66/waybar-internet-widget | https://github.com/kagetora66/waybar-internet-widget | 0 | Sem licença explícita | Script de latência e ping contínuo |
 | nicolasacchi/waybar-vpn-modules | https://github.com/nicolasacchi/waybar-vpn-modules | 0 | MIT | Módulos para Proton VPN e Tailscale |
 
@@ -151,8 +151,8 @@ Observações sobre sistema:
 | `tomat` | jolars/tomat (`docs/src/guide/integration/status-bars/waybar.md`, `examples/waybar-config.json`) | Temporizador Pomodoro em Rust com integração completa para Waybar (fases de trabalho, descanso e pausa) | Binário `tomat` (Rust) | Baixo em binário, mas usa polling de 1s para atualizar o contador visual | MIT |
 | `waybar-module-pomodoro` | Andeskjerf/waybar-module-pomodoro (`src/main.rs`) | Pomodoro simples com 4 ciclos e intervalos em binário Rust | Binário Rust | Baixo | Unlicense |
 | `waybar-pomodoro-timer` | niraletter/waybar-pomodoro-timer (`timer.sh`) | Cronômetro e Pomodoro em Bash puro com sons de alerta e ícones | `bash`, tocador de áudio (`mpv`) | Médio. Múltiplos forks de bash por segundo durante contagem | MIT |
-| `waybar-screenrecorder` | raffaelemancuso/waybar-screenrecorder (`screenrecorder`) | Indicador de gravação de tela com `wf-recorder`, com status na dica e controle por sinal | `wf-recorder`, `ffmpeg` | Zero quando inativo. Atualiza por sinal `pkill -RTMIN+1 waybar` | MIT |
-| `custom/cliphist` | JaKooLit/Hyprland-Dots (`config/waybar/ModulesCustom`) | Botão de área de transferência na barra que abre histórico no menu seletor | `cliphist`, `wl-clipboard`, `fuzzel` ou `rofi` | Zero. Módulo estático que só executa comando sob o clique | GPL-3.0 |
+| `waybar-screenrecorder` | raffaem/waybar-screenrecorder (`screenrecorder`) | Indicador de gravação de tela com `wf-recorder`, com status na dica e controle por sinal | `wf-recorder`, `ffmpeg` | Zero quando inativo. Atualiza por sinal `pkill -RTMIN+1 waybar` | MIT |
+| `custom/cliphist` | prasanthrangan/hyprdots (`Configs/.config/waybar/modules/cliphist.jsonc`) | Botão de área de transferência na barra que abre histórico no menu seletor | `cliphist`, `wl-clipboard`, `fuzzel` ou `rofi` | Zero. Módulo estático que só executa comando sob o clique | GPL-3.0 |
 | `nextmeeting` | chmouel/nextmeeting (`README.md`) | Próxima reunião do Google Agenda/CalDAV com contagem regressiva e links de videoconferência | `python`, `gcalcli` | Baixo com cache de 5 a 15 minutos | Apache-2.0 |
 
 Observações sobre produtividade:
@@ -238,11 +238,13 @@ e eficiência operacional.
   Waybar.
 
 ### 5. Botão de histórico de área de transferência (`custom/cliphist`)
-- Motivo: Recurso de alta utilidade prática no dia a dia de código. Um módulo
-  estático que não roda nenhum script em segundo plano (zero polling). O clique
-  com o botão esquerdo abre o menu seletor de histórico do `cliphist` formatado
-  no `fuzzel` (já integrado ao tema do Jangada), e o clique com botão direito
-  permite limpar o histórico.
+- Motivo: Recurso de alta utilidade prática no dia a dia de código. Inspirado
+  no módulo `custom/cliphist` do Hyprdots
+  (`Configs/.config/waybar/modules/cliphist.jsonc`), é um módulo estático que
+  não roda nenhum script em segundo plano (zero polling). O clique com o botão
+  esquerdo abre o menu seletor de histórico do `cliphist` formatado no `fuzzel`
+  (já integrado ao tema do Jangada), e o clique com botão direito permite limpar
+  o histórico.
 - Esforço estimado: Baixo.
 - Como encaixaria: Módulo `custom/cliphist` em `default/waybar/config.jsonc`
   apontando o `on-click` para comando com `cliphist`, `fuzzel` e `wl-copy`.
@@ -395,6 +397,7 @@ diretamente nos arquivos dos repositórios de referência clonados:
   - `waybar-vpn-modules`: https://github.com/nicolasacchi/waybar-vpn-modules (`scripts/vpn.sh`, `scripts/tailscale.sh`).
   - `waybar-internet-widget`: https://github.com/kagetora66/waybar-internet-widget (`internet_status.py`).
 - Módulos de produtividade e notificações:
+  - `custom/cliphist`: https://github.com/prasanthrangan/hyprdots (`Configs/.config/waybar/modules/cliphist.jsonc`).
   - `SwayNotificationCenter`: https://github.com/ErikReider/SwayNotificationCenter (`README.md`).
   - `tomat`: https://github.com/jolars/tomat (`docs/src/guide/integration/status-bars/waybar.md`).
   - `waybar-module-pomodoro`: https://github.com/Andeskjerf/waybar-module-pomodoro (`src/main.rs`).
