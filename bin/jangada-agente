@@ -78,7 +78,7 @@ fi
 PERFIL_AMBIENTE=()
 if [[ -n "$perfil" ]]; then
   if ! jangada_perfil "$perfil"; then
-    echo "perfil não encontrado: $JANGADA_CONFIG/agentes/$perfil.conf" >&2
+    echo "perfil não encontrado: $JANGADA_CONFIG/agentes/$perfil.conf nem $JANGADA_PATH/default/agentes/$perfil.conf" >&2
     echo "perfis existentes: $(jangada_perfis | tr '\n' ' ')" >&2
     exit 1
   fi
@@ -211,11 +211,13 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
 
   jq -n --arg sessao "$sessao" --arg dir "$dir" --arg raiz "$raiz" --arg worktree "$worktree" \
     --arg ramo "$ramo" --arg base "$base" --arg agente "$agente" --arg agora "$(date -Is)" \
+    --arg inicio "$( ((eh_git)) && git -C "$dir" rev-parse HEAD 2>/dev/null || true)" \
     --arg tarefa "$prompt" --arg perfil "$perfil" --arg comando "$cmd_base" \
     '{sessao:$sessao, dir:$dir, raiz:$raiz, worktree:$worktree, ramo:$ramo, base:$base,
       agente:$agente, comando:$comando, estado:"iniciado", mensagem:"", desde:$agora, atualizado:$agora}
      + (if $tarefa != "" then {tarefa:$tarefa} else {} end)
-     + (if $perfil != "" then {perfil:$perfil} else {} end)' \
+     + (if $perfil != "" then {perfil:$perfil} else {} end)
+     + (if $inicio != "" then {inicio:$inicio} else {} end)' \
     >"$estado_dir/$sessao.json"
 
   "${JANGADA_TMUX[@]}" send-keys -t "=$sessao:" "$cmd_agente" Enter

@@ -46,6 +46,7 @@ fi
 
 passo "JSON"
 jq empty default/claude/hooks.json || falha "hooks.json"
+jq empty default/agy/hooks.json || falha "agy/hooks.json"
 # config.jsonc tem comentários; remove as linhas de comentário antes de validar.
 sed 's#^[[:space:]]*//.*##' default/waybar/config.jsonc | jq empty || falha "waybar/config.jsonc"
 

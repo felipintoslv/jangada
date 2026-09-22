@@ -185,14 +185,14 @@ ligar_skill_claude() {
 # arquivo é um objeto de hooks com nome; o do jangada fica na chave "jangada",
 # substituída inteira, e os demais ficam como estão.
 mesclar_hooks_agy() {
-  local cfg="$HOME/.gemini/config/hooks.json" novos tmp
+  local cfg="$HOME/.gemini/config/hooks.json" novos tmp existia=0
   novos="$(sed "s|@JANGADA_PATH@|$JANGADA_PATH|g" "$JANGADA_PATH/default/agy/hooks.json")"
   if simulando; then
     info "[simulação] instalaria os hooks do jangada em $cfg"
     return 0
   fi
   mkdir -p "$(dirname "$cfg")"
-  [[ -f "$cfg" ]] || echo '{}' >"$cfg"
+  if [[ -f "$cfg" ]]; then existia=1; else echo '{}' >"$cfg"; fi
   tmp="$(mktemp)"
   if ! jq --argjson novos "$novos" '. + $novos' "$cfg" >"$tmp"; then
     rm -f "$tmp"
@@ -204,7 +204,8 @@ mesclar_hooks_agy() {
     ok "hooks do agy já instalados"
     return 0
   fi
-  copia_seguranca "$cfg"
+  # Arquivo criado agora não precisa de cópia de segurança.
+  ((existia)) && copia_seguranca "$cfg"
   mv "$tmp" "$cfg"
   ok "hooks do agy instalados em $cfg"
 }

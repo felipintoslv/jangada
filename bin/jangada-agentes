@@ -206,6 +206,8 @@ restaurar() {
       cmd+=" --conversation $(printf '%q' "$conversa")"
     elif [[ -n "$(jq -r '.worktree // ""' "$arq")" ]]; then
       cmd+=" --continue"
+    else
+      echo "$s: sem o id da conversa e sem worktree próprio; abrindo conversa nova" >&2
     fi
   fi
   # O ambiente do perfil é relido do arquivo, e não guardado no estado: pode

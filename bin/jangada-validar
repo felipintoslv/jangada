@@ -55,10 +55,11 @@ arq_estado=""
 rotulo="${sessao:-$(basename "$dir")}"
 rotulo="${rotulo//[^A-Za-z0-9_.-]/-}"
 
-tarefa=""
+tarefa=""; inicio=""
 if [[ -n "$arq_estado" ]]; then
   [[ -n "$base" ]] || base="$(jq -r '.base // ""' "$arq_estado")"
   tarefa="$(jq -r '.tarefa // ""' "$arq_estado")"
+  inicio="$(jq -r '.inicio // ""' "$arq_estado")"
 fi
 if [[ -z "$base" ]]; then
   for r in main master; do
@@ -67,9 +68,16 @@ if [[ -z "$base" ]]; then
 fi
 ponto=""
 [[ -n "$base" ]] && ponto="$(git -C "$dir" merge-base "$base" HEAD 2>/dev/null || true)"
-# No próprio ramo base (trabalho direto no repositório), o merge-base é o HEAD
-# e só o que está sem commit entra na revisão.
-[[ -n "$ponto" ]] || ponto="$(git -C "$dir" rev-parse HEAD)"
+# No próprio ramo base (trabalho direto no repositório, --direto), o merge-base
+# é o HEAD. Aí vale o commit em que a sessão começou, gravado pelo
+# jangada-agente, para os commits do agente entrarem na revisão; sem ele, só o
+# que está sem commit.
+cabeca="$(git -C "$dir" rev-parse HEAD)"
+if [[ -z "$ponto" || "$ponto" == "$cabeca" ]] && [[ -n "$inicio" ]] \
+   && git -C "$dir" merge-base --is-ancestor "$inicio" HEAD 2>/dev/null; then
+  ponto="$inicio"
+fi
+[[ -n "$ponto" ]] || ponto="$cabeca"
 
 diff_conteudo="$(git -C "$dir" diff "$ponto" 2>/dev/null || true)"
 arquivos="$(git -C "$dir" diff --name-status "$ponto" 2>/dev/null || true)"
@@ -156,7 +164,8 @@ mv "$saida.tmp" "$saida"
 cat "$saida"
 
 status="REVISAR"
-grep -qE '^\**STATUS:\**[[:space:]]*\**APROVADO' "$saida" && status="APROVADO"
+# Aceita a linha com marcação de Markdown (## STATUS: APROVADO, **STATUS:**).
+grep -qEi '^[#[:space:]*]*STATUS:[[:space:]*]*APROVADO' "$saida" && status="APROVADO"
 if [[ -n "$arq_estado" ]]; then
   tmp="$(mktemp "$arq_estado.XXXXXX")"
   jangada_alterar_estado "$arq_estado" "$tmp" --arg v "r$rodada: $status" '.validacao = $v'
