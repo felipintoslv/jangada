@@ -10,10 +10,13 @@
     "mpris",
     "tray",
     "custom/atualizacoes",
+    "systemd-failed-units",
+    "privacy",
     "idle_inhibitor",
     "cpu",
     "memory",
     "temperature",
+    "disk",
     "network",
     "bluetooth",
     "pulseaudio",
@@ -62,6 +65,38 @@
     "format": "{}",
     "on-click": "setsid -f sh -c \"$JANGADA_PATH/bin/jangada-terminal --titulo 'jangada update' -e $JANGADA_PATH/bin/jangada-update; pkill -RTMIN+8 -x waybar\"",
     "tooltip": true
+  },
+
+  // Oculto em operação normal (hide-on-ok). Só aparece se algum serviço
+  // do sistema ou do usuário falhar, ouvindo eventos do DBus sem polling.
+  "systemd-failed-units": {
+    "hide-on-ok": true,
+    "format": "✗ {nr_failed}",
+    "format-ok": "✓",
+    "system": true,
+    "user": true,
+    "tooltip": true,
+    "tooltip-format": "{nr_failed} unidade(s) com falha\nSistema: {nr_failed_system}\nUsuário: {nr_failed_user}"
+  },
+
+  // Indica quando algum programa está usando o microfone ou compartilhando a
+  // tela. Reativo via PipeWire e WirePlumber, recolhido quando inativo.
+  "privacy": {
+    "icon-spacing": 4,
+    "icon-size": 14,
+    "transition-duration": 250,
+    "modules": [
+      {
+        "type": "screenshare",
+        "tooltip": true,
+        "tooltip-icon-size": 24
+      },
+      {
+        "type": "audio-in",
+        "tooltip": true,
+        "tooltip-icon-size": 24
+      }
+    ]
   },
 
   // Segura o repouso enquanto estiver ligado. Convive com o hypridle: o que
@@ -127,6 +162,20 @@
     "format": " {temperatureC}°C",
     "format-critical": "󰈸 {temperatureC}°C",
     "tooltip": true,
+    "on-click": "$JANGADA_PATH/bin/jangada-monitor"
+  },
+
+  // Espaço usado na partição raiz a cada 60s via statvfs, sem subprocessos.
+  // Limiares de aviso em 80% e crítico em 90%. O clique abre o monitor geral.
+  "disk": {
+    "interval": 60,
+    "format": "󰋊 {percentage_used}%",
+    "path": "/",
+    "states": {
+      "aviso": 80,
+      "critico": 90
+    },
+    "tooltip-format": "{used} de {total} em uso ({percentage_used}%)\nDisponível: {free}",
     "on-click": "$JANGADA_PATH/bin/jangada-monitor"
   },
 

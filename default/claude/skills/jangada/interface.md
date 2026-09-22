@@ -9,6 +9,10 @@
   mudou o estado roda `pkill -RTMIN+N -x waybar`.
 - A barra é gerada pelo `jangada-barra`, que inclui o `config.jsonc` em uso e
   aplica `JANGADA_BARRA_POSICAO`.
+- No módulo `privacy`, a folga interna (padding) fica em `#privacy-item`, não
+  em `#privacy`. O contêiner pai `#privacy` com padding reserva largura visual
+  mesmo com os seletores recolhidos; já no `#privacy-item`, a barra recolhe o
+  espaço por completo quando não há captura ativa.
 
 ## Tema (`jangada-tema`)
 
