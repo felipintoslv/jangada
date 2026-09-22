@@ -36,3 +36,15 @@
 O tema fica numa pasta do sistema; o `jangada-tema` não consegue atualizá-lo.
 Depois de trocar cores ou papel de parede, rode `jangada-sddm aplicar`.
 `jangada-sddm testar` abre o tema numa janela sem alterar nada.
+
+## Compartilhar tela (Meet, navegador)
+
+- A captura passa pelo `xdg-desktop-portal-hyprland`, com dmabuf. O seletor
+  mostra o tamanho lógico do monitor (um 4K com escala 2 aparece como
+  1920x1080), mas o quadro enviado sai na resolução física.
+- Monitor 4K inteiro deixa o compartilhamento travado: o navegador reduz e
+  codifica mais de 8 milhões de pixels por quadro. Oriente a compartilhar uma
+  guia (não passa pelo portal), uma janela ou o monitor de menor resolução.
+- O xdph lê `$XDG_CONFIG_HOME/hypr/xdph.conf`. Para limitar quadros sem
+  escrever em `~/.config/hypr`, use o mesmo recurso do hypridle: um drop-in do
+  serviço de usuário com `XDG_CONFIG_HOME` apontando para `default/`.
