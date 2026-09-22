@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
-# Manda o trabalho do agente para o Claude revisar, sem que o Claude implemente
-# nada: ele recebe só o diff, lê o que precisar e devolve um parecer. Feito
-# para o agy chamar antes de entregar (default/agy/protocolo.md), e assim o
-# gasto de tokens do Claude fica restrito à revisão.
+# Manda o trabalho do agente para o outro modelo revisar: o Claude revisa o
+# agy, e o agy revisa o Claude. O revisor não implementa nada: recebe o diff,
+# lê o que precisar e devolve um parecer. O agente chama antes de entregar
+# (default/agentes/protocolo.md).
 #
 # Uso: jangada-validar [opções] [PASTA]
+#   --revisor NOME    claude ou agy (padrão: JANGADA_VALIDAR_REVISOR; sem ele,
+#                     o oposto do agente da sessão, e claude fora de sessão)
 #   --base REF        compara a partir de REF (padrão: base gravada no estado
 #                     da sessão; sem ela, main ou master; sem eles, HEAD)
-#   --modelo MODELO   modelo do Claude (padrão: JANGADA_VALIDAR_MODELO ou sonnet)
+#   --modelo MODELO   modelo do revisor (padrão: JANGADA_VALIDAR_MODELO; sem
+#                     ele, sonnet no Claude e o padrão do agy)
 #   --resposta TEXTO  o que o agente fez com o parecer anterior (corrigido,
 #                     rejeitado e por quê); entra no pedido da rodada seguinte
 #   --forcar          passa do limite de rodadas (JANGADA_VALIDAR_RODADAS, 3)
+#
+# A revisão pelo agy leva alguns minutos. Quem chama por uma ferramenta com
+# tempo limite deve dar pelo menos 10 minutos.
 #
 # Saída: o parecer, que começa por "STATUS: APROVADO" ou "STATUS: REVISAR", e
 # fica gravado em ~/.local/state/jangada/agentes/validacao-SESSAO-rN.md.
@@ -19,14 +25,16 @@ set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
-base=""; modelo="${JANGADA_VALIDAR_MODELO:-sonnet}"; resposta=""; forcar=0
+base=""; modelo="${JANGADA_VALIDAR_MODELO:-}"; resposta=""; forcar=0
+revisor="${JANGADA_VALIDAR_REVISOR:-}"
 while (($#)); do
   case "$1" in
+    --revisor) revisor="$2"; shift 2 ;;
     --base) base="$2"; shift 2 ;;
     --modelo) modelo="$2"; shift 2 ;;
     --resposta) resposta="$2"; shift 2 ;;
     --forcar) forcar=1; shift ;;
-    -h|--ajuda) sed -n '2,18s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    -h|--ajuda) sed -n '2,24s/^# \{0,1\}//p' "$0"; exit 0 ;;
     --) shift; break ;;
     -*) echo "opção desconhecida: $1" >&2; exit 1 ;;
     *) break ;;
@@ -37,7 +45,6 @@ dir="$(realpath "${1:-$PWD}")"
 git -C "$dir" rev-parse --show-toplevel >/dev/null 2>&1 \
   || { echo "jangada-validar: $dir não é um repositório git" >&2; exit 1; }
 dir="$(git -C "$dir" rev-parse --show-toplevel)"
-command -v claude >/dev/null 2>&1 || { echo "jangada-validar: claude não encontrado" >&2; exit 1; }
 
 rodadas_max="${JANGADA_VALIDAR_RODADAS:-3}"
 [[ "$rodadas_max" =~ ^[0-9]+$ ]] || rodadas_max=3
@@ -55,12 +62,28 @@ arq_estado=""
 rotulo="${sessao:-$(basename "$dir")}"
 rotulo="${rotulo//[^A-Za-z0-9_.-]/-}"
 
-tarefa=""; inicio=""
+tarefa=""; inicio=""; autor=""
 if [[ -n "$arq_estado" ]]; then
   [[ -n "$base" ]] || base="$(jq -r '.base // ""' "$arq_estado")"
   tarefa="$(jq -r '.tarefa // ""' "$arq_estado")"
   inicio="$(jq -r '.inicio // ""' "$arq_estado")"
+  autor="$(jq -r '.agente // ""' "$arq_estado")"
+  autor="$(basename "${autor%% *}")"
 fi
+# Quem revisa é o outro modelo: um modelo revisando o próprio trabalho tende a
+# concordar com ele.
+if [[ -z "$revisor" ]]; then
+  case "$autor" in
+    agy|"") revisor=claude ;;
+    *) revisor=agy ;;
+  esac
+fi
+case "$revisor" in
+  claude) nome_revisor="Claude"; nome_autor="Antigravity (agy)"; modelo="${modelo:-sonnet}" ;;
+  agy) nome_revisor="Antigravity"; nome_autor="Claude" ;;
+  *) echo "jangada-validar: revisor desconhecido: $revisor (use claude ou agy)" >&2; exit 1 ;;
+esac
+command -v "$revisor" >/dev/null 2>&1 || { echo "jangada-validar: $revisor não encontrado" >&2; exit 1; }
 if [[ -z "$base" ]]; then
   for r in main master; do
     git -C "$dir" rev-parse --verify --quiet "$r" >/dev/null && { base="$r"; break; }
@@ -110,9 +133,11 @@ fi
 
 pedido="$(
   cat <<EOF
-Você é o revisor técnico de um agente (Antigravity) que trabalha neste
-repositório. Não altere nada: só leia. Use as ferramentas de leitura quando o
-diff não bastar, e siga as regras do AGENTS.md ou CLAUDE.md do projeto.
+Você é o revisor técnico de um agente ($nome_autor) que trabalha neste
+repositório, em $dir. Não altere, crie nem apague arquivos e não execute
+comandos: só leia. Use a ferramenta de leitura quando o diff não bastar, só em
+arquivos de texto (nada de PDF, planilha, imagem, parquet ou zip, que estouram
+o contexto), e siga as regras do AGENTS.md ou CLAUDE.md do projeto.
 
 Tarefa do agente:
 ${tarefa:-(não informada; deduza pelo diff e pelos commits)}
@@ -148,16 +173,53 @@ EOF
 )"
 
 saida="$estado_dir/validacao-$rotulo-r$rodada.md"
-echo "jangada-validar: rodada $rodada de $rodadas_max, Claude ($modelo) revisando $(wc -l <<<"$arquivos") arquivo(s)..." >&2
-# O hook do Claude fica desligado nesta chamada: este Claude não é o agente da
-# sessão, e o Stop dele marcaria a sessão como concluída.
-if ! (cd "$dir" && env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 claude -p \
-      --model "$modelo" \
-      --allowedTools "Read,Grep,Glob" \
-      --disallowedTools "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch" \
-      <<<"$pedido") >"$saida.tmp"; then
+echo "jangada-validar: rodada $rodada de $rodadas_max, $nome_revisor${modelo:+ ($modelo)} revisando $(wc -l <<<"$arquivos") arquivo(s)..." >&2
+
+# O hook do revisor fica desligado: ele não é o agente da sessão, e o Stop
+# dele marcaria a sessão como concluída.
+revisar_claude() {
+  (cd "$dir" && env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 claude -p \
+    --model "$modelo" \
+    --allowedTools "Read,Grep,Glob" \
+    --disallowedTools "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch" \
+    <<<"$pedido") >"$saida.tmp"
+}
+
+# O agy recebe o pedido como argumento, e o Linux limita cada argumento a
+# 131.072 bytes (MAX_ARG_STRLEN). Acima do teto, o diff sai do pedido e vai
+# para um arquivo que o agy lê.
+revisar_agy() {
+  local LC_ALL=C args saida_agy status_agy tentativa log="$saida.log"
+  if (( ${#pedido} > 126000 )); then
+    printf '%s\n' "$diff_conteudo" >"$saida.diff"
+    pedido="${pedido/"$diff_conteudo"/"[diff grande demais para o pedido; leia o arquivo $saida.diff]"}"
+    echo "jangada-validar: pedido acima do limite de argumento; o diff vai em $saida.diff" >&2
+  fi
+  args=(-p "$pedido" --output-format json --add-dir "$dir" --add-dir "$estado_dir")
+  [[ -n "$modelo" ]] && args+=(--model "$modelo")
+  [[ -n "${JANGADA_VALIDAR_ESFORCO:-high}" ]] && args+=(--effort "${JANGADA_VALIDAR_ESFORCO:-high}")
+  # A saída vem por cano: o agy reabre o próprio descritor de saída, e com
+  # redirecionamento para arquivo o JSON já chegou a ser escrito num arquivo
+  # sem nome. A segunda tentativa cobre as respostas vazias com código 0.
+  for tentativa in 1 2; do
+    if saida_agy="$(cd "$dir" && env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 agy "${args[@]}" </dev/null 2>"$log")"; then
+      status_agy="$(jq -r '.status // ""' <<<"$saida_agy" 2>/dev/null || true)"
+      if [[ "$status_agy" == SUCCESS ]] && jq -r '.response // ""' <<<"$saida_agy" >"$saida.tmp" 2>/dev/null \
+         && [[ -n "$(tr -d '[:space:]' <"$saida.tmp")" ]]; then
+        rm -f "$log" "$saida.diff"
+        return 0
+      fi
+    fi
+    ((tentativa < 2)) && { echo "jangada-validar: o agy não respondeu; tentando de novo em 5s" >&2; sleep 5; }
+  done
+  echo "jangada-validar: saída do agy: ${saida_agy:0:300}" >&2
+  echo "jangada-validar: erro em $log e em ~/.gemini/antigravity-cli/log/" >&2
+  return 1
+}
+
+if ! "revisar_$revisor"; then
   rm -f "$saida.tmp"
-  echo "jangada-validar: a chamada ao Claude falhou" >&2
+  echo "jangada-validar: a chamada ao $nome_revisor falhou" >&2
   exit 1
 fi
 mv "$saida.tmp" "$saida"
@@ -168,10 +230,11 @@ status="REVISAR"
 grep -qEi '^[#[:space:]*]*STATUS:[[:space:]*]*APROVADO' "$saida" && status="APROVADO"
 if [[ -n "$arq_estado" ]]; then
   tmp="$(mktemp "$arq_estado.XXXXXX")"
-  jangada_alterar_estado "$arq_estado" "$tmp" --arg v "r$rodada: $status" '.validacao = $v'
+  jangada_alterar_estado "$arq_estado" "$tmp" --arg v "r$rodada: $status ($revisor)" '.validacao = $v'
   rm -f "$tmp"
 fi
 echo >&2
 echo "jangada-validar: $status (parecer em $saida)" >&2
+"$JANGADA_PATH/bin/jangada-gancho" pos-validar "$rotulo" "$status" || true
 [[ "$status" == APROVADO ]] && exit 0
 exit 3

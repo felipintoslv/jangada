@@ -86,9 +86,9 @@ for c in $(grep -ho 'j\.cmd("[a-z-]*"' default/hypr/*.lua | sed 's/j\.cmd("//; s
   [[ -x "bin/$c" ]] || falha "bin/$c citado mas ausente"
 done
 
-passo "fluxo do jangada-par com claude e agy falsos"
+passo "jangada-validar com claude e agy falsos"
 if command -v git >/dev/null && command -v jq >/dev/null; then
-  testes/par.sh || falha "testes/par.sh"
+  testes/validar.sh || falha "testes/validar.sh"
 else
   echo "git ou jq ausente; etapa ignorada"
 fi

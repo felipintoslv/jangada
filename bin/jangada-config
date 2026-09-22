@@ -137,7 +137,7 @@ jangada_fuzzel() {
 # shellcheck disable=SC2034  # PERFIL_* são lidas por quem carrega este arquivo
 jangada_perfil() {
   local _arq="$JANGADA_CONFIG/agentes/$1.conf" _chave _valor
-  PERFIL_COMANDO=""; PERFIL_ARGS=""; PERFIL_AMBIENTE=()
+  PERFIL_COMANDO=""; PERFIL_ARGS=""; PERFIL_DESCRICAO=""; PERFIL_AMBIENTE=()
   [[ "$1" =~ ^[A-Za-z0-9_-]+$ ]] || return 1
   # O perfil do usuário tem precedência; sem ele, vale o do repositório
   # (default/agentes), como o agy.conf.
@@ -150,6 +150,7 @@ jangada_perfil() {
     case "$_chave" in
       COMANDO) PERFIL_COMANDO="$_valor" ;;
       ARGS) PERFIL_ARGS="$_valor" ;;
+      DESCRICAO) PERFIL_DESCRICAO="$_valor" ;;
       *) PERFIL_AMBIENTE+=("$_chave=$_valor") ;;
     esac
   done < <(sed -e 's/^[[:space:]]*#.*//' -e 's/[[:space:]]*$//' "$_arq")

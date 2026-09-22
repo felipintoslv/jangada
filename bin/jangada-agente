@@ -14,9 +14,13 @@
 #   --prompt-arquivo ARQ  o mesmo, lida de um arquivo
 #
 # Sem --agente nem --perfil, num terminal, um seletor pergunta qual agente
-# abrir: o padrão (JANGADA_AGENTE) ou um dos perfis. JANGADA_AGENTE_ESCOLHER=0
-# desliga a pergunta. Com o agy, a tarefa vai por -i junto com o protocolo de
-# default/agy/protocolo.md, que manda validar a entrega com jangada-validar.
+# abrir: o padrão (JANGADA_AGENTE) ou um dos perfis, cada um com a descrição
+# entre parênteses. JANGADA_AGENTE_ESCOLHER=0 desliga a pergunta.
+#
+# O Claude e o agy recebem o protocolo de default/agentes/protocolo.md, que
+# manda validar a entrega com jangada-validar: o outro modelo revisa o diff.
+# No Claude ele vai por --append-system-prompt; no agy, por -i junto com a
+# tarefa. JANGADA_AGENTE_PROTOCOLO=0 desliga.
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
@@ -37,7 +41,7 @@ while (($#)); do
       [[ -r "$2" ]] || { echo "arquivo não encontrado: $2" >&2; exit 1; }
       prompt="$(<"$2")"; shift 2 ;;
     --) shift; extras=("$@"); break ;;
-    -h|--ajuda) sed -n '2,20s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    -h|--ajuda) sed -n '2,24s/^# \{0,1\}//p' "$0"; exit 0 ;;
     *) echo "argumento desconhecido: $1" >&2; exit 1 ;;
   esac
 done
@@ -64,10 +68,25 @@ fi
 if ((!agente_dado)) && [[ -z "$perfil" && -t 0 && "${JANGADA_AGENTE_ESCOLHER:-1}" != 0 ]]; then
   mapfile -t _perfis < <(jangada_perfis)
   if ((${#_perfis[@]})); then
-    _escolha="$({ printf '%s\t(padrão)\n' "$JANGADA_AGENTE"
-                  for _p in "${_perfis[@]}"; do printf '%s\t(perfil)\n' "$_p"; done; } \
-      | fzf --prompt 'agente > ' --height 40% --reverse --delimiter '\t' --with-nth 1,2 \
-      | cut -f1)" || true
+    # O que cada opção faz, entre parênteses: quem implementa e quem revisa.
+    _descrever() {
+      local base
+      base="$(basename "${1%% *}")"
+      case "$base" in
+        claude) command -v agy >/dev/null 2>&1 && echo "Claude implementa, o agy revisa; gasta mais tokens do Claude" \
+                  || echo "Claude implementa, sem revisão: agy não instalado" ;;
+        agy) echo "agy implementa, o Claude só revisa o diff; economiza mais tokens do Claude" ;;
+        *) echo "$base" ;;
+      esac
+    }
+    _escolha="$({ printf '%s\t(%s)\n' "$JANGADA_AGENTE" "$(_descrever "$JANGADA_AGENTE")"
+                  for _p in "${_perfis[@]}"; do
+                    jangada_perfil "$_p" || continue
+                    printf '%s\t(%s)\n' "$_p" "${PERFIL_DESCRICAO:-$(_descrever "$PERFIL_COMANDO")}"
+                  done; } \
+      | column -t -s $'\t' -o '   ' \
+      | fzf --prompt 'agente > ' --height 40% --reverse --no-sort \
+      | awk '{print $1}')" || true
     [[ -n "$_escolha" ]] || exit 0
     [[ "$_escolha" == "$JANGADA_AGENTE" ]] || perfil="$_escolha"
   fi
@@ -181,25 +200,36 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
   # O prompt vai por arquivo: digitado pelo send-keys, cada quebra de linha
   # seria um Enter e o agente receberia só a primeira linha. O shell da sessão
   # (bash ou zsh) lê o arquivo como um argumento só.
-  # O agy não aceita a tarefa como argumento solto: ela vai por -i, que abre a
-  # conversa interativa já com o pedido. Vai sempre, com ou sem tarefa, porque
-  # leva o protocolo do jangada (worktree, commits, jangada-validar).
-  if [[ "$(basename "${agente%% *}")" == agy ]]; then
-    arq_prompt="$estado_dir/prompt-$sessao.md"
+  # O protocolo do jangada (worktree, commits, jangada-validar) vai no Claude
+  # como instrução de sistema e fica no comando guardado, para valer também
+  # numa sessão restaurada. O agy não tem essa opção nem aceita a tarefa como
+  # argumento solto: os dois vão por -i, que abre a conversa já com o pedido.
+  base_agente="$(basename "${agente%% *}")"
+  protocolo="$JANGADA_PATH/default/agentes/protocolo.md"
+  [[ "${JANGADA_AGENTE_PROTOCOLO:-1}" != 0 && -r "$protocolo" ]] || protocolo=""
+  # Sem o agy não há revisor para o Claude, e o protocolo mandaria rodar um
+  # comando que falha.
+  [[ "$base_agente" == claude ]] && ! command -v agy >/dev/null 2>&1 && protocolo=""
+  arq_prompt="$estado_dir/prompt-$sessao.md"
+  if [[ "$base_agente" == agy ]]; then
     {
-      cat "$JANGADA_PATH/default/agy/protocolo.md"
-      printf '\n'
+      [[ -n "$protocolo" ]] && { cat "$protocolo"; printf '\n'; }
       if [[ -n "$prompt" ]]; then
         printf 'Tarefa:\n\n%s\n' "$prompt"
-      else
+      elif [[ -n "$protocolo" ]]; then
         printf 'Ainda não há tarefa. Confirme em uma linha que leu o protocolo e aguarde o pedido.\n'
       fi
     } >"$arq_prompt"
-    cmd_agente+=" -i \"\$(cat $(printf '%q' "$arq_prompt"))\""
-  elif [[ -n "$prompt" ]]; then
-    arq_prompt="$estado_dir/prompt-$sessao.md"
-    printf '%s\n' "$prompt" >"$arq_prompt"
-    cmd_agente+=" \"\$(cat $(printf '%q' "$arq_prompt"))\""
+    [[ -s "$arq_prompt" ]] && cmd_agente+=" -i \"\$(cat $(printf '%q' "$arq_prompt"))\""
+  else
+    if [[ "$base_agente" == claude && -n "$protocolo" ]]; then
+      cmd_agente+=" --append-system-prompt \"\$(cat $(printf '%q' "$protocolo"))\""
+      cmd_base="$cmd_agente"
+    fi
+    if [[ -n "$prompt" ]]; then
+      printf '%s\n' "$prompt" >"$arq_prompt"
+      cmd_agente+=" \"\$(cat $(printf '%q' "$arq_prompt"))\""
+    fi
   fi
 
   # A sessão do tmux é criada antes do arquivo de estado. O jangada-agentes

@@ -39,10 +39,6 @@ _jangada_ramo_base() {
 }
 
 # Atalhos diretos para os comandos do jangada
-par() {
-  "$JANGADA_PATH/bin/jangada-par" "$@"
-}
-
 agente() {
   "$JANGADA_PATH/bin/jangada-agente" "$@"
 }
@@ -75,70 +71,11 @@ calendario() {
   "$JANGADA_PATH/bin/jangada-calendario" "$@"
 }
 
-# Auditoria com Antigravity no diretório atual
+# Revisão do diretório atual pelo outro modelo (jangada-validar): o agy
+# revisa o Claude e o Claude revisa o agy. Fora de sessão, o revisor é o
+# Claude; "revisar --revisor agy" troca.
 revisar() {
-  if ! command -v agy >/dev/null 2>&1; then
-    echo "erro: agy não encontrado no PATH" >&2
-    return 1
-  fi
-
-  # "git diff -- X..HEAD" trata X..HEAD como caminho, não como intervalo, e
-  # devolve vazio: a auditoria saía sem diferença nenhuma. O intervalo vai sem
-  # o "--" e com três pontos, que compara a partir da base comum.
-  local diff_txt="" base_ref=""
-  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    base_ref="$(_jangada_ramo_base || true)"
-    if [ -n "$base_ref" ]; then
-      diff_txt="$(git diff "$base_ref...HEAD" 2>/dev/null || true)"
-    fi
-    # Sem ramo base, ou sem commit próprio, o que interessa é o que ainda não
-    # foi gravado em commit.
-    if [ -z "$diff_txt" ]; then
-      diff_txt="$(git diff HEAD 2>/dev/null || true)"
-    fi
-  fi
-
-  if [ -z "$diff_txt" ]; then
-    echo "aviso: nenhuma diferença encontrada; a auditoria vai olhar só os arquivos" >&2
-    diff_txt="(nenhuma diferença registrada)"
-  fi
-
-  # O prompt inteiro vai num pedido só e o modelo do agy corta em 1 milhão de
-  # tokens. O teto é o mesmo do DIFF_MAX do jangada-par.
-  if [ "${#diff_txt}" -gt 200000 ]; then
-    echo "aviso: diff de ${#diff_txt} caracteres; enviando os primeiros 200000" >&2
-    diff_txt="${diff_txt:0:200000}
-[... diff truncado aqui pelo revisar; leia os arquivos para ver o resto ...]"
-  fi
-
-  echo "==> Enviando código para auditoria com Antigravity..."
-  local prompt_rev="Você é o auditor de qualidade e segurança do Jangada.
-Analise os arquivos e as alterações recentes neste diretório.
-Diferenças recentes (git diff):
-$diff_txt
-
-Como trabalhar nesta execução:
-1. Não altere, crie nem apague arquivos, e não execute comandos. Em modo não
-   interativo o agy não tem como pedir permissão: o pedido é recusado sozinho
-   e a execução termina sem produzir saída. Leia os arquivos com a sua
-   ferramenta de leitura, a partir de $PWD.
-2. Leia apenas arquivos de texto, e comece pelos que aparecem no diff. Não
-   abra PDF, docx, xlsx, imagem, parquet, zip nem qualquer outro binário: a
-   ferramenta de leitura carrega o arquivo inteiro no contexto, e um só
-   arquivo grande estoura o limite de tokens e derruba a auditoria.
-3. Responda apenas com o texto da auditoria, no formato pedido abaixo.
-
-Avalie:
-1. Segurança: Há injeção de comandos, credenciais expostas ou permissões perigosas?
-2. Correção: Há erros lógicos, quebras de contrato ou casos de borda não tratados?
-3. Boas práticas: O código está limpo, legível e seguindo as convenções?
-
-Responda de forma concisa e estruturada com:
-- STATUS: (APROVADO ou NECESSITA_AJUSTES)
-- Resumo dos pontos fortes
-- Lista numerada de eventuais problemas ou vulnerabilidades e como corrigi-los."
-
-  agy -p "$prompt_rev" --effort high --add-dir .
+  "$JANGADA_PATH/bin/jangada-validar" "$@"
 }
 
 # Mostra o que a tarefa mudou em relação ao ramo base.
@@ -316,9 +253,8 @@ ajuda() {
   echo ""
   echo "⛵ Jangada Shell — Comandos Disponíveis:"
   echo ""
-  echo "  par \"tarefa\"      executa o ciclo completo (Claude cria, Antigravity revisa)"
-  echo "  agente [nome]     inicia um agente Claude isolado em worktree"
-  echo "  revisar           audita o código do diretório atual com Antigravity"
+  echo "  agente            cria um agente (Claude ou agy) em worktree; o outro modelo revisa"
+  echo "  revisar           manda o diff do diretório atual para o outro modelo revisar"
   echo "  status            lista as sessões de agentes ativas e seus estados"
   echo "  agentes           abre o seletor interativo de agentes ativos"
   echo "  mudancas          mostra as alterações feitas no ramo atual"

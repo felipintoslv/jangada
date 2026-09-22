@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# Testa o jangada-validar com claude e agy falsos no PATH: nada vai para a
+# rede e nada toca o estado real (XDG_STATE_HOME e XDG_CONFIG_HOME apontam
+# para uma pasta temporária).
+#
+# Uso: testes/validar.sh
+set -uo pipefail
+cd "$(dirname "$0")/.." || exit 1
+repo_jangada="$PWD"
+falhas=0
+ok()    { printf 'ok    %s\n' "$*"; }
+falha() { printf 'FALHA %s\n' "$*"; falhas=$((falhas + 1)); }
+conferir() { local d="$1"; shift; if "$@"; then ok "$d"; else falha "$d"; fi; }
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp/bin" "$tmp/config/jangada" "$tmp/estado/jangada/agentes" "$tmp/projeto" "$tmp/falso"
+estado="$tmp/estado/jangada/agentes"
+
+# Os dois falsos gravam o pedido e respondem com $FALSO_RESPOSTA. O claude
+# recebe o pedido pela entrada padrão; o agy, como argumento de -p, e responde
+# em JSON.
+cat >"$tmp/bin/claude" <<'EOF'
+#!/usr/bin/env bash
+cat >"$FALSO_DIR/claude.pedido"
+printf '%b\n' "$FALSO_RESPOSTA"
+EOF
+cat >"$tmp/bin/agy" <<'EOF'
+#!/usr/bin/env bash
+while (($#)); do [[ "$1" == -p ]] && { printf '%s' "$2" >"$FALSO_DIR/agy.pedido"; break; }; shift; done
+jq -n --arg r "$(printf '%b' "$FALSO_RESPOSTA")" '{status:"SUCCESS", response:$r}'
+EOF
+chmod +x "$tmp/bin/"*
+
+git -C "$tmp/projeto" init -q -b main
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -q --allow-empty -m inicio
+git -C "$tmp/projeto" checkout -qb agente/x
+echo "linha 1" >"$tmp/projeto/arquivo.txt"
+git -C "$tmp/projeto" add arquivo.txt
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "commit 1"
+
+# Sessão falsa com o agente dado; o jangada-validar lê .agente e .tarefa.
+sessao_de() {
+  jq -n --arg a "$1" '{sessao:"s", agente:$a, base:"main", tarefa:"tarefa de teste", estado:"trabalhando"}' \
+    >"$estado/s.json"
+  rm -f "$estado/validacao-s-r"* "$tmp/falso/"*.pedido
+}
+validar() {
+  env PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA="$1" JANGADA_SESSAO=s \
+    XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
+    "$repo_jangada/bin/jangada-validar" "${@:2}" "$tmp/projeto" >"$tmp/saida.log" 2>&1
+}
+
+# Caso 1: sessão do Claude, o revisor é o agy.
+sessao_de claude
+validar 'STATUS: REVISAR\n1. arquivo.txt:1: problema'; rc=$?
+conferir "caso 1: REVISAR sai com 3" [ "$rc" = 3 ]
+conferir "caso 1: o agy revisou" test -s "$tmp/falso/agy.pedido"
+conferir "caso 1: o claude não foi chamado" test ! -e "$tmp/falso/claude.pedido"
+conferir "caso 1: pedido traz o diff e a tarefa" \
+  bash -c 'grep -q "^+linha 1$" "$1" && grep -q "tarefa de teste" "$1"' _ "$tmp/falso/agy.pedido"
+conferir "caso 1: estado registra a rodada e o revisor" [ "$(jq -r .validacao "$estado/s.json")" = "r1: REVISAR (agy)" ]
+conferir "caso 1: parecer gravado" grep -q "problema" "$estado/validacao-s-r1.md"
+
+# Caso 2: rodada 2 leva o parecer anterior e a resposta do agente.
+validar 'STATUS: APROVADO\ntudo certo' --resposta "1 rejeitado: MARCA-RESPOSTA"; rc=$?
+conferir "caso 2: APROVADO sai com 0" [ "$rc" = 0 ]
+conferir "caso 2: pedido traz a resposta do agente" grep -q MARCA-RESPOSTA "$tmp/falso/agy.pedido"
+conferir "caso 2: pedido traz o parecer anterior" grep -q "problema" "$tmp/falso/agy.pedido"
+
+# Caso 3: sessão do agy, o revisor é o Claude; status com Markdown.
+sessao_de agy
+validar '## **STATUS: APROVADO**'; rc=$?
+conferir "caso 3: o claude revisou" test -s "$tmp/falso/claude.pedido"
+conferir "caso 3: o agy não foi chamado" test ! -e "$tmp/falso/agy.pedido"
+conferir "caso 3: status com Markdown vale como APROVADO" [ "$rc" = 0 ]
+
+# Caso 4: limite de rodadas.
+sessao_de agy
+for _ in 1 2; do validar 'STATUS: REVISAR\n1. x' >/dev/null; done
+JANGADA_VALIDAR_RODADAS=2 validar 'STATUS: REVISAR\n1. x'; rc=$?
+conferir "caso 4: acima do limite sai com 4" [ "$rc" = 4 ]
+
+# Caso 5: pedido acima do limite de argumento do agy. O diff sai do pedido e
+# vai para um arquivo que o agy lê.
+sessao_de claude
+head -c 140000 /dev/zero | tr '\0' 'a' | fold -w 100 >"$tmp/projeto/grande.txt"
+git -C "$tmp/projeto" add grande.txt
+validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 5: aprovado mesmo com diff grande" [ "$rc" = 0 ]
+conferir "caso 5: pedido cabe no argumento" [ "$(LC_ALL=C wc -c <"$tmp/falso/agy.pedido")" -lt 131072 ]
+conferir "caso 5: pedido aponta o arquivo do diff" grep -q "leia o arquivo .*validacao-s-r1.md.diff" "$tmp/falso/agy.pedido"
+git -C "$tmp/projeto" rm -qf grande.txt
+
+if ((falhas)); then
+  echo "$falhas falha(s); saídas em $tmp (mantido)"
+  trap - EXIT
+  exit 1
+fi
+echo "todos os testes do jangada-validar passaram"

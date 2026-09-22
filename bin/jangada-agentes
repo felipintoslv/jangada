@@ -46,9 +46,9 @@ campos() { tr '\t' "$US" <<<"$1"; }
 
 sessoes_vivas() { "${JANGADA_TMUX[@]}" list-sessions -F '#S' 2>/dev/null || true; }
 
-# Estado de ciclo encerrado. O jangada-par não abre sessão no tmux e o processo
-# dele sai assim que grava o resultado, então sem esta distinção o painel
-# recolheria o "concluido" antes de alguém ver.
+# Estado de ciclo encerrado. Um processo sem sessão no tmux que grava o
+# resultado e sai (como fazia o antigo jangada-par) teria o "concluido"
+# recolhido antes de alguém ver, sem esta distinção.
 estado_final() {
   case "$1" in
     concluido|aguardando) return 0 ;;
@@ -80,10 +80,9 @@ guardado() {
   fi
 }
 
-# Arquivo de estado de sessão. O jangada-par grava na mesma pasta o JSON bruto
-# do agy (revisao-<sessão>-rN.json), que fica para diagnóstico quando a chamada
-# falha; tratado como sessão, ele aparecia na lista e a barra o apagava como
-# órfão segundos depois.
+# Arquivo de estado de sessão. Restos do antigo jangada-par (o JSON bruto do
+# agy, revisao-<sessão>-rN.json) ficam na mesma pasta; tratados como sessão,
+# apareceriam na lista e a barra os apagaria como órfãos.
 eh_estado() {
   [[ -e "$1" && "$(basename "$1")" != revisao-* ]]
 }
@@ -347,23 +346,9 @@ previa() {
     echo "(sessão encerrada; Alt+I integra, Ctrl+X remove o worktree e mantém o ramo)"
   fi
 
-  # Ciclo em par: o que resta de útil é o parecer da última rodada e a
-  # avaliação que o Claude fez dele, quando houver.
-  local parecer avaliacao validacao
-  parecer="$(mais_recente "$estado_dir/parecer-$s-r")"
+  # Último parecer do revisor, pedido pelo agente com jangada-validar.
+  local validacao
   validacao="$(mais_recente "$estado_dir/validacao-$s-r")"
-  avaliacao="$(mais_recente "$estado_dir/avaliacao-$s-r")"
-  if [[ -n "$parecer" ]]; then
-    echo ""
-    echo "--- $(basename "$parecer") ---"
-    head -60 "$parecer"
-  fi
-  if [[ -n "$avaliacao" ]]; then
-    echo ""
-    echo "--- $(basename "$avaliacao") ---"
-    head -60 "$avaliacao"
-  fi
-  # Parecer do Claude pedido pelo agente com jangada-validar.
   if [[ -n "$validacao" ]]; then
     echo ""
     echo "--- $(basename "$validacao") ---"

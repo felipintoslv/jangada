@@ -6,7 +6,7 @@ description: >
   ~/.local/state/jangada; comandos jangada-*; atalhos, regras de janela,
   monitores, barra (waybar), tema (matugen), bloqueio (hyprlock, hypridle),
   tela de login (SDDM); sessões de agentes em tmux -L jangada, worktrees em
-  ~/.local/share/jangada-worktrees, hooks do Claude Code e o jangada-par com o
+  ~/.local/share/jangada-worktrees, hooks do Claude Code e a revisão cruzada com o
   Antigravity (agy). Não use para configurar o niri, o Plasma ou ~/.config/hypr.
 ---
 
@@ -21,7 +21,7 @@ qualquer coisa:
 |---|---|
 | Configuração Lua, `hyprctl`, atalhos, monitores, GPU, testar sem sair da sessão | [hyprland.md](hyprland.md) |
 | Barra, tema e papel de parede, bloqueio, tela de login, escala | [interface.md](interface.md) |
-| Sessões de agentes, estado, hooks, worktrees, `jangada-par` e agy | [agentes.md](agentes.md) |
+| Sessões de agentes, estado, hooks, worktrees, `jangada-validar` e agy | [agentes.md](agentes.md) |
 
 ## Onde cada coisa fica
 

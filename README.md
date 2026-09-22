@@ -22,7 +22,7 @@ jangada/
 ├── config/                modelos copiados uma única vez para ~/.config/jangada
 ├── shell/                 integração com bash e zsh
 ├── migrations/            ajustes aplicados em ordem a cada atualização
-├── testes/                verificar.sh (estático + testes do par e do importar) e aninhado.sh
+├── testes/                verificar.sh (estático + testes do validar e do importar) e aninhado.sh
 ├── mapeamento/            inventários do jangada-mapear (fora do git)
 └── revisao/               pareceres, avaliações e comparações; índice em revisao/README.md
 ```
@@ -84,8 +84,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-snapshot "descrição"` | cria um snapshot manual do sistema |
 | `jangada-tema [imagem]` | gera as cores a partir de um papel de parede e recarrega a interface |
 | `jangada-agente` | escolhe o agente (Claude ou agy), o projeto e cria um worktree, e abre o agente numa sessão tmux (`--prompt`, `--prompt-arquivo`, `--perfil`) |
-| `jangada-validar` | manda o diff do worktree para o Claude (`claude -p`, só leitura) revisar e devolve `STATUS: APROVADO` ou `REVISAR`; o agy chama antes de entregar |
-| `jangada-par` | tarefa em par: Claude implementa, Antigravity revisa, Claude avalia cada apontamento e aplica o que aceitar |
+| `jangada-validar` | manda o diff do worktree para o outro modelo revisar (o agy revisa o Claude, o Claude revisa o agy) e devolve `STATUS: APROVADO` ou `REVISAR`; o agente chama antes de entregar |
 | `jangada-shell` | inicia subshell enriquecida com comandos diretos de agentes e projetos |
 | `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir, integrar ou encerrar (`--proximo`, `--anterior`, `--restaurar`) |
 | `jangada-agente-fim` | encerra uma sessão e remove o worktree, com conferência de alterações pendentes; `--integrar` faz antes o merge na base e apaga o ramo |
@@ -105,7 +104,6 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `SUPER + Enter` | terminal |
 | `SUPER + Espaço` | lançador de aplicativos |
 | `SUPER + A` | novo agente |
-| `SUPER + P` | tarefa em par (Claude + Antigravity) |
 | `SUPER + SHIFT + A` | lista de agentes |
 | `SUPER + CTRL + A` | painel de agentes (workspace especial) |
 | `SUPER + N` | próximo agente que espera resposta; repetir percorre a fila |
@@ -121,7 +119,7 @@ e por isso inclui também os que você definiu em
 
 ## Worktrees dos agentes
 
-O `jangada-agente` e o `jangada-par` criam cada worktree a partir do último
+O `jangada-agente` cria cada worktree a partir do último
 commit, então arquivos fora do git (`.Renviron`, `.env`, dados locais) ficam
 para trás. Ao criar um worktree novo, o `jangada-worktree-preparar` lê três
 arquivos opcionais na raiz do projeto:
@@ -149,14 +147,14 @@ carrega quando a tarefa envolve a sessão, mesmo aberto em outro projeto.
 
 ## Ciclo de uma tarefa com agentes
 
-1. `SUPER + A` (ou `jangada-agente --prompt "..."`) abre um agente num
-   worktree `agente/<nome>`; `SUPER + P` abre uma tarefa em par.
+1. `SUPER + A` (ou `jangada-agente --prompt "..."`) pergunta o agente e abre
+   num worktree `agente/<nome>`. Cada opção diz entre parênteses quem
+   implementa, quem revisa e qual economiza mais tokens do Claude.
 2. O estado aparece na barra e no painel (`SUPER + CTRL + A`) pelos hooks do
    Claude Code: trabalhando, aguardando (notificação com botão que foca a
    janela) ou concluído. `SUPER + N` pula para quem espera.
-3. No par, cada parecer do agy fica em `~/.local/state/jangada/agentes/parecer-*`
-   e a avaliação do Claude, apontamento por apontamento, em `avaliacao-*`. A
-   prévia do seletor mostra os dois.
+3. Antes de entregar, o agente roda `jangada-validar` e o outro modelo revisa
+   o diff (veja abaixo). O último parecer aparece na prévia do seletor.
 4. Para fechar: `jangada-agente-fim --integrar SESSAO` (ou `Alt+I` no seletor)
    faz o merge na base, remove o worktree e apaga o ramo. `Ctrl+X` encerra sem
    integrar e mantém o ramo.
@@ -166,36 +164,36 @@ carrega quando a tarefa envolve a sessão, mesmo aberto em outro projeto.
    da conversa, o worktree usa `--continue`; direto no repositório abre uma
    conversa nova, porque a mais recente da pasta pode ser de outro agente.
 
-### Agente no agy, com o Claude só revisando
+### Quem implementa e quem revisa
 
-Para poupar tokens do Claude, o agy pode fazer o trabalho e o Claude entrar só
-na revisão. No `SUPER + A`, escolha `agy` no seletor de agente, ou rode
-`jangada-agente --perfil agy --nome TAREFA --prompt "..."`.
+| No seletor | Implementa | Revisa | Tokens do Claude |
+|---|---|---|---|
+| `claude` | Claude | agy | gasta mais: o Claude faz o trabalho todo |
+| `agy` | agy | Claude, só o diff | economiza mais: o Claude só lê o diff |
 
-1. O agy abre interativo, no worktree, com a tarefa e o protocolo de
-   `default/agy/protocolo.md` (trabalhar só no worktree, commits sem
-   `Co-Authored-By`, validar antes de entregar).
-2. Antes de entregar, o próprio agy roda `jangada-validar`. O Claude recebe só
-   o diff desde a base, lê o que precisar e responde. Com `REVISAR`, o agy
-   corrige e roda de novo com `--resposta`, até 3 rodadas
-   (`JANGADA_VALIDAR_RODADAS`). O modelo padrão é o Sonnet
+1. O agente abre interativo, no worktree, com o protocolo de
+   `default/agentes/protocolo.md` (trabalhar só no worktree, commits sem
+   `Co-Authored-By`, validar antes de entregar). No Claude ele vai por
+   `--append-system-prompt`; no agy, por `-i` junto com a tarefa.
+   `JANGADA_AGENTE_PROTOCOLO=0` desliga. Sem o agy instalado, o Claude abre
+   sem o protocolo, porque não haveria revisor.
+2. Antes de entregar, o agente roda `jangada-validar`. O revisor recebe o diff
+   desde a base, lê o que precisar, sem alterar nada, e responde. Com
+   `REVISAR`, o agente confere cada apontamento, corrige o que proceder e roda
+   de novo com `--resposta`, até 3 rodadas (`JANGADA_VALIDAR_RODADAS`).
+   `--revisor` escolhe o revisor à mão. O Claude revisa com o Sonnet
    (`JANGADA_VALIDAR_MODELO`).
-3. A barra acompanha pelo hook `jangada-hook-agy`, instalado em
+3. Os pareceres ficam em `~/.local/state/jangada/agentes/validacao-*`. No
+   jangada shell, `revisar` roda o mesmo comando no diretório atual.
+4. A barra acompanha o agy pelo hook `jangada-hook-agy`, instalado em
    `~/.gemini/config/hooks.json`: trabalhando e concluído. O agy não tem
-   evento de pedido de permissão, então não há "aguardando".
-4. Os pareceres ficam em `~/.local/state/jangada/agentes/validacao-*` e
-   aparecem na prévia do seletor. `Enter` restaura com
-   `agy --conversation`.
+   evento de pedido de permissão, então não há "aguardando". `Enter` restaura
+   com `agy --conversation`.
 5. Em cada worktree novo o agy pergunta se confia na pasta; responda na
    janela. A confiança é por caminho exato.
 
 Detalhes que valem para o dia a dia:
 
-- O revisor do par recebe o diff desde o início do ciclo até a árvore de
-  trabalho: o que o Claude deixar sem commit também chega a ele, e o par
-  avisa na tela. O prompt vai inteiro num argumento, com teto de
-  `PROMPT_BYTES_MAX` bytes; o diff e a avaliação anterior (`AVALIACAO_MAX`)
-  são cortados antes, e a íntegra fica legível pelo revisor.
 - O `--integrar` recusa mesclar se o repositório principal tiver alterações
   sem commit.
 - Os arquivos de estado são alterados sob uma trava
@@ -205,9 +203,10 @@ Detalhes que valem para o dia a dia:
 
 Perfis de agente (outra conta, outro modelo, outro programa) ficam em
 `~/.config/jangada/agentes/NOME.conf`; veja `default/agentes/exemplo.conf`.
+A chave `DESCRICAO=` é o texto entre parênteses no seletor.
 Ganchos do usuário ficam em `~/.config/jangada/ganchos/EVENTO` ou
 `EVENTO.d/`, para os eventos `pos-update`, `pos-tema`, `pos-agente-fim` e
-`pos-par`. Um exemplo útil: `pos-tema` rodando `jangada-sddm aplicar`.
+`pos-validar`. Um exemplo útil: `pos-tema` rodando `jangada-sddm aplicar`.
 
 ## Várias máquinas
 
@@ -260,7 +259,7 @@ instalar, rode `JANGADA_PATH=$PWD bin/...`.
 
 | Teste | O que confere |
 |---|---|
-| `testes/verificar.sh` | shellcheck, sintaxe Lua, JSON e TOML, comandos citados na configuração, fluxo do `jangada-par` com claude e agy falsos, `jangada-importar` com um config.kdl de exemplo |
+| `testes/verificar.sh` | shellcheck, sintaxe Lua, JSON e TOML, comandos citados na configuração, `jangada-validar` com claude e agy falsos, `jangada-importar` com um config.kdl de exemplo |
 | `testes/aninhado.sh` | sobe um Hyprland aninhado com a configuração (`--sem-usuario` só os padrões) e confere `configerrors` e o número de atalhos |
 
 Os testes nunca tocam a configuração real: rodam com `XDG_CONFIG_HOME` e

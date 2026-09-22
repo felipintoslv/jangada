@@ -7,7 +7,7 @@
 # ~/.config/jangada/ganchos/EVENTO.d/, em ordem de nome, e passa os
 # argumentos a cada um. Um gancho que falha gera aviso, mas não interrompe os
 # outros nem o comando que chamou. Eventos: pos-update, pos-tema,
-# pos-agente-fim (sessão) e pos-par (sessão, estado).
+# pos-agente-fim (sessão) e pos-validar (sessão, status).
 set -uo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
