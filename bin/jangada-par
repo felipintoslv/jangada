@@ -554,7 +554,9 @@ seguido de uma lista numerada e clara com cada item que o Claude deve corrigir:
   for tentativa in 1 2; do
     info "Executando Antigravity CLI... (tentativa $tentativa)"
     saida_agy=""
-    if saida_agy="$(agy "${args_agy[@]}" </dev/null 2>"$log_revisao")"; then
+    # Sem JANGADA_SESSAO o hook do agy não mexe no estado desta sessão, que
+    # o próprio jangada-par controla durante a revisão.
+    if saida_agy="$(env -u JANGADA_SESSAO agy "${args_agy[@]}" </dev/null 2>"$log_revisao")"; then
       falha_agy=""
     else
       falha_agy="a execução do agy terminou com erro"

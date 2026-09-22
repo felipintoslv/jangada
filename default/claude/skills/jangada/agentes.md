@@ -7,6 +7,8 @@
 | `jangada-agente` | escolhe projeto, cria worktree `agente/<nome>` e abre o agente numa sessão `tmux -L jangada`; `--prompt`/`--prompt-arquivo` já entregam a tarefa, `--perfil` escolhe o agente |
 | `jangada-worktree-preparar` | copia para o worktree novo os ignorados do `.worktreeinclude`, liga o que está em `.jangada/links` e roda `.jangada/preparar.sh` |
 | `jangada-hook-claude` | chamado pelos hooks do Claude Code; grava o estado e notifica |
+| `jangada-hook-agy` | o mesmo para o agy, pelo `~/.gemini/config/hooks.json` (PreInvocation e Stop) |
+| `jangada-validar` | revisão do diff pelo `claude -p` (só leitura), chamada pelo agy antes de entregar; pareceres em `validacao-<sessao>-rN.md` |
 | `jangada-agentes` | seletor, painel, módulo da barra, `--focar`, `--proximo`, `--anterior`, `--restaurar` |
 | `jangada-agente-fim` | encerra a sessão e remove o worktree (mantém o ramo); `--integrar` faz o merge na base e apaga o ramo |
 | `jangada-par` | Claude implementa, agy revisa, Claude avalia cada apontamento e aplica o que aceitar, em rodadas |
@@ -108,6 +110,32 @@ do terminal é o nome da sessão (`set-titles-string "#S"`), e é por ele que o
 Depois de integrar uma mudança no próprio jangada, confira a cópia
 instalada: `git -C ~/.local/share/jangada pull --ff-only` e
 `jangada-migrar`.
+
+## agy como agente da sessão
+
+- O seletor do `jangada-agente` oferece o padrão e os perfis; o
+  `default/agentes/agy.conf` vem no repositório e perde para um perfil de
+  mesmo nome em `~/.config/jangada/agentes`.
+- A tarefa vai por `-i`, precedida de `default/agy/protocolo.md`. Sem tarefa,
+  vai só o protocolo. O agy não aceita a tarefa como argumento solto.
+- Hooks do agy: só o global `~/.gemini/config/hooks.json` foi carregado pelo
+  CLI nos testes de 22/09/2026. O `.agents/hooks.json` do projeto deu "loaded 0
+  named hooks" no log (`~/.gemini/antigravity-cli/log/`). O hook roda com a
+  pasta do `hooks.json` como diretório atual e herda o ambiente, inclusive
+  `JANGADA_SESSAO`.
+- **Não registre `PreToolUse` respondendo `{}`**: o agy trata como recusa e a
+  ferramenta é negada ("tool call denied by pre-tool hook").
+- O Stop traz `fullyIdle`, `terminationReason` e `error`; não traz a última
+  resposta. No jq, `.fullyIdle // true` dá `true` mesmo com `false`.
+- Chamadas auxiliares desligam os hooks da sessão: o `jangada-par` chama o agy
+  com `env -u JANGADA_SESSAO`, e o `jangada-validar` chama o Claude com
+  `JANGADA_HOOK_DESLIGADO=1`, que o `jangada-hook-claude` respeita.
+- A confiança do agy na pasta é por caminho exato (`trustedWorkspaces` em
+  `~/.gemini/antigravity-cli/settings.json`; confiar em `~` não cobre as
+  subpastas). Todo worktree novo abre com a pergunta "Do you trust the
+  contents of this project?", que o usuário responde na janela.
+- Para testar hooks sem tocar no estado real, mude `XDG_STATE_HOME`; o
+  `jangada-config` recalcula `JANGADA_ESTADO` a partir dele.
 
 ## Perfis e ganchos
 

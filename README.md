@@ -83,7 +83,8 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-migrar` | aplica as migrações pendentes (o `jangada-update` já chama) |
 | `jangada-snapshot "descrição"` | cria um snapshot manual do sistema |
 | `jangada-tema [imagem]` | gera as cores a partir de um papel de parede e recarrega a interface |
-| `jangada-agente` | escolhe um projeto, cria um worktree e abre um agente numa sessão tmux (`--prompt`, `--prompt-arquivo`, `--perfil`) |
+| `jangada-agente` | escolhe o agente (Claude ou agy), o projeto e cria um worktree, e abre o agente numa sessão tmux (`--prompt`, `--prompt-arquivo`, `--perfil`) |
+| `jangada-validar` | manda o diff do worktree para o Claude (`claude -p`, só leitura) revisar e devolve `STATUS: APROVADO` ou `REVISAR`; o agy chama antes de entregar |
 | `jangada-par` | tarefa em par: Claude implementa, Antigravity revisa, Claude avalia cada apontamento e aplica o que aceitar |
 | `jangada-shell` | inicia subshell enriquecida com comandos diretos de agentes e projetos |
 | `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir, integrar ou encerrar (`--proximo`, `--anterior`, `--restaurar`) |
@@ -164,6 +165,29 @@ carrega quando a tarefa envolve a sessão, mesmo aberto em outro projeto.
    cada uma na mesma pasta e na mesma conversa (`claude --resume`). Sem o id
    da conversa, o worktree usa `--continue`; direto no repositório abre uma
    conversa nova, porque a mais recente da pasta pode ser de outro agente.
+
+### Agente no agy, com o Claude só revisando
+
+Para poupar tokens do Claude, o agy pode fazer o trabalho e o Claude entrar só
+na revisão. No `SUPER + A`, escolha `agy` no seletor de agente, ou rode
+`jangada-agente --perfil agy --nome TAREFA --prompt "..."`.
+
+1. O agy abre interativo, no worktree, com a tarefa e o protocolo de
+   `default/agy/protocolo.md` (trabalhar só no worktree, commits sem
+   `Co-Authored-By`, validar antes de entregar).
+2. Antes de entregar, o próprio agy roda `jangada-validar`. O Claude recebe só
+   o diff desde a base, lê o que precisar e responde. Com `REVISAR`, o agy
+   corrige e roda de novo com `--resposta`, até 3 rodadas
+   (`JANGADA_VALIDAR_RODADAS`). O modelo padrão é o Sonnet
+   (`JANGADA_VALIDAR_MODELO`).
+3. A barra acompanha pelo hook `jangada-hook-agy`, instalado em
+   `~/.gemini/config/hooks.json`: trabalhando e concluído. O agy não tem
+   evento de pedido de permissão, então não há "aguardando".
+4. Os pareceres ficam em `~/.local/state/jangada/agentes/validacao-*` e
+   aparecem na prévia do seletor. `Enter` restaura com
+   `agy --conversation`.
+5. Em cada worktree novo o agy pergunta se confia na pasta; responda na
+   janela. A confiança é por caminho exato.
 
 Detalhes que valem para o dia a dia:
 

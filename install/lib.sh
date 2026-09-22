@@ -180,6 +180,35 @@ ligar_skill_claude() {
   ok "skill do Claude Code ligada: $destino -> $origem"
 }
 
+# Instala os hooks do jangada para o Antigravity (default/agy/hooks.json) em
+# ~/.gemini/config/hooks.json, a pasta global que o agy lê em toda conversa. O
+# arquivo é um objeto de hooks com nome; o do jangada fica na chave "jangada",
+# substituída inteira, e os demais ficam como estão.
+mesclar_hooks_agy() {
+  local cfg="$HOME/.gemini/config/hooks.json" novos tmp
+  novos="$(sed "s|@JANGADA_PATH@|$JANGADA_PATH|g" "$JANGADA_PATH/default/agy/hooks.json")"
+  if simulando; then
+    info "[simulação] instalaria os hooks do jangada em $cfg"
+    return 0
+  fi
+  mkdir -p "$(dirname "$cfg")"
+  [[ -f "$cfg" ]] || echo '{}' >"$cfg"
+  tmp="$(mktemp)"
+  if ! jq --argjson novos "$novos" '. + $novos' "$cfg" >"$tmp"; then
+    rm -f "$tmp"
+    aviso "não consegui ler $cfg; hooks do agy não instalados"
+    return 0
+  fi
+  if [[ "$(jq -cS . "$tmp")" == "$(jq -cS . "$cfg")" ]]; then
+    rm -f "$tmp"
+    ok "hooks do agy já instalados"
+    return 0
+  fi
+  copia_seguranca "$cfg"
+  mv "$tmp" "$cfg"
+  ok "hooks do agy instalados em $cfg"
+}
+
 # Mescla os hooks do jangada (default/claude/hooks.json) em
 # ~/.claude/settings.json, evento por evento. Um hook já presente, reconhecido
 # pelo comando sem o caminho (a cópia instalada pode ter mudado de lugar), não

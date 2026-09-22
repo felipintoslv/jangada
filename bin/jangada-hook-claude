@@ -7,6 +7,9 @@
 # Recebe o JSON do evento pela entrada padrão.
 
 {
+  # O jangada-validar desliga o hook no claude -p da revisão: aquele Claude
+  # não é o agente da sessão.
+  [[ -z "${JANGADA_HOOK_DESLIGADO:-}" ]] || exit 0
   evento="${1:-ativo}"
   dir_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   # shellcheck source=bin/jangada-config

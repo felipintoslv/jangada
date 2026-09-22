@@ -138,7 +138,11 @@ jangada_fuzzel() {
 jangada_perfil() {
   local _arq="$JANGADA_CONFIG/agentes/$1.conf" _chave _valor
   PERFIL_COMANDO=""; PERFIL_ARGS=""; PERFIL_AMBIENTE=()
-  [[ "$1" =~ ^[A-Za-z0-9_-]+$ && -r "$_arq" ]] || return 1
+  [[ "$1" =~ ^[A-Za-z0-9_-]+$ ]] || return 1
+  # O perfil do usuário tem precedência; sem ele, vale o do repositório
+  # (default/agentes), como o agy.conf.
+  [[ -r "$_arq" ]] || _arq="$JANGADA_PATH/default/agentes/$1.conf"
+  [[ -r "$_arq" && "$1" != exemplo ]] || return 1
   while IFS='=' read -r _chave _valor; do
     [[ "$_chave" =~ ^[A-Z_][A-Z0-9_]*$ ]] || continue
     _valor="${_valor/#\$HOME/$HOME}"
@@ -154,9 +158,9 @@ jangada_perfil() {
 
 jangada_perfis() {
   local _a
-  for _a in "$JANGADA_CONFIG"/agentes/*.conf; do
+  for _a in "$JANGADA_CONFIG"/agentes/*.conf "$JANGADA_PATH"/default/agentes/*.conf; do
     [[ -e "$_a" ]] && basename "$_a" .conf
-  done
+  done | grep -vx exemplo | sort -u
   return 0
 }
 

@@ -13,3 +13,8 @@ if tem_comando claude || [[ -d "$HOME/.claude" ]]; then
 else
   aviso "Claude Code não encontrado; hooks e skill não instalados (rode ./install.sh 50 depois de instalar)"
 fi
+
+# Hooks do Antigravity (agy): estado da sessão na barra, como no Claude Code.
+if tem_comando agy || [[ -d "$HOME/.gemini" ]]; then
+  mesclar_hooks_agy
+fi

@@ -138,6 +138,9 @@ limpar() {
     echo "ramo mantido: $ramo (apague com: git -C $raiz branch -d $ramo)"
   fi
   rm -f "$arq"
+  # Os pareceres do jangada-validar contam as rodadas: uma sessão nova com o
+  # mesmo nome começa da primeira.
+  rm -f "$JANGADA_ESTADO/agentes/validacao-$s-r"*.md
   echo "sessão encerrada: $s"
   "$JANGADA_PATH/bin/jangada-gancho" pos-agente-fim "$s"
 }

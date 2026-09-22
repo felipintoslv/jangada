@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+# Manda o trabalho do agente para o Claude revisar, sem que o Claude implemente
+# nada: ele recebe só o diff, lê o que precisar e devolve um parecer. Feito
+# para o agy chamar antes de entregar (default/agy/protocolo.md), e assim o
+# gasto de tokens do Claude fica restrito à revisão.
+#
+# Uso: jangada-validar [opções] [PASTA]
+#   --base REF        compara a partir de REF (padrão: base gravada no estado
+#                     da sessão; sem ela, main ou master; sem eles, HEAD)
+#   --modelo MODELO   modelo do Claude (padrão: JANGADA_VALIDAR_MODELO ou sonnet)
+#   --resposta TEXTO  o que o agente fez com o parecer anterior (corrigido,
+#                     rejeitado e por quê); entra no pedido da rodada seguinte
+#   --forcar          passa do limite de rodadas (JANGADA_VALIDAR_RODADAS, 3)
+#
+# Saída: o parecer, que começa por "STATUS: APROVADO" ou "STATUS: REVISAR", e
+# fica gravado em ~/.local/state/jangada/agentes/validacao-SESSAO-rN.md.
+# Código de saída: 0 aprovado, 3 revisar, 4 limite de rodadas, 1 erro.
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+base=""; modelo="${JANGADA_VALIDAR_MODELO:-sonnet}"; resposta=""; forcar=0
+while (($#)); do
+  case "$1" in
+    --base) base="$2"; shift 2 ;;
+    --modelo) modelo="$2"; shift 2 ;;
+    --resposta) resposta="$2"; shift 2 ;;
+    --forcar) forcar=1; shift ;;
+    -h|--ajuda) sed -n '2,18s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    --) shift; break ;;
+    -*) echo "opção desconhecida: $1" >&2; exit 1 ;;
+    *) break ;;
+  esac
+done
+
+dir="$(realpath "${1:-$PWD}")"
+git -C "$dir" rev-parse --show-toplevel >/dev/null 2>&1 \
+  || { echo "jangada-validar: $dir não é um repositório git" >&2; exit 1; }
+dir="$(git -C "$dir" rev-parse --show-toplevel)"
+command -v claude >/dev/null 2>&1 || { echo "jangada-validar: claude não encontrado" >&2; exit 1; }
+
+rodadas_max="${JANGADA_VALIDAR_RODADAS:-3}"
+[[ "$rodadas_max" =~ ^[0-9]+$ ]] || rodadas_max=3
+# Teto do diff no pedido, em bytes. O pedido vai pela entrada padrão, sem o
+# limite de argumento, mas um diff de arquivo gerado gastaria tokens à toa.
+diff_max="${JANGADA_VALIDAR_DIFF_MAX:-150000}"
+[[ "$diff_max" =~ ^[0-9]+$ ]] || diff_max=150000
+
+estado_dir="$JANGADA_ESTADO/agentes"
+mkdir -p "$estado_dir"
+sessao="${JANGADA_SESSAO:-}"
+arq_estado=""
+[[ -n "$sessao" && -f "$estado_dir/$sessao.json" ]] && arq_estado="$estado_dir/$sessao.json"
+# Fora de uma sessão, os pareceres ficam com o nome da pasta.
+rotulo="${sessao:-$(basename "$dir")}"
+rotulo="${rotulo//[^A-Za-z0-9_.-]/-}"
+
+tarefa=""
+if [[ -n "$arq_estado" ]]; then
+  [[ -n "$base" ]] || base="$(jq -r '.base // ""' "$arq_estado")"
+  tarefa="$(jq -r '.tarefa // ""' "$arq_estado")"
+fi
+if [[ -z "$base" ]]; then
+  for r in main master; do
+    git -C "$dir" rev-parse --verify --quiet "$r" >/dev/null && { base="$r"; break; }
+  done
+fi
+ponto=""
+[[ -n "$base" ]] && ponto="$(git -C "$dir" merge-base "$base" HEAD 2>/dev/null || true)"
+# No próprio ramo base (trabalho direto no repositório), o merge-base é o HEAD
+# e só o que está sem commit entra na revisão.
+[[ -n "$ponto" ]] || ponto="$(git -C "$dir" rev-parse HEAD)"
+
+diff_conteudo="$(git -C "$dir" diff "$ponto" 2>/dev/null || true)"
+arquivos="$(git -C "$dir" diff --name-status "$ponto" 2>/dev/null || true)"
+novos="$(git -C "$dir" ls-files --others --exclude-standard 2>/dev/null || true)"
+[[ -n "$novos" ]] && arquivos+="${arquivos:+$'\n'}$(sed 's/^/??\t/' <<<"$novos")"
+commits="$(git -C "$dir" log --oneline "$ponto..HEAD" 2>/dev/null | head -30 || true)"
+
+if [[ -z "$diff_conteudo" && -z "$novos" ]]; then
+  echo "jangada-validar: nada a revisar desde $(git -C "$dir" rev-parse --short "$ponto")" >&2
+  exit 1
+fi
+
+# Rodada atual e parecer anterior.
+anteriores=()
+for f in "$estado_dir/validacao-$rotulo-r"*.md; do [[ -e "$f" ]] && anteriores+=("$f"); done
+rodada=$((${#anteriores[@]} + 1))
+if ((rodada > rodadas_max && !forcar)); then
+  echo "jangada-validar: limite de $rodadas_max rodadas atingido para $rotulo." >&2
+  echo "Pare e descreva o que ficou pendente; o usuário decide se roda de novo com --forcar." >&2
+  exit 4
+fi
+ultimo=""
+((${#anteriores[@]})) && ultimo="$(printf '%s\n' "${anteriores[@]}" | sort -V | tail -n1)"
+
+if (( ${#diff_conteudo} > diff_max )); then
+  echo "jangada-validar: diff de ${#diff_conteudo} bytes; vão os primeiros $diff_max" >&2
+  diff_conteudo="${diff_conteudo:0:diff_max}
+[... diff cortado pelo jangada-validar; leia os arquivos para ver o resto ...]"
+fi
+
+pedido="$(
+  cat <<EOF
+Você é o revisor técnico de um agente (Antigravity) que trabalha neste
+repositório. Não altere nada: só leia. Use as ferramentas de leitura quando o
+diff não bastar, e siga as regras do AGENTS.md ou CLAUDE.md do projeto.
+
+Tarefa do agente:
+${tarefa:-(não informada; deduza pelo diff e pelos commits)}
+
+Commits desde a base:
+${commits:-(nenhum; só alterações sem commit)}
+
+Arquivos (A novo, M alterado, D apagado, ?? novo sem commit):
+$arquivos
+
+Diff desde $(git -C "$dir" rev-parse --short "$ponto"):
+$diff_conteudo
+EOF
+  if [[ -n "$ultimo" ]]; then
+    printf '\nParecer da rodada anterior:\n---\n%s\n---\n' "$(head -c 20000 "$ultimo")"
+    printf 'Resposta do agente a esse parecer:\n---\n%s\n---\n' "${resposta:-(não informada)}"
+    printf 'Não repita um apontamento rejeitado com justificativa razoável, a menos que\n'
+    printf 'tenha evidência nova. Confira se o que foi corrigido ficou certo.\n'
+  fi
+  cat <<'EOF'
+
+Procure erros de lógica, casos que quebram, regras do projeto violadas, arquivo
+que não deveria estar no diff (lixo, gerado, segredo) e teste que falta. Não
+aponte gosto pessoal nem reescrita sem defeito concreto.
+
+Responda em português, neste formato e nada mais:
+STATUS: APROVADO
+ou
+STATUS: REVISAR
+seguido de apontamentos numerados, cada um com arquivo:linha, o problema e a
+correção sugerida, do mais grave para o menos grave.
+EOF
+)"
+
+saida="$estado_dir/validacao-$rotulo-r$rodada.md"
+echo "jangada-validar: rodada $rodada de $rodadas_max, Claude ($modelo) revisando $(wc -l <<<"$arquivos") arquivo(s)..." >&2
+# O hook do Claude fica desligado nesta chamada: este Claude não é o agente da
+# sessão, e o Stop dele marcaria a sessão como concluída.
+if ! (cd "$dir" && env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 claude -p \
+      --model "$modelo" \
+      --allowedTools "Read,Grep,Glob" \
+      --disallowedTools "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch" \
+      <<<"$pedido") >"$saida.tmp"; then
+  rm -f "$saida.tmp"
+  echo "jangada-validar: a chamada ao Claude falhou" >&2
+  exit 1
+fi
+mv "$saida.tmp" "$saida"
+cat "$saida"
+
+status="REVISAR"
+grep -qE '^\**STATUS:\**[[:space:]]*\**APROVADO' "$saida" && status="APROVADO"
+if [[ -n "$arq_estado" ]]; then
+  tmp="$(mktemp "$arq_estado.XXXXXX")"
+  jangada_alterar_estado "$arq_estado" "$tmp" --arg v "r$rodada: $status" '.validacao = $v'
+  rm -f "$tmp"
+fi
+echo >&2
+echo "jangada-validar: $status (parecer em $saida)" >&2
+[[ "$status" == APROVADO ]] && exit 0
+exit 3
