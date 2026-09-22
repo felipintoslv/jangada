@@ -125,6 +125,10 @@ instalada: `git -C ~/.local/share/jangada pull --ff-only` e
   contents of this project?", que o usuário responde na janela.
 - Para testar hooks sem tocar no estado real, mude `XDG_STATE_HOME`; o
   `jangada-config` recalcula `JANGADA_ESTADO` a partir dele.
+- Clones de referência em subpastas (como `referencia/`): se contiverem
+  `CLAUDE.md` ou `AGENTS.md`, o harness do Claude ou do agy pode carregar os
+  arquivos de terceiros como se fossem regras do projeto. Apague esses arquivos
+  de dentro de `referencia/` logo após clonar.
 
 ## Perfis e ganchos
 
