@@ -39,9 +39,11 @@ echo "linha 1" >"$tmp/projeto/arquivo.txt"
 git -C "$tmp/projeto" add arquivo.txt
 git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "commit 1"
 
-# Sessão falsa com o agente dado; o jangada-validar lê .agente e .tarefa.
+# Sessão falsa com o agente dado; o jangada-validar lê .agente, .revisor e .tarefa.
 sessao_de() {
-  jq -n --arg a "$1" '{sessao:"s", agente:$a, base:"main", tarefa:"tarefa de teste", estado:"trabalhando"}' \
+  jq -n --arg a "$1" --arg r "${2:-}" \
+    '{sessao:"s", agente:$a, base:"main", tarefa:"tarefa de teste", estado:"trabalhando"}
+     + (if $r != "" then {revisor:$r} else {} end)' \
     >"$estado/s.json"
   rm -f "$estado/validacao-s-r"* "$tmp/falso/"*.pedido
 }
@@ -91,6 +93,41 @@ conferir "caso 5: aprovado mesmo com diff grande" [ "$rc" = 0 ]
 conferir "caso 5: pedido cabe no argumento" [ "$(LC_ALL=C wc -c <"$tmp/falso/agy.pedido")" -lt 131072 ]
 conferir "caso 5: pedido aponta o arquivo do diff" grep -q "leia o arquivo .*validacao-s-r1.md.diff" "$tmp/falso/agy.pedido"
 git -C "$tmp/projeto" rm -qf grande.txt
+
+# Caso 6: auto-revisão do agy (revisor agy gravado no estado).
+sessao_de agy agy
+validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 6: auto-revisão do agy sai com 0" [ "$rc" = 0 ]
+conferir "caso 6: o agy revisou o próprio trabalho" test -s "$tmp/falso/agy.pedido"
+conferir "caso 6: o claude não foi chamado" test ! -e "$tmp/falso/claude.pedido"
+conferir "caso 6: pedido identifica o autor como Antigravity" grep -q "agente (Antigravity" "$tmp/falso/agy.pedido"
+conferir "caso 6: pedido alerta sobre revisão pelo mesmo modelo" grep -q "revisão pelo mesmo modelo" "$tmp/falso/agy.pedido"
+conferir "caso 6: estado registra a rodada e o revisor agy" [ "$(jq -r .validacao "$estado/s.json")" = "r1: APROVADO (agy)" ]
+
+# Caso 7: auto-revisão do Claude com --revisor mesmo.
+sessao_de claude
+validar 'STATUS: APROVADO' --revisor mesmo; rc=$?
+conferir "caso 7: auto-revisão do claude com --revisor mesmo sai com 0" [ "$rc" = 0 ]
+conferir "caso 7: o claude revisou o próprio trabalho" test -s "$tmp/falso/claude.pedido"
+conferir "caso 7: o agy não foi chamado" test ! -e "$tmp/falso/agy.pedido"
+conferir "caso 7: pedido identifica o autor como Claude" grep -q "agente (Claude)" "$tmp/falso/claude.pedido"
+conferir "caso 7: pedido alerta sobre revisão pelo mesmo modelo" grep -q "revisão pelo mesmo modelo" "$tmp/falso/claude.pedido"
+conferir "caso 7: estado registra a rodada e o revisor claude" [ "$(jq -r .validacao "$estado/s.json")" = "r1: APROVADO (claude)" ]
+
+# Caso 8: perfis agy-agy e claude-claude definem variáveis esperadas.
+(
+  export JANGADA_PATH="$repo_jangada" XDG_CONFIG_HOME="$tmp/config"
+  # shellcheck source=bin/jangada-config
+  source "$repo_jangada/bin/jangada-config"
+  jangada_perfil agy-agy
+  [[ "$PERFIL_COMANDO" == "agy" ]] || exit 1
+  [[ " ${PERFIL_AMBIENTE[*]} " == *" JANGADA_VALIDAR_REVISOR=agy "* ]] || exit 1
+
+  jangada_perfil claude-claude
+  [[ "$PERFIL_COMANDO" == "claude" ]] || exit 1
+  [[ " ${PERFIL_AMBIENTE[*]} " == *" JANGADA_VALIDAR_REVISOR=claude "* ]] || exit 1
+); rc=$?
+conferir "caso 8: perfis agy-agy e claude-claude definem comando e revisor" [ "$rc" = 0 ]
 
 if ((falhas)); then
   echo "$falhas falha(s); saídas em $tmp (mantido)"
