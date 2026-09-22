@@ -468,7 +468,11 @@ case "${1:-}" in
     # enquanto a lista ficasse aberta.
     # Se a lista já está aberta, o atalho só a traz para a frente.
     jangada_focar_classe org.jangada.lista && exit 0
-    setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.lista -e "$0" >/dev/null 2>&1
+    # JANGADA_LISTA_JANELA faz a lista esperar um Enter depois do Alt+I e do
+    # Ctrl+X: sem isso a janela fecha com o fim do comando e leva junto a
+    # mensagem, inclusive a de recusa do --integrar.
+    setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.lista \
+      -e env JANGADA_LISTA_JANELA=1 "$0" >/dev/null 2>&1
     ;;
   --painel)
     if ! hyprctl clients -j | jq -e 'any(.class == "org.jangada.painel")' >/dev/null; then
@@ -508,10 +512,17 @@ case "${1:-}" in
     tecla="$(head -1 <<<"$escolha")"
     s="$(sed -n 2p <<<"$escolha" | cut -f2)"
     [[ -n "$s" ]] || exit 0
+    fim=()
     case "$tecla" in
-      ctrl-x) exec "$JANGADA_PATH/bin/jangada-agente-fim" "$s" ;;
-      alt-i) exec "$JANGADA_PATH/bin/jangada-agente-fim" --integrar "$s" ;;
+      ctrl-x) fim=("$JANGADA_PATH/bin/jangada-agente-fim" "$s") ;;
+      alt-i) fim=("$JANGADA_PATH/bin/jangada-agente-fim" --integrar "$s") ;;
     esac
+    if ((${#fim[@]})); then
+      [[ -n "${JANGADA_LISTA_JANELA:-}" ]] || exec "${fim[@]}"
+      rc=0; "${fim[@]}" || rc=$?
+      read -r -p "Enter para fechar " _ || true
+      exit "$rc"
+    fi
     focar "$s"
     ;;
   -h|--ajuda)
