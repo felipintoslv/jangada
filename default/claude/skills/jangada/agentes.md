@@ -8,7 +8,7 @@
 | `jangada-worktree-preparar` | copia para o worktree novo os ignorados do `.worktreeinclude`, liga o que está em `.jangada/links` e roda `.jangada/preparar.sh` |
 | `jangada-hook-claude` | chamado pelos hooks do Claude Code; grava o estado e notifica |
 | `jangada-hook-agy` | o mesmo para o agy, pelo `~/.gemini/config/hooks.json` (PreInvocation e Stop) |
-| `jangada-validar` | revisão do diff pelo outro modelo (agy revisa o Claude, Claude revisa o agy), só leitura, chamada pelo agente antes de entregar; pareceres em `validacao-<sessao>-rN.md` |
+| `jangada-validar` | revisão do diff por outro modelo ou pelo mesmo modelo isolado (claude ou agy), só leitura, chamada pelo agente antes de entregar; pareceres em `validacao-<sessao>-rN.md` |
 | `jangada-agentes` | seletor, painel, módulo da barra, `--focar`, `--proximo`, `--anterior`, `--restaurar` |
 | `jangada-agente-fim` | encerra a sessão e remove o worktree (mantém o ramo); `--integrar` faz o merge na base e apaga o ramo |
 | `jangada-consumo` | tokens do Claude no bloco de 5 horas, lidos de `~/.claude/projects` |
@@ -17,7 +17,7 @@
 ## Contrato de estado
 
 Um JSON por sessão em `~/.local/state/jangada/agentes/<sessao>.json`, com
-`sessao`, `dir`, `raiz`, `worktree`, `ramo`, `base`, `agente`, `estado`,
+`sessao`, `dir`, `raiz`, `worktree`, `ramo`, `base`, `agente`, `revisor`, `estado`,
 `mensagem`, `desde`, `atualizado`, `comando`, `perfil`, `tarefa`, `conversa`
 (id da conversa, gravado pelo hook), `inicio` (HEAD na criação) e
 `validacao` (última rodada do `jangada-validar`, com o revisor).
@@ -73,6 +73,8 @@ O `jangada-par` (Claude implementando em lote, agy revisando) saiu em
 porta de entrada. O que se aprendeu com ele vale para o revisor agy:
 
 - O revisor padrão é o oposto do `.agente` da sessão; fora de sessão, Claude.
+  Com `--revisor mesmo` ou nos perfis `claude-claude` e `agy-agy`, o mesmo
+  modelo revisa em processo isolado.
 - Sem terminal, o agy não tem como pedir permissão: comando ou escrita é
   recusado e ele devolve `status: SUCCESS` com `response` vazio. O pedido
   manda **não executar comandos** e ler com a ferramenta de leitura.
@@ -100,9 +102,9 @@ instalada: `git -C ~/.local/share/jangada pull --ff-only` e
 ## agy como agente da sessão
 
 - O seletor do `jangada-agente` oferece o padrão e os perfis, cada um com a
-  descrição entre parênteses (`DESCRICAO=` do perfil). O
-  `default/agentes/agy.conf` vem no repositório e perde para um perfil de
-  mesmo nome em `~/.config/jangada/agentes`.
+  descrição entre parênteses (`DESCRICAO=` do perfil). Os perfis
+  `default/agentes/agy.conf`, `agy-agy.conf` e `claude-claude.conf` vêm no
+  repositório e perdem para perfis de mesmo nome em `~/.config/jangada/agentes`.
 - O protocolo é `default/agentes/protocolo.md`. No agy a tarefa vai por `-i`,
   precedida dele; sem tarefa, vai só o protocolo. O agy não aceita a tarefa
   como argumento solto. No Claude vai por `--append-system-prompt`, dentro do
