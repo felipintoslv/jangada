@@ -16,7 +16,7 @@ done
 
 passo "shellcheck"
 if command -v shellcheck >/dev/null; then
-  shellcheck -x -S warning install.sh install/*.sh bin/* testes/*.sh || falha "shellcheck"
+  shellcheck -x -S warning install.sh install/*.sh bin/* migrations/*.sh testes/*.sh || falha "shellcheck"
   shellcheck -s sh -S warning shell/jangada.sh || falha "shellcheck shell/jangada.sh"
   # As funções da subshell não estavam sendo conferidas por ninguém.
   shellcheck -S warning shell/jangada-shell.sh || falha "shellcheck shell/jangada-shell.sh"
@@ -49,6 +49,7 @@ jq empty default/claude/hooks.json || falha "hooks.json"
 jq empty default/agy/hooks.json || falha "agy/hooks.json"
 # config.jsonc tem comentários; remove as linhas de comentário antes de validar.
 sed 's#^[[:space:]]*//.*##' default/waybar/config.jsonc | jq empty || falha "waybar/config.jsonc"
+sed 's#^[[:space:]]*//.*##' default/fastfetch/config.jsonc | jq empty || falha "fastfetch/config.jsonc"
 
 passo "TOML"
 if python3 -c 'import tomllib' 2>/dev/null; then

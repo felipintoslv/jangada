@@ -42,7 +42,7 @@ tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/jangada-sh-XXXXXX")"
 umask "$antigo_umask"
 chmod 700 "$tmp_dir"
 # shellcheck disable=SC2064
-trap "rm -rf '$tmp_dir'" EXIT INT TERM HUP
+trap "rm -rf '$tmp_dir'" EXIT
 
 export JANGADA_SHELL=1
 export JANGADA_PATH
@@ -71,7 +71,7 @@ fi
 
 # Banner inicial
 echo ""
-echo "⛵ Jangada Shell — Console de Agentes"
+echo "⛵ Jangada Shell: Console de Agentes"
 echo "Diretório atual: $PWD"
 echo "Digite 'ajuda' para listar os comandos. 'exit' para sair."
 echo ""
@@ -91,7 +91,7 @@ if [[ -f "$JANGADA_PATH/shell/jangada-shell.sh" ]]; then
 fi
 
 echo ""
-echo "⛵ Jangada Shell — Console de Agentes"
+echo "⛵ Jangada Shell: Console de Agentes"
 echo "Diretório atual: $PWD"
 echo "Digite 'ajuda' para listar os comandos. 'exit' para sair."
 echo ""

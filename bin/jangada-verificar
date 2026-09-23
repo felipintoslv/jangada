@@ -156,6 +156,23 @@ else
   nota "$HOME/.claude/settings.json não existe"
 fi
 
+if command -v agy >/dev/null 2>&1 || [[ -d "$HOME/.gemini" ]]; then
+  echo "== hooks do Antigravity (agy)"
+  if [[ -f "$HOME/.gemini/config/hooks.json" ]]; then
+    _faltam_agy="$(jq -r --slurpfile p "$JANGADA_PATH/default/agy/hooks.json" '
+      ($p[0].jangada | keys) - [(.jangada // {}) | to_entries[]
+        | select([.value[]?.command // ""] | any(test("jangada-hook-agy"))) | .key]
+      | join(" ")' "$HOME/.gemini/config/hooks.json" 2>/dev/null || echo "?")"
+    if [[ -z "$_faltam_agy" ]]; then
+      ok "hooks instalados em todos os eventos"
+    else
+      falha "hooks ausentes nos eventos: $_faltam_agy (rode jangada-migrar ou ./install.sh 50)"
+    fi
+  else
+    nota "$HOME/.gemini/config/hooks.json não existe"
+  fi
+fi
+
 if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
   echo "== erros de configuração do Hyprland"
   erros="$(hyprctl configerrors 2>/dev/null | sed '/^[[:space:]]*$/d')"

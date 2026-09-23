@@ -7,6 +7,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 repo_jangada="$PWD"
+unset JANGADA_VALIDAR_REVISOR
 falhas=0
 ok()    { printf 'ok    %s\n' "$*"; }
 falha() { printf 'FALHA %s\n' "$*"; falhas=$((falhas + 1)); }
@@ -48,7 +49,7 @@ sessao_de() {
   rm -f "$estado/validacao-s-r"* "$tmp/falso/"*.pedido
 }
 validar() {
-  env PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA="$1" JANGADA_SESSAO=s \
+  env -u JANGADA_VALIDAR_REVISOR PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA="$1" JANGADA_SESSAO=s \
     XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
     "$repo_jangada/bin/jangada-validar" "${@:2}" "$tmp/projeto" >"$tmp/saida.log" 2>&1
 }
@@ -182,6 +183,15 @@ env -u TMUX -u HYPRLAND_INSTANCE_SIGNATURE PATH="$tmp/bin:$PATH" \
   "$repo_jangada/bin/jangada-agente" --projeto "$tmp/projeto" --direto </dev/null >/dev/null 2>&1
 conferir "caso 10d: JANGADA_VALIDAR_REVISOR=mesmo global resolve para o agente da sessão" \
   [ "$(jq -r '.revisor // ""' "$estado/projeto.json")" = "claude" ]
+
+# 10e: Revisor do estado prevalece sobre JANGADA_VALIDAR_REVISOR global no jangada-validar
+sessao_de agy agy
+env PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA='STATUS: APROVADO' JANGADA_SESSAO=s \
+  XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
+  JANGADA_VALIDAR_REVISOR=claude \
+  "$repo_jangada/bin/jangada-validar" "$tmp/projeto" >/dev/null 2>&1
+conferir "caso 10e: revisor do estado prevalece sobre global claude no jangada-validar" \
+  test -s "$tmp/falso/agy.pedido"
 
 if ((falhas)); then
   echo "$falhas falha(s); saídas em $tmp (mantido)"

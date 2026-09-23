@@ -64,9 +64,6 @@ if ((janela)); then
   exec "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente -e "$0" "${args[@]}"
 fi
 
-# Nome seguro para ramo, pasta e sessão do tmux. Acentos viram a letra sem
-# acento antes do filtro: com locale UTF-8 o intervalo a-z do sed aceita "á",
-# e o ramo saía com acento.
 # Escolha do agente. Só com terminal e sem escolha feita na linha de comando:
 # chamado por outro script, vale o padrão.
 if ((!agente_dado)) && [[ -z "$perfil" && -t 0 && "${JANGADA_AGENTE_ESCOLHER:-1}" != 0 ]]; then
@@ -109,6 +106,9 @@ if [[ -n "$perfil" ]]; then
   agente="$PERFIL_COMANDO"
 fi
 
+# Nome seguro para ramo, pasta e sessão do tmux. Acentos viram a letra sem
+# acento antes do filtro: com locale UTF-8 o intervalo a-z do sed aceita "á",
+# e o ramo saía com acento.
 slug() {
   { iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null <<<"$1" || printf '%s\n' "$1"; } \
     | LC_ALL=C tr '[:upper:]' '[:lower:]' \

@@ -28,7 +28,7 @@ montar() {
     /^$/ {
       if (key == "") next
       if (sub_ != "") key = key "  [modo " sub_ "]"
-      if (desc == "") desc = "—"
+      if (desc == "") desc = "-"
       printf "%s%s\t%s\n", teclas(mod), key, desc
       key = ""
     }

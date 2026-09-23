@@ -251,7 +251,7 @@ sddm() {
 # Ajuda dos comandos do jangada shell
 ajuda() {
   echo ""
-  echo "⛵ Jangada Shell — Comandos Disponíveis:"
+  echo "⛵ Jangada Shell: Comandos Disponíveis:"
   echo ""
   echo "  agente            cria um agente (Claude ou agy) em worktree; o outro modelo revisa"
   echo "  revisar           manda o diff do diretório atual para o outro modelo revisar"

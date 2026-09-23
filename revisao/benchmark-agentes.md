@@ -261,7 +261,7 @@ escrever uma shell própria.
 | I. Consumo na barra | feito | `jangada-consumo`, no tooltip do módulo de agentes |
 | J. Diagnóstico entregue ao agente | feito | `jangada-verificar --diagnostico` e `--agente`; entrada no menu |
 | K. Proteção durante a atualização | feito em parte | `jangada-update` confere mkinitcpio, dkms e a versão da NVIDIA e avisa quando é preciso reiniciar. **Adiado:** suspender a recarga automática do Hyprland durante o pacman. O pacman não toca em `~/.config/jangada` nem em `default/` (que só muda por `git pull`), então não há recarga disparada no meio da transação; o problema do Omarchy vem de pacotes que escrevem na configuração do Hyprland, o que o jangada não faz |
-| L. Ganchos do usuário | feito | `jangada-gancho`: `pos-tema`, `pos-agente-fim`, `pos-par`, `pos-update` |
+| L. Ganchos do usuário | feito | `jangada-gancho`: `pos-tema`, `pos-agente-fim`, `pos-validar`, `pos-update` |
 | Par com avaliação | feito (fora da lista original) | o Claude avalia cada apontamento do agy antes de implementar |
 | 4.1 Teste aninhado | feito | `testes/aninhado.sh` |
 | 4.2 `jangada-importar` | feito | lê o niri (atual ou de um mapeamento) e grava arquivos `.importado` |
