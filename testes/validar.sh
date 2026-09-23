@@ -129,6 +129,60 @@ conferir "caso 7: estado registra a rodada e o revisor claude" [ "$(jq -r .valid
 ); rc=$?
 conferir "caso 8: perfis agy-agy e claude-claude definem comando e revisor" [ "$rc" = 0 ]
 
+# Caso 9: auto-revisão fora de sessão com --revisor mesmo.
+rm -f "$tmp/falso/"*.pedido
+env PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA='STATUS: APROVADO' \
+  XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
+  "$repo_jangada/bin/jangada-validar" --revisor mesmo "$tmp/projeto" >"$tmp/saida.log" 2>&1; rc=$?
+conferir "caso 9: --revisor mesmo fora de sessão sai com 0" [ "$rc" = 0 ]
+conferir "caso 9: o claude revisou" test -s "$tmp/falso/claude.pedido"
+conferir "caso 9: pedido identifica autor coerente com revisor" grep -q "agente (Claude)" "$tmp/falso/claude.pedido"
+conferir "caso 9: pedido inclui alerta de auto-revisão" grep -q "revisão pelo mesmo modelo" "$tmp/falso/claude.pedido"
+
+# Caso 10: resolução de revisor no jangada-agente (precedência entre --revisor, perfil e global).
+cat >"$tmp/bin/tmux" <<'EOF'
+#!/usr/bin/env bash
+for arg in "$@"; do [[ "$arg" == has-session ]] && exit 1; done
+exit 0
+EOF
+chmod +x "$tmp/bin/tmux"
+
+# 10a: Perfil agy-agy prevalece sobre JANGADA_VALIDAR_REVISOR=claude global
+rm -f "$estado/"*.json
+env -u TMUX -u HYPRLAND_INSTANCE_SIGNATURE PATH="$tmp/bin:$PATH" \
+  XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
+  JANGADA_AGENTE_ESCOLHER=0 JANGADA_VALIDAR_REVISOR=claude \
+  "$repo_jangada/bin/jangada-agente" --projeto "$tmp/projeto" --direto --perfil agy-agy </dev/null >/dev/null 2>&1
+conferir "caso 10a: perfil agy-agy prevalece sobre global claude" \
+  [ "$(jq -r '.revisor // ""' "$estado/projeto.json")" = "agy" ]
+
+# 10b: Perfil claude-claude prevalece sobre JANGADA_VALIDAR_REVISOR=agy global
+rm -f "$estado/"*.json
+env -u TMUX -u HYPRLAND_INSTANCE_SIGNATURE PATH="$tmp/bin:$PATH" \
+  XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
+  JANGADA_AGENTE_ESCOLHER=0 JANGADA_VALIDAR_REVISOR=agy \
+  "$repo_jangada/bin/jangada-agente" --projeto "$tmp/projeto" --direto --perfil claude-claude </dev/null >/dev/null 2>&1
+conferir "caso 10b: perfil claude-claude prevalece sobre global agy" \
+  [ "$(jq -r '.revisor // ""' "$estado/projeto.json")" = "claude" ]
+
+# 10c: Opção explícita --revisor prevalece sobre o perfil
+rm -f "$estado/"*.json
+env -u TMUX -u HYPRLAND_INSTANCE_SIGNATURE PATH="$tmp/bin:$PATH" \
+  XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
+  JANGADA_AGENTE_ESCOLHER=0 \
+  "$repo_jangada/bin/jangada-agente" --projeto "$tmp/projeto" --direto --perfil claude-claude --revisor agy </dev/null >/dev/null 2>&1
+conferir "caso 10c: --revisor agy explícito prevalece sobre perfil claude-claude" \
+  [ "$(jq -r '.revisor // ""' "$estado/projeto.json")" = "agy" ]
+
+# 10d: JANGADA_VALIDAR_REVISOR=mesmo global resolve para o agente padrão
+rm -f "$estado/"*.json
+env -u TMUX -u HYPRLAND_INSTANCE_SIGNATURE PATH="$tmp/bin:$PATH" \
+  XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
+  JANGADA_AGENTE_ESCOLHER=0 JANGADA_VALIDAR_REVISOR=mesmo \
+  "$repo_jangada/bin/jangada-agente" --projeto "$tmp/projeto" --direto </dev/null >/dev/null 2>&1
+conferir "caso 10d: JANGADA_VALIDAR_REVISOR=mesmo global resolve para o agente da sessão" \
+  [ "$(jq -r '.revisor // ""' "$estado/projeto.json")" = "claude" ]
+
 if ((falhas)); then
   echo "$falhas falha(s); saídas em $tmp (mantido)"
   trap - EXIT

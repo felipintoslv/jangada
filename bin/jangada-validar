@@ -73,7 +73,9 @@ if [[ -n "$arq_estado" ]]; then
   [[ -n "$revisor" ]] || revisor="$(jq -r '.revisor // ""' "$arq_estado")"
 fi
 
+auto_revisao=0
 if [[ "$revisor" == "mesmo" ]]; then
+  auto_revisao=1
   revisor="${autor:-claude}"
 elif [[ "$revisor" == "oposto" ]]; then
   case "$autor" in
@@ -96,14 +98,22 @@ case "$revisor" in
   *) echo "jangada-validar: revisor desconhecido: $revisor (use claude, agy ou mesmo)" >&2; exit 1 ;;
 esac
 
+if [[ -n "$autor" && "$revisor" == "$autor" ]]; then
+  auto_revisao=1
+fi
+
 case "$autor" in
   claude) nome_autor="Claude" ;;
   agy) nome_autor="Antigravity (agy)" ;;
   *)
-    case "$revisor" in
-      claude) nome_autor="Antigravity (agy)" ;;
-      agy) nome_autor="Claude" ;;
-    esac
+    if ((auto_revisao)); then
+      [[ "$revisor" == claude ]] && nome_autor="Claude" || nome_autor="Antigravity (agy)"
+    else
+      case "$revisor" in
+        claude) nome_autor="Antigravity (agy)" ;;
+        agy) nome_autor="Claude" ;;
+      esac
+    fi
     ;;
 esac
 command -v "$revisor" >/dev/null 2>&1 || { echo "jangada-validar: $revisor não encontrado" >&2; exit 1; }
@@ -162,7 +172,7 @@ comandos: só leia. Use a ferramenta de leitura quando o diff não bastar, só e
 arquivos de texto (nada de PDF, planilha, imagem, parquet ou zip, que estouram
 o contexto), e siga as regras do AGENTS.md ou CLAUDE.md do projeto.
 EOF
-  if [[ -n "$autor" && "$revisor" == "$autor" ]]; then
+  if ((auto_revisao)); then
     printf '\nEsta é uma revisão pelo mesmo modelo. Seja criterioso na conferência do código.\n'
   fi
   cat <<EOF
