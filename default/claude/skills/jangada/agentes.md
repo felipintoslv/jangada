@@ -10,7 +10,7 @@
 | `jangada-hook-agy` | o mesmo para o agy, pelo `~/.gemini/config/hooks.json` (PreInvocation e Stop) |
 | `jangada-validar` | revisão do diff por outro modelo ou pelo mesmo modelo isolado (claude ou agy), só leitura, chamada pelo agente antes de entregar; pareceres em `validacao-<sessao>-rN.md` |
 | `jangada-agentes` | seletor, painel, módulo da barra, `--focar`, `--proximo`, `--anterior`, `--restaurar` |
-| `jangada-agente-fim` | encerra a sessão e remove o worktree (mantém o ramo); `--integrar` faz o merge na base e apaga o ramo |
+| `jangada-agente-fim` | encerra a sessão e remove o worktree (mantém o ramo); `--integrar` faz o merge na base, atualiza a cópia instalada se for o repositório do jangada e apaga o ramo |
 | `jangada-consumo` | tokens do Claude no bloco de 5 horas, lidos de `~/.claude/projects` |
 | `jangada-gancho` | roda os ganchos do usuário em `~/.config/jangada/ganchos/` |
 
@@ -140,5 +140,5 @@ instalada: `git -C ~/.local/share/jangada pull --ff-only` e
   em `default/agentes/exemplo.conf`). O arquivo é lido, não executado.
   Use para outra conta, outro modelo ou outro agente.
 - Ganchos: executável `~/.config/jangada/ganchos/EVENTO` ou arquivos em
-  `EVENTO.d/`. Eventos: `pos-tema`, `pos-agente-fim`, `pos-validar`,
-  `pos-update`. Falha de gancho gera só aviso.
+  `EVENTO.d/`. Eventos: `pos-tema`, `pos-agente-fim` (sessão, raiz, integrado),
+  `pos-validar`, `pos-update`. Falha de gancho gera só aviso.

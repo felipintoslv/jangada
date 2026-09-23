@@ -53,6 +53,47 @@ confirmar() {
 
 # Integração: as mesmas conferências da função concluir do shell, feitas antes
 # de qualquer limpeza. Se o merge falhar, nada é removido.
+atualizar_copia_instalada() {
+  local r="$1"
+  [[ -d "$JANGADA_PATH/.git" ]] || return 0
+
+  local raiz_real caminho_real
+  raiz_real="$(realpath "$r" 2>/dev/null || printf '%s' "$r")"
+  caminho_real="$(realpath "$JANGADA_PATH" 2>/dev/null || printf '%s' "$JANGADA_PATH")"
+  [[ "$raiz_real" != "$caminho_real" ]] || return 0
+
+  local e_repo=0
+  if [[ -n "${JANGADA_REPO:-}" && -d "$JANGADA_REPO" ]]; then
+    local repo_real
+    repo_real="$(realpath "$JANGADA_REPO" 2>/dev/null || true)"
+    [[ -n "$repo_real" && "$raiz_real" == "$repo_real" ]] && e_repo=1
+  fi
+
+  local origem
+  origem="$(git -C "$JANGADA_PATH" config --get remote.origin.url 2>/dev/null || true)"
+  if [[ "$origem" == /* && -d "$origem/.git" ]]; then
+    local origem_real
+    origem_real="$(realpath "$origem" 2>/dev/null || true)"
+    [[ -n "$origem_real" && "$raiz_real" == "$origem_real" ]] && e_repo=1
+  fi
+
+  if ((e_repo)); then
+    local ramo_instalado
+    ramo_instalado="$(git -C "$JANGADA_PATH" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    if [[ -n "$base" && "$ramo_instalado" != "$base" ]]; then
+      echo "cópia instalada ($JANGADA_PATH) está em '$ramo_instalado', não em '$base'; git pull não executado" >&2
+      return 0
+    fi
+    if [[ -z "$(git -C "$JANGADA_PATH" status --porcelain 2>/dev/null)" ]]; then
+      echo "atualizando a cópia instalada em $JANGADA_PATH..."
+      git -C "$JANGADA_PATH" pull --ff-only || echo "!! não foi possível atualizar $JANGADA_PATH" >&2
+    else
+      echo "!! cópia instalada ($JANGADA_PATH) tem alterações locais; git pull não executado" >&2
+    fi
+  fi
+}
+
+integrado=0
 apagar_ramo=0
 if ((integrar)); then
   [[ -n "$ramo" && -n "$base" && -n "$raiz" ]] \
@@ -89,6 +130,8 @@ if ((integrar)); then
       exit 1
     fi
     echo "integrado em $base"
+    integrado=1
+    atualizar_copia_instalada "$raiz"
   fi
   apagar_ramo=1
 fi
@@ -142,13 +185,13 @@ limpar() {
   # mesmo nome começa da primeira.
   rm -f "$JANGADA_ESTADO/agentes/validacao-$s-r"*.md "$JANGADA_ESTADO/agentes/prompt-$s.md"
   echo "sessão encerrada: $s"
-  "$JANGADA_PATH/bin/jangada-gancho" pos-agente-fim "$s"
+  "$JANGADA_PATH/bin/jangada-gancho" pos-agente-fim "$s" "$raiz" "$integrado"
 }
 
 if [[ "${JANGADA_SESSAO:-}" == "$s" ]]; then
   registro="$JANGADA_ESTADO/agentes/fim-$s.log"
   echo "encerrando a partir da própria sessão; registro em $registro"
-  export s worktree ramo raiz arq forcar matar_pid apagar_ramo
+  export s worktree ramo raiz arq forcar matar_pid apagar_ramo integrado
   export -f limpar
   # shellcheck disable=SC1090,SC2016
   setsid -f bash -c 'sleep 0.5; source "$1"; limpar' _ "$JANGADA_PATH/bin/jangada-config" >"$registro" 2>&1

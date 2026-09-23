@@ -87,7 +87,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-validar` | manda o diff do worktree para o outro modelo revisar (o agy revisa o Claude, o Claude revisa o agy) e devolve `STATUS: APROVADO` ou `REVISAR`; o agente chama antes de entregar |
 | `jangada-shell` | inicia subshell enriquecida com comandos diretos de agentes e projetos |
 | `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir, integrar ou encerrar (`--proximo`, `--anterior`, `--restaurar`) |
-| `jangada-agente-fim` | encerra uma sessão e remove o worktree, com conferência de alterações pendentes; `--integrar` faz antes o merge na base e apaga o ramo |
+| `jangada-agente-fim` | encerra uma sessão e remove o worktree, com conferência de alterações pendentes; `--integrar` faz antes o merge na base, atualiza a cópia instalada se for o repositório do jangada e apaga o ramo |
 | `jangada-consumo` | tokens do Claude Code no bloco de 5 horas em andamento (também no tooltip da barra) |
 | `jangada-gancho` | roda os ganchos do usuário de um evento (chamado pelos outros comandos) |
 | `jangada-importar` | converte a configuração do niri em arquivos `.importado` |
@@ -207,8 +207,8 @@ Perfis de agente (outra conta, outro modelo, outro programa) ficam em
 `~/.config/jangada/agentes/NOME.conf`; veja `default/agentes/exemplo.conf`.
 A chave `DESCRICAO=` é o texto entre parênteses no seletor.
 Ganchos do usuário ficam em `~/.config/jangada/ganchos/EVENTO` ou
-`EVENTO.d/`, para os eventos `pos-update`, `pos-tema`, `pos-agente-fim` e
-`pos-validar`. Um exemplo útil: `pos-tema` rodando `jangada-sddm aplicar`.
+`EVENTO.d/`, para os eventos `pos-update`, `pos-tema`, `pos-agente-fim`
+(recebe sessão, raiz e se houve integração) e `pos-validar` (sessão e status). Um exemplo útil: `pos-tema` rodando `jangada-sddm aplicar`.
 
 ## Várias máquinas
 
