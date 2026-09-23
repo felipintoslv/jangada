@@ -39,9 +39,11 @@ echo "linha 1" >"$tmp/projeto/arquivo.txt"
 git -C "$tmp/projeto" add arquivo.txt
 git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "commit 1"
 
-# Sessão falsa com o agente dado; o jangada-validar lê .agente e .tarefa.
+# Sessão falsa com o agente dado; o jangada-validar lê .agente, .revisor e .tarefa.
 sessao_de() {
-  jq -n --arg a "$1" '{sessao:"s", agente:$a, base:"main", tarefa:"tarefa de teste", estado:"trabalhando"}' \
+  jq -n --arg a "$1" --arg r "${2:-}" \
+    '{sessao:"s", agente:$a, base:"main", tarefa:"tarefa de teste", estado:"trabalhando"}
+     + (if $r != "" then {revisor:$r} else {} end)' \
     >"$estado/s.json"
   rm -f "$estado/validacao-s-r"* "$tmp/falso/"*.pedido
 }
@@ -91,6 +93,95 @@ conferir "caso 5: aprovado mesmo com diff grande" [ "$rc" = 0 ]
 conferir "caso 5: pedido cabe no argumento" [ "$(LC_ALL=C wc -c <"$tmp/falso/agy.pedido")" -lt 131072 ]
 conferir "caso 5: pedido aponta o arquivo do diff" grep -q "leia o arquivo .*validacao-s-r1.md.diff" "$tmp/falso/agy.pedido"
 git -C "$tmp/projeto" rm -qf grande.txt
+
+# Caso 6: auto-revisão do agy (revisor agy gravado no estado).
+sessao_de agy agy
+validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 6: auto-revisão do agy sai com 0" [ "$rc" = 0 ]
+conferir "caso 6: o agy revisou o próprio trabalho" test -s "$tmp/falso/agy.pedido"
+conferir "caso 6: o claude não foi chamado" test ! -e "$tmp/falso/claude.pedido"
+conferir "caso 6: pedido identifica o autor como Antigravity" grep -q "agente (Antigravity" "$tmp/falso/agy.pedido"
+conferir "caso 6: pedido alerta sobre revisão pelo mesmo modelo" grep -q "revisão pelo mesmo modelo" "$tmp/falso/agy.pedido"
+conferir "caso 6: estado registra a rodada e o revisor agy" [ "$(jq -r .validacao "$estado/s.json")" = "r1: APROVADO (agy)" ]
+
+# Caso 7: auto-revisão do Claude com --revisor mesmo.
+sessao_de claude
+validar 'STATUS: APROVADO' --revisor mesmo; rc=$?
+conferir "caso 7: auto-revisão do claude com --revisor mesmo sai com 0" [ "$rc" = 0 ]
+conferir "caso 7: o claude revisou o próprio trabalho" test -s "$tmp/falso/claude.pedido"
+conferir "caso 7: o agy não foi chamado" test ! -e "$tmp/falso/agy.pedido"
+conferir "caso 7: pedido identifica o autor como Claude" grep -q "agente (Claude)" "$tmp/falso/claude.pedido"
+conferir "caso 7: pedido alerta sobre revisão pelo mesmo modelo" grep -q "revisão pelo mesmo modelo" "$tmp/falso/claude.pedido"
+conferir "caso 7: estado registra a rodada e o revisor claude" [ "$(jq -r .validacao "$estado/s.json")" = "r1: APROVADO (claude)" ]
+
+# Caso 8: perfis agy-agy e claude-claude definem variáveis esperadas.
+(
+  export JANGADA_PATH="$repo_jangada" XDG_CONFIG_HOME="$tmp/config"
+  # shellcheck source=bin/jangada-config
+  source "$repo_jangada/bin/jangada-config"
+  jangada_perfil agy-agy
+  [[ "$PERFIL_COMANDO" == "agy" ]] || exit 1
+  [[ " ${PERFIL_AMBIENTE[*]} " == *" JANGADA_VALIDAR_REVISOR=agy "* ]] || exit 1
+
+  jangada_perfil claude-claude
+  [[ "$PERFIL_COMANDO" == "claude" ]] || exit 1
+  [[ " ${PERFIL_AMBIENTE[*]} " == *" JANGADA_VALIDAR_REVISOR=claude "* ]] || exit 1
+); rc=$?
+conferir "caso 8: perfis agy-agy e claude-claude definem comando e revisor" [ "$rc" = 0 ]
+
+# Caso 9: auto-revisão fora de sessão com --revisor mesmo.
+rm -f "$tmp/falso/"*.pedido
+env PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA='STATUS: APROVADO' \
+  XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
+  "$repo_jangada/bin/jangada-validar" --revisor mesmo "$tmp/projeto" >"$tmp/saida.log" 2>&1; rc=$?
+conferir "caso 9: --revisor mesmo fora de sessão sai com 0" [ "$rc" = 0 ]
+conferir "caso 9: o claude revisou" test -s "$tmp/falso/claude.pedido"
+conferir "caso 9: pedido identifica autor coerente com revisor" grep -q "agente (Claude)" "$tmp/falso/claude.pedido"
+conferir "caso 9: pedido inclui alerta de auto-revisão" grep -q "revisão pelo mesmo modelo" "$tmp/falso/claude.pedido"
+
+# Caso 10: resolução de revisor no jangada-agente (precedência entre --revisor, perfil e global).
+cat >"$tmp/bin/tmux" <<'EOF'
+#!/usr/bin/env bash
+for arg in "$@"; do [[ "$arg" == has-session ]] && exit 1; done
+exit 0
+EOF
+chmod +x "$tmp/bin/tmux"
+
+# 10a: Perfil agy-agy prevalece sobre JANGADA_VALIDAR_REVISOR=claude global
+rm -f "$estado/"*.json
+env -u TMUX -u HYPRLAND_INSTANCE_SIGNATURE PATH="$tmp/bin:$PATH" \
+  XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
+  JANGADA_AGENTE_ESCOLHER=0 JANGADA_VALIDAR_REVISOR=claude \
+  "$repo_jangada/bin/jangada-agente" --projeto "$tmp/projeto" --direto --perfil agy-agy </dev/null >/dev/null 2>&1
+conferir "caso 10a: perfil agy-agy prevalece sobre global claude" \
+  [ "$(jq -r '.revisor // ""' "$estado/projeto.json")" = "agy" ]
+
+# 10b: Perfil claude-claude prevalece sobre JANGADA_VALIDAR_REVISOR=agy global
+rm -f "$estado/"*.json
+env -u TMUX -u HYPRLAND_INSTANCE_SIGNATURE PATH="$tmp/bin:$PATH" \
+  XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
+  JANGADA_AGENTE_ESCOLHER=0 JANGADA_VALIDAR_REVISOR=agy \
+  "$repo_jangada/bin/jangada-agente" --projeto "$tmp/projeto" --direto --perfil claude-claude </dev/null >/dev/null 2>&1
+conferir "caso 10b: perfil claude-claude prevalece sobre global agy" \
+  [ "$(jq -r '.revisor // ""' "$estado/projeto.json")" = "claude" ]
+
+# 10c: Opção explícita --revisor prevalece sobre o perfil
+rm -f "$estado/"*.json
+env -u TMUX -u HYPRLAND_INSTANCE_SIGNATURE PATH="$tmp/bin:$PATH" \
+  XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
+  JANGADA_AGENTE_ESCOLHER=0 \
+  "$repo_jangada/bin/jangada-agente" --projeto "$tmp/projeto" --direto --perfil claude-claude --revisor agy </dev/null >/dev/null 2>&1
+conferir "caso 10c: --revisor agy explícito prevalece sobre perfil claude-claude" \
+  [ "$(jq -r '.revisor // ""' "$estado/projeto.json")" = "agy" ]
+
+# 10d: JANGADA_VALIDAR_REVISOR=mesmo global resolve para o agente padrão
+rm -f "$estado/"*.json
+env -u TMUX -u HYPRLAND_INSTANCE_SIGNATURE PATH="$tmp/bin:$PATH" \
+  XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
+  JANGADA_AGENTE_ESCOLHER=0 JANGADA_VALIDAR_REVISOR=mesmo \
+  "$repo_jangada/bin/jangada-agente" --projeto "$tmp/projeto" --direto </dev/null >/dev/null 2>&1
+conferir "caso 10d: JANGADA_VALIDAR_REVISOR=mesmo global resolve para o agente da sessão" \
+  [ "$(jq -r '.revisor // ""' "$estado/projeto.json")" = "claude" ]
 
 if ((falhas)); then
   echo "$falhas falha(s); saídas em $tmp (mantido)"

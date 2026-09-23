@@ -5,8 +5,9 @@
 # (default/agentes/protocolo.md).
 #
 # Uso: jangada-validar [opções] [PASTA]
-#   --revisor NOME    claude ou agy (padrão: JANGADA_VALIDAR_REVISOR; sem ele,
-#                     o oposto do agente da sessão, e claude fora de sessão)
+#   --revisor NOME    claude ou agy, ou mesmo para o modelo da sessão (padrão:
+#                     JANGADA_VALIDAR_REVISOR; sem ele, o revisor da sessão;
+#                     sem ele, o oposto do agente da sessão, e claude fora de sessão)
 #   --base REF        compara a partir de REF (padrão: base gravada no estado
 #                     da sessão; sem ela, main ou master; sem eles, HEAD)
 #   --modelo MODELO   modelo do revisor (padrão: JANGADA_VALIDAR_MODELO; sem
@@ -69,9 +70,22 @@ if [[ -n "$arq_estado" ]]; then
   inicio="$(jq -r '.inicio // ""' "$arq_estado")"
   autor="$(jq -r '.agente // ""' "$arq_estado")"
   autor="$(basename "${autor%% *}")"
+  [[ -n "$revisor" ]] || revisor="$(jq -r '.revisor // ""' "$arq_estado")"
 fi
-# Quem revisa é o outro modelo: um modelo revisando o próprio trabalho tende a
-# concordar com ele.
+
+auto_revisao=0
+if [[ "$revisor" == "mesmo" ]]; then
+  auto_revisao=1
+  revisor="${autor:-claude}"
+elif [[ "$revisor" == "oposto" ]]; then
+  case "$autor" in
+    agy|"") revisor=claude ;;
+    *) revisor=agy ;;
+  esac
+fi
+
+# Quem revisa é o outro modelo por padrão: um modelo revisando o próprio
+# trabalho tende a concordar com ele.
 if [[ -z "$revisor" ]]; then
   case "$autor" in
     agy|"") revisor=claude ;;
@@ -79,9 +93,28 @@ if [[ -z "$revisor" ]]; then
   esac
 fi
 case "$revisor" in
-  claude) nome_revisor="Claude"; nome_autor="Antigravity (agy)"; modelo="${modelo:-sonnet}" ;;
-  agy) nome_revisor="Antigravity"; nome_autor="Claude" ;;
-  *) echo "jangada-validar: revisor desconhecido: $revisor (use claude ou agy)" >&2; exit 1 ;;
+  claude) nome_revisor="Claude"; modelo="${modelo:-sonnet}" ;;
+  agy) nome_revisor="Antigravity" ;;
+  *) echo "jangada-validar: revisor desconhecido: $revisor (use claude, agy ou mesmo)" >&2; exit 1 ;;
+esac
+
+if [[ -n "$autor" && "$revisor" == "$autor" ]]; then
+  auto_revisao=1
+fi
+
+case "$autor" in
+  claude) nome_autor="Claude" ;;
+  agy) nome_autor="Antigravity (agy)" ;;
+  *)
+    if ((auto_revisao)); then
+      [[ "$revisor" == claude ]] && nome_autor="Claude" || nome_autor="Antigravity (agy)"
+    else
+      case "$revisor" in
+        claude) nome_autor="Antigravity (agy)" ;;
+        agy) nome_autor="Claude" ;;
+      esac
+    fi
+    ;;
 esac
 command -v "$revisor" >/dev/null 2>&1 || { echo "jangada-validar: $revisor não encontrado" >&2; exit 1; }
 if [[ -z "$base" ]]; then
@@ -138,6 +171,11 @@ repositório, em $dir. Não altere, crie nem apague arquivos e não execute
 comandos: só leia. Use a ferramenta de leitura quando o diff não bastar, só em
 arquivos de texto (nada de PDF, planilha, imagem, parquet ou zip, que estouram
 o contexto), e siga as regras do AGENTS.md ou CLAUDE.md do projeto.
+EOF
+  if ((auto_revisao)); then
+    printf '\nEsta é uma revisão pelo mesmo modelo. Seja criterioso na conferência do código.\n'
+  fi
+  cat <<EOF
 
 Tarefa do agente:
 ${tarefa:-(não informada; deduza pelo diff e pelos commits)}

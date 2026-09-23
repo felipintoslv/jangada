@@ -8,9 +8,9 @@ durante toda a conversa.
 3. Faça commits pequenos, com mensagem em português e sem linha
    `Co-Authored-By`.
 4. Antes de dizer que terminou, rode `jangada-validar`. Ele manda o diff para
-   o outro modelo revisar (o Claude revisa o agy, o agy revisa o Claude) e
-   imprime o parecer. A revisão pode levar alguns minutos: se a ferramenta de
-   comando tiver tempo limite, dê 10 minutos.
+   o revisor técnico (por padrão o outro modelo, ou o revisor configurado para a
+   sessão) e imprime o parecer. A revisão pode levar alguns minutos: se a
+   ferramenta de comando tiver tempo limite, dê 10 minutos.
    - `STATUS: APROVADO`: resuma o que foi feito e pare.
    - `STATUS: REVISAR`: o revisor pode errar. Confira cada apontamento no
      código, corrija o que for procedente, faça commit e rode de novo dizendo

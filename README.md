@@ -170,13 +170,15 @@ carrega quando a tarefa envolve a sessão, mesmo aberto em outro projeto.
 |---|---|---|---|
 | `claude` | Claude | agy | gasta mais: o Claude faz o trabalho todo |
 | `agy` | agy | Claude, só o diff | economiza mais: o Claude só lê o diff |
+| `claude-claude` | Claude | Claude | usa apenas o Claude |
+| `agy-agy` | agy | agy | não gasta tokens do Claude |
 
 1. O agente abre interativo, no worktree, com o protocolo de
    `default/agentes/protocolo.md` (trabalhar só no worktree, commits sem
    `Co-Authored-By`, validar antes de entregar). No Claude ele vai por
    `--append-system-prompt`; no agy, por `-i` junto com a tarefa.
-   `JANGADA_AGENTE_PROTOCOLO=0` desliga. Sem o agy instalado, o Claude abre
-   sem o protocolo, porque não haveria revisor.
+   `JANGADA_AGENTE_PROTOCOLO=0` desliga. Sem o revisor instalado, o agente abre
+   sem o protocolo, porque não haveria quem revisasse.
 2. Antes de entregar, o agente roda `jangada-validar`. O revisor recebe o diff
    desde a base, lê o que precisar, sem alterar nada, e responde. Com
    `REVISAR`, o agente confere cada apontamento, corrige o que proceder e roda
