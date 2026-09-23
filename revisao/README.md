@@ -36,6 +36,8 @@ formato que o `jangada-par` usa em `avaliacao-<sessao>-rN.md`.
 | 21/09/2026 | [avaliacao-gemini-20260921-0909-itens1a3.md](avaliacao-gemini-20260921-0909-itens1a3.md) | avaliação | do parecer acima | aplicada em 04e61a6 e 37ed61a |
 | 21/09/2026 | [gemini-20260921-fechamento.md](gemini-20260921-fechamento.md) | parecer | commits db70c2d..f026c23 (itens C, E a L e seção 4) | 15 apontamentos |
 | 21/09/2026 | [avaliacao-gemini-20260921-fechamento.md](avaliacao-gemini-20260921-fechamento.md) | avaliação | do parecer acima | 7 aceitos, 6 em parte, 2 rejeitados |
+| 22/09/2026 | [gemini-20260922-integrar-pull.md](gemini-20260922-integrar-pull.md) | parecer | atualização da cópia instalada e gancho pos-agente-fim | 4 apontamentos |
+| 22/09/2026 | [avaliacao-gemini-20260922-integrar-pull.md](avaliacao-gemini-20260922-integrar-pull.md) | avaliação | do parecer acima | 4 aceitos e aplicados |
 
 ## Outros documentos
 
