@@ -65,6 +65,9 @@ do terminal é o nome da sessão (`set-titles-string "#S"`), e é por ele que o
 - O fzf roda a prévia com o `$SHELL` do usuário; no zsh uma palavra começando
   com `=` (como `-t =sessao:` do tmux) é expandida. Chame o próprio script
   (`--previa`) em vez de montar o comando na string.
+- Em sessões diretas no repositório (sem ramo nem worktree), `jangada-agente-fim`
+  com `--integrar` não deve falhar: avisa que não há ramo a integrar e encerra a
+  sessão normalmente.
 
 ## Revisão cruzada (`jangada-validar`)
 

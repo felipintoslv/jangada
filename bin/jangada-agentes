@@ -342,10 +342,12 @@ previa() {
     (if .worktree then "worktree: " + .worktree else empty end),
     (if .tarefa   then "tarefa:   " + ((.tarefa | split("\n") | .[0])[0:120]) else empty end)
   ' "$arq" 2>/dev/null || true
+  local dica_x="encerra a sessão"
+  [[ -n "$(jq -r '.worktree // ""' "$arq" 2>/dev/null || true)" ]] && dica_x="remove o worktree e mantém o ramo"
   if restauravel "$arq"; then
-    echo "(sem processo; Enter restaura, Alt+I integra, Ctrl+X remove o worktree)"
+    echo "(sem processo; Enter restaura, Alt+I integra, Ctrl+X $dica_x)"
   else
-    echo "(sessão encerrada; Alt+I integra, Ctrl+X remove o worktree e mantém o ramo)"
+    echo "(sessão encerrada; Alt+I integra, Ctrl+X $dica_x)"
   fi
 
   # Último parecer do revisor, pedido pelo agente com jangada-validar.
@@ -394,7 +396,7 @@ case "${1:-}" in
       consumo="$("$JANGADA_PATH/bin/jangada-consumo" --curto 2>/dev/null || true)"
     fi
     if [[ -z "$linhas" ]]; then
-      dica=$'nenhum agente ativo\n\nSUPER+A: novo agente\nSUPER+P: tarefa em par\nSUPER+SHIFT+A: lista de agentes'
+      dica=$'nenhum agente ativo\n\nSUPER+A: novo agente\nSUPER+SHIFT+A: lista de agentes\nSUPER+CTRL+A: painel de agentes'
       [[ -n "$consumo" ]] && dica+=$'\n\n'"$consumo"
       jq -cn --arg d "$dica" '{text:"󰚩 0", tooltip:$d, class:"vazio"}'
       exit 0

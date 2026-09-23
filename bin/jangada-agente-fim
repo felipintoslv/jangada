@@ -96,44 +96,47 @@ atualizar_copia_instalada() {
 integrado=0
 apagar_ramo=0
 if ((integrar)); then
-  [[ -n "$ramo" && -n "$base" && -n "$raiz" ]] \
-    || { echo "a sessão $s não tem ramo próprio (trabalho direto no repositório); nada a integrar" >&2; exit 1; }
-  if [[ -n "$worktree" && -d "$worktree" && -n "$(git -C "$worktree" status --porcelain)" ]]; then
-    echo "alterações não salvas em commit no worktree $worktree:" >&2
-    git -C "$worktree" status --short | head -20 >&2
-    echo "faça commit delas (ou descarte) antes de integrar" >&2
-    exit 1
-  fi
-  atual="$(git -C "$raiz" rev-parse --abbrev-ref HEAD)"
-  if [[ "$atual" != "$base" ]]; then
-    echo "o repositório principal ($raiz) está em '$atual', não em '$base'; troque para $base e rode de novo" >&2
-    exit 1
-  fi
-  # O git já recusa o merge com alteração no índice ou em arquivo que o ramo
-  # toca; esta conferência diz o motivo antes, e cobre o arquivo alterado que o
-  # merge deixaria passar e que depois ninguém sabe se veio do ramo ou não.
-  if [[ -n "$(git -C "$raiz" status --porcelain --untracked-files=no)" ]]; then
-    echo "o repositório principal ($raiz) tem alterações sem commit:" >&2
-    git -C "$raiz" status --short --untracked-files=no | head -20 >&2
-    echo "faça commit delas (ou guarde com git stash) antes de integrar" >&2
-    exit 1
-  fi
-  novos="$(git -C "$raiz" log --oneline "$base..$ramo" 2>/dev/null || true)"
-  if [[ -z "$novos" ]]; then
-    echo "o ramo $ramo não tem commits além de $base; nada a integrar"
+  if [[ -z "$ramo" || -z "$base" || -z "$raiz" ]]; then
+    echo "a sessão $s não tem ramo próprio (trabalho direto no repositório); nada a integrar"
+    [[ -n "$raiz" ]] && atualizar_copia_instalada "$raiz"
   else
-    echo "commits de $ramo a integrar em $base ($raiz):"
-    printf '%s\n' "$novos" | head -30
-    confirmar "mesclar e encerrar a sessão?" || { echo "nada foi feito"; exit 1; }
-    if ! git -C "$raiz" merge --no-ff -m "Integra $ramo" "$ramo"; then
-      echo "o merge falhou; resolva em $raiz (git merge --abort desfaz). A sessão foi mantida." >&2
+    if [[ -n "$worktree" && -d "$worktree" && -n "$(git -C "$worktree" status --porcelain)" ]]; then
+      echo "alterações não salvas em commit no worktree $worktree:" >&2
+      git -C "$worktree" status --short | head -20 >&2
+      echo "faça commit delas (ou descarte) antes de integrar" >&2
       exit 1
     fi
-    echo "integrado em $base"
-    integrado=1
-    atualizar_copia_instalada "$raiz"
+    atual="$(git -C "$raiz" rev-parse --abbrev-ref HEAD)"
+    if [[ "$atual" != "$base" ]]; then
+      echo "o repositório principal ($raiz) está em '$atual', não em '$base'; troque para $base e rode de novo" >&2
+      exit 1
+    fi
+    # O git já recusa o merge com alteração no índice ou em arquivo que o ramo
+    # toca; esta conferência diz o motivo antes, e cobre o arquivo alterado que o
+    # merge deixaria passar e que depois ninguém sabe se veio do ramo ou não.
+    if [[ -n "$(git -C "$raiz" status --porcelain --untracked-files=no)" ]]; then
+      echo "o repositório principal ($raiz) tem alterações sem commit:" >&2
+      git -C "$raiz" status --short --untracked-files=no | head -20 >&2
+      echo "faça commit delas (ou guarde com git stash) antes de integrar" >&2
+      exit 1
+    fi
+    novos="$(git -C "$raiz" log --oneline "$base..$ramo" 2>/dev/null || true)"
+    if [[ -z "$novos" ]]; then
+      echo "o ramo $ramo não tem commits além de $base; nada a integrar"
+    else
+      echo "commits de $ramo a integrar em $base ($raiz):"
+      printf '%s\n' "$novos" | head -30
+      confirmar "mesclar e encerrar a sessão?" || { echo "nada foi feito"; exit 1; }
+      if ! git -C "$raiz" merge --no-ff -m "Integra $ramo" "$ramo"; then
+        echo "o merge falhou; resolva em $raiz (git merge --abort desfaz). A sessão foi mantida." >&2
+        exit 1
+      fi
+      echo "integrado em $base"
+      integrado=1
+      atualizar_copia_instalada "$raiz"
+    fi
+    apagar_ramo=1
   fi
-  apagar_ramo=1
 fi
 
 forcar=0
