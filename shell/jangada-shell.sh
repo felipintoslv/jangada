@@ -55,27 +55,21 @@ fim() {
   "$JANGADA_PATH/bin/jangada-agente-fim" "$@"
 }
 
-audio() {
-  "$JANGADA_PATH/bin/jangada-audio" "$@"
-}
-
-bluetooth() {
-  "$JANGADA_PATH/bin/jangada-bluetooth" "$@"
-}
-
-rede() {
-  "$JANGADA_PATH/bin/jangada-rede" "$@"
-}
-
-calendario() {
-  "$JANGADA_PATH/bin/jangada-calendario" "$@"
-}
-
 # Revisão do diretório atual pelo outro modelo (jangada-validar): o agy
 # revisa o Claude e o Claude revisa o agy. Fora de sessão, o revisor é o
 # Claude; "revisar --revisor agy" troca.
 revisar() {
   "$JANGADA_PATH/bin/jangada-validar" "$@"
+}
+
+# Filtra comandos de terminal longos para economizar tokens do contexto
+resumir() {
+  "$JANGADA_PATH/bin/jangada-filtrar" "$@"
+}
+
+# Gera o mapa estrutural e assinaturas do repositório
+mapa() {
+  "$JANGADA_PATH/bin/jangada-mapa" "$@"
 }
 
 # Mostra o que a tarefa mudou em relação ao ramo base.
@@ -101,81 +95,152 @@ mudancas() {
   git diff "$base...HEAD"
 }
 
-# Integra a tarefa do worktree no ramo principal.
-#
-# O merge acontece no repositório principal, não aqui: o worktree da tarefa e o
-# repositório principal são checkouts distintos do mesmo repositório, e um
-# "git checkout main" dentro do worktree falha com "already used by worktree".
+# Identifica a sessão de agente ativa no diretório atual.
+# Lê a variável JANGADA_SESSAO ou localiza o arquivo de estado cujo worktree
+# coincida com o diretório raiz do repositório atual.
+_jangada_sessao_atual() {
+  if [ -n "${JANGADA_SESSAO:-}" ]; then
+    printf '%s\n' "$JANGADA_SESSAO"
+    return 0
+  fi
+  local estado_dir="${JANGADA_ESTADO:-${XDG_STATE_HOME:-$HOME/.local/state}/jangada}/agentes"
+  local toplevel
+  toplevel="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  if [ -n "$toplevel" ] && [ -d "$estado_dir" ]; then
+    local arqs arq
+    arqs="$(find "$estado_dir" -maxdepth 1 -name '*.json' 2>/dev/null || true)"
+    if [ -n "$arqs" ]; then
+      while IFS= read -r arq; do
+        [ -f "$arq" ] || continue
+        if [ "$(jq -r '.worktree // empty' "$arq" 2>/dev/null)" = "$toplevel" ]; then
+          basename "$arq" .json
+          return 0
+        fi
+      done <<<"$arqs"
+    fi
+  fi
+  return 1
+}
+
+# Integra a tarefa do worktree no ramo principal e encerra a sessão.
+# Delega para jangada-agente-fim --integrar quando houver sessão associada.
 concluir() {
+  local sessao
+  sessao="$(_jangada_sessao_atual || true)"
+  if [ -n "$sessao" ]; then
+    "$JANGADA_PATH/bin/jangada-agente-fim" --integrar "$sessao"
+    return $?
+  fi
+
   if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "o diretório atual não é um repositório git" >&2
     return 1
   fi
 
-  local ramo base principal ramo_principal pendentes commits
-  ramo="$(git rev-parse --abbrev-ref HEAD)"
-  if [ "$ramo" = "HEAD" ]; then
-    echo "HEAD está solto (detached); troque para o ramo da tarefa antes de concluir." >&2
-    return 1
-  fi
-
+  local ramo base
+  ramo="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
   base="$(_jangada_ramo_base || true)"
-  if [ -z "$base" ]; then
-    echo "não encontrei um ramo principal (main ou master) neste repositório." >&2
-    return 1
-  fi
-
-  if [ "$ramo" = "$base" ]; then
+  if [ -n "$base" ] && [ "$ramo" = "$base" ]; then
     echo "você já está no ramo principal ($base). Entre no worktree de uma tarefa para concluir."
     return 0
   fi
 
-  # A primeira entrada de "git worktree list" é sempre o worktree principal.
-  principal="$(git worktree list --porcelain | awk '/^worktree /{print substr($0, 10); exit}')"
-  if [ -z "$principal" ] || [ ! -d "$principal" ]; then
-    echo "não consegui localizar o repositório principal." >&2
+  echo "nenhuma sessão de agente identificada no diretório atual." >&2
+  echo "para integrar uma sessão pelo nome: fim --integrar <sessao>" >&2
+  return 1
+}
+
+# Cancela a tarefa da sessão atual e remove o worktree sem mesclar alterações.
+desistir() {
+  local sessao
+  sessao="$(_jangada_sessao_atual || true)"
+  if [ -z "$sessao" ]; then
+    echo "nenhuma sessão de agente identificada no diretório atual." >&2
+    echo "para encerrar uma sessão específica: fim <sessao>" >&2
+    return 1
+  fi
+  "$JANGADA_PATH/bin/jangada-agente-fim" "$sessao"
+}
+
+# Reverte o worktree para o ponto inicial da tarefa após confirmação
+reverter() {
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "o diretório atual não é um repositório git" >&2
+    return 1
+  fi
+  local base ponto
+  base="$(_jangada_ramo_base || true)"
+  if [ -n "$base" ]; then
+    ponto="$(git merge-base "$base" HEAD 2>/dev/null || true)"
+  fi
+  ponto="${ponto:-HEAD}"
+
+  if _jangada_confirmar "Deseja reverter todas as alterações deste worktree para o ponto inicial ($ponto)?"; then
+    git reset --hard "$ponto"
+    git clean -fd
+    echo "worktree revertido para o ponto inicial limpo ($ponto)."
+  fi
+}
+
+# Repassa o contexto e parecer de validação de uma sessão para outra
+repassar() {
+  local sessao_origem="${1:-}"
+  local agente_destino="${2:-}"
+  local estado_dir="${JANGADA_ESTADO:-${XDG_STATE_HOME:-$HOME/.local/state}/jangada}/agentes"
+
+  if [ -z "$sessao_origem" ]; then
+    sessao_origem="$(_jangada_sessao_atual || true)"
+  fi
+
+  if [ -z "$sessao_origem" ] && command -v fzf >/dev/null 2>&1; then
+    sessao_origem="$("$JANGADA_PATH/bin/jangada-agentes" --lista 2>/dev/null | awk '{print $1}' | fzf --prompt 'repassar da sessão > ' --height 40% --reverse)" || return 0
+  fi
+
+  if [ -z "$sessao_origem" ]; then
+    echo "informe a sessão de origem: repassar <sessao_origem> [perfil_destino]" >&2
     return 1
   fi
 
-  pendentes="$(git status --porcelain)"
-  if [ -n "$pendentes" ]; then
-    echo "aviso: existem alterações não salvas no worktree:"
-    printf '%s\n' "$pendentes" | head -10
-    echo "faça commit das alterações antes de concluir."
-    return 1
+  local ultimo_parecer=""
+  local arqs_val
+  arqs_val="$(find "$estado_dir" -name "validacao-${sessao_origem}-r*.md" 2>/dev/null || true)"
+  if [ -n "$arqs_val" ]; then
+    ultimo_parecer="$(printf '%s\n' "$arqs_val" | sort -V | tail -n1)"
   fi
 
-  commits="$(git log --oneline "$base..$ramo" 2>/dev/null || true)"
-  if [ -z "$commits" ]; then
-    echo "o ramo $ramo não tem nenhum commit além de $base; nada a integrar."
-    return 0
+  local tmp_prompt
+  tmp_prompt="$(mktemp "${TMPDIR:-/tmp}/jangada-repassar.XXXXXX.md")"
+  {
+    echo "Contexto repassado da sessão '$sessao_origem':"
+    echo ""
+    if [ -n "$ultimo_parecer" ] && [ -f "$ultimo_parecer" ]; then
+      echo "## Parecer da última validação:"
+      cat "$ultimo_parecer"
+      echo ""
+    fi
+    local arq_estado="$estado_dir/$sessao_origem.json"
+    if [ -f "$arq_estado" ]; then
+      local tarefa
+      tarefa="$(jq -r '.tarefa // empty' "$arq_estado" 2>/dev/null || true)"
+      if [ -n "$tarefa" ]; then
+        echo "## Tarefa original:"
+        echo "$tarefa"
+        echo ""
+      fi
+    fi
+  } >"$tmp_prompt"
+
+  if [ -n "$agente_destino" ]; then
+    echo "abrindo nova tarefa para o agente '$agente_destino' com o contexto repassado..."
+    "$JANGADA_PATH/bin/jangada-agente" --perfil "$agente_destino" --prompt-arquivo "$tmp_prompt"
+    rm -f "$tmp_prompt"
+  else
+    echo "contexto preparado a partir de '$sessao_origem':"
+    cat "$tmp_prompt"
+    echo ""
+    echo "para iniciar uma sessão com este contexto: repassar $sessao_origem <perfil_agente>"
+    rm -f "$tmp_prompt"
   fi
-
-  echo "Ramo da tarefa:  $ramo"
-  echo "Integrar em:     $base ($principal)"
-  echo ""
-  echo "Commits a serem integrados:"
-  printf '%s\n' "$commits"
-  echo ""
-
-  _jangada_confirmar "Mesclar '$ramo' em '$base'?" || { echo "operação cancelada."; return 0; }
-
-  ramo_principal="$(git -C "$principal" rev-parse --abbrev-ref HEAD)"
-  if [ "$ramo_principal" != "$base" ]; then
-    echo "o repositório principal está em '$ramo_principal', não em '$base'." >&2
-    echo "troque para $base lá e rode de novo." >&2
-    return 1
-  fi
-
-  if ! git -C "$principal" merge --no-ff "$ramo"; then
-    echo "ocorreram conflitos no merge; resolva-os em $principal." >&2
-    return 1
-  fi
-  echo "merge realizado com sucesso em $principal."
-
-  # O ramo só pode ser apagado depois que o worktree que o usa sumir; até lá o
-  # git recusa com "checked out at". Quem remove o worktree é o jangada-agente-fim.
-  echo "para remover o worktree e encerrar a sessão: fim <sessao> (ou Ctrl+X em 'agentes')"
 }
 
 # Seletor rápido de projetos com fzf
@@ -200,54 +265,6 @@ trocar() {
   fi
 }
 
-# Seletor e gerador de temas com matugen
-tema() {
-  if (($# == 0)); then
-    "$JANGADA_PATH/bin/jangada-tema" --escolher
-  else
-    "$JANGADA_PATH/bin/jangada-tema" "$@"
-  fi
-}
-
-# Gestão de energia, sessão e atalhos rápidos
-energia() {
-  "$JANGADA_PATH/bin/jangada-energia" "$@"
-}
-
-desligar() {
-  if _jangada_confirmar "Deseja realmente desligar o computador?"; then
-    systemctl poweroff
-  fi
-}
-
-reiniciar() {
-  if _jangada_confirmar "Deseja realmente reiniciar o computador?"; then
-    systemctl reboot
-  fi
-}
-
-suspender() {
-  systemctl suspend
-}
-
-bloquear() {
-  "$JANGADA_PATH/bin/jangada-bloquear" "$@"
-}
-
-sair() {
-  if _jangada_confirmar "Deseja realmente sair da sessão?"; then
-    hyprctl dispatch 'hl.dsp.exit()' 2>/dev/null || true
-  fi
-}
-
-menu() {
-  "$JANGADA_PATH/bin/jangada-menu" "$@"
-}
-
-sddm() {
-  "$JANGADA_PATH/bin/jangada-sddm" "$@"
-}
-
 # Ajuda dos comandos do jangada shell
 ajuda() {
   echo ""
@@ -255,26 +272,20 @@ ajuda() {
   echo ""
   echo "  agente            cria um agente (Claude ou agy) em worktree; o outro modelo revisa"
   echo "  revisar           manda o diff do diretório atual para o outro modelo revisar"
+  echo "  resumir <cmd>     executa comando condensando saídas longas de testes e linters"
+  echo "  mapa [pasta]      extrai o mapa estrutural e assinaturas do repositório"
+  echo "  repassar [orig]   transfere o contexto e parecer de uma sessão para outra"
   echo "  status            lista as sessões de agentes ativas e seus estados"
   echo "  agentes           abre o seletor interativo de agentes ativos"
   echo "  mudancas          mostra as alterações feitas no ramo atual"
-  echo "  concluir          integra a tarefa atual no ramo principal"
+  echo "  concluir          integra a tarefa da sessão no ramo principal e a encerra"
+  echo "  desistir          cancela a tarefa da sessão e remove o worktree sem mesclar"
+  echo "  reverter          restaura o worktree para o ponto limpo inicial da tarefa"
   echo "  trocar            muda rapidamente para outro projeto com fzf"
-  echo "  tema [imagem]     escolhe ou aplica um papel de parede e recalcula as cores"
-  echo "  audio [saida|ent] escolhe o dispositivo de áudio ativo (fones, microfone)"
-  echo "  bluetooth         gerencia conexões de dispositivos Bluetooth"
-  echo "  rede              gerencia conexões cabeada (Ethernet) e Wi-Fi"
-  echo "  calendario        abre o calendário interativo com seus eventos"
-  echo "  energia           gerencia perfis de consumo e estado de energia"
-  echo "  bloquear          bloqueia a tela com hyprlock"
-  echo "  suspender         suspende a máquina imediatamente"
-  echo "  reiniciar         reinicia o computador (com confirmação)"
-  echo "  desligar          desliga o computador (com confirmação)"
-  echo "  sair              encerra a sessão do jangada (com confirmação)"
-  echo "  sddm <ação>       tela de login: aplicar, restaurar, status ou testar"
-  echo "  menu              abre o menu central do jangada (fuzzel)"
   echo "  fim <sessao>      encerra uma sessão de agente e limpa o worktree"
   echo "  ajuda             exibe esta lista de comandos"
   echo "  exit              sai do jangada shell e volta ao terminal normal"
+  echo ""
+  echo "Nota: Comandos de hardware e sessão ficam na barra (Waybar) e no menu central (SUPER+ESC)."
   echo ""
 }

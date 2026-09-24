@@ -89,7 +89,7 @@ CABECALHO
   "name": "vertical",
   "width": 32,
   "height": 0,
-  "modules-left": ["hyprland/workspaces", "custom/agentes"],
+  "modules-left": ["custom/menu", "hyprland/workspaces", "custom/agentes"],
   "clock": { "format": "{:%H\n%M}" },
   "systemd-failed-units": { "hide-on-ok": true, "format": "✗" },
   "cpu": { "format": "" },

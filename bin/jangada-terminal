@@ -23,17 +23,30 @@ if [[ -z "$term" ]]; then
   for t in ghostty kitty foot alacritty; do
     command -v "$t" >/dev/null 2>&1 && { term="$t"; break; }
   done
+  if [[ -z "$term" && "$(uname -s)" == "Darwin" ]]; then
+    if [[ -x "/Applications/Ghostty.app/Contents/MacOS/ghostty" ]]; then
+      term="/Applications/Ghostty.app/Contents/MacOS/ghostty"
+    elif [[ -x "/Applications/Kitty.app/Contents/MacOS/kitty" ]]; then
+      term="/Applications/Kitty.app/Contents/MacOS/kitty"
+    elif [[ -x "/Applications/Alacritty.app/Contents/MacOS/alacritty" ]]; then
+      term="/Applications/Alacritty.app/Contents/MacOS/alacritty"
+    elif [[ -d "/Applications/iTerm.app" ]]; then
+      term="iterm"
+    else
+      term="terminal.app"
+    fi
+  fi
 fi
-[[ -n "$term" ]] || { notify-send "jangada" "nenhum terminal encontrado"; exit 1; }
+[[ -n "$term" ]] || { jangada_notificar "jangada" "nenhum terminal encontrado"; exit 1; }
 
 args=()
 case "$term" in
-  ghostty)
+  *ghostty*)
     [[ -n "$classe" ]] && args+=("--class=$classe")
     [[ -n "$titulo" ]] && args+=("--title=$titulo")
     ((${#comando[@]})) && args+=(-e "${comando[@]}")
     ;;
-  kitty)
+  *kitty*)
     [[ -n "$classe" ]] && args+=(--class "$classe")
     [[ -n "$titulo" ]] && args+=(--title "$titulo")
     ((${#comando[@]})) && args+=("${comando[@]}")
@@ -43,10 +56,18 @@ case "$term" in
     [[ -n "$titulo" ]] && args+=("--title=$titulo")
     ((${#comando[@]})) && args+=("${comando[@]}")
     ;;
-  alacritty)
+  *alacritty*)
     [[ -n "$classe" ]] && args+=(--class "$classe")
     [[ -n "$titulo" ]] && args+=(--title "$titulo")
     ((${#comando[@]})) && args+=(-e "${comando[@]}")
+    ;;
+  iterm)
+    cmd_str="$(printf '%q ' "${comando[@]}")"
+    exec osascript -e "tell application \"iTerm\" to create window with default profile command \"$cmd_str\""
+    ;;
+  terminal.app)
+    cmd_str="$(printf '%q ' "${comando[@]}")"
+    exec osascript -e "tell application \"Terminal\" to do script \"$cmd_str\""
     ;;
   *)
     ((${#comando[@]})) && args+=(-e "${comando[@]}")

@@ -38,9 +38,9 @@ listar_dispositivos() {
     icone="$(icone_dispositivo "$nome")"
 
     if ((conectado)); then
-      printf '✔ [%s] %s  %s (Conectado - clique p/ desconectar)\n' "$mac" "$icone" "$nome"
+      printf '✔ [%s] %s  %s (conectado; clique para desconectar)\n' "$mac" "$icone" "$nome"
     else
-      printf '  [%s] %s  %s (Desconectado - clique p/ conectar)\n' "$mac" "$icone" "$nome"
+      printf '  [%s] %s  %s (desconectado; clique para conectar)\n' "$mac" "$icone" "$nome"
     fi
   done
 }
@@ -161,6 +161,7 @@ case "${1:-menu}" in
       bluetoothctl power off >/dev/null 2>&1
       notify-send -a jangada -u low "Bluetooth" "Bluetooth desativado" 2>/dev/null || true
     else
+      command -v rfkill >/dev/null 2>&1 && rfkill unblock bluetooth 2>/dev/null || true
       bluetoothctl power on >/dev/null 2>&1
       notify-send -a jangada -u low "Bluetooth" "Bluetooth ativado" 2>/dev/null || true
     fi

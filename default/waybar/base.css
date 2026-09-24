@@ -88,8 +88,13 @@ window#waybar {
 
 #clock, #pulseaudio, #network, #bluetooth, #cpu, #memory, #temperature, #battery, #tray,
 #mpris, #idle_inhibitor, #custom-atualizacoes, #window,
-#systemd-failed-units, #privacy-item, #disk {
+#systemd-failed-units, #privacy-item, #disk, #custom-menu, #custom-sessao {
   padding: 0 8px;
+}
+
+#custom-menu:hover,
+#custom-sessao:hover {
+  color: @primaria;
 }
 
 /* Título da janela em foco. Fica em segundo plano na leitura, como o mpris:
@@ -136,6 +141,7 @@ window#waybar {
    ser a largura, então a folga interna troca de eixo. A classe vem do "name"
    da configuração que o jangada-barra gera. */
 window#waybar.vertical #workspaces button,
+window#waybar.vertical #custom-menu,
 window#waybar.vertical #custom-agentes,
 window#waybar.vertical #clock,
 window#waybar.vertical #pulseaudio,
@@ -145,6 +151,7 @@ window#waybar.vertical #cpu,
 window#waybar.vertical #memory,
 window#waybar.vertical #temperature,
 window#waybar.vertical #battery,
+window#waybar.vertical #custom-sessao,
 window#waybar.vertical #tray,
 window#waybar.vertical #mpris,
 window#waybar.vertical #idle_inhibitor,

@@ -174,10 +174,32 @@ jangada_perfis() {
 jangada_alterar_estado() {
   local arq="$1" tmp="$2"
   shift 2
-  (
-    flock -w 5 9 || exit 1
+  if command -v flock >/dev/null 2>&1; then
+    (
+      flock -w 5 9 || exit 1
+      jq "$@" "$arq" >"$tmp" 2>/dev/null && mv "$tmp" "$arq"
+    ) 9>"$(dirname "$arq")/.trava"
+  else
+    local trava_dir i=0
+    trava_dir="$(dirname "$arq")/.trava.d"
+    while ! mkdir "$trava_dir" 2>/dev/null; do
+      sleep 0.1
+      i=$((i + 1))
+      (( i > 50 )) && break
+    done
     jq "$@" "$arq" >"$tmp" 2>/dev/null && mv "$tmp" "$arq"
-  ) 9>"$(dirname "$arq")/.trava"
+    rmdir "$trava_dir" 2>/dev/null || true
+  fi
+}
+
+# Notificação do sistema compatível com Linux (notify-send) e macOS (osascript).
+jangada_notificar() {
+  local titulo="$1" msg="$2"
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send -a jangada "$titulo" "$msg" 2>/dev/null || true
+  elif command -v osascript >/dev/null 2>&1; then
+    osascript -e "display notification \"$msg\" with title \"$titulo\"" 2>/dev/null || true
+  fi
 }
 
 # Foca a primeira janela da classe CLASSE e devolve 0; devolve 1 se não houver

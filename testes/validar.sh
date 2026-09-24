@@ -193,6 +193,33 @@ env PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA='STATUS: APROVAD
 conferir "caso 10e: revisor do estado prevalece sobre global claude no jangada-validar" \
   test -s "$tmp/falso/agy.pedido"
 
+# Caso 11: portão determinístico local
+# 11a: marcador de conflito no arquivo alterado reprova antes de chamar o revisor
+sessao_de claude
+echo -e "<<<<<<< HEAD\nconflito\n=======\noutro\n>>>>>>> branch" >"$tmp/projeto/conflito.txt"
+git -C "$tmp/projeto" add conflito.txt
+validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 11a: falha local sai com código 3" [ "$rc" = 3 ]
+conferir "caso 11a: revisor IA não foi chamado" test ! -e "$tmp/falso/agy.pedido"
+conferir "caso 11a: estado gravado como REVISAR (local)" [ "$(jq -r .validacao "$estado/s.json")" = "r1: REVISAR (local)" ]
+
+# 11b: --pular-local ignora a checagem e chama o revisor
+validar 'STATUS: APROVADO' --pular-local; rc=$?
+conferir "caso 11b: --pular-local chama o revisor mesmo com falha local" [ "$rc" = 0 ]
+conferir "caso 11b: o revisor foi chamado com --pular-local" test -s "$tmp/falso/agy.pedido"
+
+git -C "$tmp/projeto" rm -qf conflito.txt
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "limpeza conflito"
+
+# 11c: --reverter-se-limite restaura o worktree ao atingir o limite de rodadas
+sessao_de agy
+echo "alteração pendente" >"$tmp/projeto/pendente.txt"
+git -C "$tmp/projeto" add pendente.txt
+for _ in 1 2; do validar 'STATUS: REVISAR\n1. x' >/dev/null; done
+JANGADA_VALIDAR_RODADAS=2 validar 'STATUS: REVISAR\n1. x' --reverter-se-limite; rc=$?
+conferir "caso 11c: limite de rodadas com reversão sai com 4" [ "$rc" = 4 ]
+conferir "caso 11c: arquivo pendente foi revertido" test ! -e "$tmp/projeto/pendente.txt"
+
 if ((falhas)); then
   echo "$falhas falha(s); saídas em $tmp (mantido)"
   trap - EXIT

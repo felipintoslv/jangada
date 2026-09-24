@@ -86,7 +86,13 @@ atualizar_copia_instalada() {
     fi
     if [[ -z "$(git -C "$JANGADA_PATH" status --porcelain 2>/dev/null)" ]]; then
       echo "atualizando a cópia instalada em $JANGADA_PATH..."
-      git -C "$JANGADA_PATH" pull --ff-only || echo "!! não foi possível atualizar $JANGADA_PATH" >&2
+      if git -C "$JANGADA_PATH" pull --ff-only; then
+        if [[ -x "$JANGADA_PATH/bin/jangada-migrar" ]]; then
+          "$JANGADA_PATH/bin/jangada-migrar" || echo "!! aviso: jangada-migrar retornou código de erro" >&2
+        fi
+      else
+        echo "!! não foi possível atualizar $JANGADA_PATH" >&2
+      fi
     else
       echo "!! cópia instalada ($JANGADA_PATH) tem alterações locais; git pull não executado" >&2
     fi
@@ -176,6 +182,37 @@ limpar() {
     fi
     echo "worktree removido: $worktree"
   fi
+  local conf_agy="$HOME/.gemini/antigravity-cli/settings.json"
+  if [[ -n "$worktree" && -f "$conf_agy" && -w "$conf_agy" ]]; then
+    local dir_agy
+    dir_agy="$(dirname "$conf_agy")"
+    if command -v flock >/dev/null 2>&1; then
+      (
+        flock -w 5 9 2>/dev/null || exit 1
+        local tmp_agy
+        tmp_agy="$(mktemp "$dir_agy/settings.tmp.XXXXXX" 2>/dev/null)" || exit 0
+        if jq --arg w "$worktree" '
+          if (.trustedWorkspaces | type == "array") then
+            .trustedWorkspaces |= map(select(. != $w))
+          else . end' "$conf_agy" >"$tmp_agy" 2>/dev/null; then
+          mv -f "$tmp_agy" "$conf_agy"
+        else
+          rm -f "$tmp_agy"
+        fi
+      ) 9>"$dir_agy/.trava" 2>/dev/null || true
+    else
+      local tmp_agy
+      tmp_agy="$(mktemp "$dir_agy/settings.tmp.XXXXXX" 2>/dev/null)" || true
+      if [[ -n "$tmp_agy" ]] && jq --arg w "$worktree" '
+        if (.trustedWorkspaces | type == "array") then
+          .trustedWorkspaces |= map(select(. != $w))
+        else . end' "$conf_agy" >"$tmp_agy" 2>/dev/null; then
+        mv -f "$tmp_agy" "$conf_agy"
+      else
+        [[ -n "$tmp_agy" ]] && rm -f "$tmp_agy"
+      fi
+    fi
+  fi
   if ((apagar_ramo)); then
     # -d, não -D: o git só apaga se o ramo estiver mesclado, o que confere a
     # integração feita acima.
@@ -196,8 +233,13 @@ if [[ "${JANGADA_SESSAO:-}" == "$s" ]]; then
   echo "encerrando a partir da própria sessão; registro em $registro"
   export s worktree ramo raiz arq forcar matar_pid apagar_ramo integrado
   export -f limpar
-  # shellcheck disable=SC1090,SC2016
-  setsid -f bash -c 'sleep 0.5; source "$1"; limpar' _ "$JANGADA_PATH/bin/jangada-config" >"$registro" 2>&1
+  if command -v setsid >/dev/null 2>&1; then
+    # shellcheck disable=SC1090,SC2016
+    setsid -f bash -c 'sleep 0.5; source "$1"; limpar' _ "$JANGADA_PATH/bin/jangada-config" >"$registro" 2>&1
+  else
+    # shellcheck disable=SC1090,SC2016
+    nohup bash -c 'sleep 0.5; source "$1"; limpar' _ "$JANGADA_PATH/bin/jangada-config" >"$registro" 2>&1 &
+  fi
   exit 0
 fi
 

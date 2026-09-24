@@ -15,6 +15,8 @@
 #   --resposta TEXTO  o que o agente fez com o parecer anterior (corrigido,
 #                     rejeitado e por quê); entra no pedido da rodada seguinte
 #   --forcar          passa do limite de rodadas (JANGADA_VALIDAR_RODADAS, 3)
+#   --pular-local     pula a verificação determinística local antes do revisor
+#   --reverter-se-limite reverte o worktree para o ponto inicial se atingir o limite
 #
 # A revisão pelo agy leva alguns minutos. Quem chama por uma ferramenta com
 # tempo limite deve dar pelo menos 10 minutos.
@@ -28,6 +30,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
 base=""; modelo="${JANGADA_VALIDAR_MODELO:-}"; resposta=""; forcar=0
 revisor=""; revisor_dado=0
+pular_local="${JANGADA_VALIDAR_PULAR_LOCAL:-0}"
+reverter_se_limite=0
 while (($#)); do
   case "$1" in
     --revisor) revisor="$2"; revisor_dado=1; shift 2 ;;
@@ -35,7 +39,9 @@ while (($#)); do
     --modelo) modelo="$2"; shift 2 ;;
     --resposta) resposta="$2"; shift 2 ;;
     --forcar) forcar=1; shift ;;
-    -h|--ajuda) sed -n '2,24s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    --pular-local) pular_local=1; shift ;;
+    --reverter-se-limite) reverter_se_limite=1; shift ;;
+    -h|--ajuda|--help) sed -n '2,26s/^# \{0,1\}//p' "$0"; exit 0 ;;
     --) shift; break ;;
     -*) echo "opção desconhecida: $1" >&2; exit 1 ;;
     *) break ;;
@@ -140,8 +146,30 @@ fi
 
 diff_conteudo="$(git -C "$dir" diff "$ponto" 2>/dev/null || true)"
 arquivos="$(git -C "$dir" diff --name-status "$ponto" 2>/dev/null || true)"
-novos="$(git -C "$dir" ls-files --others --exclude-standard 2>/dev/null || true)"
+novos="$(git -C "$dir" -c core.quotePath=false ls-files --others --exclude-standard 2>/dev/null || true)"
 [[ -n "$novos" ]] && arquivos+="${arquivos:+$'\n'}$(sed 's/^/??\t/' <<<"$novos")"
+if [[ -n "$novos" ]]; then
+  conteudo_novos=""
+  while IFS= read -r n; do
+    [[ -f "$dir/$n" ]] || continue
+    if [[ ! -s "$dir/$n" ]]; then
+      conteudo_novos+="${conteudo_novos:+$'\n\n'}=== Arquivo novo (não rastreado, vazio): $n ==="
+    elif grep -Iq '^' "$dir/$n" 2>/dev/null; then
+      tam="$(wc -c <"$dir/$n" 2>/dev/null || echo 0)"
+      if ((tam <= 50000)); then
+        conteudo_novos+="${conteudo_novos:+$'\n\n'}=== Arquivo novo (não rastreado): $n ===$'\n'"
+        conteudo_novos+="$(<"$dir/$n")"
+      else
+        conteudo_novos+="${conteudo_novos:+$'\n\n'}=== Arquivo novo (não rastreado, >50KB): $n ===$'\n[arquivo muito grande para o diff; leia com a ferramenta se necessário]'"
+      fi
+    else
+      conteudo_novos+="${conteudo_novos:+$'\n\n'}=== Arquivo novo (não rastreado, binário): $n ==="
+    fi
+  done <<<"$novos"
+  if [[ -n "$conteudo_novos" ]]; then
+    diff_conteudo+="${diff_conteudo:+$'\n\n'}$conteudo_novos"
+  fi
+fi
 commits="$(git -C "$dir" log --oneline "$ponto..HEAD" 2>/dev/null | head -30 || true)"
 
 if [[ -z "$diff_conteudo" && -z "$novos" ]]; then
@@ -155,7 +183,14 @@ for f in "$estado_dir/validacao-$rotulo-r"*.md; do [[ -e "$f" ]] && anteriores+=
 rodada=$((${#anteriores[@]} + 1))
 if ((rodada > rodadas_max && !forcar)); then
   echo "jangada-validar: limite de $rodadas_max rodadas atingido para $rotulo." >&2
-  echo "Pare e descreva o que ficou pendente; o usuário decide se roda de novo com --forcar." >&2
+  if ((reverter_se_limite)); then
+    echo "jangada-validar: revertendo worktree para o ponto inicial ($ponto)..." >&2
+    git -C "$dir" reset --hard "$ponto" >&2
+    git -C "$dir" clean -fd >&2
+    echo "jangada-validar: worktree revertido com sucesso." >&2
+  else
+    echo "Pare e descreva o que ficou pendente; o usuário decide se roda de novo com --forcar ou se reverte com jangada-shell 'reverter'." >&2
+  fi
   exit 4
 fi
 ultimo=""
@@ -214,6 +249,92 @@ EOF
 )"
 
 saida="$estado_dir/validacao-$rotulo-r$rodada.md"
+
+# Portão determinístico local pré-revisão: valida marcadores de conflito, sintaxe e testes
+# antes de gastar tempo e tokens com o modelo revisor.
+verificar_local() {
+  local erros=""
+  local arq
+
+  # 1. Marcadores de conflito do Git
+  while IFS= read -r arq; do
+    [[ -n "$arq" && -f "$dir/$arq" ]] || continue
+    if grep -Iq '^' "$dir/$arq" 2>/dev/null; then
+      if grep -En '^(<<<<<<<|=======|>>>>>>>)' "$dir/$arq" >/dev/null 2>&1; then
+        erros+="conflito do git não resolvido em $arq:$'\n'"
+        erros+="$(grep -En '^(<<<<<<<|=======|>>>>>>>)' "$dir/$arq" | head -n 5)"$'\n'
+      fi
+    fi
+  done <<<"$(git -C "$dir" diff --name-only "$ponto" 2>/dev/null || true)"
+
+  # 2. Sintaxe de arquivos de script modificados
+  while IFS= read -r arq; do
+    [[ -n "$arq" && -f "$dir/$arq" ]] || continue
+    case "$arq" in
+      *.sh)
+        if command -v shellcheck >/dev/null 2>&1; then
+          local sc_out
+          if ! sc_out="$(shellcheck -S warning "$dir/$arq" 2>&1)"; then
+            erros+="falha no shellcheck em $arq:$'\n'$sc_out"$'\n'
+          fi
+        fi
+        ;;
+      *.lua)
+        local luac_bin
+        luac_bin="$(command -v luac || command -v luac5.4 || true)"
+        if [[ -n "$luac_bin" ]]; then
+          local luac_out
+          if ! luac_out="$("$luac_bin" -p "$dir/$arq" 2>&1)"; then
+            erros+="falha de sintaxe lua em $arq:$'\n'$luac_out"$'\n'
+          fi
+        fi
+        ;;
+    esac
+  done <<<"$(git -C "$dir" diff --name-only "$ponto" 2>/dev/null || true)"
+
+  # 3. Validação do projeto se existir e não estiver em recursão
+  if [[ -z "${JANGADA_VALIDAR_EM_CURSO:-}" ]]; then
+    export JANGADA_VALIDAR_EM_CURSO=1
+    if [[ -x "$dir/.jangada/validar.sh" ]]; then
+      local val_out
+      if ! val_out="$(cd "$dir" && .jangada/validar.sh 2>&1)"; then
+        erros+="falha na validação do projeto (.jangada/validar.sh):$'\n'$val_out"$'\n'
+      fi
+    fi
+  fi
+
+  if [[ -n "$erros" ]]; then
+    printf '%s\n' "$erros"
+    return 1
+  fi
+  return 0
+}
+
+if ((!pular_local)) && [[ "${JANGADA_VALIDAR_TESTANDO:-0}" != "1" ]]; then
+  erros_locais=""
+  if ! erros_locais="$(verificar_local)"; then
+    echo "jangada-validar: verificação local determinística falhou; revisor externo poupado." >&2
+    {
+      echo "STATUS: REVISAR"
+      echo ""
+      echo "1. [verificação local]: falha determinística antes da revisão externa."
+      echo "Corrija as inconsistências apontadas abaixo antes de submeter para revisão por IA:"
+      echo ""
+      echo "$erros_locais"
+    } >"$saida"
+    cat "$saida"
+    if [[ -n "$arq_estado" ]]; then
+      tmp="$(mktemp "$arq_estado.XXXXXX")"
+      jangada_alterar_estado "$arq_estado" "$tmp" --arg v "r$rodada: REVISAR (local)" '.validacao = $v'
+      rm -f "$tmp"
+    fi
+    echo >&2
+    echo "jangada-validar: REVISAR (parecer em $saida)" >&2
+    "$JANGADA_PATH/bin/jangada-gancho" pos-validar "$rotulo" "REVISAR" || true
+    exit 3
+  fi
+fi
+
 echo "jangada-validar: rodada $rodada de $rodadas_max, $nome_revisor${modelo:+ ($modelo)} revisando $(wc -l <<<"$arquivos") arquivo(s)..." >&2
 
 # O hook do revisor fica desligado: ele não é o agente da sessão, e o Stop

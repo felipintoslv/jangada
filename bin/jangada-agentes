@@ -10,9 +10,10 @@
 #   jangada-agentes --focar S  foca a janela da sessão S ou abre uma nova
 #   jangada-agentes --lista    lista simples: estado, sessão, diretório
 #   jangada-agentes --previa S conteúdo do painel de prévia da sessão S
-#   jangada-agentes --proximo  foca o próximo agente que espera (atalho SUPER+N)
+#   jangada-agentes --proximo  foca o próximo agente ativo ou que espera (SUPER+N)
 #   jangada-agentes --anterior volta ao agente focado antes do atual (SUPER+SHIFT+N)
 #   jangada-agentes --restaurar [S]  reabre as sessões interrompidas (ou só S)
+#   jangada-agentes --limpar-concluidos  encerra em lote todas as sessões concluídas
 #
 # Sessões terminadas em "concluido" ou "aguardando" continuam na lista depois de
 # o processo sair: são o resultado do ciclo, não um processo vivo. Saem com
@@ -59,9 +60,15 @@ estado_final() {
 # Um estado final velho demais para continuar ocupando o painel. Sem data, ou
 # com data ilegível, conta como vencido: é resto de versão antiga do arquivo.
 vencido() {
-  local quando="$1" horas="${2:-$guardar_horas}" marca agora
+  local quando="$1" horas="${2:-$guardar_horas}" marca="" agora
   [[ -n "$quando" ]] || return 0
-  marca="$(date -d "$quando" +%s 2>/dev/null)" || return 0
+  if command -v gdate >/dev/null 2>&1; then
+    marca="$(gdate -d "$quando" +%s 2>/dev/null || true)"
+  elif date -d "$quando" +%s >/dev/null 2>&1; then
+    marca="$(date -d "$quando" +%s 2>/dev/null || true)"
+  elif command -v python3 >/dev/null 2>&1; then
+    marca="$(python3 -c "import sys, datetime; print(int(datetime.datetime.fromisoformat(sys.argv[1]).timestamp()))" "$quando" 2>/dev/null || true)"
+  fi
   [[ -n "$marca" ]] || return 0
   agora="$(date +%s)"
   (( agora - marca > horas * 3600 ))
@@ -165,8 +172,9 @@ restauravel() {
 # que o outro acabou de gravar.
 marcar() {
   local arq="$1" tmp
-  tmp="$(mktemp "$arq.XXXXXX")" || return 0
-  jangada_alterar_estado "$arq" "$tmp" --arg e "$2" --arg m "$3" --arg a "$(date -Is)" \
+  local agora
+  agora="$(date -Is 2>/dev/null || date +"%Y-%m-%dT%H:%M:%S%z")"
+  jangada_alterar_estado "$arq" "$tmp" --arg e "$2" --arg m "$3" --arg a "$agora" \
     '.estado = $e | .mensagem = $m | .atualizado = $a' || rm -f "$tmp"
 }
 
@@ -249,8 +257,8 @@ anterior() {
     "${JANGADA_TMUX[@]}" has-session -t "=$s" 2>/dev/null || continue
     focar "$s"
     return 0
-  done < <(tac "$historico")
-  notify-send -a jangada "Agentes" "nenhum agente anterior" 2>/dev/null || echo "nenhum agente anterior"
+  done < <(command -v tac >/dev/null 2>&1 && tac "$historico" || tail -r "$historico" 2>/dev/null || awk '{l[NR]=$0} END {for (i=NR;i>0;i--) print l[i]}' "$historico")
+  jangada_notificar "Agentes" "nenhum agente anterior" || echo "nenhum agente anterior"
 }
 
 focar() {
@@ -266,8 +274,13 @@ focar() {
   if [[ -n "$endereco" ]]; then
     hyprctl dispatch "hl.dsp.focus({ window = \"address:$endereco\" })" >/dev/null
   elif "${JANGADA_TMUX[@]}" has-session -t "=$s" 2>/dev/null; then
-    setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente \
-      -e "${JANGADA_TMUX[@]}" attach -t "=$s" >/dev/null 2>&1
+    if command -v setsid >/dev/null 2>&1; then
+      setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente \
+        -e "${JANGADA_TMUX[@]}" attach -t "=$s" >/dev/null 2>&1
+    else
+      "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente \
+        -e "${JANGADA_TMUX[@]}" attach -t "=$s" >/dev/null 2>&1 &
+    fi
   fi
 }
 
@@ -285,9 +298,16 @@ proximo() {
     awk -F'\t' '$1=="aguardando" {print $4 "\t" $2}' <<<"$linhas" | sort | cut -f2
     awk -F'\t' '$1=="concluido" {print $4 "\t" $2}' <<<"$linhas" | sort -r | cut -f2
   )
+  # Fallback determinístico: se não houver agente aguardando ou concluído, percorre
+  # quem está trabalhando, ordenado pelo nome da sessão para não saltar caoticamente.
+  if [[ "${#fila[@]}" -eq 0 ]] || [[ -z "${fila[0]}" ]]; then
+    mapfile -t fila < <(
+      awk -F'\t' '$1=="trabalhando" {print $2}' <<<"$linhas" | sort
+    )
+  fi
   n="${#fila[@]}"
   if ((n == 0)) || [[ -z "${fila[0]}" ]]; then
-    notify-send -a jangada "Agentes" "nenhum agente esperando" 2>/dev/null || echo "nenhum agente esperando"
+    jangada_notificar "Agentes" "nenhum agente ativo" || echo "nenhum agente ativo"
     return 0
   fi
 
@@ -509,20 +529,43 @@ case "${1:-}" in
       sleep 2
     done
     ;;
+  --limpar-concluidos)
+    limpar_orfaos
+    linhas="$(listar)"
+    concluidas=()
+    while IFS=$'\t' read -r est s _resto; do
+      [[ "$est" == "concluido" ]] && concluidas+=("$s")
+    done <<<"$linhas"
+    if [[ "${#concluidas[@]}" -eq 0 ]]; then
+      echo "nenhuma sessão concluída para limpar."
+      exit 0
+    fi
+    echo "sessões concluídas a limpar: ${#concluidas[@]}"
+    falhas=0
+    for s in "${concluidas[@]}"; do
+      echo "==> limpando $s"
+      "$JANGADA_PATH/bin/jangada-agente-fim" "$s" || falhas=$((falhas + 1))
+    done
+    if ((falhas > 0)); then
+      echo "limpeza concluída com $falhas aviso(s)" >&2
+      exit 1
+    fi
+    echo "todas as sessões concluídas foram limpas."
+    ;;
   "")
     limpar_orfaos
     escolha="$(listar | awk -F'\t' '{printf "%s\t%s\t%s\n", $1, $2, $3}' | fzf \
       --delimiter '\t' --with-nth 1,2 --prompt 'agente > ' --reverse \
-      --header 'Enter: abrir (ou restaurar)   Alt+I: integrar e encerrar   Ctrl+X: encerrar' \
-      --expect ctrl-x,alt-i \
+      --header 'Enter: abrir (ou restaurar)   Alt+I: integrar   Ctrl+X: fechar   Alt+L: limpar concluídos' \
+      --expect ctrl-x,alt-i,alt-l \
       --preview "'$0' --previa {2}")" || exit 0
     tecla="$(head -1 <<<"$escolha")"
     s="$(sed -n 2p <<<"$escolha" | cut -f2)"
-    [[ -n "$s" ]] || exit 0
     fim=()
     case "$tecla" in
-      ctrl-x) fim=("$JANGADA_PATH/bin/jangada-agente-fim" "$s") ;;
-      alt-i) fim=("$JANGADA_PATH/bin/jangada-agente-fim" --integrar "$s") ;;
+      ctrl-x) [[ -n "$s" ]] && fim=("$JANGADA_PATH/bin/jangada-agente-fim" "$s") ;;
+      alt-i) [[ -n "$s" ]] && fim=("$JANGADA_PATH/bin/jangada-agente-fim" --integrar "$s") ;;
+      alt-l) fim=("$0" --limpar-concluidos) ;;
     esac
     if ((${#fim[@]})); then
       [[ -n "${JANGADA_LISTA_JANELA:-}" ]] || exec "${fim[@]}"
@@ -530,6 +573,7 @@ case "${1:-}" in
       read -r -p "Enter para fechar " _ || true
       exit "$rc"
     fi
+    [[ -n "$s" ]] || exit 0
     focar "$s"
     ;;
   -h|--ajuda)

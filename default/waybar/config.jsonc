@@ -4,7 +4,7 @@
   "position": "top",
   "height": 32,
   "spacing": 4,
-  "modules-left": ["hyprland/workspaces", "custom/agentes", "hyprland/window"],
+  "modules-left": ["custom/menu", "hyprland/workspaces", "custom/agentes", "hyprland/window"],
   "modules-center": ["clock"],
   "modules-right": [
     "mpris",
@@ -21,8 +21,19 @@
     "bluetooth",
     "pulseaudio",
     "pulseaudio#microfone",
-    "battery"
+    "battery",
+    "custom/sessao"
   ],
+
+  // Ponto de entrada do menu central do jangada na barra (Omarchy best practice).
+  // Clique abre o menu fuzzel; clique direito abre o terminal.
+  "custom/menu": {
+    "format": "⛵",
+    "tooltip": true,
+    "tooltip-format": "Menu Jangada (botão direito: terminal)",
+    "on-click": "$JANGADA_PATH/bin/jangada-menu",
+    "on-click-right": "$JANGADA_PATH/bin/jangada-terminal"
+  },
 
   "hyprland/workspaces": {
     "format": "{name}",
@@ -196,7 +207,7 @@
     "tooltip-format-connected": "{controller_alias}\t{controller_address}\n\n{num_connections} conectado(s)\n\n{device_enumerate}",
     "tooltip-format-enumerate-connected": "{device_alias}\t{device_address}",
     "on-click": "$JANGADA_PATH/bin/jangada-bluetooth",
-    "on-click-right": "$JANGADA_PATH/bin/jangada-bluetooth menu"
+    "on-click-right": "$JANGADA_PATH/bin/jangada-bluetooth toggle"
   },
 
   "pulseaudio": {
@@ -230,6 +241,16 @@
     "states": { "aviso": 25, "critico": 10 },
     "tooltip-format": "{capacity}% · {timeTo}",
     "on-click": "$JANGADA_PATH/bin/jangada-energia"
+  },
+
+  // Ações de energia e sessão: perfil de energia, suspender, reiniciar,
+  // desligar e sair da sessão. O botão direito aciona o bloqueio de tela.
+  "custom/sessao": {
+    "format": "󰐥",
+    "tooltip": true,
+    "tooltip-format": "Energia e sessão (botão direito: bloquear tela)",
+    "on-click": "$JANGADA_PATH/bin/jangada-energia",
+    "on-click-right": "setsid -f $JANGADA_PATH/bin/jangada-bloquear"
   },
 
   // show-passive-items mostra também o que está em repouso, que é o caso de
