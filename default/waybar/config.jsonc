@@ -28,7 +28,7 @@
   // Ponto de entrada do menu central do jangada na barra (Omarchy best practice).
   // Clique abre o menu fuzzel; clique direito abre o terminal.
   "custom/menu": {
-    "format": "⛵",
+    "format": "󱒅",
     "tooltip": true,
     "tooltip-format": "Menu Jangada (botão direito: terminal)",
     "on-click": "$JANGADA_PATH/bin/jangada-menu",

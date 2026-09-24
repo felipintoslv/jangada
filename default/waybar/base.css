@@ -92,9 +92,21 @@ window#waybar {
   padding: 0 8px;
 }
 
-#custom-menu:hover,
-#custom-sessao:hover {
+#custom-menu {
   color: @primaria;
+  font-size: 15px;
+}
+
+#custom-menu:hover {
+  color: @atencao;
+}
+
+#custom-sessao {
+  color: @texto_suave;
+}
+
+#custom-sessao:hover {
+  color: @atencao;
 }
 
 /* Título da janela em foco. Fica em segundo plano na leitura, como o mpris:
