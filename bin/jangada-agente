@@ -168,7 +168,7 @@ if ((eh_git)) && [[ -n "$nome" ]]; then
   ramo="agente/$nome"
   base="$(git -C "$raiz" rev-parse --abbrev-ref HEAD)"
   # Remove registros de worktrees cujas pastas foram apagadas à mão.
-  git -C "$raiz" worktree prune
+  git -C "$raiz" worktree prune --expire now
   if [[ -d "$worktree" ]]; then
     echo "reaproveitando worktree existente: $worktree"
   elif git -C "$raiz" show-ref --verify --quiet "refs/heads/$ramo"; then
@@ -321,7 +321,7 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
 
   jq -n --arg sessao "$sessao" --arg dir "$dir" --arg raiz "$raiz" --arg worktree "$worktree" \
     --arg ramo "$ramo" --arg base "$base" --arg agente "$agente" \
-    --arg agora "$(date -Is 2>/dev/null || date +"%Y-%m-%dT%H:%M:%S%z")" \
+    --arg agora "$(jangada_data_iso)" \
     --arg inicio "$( ((eh_git)) && git -C "$dir" rev-parse HEAD 2>/dev/null || true)" \
     --arg tarefa "$prompt" --arg perfil "$perfil" --arg comando "$cmd_base" \
     --arg revisor "$revisor_efetivo" \

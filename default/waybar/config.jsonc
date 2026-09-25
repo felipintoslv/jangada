@@ -25,7 +25,7 @@
     "custom/sessao"
   ],
 
-  // Ponto de entrada do menu central do jangada na barra (Omarchy best practice).
+  // Ponto de entrada do menu central do jangada na barra.
   // Clique abre o menu fuzzel; clique direito abre o terminal.
   "custom/menu": {
     "format": "󱒅",
@@ -79,7 +79,7 @@
   },
 
   // Oculto em operação normal (hide-on-ok). Só aparece se algum serviço
-  // do sistema ou do usuário falhar, ouvindo eventos do DBus sem polling.
+  // do sistema ou do usuário falhar, ouvindo eventos do DBus sem consulta periódica.
   "systemd-failed-units": {
     "hide-on-ok": true,
     "format": "✗ {nr_failed}",

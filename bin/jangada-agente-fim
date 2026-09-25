@@ -182,37 +182,7 @@ limpar() {
     fi
     echo "worktree removido: $worktree"
   fi
-  local conf_agy="$HOME/.gemini/antigravity-cli/settings.json"
-  if [[ -n "$worktree" && -f "$conf_agy" && -w "$conf_agy" ]]; then
-    local dir_agy
-    dir_agy="$(dirname "$conf_agy")"
-    if command -v flock >/dev/null 2>&1; then
-      (
-        flock -w 5 9 2>/dev/null || exit 1
-        local tmp_agy
-        tmp_agy="$(mktemp "$dir_agy/settings.tmp.XXXXXX" 2>/dev/null)" || exit 0
-        if jq --arg w "$worktree" '
-          if (.trustedWorkspaces | type == "array") then
-            .trustedWorkspaces |= map(select(. != $w))
-          else . end' "$conf_agy" >"$tmp_agy" 2>/dev/null; then
-          mv -f "$tmp_agy" "$conf_agy"
-        else
-          rm -f "$tmp_agy"
-        fi
-      ) 9>"$dir_agy/.trava" 2>/dev/null || true
-    else
-      local tmp_agy
-      tmp_agy="$(mktemp "$dir_agy/settings.tmp.XXXXXX" 2>/dev/null)" || true
-      if [[ -n "$tmp_agy" ]] && jq --arg w "$worktree" '
-        if (.trustedWorkspaces | type == "array") then
-          .trustedWorkspaces |= map(select(. != $w))
-        else . end' "$conf_agy" >"$tmp_agy" 2>/dev/null; then
-        mv -f "$tmp_agy" "$conf_agy"
-      else
-        [[ -n "$tmp_agy" ]] && rm -f "$tmp_agy"
-      fi
-    fi
-  fi
+  [[ -n "$worktree" ]] && jangada_agy_ajustar_confianca remover "$worktree" || true
   if ((apagar_ramo)); then
     # -d, não -D: o git só apaga se o ramo estiver mesclado, o que confere a
     # integração feita acima.

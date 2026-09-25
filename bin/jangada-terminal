@@ -63,11 +63,19 @@ case "$term" in
     ;;
   iterm)
     cmd_str="$(printf '%q ' "${comando[@]}")"
-    exec osascript -e "tell application \"iTerm\" to create window with default profile command \"$cmd_str\""
+    exec osascript -e 'on run argv' \
+      -e 'tell application "iTerm"' \
+      -e '  create window with default profile command (item 1 of argv)' \
+      -e 'end tell' \
+      -e 'end run' "$cmd_str"
     ;;
   terminal.app)
     cmd_str="$(printf '%q ' "${comando[@]}")"
-    exec osascript -e "tell application \"Terminal\" to do script \"$cmd_str\""
+    exec osascript -e 'on run argv' \
+      -e 'tell application "Terminal"' \
+      -e '  do script (item 1 of argv)' \
+      -e 'end tell' \
+      -e 'end run' "$cmd_str"
     ;;
   *)
     ((${#comando[@]})) && args+=(-e "${comando[@]}")

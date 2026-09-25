@@ -47,7 +47,7 @@ echo '{}'
   tmp="$(mktemp "$arq.XXXXXX")"
   # shellcheck disable=SC2016  # $e, $m, $a e $c são variáveis do jq
   jangada_alterar_estado "$arq" "$tmp" \
-    --arg e "$evento" --arg m "$mensagem" --arg a "$(date -Is)" --arg c "$conversa" '
+    --arg e "$evento" --arg m "$mensagem" --arg a "$(jangada_data_iso)" --arg c "$conversa" '
     (if $c != "" then .conversa = $c else . end)
     | .estado = $e | .atualizado = $a
     | (if $m != "" then .mensagem = $m else . end)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Executa um comando e filtra sua saída para economizar tokens em agentes.
-# Remove caracteres de controle ANSI e condensa saídas longas de testes e linters.
+# Remove caracteres de controle ANSI e condensa saídas longas de testes e verificadores de código.
 #
 # Uso: jangada-filtrar [opções] [--] [comando [argumentos...]]
 #      comando | jangada-filtrar [opções]
@@ -18,8 +18,14 @@ modo_puro=0
 
 while (($#)); do
   case "$1" in
-    -m|--max-linhas) max_linhas="$2"; shift 2 ;;
-    -e|--linhas-erro) linhas_erro="$2"; shift 2 ;;
+    -m|--max-linhas)
+      max_linhas="${2:-}"
+      [[ "$max_linhas" =~ ^(0|[1-9][0-9]*)$ ]] || { echo "jangada-filtrar: -m requer número inteiro" >&2; exit 1; }
+      shift 2 ;;
+    -e|--linhas-erro)
+      linhas_erro="${2:-}"
+      [[ "$linhas_erro" =~ ^(0|[1-9][0-9]*)$ ]] || { echo "jangada-filtrar: -e requer número inteiro" >&2; exit 1; }
+      shift 2 ;;
     -p|--puro) modo_puro=1; shift ;;
     -h|--ajuda|--help) sed -n '2,11s/^# \{0,1\}//p' "$0"; exit 0 ;;
     --) shift; break ;;

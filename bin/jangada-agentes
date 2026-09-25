@@ -173,7 +173,8 @@ restauravel() {
 marcar() {
   local arq="$1" tmp
   local agora
-  agora="$(date -Is 2>/dev/null || date +"%Y-%m-%dT%H:%M:%S%z")"
+  agora="$(jangada_data_iso)"
+  tmp="$(mktemp "$arq.XXXXXX" 2>/dev/null)" || return 0
   jangada_alterar_estado "$arq" "$tmp" --arg e "$2" --arg m "$3" --arg a "$agora" \
     '.estado = $e | .mensagem = $m | .atualizado = $a' || rm -f "$tmp"
 }
@@ -298,7 +299,7 @@ proximo() {
     awk -F'\t' '$1=="aguardando" {print $4 "\t" $2}' <<<"$linhas" | sort | cut -f2
     awk -F'\t' '$1=="concluido" {print $4 "\t" $2}' <<<"$linhas" | sort -r | cut -f2
   )
-  # Fallback determinístico: se não houver agente aguardando ou concluído, percorre
+  # Alternativa: se não houver agente aguardando ou concluído, percorre
   # quem está trabalhando, ordenado pelo nome da sessão para não saltar caoticamente.
   if [[ "${#fila[@]}" -eq 0 ]] || [[ -z "${fila[0]}" ]]; then
     mapfile -t fila < <(

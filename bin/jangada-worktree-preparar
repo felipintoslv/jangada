@@ -115,7 +115,10 @@ if [[ -f "$raiz/.worktreeinclude" ]]; then
       else
         mkdir -p -- "$(dirname -- "$worktree/$c")"
         if [[ "$(uname -s)" == "Darwin" ]]; then
-          cp -R -p -c -- "$raiz/$c" "$worktree/$c"
+          if ! cp -R -p -c -- "$raiz/$c" "$worktree/$c" 2>/dev/null; then
+            rm -rf -- "${worktree:?}/${c:?}"
+            cp -R -p -- "$raiz/$c" "$worktree/$c"
+          fi
         else
           cp -a --reflink=auto -- "$raiz/$c" "$worktree/$c"
         fi
@@ -172,41 +175,10 @@ fi
 # 4. Confiança de pasta para o Antigravity (agy).
 # Evita a pergunta interativa de segurança por caminho absoluto ao abrir um
 # agente agy no worktree recém-criado.
-conf_agy="$HOME/.gemini/antigravity-cli/settings.json"
-if [[ -f "$conf_agy" && -w "$conf_agy" ]]; then
-  if ((simular)); then
-    echo "adicionaria $worktree a trustedWorkspaces em $conf_agy"
-  else
-    dir_agy="$(dirname "$conf_agy")"
-    if command -v flock >/dev/null 2>&1; then
-      (
-        flock -w 5 9 2>/dev/null || exit 1
-        tmp_agy="$(mktemp "$dir_agy/settings.tmp.XXXXXX" 2>/dev/null)" || exit 0
-        if jq --arg w "$worktree" '
-          if (.trustedWorkspaces | type == "array") then
-            if (.trustedWorkspaces | index($w)) then . else .trustedWorkspaces += [$w] end
-          else
-            .trustedWorkspaces = [$w]
-          end' "$conf_agy" >"$tmp_agy" 2>/dev/null; then
-          mv -f "$tmp_agy" "$conf_agy"
-        else
-          rm -f "$tmp_agy"
-        fi
-      ) 9>"$dir_agy/.trava" 2>/dev/null || true
-    else
-      tmp_agy="$(mktemp "$dir_agy/settings.tmp.XXXXXX" 2>/dev/null)" || true
-      if [[ -n "$tmp_agy" ]] && jq --arg w "$worktree" '
-        if (.trustedWorkspaces | type == "array") then
-          if (.trustedWorkspaces | index($w)) then . else .trustedWorkspaces += [$w] end
-        else
-          .trustedWorkspaces = [$w]
-        end' "$conf_agy" >"$tmp_agy" 2>/dev/null; then
-        mv -f "$tmp_agy" "$conf_agy"
-      else
-        [[ -n "$tmp_agy" ]] && rm -f "$tmp_agy"
-      fi
-    fi
-  fi
+if ((simular)); then
+  echo "adicionaria $worktree a trustedWorkspaces"
+else
+  jangada_agy_ajustar_confianca adicionar "$worktree" || true
 fi
 
 exit 0

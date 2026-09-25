@@ -36,6 +36,14 @@ elif [[ -x /usr/local/bin/brew ]]; then
   eval "$(/usr/local/bin/brew shellenv)"
 fi
 
+if ((BASH_VERSINFO[0] < 4)); then
+  for b in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+    if [[ -x "$b" ]]; then
+      exec "$b" "$0" "$@"
+    fi
+  done
+fi
+
 # 2. Instalação de pacotes necessários
 info "verificando dependências no Homebrew..."
 pacotes_necessarios=(bash tmux fzf jq coreutils)
@@ -50,6 +58,13 @@ done
 if ((${#pacotes_para_instalar[@]})); then
   info "instalando via brew: ${pacotes_para_instalar[*]}"
   executar brew install "${pacotes_para_instalar[@]}"
+  if ((BASH_VERSINFO[0] < 4)) && ! simulando; then
+    for b in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+      if [[ -x "$b" ]]; then
+        exec "$b" "$0" "$@"
+      fi
+    done
+  fi
 else
   ok "todas as ferramentas básicas já estão instaladas via brew"
 fi
@@ -121,7 +136,8 @@ if [[ ! -f "$script_raycast" ]]; then
   if simulando; then
     info "[simulação] criaria comando do Raycast em $script_raycast"
   else
-    cat <<'EOF' >"$script_raycast"
+    {
+      cat <<'EOF'
 #!/usr/bin/env bash
 # Required parameters:
 # @raycast.schemaVersion 1
@@ -142,11 +158,14 @@ elif [[ -x /usr/local/bin/brew ]]; then
   eval "$(/usr/local/bin/brew shellenv)"
 fi
 
-JANGADA_DIR="${JANGADA_PATH:-$HOME/.local/share/jangada}"
+EOF
+      printf 'JANGADA_DIR=%q\n' "$JANGADA_PATH"
+      cat <<'EOF'
 export PATH="$JANGADA_DIR/bin:$PATH"
 
 jangada-agente --janela
 EOF
+    } >"$script_raycast"
     chmod +x "$script_raycast"
     ok "comando do Raycast criado em $script_raycast"
   fi
@@ -161,7 +180,13 @@ if tem_comando osacompile; then
     if simulando; then
       info "[simulação] compilaria aplicativo $app_agente"
     else
-      osacompile -e 'do shell script "PATH=/opt/homebrew/bin:/usr/local/bin:$PATH '"$JANGADA_PATH"'/bin/jangada-agente --janela >/dev/null 2>&1 &"' -o "$app_agente" 2>/dev/null || true
+      bin_agente="$JANGADA_PATH/bin/jangada-agente"
+      bin_escapado="${bin_agente//\\/\\\\}"
+      bin_escapado="${bin_escapado//\"/\\\"}"
+      osacompile -e 'on run' \
+        -e '  set binPath to quoted form of "'"$bin_escapado"'"' \
+        -e '  do shell script "PATH=/opt/homebrew/bin:/usr/local/bin:$PATH " & binPath & " --janela >/dev/null 2>&1 &"' \
+        -e 'end run' -o "$app_agente" 2>/dev/null || true
       if [[ -e "$app_agente" ]]; then
         ok "aplicativo criado: $app_agente (disponível no Spotlight e Dock)"
       fi

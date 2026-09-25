@@ -168,8 +168,24 @@ reverter() {
     echo "o diretório atual não é um repositório git" >&2
     return 1
   fi
-  local base ponto
+  local base ponto ramo_atual dir_atual wt_padrao
   base="$(_jangada_ramo_base || true)"
+  ramo_atual="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  dir_atual="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  wt_padrao="${JANGADA_WORKTREES:-$HOME/.local/share/jangada-worktrees}"
+
+  if [ -n "$base" ] && [ "$ramo_atual" = "$base" ]; then
+    echo "reverter cancelado: não é permitido reverter o ramo base ($ramo_atual)" >&2
+    return 1
+  fi
+  if [ "$ramo_atual" = "main" ] || [ "$ramo_atual" = "master" ]; then
+    echo "reverter cancelado: não é permitido reverter o ramo principal ($ramo_atual)" >&2
+    return 1
+  fi
+  if [ "${dir_atual#"$wt_padrao"/}" = "$dir_atual" ]; then
+    echo "reverter cancelado: o diretório atual não é um worktree gerenciado ($dir_atual)" >&2
+    return 1
+  fi
   if [ -n "$base" ]; then
     ponto="$(git merge-base "$base" HEAD 2>/dev/null || true)"
   fi
@@ -193,7 +209,7 @@ repassar() {
   fi
 
   if [ -z "$sessao_origem" ] && command -v fzf >/dev/null 2>&1; then
-    sessao_origem="$("$JANGADA_PATH/bin/jangada-agentes" --lista 2>/dev/null | awk '{print $1}' | fzf --prompt 'repassar da sessão > ' --height 40% --reverse)" || return 0
+    sessao_origem="$("$JANGADA_PATH/bin/jangada-agentes" --lista 2>/dev/null | awk -F'\t' '{print $2}' | fzf --prompt 'repassar da sessão > ' --height 40% --reverse)" || return 0
   fi
 
   if [ -z "$sessao_origem" ]; then
@@ -209,7 +225,7 @@ repassar() {
   fi
 
   local tmp_prompt
-  tmp_prompt="$(mktemp "${TMPDIR:-/tmp}/jangada-repassar.XXXXXX.md")"
+  tmp_prompt="$(mktemp "${TMPDIR:-/tmp}/jangada-repassar.XXXXXX")"
   {
     echo "Contexto repassado da sessão '$sessao_origem':"
     echo ""

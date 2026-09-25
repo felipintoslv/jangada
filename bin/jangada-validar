@@ -157,10 +157,10 @@ if [[ -n "$novos" ]]; then
     elif grep -Iq '^' "$dir/$n" 2>/dev/null; then
       tam="$(wc -c <"$dir/$n" 2>/dev/null || echo 0)"
       if ((tam <= 50000)); then
-        conteudo_novos+="${conteudo_novos:+$'\n\n'}=== Arquivo novo (não rastreado): $n ===$'\n'"
+        conteudo_novos+="${conteudo_novos:+$'\n\n'}=== Arquivo novo (não rastreado): $n ==="$'\n'
         conteudo_novos+="$(<"$dir/$n")"
       else
-        conteudo_novos+="${conteudo_novos:+$'\n\n'}=== Arquivo novo (não rastreado, >50KB): $n ===$'\n[arquivo muito grande para o diff; leia com a ferramenta se necessário]'"
+        conteudo_novos+="${conteudo_novos:+$'\n\n'}=== Arquivo novo (não rastreado, >50KB): $n ==="$'\n[arquivo muito grande para o diff; leia com a ferramenta se necessário]'
       fi
     else
       conteudo_novos+="${conteudo_novos:+$'\n\n'}=== Arquivo novo (não rastreado, binário): $n ==="
@@ -184,10 +184,23 @@ rodada=$((${#anteriores[@]} + 1))
 if ((rodada > rodadas_max && !forcar)); then
   echo "jangada-validar: limite de $rodadas_max rodadas atingido para $rotulo." >&2
   if ((reverter_se_limite)); then
-    echo "jangada-validar: revertendo worktree para o ponto inicial ($ponto)..." >&2
-    git -C "$dir" reset --hard "$ponto" >&2
-    git -C "$dir" clean -fd >&2
-    echo "jangada-validar: worktree revertido com sucesso." >&2
+    ramo_atual="$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    base_efetiva="${base:-main}"
+    wt_padrao="${JANGADA_WORKTREES:-$HOME/.local/share/jangada-worktrees}"
+    dir_valido=0
+    [[ "$dir/" == "$wt_padrao"/* || "$dir" == /tmp/* ]] && dir_valido=1
+    [[ -n "${TMPDIR:-}" && "$dir" == "$TMPDIR"* ]] && dir_valido=1
+
+    if [[ "$ramo_atual" == "$base_efetiva" || "$ramo_atual" == "main" || "$ramo_atual" == "master" ]]; then
+      echo "jangada-validar: reversão cancelada para proteção do ramo base ($ramo_atual)." >&2
+    elif ((!dir_valido)); then
+      echo "jangada-validar: reversão cancelada: diretório fora de JANGADA_WORKTREES ($dir)." >&2
+    else
+      echo "jangada-validar: revertendo worktree para o ponto inicial ($ponto)..." >&2
+      git -C "$dir" reset --hard "$ponto" >&2
+      git -C "$dir" clean -fd >&2
+      echo "jangada-validar: worktree revertido com sucesso." >&2
+    fi
   else
     echo "Pare e descreva o que ficou pendente; o usuário decide se roda de novo com --forcar ou se reverte com jangada-shell 'reverter'." >&2
   fi
@@ -260,9 +273,9 @@ verificar_local() {
   while IFS= read -r arq; do
     [[ -n "$arq" && -f "$dir/$arq" ]] || continue
     if grep -Iq '^' "$dir/$arq" 2>/dev/null; then
-      if grep -En '^(<<<<<<<|=======|>>>>>>>)' "$dir/$arq" >/dev/null 2>&1; then
-        erros+="conflito do git não resolvido em $arq:$'\n'"
-        erros+="$(grep -En '^(<<<<<<<|=======|>>>>>>>)' "$dir/$arq" | head -n 5)"$'\n'
+      if grep -En '^<{7}( |$)' "$dir/$arq" >/dev/null 2>&1 && grep -En '^>{7}( |$)' "$dir/$arq" >/dev/null 2>&1; then
+        erros+="conflito do git não resolvido em $arq:"$'\n'
+        erros+="$(grep -En '^<{7}( |$)|^={7}$|^>{7}( |$)' "$dir/$arq" | head -n 5)"$'\n'
       fi
     fi
   done <<<"$(git -C "$dir" diff --name-only "$ponto" 2>/dev/null || true)"
@@ -270,22 +283,31 @@ verificar_local() {
   # 2. Sintaxe de arquivos de script modificados
   while IFS= read -r arq; do
     [[ -n "$arq" && -f "$dir/$arq" ]] || continue
+    local eh_script_shell=0
     case "$arq" in
-      *.sh)
-        if command -v shellcheck >/dev/null 2>&1; then
-          local sc_out
-          if ! sc_out="$(shellcheck -S warning "$dir/$arq" 2>&1)"; then
-            erros+="falha no shellcheck em $arq:$'\n'$sc_out"$'\n'
-          fi
+      *.sh) eh_script_shell=1 ;;
+      *)
+        if head -n1 "$dir/$arq" 2>/dev/null | grep -Eq '^#!(.*/|.*env[[:space:]]+)(ba|da|k)?sh([[:space:]]|$)'; then
+          eh_script_shell=1
         fi
         ;;
+    esac
+    if ((eh_script_shell)); then
+      if command -v shellcheck >/dev/null 2>&1; then
+        local sc_out
+        if ! sc_out="$(shellcheck -S warning "$dir/$arq" 2>&1)"; then
+          erros+="falha no shellcheck em $arq:"$'\n'"$sc_out"$'\n'
+        fi
+      fi
+    fi
+    case "$arq" in
       *.lua)
         local luac_bin
         luac_bin="$(command -v luac || command -v luac5.4 || true)"
         if [[ -n "$luac_bin" ]]; then
           local luac_out
           if ! luac_out="$("$luac_bin" -p "$dir/$arq" 2>&1)"; then
-            erros+="falha de sintaxe lua em $arq:$'\n'$luac_out"$'\n'
+            erros+="falha de sintaxe lua em $arq:"$'\n'"$luac_out"$'\n'
           fi
         fi
         ;;
@@ -298,7 +320,7 @@ verificar_local() {
     if [[ -x "$dir/.jangada/validar.sh" ]]; then
       local val_out
       if ! val_out="$(cd "$dir" && .jangada/validar.sh 2>&1)"; then
-        erros+="falha na validação do projeto (.jangada/validar.sh):$'\n'$val_out"$'\n'
+        erros+="falha na validação do projeto (.jangada/validar.sh):"$'\n'"$val_out"$'\n'
       fi
     fi
   fi
@@ -325,7 +347,7 @@ if ((!pular_local)) && [[ "${JANGADA_VALIDAR_TESTANDO:-0}" != "1" ]]; then
     cat "$saida"
     if [[ -n "$arq_estado" ]]; then
       tmp="$(mktemp "$arq_estado.XXXXXX")"
-      jangada_alterar_estado "$arq_estado" "$tmp" --arg v "r$rodada: REVISAR (local)" '.validacao = $v'
+      jangada_alterar_estado "$arq_estado" "$tmp" --arg v "r$rodada: REVISAR (local)" '.validacao = $v' || true
       rm -f "$tmp"
     fi
     echo >&2
@@ -392,7 +414,7 @@ status="REVISAR"
 grep -qEi '^[#[:space:]*]*STATUS:[[:space:]*]*APROVADO' "$saida" && status="APROVADO"
 if [[ -n "$arq_estado" ]]; then
   tmp="$(mktemp "$arq_estado.XXXXXX")"
-  jangada_alterar_estado "$arq_estado" "$tmp" --arg v "r$rodada: $status ($revisor)" '.validacao = $v'
+  jangada_alterar_estado "$arq_estado" "$tmp" --arg v "r$rodada: $status ($revisor)" '.validacao = $v' || true
   rm -f "$tmp"
 fi
 echo >&2

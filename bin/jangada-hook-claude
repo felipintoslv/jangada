@@ -72,7 +72,7 @@
     estado_dir="$JANGADA_ESTADO/agentes"
     mkdir -p "$estado_dir"
     arq="$estado_dir/$sessao.json"
-    agora="$(date -Is)"
+    agora="$(jangada_data_iso)"
     [[ -f "$arq" ]] || jq -n --arg s "$sessao" --arg d "${cwd:-$PWD}" '{sessao:$s, dir:$d}' >"$arq"
     tmp="$(mktemp "$arq.XXXXXX")"
     # A conversa é gravada em todo evento: instalações sem o SessionStart
