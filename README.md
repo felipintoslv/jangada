@@ -18,7 +18,7 @@ jangada/
 ├── install/               etapas numeradas, executadas em ordem
 │   └── pacotes/           listas de pacotes por grupo
 ├── bin/                   comandos jangada-* (entram no PATH)
-├── default/               padrões atualizáveis (hypr em Lua, waybar, matugen, tmux, hooks e skill do Claude Code)
+├── default/               padrões atualizáveis (hypr em Lua, waybar, matugen, tmux, hooks e skills do Claude Code)
 ├── config/                modelos copiados uma única vez para ~/.config/jangada
 ├── shell/                 integração com bash e zsh
 ├── migrations/            ajustes aplicados em ordem a cada atualização
@@ -137,13 +137,23 @@ para pastas, escreva `/dados` no `.gitignore`, sem a barra final, porque o
 padrão `dados/` não cobre um link. Um worktree reaproveitado não é preparado de
 novo.
 
-## Skill do Claude Code
+## Skills do Claude Code
 
-A etapa de agentes liga `~/.claude/skills/jangada` a
-`default/claude/skills/jangada`. A skill reúne as regras do projeto e as
-pegadinhas já resolvidas (`hyprctl dispatch` só com Lua, hypridle que ignora
-`-c`, on-click da waybar com `setsid -f`, agy sem terminal), e o Claude Code a
-carrega quando a tarefa envolve a sessão, mesmo aberto em outro projeto.
+A etapa de agentes liga cada pasta de `default/claude/skills` em
+`~/.claude/skills/<nome>`, e o Claude Code carrega a skill quando a tarefa
+combina com a descrição dela, mesmo aberto em outro projeto:
+
+- `jangada`: regras do projeto e pegadinhas já resolvidas (`hyprctl dispatch`
+  só com Lua, hypridle que ignora `-c`, on-click da waybar com `setsid -f`,
+  agy sem terminal).
+- `relatorio-tecnico`: investigação, postmortem, RFC, ADR e relatório formal
+  (NBR 10719), com a estrutura de cada tipo e o checklist de entrega.
+- `relatorio-academico`: artigo, monografia e tese, com o que levantar antes
+  de redigir, `[FALTA: ...]` no lugar de dado ou citação sem origem e o
+  checklist de entrega.
+
+O agy não lê essas skills; para ele, diga na tarefa qual arquivo seguir, por
+exemplo "siga `~/.claude/skills/relatorio-tecnico/SKILL.md`".
 
 ## Ciclo de uma tarefa com agentes
 

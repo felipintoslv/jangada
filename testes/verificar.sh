@@ -51,6 +51,15 @@ jq empty default/agy/hooks.json || falha "agy/hooks.json"
 sed 's#^[[:space:]]*//.*##' default/waybar/config.jsonc | jq empty || falha "waybar/config.jsonc"
 sed 's#^[[:space:]]*//.*##' default/fastfetch/config.jsonc | jq empty || falha "fastfetch/config.jsonc"
 
+passo "skills do Claude Code"
+# O Claude Code ignora a skill sem frontmatter ou com name diferente da pasta.
+for d in default/claude/skills/*/; do
+  d="${d%/}"
+  cab="$(awk 'NR == 1 && $0 != "---" {exit} NR > 1 && $0 == "---" {exit} NR > 1' "$d/SKILL.md" 2>/dev/null)"
+  grep -qx "name: ${d##*/}" <<<"$cab" || falha "skill ${d##*/}: sem name igual à pasta"
+  grep -q '^description:' <<<"$cab" || falha "skill ${d##*/}: sem description"
+done
+
 passo "TOML"
 if python3 -c 'import tomllib' 2>/dev/null; then
   python3 -c 'import tomllib,sys; tomllib.load(open(sys.argv[1],"rb"))' default/matugen/config.toml || falha "matugen/config.toml"

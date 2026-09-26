@@ -153,31 +153,36 @@ carregador_boot() {
   fi
 }
 
-# Liga a skill do jangada em ~/.claude/skills/jangada, apontando para o
-# repositório instalado: o jangada-update a atualiza junto com o resto. Um link
+# Liga cada skill de default/claude/skills (jangada, relatorio-tecnico,
+# relatorio-academico) em ~/.claude/skills/<nome>, apontando para o
+# repositório instalado: o jangada-update as atualiza junto com o resto. Um link
 # antigo do jangada (outro JANGADA_PATH) é trocado; uma pasta ou link alheio
 # com o mesmo nome fica como está, com aviso.
 ligar_skill_claude() {
-  local origem="$JANGADA_PATH/default/claude/skills/jangada"
-  local destino="$HOME/.claude/skills/jangada" atual
-  [[ -f "$origem/SKILL.md" ]] || { aviso "skill não encontrada em $origem"; return 0; }
-  if [[ -L "$destino" ]]; then
-    atual="$(readlink "$destino")"
-    if [[ "$atual" == "$origem" ]]; then
-      ok "skill do Claude Code já ligada: $destino"
-      return 0
+  local origem nome destino atual
+  for origem in "$JANGADA_PATH"/default/claude/skills/*/; do
+    origem="${origem%/}"
+    [[ -f "$origem/SKILL.md" ]] || continue
+    nome="${origem##*/}"
+    destino="$HOME/.claude/skills/$nome"
+    if [[ -L "$destino" ]]; then
+      atual="$(readlink "$destino")"
+      if [[ "$atual" == "$origem" ]]; then
+        ok "skill $nome do Claude Code já ligada: $destino"
+        continue
+      fi
+      if [[ "$atual" != */default/claude/skills/"$nome" ]]; then
+        aviso "$destino aponta para $atual, que não é do jangada; mantido"
+        continue
+      fi
+    elif [[ -e "$destino" ]]; then
+      aviso "$destino já existe e não é um link do jangada; mantido"
+      continue
     fi
-    if [[ "$atual" != */default/claude/skills/jangada ]]; then
-      aviso "$destino aponta para $atual, que não é do jangada; mantido"
-      return 0
-    fi
-  elif [[ -e "$destino" ]]; then
-    aviso "$destino já existe e não é um link do jangada; mantido"
-    return 0
-  fi
-  executar mkdir -p "$(dirname "$destino")"
-  executar ln -sfn "$origem" "$destino"
-  ok "skill do Claude Code ligada: $destino -> $origem"
+    executar mkdir -p "$(dirname "$destino")"
+    executar ln -sfn "$origem" "$destino"
+    ok "skill $nome do Claude Code ligada: $destino -> $origem"
+  done
 }
 
 # Instala os hooks do jangada para o Antigravity (default/agy/hooks.json) em
