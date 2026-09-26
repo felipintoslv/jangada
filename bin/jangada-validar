@@ -170,7 +170,9 @@ if [[ -n "$novos" ]]; then
     diff_conteudo+="${diff_conteudo:+$'\n\n'}$conteudo_novos"
   fi
 fi
-commits="$(git -C "$dir" log --oneline "$ponto..HEAD" 2>/dev/null | head -30 || true)"
+# Mensagem inteira, para o revisor julgar o corpo; limitada a 30 commits e
+# 8 KB para não tomar o espaço do diff.
+commits="$(git -C "$dir" log -30 --format='%h %s%n%w(0,4,4)%b' "$ponto..HEAD" 2>/dev/null | head -c 8000 || true)"
 
 if [[ -z "$diff_conteudo" && -z "$novos" ]]; then
   echo "jangada-validar: nada a revisar desde $(git -C "$dir" rev-parse --short "$ponto")" >&2
@@ -231,7 +233,7 @@ EOF
 Tarefa do agente:
 ${tarefa:-(não informada; deduza pelo diff e pelos commits)}
 
-Commits desde a base:
+Commits desde a base (resumo e corpo):
 ${commits:-(nenhum; só alterações sem commit)}
 
 Arquivos (A novo, M alterado, D apagado, ?? novo sem commit):
@@ -255,12 +257,14 @@ aponte gosto pessoal nem reescrita sem defeito concreto.
 Na escrita (comentário de código, documentação, mensagem de commit), aponte
 só estes casos, e só em linhas que o diff acrescenta:
 - código comentado;
-- comentário que narra a mudança ("agora faz", "alterado para", "novo") ou
-  repete o que o código diz, em vez de explicar restrição, invariante ou
-  workaround;
-- enchimento ("vale ressaltar", "é importante destacar", "basicamente",
-  "simplesmente") e abertura ou fecho de cortesia;
-- documentação que contradiz o código do mesmo diff.
+- comentário que narra a mudança ("agora faz", "alterado para", "novo"),
+  repete o que o código diz ou fala com o revisor, em vez de explicar
+  restrição, invariante ou workaround;
+- enchimento ("a fim de", "vale ressaltar", "é importante destacar",
+  "basicamente", "simplesmente", "é fácil") e abertura ou fecho de cortesia;
+- documentação que contradiz o código do mesmo diff;
+- arquivo de resumo ou documentação que a tarefa não pediu;
+- commit com corpo que repete o diff ou lista arquivos em vez de dar o porquê.
 Deixe o texto das linhas que o diff não tocou como está.
 
 Responda em português, neste formato e nada mais:
@@ -385,9 +389,9 @@ verificar_local() {
     rm -f "$r_err"
   fi
 
-  # 4. Commit com Co-Authored-By, que o protocolo dos agentes proíbe. O revisor
-  # só vê o resumo dos commits, então a conferência fica aqui. Só avisa:
-  # corrigir exige reescrever o histórico do ramo, e o agente decide.
+  # 4. Commit com Co-Authored-By, que o protocolo dos agentes proíbe. Checagem
+  # exata, então fica aqui e não no revisor. Só avisa: corrigir exige
+  # reescrever o histórico do ramo, e o agente decide.
   local coautor
   coautor="$(git -C "$dir" log -i -E --grep='^co-authored-by:' --format='%h %s' \
     "$ponto..HEAD" 2>/dev/null || true)"

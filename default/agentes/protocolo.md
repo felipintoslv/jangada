@@ -33,7 +33,9 @@ durante toda a conversa.
    - Não repita o que o usuário já vê: plano, diff, conteúdo de arquivo.
    - Tamanho proporcional à pergunta; frases de até ~25 palavras; lista para
      itens paralelos, parágrafo para raciocínio.
-   - Corte enchimento ("vale ressaltar", "basicamente", "simplesmente") e
-     adjetivo vago; use fato ou número.
+   - Corte enchimento ("a fim de", "vale ressaltar", "basicamente",
+     "simplesmente", "é fácil") e adjetivo vago; use fato ou número.
    - Uma ressalva por afirmação, dizendo o que é incerto e por quê.
-   - Comentário de código só para restrição, invariante ou workaround.
+   - Comentário de código só para restrição, invariante ou workaround; nunca
+     para narrar a linha ou falar com o revisor.
+   - Não crie arquivo de resumo ou documentação que ninguém pediu.

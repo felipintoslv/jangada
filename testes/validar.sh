@@ -299,14 +299,15 @@ git -C "$tmp/projeto" add escrita.txt
 git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "commit limpo"
 validar 'STATUS: APROVADO'; rc=$?
 conferir "caso 14: pedido traz os critérios de escrita" \
-  bash -c 'grep -q "código comentado" "$1" && grep -q "vale ressaltar" "$1"' _ "$tmp/falso/agy.pedido"
+  bash -c 'grep -q "código comentado" "$1" && grep -q "arquivo de resumo" "$1" && grep -q "corpo que repete o diff" "$1"' _ "$tmp/falso/agy.pedido"
 conferir "caso 14: commit sem Co-Authored-By não gera aviso" bash -c '! grep -qi "co-authored-by" "$1"' _ "$tmp/saida.log"
 sessao_de claude
 echo "com coautor" >>"$tmp/projeto/escrita.txt"
 git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qam "commit com coautor" \
-  -m "Co-authored-by: Fulano <f@f>"
+  -m "Corpo com MARCA-CORPO." -m "Co-authored-by: Fulano <f@f>"
 validar 'STATUS: APROVADO'; rc=$?
 conferir "caso 14: Co-Authored-By só avisa, não reprova" [ "$rc" = 0 ]
+conferir "caso 14: pedido traz o corpo do commit" grep -q "MARCA-CORPO" "$tmp/falso/agy.pedido"
 conferir "caso 14: o aviso aponta o commit" \
   bash -c 'grep -q "aviso: commit com linha Co-Authored-By" "$1" && grep -q "commit com coautor" "$1" && ! grep -q "commit limpo" "$1"' _ "$tmp/saida.log"
 

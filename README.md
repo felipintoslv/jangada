@@ -207,8 +207,10 @@ exemplo "siga `~/.claude/skills/relatorio-tecnico/SKILL.md`".
    achado só aparece como aviso. Sem R ou sem o pacote `lintr`, a etapa é
    pulada. Commit com `Co-Authored-By` também gera aviso.
    Na escrita, o revisor aponta só casos objetivos nas linhas novas: código
-   comentado, comentário que narra a mudança ou repete o código, enchimento
-   ("vale ressaltar", "basicamente") e documentação que contradiz o código.
+   comentado, comentário que narra a mudança, repete o código ou fala com o
+   revisor, enchimento ("vale ressaltar", "basicamente"), documentação que
+   contradiz o código, arquivo de resumo que ninguém pediu e corpo de commit
+   que repete o diff em vez de dar o porquê.
 3. Os pareceres ficam em `~/.local/state/jangada/agentes/validacao-*`. No
    jangada shell, `revisar` roda o mesmo comando no diretório atual.
 4. A barra acompanha o agy pelo hook `jangada-hook-agy`, instalado em
