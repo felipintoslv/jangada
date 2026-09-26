@@ -175,7 +175,7 @@ carrega quando a tarefa envolve a sessão, mesmo aberto em outro projeto.
 
 1. O agente abre interativo, no worktree, com o protocolo de
    `default/agentes/protocolo.md` (trabalhar só no worktree, commits sem
-   `Co-Authored-By`, validar antes de entregar). No Claude ele vai por
+   `Co-Authored-By`, validar antes de entregar, regras de escrita). No Claude ele vai por
    `--append-system-prompt`; no agy, por `-i` junto com a tarefa.
    `JANGADA_AGENTE_PROTOCOLO=0` desliga. Sem o revisor instalado, o agente abre
    sem o protocolo, porque não haveria quem revisasse.

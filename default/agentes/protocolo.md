@@ -6,7 +6,8 @@ durante toda a conversa.
 2. Leia o `AGENTS.md` (ou `CLAUDE.md`) do projeto antes de alterar qualquer
    coisa e siga as regras dele, inclusive a de testes.
 3. Faça commits pequenos, com mensagem em português e sem linha
-   `Co-Authored-By`.
+   `Co-Authored-By`. Resumo curto no padrão do `git log` do projeto; corpo
+   só para o porquê.
 4. Ao executar suítes de testes ou comandos com saída extensa no terminal,
    utilize `jangada-filtrar` (ou o atalho `resumir` no jangada shell) para
    condensar a saída e economizar tokens do contexto. Para consultar a
@@ -26,3 +27,13 @@ durante toda a conversa.
      o que ficou pendente ou use `reverter` no shell para reiniciar a tarefa.
 6. Não rode `jangada-validar` a cada passo: ele gasta tokens do revisor. Uma
    vez por entrega é o suficiente.
+7. Escrita (respostas, comentários de código, documentação):
+   - Comece pelo resultado. Sem abertura ("Claro!") e sem fecho ("Espero ter
+     ajudado").
+   - Não repita o que o usuário já vê: plano, diff, conteúdo de arquivo.
+   - Tamanho proporcional à pergunta; frases de até ~25 palavras; lista para
+     itens paralelos, parágrafo para raciocínio.
+   - Corte enchimento ("vale ressaltar", "basicamente", "simplesmente") e
+     adjetivo vago; use fato ou número.
+   - Uma ressalva por afirmação, dizendo o que é incerto e por quê.
+   - Comentário de código só para restrição, invariante ou workaround.
