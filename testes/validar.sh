@@ -46,7 +46,7 @@ sessao_de() {
     '{sessao:"s", agente:$a, base:"main", tarefa:"tarefa de teste", estado:"trabalhando"}
      + (if $r != "" then {revisor:$r} else {} end)' \
     >"$estado/s.json"
-  rm -f "$estado/validacao-s-r"* "$tmp/falso/"*.pedido
+  rm -f "$estado/validacao-s-r"* "$estado/validacao-s.aprovado" "$tmp/falso/"*.pedido
 }
 validar() {
   env -u JANGADA_VALIDAR_REVISOR PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA="$1" JANGADA_SESSAO=s \
@@ -310,6 +310,29 @@ conferir "caso 14: Co-Authored-By só avisa, não reprova" [ "$rc" = 0 ]
 conferir "caso 14: pedido traz o corpo do commit" grep -q "MARCA-CORPO" "$tmp/falso/agy.pedido"
 conferir "caso 14: o aviso aponta o commit" \
   bash -c 'grep -q "aviso: commit com linha Co-Authored-By" "$1" && grep -q "commit com coautor" "$1" && ! grep -q "commit limpo" "$1"' _ "$tmp/saida.log"
+
+# Caso 15: depois de um APROVADO, a próxima entrega parte do commit aprovado e
+# as rodadas recomeçam.
+sessao_de claude
+echo "entrega 1" >"$tmp/projeto/entrega1.txt"
+git -C "$tmp/projeto" add entrega1.txt
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "entrega 1"
+validar 'STATUS: REVISAR\n1. x'
+validar 'STATUS: APROVADO' --resposta "1 corrigido"
+conferir "caso 15: APROVADO grava o commit aprovado" test -s "$estado/validacao-s.aprovado"
+rm -f "$tmp/falso/"*.pedido
+echo "entrega 2" >"$tmp/projeto/entrega2.txt"
+git -C "$tmp/projeto" add entrega2.txt
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "entrega 2"
+validar 'STATUS: REVISAR\n1. y'; rc=$?
+conferir "caso 15: nova entrega começa na rodada 1" grep -q "rodada 1 de 3" "$tmp/saida.log"
+conferir "caso 15: o parecer novo não sobrescreve os antigos" test -s "$estado/validacao-s-r3.md"
+conferir "caso 15: pedido traz só a entrega nova" \
+  bash -c 'grep -q "entrega2.txt" "$1" && ! grep -q "entrega1.txt" "$1"' _ "$tmp/falso/agy.pedido"
+conferir "caso 15: pedido não traz o parecer da entrega aprovada" bash -c '! grep -q "Parecer da rodada anterior" "$1"' _ "$tmp/falso/agy.pedido"
+validar 'STATUS: REVISAR\n1. y' --resposta "1 rejeitado"
+conferir "caso 15: a segunda chamada é a rodada 2" grep -q "rodada 2 de 3" "$tmp/saida.log"
+conferir "caso 15: a rodada 2 traz o parecer anterior" grep -q "Parecer da rodada anterior" "$tmp/falso/agy.pedido"
 
 # Caso 13: o jangada-agente acrescenta as regras de R só em projeto com arquivos R.
 agente_em() {

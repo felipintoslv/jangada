@@ -143,6 +143,19 @@ if [[ -z "$ponto" || "$ponto" == "$cabeca" ]] && [[ -n "$inicio" ]] \
   ponto="$inicio"
 fi
 [[ -n "$ponto" ]] || ponto="$cabeca"
+# Depois de um APROVADO, a próxima chamada é outra entrega: a revisão parte do
+# commit aprovado e as rodadas recomeçam. Sem isso, uma sessão longa revisava
+# de novo tudo desde o início e somava as rodadas de entregas diferentes.
+arq_aprovado="$estado_dir/validacao-$rotulo.aprovado"
+aprovado_commit=""; aprovado_num=0
+if [[ -f "$arq_aprovado" ]]; then
+  read -r aprovado_commit aprovado_num <"$arq_aprovado" || true
+  [[ "$aprovado_num" =~ ^[0-9]+$ ]] || aprovado_num=0
+  if git -C "$dir" merge-base --is-ancestor "$ponto" "$aprovado_commit" 2>/dev/null \
+     && git -C "$dir" merge-base --is-ancestor "$aprovado_commit" HEAD 2>/dev/null; then
+    ponto="$(git -C "$dir" rev-parse "$aprovado_commit")"
+  fi
+fi
 
 diff_conteudo="$(git -C "$dir" diff "$ponto" 2>/dev/null || true)"
 arquivos="$(git -C "$dir" diff --name-status "$ponto" 2>/dev/null || true)"
@@ -182,7 +195,10 @@ fi
 # Rodada atual e parecer anterior.
 anteriores=()
 for f in "$estado_dir/validacao-$rotulo-r"*.md; do [[ -e "$f" ]] && anteriores+=("$f"); done
-rodada=$((${#anteriores[@]} + 1))
+# num numera o arquivo do parecer; rodada conta só a entrega atual.
+num=$((${#anteriores[@]} + 1))
+((aprovado_num < num)) || aprovado_num=0
+rodada=$((num - aprovado_num))
 if ((rodada > rodadas_max && !forcar)); then
   echo "jangada-validar: limite de $rodadas_max rodadas atingido para $rotulo." >&2
   if ((reverter_se_limite)); then
@@ -209,7 +225,7 @@ if ((rodada > rodadas_max && !forcar)); then
   exit 4
 fi
 ultimo=""
-((${#anteriores[@]})) && ultimo="$(printf '%s\n' "${anteriores[@]}" | sort -V | tail -n1)"
+((rodada > 1)) && ultimo="$(printf '%s\n' "${anteriores[@]}" | sort -V | tail -n1)"
 
 if (( ${#diff_conteudo} > diff_max )); then
   echo "jangada-validar: diff de ${#diff_conteudo} bytes; vão os primeiros $diff_max" >&2
@@ -276,7 +292,7 @@ correção sugerida, do mais grave para o menos grave.
 EOF
 )"
 
-saida="$estado_dir/validacao-$rotulo-r$rodada.md"
+saida="$estado_dir/validacao-$rotulo-r$num.md"
 
 # Roda o lintr e imprime arquivo, linha, linter e mensagem separados por
 # tabulação. Argumentos: arquivo de configuração (vazio para o .lintr do
@@ -505,5 +521,8 @@ fi
 echo >&2
 echo "jangada-validar: $status (parecer em $saida)" >&2
 "$JANGADA_PATH/bin/jangada-gancho" pos-validar "$rotulo" "$status" || true
-[[ "$status" == APROVADO ]] && exit 0
+if [[ "$status" == APROVADO ]]; then
+  printf '%s %s\n' "$cabeca" "$num" >"$arq_aprovado"
+  exit 0
+fi
 exit 3

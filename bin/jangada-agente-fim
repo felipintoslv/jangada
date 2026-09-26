@@ -193,7 +193,7 @@ limpar() {
   rm -f "$arq"
   # Os pareceres do jangada-validar contam as rodadas: uma sessão nova com o
   # mesmo nome começa da primeira.
-  rm -f "$JANGADA_ESTADO/agentes/validacao-$s-r"*.md "$JANGADA_ESTADO/agentes/prompt-$s.md" \
+  rm -f "$JANGADA_ESTADO/agentes/validacao-$s-r"*.md "$JANGADA_ESTADO/agentes/validacao-$s.aprovado" "$JANGADA_ESTADO/agentes/prompt-$s.md" \
     "$JANGADA_ESTADO/agentes/protocolo-$s.md"
   echo "sessão encerrada: $s"
   "$JANGADA_PATH/bin/jangada-gancho" pos-agente-fim "$s" "$raiz" "$integrado"

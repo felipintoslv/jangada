@@ -195,7 +195,9 @@ exemplo "siga `~/.claude/skills/relatorio-tecnico/SKILL.md`".
 2. Antes de entregar, o agente roda `jangada-validar`. O revisor recebe o diff
    desde a base, lê o que precisar, sem alterar nada, e responde. Com
    `REVISAR`, o agente confere cada apontamento, corrige o que proceder e roda
-   de novo com `--resposta`, até 3 rodadas (`JANGADA_VALIDAR_RODADAS`).
+   de novo com `--resposta`, até 3 rodadas (`JANGADA_VALIDAR_RODADAS`) por
+   entrega. Depois de um `APROVADO`, a próxima chamada revisa só o que veio
+   depois do commit aprovado e recomeça a contagem.
    `--revisor` escolhe o revisor à mão. O Claude revisa com o Sonnet
    (`JANGADA_VALIDAR_MODELO`).
    Antes do revisor, uma verificação local procura conflitos do git, confere
