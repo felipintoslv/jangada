@@ -205,7 +205,10 @@ exemplo "siga `~/.claude/skills/relatorio-tecnico/SKILL.md`".
    lintr confunde as colunas do dplyr com variáveis). Com `.lintr` no projeto, um
    achado reprova sem chamar o revisor; sem ele, vale `default/r/lintr` e o
    achado só aparece como aviso. Sem R ou sem o pacote `lintr`, a etapa é
-   pulada.
+   pulada. Commit com `Co-Authored-By` também gera aviso.
+   Na escrita, o revisor aponta só casos objetivos nas linhas novas: código
+   comentado, comentário que narra a mudança ou repete o código, enchimento
+   ("vale ressaltar", "basicamente") e documentação que contradiz o código.
 3. Os pareceres ficam em `~/.local/state/jangada/agentes/validacao-*`. No
    jangada shell, `revisar` roda o mesmo comando no diretório atual.
 4. A barra acompanha o agy pelo hook `jangada-hook-agy`, instalado em

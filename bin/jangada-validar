@@ -252,6 +252,17 @@ Procure erros de lógica, casos que quebram, regras do projeto violadas, arquivo
 que não deveria estar no diff (lixo, gerado, segredo) e teste que falta. Não
 aponte gosto pessoal nem reescrita sem defeito concreto.
 
+Na escrita (comentário de código, documentação, mensagem de commit), aponte
+só estes casos, e só em linhas que o diff acrescenta:
+- código comentado;
+- comentário que narra a mudança ("agora faz", "alterado para", "novo") ou
+  repete o que o código diz, em vez de explicar restrição, invariante ou
+  workaround;
+- enchimento ("vale ressaltar", "é importante destacar", "basicamente",
+  "simplesmente") e abertura ou fecho de cortesia;
+- documentação que contradiz o código do mesmo diff.
+Deixe o texto das linhas que o diff não tocou como está.
+
 Responda em português, neste formato e nada mais:
 STATUS: APROVADO
 ou
@@ -374,7 +385,17 @@ verificar_local() {
     rm -f "$r_err"
   fi
 
-  # 4. Validação do projeto se existir e não estiver em recursão
+  # 4. Commit com Co-Authored-By, que o protocolo dos agentes proíbe. O revisor
+  # só vê o resumo dos commits, então a conferência fica aqui. Só avisa:
+  # corrigir exige reescrever o histórico do ramo, e o agente decide.
+  local coautor
+  coautor="$(git -C "$dir" log -i -E --grep='^co-authored-by:' --format='%h %s' \
+    "$ponto..HEAD" 2>/dev/null || true)"
+  if [[ -n "$coautor" ]]; then
+    printf 'jangada-validar: aviso: commit com linha Co-Authored-By (o protocolo pede sem):\n%s\n' "$coautor" >&2
+  fi
+
+  # 5. Validação do projeto se existir e não estiver em recursão
   if [[ -z "${JANGADA_VALIDAR_EM_CURSO:-}" ]]; then
     export JANGADA_VALIDAR_EM_CURSO=1
     if [[ -x "$dir/.jangada/validar.sh" ]]; then

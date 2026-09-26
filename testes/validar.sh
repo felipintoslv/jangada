@@ -292,6 +292,24 @@ else
   echo "pulado caso 12: R ou lintr não instalado"
 fi
 
+# Caso 14: critérios de escrita no pedido e aviso de commit com Co-Authored-By.
+sessao_de claude
+echo "sem coautor" >"$tmp/projeto/escrita.txt"
+git -C "$tmp/projeto" add escrita.txt
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "commit limpo"
+validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 14: pedido traz os critérios de escrita" \
+  bash -c 'grep -q "código comentado" "$1" && grep -q "vale ressaltar" "$1"' _ "$tmp/falso/agy.pedido"
+conferir "caso 14: commit sem Co-Authored-By não gera aviso" bash -c '! grep -qi "co-authored-by" "$1"' _ "$tmp/saida.log"
+sessao_de claude
+echo "com coautor" >>"$tmp/projeto/escrita.txt"
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qam "commit com coautor" \
+  -m "Co-authored-by: Fulano <f@f>"
+validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 14: Co-Authored-By só avisa, não reprova" [ "$rc" = 0 ]
+conferir "caso 14: o aviso aponta o commit" \
+  bash -c 'grep -q "aviso: commit com linha Co-Authored-By" "$1" && grep -q "commit com coautor" "$1" && ! grep -q "commit limpo" "$1"' _ "$tmp/saida.log"
+
 # Caso 13: o jangada-agente acrescenta as regras de R só em projeto com arquivos R.
 agente_em() {
   rm -f "$estado/"*.json "$estado/"protocolo-*.md "$estado/"prompt-*.md
