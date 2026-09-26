@@ -175,7 +175,10 @@ carrega quando a tarefa envolve a sessão, mesmo aberto em outro projeto.
 
 1. O agente abre interativo, no worktree, com o protocolo de
    `default/agentes/protocolo.md` (trabalhar só no worktree, commits sem
-   `Co-Authored-By`, validar antes de entregar, regras de escrita). No Claude ele vai por
+   `Co-Authored-By`, validar antes de entregar, regras de escrita). Num
+   projeto com arquivos R até dois níveis abaixo da raiz, vão também as
+   regras de `default/agentes/protocolo-r.md` (sem `cat()` como mensagem,
+   sem código comentado, `seq_along()`). No Claude ele vai por
    `--append-system-prompt`; no agy, por `-i` junto com a tarefa.
    `JANGADA_AGENTE_PROTOCOLO=0` desliga. Sem o revisor instalado, o agente abre
    sem o protocolo, porque não haveria quem revisasse.
@@ -188,7 +191,8 @@ carrega quando a tarefa envolve a sessão, mesmo aberto em outro projeto.
    Antes do revisor, uma verificação local procura conflitos do git, confere
    a sintaxe de shell e Lua e roda o `lintr` nos arquivos R, só nas linhas
    que o agente alterou (`cat()` e `print()` fora de métodos `print`, código
-   comentado, variável sem uso, `1:length()`). Com `.lintr` no projeto, um
+   comentado, `1:length()`; a variável sem uso fica de fora porque o
+   lintr confunde as colunas do dplyr com variáveis). Com `.lintr` no projeto, um
    achado reprova sem chamar o revisor; sem ele, vale `default/r/lintr` e o
    achado só aparece como aviso. Sem R ou sem o pacote `lintr`, a etapa é
    pulada.

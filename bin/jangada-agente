@@ -21,7 +21,8 @@
 # O Claude e o agy recebem o protocolo de default/agentes/protocolo.md, que
 # manda validar a entrega com jangada-validar: o outro modelo revisa o diff.
 # No Claude ele vai por --append-system-prompt; no agy, por -i junto com a
-# tarefa. JANGADA_AGENTE_PROTOCOLO=0 desliga.
+# tarefa. Num projeto com arquivos R, vão também as regras de
+# default/agentes/protocolo-r.md. JANGADA_AGENTE_PROTOCOLO=0 desliga os dois.
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
@@ -286,6 +287,15 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
   [[ "${JANGADA_AGENTE_PROTOCOLO:-1}" != 0 && -r "$protocolo" ]] || protocolo=""
   # Sem o revisor instalado, o protocolo mandaria rodar um comando que falharia.
   ! command -v "$revisor_efetivo" >/dev/null 2>&1 && protocolo=""
+  # Projeto com arquivos R recebe também as regras de código R. O protocolo da
+  # sessão fica num arquivo próprio porque o comando guardado para o
+  # --restaurar lê o arquivo de novo.
+  if [[ -n "$protocolo" && -n "$(find "$dir" -maxdepth 2 -not -path '*/.git/*' \
+        \( -iname '*.R' -o -name '*.Rmd' -o -name '*.qmd' -o -name '*.Rproj' -o -name DESCRIPTION \) \
+        -print -quit 2>/dev/null)" ]]; then
+    cat "$protocolo" "$JANGADA_PATH/default/agentes/protocolo-r.md" >"$estado_dir/protocolo-$sessao.md"
+    protocolo="$estado_dir/protocolo-$sessao.md"
+  fi
   arq_prompt="$estado_dir/prompt-$sessao.md"
   if [[ "$base_agente" == agy ]]; then
     {

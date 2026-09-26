@@ -5,6 +5,5 @@ linters: list(
       browser = "remova antes de entregar"
     )),
     commented_code_linter(),
-    object_usage_linter(),
     seq_linter()
   )

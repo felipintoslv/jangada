@@ -292,6 +292,36 @@ else
   echo "pulado caso 12: R ou lintr não instalado"
 fi
 
+# Caso 13: o jangada-agente acrescenta as regras de R só em projeto com arquivos R.
+agente_em() {
+  rm -f "$estado/"*.json "$estado/"protocolo-*.md "$estado/"prompt-*.md
+  env -u TMUX -u HYPRLAND_INSTANCE_SIGNATURE PATH="$tmp/bin:$PATH" \
+    XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
+    JANGADA_AGENTE_ESCOLHER=0 "$repo_jangada/bin/jangada-agente" --projeto "$1" --direto "${@:2}" </dev/null >/dev/null 2>&1
+}
+mkdir -p "$tmp/semr" "$tmp/comr/R"
+echo "x" >"$tmp/semr/notas.txt"
+echo "x <- 1" >"$tmp/comr/R/analise.R"
+
+agente_em "$tmp/semr"
+conferir "caso 13a: sem R, o Claude recebe o protocolo padrão" \
+  bash -c 'jq -r .comando "$1" | grep -q "default/agentes/protocolo.md"' _ "$estado/semr.json"
+conferir "caso 13a: sem R, nenhum protocolo da sessão é gravado" test ! -e "$estado/protocolo-semr.md"
+
+agente_em "$tmp/comr"
+conferir "caso 13b: com R, o Claude recebe o protocolo da sessão" \
+  bash -c 'jq -r .comando "$1" | grep -q "protocolo-comr.md"' _ "$estado/comr.json"
+conferir "caso 13b: o protocolo da sessão traz o padrão e as regras de R" \
+  bash -c 'grep -q "^7. Escrita" "$1" && grep -q "^8. Código R" "$1"' _ "$estado/protocolo-comr.md"
+
+agente_em "$tmp/comr" --perfil agy-agy
+conferir "caso 13c: com R, o agy recebe as regras de R no -i" grep -q "^8. Código R" "$estado/prompt-comr.md"
+
+rm -f "$estado/"protocolo-*.md
+JANGADA_AGENTE_PROTOCOLO=0 agente_em "$tmp/comr"
+conferir "caso 13d: JANGADA_AGENTE_PROTOCOLO=0 desliga também as regras de R" \
+  bash -c '! jq -r .comando "$1" | grep -q "append-system-prompt" && test ! -e "$2"' _ "$estado/comr.json" "$estado/protocolo-comr.md"
+
 if ((falhas)); then
   echo "$falhas falha(s); saídas em $tmp (mantido)"
   trap - EXIT
