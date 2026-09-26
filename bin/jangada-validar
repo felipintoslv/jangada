@@ -263,8 +263,27 @@ EOF
 
 saida="$estado_dir/validacao-$rotulo-r$rodada.md"
 
-# Portão determinístico local pré-revisão: valida marcadores de conflito, sintaxe e testes
-# antes de gastar tempo e tokens com o modelo revisor.
+# Roda o lintr e imprime arquivo, linha, linter e mensagem separados por
+# tabulação. Argumentos: arquivo de configuração (vazio para o .lintr do
+# projeto) e os arquivos R. Sai com 2 se o lintr não estiver instalado.
+lintr_r='
+if (!requireNamespace("lintr", quietly = TRUE)) quit(status = 2)
+args <- commandArgs(trailingOnly = TRUE)
+linters <- NULL
+if (nzchar(args[[1]])) {
+  cfg <- read.dcf(args[[1]], fields = "linters")
+  linters <- eval(parse(text = cfg[1, "linters"]), envir = asNamespace("lintr"))
+}
+for (arq in args[-1]) {
+  achados <- if (is.null(linters)) lintr::lint(arq) else lintr::lint(arq, linters = linters)
+  for (l in achados) {
+    writeLines(paste(arq, l$line_number, l$linter, gsub("[\t\n]", " ", l$message), sep = "\t"))
+  }
+}
+'
+
+# Portão determinístico local pré-revisão: valida marcadores de conflito, sintaxe,
+# lintr e testes antes de gastar tempo e tokens com o modelo revisor.
 verificar_local() {
   local erros=""
   local arq
@@ -314,7 +333,48 @@ verificar_local() {
     esac
   done <<<"$(git -C "$dir" diff --name-only "$ponto" 2>/dev/null || true)"
 
-  # 3. Validação do projeto se existir e não estiver em recursão
+  # 3. lintr nos arquivos R, só nas linhas que a mudança tocou, para um cat()
+  # antigo em código legado não barrar a entrega. Com .lintr no projeto, o
+  # achado reprova; sem ele, vale default/r/lintr e o achado só vira aviso.
+  local r_arqs=()
+  while IFS= read -r arq; do
+    [[ -n "$arq" && -f "$dir/$arq" ]] || continue
+    case "$arq" in *.R|*.r|*.Rmd|*.qmd) r_arqs+=("$arq") ;; esac
+  done <<<"$(git -C "$dir" diff --name-only --diff-filter=d "$ponto" 2>/dev/null || true; printf '%s\n' "$novos")"
+  if ((${#r_arqs[@]})) && command -v Rscript >/dev/null 2>&1; then
+    local config="" bloqueia=0 linhas=$'#\t#\n' achados r_rc r_err
+    if [[ -f "$dir/.lintr" ]]; then bloqueia=1; else config="$JANGADA_PATH/default/r/lintr"; fi
+    for arq in "${r_arqs[@]}"; do
+      if grep -qxF -- "$arq" <<<"$novos"; then
+        linhas+="$arq"$'\t*\n'
+      else
+        linhas+="$(git -C "$dir" diff -U0 "$ponto" -- "$arq" | awk -v f="$arq" '
+          /^@@/ { split($3, a, ","); ini = substr(a[1], 2); n = (2 in a) ? a[2] : 1
+                  for (i = ini; i < ini + n; i++) print f "\t" i }')"$'\n'
+      fi
+    done
+    r_err="$(mktemp)"
+    achados="$(cd "$dir" && Rscript -e "$lintr_r" "$config" "${r_arqs[@]}" 2>"$r_err")" && r_rc=0 || r_rc=$?
+    if ((r_rc == 0)) && [[ -n "$achados" ]]; then
+      # NF >= 2: um arquivo só com linhas apagadas deixa linha vazia em $linhas.
+      achados="$(awk -F'\t' 'NR == FNR { if (NF >= 2) ok[$1 FS $2] = 1; next }
+        NF >= 3 && (ok[$1 FS "*"] || ok[$1 FS $2]) { print $1 ":" $2 ": [" $3 "] " $4 }' \
+        <(printf '%s' "$linhas") <(printf '%s\n' "$achados"))"
+      if [[ -n "$achados" ]]; then
+        if ((bloqueia)); then
+          erros+="lintr (.lintr do projeto) nas linhas alteradas:"$'\n'"$achados"$'\n'
+        else
+          printf 'jangada-validar: aviso do lintr (padrão do jangada; não reprova, crie um .lintr no projeto para reprovar):\n%s\n' "$achados" >&2
+        fi
+      fi
+    elif ((r_rc != 0 && r_rc != 2)); then
+      # 2 é lintr ausente; outro código é erro do próprio lintr, que não reprova.
+      printf 'jangada-validar: lintr falhou, arquivos R não conferidos:\n%s\n' "$(tail -n 5 "$r_err")" >&2
+    fi
+    rm -f "$r_err"
+  fi
+
+  # 4. Validação do projeto se existir e não estiver em recursão
   if [[ -z "${JANGADA_VALIDAR_EM_CURSO:-}" ]]; then
     export JANGADA_VALIDAR_EM_CURSO=1
     if [[ -x "$dir/.jangada/validar.sh" ]]; then

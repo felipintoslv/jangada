@@ -220,6 +220,78 @@ JANGADA_VALIDAR_RODADAS=2 validar 'STATUS: REVISAR\n1. x' --reverter-se-limite; 
 conferir "caso 11c: limite de rodadas com reversão sai com 4" [ "$rc" = 4 ]
 conferir "caso 11c: arquivo pendente foi revertido" test ! -e "$tmp/projeto/pendente.txt"
 
+# Caso 12: lintr nos arquivos R, só nas linhas alteradas. O cat() da linha 1
+# de antigo.R vem da base e não conta; limpo.R serve para a remoção pura.
+if Rscript -e 'quit(status = !requireNamespace("lintr", quietly = TRUE))' >/dev/null 2>&1; then
+  git -C "$tmp/projeto" checkout -q main
+  printf 'cat("legado\\n")\n' >"$tmp/projeto/antigo.R"
+  printf 'x <- 1\ny <- 2\n' >"$tmp/projeto/limpo.R"
+  git -C "$tmp/projeto" add antigo.R limpo.R
+  git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "código legado"
+  git -C "$tmp/projeto" checkout -q agente/x
+  git -C "$tmp/projeto" -c user.name=t -c user.email=t@t merge -q main -m "traz o legado"
+
+  # 12a: linha nova limpa passa, e o cat() da base não aparece.
+  sessao_de claude
+  echo 'y <- 2' >>"$tmp/projeto/antigo.R"
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 12a: linha nova limpa em arquivo legado passa" [ "$rc" = 0 ]
+  conferir "caso 12a: cat() da base não é apontado" bash -c '! grep -q "antigo.R:1:" "$1"' _ "$tmp/saida.log"
+
+  # 12b: sem .lintr no projeto, o achado só vira aviso e o revisor é chamado.
+  sessao_de claude
+  echo 'cat("novo\n")' >>"$tmp/projeto/antigo.R"
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 12b: sem .lintr, cat() novo não reprova" [ "$rc" = 0 ]
+  conferir "caso 12b: sem .lintr, cat() novo sai como aviso" \
+    grep -q "aviso do lintr" "$tmp/saida.log"
+  conferir "caso 12b: o aviso aponta a linha nova" grep -q "antigo.R:3: \[undesirable_function_linter\]" "$tmp/saida.log"
+  conferir "caso 12b: o revisor foi chamado" test -s "$tmp/falso/agy.pedido"
+
+  # 12c: com .lintr no projeto, o achado reprova antes do revisor.
+  sessao_de claude
+  cp "$repo_jangada/default/r/lintr" "$tmp/projeto/.lintr"
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 12c: com .lintr, cat() novo reprova" [ "$rc" = 3 ]
+  conferir "caso 12c: o revisor não foi chamado" test ! -e "$tmp/falso/agy.pedido"
+  conferir "caso 12c: o parecer aponta a linha nova e não a da base" \
+    bash -c 'grep -q "antigo.R:3:" "$1" && ! grep -q "antigo.R:1:" "$1"' _ "$estado/validacao-s-r1.md"
+
+  # 12c: com .lintr, arquivo R só com linhas apagadas não gera achado.
+  sessao_de claude
+  git -C "$tmp/projeto" checkout -q -- antigo.R
+  sed -i 2d "$tmp/projeto/limpo.R"
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 12c: só remoção de linha em arquivo R passa" [ "$rc" = 0 ]
+  conferir "caso 12c: só remoção de linha não gera achado" bash -c '! grep -q "lintr" "$1"' _ "$tmp/saida.log"
+  git -C "$tmp/projeto" checkout -q -- limpo.R
+
+  # 12d: arquivo novo sem commit conta inteiro; # nolint no método print vale.
+  sessao_de claude
+  printf 'print.resumo <- function(x, ...) {\n  cat("Resumo\\n") # nolint: undesirable_function_linter.\n  invisible(x)\n}\n' >"$tmp/projeto/metodo.R"
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 12d: cat() com nolint em método print passa" [ "$rc" = 0 ]
+  echo 'print(1)' >"$tmp/projeto/novo.R"
+  sessao_de claude
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 12d: arquivo R novo sem commit é conferido" [ "$rc" = 3 ]
+  conferir "caso 12d: o parecer aponta o arquivo novo" grep -q "novo.R:1:" "$estado/validacao-s-r1.md"
+  rm -f "$tmp/projeto/novo.R"
+
+  # 12e: sem o lintr instalado (Rscript sai com 2), a etapa é pulada em silêncio.
+  mkdir -p "$tmp/semlintr"
+  printf '#!/usr/bin/env bash\nexit 2\n' >"$tmp/semlintr/Rscript"
+  chmod +x "$tmp/semlintr/Rscript"
+  echo 'print(1)' >"$tmp/projeto/novo.R"
+  sessao_de claude
+  PATH="$tmp/semlintr:$PATH" validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 12e: sem lintr, a etapa é pulada" [ "$rc" = 0 ]
+  conferir "caso 12e: sem lintr, nada é dito" bash -c '! grep -q "lintr" "$1"' _ "$tmp/saida.log"
+  rm -f "$tmp/projeto/novo.R" "$tmp/projeto/metodo.R" "$tmp/projeto/.lintr"
+else
+  echo "pulado caso 12: R ou lintr não instalado"
+fi
+
 if ((falhas)); then
   echo "$falhas falha(s); saídas em $tmp (mantido)"
   trap - EXIT

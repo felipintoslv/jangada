@@ -185,6 +185,13 @@ carrega quando a tarefa envolve a sessão, mesmo aberto em outro projeto.
    de novo com `--resposta`, até 3 rodadas (`JANGADA_VALIDAR_RODADAS`).
    `--revisor` escolhe o revisor à mão. O Claude revisa com o Sonnet
    (`JANGADA_VALIDAR_MODELO`).
+   Antes do revisor, uma verificação local procura conflitos do git, confere
+   a sintaxe de shell e Lua e roda o `lintr` nos arquivos R, só nas linhas
+   que o agente alterou (`cat()` e `print()` fora de métodos `print`, código
+   comentado, variável sem uso, `1:length()`). Com `.lintr` no projeto, um
+   achado reprova sem chamar o revisor; sem ele, vale `default/r/lintr` e o
+   achado só aparece como aviso. Sem R ou sem o pacote `lintr`, a etapa é
+   pulada.
 3. Os pareceres ficam em `~/.local/state/jangada/agentes/validacao-*`. No
    jangada shell, `revisar` roda o mesmo comando no diretório atual.
 4. A barra acompanha o agy pelo hook `jangada-hook-agy`, instalado em
