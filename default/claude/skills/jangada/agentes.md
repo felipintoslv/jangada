@@ -285,7 +285,9 @@ instalada: `git -C ~/.local/share/jangada pull --ff-only` e
   hooks respeitam.
 - A confiança do agy na pasta é por caminho exato (`trustedWorkspaces` em
   `~/.gemini/antigravity-cli/settings.json`; confiar em `~` não cobre as
-  subpastas). Todo worktree novo abre com a pergunta "Do you trust the
+  subpastas). Só o `jangada-worktree-preparar` e o fim da sessão mexem
+  nela; o `jangada-delegar` recusa pasta sem confiança em vez de confiar,
+  porque a confiança libera agentes, regras e MCP da própria pasta. Todo worktree novo abre com a pergunta "Do you trust the
   contents of this project?", que o usuário responde na janela.
 - Para testar hooks sem tocar no estado real, mude `XDG_STATE_HOME`; o
   `jangada-config` recalcula `JANGADA_ESTADO` a partir dele.
@@ -307,7 +309,8 @@ Testes de 27/09/2026, agy 1.2.12:
   chamada: `agy -p ... --agent PAPEL --model gemini-3.8-flash-low`.
 - **`--agent` com nome desconhecido não falha**: cai no agente padrão, com
   todas as ferramentas. Só o log diz (`Agent "x" not found, falling back to
-  default`). Confira o log antes de confiar numa delegação.
+  default`). Confira com `agy agents` antes da chamada, como fazem o
+  `jangada-delegar` e o `jangada-validar`: falha fechada, não aberta.
 - `tools:` restringe de fato; `manage_task` e `send_message` vêm sempre.
 - No `-p`, `run_command` é negado sem regra em `permissions.allow`
   (`denied_actions` no JSON e `response` vazio).
@@ -317,8 +320,14 @@ Testes de 27/09/2026, agy 1.2.12:
   gastar cota: a fração restante fica em
   `.command.data.groups[].buckets[]` com `id` `gemini-5h`, `gemini-weekly`,
   `3p-5h` e `3p-weekly` (`remaining_fraction`, de 0 a 1).
-- `agy agents` sem terminal não imprime nada. Para saber se o agente
-  carregou, rode um `-p` curto com `--agent` e procure o "not found" no log.
+- `agy agents` lista um nome por linha só dos agentes que carregaram (um
+  `model:` inválido some da lista). Em 27/09/2026, com a saída num cano ou
+  num arquivo e sem terminal (`setsid`, `</dev/null`), a lista saiu inteira.
+- Agente com `subagent: false` e `model: inherit` carrega e atende ao
+  `--agent` com `--model` na chamada (testado em 27/09/2026 com o `revisor`
+  do `jangada-validar`, que negou criar arquivo e rodar comando).
+- `--sandbox` restringe só o terminal. Leitura sem escrita vem do `tools:`
+  do agente.
 - `--dangerously-skip-permissions` não serve para delegar: libera escrita.
   O `jangada-delegar` usa `--sandbox` e depende do `permissions.allow`.
 

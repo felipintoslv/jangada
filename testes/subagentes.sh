@@ -54,6 +54,13 @@ for p in "${papeis[@]}"; do
   conferir "$p: run_command no agy se e só se Bash no Claude" [ "$bash_claude" = "$cmd_agy" ]
 done
 
+# O revisor do jangada-validar lê a entrega, conteúdo não confiável: no agy
+# roda só com ferramentas de leitura e não aparece como subagente.
+rev=default/agy/agents/revisor/agent.md
+conferir "revisor do agy existe" test -r "$rev"
+conferir "revisor do agy não é subagente" [ "$(campo "$rev" subagent)" = false ]
+conferir "revisor do agy só lê" [ "$(sed -n '/^tools:/,/^[a-z]/p' "$rev" | grep '^  - ' | sort | tr -d ' -' | paste -sd,)" = find_by_name,grep_search,list_dir,view_file ]
+
 # Instalação num HOME temporário.
 instalar() {
   env HOME="$tmp/home" JANGADA_PATH="$repo_jangada" JANGADA_SIMULAR="${SIMULAR:-0}" \

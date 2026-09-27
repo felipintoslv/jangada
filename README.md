@@ -217,7 +217,9 @@ alheio com o mesmo nome nas duas pastas fica como está, com aviso.
    entrega. Depois de um `APROVADO`, a próxima chamada revisa só o que veio
    depois do commit aprovado e recomeça a contagem.
    `--revisor` escolhe o revisor à mão. O Claude revisa com o Sonnet
-   (`JANGADA_VALIDAR_MODELO`).
+   (`JANGADA_VALIDAR_MODELO`), só com Read, Grep e Glob; o agy revisa com o
+   agente `revisor` (`default/agy/agents/revisor`), só com ferramentas de
+   leitura e em `--sandbox`. Sem esse agente no agy, a validação para.
    Antes do revisor, uma verificação local procura conflitos do git, reprova
    script com byte nulo (o revisor o receberia como binário), confere
    a sintaxe de shell e Lua e roda o `lintr` nos arquivos R, só nas linhas
@@ -261,7 +263,9 @@ alheio com o mesmo nome nas duas pastas fica como está, com aviso.
    evento de pedido de permissão, então não há "aguardando". `Enter` restaura
    com `agy --conversation`.
 6. Em cada worktree novo o agy pergunta se confia na pasta; responda na
-   janela. A confiança é por caminho exato.
+   janela. A confiança é por caminho exato. O `jangada-worktree-preparar`
+   confia no worktree que cria e o fim da sessão tira; a primeira alteração
+   guarda o original em `settings.json.jangada-orig`.
 
 Detalhes que valem para o dia a dia:
 
@@ -286,7 +290,9 @@ Quatro papéis, com o mesmo nome e o mesmo texto no Claude Code
 (`default/claude/agents/`, ligados em `~/.claude/agents/`) e no agy
 (`default/agy/agents/`, registrados em `~/.gemini/config/agents.json`). Nenhum
 edita arquivos, e todos citam caminho e linha, página, célula ou URL em cada
-afirmação.
+afirmação. O explorador e o pesquisador não têm terminal; o leitor e o
+verificador têm, e o "só leitura" deles vale pela instrução e, no agy, pelo
+`permissions.allow`.
 
 | Papel | Faz | Claude | agy |
 |---|---|---|---|
@@ -307,11 +313,16 @@ perfil (ou global), e o seletor mostra o destino:
 `jangada-delegar PAPEL "pedido" [--arquivo SAIDA]` roda o agente do papel
 no agy (Flash low no explorador, medium no leitor e no pesquisador, high no
 verificador), com `--sandbox`, na raiz do repositório atual, e imprime só o
-relatório. Acima de 600 palavras (`JANGADA_DELEGAR_PALAVRAS`), o relatório
-sai cortado, com o caminho do texto completo. Antes, lê a cota do agy
+relatório. A pasta precisa ser confiável para o agy (o worktree da sessão
+é, e as outras só se você já respondeu à pergunta do agy nelas): o
+`jangada-delegar` não confia por conta própria, porque a confiança libera
+agentes, regras e MCP da própria pasta. Acima de 600 palavras
+(`JANGADA_DELEGAR_PALAVRAS`), o relatório sai cortado, com o caminho do
+texto completo. Antes, lê a cota do agy
 (`agy -p /usage`, guardada por 5 minutos) e recusa, com código 4 e uma
 linha indicando o subagente do Claude do mesmo papel, quando o limite de 5
-horas do Gemini está abaixo de 20% (`JANGADA_DELEGAR_COTA_MIN`), quando o
+horas do Gemini está abaixo de 20% (`JANGADA_DELEGAR_COTA_MIN`), quando a
+pasta não é confiável, quando o `agy agents` não lista o papel, quando o
 agy falha ou passa de 300 segundos (`JANGADA_DELEGAR_TEMPO`) e quando o
 perfil não delega ao agy. Sem terminal, o agy só roda os comandos listados
 em `permissions.allow` de `~/.gemini/antigravity-cli/settings.json`; os

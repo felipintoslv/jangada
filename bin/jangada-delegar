@@ -8,10 +8,11 @@
 #                     (default/agy/agents/PAPEL/agent.md)
 #   --arquivo SAIDA   grava o relatório completo em SAIDA
 #
-# Roda na raiz do repositório atual (ou na pasta atual), com --sandbox e só
-# com as ferramentas de leitura do papel. Comando de terminal sem terminal só roda se estiver em
-# permissions.allow de ~/.gemini/antigravity-cli/settings.json; os outros o
-# agy nega e o jangada-delegar lista.
+# Roda na raiz do repositório atual (ou na pasta atual), que o agy já precisa
+# confiar, com --sandbox e só com as ferramentas de leitura do papel. Comando
+# de terminal sem terminal só roda se estiver em permissions.allow de
+# ~/.gemini/antigravity-cli/settings.json; os outros o agy nega e o
+# jangada-delegar lista.
 #
 # Antes de rodar, lê a cota do agy (agy -p "/usage", guardada por
 # JANGADA_DELEGAR_CACHE minutos, padrão 5). Recusa se o limite de 5 horas do
@@ -24,8 +25,9 @@
 # ~/.local/state/jangada/delegacoes.jsonl.
 #
 # Código de saída: 0 relatório; 2 uso errado; 4 recusa (perfil sem delegação
-# ao agy, cota baixa, agy ausente, erro ou tempo esgotado). Na recusa, a
-# última linha diz qual subagente do Claude usar. Nunca chama o Claude.
+# ao agy, pasta sem confiança, papel não instalado, cota baixa, agy ausente,
+# erro ou tempo esgotado). Na recusa, a última linha diz qual subagente do
+# Claude usar. Nunca chama o Claude.
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
@@ -101,6 +103,25 @@ if [[ "$(jangada_delegacao claude "${JANGADA_DELEGAR:-}")" == claude ]]; then
 fi
 
 agy_limpo() { env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 agy "$@" </dev/null; }
+command -v agy >/dev/null 2>&1 || recusar "agy não instalado"
+
+# Sem terminal, o agy só roda em pasta confiável, e a confiança vale para o
+# caminho exato. O jangada-delegar não confia por conta própria: a pergunta de
+# confiança do agy barra agentes, regras e MCP da própria pasta, que num clone
+# de fora mandariam no subagente. Vale o worktree da sessão, que o
+# jangada-worktree-preparar confia, ou a pasta que o usuário já confiou.
+conf_agy="${JANGADA_AGY_SETTINGS:-$HOME/.gemini/antigravity-cli/settings.json}"
+# O agy pode ter gravado o caminho com o link simbólico por onde a pasta foi
+# aberta, então vale o caminho resolvido ou o original.
+if ! jq -e --arg w "$(realpath "$pasta")" --arg o "$pasta" \
+     '(.trustedWorkspaces // []) as $t | ($t | index($w)) or ($t | index($o))' "$conf_agy" >/dev/null 2>&1; then
+  recusar "o agy não confia em $pasta (abra o agy nessa pasta e responda à pergunta de confiança, ou trabalhe num worktree do jangada)"
+fi
+# Com --agent de nome desconhecido o agy roda o agente padrão, com todas as
+# ferramentas, e só o log avisa: confere antes de mandar o pedido.
+if ! agy_limpo agents 2>/dev/null | grep -qx -- "$papel"; then
+  recusar "o agy não achou o agente $papel (rode ./install.sh 50)"
+fi
 
 # Cota do Gemini (limite de 5 horas), em % restante, com duas casas.
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/jangada/agy-usage.json"
@@ -124,24 +145,10 @@ if ((${cota%.*} < ${JANGADA_DELEGAR_COTA_MIN:-20})); then
   recusar "cota de 5 horas do Gemini em $cota%, abaixo de ${JANGADA_DELEGAR_COTA_MIN:-20}%"
 fi
 
-# Sem terminal, o agy só roda em pasta confiável, e a confiança vale para o
-# caminho exato: roda na raiz do repositório (o worktree da sessão já é
-# confiável), e a confiança dada aqui sai no fim. O log do agy diz se o agente do papel não foi achado: nesse caso o
-# agy responde com o agente padrão, sem avisar.
-conf_agy="${JANGADA_AGY_SETTINGS:-$HOME/.gemini/antigravity-cli/settings.json}"
-confiou=0
-if [[ -f "$conf_agy" ]] && ! jq -e --arg w "$(realpath "$pasta")" '(.trustedWorkspaces // []) | index($w)' "$conf_agy" >/dev/null 2>&1; then
-  jangada_agy_ajustar_confianca adicionar "$pasta"
-  confiou=1
-fi
 log_agy="${JANGADA_AGY_LOG:-$HOME/.gemini/antigravity-cli/log}"
 marca="$(mktemp)"
 saida="$(mktemp)"
-limpar() {
-  ((confiou)) && jangada_agy_ajustar_confianca remover "$pasta"
-  rm -f "$marca" "$saida"
-}
-trap limpar EXIT
+trap 'rm -f "$marca" "$saida"' EXIT
 
 # Sem terminal, a ação negada encerra a vez do agente sem resposta.
 pedido="$pedido

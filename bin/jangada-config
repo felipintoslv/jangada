@@ -261,6 +261,13 @@ _jangada_trava_obter() {
   return 1
 }
 
+# O settings.json é do agy e do usuário: a primeira alteração do jangada
+# guarda o original, que nunca é sobrescrito. Roda sob a trava, para não
+# copiar o arquivo no meio de outra regravação.
+_jangada_agy_guardar_original() {
+  [[ -e "$1.jangada-orig" ]] || cp -a "$1" "$1.jangada-orig" 2>/dev/null || true
+}
+
 # Adiciona ou remove caminho de trustedWorkspaces no settings.json do Antigravity.
 # Mantém travas e arquivos de trabalho isolados em JANGADA_ESTADO e preserva permissões.
 jangada_agy_ajustar_confianca() {
@@ -286,6 +293,7 @@ jangada_agy_ajustar_confianca() {
   if command -v flock >/dev/null 2>&1; then
     (
       flock -w 5 9 2>/dev/null || exit 1
+      _jangada_agy_guardar_original "$conf_agy"
       if jq --arg w "$caminho_real" --arg w_orig "$caminho" "$filtro" "$conf_agy" >"$tmp" 2>/dev/null; then
         cat "$tmp" > "$conf_agy"
       fi
@@ -294,6 +302,7 @@ jangada_agy_ajustar_confianca() {
   else
     local trava_d="$JANGADA_ESTADO/.trava-agy.d"
     if _jangada_trava_obter "$trava_d"; then
+      _jangada_agy_guardar_original "$conf_agy"
       if jq --arg w "$caminho_real" --arg w_orig "$caminho" "$filtro" "$conf_agy" >"$tmp" 2>/dev/null; then
         cat "$tmp" > "$conf_agy"
       fi

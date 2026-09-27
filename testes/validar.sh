@@ -31,6 +31,8 @@ printf '%b\n' "$FALSO_RESPOSTA"
 EOF
 cat >"$tmp/bin/agy" <<'EOF'
 #!/usr/bin/env bash
+if [[ "$1" == agents ]]; then printf '%s\n' ${FALSO_AGENTES-explorador revisor}; exit 0; fi
+printf '%s\n' "$@" >"$FALSO_DIR/agy.args"
 while (($#)); do [[ "$1" == -p ]] && { printf '%s' "$2" >"$FALSO_DIR/agy.pedido"; break; }; shift; done
 jq -n --arg r "$(printf '%b' "$FALSO_RESPOSTA")" '{status:"SUCCESS", response:$r}'
 EOF
@@ -63,6 +65,8 @@ validar 'STATUS: REVISAR\n1. arquivo.txt:1: problema'; rc=$?
 conferir "caso 1: REVISAR sai com 3" [ "$rc" = 3 ]
 conferir "caso 1: o agy revisou" test -s "$tmp/falso/agy.pedido"
 conferir "caso 1: o claude não foi chamado" test ! -e "$tmp/falso/claude.pedido"
+conferir "caso 1: o agy revisa com o agente revisor, em --sandbox" \
+  bash -c 'grep -qx -- revisor "$1" && grep -qx -- --sandbox "$1"' _ "$tmp/falso/agy.args"
 conferir "caso 1: pedido traz o diff e a tarefa" \
   bash -c 'grep -q "^+linha 1$" "$1" && grep -q "tarefa de teste" "$1"' _ "$tmp/falso/agy.pedido"
 conferir "caso 1: estado registra a rodada e o revisor" [ "$(jq -r .validacao "$estado/s.json")" = "r1: REVISAR (agy)" ]
@@ -126,6 +130,13 @@ conferir "caso 6: o claude não foi chamado" test ! -e "$tmp/falso/claude.pedido
 conferir "caso 6: pedido identifica o autor como Antigravity" grep -q "agente (Antigravity" "$tmp/falso/agy.pedido"
 conferir "caso 6: pedido alerta sobre revisão pelo mesmo modelo" grep -q "revisão pelo mesmo modelo" "$tmp/falso/agy.pedido"
 conferir "caso 6: estado registra a rodada e o revisor agy" [ "$(jq -r .validacao "$estado/s.json")" = "r1: APROVADO (agy)" ]
+
+# Caso 6b: sem o agente revisor, o agy rodaria o agente padrão, com todas as
+# ferramentas; a validação para antes do pedido.
+sessao_de claude
+FALSO_AGENTES=explorador validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 6b: sem o agente revisor a validação falha sem chamar o agy" \
+  bash -c '[ "$1" != 0 ] && [ ! -e "$2" ] && grep -q "agente revisor" "$3"' _ "$rc" "$tmp/falso/agy.pedido" "$tmp/saida.log"
 
 # Caso 7: auto-revisão do Claude com --revisor mesmo.
 sessao_de claude

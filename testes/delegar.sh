@@ -20,6 +20,10 @@ mkdir -p "$tmp/bin" "$tmp/home/.gemini/antigravity-cli/log" "$tmp/falso" "$tmp/p
 # pedido com $FALSO_RESPOSTA. Grava os argumentos de cada chamada.
 cat >"$tmp/bin/agy" <<'EOF'
 #!/usr/bin/env bash
+if [[ "$1" == agents ]]; then
+  printf '%s\n' ${FALSO_AGENTES:-explorador leitor pesquisador verificador}
+  exit 0
+fi
 if [[ "$2" == /usage ]]; then
   echo usage >>"$FALSO_DIR/usage.chamadas"
   [[ "${FALSO_USAGE_FALHA:-0}" == 1 ]] && exit 1
@@ -35,6 +39,8 @@ jq -n --arg r "$FALSO_RESPOSTA" --arg n "${FALSO_NEGADO:-}" \
     denied_actions: (if $n == "" then [] else [{action: "read_url", display_name: $n}] end)}'
 EOF
 chmod +x "$tmp/bin/agy"
+conf_agy="$tmp/home/.gemini/antigravity-cli/settings.json"
+jq -n --arg w "$(realpath "$tmp/projeto")" '{trustedWorkspaces: [$w]}' >"$conf_agy"
 
 delegar() {
   rm -f "$tmp/falso/agy.args"
@@ -42,6 +48,7 @@ delegar() {
     HOME="$tmp/home" PATH="$tmp/bin:$PATH" JANGADA_PATH="$repo_jangada" FALSO_DIR="$tmp/falso" \
     FALSO_COTA="${COTA:-0.9}" FALSO_RESPOSTA="${RESPOSTA-relatorio em a.sh:1}" \
     FALSO_CODIGO="${CODIGO:-0}" FALSO_NEGADO="${NEGADO:-}" FALSO_LOG="${LOG:-}" FALSO_USAGE_FALHA="${USAGE_FALHA:-0}" \
+    ${AGENTES:+FALSO_AGENTES="$AGENTES"} \
     ${DELEGAR:+JANGADA_DELEGAR=$DELEGAR} \
     "$repo_jangada/bin/jangada-delegar" "$@" >"$tmp/saida" 2>"$tmp/erro")
   echo $? >"$tmp/codigo"
@@ -118,6 +125,46 @@ NEGADO=ReadUrlContent delegar pesquisador "busque"
 conferir "caso 13: ação negada com resposta avisa e entrega" \
   bash -c '[ "$1" = 0 ] && grep -q "negou: ReadUrlContent" "$2"' _ "$(codigo)" "$tmp/erro"
 conferir "caso 13: pedido manda seguir depois da negação" grep -q "não pare" "$tmp/falso/agy.args"
+
+# Pasta sem confiança do agy: recusa, sem confiar por conta própria.
+jq '.trustedWorkspaces = []' "$conf_agy" >"$tmp/conf" && cp "$tmp/conf" "$conf_agy"
+delegar explorador "mapeie"
+conferir "caso 14: pasta sem confiança recusa sem chamar o agy" \
+  bash -c '[ "$1" = 4 ] && [ ! -e "$2" ] && grep -q "não confia" "$3"' _ "$(codigo)" "$tmp/falso/agy.args" "$tmp/erro"
+conferir "caso 14: o settings.json do agy fica como estava" jqok -e '.trustedWorkspaces == []' "$conf_agy"
+jq -n --arg w "$(realpath "$tmp/projeto")" '{trustedWorkspaces: [$w]}' >"$conf_agy"
+
+# Pasta confiada pelo caminho com link simbólico, como o agy grava quando foi
+# aberta por ele.
+ln -s "$tmp/projeto" "$tmp/atalho"
+jq -n --arg w "$tmp/atalho" '{trustedWorkspaces: [$w]}' >"$conf_agy"
+(cd "$tmp/atalho" && env -u JANGADA_DELEGAR -u XDG_CACHE_HOME -u XDG_STATE_HOME -u XDG_CONFIG_HOME \
+  HOME="$tmp/home" PATH="$tmp/bin:$PATH" JANGADA_PATH="$repo_jangada" FALSO_DIR="$tmp/falso" \
+  FALSO_COTA=0.9 FALSO_RESPOSTA="relatorio em a.sh:1" PWD="$tmp/atalho" \
+  "$repo_jangada/bin/jangada-delegar" explorador "mapeie" >/dev/null 2>&1)
+conferir "caso 14b: pasta confiada pelo link simbólico é aceita" [ $? = 0 ]
+jq -n --arg w "$(realpath "$tmp/projeto")" '{trustedWorkspaces: [$w]}' >"$conf_agy"
+
+# Papel que o agy não carregou: o agy rodaria o agente padrão.
+AGENTES="leitor" delegar explorador "mapeie"
+conferir "caso 15: papel ausente no agy recusa antes do pedido" \
+  bash -c '[ "$1" = 4 ] && [ ! -e "$2" ] && grep -q "install.sh 50" "$3"' _ "$(codigo)" "$tmp/falso/agy.args" "$tmp/erro"
+
+# Confiança no worktree (jangada-worktree-preparar e fim da sessão): a
+# primeira alteração guarda o settings.json original, e só ela.
+confianca() {
+  env HOME="$tmp/home" XDG_STATE_HOME="$tmp/estado" JANGADA_PATH="$repo_jangada" \
+    bash -c 'source "$1/bin/jangada-config"; jangada_agy_ajustar_confianca "$2" "$3"' _ "$repo_jangada" "$@"
+}
+echo '{"trustedWorkspaces": [], "outra": 1}' >"$conf_agy"
+confianca adicionar "$tmp/projeto"
+confianca adicionar "$tmp/falso"
+confianca remover "$tmp/projeto"
+conferir "caso 16: confiança adicionada e removida por caminho" \
+  jqok -e --arg w "$(realpath "$tmp/falso")" '.trustedWorkspaces == [$w] and .outra == 1' "$conf_agy"
+conferir "caso 16: cópia do settings.json de antes da primeira alteração" \
+  jqok -e '.trustedWorkspaces == [] and .outra == 1' "$conf_agy.jangada-orig"
+jq -n --arg w "$(realpath "$tmp/projeto")" '{trustedWorkspaces: [$w]}' >"$conf_agy"
 
 delegar revisor "revise"
 conferir "caso 11: papel desconhecido dá código 2" [ "$(codigo)" = 2 ]

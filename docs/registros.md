@@ -75,7 +75,7 @@ Pasta `$JANGADA_ESTADO/agentes/`. Em 26/09/2026 havia 41 arquivos.
 
 | Arquivo | Qtd. | Período (mtime) | Quem escreve | Quem apaga |
 |---|---|---|---|---|
-| `validacao-SESSAO-rN.md` | 16 | 26/09 20:54 a 23:37 | `bin/jangada-validar:747` (e a reprovação local, linhas 672 a 691) | `bin/jangada-agente-fim:261` a `:264`, ao encerrar a sessão |
+| `validacao-SESSAO-rN.md` | 16 | 26/09 20:54 a 23:37 | `bin/jangada-validar:755` (e a reprovação local, linhas 672 a 691) | `bin/jangada-agente-fim:261` a `:264`, ao encerrar a sessão |
 | `validacao-SESSAO.aprovado` | 1 | 26/09 | `bin/jangada-validar:768` | `bin/jangada-agente-fim:264` |
 | `parecer-SESSAO-rN.md` | 12 | 20/09 a 21/09 | antigo `bin/jangada-par` (removido no commit 411d273, 22/09) | ninguém |
 | `avaliacao-SESSAO-rN.md` | 2 | 21/09 | antigo `bin/jangada-par` (avaliação do Claude sobre o parecer, não é revisão) | ninguém |

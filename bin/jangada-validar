@@ -716,7 +716,15 @@ revisar_agy() {
     pedido="${pedido/"$diff_conteudo"/"[diff grande demais para o pedido; leia o arquivo $saida.diff]"}"
     echo "jangada-validar: pedido acima do limite de argumento; o diff vai em $saida.diff" >&2
   fi
-  args=(-p "$pedido" --output-format json --add-dir "$dir" --add-dir "$estado_dir")
+  # O revisor lê o conteúdo menos confiável da entrega: roda com o agente
+  # revisor (default/agy/agents/revisor), só com ferramentas de leitura, e em
+  # --sandbox. Com --agent de nome desconhecido o agy cairia no agente padrão,
+  # com todas as ferramentas, então a falta do revisor para a validação.
+  if ! env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 agy agents </dev/null 2>/dev/null | grep -qx revisor; then
+    echo "jangada-validar: o agy não achou o agente revisor (rode ./install.sh 50)" >&2
+    return 1
+  fi
+  args=(-p "$pedido" --agent revisor --sandbox --output-format json --add-dir "$dir" --add-dir "$estado_dir")
   [[ -n "$modelo" ]] && args+=(--model "$modelo")
   [[ -n "${JANGADA_VALIDAR_ESFORCO:-high}" ]] && args+=(--effort "${JANGADA_VALIDAR_ESFORCO:-high}")
   # A saída vem por cano: o agy reabre o próprio descritor de saída, e com
