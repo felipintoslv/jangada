@@ -208,8 +208,9 @@ alheio com o mesmo nome nas duas pastas fica como está, com aviso.
    Antes do revisor, uma verificação local procura conflitos do git, confere
    a sintaxe de shell e Lua e roda o `lintr` nos arquivos R, só nas linhas
    que o agente alterou (`cat()` e `print()` fora de métodos `print`, código
-   comentado, `1:length()`; a variável sem uso fica de fora porque o
-   lintr confunde as colunas do dplyr com variáveis). Com `.lintr` no projeto, um
+   comentado, `1:length()`, variável sem uso dentro de função). Do
+   `object_usage_linter` só vale a variável sem uso; o aviso de variável
+   global, que dispara em toda coluna do dplyr, é descartado. Com `.lintr` no projeto, um
    achado reprova sem chamar o revisor; sem ele, vale `default/r/lintr` e o
    achado só aparece como aviso. Sem R ou sem o pacote `lintr`, a etapa é
    pulada. O `gitleaks` procura segredos nas linhas acrescentadas; um achado

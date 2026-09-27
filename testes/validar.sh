@@ -324,7 +324,22 @@ if Rscript -e 'quit(status = !requireNamespace("lintr", quietly = TRUE))' >/dev/
   PATH="$tmp/semlintr:$PATH" validar 'STATUS: APROVADO'; rc=$?
   conferir "caso 12e: sem lintr, a etapa é pulada" [ "$rc" = 0 ]
   conferir "caso 12e: sem lintr, nada é dito" bash -c '! grep -q "lintr" "$1"' _ "$tmp/saida.log"
-  rm -f "$tmp/projeto/novo.R" "$tmp/projeto/metodo.R" "$tmp/projeto/.lintr"
+  rm -f "$tmp/projeto/novo.R"
+
+  # 12f: com .lintr, a variável sem uso reprova; a coluna do dplyr, não.
+  cp "$repo_jangada/default/r/lintr" "$tmp/projeto/.lintr"
+  printf 'f <- function(df) {\n  df |> dplyr::filter(idade > 10)\n}\n' >"$tmp/projeto/colunas.R"
+  sessao_de claude
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 12f: coluna do dplyr não é apontada" [ "$rc" = 0 ]
+  printf 'g <- function(x) {\n  sobra <- x + 1\n  x\n}\n' >"$tmp/projeto/sobra.R"
+  sessao_de claude
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 12f: variável sem uso reprova" [ "$rc" = 3 ]
+  conferir "caso 12f: o parecer aponta a variável" \
+    grep -q "sobra.R:2: \[object_usage_linter\]" "$estado/validacao-s-r1.md"
+  rm -f "$tmp/projeto/colunas.R" "$tmp/projeto/sobra.R"
+  rm -f "$tmp/projeto/metodo.R" "$tmp/projeto/.lintr"
 else
   echo "pulado caso 12: R ou lintr não instalado"
 fi

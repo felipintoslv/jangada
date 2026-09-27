@@ -364,6 +364,8 @@ saida="$estado_dir/validacao-$rotulo-r$num.md"
 # Roda o lintr e imprime arquivo, linha, linter e mensagem separados por
 # tabulação. Argumentos: arquivo de configuração (vazio para o .lintr do
 # projeto) e os arquivos R. Sai com 2 se o lintr não estiver instalado.
+# Do object_usage_linter fica só a variável sem uso: o "no visible binding"
+# dispara em toda coluna do dplyr.
 lintr_r='
 if (!requireNamespace("lintr", quietly = TRUE)) quit(status = 2)
 args <- commandArgs(trailingOnly = TRUE)
@@ -375,6 +377,8 @@ if (nzchar(args[[1]])) {
 for (arq in args[-1]) {
   achados <- if (is.null(linters)) lintr::lint(arq) else lintr::lint(arq, linters = linters)
   for (l in achados) {
+    if (l$linter == "object_usage_linter" &&
+        !grepl("assigned but may not be used", l$message, fixed = TRUE)) next
     writeLines(paste(arq, l$line_number, l$linter, gsub("[\t\n]", " ", l$message), sep = "\t"))
   }
 }
