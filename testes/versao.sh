@@ -76,6 +76,10 @@ rodar
 conferir "sem tag: sem versão (hash curto)" \
   [ "$(saida)" = "sem versão ($(git -C "$repo" rev-parse --short HEAD))" ]
 conferir "-h responde" bash -c '"$1" -h >/dev/null' _ "$repo_jangada/bin/jangada-versao"
+conferir "--ajuda responde fora de repositório" \
+  bash -c 'cd "$2" && JANGADA_PATH="$2" "$1" --ajuda | grep -q "^Uso:"' _ "$repo_jangada/bin/jangada-versao" "$tmp"
+conferir "-C PASTA -h responde" \
+  bash -c '"$1" -C "$2" -h | grep -q "^Uso:"' _ "$repo_jangada/bin/jangada-versao" "$tmp"
 
 # Novidades de todo o histórico.
 rodar --novidades

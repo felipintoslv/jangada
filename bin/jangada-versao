@@ -24,6 +24,10 @@ if [[ "${1:-}" == -C ]]; then
   [[ -n "${2:-}" ]] || { echo "jangada-versao: -C pede uma pasta" >&2; exit 1; }
   repo="$2"; shift 2
 fi
+# A ajuda não depende de repositório.
+case "${1:-}" in
+  -h|--ajuda|--help) sed -n '2,18s/^# \{0,1\}//p' "$0"; exit 0 ;;
+esac
 if [[ -z "$repo" ]]; then
   repo="$(git rev-parse --show-toplevel 2>/dev/null || echo "$JANGADA_PATH")"
 fi
@@ -119,9 +123,6 @@ case "${1:-}" in
     g tag -a "v$nova" -m "jangada $nova"
     echo "versão $nova criada: commit $(g rev-parse --short HEAD), tag v$nova"
     echo "para publicar: git -C $(printf '%q' "$repo") push origin HEAD v$nova"
-    ;;
-  -h|--ajuda|--help)
-    sed -n '2,18s/^# \{0,1\}//p' "$0"
     ;;
   *)
     echo "jangada-versao: opção desconhecida: $1 (veja --ajuda)" >&2
