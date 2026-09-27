@@ -212,6 +212,18 @@ else
       q <- rede_pontos_quentes(edicoes(ch))
       cat(nrow(ci), basename(ci$arquivo), "edição com retrabalho" %in% g$nos$group, nrow(q$nos), q$arestas$value)
     ' "$cache" 2>/dev/null)" = "1 a.R TRUE 2 2" ]
+  conferir "caso 5: pontos quentes contam os itens REVISAR do mesmo arquivo" \
+    [ "$(cd default/painel && Rscript -e '
+      source("indicadores.R")
+      ch <- data.frame(ferramenta = "Edit", alvo = "a.R", conversa = c("c1", "c2", "c3"), sessao = c("s1", "s2", "s2"),
+                       projeto = "meu-projeto", data = Sys.time() - 1:3,
+                       arquivo = c("/pr/Meu Projeto/R/a.R", "/wt/Meu Projeto/tarefa/R/a.R", "/pr/Meu Projeto/b.R"))
+      ed <- edicoes(ch)
+      ed$arq <- normalizar_arquivo(ed$arquivo, projetos = "/pr", worktrees = "/wt")
+      ap <- data.frame(projeto = "meu-projeto", arquivo = c("R/a.R", "R/a.R", "c.R"))
+      q <- pontos_quentes(ed, ap)
+      cat(q$arquivo[1], q$sessoes[1], q$revisar[1], q$revisar[2])
+    ' 2>&1)" = "Meu Projeto/R/a.R 2 2 0" ]
   conferir "caso 5: espaço de capacidades (RCA, proximidade e típico)" \
     [ "$(cd default/painel && Rscript -e '
       source("indicadores.R")

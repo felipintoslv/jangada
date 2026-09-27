@@ -27,11 +27,11 @@ url="http://127.0.0.1:$JANGADA_PAINEL_PORTA"
 app_dir="$JANGADA_PATH/default/painel"
 # Pacotes R do app. O install/ só confere; não instala pacote R.
 pacotes_r=(shiny bslib bsicons plotly visNetwork igraph DT arrow jsonlite)
-mkdir -p "$cache"
 
 avisar_barra() { pkill -RTMIN+9 -x waybar 2>/dev/null || true; }
 
 erro() {
+  mkdir -p "$cache"
   printf '%s\n' "$1" >"$errof"
   echo "jangada-painel: $1" >&2
   command -v notify-send >/dev/null 2>&1 && notify-send -a jangada-painel "Painel de indicadores" "$1" 2>/dev/null || true
@@ -47,13 +47,14 @@ no_ar() {
 }
 
 gerar() {
+  mkdir -p "$cache"
   command -v python3 >/dev/null 2>&1 || erro "python3 não instalado"
   python3 -c 'import pyarrow' 2>/dev/null || erro "falta o pyarrow do Python (pacote python-pyarrow)"
   # Uma coleta por vez; um segundo clique espera a primeira terminar.
   exec 8>"$cache/.trava"
   flock -w 120 8 || erro "outra coleta não terminou em 2 minutos"
   # Coleta interrompida não deixa a barra presa em "atualizando".
-  trap 'rm -f "$marca"' EXIT
+  trap 'rm -f "$marca"; avisar_barra' EXIT
   : >"$marca"; avisar_barra
   local rc=0
   python3 "$app_dir/coletor.py" "$cache" >"$cache/coleta.log" 2>&1 || rc=$?
@@ -65,6 +66,7 @@ gerar() {
 }
 
 subir() {
+  mkdir -p "$cache"
   command -v Rscript >/dev/null 2>&1 || erro "R não instalado (pacote r)"
   rm -f "$errof"
   # O "jangada-painel-app" no comando identifica o processo no --parar.

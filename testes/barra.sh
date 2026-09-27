@@ -17,6 +17,8 @@ trap 'rm -rf "$tmp"' EXIT
 # config.jsonc sem as linhas de comentário, como em testes/verificar.sh.
 sem_comentario() { sed 's#^[[:space:]]*//.*##' "$1"; }
 jq_ok() { jq -e "$@" >/dev/null 2>&1; }
+# Sem cmp: o diffutils não vem na imagem do CI.
+iguais() { [[ "$(<"$1")" == "$(<"$2")" ]]; }
 sem_comentario default/waybar/config.jsonc >"$tmp/config.json"
 
 # Caso 1: módulo no config.jsonc do repositório.
@@ -74,7 +76,7 @@ PY
 conferir "caso 4: a barra de antes não tem o módulo" bash -c '! grep -q custom/indicadores "$1"' _ "$alvo"
 cp "$alvo" "$tmp/antes.jsonc"
 JANGADA_SIMULAR=1 migrar
-conferir "caso 4: simulação não altera o arquivo" cmp -s "$alvo" "$tmp/antes.jsonc"
+conferir "caso 4: simulação não altera o arquivo" iguais "$alvo" "$tmp/antes.jsonc"
 conferir "caso 4: migração roda sem erro" migrar
 sem_comentario "$alvo" >"$tmp/migrado.json"
 conferir "caso 4: resultado com o mesmo módulo do padrão" \
@@ -84,7 +86,7 @@ conferir "caso 4: deixa uma cópia de segurança" \
   [ "$(compgen -G "$alvo.jangada-*.bak" | wc -l)" = 1 ]
 cp "$alvo" "$tmp/depois.jsonc"
 conferir "caso 4: segunda passada roda sem erro" migrar
-conferir "caso 4: segunda passada não muda nada" cmp -s "$alvo" "$tmp/depois.jsonc"
+conferir "caso 4: segunda passada não muda nada" iguais "$alvo" "$tmp/depois.jsonc"
 
 # Caso 5: lista em várias linhas, com o custom/agentes por último.
 printf '{\n  "modules-left": [\n    "custom/menu",\n    "custom/agentes"\n  ],\n  "custom/agentes": {\n    "exec": "x"\n  }\n}\n' >"$alvo"
@@ -97,7 +99,7 @@ conferir "caso 5: módulo entra no fim da lista em várias linhas" \
 printf '{\n  "modules-left": ["custom/menu"]\n}\n' >"$alvo"
 cp "$alvo" "$tmp/sem-agentes.jsonc"
 conferir "caso 6: sem custom/agentes, sai sem erro" migrar
-conferir "caso 6: sem custom/agentes, não altera o arquivo" cmp -s "$alvo" "$tmp/sem-agentes.jsonc"
+conferir "caso 6: sem custom/agentes, não altera o arquivo" iguais "$alvo" "$tmp/sem-agentes.jsonc"
 
 # Caso 7: sem cópia própria, nada a fazer.
 rm -f "$alvo"
