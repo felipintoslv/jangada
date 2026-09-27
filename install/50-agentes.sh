@@ -20,3 +20,9 @@ if tem_comando agy || [[ -d "$HOME/.gemini" ]]; then
   mesclar_hooks_agy
   ligar_skill_agy
 fi
+
+# Painel de indicadores (jangada-painel): opcional. Só avisa o que falta;
+# não instala R, pacote R nem o pyarrow.
+"$JANGADA_PATH/bin/jangada-painel" --conferir 2>/dev/null | while IFS= read -r l; do
+  aviso "painel de indicadores: $l"
+done

@@ -15,6 +15,7 @@
 | `jangada-agentes` | seletor, painel, módulo da barra, `--focar`, `--proximo`, `--anterior`, `--restaurar` |
 | `jangada-agente-fim` | encerra a sessão e remove o worktree (mantém o ramo); `--integrar` faz o merge na base, atualiza a cópia instalada se for o repositório do jangada e apaga o ramo |
 | `jangada-consumo` | tokens do Claude no bloco de 5 horas, lidos de `~/.claude/projects` |
+| `jangada-painel` | indicadores num app Shiny em 127.0.0.1; `default/painel/coletor.py` grava o cache em Parquet (`~/.local/state/jangada/painel`), `default/painel/app.R` só lê o cache |
 | `jangada-gancho` | roda os ganchos do usuário em `~/.config/jangada/ganchos/` |
 
 ## Isolamento (`jangada-isolar`)
@@ -118,6 +119,14 @@ Os hooks rodam dentro do isolamento do agente. Arquivo novo que um hook
 precise gravar fora de `agentes/` tem de entrar como gravável no
 `jangada-isolar` (e existir antes do bind); sem isso a escrita falha calada,
 porque o hook engole o erro.
+
+Registro novo que o painel precise ler entra no `coletor.py`, nunca no
+`app.R`. O coletor lê cada jsonl do Claude a partir da posição salva em
+`posicoes.json` e só faz `json.loads` nas linhas com `"usage"`,
+`"tool_use"` ou `"tool_result"`. Reler `~/.claude/projects` inteiro custa
+~280 MB por clique, e o Claude apaga conversas com mais de 30 dias: o
+histórico existe só no cache. Resposta do Claude conta uma vez por
+`message.id` e `requestId`, com o maior `output_tokens`.
 
 ## Scripts bash deste repositório
 

@@ -93,6 +93,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir, integrar ou encerrar (`--proximo`, `--anterior`, `--restaurar`) |
 | `jangada-agente-fim` | encerra uma sessão e remove o worktree, com conferência de alterações pendentes; `--integrar` faz antes o merge na base, atualiza a cópia instalada se for o repositório do jangada e apaga o ramo |
 | `jangada-consumo` | tokens do Claude Code no bloco de 5 horas em andamento (também no tooltip da barra) |
+| `jangada-painel` | painel de indicadores do uso de IA num app Shiny local; `--json` imprime os do dia, `--parar` encerra o app, `--conferir` lista o que falta |
 | `jangada-gancho` | roda os ganchos do usuário de um evento (chamado pelos outros comandos) |
 | `jangada-importar` | converte a configuração do niri em arquivos `.importado` |
 | `jangada-atalhos` | mostra todos os atalhos ativos, lidos do próprio Hyprland (`--lista` para o terminal) |
@@ -296,6 +297,46 @@ O prefixo `jangada-isolar` entra no comando guardado, e o estado registra
 `isolar`; na restauração, se o prefixo tiver sumido do comando de uma sessão
 isolada, o `jangada-agentes` o põe de volta. Sem o pacote `bubblewrap`, o
 agente abre sem isolamento e com aviso.
+
+## Painel de indicadores
+
+O `jangada-painel` junta os registros dos agentes num cache e abre um app
+Shiny em `127.0.0.1:8765` (`JANGADA_PAINEL_PORTA`). O app só existe enquanto
+está aberto: `jangada-painel --parar` libera a memória do R. Precisa de R com
+shiny, bslib, bsicons, plotly, DT, arrow e jsonlite, e do
+`python-pyarrow`; a instalação só avisa o que falta.
+
+Cada chamada roda o coletor (`default/painel/coletor.py`). Ele lê as
+conversas do Claude Code a partir de onde parou, então só a primeira coleta
+lê os ~280 MB de `~/.claude/projects`. O cache fica em
+`~/.local/state/jangada/painel`, em Parquet, e guarda o que o Claude Code já
+apagou (ele apaga conversas com mais de 30 dias). O mapa de cada registro,
+com campos e lacunas, está em `docs/registros.md`.
+
+Definições:
+
+- **Entrega**: as rodadas do `jangada-validar` num mesmo rótulo até um
+  APROVADO. Antes do `validar.jsonl` (26/09/2026) as rodadas vêm dos
+  pareceres guardados em `agentes/`.
+- **Aprovação na 1ª rodada**: entregas aprovadas sem nenhum REVISAR antes,
+  sobre as entregas aprovadas.
+- **No limite**: entregas que chegaram a `JANGADA_VALIDAR_RODADAS` sem
+  aprovação. Indica tarefa ambígua ou modelos em desacordo.
+- **Tokens**: só do Claude Code; o agy não grava contagem legível. Saída,
+  raciocínio (parte da saída) e cache criado aparecem separados; o cache lido
+  é barato e fica num gráfico à parte. Cada resposta conta uma vez.
+- **Bloco de 5 horas**: a regra do `jangada-consumo`. Os registros não trazem
+  o limite do plano; "perto do limite" é um bloco com 80% ou mais da saída do
+  maior bloco observado.
+- **Tokens por entrega**: as respostas da sessão da entrega entre o fim da
+  entrega anterior do mesmo rótulo (ou 24 horas antes da 1ª rodada) e a
+  aprovação.
+- **Tempo em aguardando** e **sessões simultâneas**: saem do
+  `eventos-agentes.jsonl`, que começou em 26/09/2026. O agy não tem estado
+  aguardando.
+
+Cada gráfico mostra o período e o número de observações coberto, com o aviso
+"pouco dado" abaixo de 10.
 
 ## Várias máquinas
 

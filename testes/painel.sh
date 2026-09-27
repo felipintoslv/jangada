@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+# Testa o painel de indicadores: o coletor (default/painel/coletor.py) sobre
+# registros de exemplo, a leitura incremental, o módulo da barra e, com os
+# pacotes R presentes, os indicadores e o app no ar.
+#
+# Uso: testes/painel.sh
+set -uo pipefail
+cd "$(dirname "$0")/.." || exit 1
+repo_jangada="$PWD"
+falhas=0
+ok()    { printf 'ok    %s\n' "$*"; }
+falha() { printf 'FALHA %s\n' "$*"; falhas=$((falhas + 1)); }
+conferir() { local d="$1"; shift; if "$@"; then ok "$d"; else falha "$d"; fi; }
+
+if ! python3 -c 'import pyarrow' 2>/dev/null; then
+  echo "pyarrow do Python ausente; testes do painel ignorados"
+  exit 0
+fi
+
+tmp="$(mktemp -d)"
+trap '[[ -n "${PAINEL_MANTER:-}" ]] || rm -rf "$tmp"' EXIT
+estado="$tmp/state/jangada"
+cache="$estado/painel"
+conversas="$tmp/claude/projects"
+mkdir -p "$estado/agentes" "$conversas/-proj" "$tmp/bin"
+printf '#!/bin/sh\nexit 0\n' >"$tmp/bin/notify-send"
+printf '#!/bin/sh\nexit 0\n' >"$tmp/bin/pkill"
+printf '#!/bin/sh\nexit 0\n' >"$tmp/bin/xdg-open"
+chmod +x "$tmp/bin/"*
+
+# Porta livre para o app, fora da do usuário.
+porta=$((20000 + RANDOM % 20000))
+rodar() {
+  env -u HYPRLAND_INSTANCE_SIGNATURE PATH="$tmp/bin:$PATH" XDG_STATE_HOME="$tmp/state" \
+    XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" JANGADA_CLAUDE_PROJETOS="$conversas" \
+    JANGADA_PROJETOS="$tmp/Projetos" JANGADA_WORKTREES="$tmp/wt" JANGADA_PAINEL_PORTA="$porta" "$@"
+}
+painel() { rodar "$repo_jangada/bin/jangada-painel" "$@"; }
+consulta() { python3 - "$cache"; }
+jq_ok() { jq -e "$@" >/dev/null; }
+
+# Tudo a poucos minutos de agora, para cair no "hoje" do hoje.json (falha só
+# nos 3 primeiros minutos do dia). O parecer velho, de 9 dias atrás, entra nos
+# 30 dias do filtro do app: 1 de 3 entregas aprovadas de primeira.
+antes="$(date -Iseconds -d '-3 minutes')"
+depois="$(date -Iseconds -d '-2 minutes')"
+agora="$(date -Iseconds)"
+
+# validar.jsonl: uma entrega reprovada e depois aprovada, outra aprovada de
+# primeira. O projeto vem com nome real e maiúscula, como o jangada grava.
+{
+  jq -cn --arg d "$antes" '{data: $d, projeto: "Meu Projeto", rotulo: "meu-projeto", rodada: 1, resultado: "revisar", etapa: "revisor", revisor: "agy", modelo: "", autor: "claude", arquivos: 2, mais: 40, menos: 3, itens: 2, segundos: 90}'
+  jq -cn --arg d "$depois" '{data: $d, projeto: "Meu Projeto", rotulo: "meu-projeto", rodada: 2, resultado: "aprovado", etapa: "revisor", revisor: "agy", modelo: "", autor: "claude", arquivos: 2, mais: 45, menos: 3, itens: 0, segundos: 60}'
+  jq -cn --arg d "$agora" '{data: $d, projeto: "Meu Projeto", rotulo: "meu-projeto", rodada: 1, resultado: "aprovado", etapa: "revisor", revisor: "agy", modelo: "", autor: "claude", arquivos: 1, mais: 5, menos: 0, itens: 0, segundos: 30}'
+} >"$estado/validar.jsonl"
+# Parecer do mesmo segundo de uma linha do validar.jsonl: não conta de novo.
+printf 'STATUS: APROVADO\n' >"$estado/agentes/validacao-meu-projeto-r2.md"
+touch -d "$depois" "$estado/agentes/validacao-meu-projeto-r2.md"
+# Pareceres antigos do jangada-par: o r1 foi sobrescrito depois do r2, e a
+# ordem certa é a do mtime. A avaliacao-* não é revisão.
+printf 'STATUS: REVISAR\n\n1. falta teste\n2. nome ruim\n' >"$estado/agentes/parecer-velho--tarefa-r2.md"
+touch -d '-10 days' "$estado/agentes/parecer-velho--tarefa-r2.md"
+printf '# Parecer\n\nSTATUS: APROVADO\n' >"$estado/agentes/parecer-velho--tarefa-r1.md"
+touch -d '-9 days' "$estado/agentes/parecer-velho--tarefa-r1.md"
+printf 'STATUS: APROVADO\n' >"$estado/agentes/avaliacao-velho--tarefa-r1.md"
+
+# Histórico de estados e uma sessão aberta.
+{
+  jq -cn --arg d "$antes" '{data: $d, sessao: "meu-projeto", projeto: "Meu Projeto", agente: "claude", estado: "inicio"}'
+  jq -cn --arg d "$antes" '{data: $d, sessao: "meu-projeto", projeto: "Meu Projeto", agente: "claude", estado: "aguardando"}'
+  jq -cn --arg d "$depois" '{data: $d, sessao: "meu-projeto", projeto: "Meu Projeto", agente: "claude", estado: "foco"}'
+  jq -cn --arg d "$agora" '{data: $d, sessao: "meu-projeto", projeto: "Meu Projeto", agente: "claude", estado: "trabalhando"}'
+} >"$estado/eventos-agentes.jsonl"
+jq -n --arg d "$antes" '{sessao: "meu-projeto", raiz: "/x/Meu Projeto", agente: "claude", estado: "trabalhando", desde: $d, atualizado: $d}' \
+  >"$estado/agentes/meu-projeto.json"
+
+# Conversa do Claude: a mesma resposta em duas linhas (a primeira com a saída
+# parcial), um ciclo de retrabalho (edita, o teste falha, edita de novo), uma
+# recusa de permissão e uma linha <synthetic>, que não é consumo real.
+cwd="$tmp/Projetos/Meu Projeto"
+linha() { jq -cn --arg d "$agora" --arg c "$cwd" "$@"; }
+assistente() {
+  linha --arg id "$1" --arg r "$2" --argjson s "$3" --argjson b "$4" --arg m "${5:-claude-opus-5-5}" \
+    '{type: "assistant", timestamp: $d, cwd: $c, sessionId: "conv1", requestId: $r,
+      message: {id: $id, model: $m, content: $b,
+        usage: {input_tokens: 10, output_tokens: $s, cache_creation_input_tokens: 100,
+                cache_read_input_tokens: 1000, output_tokens_details: {thinking_tokens: 5}}}}'
+}
+resultado() {
+  linha --arg t "$1" --argjson e "$2" --arg x "$3" \
+    '{type: "user", timestamp: $d, cwd: $c, sessionId: "conv1",
+      message: {role: "user", content: [{type: "tool_result", tool_use_id: $t, is_error: $e, content: $x}]}}'
+}
+{
+  assistente m1 r1 16 '[{"type": "text", "text": "vou"}]'
+  assistente m1 r1 250 '[{"type": "tool_use", "id": "t1", "name": "Edit", "input": {"file_path": "/p/a.R"}}]'
+  resultado t1 false ok
+  assistente m2 r2 30 '[{"type": "tool_use", "id": "t2", "name": "Bash", "input": {"command": "testes/verificar.sh"}}]'
+  resultado t2 true 'Exit code 1'
+  assistente m3 r3 40 '[{"type": "tool_use", "id": "t3", "name": "Edit", "input": {"file_path": "/p/a.R"}}]'
+  resultado t3 false ok
+  assistente m4 r4 20 '[{"type": "tool_use", "id": "t4", "name": "Bash", "input": {"command": "rm -rf x"}}]'
+  resultado t4 true "The user doesn't want to proceed with this tool use."
+  assistente m5 r5 0 '[{"type": "text", "text": "x"}]' '<synthetic>'
+} >"$conversas/-proj/conv1.jsonl"
+
+# Caso 1: primeira coleta.
+if painel --gerar >"$tmp/coleta1.json" 2>"$tmp/erro1"; then ok "caso 1: coleta sem erro"; else falha "caso 1: coleta: $(cat "$tmp/erro1")"; fi
+conferir "caso 1: lê as 10 linhas da conversa" jq_ok '.linhas_lidas == 10' "$tmp/coleta1.json"
+conferir "caso 1: resposta repetida conta uma vez, com a saída final" \
+  [ "$(consulta <<'PY'
+import sys, pyarrow.dataset as ds
+t = ds.dataset(sys.argv[1] + "/mensagens").to_table().to_pylist()
+m1 = [x for x in t if x["id"] == "m1:r1"]
+print(len(t), len(m1), m1[0]["saida"], m1[0]["raciocinio"], m1[0]["projeto"], m1[0]["sessao"])
+PY
+)" = "4 1 250 5 meu-projeto meu-projeto" ]
+conferir "caso 1: falha de teste é erro; recusa do usuário não" \
+  [ "$(consulta <<'PY'
+import sys, pyarrow.dataset as ds
+t = {x["id"]: x["erro"] for x in ds.dataset(sys.argv[1] + "/resultados").to_table().to_pylist()}
+f = {x["id"]: x["alvo"] for x in ds.dataset(sys.argv[1] + "/ferramentas").to_table().to_pylist()}
+print(t["t1"], t["t2"], t["t4"], f["t1"], f["t2"])
+PY
+)" = "False True False a.R testes" ]
+conferir "caso 1: rodadas, entregas, pareceres antigos e slug do projeto" \
+  [ "$(consulta <<'PY'
+import sys, pyarrow.parquet as pq
+t = pq.read_table(sys.argv[1] + "/validacoes.parquet").to_pylist()
+print(" ".join(f'{x["projeto"]}:{x["rodada"]}:{x["resultado"]}:{x["entrega"]}:{x["origem"][0]}' for x in t))
+PY
+)" = "meu-projeto:1:revisar:meu-projeto#1:v meu-projeto:2:aprovado:meu-projeto#1:v meu-projeto:1:aprovado:meu-projeto#2:v velho:1:revisar:velho--tarefa#1:p velho:2:aprovado:velho--tarefa#1:p" ]
+conferir "caso 1: indicadores do dia" \
+  jq_ok '.entregas_aprovadas == 2 and .aprovacao_1a_rodada == 50 and .tokens.saida == 340
+    and .tokens.cache_lido == 4000 and .aguardando_segundos >= 55' "$cache/hoje.json"
+
+# Caso 2: a segunda coleta não relê nada; uma linha nova é lida sozinha.
+painel --gerar >"$tmp/coleta2.json" 2>/dev/null
+conferir "caso 2: segunda coleta incremental" jq_ok '.linhas_lidas == 0 and .mensagens_novas == 0' "$tmp/coleta2.json"
+assistente m6 r6 7 '[{"type": "text", "text": "fim"}]' >>"$conversas/-proj/conv1.jsonl"
+assistente m1 r1 250 '[{"type": "text", "text": "retomada"}]' >>"$conversas/-proj/conv1.jsonl"
+painel --gerar >"$tmp/coleta3.json" 2>/dev/null
+conferir "caso 2: só as linhas novas, sem duplicar a resposta já contada" \
+  jq_ok '.linhas_lidas == 2 and .mensagens_novas == 1' "$tmp/coleta3.json"
+
+# Caso 3: módulo da barra.
+conferir "caso 3: --waybar com o app parado" \
+  jq_ok '.class == "parado" and (.tooltip | test("aprovação na 1ª rodada: 50%"))' <(painel --waybar)
+: >"$cache/atualizando"
+conferir "caso 3: --waybar durante a coleta" jq_ok '.class == "atualizando"' <(painel --waybar)
+rm -f "$cache/atualizando"
+echo "a coleta falhou" >"$cache/erro.txt"
+conferir "caso 3: --waybar com erro" jq_ok '.class == "erro" and (.tooltip | test("falhou"))' <(painel --waybar)
+rm -f "$cache/erro.txt"
+
+# Caso 4: entrega nova que começa barrada na verificação local, e sessão
+# esquecida em aguardando (sem evento depois), que conta no máximo 12 horas.
+mkdir -p "$tmp/e5"
+{
+  jq -cn '{data: "2026-01-01T10:00:00-03:00", projeto: "x", rotulo: "x", rodada: 1, resultado: "revisar", etapa: "revisor", revisor: "agy", modelo: "", autor: "claude"}'
+  jq -cn '{data: "2026-01-02T10:00:00-03:00", projeto: "x", rotulo: "x", rodada: 1, resultado: "revisar", etapa: "local", revisor: "agy", modelo: "", autor: "claude"}'
+} >"$tmp/e5/validar.jsonl"
+conferir "caso 4: rodada 1 barrada na verificação local abre outra entrega" \
+  [ "$(JANGADA_ESTADO="$tmp/e5" PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=default/painel python3 -c '
+import coletor
+print(" ".join(l["entrega"] for l in coletor.validacoes()))')" = "x#1 x#2" ]
+conferir "caso 4: sessão esquecida em aguardando conta no máximo 12 horas" \
+  [ "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=default/painel python3 -c '
+import datetime as dt, coletor
+agora = dt.datetime.now(dt.timezone.utc)
+evs = [{"sessao": "s", "estado": "aguardando", "data": agora - dt.timedelta(hours=30)}]
+print(int(coletor.segundos_aguardando(evs, agora - dt.timedelta(hours=48), agora, agora)))')" = "43200" ]
+
+# Caso 5: indicadores em R e o app no ar.
+if ! command -v Rscript >/dev/null 2>&1 \
+  || ! Rscript -e 'for (p in c("shiny", "bslib", "bsicons", "plotly", "DT", "arrow", "jsonlite")) if (!requireNamespace(p, quietly = TRUE)) quit(status = 1)' 2>/dev/null; then
+  echo "R ou pacotes do app ausentes; caso 5 ignorado"
+else
+  conferir "caso 5: indicadores em R sobre o cache" \
+    [ "$(cd default/painel && Rscript -e '
+      source("indicadores.R")
+      d <- carregar_cache(commandArgs(TRUE)[1])
+      e <- entregas(d$validacoes)
+      r <- resumo_aprovacao(e[e$projeto == "meu-projeto", ])
+      b <- consumo_por(d$mensagens[d$mensagens$modelo != "<synthetic>", ], "projeto")
+      cat(nrow(e), r$primeira_pct, r$rodadas_media, b$saida[b$projeto == "meu-projeto"], nrow(sessoes_paradas(d$sessoes, e)))
+    ' "$cache" 2>/dev/null)" = "3 50 1.5 347 0" ]
+  conferir "caso 5: sessão parada sem nenhuma entrega aprovada" \
+    [ "$(cd default/painel && Rscript -e '
+      source("indicadores.R")
+      v <- data.frame(data = Sys.time() - 5 * 86400, projeto = "p", rotulo = "s", rodada = 1L,
+                      resultado = "revisar", etapa = "revisor", revisor = "agy", modelo = "", autor = "claude",
+                      mais = NA_real_, menos = NA_real_, entrega = "s#1", stringsAsFactors = FALSE)
+      s <- data.frame(sessao = "s", projeto = "p", agente = "claude", estado = "aguardando",
+                      desde = Sys.time() - 5 * 86400, stringsAsFactors = FALSE)
+      cat(nrow(sessoes_paradas(s, entregas(v))))
+    ' 2>&1)" = "1" ]
+  conferir "caso 5: o servidor do app calcula os cartões" \
+    [ "$(cd default/painel && Rscript -e '
+      options(jangada.painel.cache = commandArgs(TRUE)[1])
+      shiny::testServer(shiny::shinyAppDir("."), {
+        session$setInputs(periodo = c(Sys.Date() - 30, Sys.Date()), projeto = NULL, agente = NULL, par = NULL)
+        cat(output$vb_primeira, output$vb_limite, output$vb_saida)
+      })
+    ' "$cache" 2>/dev/null)" = "33% 0 347" ]
+  if painel >/dev/null 2>"$tmp/erro4"; then
+    ok "caso 5: o app sobe"
+    conferir "caso 5: a página tem o título do painel" \
+      grep -q "Indicadores do jangada" <(curl -s --max-time 5 "http://127.0.0.1:$porta")
+    conferir "caso 5: --waybar vê o app no ar" jq_ok '.class == "no-ar"' <(painel --waybar)
+    painel --parar >/dev/null
+    sleep 1
+    conferir "caso 5: --parar encerra o app" \
+      bash -c "! curl -s -o /dev/null --max-time 1 http://127.0.0.1:$porta"
+  else
+    falha "caso 5: o app não subiu: $(cat "$tmp/erro4")"
+    painel --parar >/dev/null
+  fi
+fi
+
+if ((falhas)); then
+  echo "$falhas teste(s) do painel falharam"
+  exit 1
+fi
+echo "todos os testes do painel passaram"
