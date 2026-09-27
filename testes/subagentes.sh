@@ -10,6 +10,8 @@ falhas=0
 ok()    { printf 'ok    %s\n' "$*"; }
 falha() { printf 'FALHA %s\n' "$*"; falhas=$((falhas + 1)); }
 conferir() { local d="$1"; shift; if "$@"; then ok "$d"; else falha "$d"; fi; }
+# jq -e em silêncio: redirecionar a linha do conferir calaria o ok e a FALHA.
+jqok() { jq "$@" >/dev/null; }
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
@@ -68,8 +70,8 @@ echo "alheio" >"$tmp/home/.claude/agents/leitor.md"
 instalar
 agentes_json="$tmp/home/.gemini/config/agents.json"
 conferir "agents.json aponta para a pasta do jangada" \
-  jq -e --arg p "$repo_jangada/default/agy/agents" '[.entries[].path] == ["/outro/agents", $p]' "$agentes_json" >/dev/null
-conferir "agents.json mantém as outras chaves" jq -e 'has("inherits")' "$agentes_json" >/dev/null
+  jqok -e --arg p "$repo_jangada/default/agy/agents" '[.entries[].path] == ["/outro/agents", $p]' "$agentes_json"
+conferir "agents.json mantém as outras chaves" jqok -e 'has("inherits")' "$agentes_json"
 conferir "agents.json ganhou cópia de segurança" \
   bash -c 'ls "$1"/agents.json.jangada-*.bak >/dev/null 2>&1' _ "$tmp/home/.gemini/config"
 conferir "subagente do Claude ligado ao repositório" \
@@ -81,6 +83,36 @@ instalar
 conferir "rodar de novo não muda nada" \
   bash -c '[ "$1" = "$(cat "$2")" ] && [ "$3" = "$(find "$4" -name "*.bak" | wc -l)" ] && grep -q "já registrados" "$5"' \
   _ "$antes" "$agentes_json" "$n_bak" "$tmp/home/.gemini/config" "$tmp/saida.log"
+
+# Registros de subagentes e delegações, com as amostras de
+# testes/amostras-subagentes.py.
+amostra="$tmp/amostra"
+mkdir -p "$amostra/projeto"
+python3 testes/amostras-subagentes.py "$amostra" "$amostra/projeto"
+subagentes() {
+  env -u JANGADA_ESTADO JANGADA_CLAUDE_PROJETOS="$amostra/claude/projects" JANGADA_AGY_DIR="$amostra/agy" \
+    XDG_STATE_HOME="$amostra/state" "$repo_jangada/bin/jangada-subagentes" "$@"
+}
+subagentes --registros >"$tmp/registros.jsonl"
+reg() { jq -e --arg id "$1" "select(.id == \$id) | $2" "$tmp/registros.jsonl" >/dev/null; }
+conferir "registros: primeiro plano com totais e retorno da conversa mãe" \
+  reg a1 '.papel == "explorador" and .forma == "foreground" and .tokens == 20000 and .retorno_tokens == 104
+          and .casamento and .edicoes == 0 and (.autorrevisao | not) and .sem_fonte == 0'
+conferir "registros: segundo plano com totais do aviso e retorno do handback" \
+  reg a2 '.estado == "completed" and .tokens == 50000 and .ferramentas == 7 and .retorno_tokens > 100
+          and .edicoes == 1 and .autorrevisao and .generico and .sem_fonte == 20'
+conferir "registros: sem totais na mãe, usa o contexto do último turno" \
+  reg a3 '.tokens == 500 and .retorno_tokens == null and .casamento == null'
+conferir "registros: subagente do agy com passos e escrita" \
+  reg s1 '.origem == "agy" and .passos == 5 and .edicoes == 1 and .autorrevisao and .generico'
+subagentes --entrega "$amostra/projeto" >"$tmp/entrega.json"
+conferir "entrega: soma subagentes e delegações da pasta" jqok -e '.n == 5 and .claude == {n: 3, tokens: 70500}
+  and .agy == {n: 2, passos: 17} and .papeis == {explorador: 2} and .edicoes == 2 and .autorrevisao == 2
+  and .recusas == 1' "$tmp/entrega.json"
+subagentes --entrega "$amostra/projeto" --desde 2026-09-27T10:05:30Z >"$tmp/entrega.json"
+conferir "entrega: --desde deixa só o que veio depois" jqok -e '.n == 0 and .recusas == 1' "$tmp/entrega.json"
+subagentes --entrega "$tmp" >"$tmp/entrega.json"
+conferir "entrega: outra pasta não conta nada" jqok -e '.n == 0 and .recusas == 0' "$tmp/entrega.json"
 
 echo
 if ((falhas)); then

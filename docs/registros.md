@@ -52,6 +52,14 @@ Caminhos usados abaixo:
   - `itens`: linhas do parecer que começam por `N.`. É 0 no `limite` e no
     `erro`, que não têm parecer.
   - `segundos`: `$SECONDS` do script, do início ao registro.
+  - `subagentes` (opcional, a partir de 27/09/2026): resumo dos subagentes
+    e delegações da entrega, dado por `jangada-subagentes --entrega`. Conta
+    o que rodou na pasta desde a última aprovação (mtime do
+    `validacao-*.aprovado`), desde o início da sessão ou desde a data do
+    commit base. Campos: `n` (subagentes mais delegações atendidas),
+    `claude` (`n`, `tokens`), `agy` (`n`, `passos`), `papeis` (contagem por
+    papel), `retorno_tokens`, `edicoes`, `autorrevisao` e `recusas`. Falta
+    nas linhas antigas e quando o módulo falha.
 - **Desde:** 26/09/2026 21:29 (primeira linha). Em 26/09/2026 havia 11
   linhas, todas do projeto jangada, revisor agy, autor claude, modelo vazio:
   7 aprovado e 4 revisar.
@@ -263,6 +271,19 @@ resultado.
   `tool_use` do `Agent` na conversa mãe.
 - 11 subagentes em 26/09/2026. O `find -name '*.jsonl'` do
   `jangada-consumo` já entra nessas pastas.
+- **Totais na conversa mãe.** No primeiro plano, o `tool_result` do `Agent`
+  traz `toolUseResult.totalTokens`, `totalDurationMs`, `totalToolUseCount`
+  e o texto devolvido. No segundo plano, o `tool_result` só diz
+  `status: async_launched`; os totais vêm depois numa linha `attachment`
+  de tipo `queued_command`, com `attachment.usage` (`totalTokens`,
+  `toolUses`, `durationMs`) e um `prompt` com `<task-notification>`,
+  `<task-id>ID</task-id>` e `<status>completed</status>` (ou `killed`). O
+  relatório chega à parte, numa mensagem que começa por "Another Claude
+  session sent a message:" com `<agent-message from="ID">`.
+- **`totalTokens` é o contexto do último turno** (entrada, cache criado,
+  cache lido e saída), não a soma dos turnos. Sem linha na mãe (conversa
+  antiga ou subagente morto), o `jangada-subagentes` usa a mesma conta no
+  último turno do `agent-ID.jsonl`.
 
 ### Outras linhas úteis
 
@@ -428,6 +449,13 @@ subagente tem `.db` próprio.
   - `agente`: `claude` ou `agy`.
   - `estado`: `inicio`, `trabalhando`, `aguardando`, `concluido`, `fim` ou
     `foco`. O `SESSAO.json` grava `iniciado`; aqui o valor é `inicio`.
+- **Subagentes do Claude:** com o hook de subagentes do Claude Code
+  (SubagentStart e SubagentStop), o `eventos-agentes.jsonl` ganha linhas
+  com estado `subagente-inicio` e `subagente-fim`. Elas trazem três campos
+  opcionais a mais: `subagente_id` (o `agent_id`, igual ao `agent-ID` de
+  `subagents/` da conversa), `subagente_tipo` (o `agent_type`) e `conversa`
+  (o `session_id`). Essas linhas não mudam o estado da sessão. Quem mede
+  tempo por estado deve ignorá-las, como ignora `foco`.
 - **Acumulado.** Ninguém apaga; o painel não depende de apagar.
 - **Limites do registro:**
   - só sessões abertas pelo `jangada-agente` (com `JANGADA_SESSAO`);
@@ -439,6 +467,36 @@ subagente tem `.db` próprio.
   - os hooks rodam da cópia instalada em `~/.local/share/jangada/bin`
     (`~/.claude/settings.json`, `~/.gemini/config/hooks.json`). O registro
     só começa depois de instalar a versão nova.
+
+## 9. delegacoes.jsonl (novo, a partir de 27/09/2026)
+
+- **Caminho:** `$JANGADA_ESTADO/delegacoes.jsonl`.
+- **Quem escreve:** `bin/jangada-delegar`, função `registrar`, uma linha
+  por chamada, atendida ou recusada. O `bin/jangada-isolar` libera a
+  escrita para o agente isolado.
+- **Exemplo:**
+
+  ```json
+  {"data":"2026-09-27T09:10:00-03:00","sessao":"jangada","projeto":"jangada","pasta":"/home/u/Projetos/jangada","papel":"explorador","destino":"agy","modelo":"gemini-3.8-flash-low","segundos":41,"codigo_saida":0,"palavras":250,"tokens_retorno":420,"passos":18,"tokens_agy":61000,"cota_antes":93.87,"cota_depois":93.87,"recusa":false,"motivo":"","conversa":"..."}
+  ```
+
+- **Campos:**
+  - `pasta`: raiz git da pasta atual; é por ela que o validar liga a
+    delegação à entrega.
+  - `destino`: `agy` ou `claude` (perfil sem agy; aí sempre recusa).
+  - `modelo`: Flash com o esforço do papel.
+  - `codigo_saida`: 0 atendida, 4 recusada.
+  - `palavras`, `tokens_retorno`: tamanho do que voltou ao Claude
+    (caracteres impressos divididos por 4, relatório cortado em 600
+    palavras).
+  - `passos`: linhas da tabela `steps` do `.db` da conversa do agy.
+  - `tokens_agy`: `usage.total_tokens` da saída JSON do agy.
+  - `cota_antes`, `cota_depois`: `remaining_fraction` do balde `gemini-5h`
+    do `/usage`, em porcentagem com duas casas. O antes pode vir do cache
+    de 5 minutos. Uma delegação pequena não move esse número.
+  - `recusa`, `motivo`: por que não delegou (cota abaixo de 20%, agy
+    falhou, agente não achado, ação negada sem resposta, perfil).
+  - Campos numéricos sem valor ficam `null`.
 
 ## Indicadores e registros
 

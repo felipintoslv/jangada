@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Subagentes do Claude e do agy e delegações do jangada-delegar.
+#
+# Uso: jangada-subagentes --entrega PASTA [--desde ISO] [--ate ISO]
+#        resumo de uma entrega em JSON (campo subagentes do validar.jsonl)
+#      jangada-subagentes --registros
+#        um JSON por linha para cada subagente e delegação lida
+#
+# A leitura fica em default/painel/subagentes.py, a mesma do painel.
+set -euo pipefail
+exec python3 "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../default/painel/subagentes.py" "$@"

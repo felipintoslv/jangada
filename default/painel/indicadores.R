@@ -180,10 +180,11 @@ tokens_por_entrega <- function(ent, m) {
 # C. Tempo e atenção -----------------------------------------------------------
 
 # Intervalos de estado por sessão: cada evento vale até o próximo evento de
-# estado da mesma sessão (o foco não muda o estado); o último vale até agora,
-# mas nunca além de 12 horas, para uma sessão esquecida não inflar a conta.
+# estado da mesma sessão (o foco e os subagentes não mudam o estado); o
+# último vale até agora, mas nunca além de 12 horas, para uma sessão
+# esquecida não inflar a conta.
 intervalos_estado <- function(ev, agora = Sys.time()) {
-  ev <- ev[ev$estado != "foco", ]
+  ev <- ev[ev$estado != "foco" & !startsWith(ev$estado, "subagente"), ]
   if (!nrow(ev)) return(data.frame())
   ev <- ev[order(ev$sessao, ev$data), ]
   do.call(rbind, lapply(split(ev, ev$sessao), function(s) {

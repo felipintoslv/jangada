@@ -9,6 +9,8 @@ falhas=0
 ok()    { printf 'ok    %s\n' "$*"; }
 falha() { printf 'FALHA %s\n' "$*"; falhas=$((falhas + 1)); }
 conferir() { local d="$1"; shift; if "$@"; then ok "$d"; else falha "$d"; fi; }
+# jq -e em silêncio: redirecionar a linha do conferir calaria o ok e a FALHA.
+jqok() { jq "$@" >/dev/null; }
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
@@ -28,7 +30,9 @@ printf '%s\n' "$@" >"$FALSO_DIR/agy.args"
 pwd >"$FALSO_DIR/agy.pasta"
 [[ -n "${FALSO_LOG:-}" ]] && echo "$FALSO_LOG" >"$HOME/.gemini/antigravity-cli/log/cli-1.log"
 [[ "${FALSO_CODIGO:-0}" != 0 ]] && { echo "falha falsa" >&2; exit "$FALSO_CODIGO"; }
-jq -n --arg r "$FALSO_RESPOSTA" '{conversation_id: "c1", status: "SUCCESS", response: $r, denied_actions: []}'
+jq -n --arg r "$FALSO_RESPOSTA" --arg n "${FALSO_NEGADO:-}" \
+  '{conversation_id: "c1", status: "SUCCESS", response: $r,
+    denied_actions: (if $n == "" then [] else [{action: "read_url", display_name: $n}] end)}'
 EOF
 chmod +x "$tmp/bin/agy"
 
@@ -36,8 +40,8 @@ delegar() {
   rm -f "$tmp/falso/agy.args"
   (cd "$tmp/projeto" && env -u JANGADA_DELEGAR -u XDG_CACHE_HOME -u XDG_STATE_HOME -u XDG_CONFIG_HOME \
     HOME="$tmp/home" PATH="$tmp/bin:$PATH" JANGADA_PATH="$repo_jangada" FALSO_DIR="$tmp/falso" \
-    FALSO_COTA="${COTA:-0.9}" FALSO_RESPOSTA="${RESPOSTA:-relatorio em a.sh:1}" \
-    FALSO_CODIGO="${CODIGO:-0}" FALSO_LOG="${LOG:-}" FALSO_USAGE_FALHA="${USAGE_FALHA:-0}" \
+    FALSO_COTA="${COTA:-0.9}" FALSO_RESPOSTA="${RESPOSTA-relatorio em a.sh:1}" \
+    FALSO_CODIGO="${CODIGO:-0}" FALSO_NEGADO="${NEGADO:-}" FALSO_LOG="${LOG:-}" FALSO_USAGE_FALHA="${USAGE_FALHA:-0}" \
     ${DELEGAR:+JANGADA_DELEGAR=$DELEGAR} \
     "$repo_jangada/bin/jangada-delegar" "$@" >"$tmp/saida" 2>"$tmp/erro")
   echo $? >"$tmp/codigo"
@@ -54,7 +58,15 @@ conferir "caso 1: roda na pasta atual" [ "$(cat "$tmp/falso/agy.pasta")" = "$tmp
 
 delegar verificador "confira"
 conferir "caso 2: Flash high para o verificador" grep -qx -- gemini-3.8-flash-high "$tmp/falso/agy.args"
-conferir "caso 2: cota lida uma vez só (cache)" [ "$(wc -l <"$tmp/falso/usage.chamadas")" = 1 ]
+# Antes da primeira, depois de cada uma; o antes da segunda vem do cache.
+conferir "caso 2: cota do antes vem do cache" [ "$(wc -l <"$tmp/falso/usage.chamadas")" = 3 ]
+reg="$tmp/home/.local/state/jangada/delegacoes.jsonl"
+conferir "caso 2: uma linha por chamada" [ "$(wc -l <"$reg")" = 2 ]
+conferir "caso 2: linha com os campos" jqok -e 'select(.papel == "verificador")
+  | .destino == "agy" and .modelo == "gemini-3.8-flash-high" and .codigo_saida == 0 and .recusa == false
+    and .cota_antes == 90 and .cota_depois == 90 and .palavras == 3 and .tokens_retorno == 5
+    and .conversa == "c1" and .pasta != "" and (.segundos | type) == "number"' "$reg"
+
 
 rm -f "$tmp/home/.cache/jangada/agy-usage.json"
 COTA=0.15 delegar leitor "leia"
@@ -62,6 +74,8 @@ conferir "caso 3: cota baixa recusa com código 4" [ "$(codigo)" = 4 ]
 conferir "caso 3: agy não é chamado" test ! -e "$tmp/falso/agy.args"
 conferir "caso 3: diz a cota" grep -q "15%" "$tmp/erro"
 conferir "caso 3: indica o subagente do Claude" grep -q "subagente leitor do Claude" "$tmp/saida"
+conferir "caso 3: recusa registrada com o motivo" \
+  jqok -se 'last | .recusa and .codigo_saida == 4 and (.motivo | test("15"))' "$reg"
 
 rm -f "$tmp/home/.cache/jangada/agy-usage.json"
 USAGE_FALHA=1 delegar leitor "leia"
@@ -88,8 +102,17 @@ conferir "caso 8: --arquivo grava o relatório" grep -qx curto "$tmp/rel.md"
 DELEGAR=claude delegar explorador "mapeie"
 conferir "caso 9: perfil claude recusa sem chamar o agy" \
   bash -c '[ "$1" = 4 ] && [ ! -e "$2" ]' _ "$(codigo)" "$tmp/falso/agy.args"
+conferir "caso 9: registrada com destino claude" jqok -se 'last | .destino == "claude" and .recusa' "$reg"
 DELEGAR=nativo delegar explorador "mapeie"
 conferir "caso 10: sessão do agy aponta o invoke_subagent" grep -q invoke_subagent "$tmp/erro"
+
+RESPOSTA="" NEGADO=ReadUrlContent delegar pesquisador "busque"
+conferir "caso 12: ação negada sem resposta recusa e diz o quê" \
+  bash -c '[ "$1" = 4 ] && grep -q "negou ReadUrlContent" "$2"' _ "$(codigo)" "$tmp/erro"
+NEGADO=ReadUrlContent delegar pesquisador "busque"
+conferir "caso 13: ação negada com resposta avisa e entrega" \
+  bash -c '[ "$1" = 0 ] && grep -q "negou: ReadUrlContent" "$2"' _ "$(codigo)" "$tmp/erro"
+conferir "caso 13: pedido manda seguir depois da negação" grep -q "não pare" "$tmp/falso/agy.args"
 
 delegar revisor "revise"
 conferir "caso 11: papel desconhecido dá código 2" [ "$(codigo)" = 2 ]

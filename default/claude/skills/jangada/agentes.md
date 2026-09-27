@@ -83,10 +83,11 @@ guardado no estado.
 Cada mudança de estado vira também uma linha em
 `~/.local/state/jangada/eventos-agentes.jsonl`, com `data`, `sessao`,
 `projeto` (nome da pasta da raiz), `agente` e `estado`. Além dos estados
-acima, o arquivo tem `inicio` e `fim` (SessionStart e SessionEnd do Claude)
-e `foco` (cada `--focar` numa sessão viva). Só gravam o histórico os hooks e
-o `jangada-agentes`, por `jangada_registrar_evento` (`bin/jangada-config`),
-que nunca falha: um erro ao gravar não pode derrubar o hook. O histórico só
+acima, o arquivo tem `inicio` e `fim` (SessionStart e SessionEnd do Claude),
+`foco` (cada `--focar` numa sessão viva) e `subagente-inicio` e
+`subagente-fim` (com `subagente_id`, `subagente_tipo` e `conversa`). Só
+gravam o histórico os hooks e o `jangada-agentes`, por
+`jangada_registrar_evento` (`bin/jangada-config`), que nunca falha: um erro ao gravar não pode derrubar o hook. O histórico só
 cresce; o mapa de todos os registros usados pelo painel de indicadores está
 em `docs/registros.md`.
 
@@ -98,7 +99,13 @@ o caminho até `/bin/`). Eventos: `UserPromptSubmit` e `PostToolUse` (trabalhand
 `Notification` (aguardando; `auth_success` é ignorado e `idle_prompt` vira
 concluído sem aviso), `Stop` (concluído), `SessionStart` (iniciado) e
 `SessionEnd` (concluído; `reason=clear` não muda o estado). Todo evento grava
-`conversa` com o `session_id`. `jangada-verificar` confere cada evento.
+`conversa` com o `session_id`. `SubagentStart` e `SubagentStop` (Claude Code
+2.1.283 confirmado) trazem `agent_id` e `agent_type`, e o Stop traz também
+`agent_transcript_path` e `last_assistant_message`. Eles só gravam uma linha
+no histórico: não mexem no estado nem na barra, porque o agente principal
+segue trabalhando. O `Stop` comum não dispara no fim de um subagente. Quem
+lê o histórico e mede tempo por estado deve pular os estados `subagente-*`,
+como já pula o `foco`. `jangada-verificar` confere cada evento.
 A `mensagem` vem de `.message` (Notification), `.last_assistant_message`
 (Stop) ou `.prompt` (UserPromptSubmit), primeira linha; o `PostToolUse`
 mantém a anterior. Toda alteração do arquivo passa por

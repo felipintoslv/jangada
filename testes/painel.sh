@@ -64,11 +64,12 @@ printf '# Parecer\n\nSTATUS: APROVADO\n' >"$estado/agentes/parecer-velho--tarefa
 touch -d '-9 days' "$estado/agentes/parecer-velho--tarefa-r1.md"
 printf 'STATUS: APROVADO\n' >"$estado/agentes/avaliacao-velho--tarefa-r1.md"
 
-# Histórico de estados e uma sessão aberta.
+# Histórico de estados e uma sessão aberta. Foco e subagente não mudam o estado.
 {
   jq -cn --arg d "$antes" '{data: $d, sessao: "meu-projeto", projeto: "Meu Projeto", agente: "claude", estado: "inicio"}'
   jq -cn --arg d "$antes" '{data: $d, sessao: "meu-projeto", projeto: "Meu Projeto", agente: "claude", estado: "aguardando"}'
   jq -cn --arg d "$depois" '{data: $d, sessao: "meu-projeto", projeto: "Meu Projeto", agente: "claude", estado: "foco"}'
+  jq -cn --arg d "$depois" '{data: $d, sessao: "meu-projeto", projeto: "Meu Projeto", agente: "claude", estado: "subagente-inicio", subagente_id: "a1", subagente_tipo: "explorador"}'
   jq -cn --arg d "$agora" '{data: $d, sessao: "meu-projeto", projeto: "Meu Projeto", agente: "claude", estado: "trabalhando"}'
 } >"$estado/eventos-agentes.jsonl"
 jq -n --arg d "$antes" '{sessao: "meu-projeto", raiz: "/x/Meu Projeto", agente: "claude", estado: "trabalhando", desde: $d, atualizado: $d}' \

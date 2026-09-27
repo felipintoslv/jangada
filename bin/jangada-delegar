@@ -20,6 +20,9 @@
 # Relatório acima de JANGADA_DELEGAR_PALAVRAS palavras (padrão 600) sai
 # cortado, com o caminho do arquivo completo.
 #
+# Cada chamada, atendida ou recusada, acrescenta uma linha a
+# ~/.local/state/jangada/delegacoes.jsonl.
+#
 # Código de saída: 0 relatório; 2 uso errado; 4 recusa (perfil sem delegação
 # ao agy, cota baixa, agy ausente, erro ou tempo esgotado). Na recusa, a
 # última linha diz qual subagente do Claude usar. Nunca chama o Claude.
@@ -51,41 +54,71 @@ if [[ -z "${esforco[$papel]:-}" ]]; then
 fi
 modelo="gemini-3.8-flash-${esforco[$papel]}"
 
+# Uma linha por chamada em delegacoes.jsonl (docs/registros.md). Linha única
+# e curta: o >> de delegações simultâneas não se mistura.
+inicio=$SECONDS
+destino=agy; cota=""; cota_depois=""; passos=""; tokens_agy=""; conversa=""; palavras=0; retorno=0
+pasta="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+projeto="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+projeto="$(basename "$(dirname "${projeto:-$pasta/.}")")"
+registrar() {
+  mkdir -p "$JANGADA_ESTADO" 2>/dev/null || true
+  jq -nc --arg data "$(date -Iseconds)" --arg sessao "${JANGADA_SESSAO:-}" --arg projeto "$projeto" \
+    --arg pasta "$pasta" --arg papel "$papel" --arg destino "$destino" --arg modelo "$modelo" \
+    --argjson segundos "$((SECONDS - inicio))" --argjson codigo "$1" --arg motivo "${2:-}" \
+    --argjson palavras "$palavras" --argjson retorno "$retorno" --arg passos "$passos" \
+    --arg tokens_agy "$tokens_agy" --arg antes "$cota" --arg depois "$cota_depois" --arg conversa "$conversa" \
+    'def num: if . == "" then null else tonumber end;
+     {data: $data, sessao: $sessao, projeto: $projeto, pasta: $pasta, papel: $papel,
+      destino: $destino, modelo: $modelo, segundos: $segundos, codigo_saida: $codigo,
+      palavras: $palavras, tokens_retorno: $retorno, passos: ($passos | num),
+      tokens_agy: ($tokens_agy | num), cota_antes: ($antes | num), cota_depois: ($depois | num),
+      recusa: ($motivo != ""), motivo: $motivo, conversa: $conversa}' \
+    >>"$JANGADA_ESTADO/delegacoes.jsonl" 2>/dev/null || true
+}
+
 recusar() {
+  local linha="Use o subagente $papel do Claude (ferramenta Agent, subagent_type $papel)."
   echo "jangada-delegar: recusado: $1" >&2
-  echo "Use o subagente $papel do Claude (ferramenta Agent, subagent_type $papel)."
+  echo "$linha"
+  retorno=$(( (${#linha} + 3) / 4 ))
+  registrar 4 "$1"
   exit 4
 }
 
 # JANGADA_DELEGAR vem do perfil da sessão (jangada-agente). Fora de sessão
 # vale agy. O jangada-delegar é chamado pelo Claude: nativo não se aplica.
-destino="$(jangada_delegacao claude "${JANGADA_DELEGAR:-}")"
 if [[ "${JANGADA_DELEGAR:-}" == nativo ]]; then
   echo "jangada-delegar: numa sessão do agy, use invoke_subagent com o papel $papel" >&2
   exit 4
 fi
-if [[ "$destino" == claude ]]; then
+if [[ "$(jangada_delegacao claude "${JANGADA_DELEGAR:-}")" == claude ]]; then
+  destino=claude
   command -v agy >/dev/null 2>&1 || recusar "agy não instalado"
   recusar "o perfil da sessão não delega ao agy (JANGADA_DELEGAR=claude)"
 fi
 
 agy_limpo() { env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 agy "$@" </dev/null; }
 
-# Cota do Gemini (limite de 5 horas), em % restante.
+# Cota do Gemini (limite de 5 horas), em % restante, com duas casas.
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/jangada/agy-usage.json"
 mkdir -p "${cache%/*}"
-if [[ ! -s "$cache" || -n "$(find "$cache" -mmin "+${JANGADA_DELEGAR_CACHE:-5}" 2>/dev/null)" ]]; then
-  tmp="$(mktemp "$cache.XXXXXX")"
-  if agy_limpo -p "/usage" --output-format json --print-timeout 60s 2>/dev/null >"$tmp.cano" \
-     && jq -e '.command.data.groups' "$tmp.cano" >/dev/null 2>&1; then
-    mv "$tmp.cano" "$cache"
+ler_cota() {
+  local tmp
+  if [[ "${1:-}" == nova || ! -s "$cache" || -n "$(find "$cache" -mmin "+${JANGADA_DELEGAR_CACHE:-5}" 2>/dev/null)" ]]; then
+    tmp="$(mktemp "$cache.XXXXXX")"
+    if agy_limpo -p "/usage" --output-format json --print-timeout 60s 2>/dev/null >"$tmp" \
+       && jq -e '.command.data.groups' "$tmp" >/dev/null 2>&1; then
+      mv "$tmp" "$cache"
+    fi
+    rm -f "$tmp"
   fi
-  rm -f "$tmp" "$tmp.cano"
-fi
-cota="$(jq -r '[.command.data.groups[].buckets[] | select(.id == "gemini-5h") | .remaining_fraction][0] // empty
-  | . * 100 | floor' "$cache" 2>/dev/null || true)"
+  jq -r '[.command.data.groups[].buckets[] | select(.id == "gemini-5h") | .remaining_fraction][0] // empty
+    | . * 10000 | round / 100' "$cache" 2>/dev/null || true
+}
+cota="$(ler_cota)"
 [[ -n "$cota" ]] || recusar "não consegui ler a cota do agy (agy -p /usage)"
-if ((cota < ${JANGADA_DELEGAR_COTA_MIN:-20})); then
+if ((${cota%.*} < ${JANGADA_DELEGAR_COTA_MIN:-20})); then
   recusar "cota de 5 horas do Gemini em $cota%, abaixo de ${JANGADA_DELEGAR_COTA_MIN:-20}%"
 fi
 
@@ -93,7 +126,6 @@ fi
 # caminho exato: roda na raiz do repositório (o worktree da sessão já é
 # confiável), e a confiança dada aqui sai no fim. O log do agy diz se o agente do papel não foi achado: nesse caso o
 # agy responde com o agente padrão, sem avisar.
-pasta="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 conf_agy="${JANGADA_AGY_SETTINGS:-$HOME/.gemini/antigravity-cli/settings.json}"
 confiou=0
 if [[ -f "$conf_agy" ]] && ! jq -e --arg w "$(realpath "$pasta")" '(.trustedWorkspaces // []) | index($w)' "$conf_agy" >/dev/null 2>&1; then
@@ -109,6 +141,11 @@ limpar() {
 }
 trap limpar EXIT
 
+# Sem terminal, a ação negada encerra a vez do agente sem resposta.
+pedido="$pedido
+
+Se uma ferramenta ou comando for negado, não pare: responda com o que já
+achou e liste o que foi negado."
 tempo="${JANGADA_DELEGAR_TEMPO:-300}"
 codigo=0
 resposta="$(cd "$pasta" && timeout "$((tempo + 30))" env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 \
@@ -120,12 +157,22 @@ if [[ -d "$log_agy" ]] && find "$log_agy" -name 'cli-*.log' -newer "$marca" -pri
      | xargs -0r grep -l "Agent \"$papel\" not found" 2>/dev/null | grep -q .; then
   recusar "o agy não achou o agente $papel (rode ./install.sh 50)"
 fi
+conversa="$(jq -r '.conversation_id // ""' <<<"$resposta" 2>/dev/null || true)"
+tokens_agy="$(jq -r '.usage.total_tokens // ""' <<<"$resposta" 2>/dev/null || true)"
+banco="${JANGADA_AGY_CONVERSAS:-$HOME/.gemini/antigravity-cli/conversations}/$conversa.db"
+if [[ -n "$conversa" && -f "$banco" ]] && command -v sqlite3 >/dev/null 2>&1; then
+  passos="$(sqlite3 -readonly "$banco" 'select count(*) from steps' 2>/dev/null || true)"
+fi
+# A cota depois é lida de novo, sem o cache: custa uns 3 segundos.
+cota_depois="$(ler_cota nova)"
 status="$(jq -r '.status // ""' <<<"$resposta" 2>/dev/null || true)"
 [[ "$status" == SUCCESS ]] || recusar "o agy não respondeu (status ${status:-vazio})"
 texto="$(jq -r '.response // ""' <<<"$resposta")"
-[[ -n "${texto//[[:space:]]/}" ]] || recusar "o agy devolveu resposta vazia"
-
-negados="$(jq -r '.denied_actions // [] | map(tostring) | join("; ")' <<<"$resposta" 2>/dev/null || true)"
+negados="$(jq -r '.denied_actions // [] | map(.display_name // .action // tostring) | unique | join(", ")' <<<"$resposta" 2>/dev/null || true)"
+if [[ -z "${texto//[[:space:]]/}" ]]; then
+  [[ -n "$negados" ]] && recusar "o agy negou $negados e não respondeu (libere em permissions.allow de $conf_agy)"
+  recusar "o agy devolveu resposta vazia"
+fi
 [[ -n "$negados" ]] && echo "jangada-delegar: o agy negou: ${negados:0:300}" >&2
 
 palavras="$(wc -w <<<"$texto")"
@@ -137,11 +184,14 @@ if ((palavras > limite)) && [[ -z "$arquivo" ]]; then
 fi
 [[ -n "$arquivo" ]] && printf '%s\n' "$texto" >"$arquivo"
 if ((palavras > limite)); then
-  awk -v n="$limite" '
+  impresso="$(awk -v n="$limite" '
     c + NF <= n { print; c += NF; next }
-    { l = ""; for (i = 1; i <= n - c; i++) l = l (i > 1 ? " " : "") $i; if (l != "") print l; exit }' <<<"$texto"
-  echo
-  echo "[relatório cortado em $limite de $palavras palavras; completo em $arquivo]"
+    { l = ""; for (i = 1; i <= n - c; i++) l = l (i > 1 ? " " : "") $i; if (l != "") print l; exit }' <<<"$texto")"
+  impresso+=$'\n\n'"[relatório cortado em $limite de $palavras palavras; completo em $arquivo]"
 else
-  printf '%s\n' "$texto"
+  impresso="$texto"
 fi
+printf '%s\n' "$impresso"
+# Estimativa do que entra no contexto do Claude: 4 caracteres por token.
+retorno=$(( (${#impresso} + 3) / 4 ))
+registrar 0

@@ -4,6 +4,7 @@
 #
 # Uso (configurado em ~/.claude/settings.json):
 #   jangada-hook-claude trabalhando|aguardando|concluido|inicio|fim
+#   jangada-hook-claude subagente-inicio|subagente-fim
 # Recebe o JSON do evento pela entrada padrão.
 
 {
@@ -27,6 +28,20 @@
   cwd="$(campo .cwd)"
   conversa="$(campo .session_id)"
   tipo="$(campo .notification_type)"
+
+  # SubagentStart e SubagentStop: só uma linha no histórico, com o id e o tipo
+  # do subagente. O estado da sessão e a barra não mudam: o agente principal
+  # segue trabalhando. O Stop não dispara no fim de um subagente.
+  if [[ "$evento" == subagente-inicio || "$evento" == subagente-fim ]]; then
+    sessao="${JANGADA_SESSAO:-}"
+    [[ -n "$sessao" ]] || exit 0
+    arq="$JANGADA_ESTADO/agentes/$sessao.json"
+    projeto="$(jq -r '(.raiz // .dir // "") | split("/") | last // ""' "$arq" 2>/dev/null || true)"
+    extra="$(jq -c '{subagente_id: (.agent_id // ""), subagente_tipo: (.agent_type // ""),
+      conversa: (.session_id // "")}' <<<"$entrada" 2>/dev/null || true)"
+    jangada_registrar_evento "$sessao" "${projeto:-$(basename "${cwd:-$PWD}")}" claude "$evento" "$extra"
+    exit 0
+  fi
 
   # O que cada evento significa para o painel. Estado vazio: só registra a
   # conversa, sem mudar o estado nem avisar.

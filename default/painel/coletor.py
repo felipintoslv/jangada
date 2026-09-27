@@ -510,11 +510,12 @@ def segundos_aguardando(evs, ini, fim, agora):
             if e["estado"] != "aguardando":
                 continue
             a = e["data"]
-            # O foco não muda o estado da sessão; o intervalo vai até o próximo
-            # evento de estado.
+            # O foco e os subagentes não mudam o estado da sessão; o intervalo
+            # vai até o próximo evento de estado.
             # Sem evento depois, a sessão pode ter sido esquecida em aguardando:
             # conta no máximo 12 horas, como no app.
-            b = next((x["data"] for x in lista[i + 1:] if x["estado"] != "foco"),
+            b = next((x["data"] for x in lista[i + 1:]
+                      if x["estado"] != "foco" and not x["estado"].startswith("subagente")),
                      min(agora, a + dt.timedelta(hours=12)))
             a, b = max(a, ini), min(b, fim)
             if b > a:

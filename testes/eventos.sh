@@ -72,6 +72,22 @@ rodar "$repo_jangada/bin/jangada-agentes" --focar outro >/dev/null 2>&1
 conferir "caso 4: foco registrado" \
   jq_ok 'any(.[]; .sessao == "outro" and .estado == "foco" and .agente == "agy")' "$eventos"
 
+# Caso 4b: subagente do Claude. Início e fim viram linha com id e tipo, e o
+# estado da sessão fica como estava.
+claude trabalhando '{}'
+antes_estado="$(jq -c '{estado, mensagem, atualizado}' "$estado/agentes/proj--tarefa.json")"
+claude subagente-inicio '{"session_id": "c1", "agent_id": "a1", "agent_type": "explorador"}'
+claude subagente-fim '{"session_id": "c1", "agent_id": "a1", "agent_type": "explorador", "last_assistant_message": "relatório"}'
+conferir "caso 4b: início e fim do subagente registrados" \
+  jq_ok '[.[] | select(.estado | startswith("subagente"))]
+    | map(.estado) == ["subagente-inicio", "subagente-fim"]
+    and all(.[]; .subagente_id == "a1" and .subagente_tipo == "explorador" and .conversa == "c1"
+            and .sessao == "proj--tarefa" and .projeto == "proj" and .agente == "claude")' "$eventos"
+conferir "caso 4b: estado da sessão não muda" \
+  [ "$(jq -c '{estado, mensagem, atualizado}' "$estado/agentes/proj--tarefa.json")" = "$antes_estado" ]
+conferir "caso 4b: linhas antigas sem campos novos" \
+  jq_ok 'all(.[] | select(.estado | startswith("subagente") | not); has("subagente_id") | not)' "$eventos"
+
 # Caso 5: o hook não falha nem trava com o histórico sem permissão de escrita.
 rm -f "$eventos"; mkdir "$eventos"
 claude trabalhando '{}'; rc=$?

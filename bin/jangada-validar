@@ -83,11 +83,28 @@ registrar() {
     --argjson rodada "$rodada" --arg resultado "$1" --arg etapa "$2" --arg revisor "$revisor" \
     --arg modelo "$modelo" --arg autor "$autor" --argjson arquivos "$(grep -c . <<<"$arquivos" || true)" \
     --argjson mais "${mais:-0}" --argjson menos "${menos:-0}" --argjson itens "${itens:-0}" \
-    --argjson segundos "$SECONDS" \
+    --argjson segundos "$SECONDS" --arg subagentes "$(resumo_subagentes)" \
     '{data: $data, projeto: $projeto, rotulo: $rotulo, rodada: $rodada, resultado: $resultado,
       etapa: $etapa, revisor: $revisor, modelo: $modelo, autor: $autor, arquivos: $arquivos,
-      mais: $mais, menos: $menos, itens: $itens, segundos: $segundos}' \
+      mais: $mais, menos: $menos, itens: $itens, segundos: $segundos}
+     + ($subagentes | fromjson? // null | if type == "object" then {subagentes: .} else {} end)' \
     >>"$arq_metricas" 2>/dev/null || true
+}
+
+# Subagentes e delegações da entrega: os que rodaram na pasta desde a última
+# aprovação (ou o início da sessão, ou o commit de partida). Campo opcional:
+# sem python3 ou com erro de leitura, a linha sai sem ele.
+resumo_subagentes() {
+  local desde=""
+  [[ -n "${dir:-}" ]] || return 0
+  if [[ -f "${arq_aprovado:-}" ]]; then
+    desde="$(date -r "$arq_aprovado" -Iseconds)"
+  elif [[ -n "${inicio:-}" ]]; then
+    desde="$inicio"
+  elif [[ -n "${ponto:-}" ]]; then
+    desde="$(git -C "$dir" log -1 --format=%cI "$ponto" 2>/dev/null || true)"
+  fi
+  timeout 30 "$JANGADA_PATH/bin/jangada-subagentes" --entrega "$dir" ${desde:+--desde "$desde"} 2>/dev/null || true
 }
 
 dir="$(realpath "${1:-$PWD}")"

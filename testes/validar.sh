@@ -536,6 +536,23 @@ validar x --metricas; rc=$?
 conferir "caso 17: linha corrompida não derruba o --metricas" \
   bash -c '[ "$1" = 0 ] && grep -q "^projeto: 2 entrega(s).* 1 no limite de rodadas, 1 falha(s) do revisor" "$2"' _ "$rc" "$tmp/saida.log"
 
+# Caso 17b: a linha do validar.jsonl ganha o resumo dos subagentes da entrega,
+# lido de registros de exemplo; os campos antigos ficam como estavam.
+python3 testes/amostras-subagentes.py "$tmp/amostra" "$tmp/projeto" "$(date -u -Iseconds)"
+cp "$tmp/amostra/state/jangada/delegacoes.jsonl" "$tmp/estado/jangada/"
+sessao_de claude
+echo "m4" >>"$tmp/projeto/metricas.txt"
+JANGADA_ESTADO="$tmp/estado/jangada" JANGADA_CLAUDE_PROJETOS="$tmp/amostra/claude/projects" JANGADA_AGY_DIR="$tmp/amostra/agy" \
+  validar 'STATUS: APROVADO'
+conferir "caso 17b: resumo dos subagentes na linha da entrega" \
+  bash -c 'tail -n1 "$1" | jq -e ".subagentes | .n == 5 and .claude.n == 3 and .agy.n == 2 and .recusas == 1" >/dev/null' _ "$metricas"
+conferir "caso 17b: campos antigos continuam" \
+  bash -c 'tail -n1 "$1" | jq -e ".resultado == \"aprovado\" and .projeto == \"projeto\" and (.rodada | type) == \"number\"" >/dev/null' _ "$metricas"
+conferir "caso 17b: sem subagentes na pasta, o resumo vem zerado" \
+  bash -c 'sed -n 1p "$1" | jq -e ".subagentes.n == 0" >/dev/null' _ "$metricas"
+rm -f "$tmp/estado/jangada/delegacoes.jsonl"
+git -C "$tmp/projeto" checkout -q -- metricas.txt
+
 # Caso 13: o jangada-agente acrescenta as regras de R só em projeto com arquivos R.
 agente_em() {
   rm -f "$estado/"*.json "$estado/"protocolo-*.md "$estado/"prompt-*.md

@@ -46,6 +46,8 @@ conferir "caso 1: métricas do validar graváveis" \
   seguidos --bind "$casa/.local/state/jangada/validar.jsonl" "$casa/.local/state/jangada/validar.jsonl"
 conferir "caso 1: histórico de estados gravável" \
   seguidos --bind "$casa/.local/state/jangada/eventos-agentes.jsonl" "$casa/.local/state/jangada/eventos-agentes.jsonl"
+conferir "caso 1: registro de delegações gravável" \
+  seguidos --bind "$casa/.local/state/jangada/delegacoes.jsonl" "$casa/.local/state/jangada/delegacoes.jsonl"
 conferir "caso 1: o resto do estado não é gravável" \
   bash -c '! grep -qxF "$1" "$2"' _ "$casa/.local/state/jangada" "$tmp/args"
 conferir "caso 1: fora do tmux e do agente SSH" \

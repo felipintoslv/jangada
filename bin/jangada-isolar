@@ -6,15 +6,15 @@
 #   --mostrar   imprime a chamada ao bwrap, um argumento por linha, e sai
 #
 # Graváveis: a pasta atual, o .git comum do repositório (num worktree ele fica
-# fora da pasta), as pastas do Claude e do agy, o cache, o estado dos
-# agentes, as métricas do jangada-validar, o histórico de estados dos agentes
-# e o que estiver em JANGADA_ISOLAR_ESCRITA (caminhos separados por ":"). O
-# /tmp é próprio e some no fim; com ele some o socket do tmux, e o agente não
-# comanda as outras sessões. O agente SSH também fica de fora. Ficam somente
-# leitura, mesmo dentro dos graváveis, o config e os hooks do git e o arquivo
-# .git do worktree: por eles o git rodaria, fora do isolamento, código que o
-# agente escreveu. Ficam ocultas as chaves e os perfis de navegador
-# (JANGADA_ISOLAR_OCULTAR substitui a lista).
+# fora da pasta), as pastas do Claude e do agy, o cache, o estado dos agentes,
+# as métricas do jangada-validar, o histórico de estados dos agentes, o
+# registro de delegações e o que estiver em JANGADA_ISOLAR_ESCRITA (caminhos
+# separados por ":"). O /tmp é próprio e some no fim; com ele some o socket do
+# tmux, e o agente não comanda as outras sessões. O agente SSH também fica de
+# fora. Ficam somente leitura, mesmo dentro dos graváveis, o config e os hooks
+# do git e o arquivo .git do worktree: por eles o git rodaria, fora do
+# isolamento, código que o agente escreveu. Ficam ocultas as chaves e os perfis
+# de navegador (JANGADA_ISOLAR_OCULTAR substitui a lista).
 #
 # Protege contra o dano acidental: rm fora do projeto, edição de dotfiles,
 # leitura de chaves. Não é fronteira contra agente malicioso: a configuração
@@ -70,12 +70,13 @@ done
 # estados: o resto (a barra, as marcas das migrações) alimenta código que roda
 # fora.
 mkdir -p "$JANGADA_ESTADO/agentes" 2>/dev/null || true
-for p in validar.jsonl eventos-agentes.jsonl; do
+for p in validar.jsonl eventos-agentes.jsonl delegacoes.jsonl; do
   [[ -e "$JANGADA_ESTADO/$p" ]] || : 2>/dev/null >>"$JANGADA_ESTADO/$p" || true
 done
 gravavel "$JANGADA_ESTADO/agentes"
 gravavel "$JANGADA_ESTADO/validar.jsonl"
 gravavel "$JANGADA_ESTADO/eventos-agentes.jsonl"
+gravavel "$JANGADA_ESTADO/delegacoes.jsonl"
 IFS=: read -ra extras <<<"${JANGADA_ISOLAR_ESCRITA:-}"
 for p in "${extras[@]}"; do
   [[ -n "$p" ]] && gravavel "$(realpath -m "${p/#\~/$HOME}")"

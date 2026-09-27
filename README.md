@@ -292,7 +292,15 @@ horas do Gemini está abaixo de 20% (`JANGADA_DELEGAR_COTA_MIN`), quando o
 agy falha ou passa de 300 segundos (`JANGADA_DELEGAR_TEMPO`) e quando o
 perfil não delega ao agy. Sem terminal, o agy só roda os comandos listados
 em `permissions.allow` de `~/.gemini/antigravity-cli/settings.json`; os
-outros ele nega, e o `jangada-delegar` mostra quais.
+outros ele nega, e o `jangada-delegar` mostra quais. Cada chamada,
+atendida ou recusada, vira uma linha de `delegacoes.jsonl`, com tempo,
+tamanho do retorno, passos do agy e a cota antes e depois.
+
+`jangada-subagentes --entrega PASTA` resume os subagentes do Claude, os do
+agy e as delegações que rodaram na pasta: quantos, tokens, tamanho do
+retorno, edições e autorrevisões. O `jangada-validar` grava esse resumo no
+campo `subagentes` do `validar.jsonl`. Os registros estão em
+`docs/registros.md`.
 
 Sem o agy instalado, `agy` vira `claude`. Subagente não revisa a entrega: o
 `verificador` confere regras e testes, não o mérito, e o `jangada-validar`
@@ -303,8 +311,8 @@ continua com o revisor de sempre.
 O agente roda no bubblewrap, pelo `jangada-isolar`. Ele grava só na pasta da
 tarefa (o worktree, ou o repositório com `--direto`), no `.git` comum do
 repositório, em `~/.claude`, em `~/.gemini/antigravity-cli`, em `~/.cache`, em
-`~/.local/state/jangada/agentes`, no `validar.jsonl` e no
-`eventos-agentes.jsonl`. O resto do sistema e da
+`~/.local/state/jangada/agentes`, no `validar.jsonl`, no
+`eventos-agentes.jsonl` e no `delegacoes.jsonl`. O resto do sistema e da
 pasta pessoal fica somente leitura, inclusive `~/.claude.json` (perdê-lo só
 perde contadores), `~/.local/share/claude` (o Claude não se atualiza de
 dentro), os hooks do agy em `~/.gemini/config` e o resto do estado do jangada

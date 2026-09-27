@@ -59,6 +59,26 @@
           }
         ]
       }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "@JANGADA_PATH@/bin/jangada-hook-claude subagente-inicio"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "@JANGADA_PATH@/bin/jangada-hook-claude subagente-fim"
+          }
+        ]
+      }
     ]
   }
 }

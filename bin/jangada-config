@@ -217,13 +217,15 @@ jangada_data_iso() {
 
 # Acrescenta uma linha ao histórico de estados dos agentes
 # ($JANGADA_ESTADO/eventos-agentes.jsonl), lido pelo jangada-painel.
-# Uso: jangada_registrar_evento SESSAO PROJETO AGENTE ESTADO. Nunca falha: é
-# chamado de dentro dos hooks. Uma linha curta com >> é gravada inteira mesmo
-# com dois hooks ao mesmo tempo.
+# Uso: jangada_registrar_evento SESSAO PROJETO AGENTE ESTADO [EXTRA]. EXTRA é
+# um objeto JSON com campos a mais, acrescentados depois dos cinco de sempre.
+# Nunca falha: é chamado de dentro dos hooks. Uma linha curta com >> é gravada
+# inteira mesmo com dois hooks ao mesmo tempo.
 jangada_registrar_evento() {
   local linha
   linha="$(jq -cn --arg d "$(jangada_data_iso)" --arg s "$1" --arg p "$2" --arg a "$3" --arg e "$4" \
-    '{data: $d, sessao: $s, projeto: $p, agente: $a, estado: $e}' 2>/dev/null)" || return 0
+    --arg x "${5:-}" '{data: $d, sessao: $s, projeto: $p, agente: $a, estado: $e}
+      + (($x | fromjson? | objects) // {})' 2>/dev/null)" || return 0
   [[ -n "$linha" ]] || return 0
   printf '%s\n' "$linha" 2>/dev/null >>"$JANGADA_ESTADO/eventos-agentes.jsonl" || true
   return 0
