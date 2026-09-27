@@ -1,4 +1,4 @@
-8. Código R (o projeto tem arquivos R):
+9. Código R (o projeto tem arquivos R):
    - Escreva o mínimo que resolve o pedido: sem parâmetros, opções ou funções
      auxiliares que ninguém pediu.
    - Sem código comentado nem variável sem uso. Apague o que a sua mudança

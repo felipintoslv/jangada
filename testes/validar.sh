@@ -548,18 +548,42 @@ echo "x" >"$tmp/semr/notas.txt"
 echo "x <- 1" >"$tmp/comr/R/analise.R"
 
 agente_em "$tmp/semr"
-conferir "caso 13a: sem R, o Claude recebe o protocolo padrão" \
-  bash -c 'jq -r .comando "$1" | grep -q "default/agentes/protocolo.md"' _ "$estado/semr.json"
-conferir "caso 13a: sem R, nenhum protocolo da sessão é gravado" test ! -e "$estado/protocolo-semr.md"
+conferir "caso 13a: sem R, o Claude recebe o protocolo da sessão" \
+  bash -c 'jq -r .comando "$1" | grep -q "protocolo-semr.md"' _ "$estado/semr.json"
+conferir "caso 13a: sem R, o protocolo traz o padrão e os subagentes, sem as regras de R" \
+  bash -c 'grep -q "^7. Escrita" "$1" && grep -q "^8. Subagentes" "$1" && ! grep -q "Código R" "$1"' _ "$estado/protocolo-semr.md"
 
 agente_em "$tmp/comr"
 conferir "caso 13b: com R, o Claude recebe o protocolo da sessão" \
   bash -c 'jq -r .comando "$1" | grep -q "protocolo-comr.md"' _ "$estado/comr.json"
-conferir "caso 13b: o protocolo da sessão traz o padrão e as regras de R" \
-  bash -c 'grep -q "^7. Escrita" "$1" && grep -q "^8. Código R" "$1"' _ "$estado/protocolo-comr.md"
+conferir "caso 13b: o protocolo da sessão traz o padrão, os subagentes e as regras de R" \
+  bash -c 'grep -q "^7. Escrita" "$1" && grep -q "^8. Subagentes" "$1" && grep -q "^9. Código R" "$1"' _ "$estado/protocolo-comr.md"
 
 agente_em "$tmp/comr" --perfil agy-agy
-conferir "caso 13c: com R, o agy recebe as regras de R no -i" grep -q "^8. Código R" "$estado/prompt-comr.md"
+conferir "caso 13c: com R, o agy recebe as regras de R no -i" grep -q "^9. Código R" "$estado/prompt-comr.md"
+
+# Caso 13g: o item de subagentes segue JANGADA_DELEGAR (perfil, depois global,
+# depois o padrão do agente), e o destino vai para o estado da sessão.
+delegar_de() { jq -r .delegar "$estado/semr.json"; }
+agente_em "$tmp/semr"
+conferir "caso 13g: o Claude sem a variável delega ao agy" \
+  bash -c '[ "$1" = agy ] && grep -q "jangada-delegar PAPEL" "$2"' _ "$(delegar_de)" "$estado/protocolo-semr.md"
+agente_em "$tmp/semr" --perfil claude-claude
+conferir "caso 13g: o perfil claude-claude usa os subagentes do Claude" \
+  bash -c '[ "$1" = claude ] && ! grep -q "jangada-delegar" "$2" && grep -q "Nunca .general-purpose." "$2"' \
+  _ "$(delegar_de)" "$estado/protocolo-semr.md"
+agente_em "$tmp/semr" --perfil agy
+conferir "caso 13g: o agy usa os próprios subagentes" \
+  bash -c '[ "$1" = nativo ] && grep -q "invoke_subagent" "$2"' _ "$(delegar_de)" "$estado/prompt-semr.md"
+JANGADA_DELEGAR=claude agente_em "$tmp/semr"
+conferir "caso 13g: JANGADA_DELEGAR global vale sem a chave no perfil" [ "$(delegar_de)" = claude ]
+JANGADA_DELEGAR=agy agente_em "$tmp/semr" --perfil claude-claude
+conferir "caso 13g: a chave do perfil vence a global" [ "$(delegar_de)" = claude ]
+env PATH="$tmp/semagy:/usr/bin:/bin" bash -c 'source "$1/bin/jangada-config"; jangada_delegacao claude agy' _ "$repo_jangada" >"$tmp/delegar.txt"
+conferir "caso 13g: sem o agy instalado, agy vira claude" [ "$(cat "$tmp/delegar.txt")" = claude ]
+conferir "caso 13g: todo destino tem o texto comum de não editar e não revisar" \
+  bash -c 'for m in agy claude nativo; do test -r "$1/default/agentes/protocolo-delegar-$m.md" || exit 1; done
+           grep -q "não editam arquivos" "$1/default/agentes/protocolo-delegar.md"' _ "$repo_jangada"
 
 rm -f "$estado/"protocolo-*.md
 JANGADA_AGENTE_PROTOCOLO=0 agente_em "$tmp/comr"

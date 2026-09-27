@@ -168,6 +168,29 @@ jangada_perfil() {
   [[ -n "$PERFIL_COMANDO" ]] || PERFIL_COMANDO="$JANGADA_AGENTE"
 }
 
+# Destino dos subagentes de uma sessão: agy (jangada-delegar manda ao agy
+# Flash), claude (subagentes do Claude) ou nativo (subagentes do próprio agy).
+# Uso: jangada_delegacao COMANDO [JANGADA_DELEGAR]. Sem valor, vale agy para o
+# Claude e nativo para o agy. O agy como agente só delega aos próprios
+# subagentes, e o Claude não tem "nativo" além dos seus: vira claude. Sem o
+# agy instalado, agy vira claude, para o protocolo não mandar a um comando
+# que só recusaria.
+jangada_delegacao() {
+  local _base _valor="${2:-}"
+  _base="$(basename "${1%% *}")"
+  if [[ "$_base" == agy ]]; then
+    echo nativo
+    return 0
+  fi
+  case "$_valor" in
+    agy|claude) ;;
+    nativo) _valor=claude ;;
+    *) _valor=agy ;;
+  esac
+  [[ "$_valor" == agy ]] && ! command -v agy >/dev/null 2>&1 && _valor=claude
+  echo "$_valor"
+}
+
 jangada_perfis() {
   local _a
   for _a in "$JANGADA_CONFIG"/agentes/*.conf "$JANGADA_PATH"/default/agentes/*.conf; do

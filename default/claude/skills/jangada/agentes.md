@@ -228,6 +228,26 @@ instalada: `git -C ~/.local/share/jangada pull --ff-only` e
   arquivos de terceiros como se fossem regras do projeto. Apague esses arquivos
   de dentro de `referencia/` logo após clonar.
 
+## Subagentes do agy
+
+Testes de 27/09/2026, agy 1.2.12:
+
+- Agente personalizado em `agent.md` (frontmatter YAML, prompt depois de um
+  título H1), numa pasta listada em `~/.gemini/config/agents.json`
+  (`{"entries": [{"path": PASTA}]}`, lida um nível abaixo). A pasta
+  `~/.gemini/config/agents/` sozinha não é lida.
+- `model:` aceita só `flash`, `pro` ou `inherit`. Com o nome completo
+  (`gemini-3.8-flash-low`) o agente some sem aviso. O esforço vai na
+  chamada: `agy -p ... --agent PAPEL --model gemini-3.8-flash-low`.
+- **`--agent` com nome desconhecido não falha**: cai no agente padrão, com
+  todas as ferramentas. Só o log diz (`Agent "x" not found, falling back to
+  default`). Confira o log antes de confiar numa delegação.
+- `tools:` restringe de fato; `manage_task` e `send_message` vêm sempre.
+- No `-p`, `run_command` é negado sem regra em `permissions.allow`
+  (`denied_actions` no JSON e `response` vazio).
+- O JSON do `-p` traz `usage` (`input_tokens`, `output_tokens`,
+  `total_tokens`) e `duration_seconds`.
+
 ## Perfis e ganchos
 
 - Perfil: `~/.config/jangada/agentes/NOME.conf` com `COMANDO=`, `ARGS=`,

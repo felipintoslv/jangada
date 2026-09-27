@@ -193,6 +193,66 @@ ligar_skill_claude() { ligar_skills "$HOME/.claude/skills" "Claude Code"; }
 # link simbólico e o frontmatter do Claude Code como está.
 ligar_skill_agy() { ligar_skills "$HOME/.gemini/config/skills" "agy"; }
 
+# Liga os papéis de subagente do Claude Code (default/claude/agents/*.md) em
+# ~/.claude/agents/<papel>.md, com as mesmas regras de ligar_skills: link
+# antigo do jangada é trocado, arquivo alheio com o mesmo nome fica.
+ligar_agentes_claude() {
+  local pasta="$HOME/.claude/agents" origem nome destino atual
+  for origem in "$JANGADA_PATH"/default/claude/agents/*.md; do
+    [[ -f "$origem" ]] || continue
+    nome="${origem##*/}"
+    destino="$pasta/$nome"
+    if [[ -L "$destino" ]]; then
+      atual="$(readlink "$destino")"
+      if [[ "$atual" == "$origem" ]]; then
+        ok "subagente ${nome%.md} do Claude Code já ligado: $destino"
+        continue
+      fi
+      if [[ "$atual" != */default/claude/agents/"$nome" ]]; then
+        aviso "$destino aponta para $atual, que não é do jangada; mantido"
+        continue
+      fi
+    elif [[ -e "$destino" ]]; then
+      aviso "$destino já existe e não é um link do jangada; mantido"
+      continue
+    fi
+    executar mkdir -p "$pasta"
+    executar ln -sfn "$origem" "$destino"
+    ok "subagente ${nome%.md} do Claude Code ligado: $destino -> $origem"
+  done
+}
+
+# Registra os papéis de subagente do agy (default/agy/agents/<papel>/agent.md)
+# em ~/.gemini/config/agents.json, como uma entrada de pasta: o agy lê os
+# agentes direto do repositório instalado, sem nada em .agents/ dos projetos.
+# Uma entrada antiga do jangada (outro JANGADA_PATH) é trocada; as demais
+# ficam como estão.
+mesclar_agentes_agy() {
+  local cfg="$HOME/.gemini/config/agents.json" pasta="$JANGADA_PATH/default/agy/agents" tmp existia=0
+  if simulando; then
+    info "[simulação] registraria os subagentes do jangada em $cfg"
+    return 0
+  fi
+  mkdir -p "$(dirname "$cfg")"
+  if [[ -f "$cfg" ]]; then existia=1; else echo '{}' >"$cfg"; fi
+  tmp="$(mktemp)"
+  if ! jq --arg p "$pasta" '
+      .entries = ([(.entries // [])[] | select((.path // "") | endswith("/default/agy/agents") | not)]
+                  + [{path: $p}])' "$cfg" >"$tmp"; then
+    rm -f "$tmp"
+    aviso "não consegui ler $cfg; subagentes do agy não registrados"
+    return 0
+  fi
+  if ((existia)) && [[ "$(jq -cS . "$tmp")" == "$(jq -cS . "$cfg")" ]]; then
+    rm -f "$tmp"
+    ok "subagentes do agy já registrados"
+    return 0
+  fi
+  ((existia)) && copia_seguranca "$cfg"
+  mv "$tmp" "$cfg"
+  ok "subagentes do agy registrados em $cfg"
+}
+
 # Instala os hooks do jangada para o Antigravity (default/agy/hooks.json) em
 # ~/.gemini/config/hooks.json, a pasta global que o agy lê em toda conversa. O
 # arquivo é um objeto de hooks com nome; o do jangada fica na chave "jangada",

@@ -23,7 +23,10 @@
 # manda validar a entrega com jangada-validar: o outro modelo revisa o diff.
 # No Claude ele vai por --append-system-prompt; no agy, por -i junto com a
 # tarefa. Num projeto com arquivos R, vão também as regras de
-# default/agentes/protocolo-r.md. JANGADA_AGENTE_PROTOCOLO=0 desliga os dois.
+# default/agentes/protocolo-r.md. O item de subagentes depende de
+# JANGADA_DELEGAR (agy, claude ou nativo; ver jangada_delegacao em
+# jangada-config) e vem de default/agentes/protocolo-delegar-*.md.
+# JANGADA_AGENTE_PROTOCOLO=0 desliga o protocolo.
 #
 # O agente roda no bubblewrap pelo jangada-isolar: grava só na pasta da
 # tarefa e no que o jangada-isolar libera.
@@ -89,10 +92,20 @@ if ((!agente_dado)) && [[ -z "$perfil" && -t 0 && "${JANGADA_AGENTE_ESCOLHER:-1}
         *) echo "$base" ;;
       esac
     }
-    _escolha="$({ printf '%s\t(%s)\n' "$JANGADA_AGENTE" "$(_descrever "$JANGADA_AGENTE")"
+    # O destino dos subagentes (jangada_delegacao) vai no fim da descrição.
+    _delegar_perfil() {
+      local _e _v=""
+      for _e in "${PERFIL_AMBIENTE[@]}"; do
+        [[ "$_e" =~ ^JANGADA_DELEGAR=(.*)$ ]] && _v="${BASH_REMATCH[1]}"
+      done
+      jangada_delegacao "$PERFIL_COMANDO" "${_v:-${JANGADA_DELEGAR:-}}"
+    }
+    _escolha="$({ printf '%s\t(%s; subagentes: %s)\n' "$JANGADA_AGENTE" "$(_descrever "$JANGADA_AGENTE")" \
+                    "$(jangada_delegacao "$JANGADA_AGENTE" "${JANGADA_DELEGAR:-}")"
                   for _p in "${_perfis[@]}"; do
                     jangada_perfil "$_p" || continue
-                    printf '%s\t(%s)\n' "$_p" "${PERFIL_DESCRICAO:-$(_descrever "$PERFIL_COMANDO")}"
+                    printf '%s\t(%s; subagentes: %s)\n' "$_p" "${PERFIL_DESCRICAO:-$(_descrever "$PERFIL_COMANDO")}" \
+                      "$(_delegar_perfil)"
                   done; } \
       | column -t -s $'\t' -o '   ' \
       | fzf --prompt 'agente > ' --height 40% --reverse --no-sort \
@@ -282,6 +295,12 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
       fi
     done
   fi
+  # Destino dos subagentes: JANGADA_DELEGAR do perfil, depois o global.
+  delegar="${JANGADA_DELEGAR:-}"
+  for _env in "${PERFIL_AMBIENTE[@]}"; do
+    [[ "$_env" =~ ^JANGADA_DELEGAR=(.*)$ ]] && delegar="${BASH_REMATCH[1]}"
+  done
+  delegar="$(jangada_delegacao "$agente" "$delegar")"
   if ((!isolar_dado)); then
     for _env in "${PERFIL_AMBIENTE[@]}"; do
       [[ "$_env" =~ ^JANGADA_AGENTE_ISOLAR=(.*)$ ]] && isolar="${BASH_REMATCH[1]}"
@@ -304,13 +323,18 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
   [[ "${JANGADA_AGENTE_PROTOCOLO:-1}" != 0 && -r "$protocolo" ]] || protocolo=""
   # Sem o revisor instalado, o protocolo mandaria rodar um comando que falharia.
   ! command -v "$revisor_efetivo" >/dev/null 2>&1 && protocolo=""
-  # Projeto com arquivos R recebe também as regras de código R. O protocolo da
-  # sessão fica num arquivo próprio porque o comando guardado para o
-  # --restaurar lê o arquivo de novo.
-  if [[ -n "$protocolo" && -n "$(find "$dir" -maxdepth 2 -not -path '*/.git/*' \
-        \( -iname '*.R' -o -name '*.Rmd' -o -name '*.qmd' -o -name '*.Rproj' -o -name DESCRIPTION \) \
-        -print -quit 2>/dev/null)" ]]; then
-    cat "$protocolo" "$JANGADA_PATH/default/agentes/protocolo-r.md" >"$estado_dir/protocolo-$sessao.md"
+  # O protocolo da sessão fica num arquivo próprio porque o comando guardado
+  # para o --restaurar lê o arquivo de novo. Leva o item de subagentes do
+  # destino da delegação e, em projeto com arquivos R, as regras de código R.
+  if [[ -n "$protocolo" ]]; then
+    partes=("$protocolo" "$JANGADA_PATH/default/agentes/protocolo-delegar-$delegar.md"
+            "$JANGADA_PATH/default/agentes/protocolo-delegar.md")
+    if [[ -n "$(find "$dir" -maxdepth 2 -not -path '*/.git/*' \
+          \( -iname '*.R' -o -name '*.Rmd' -o -name '*.qmd' -o -name '*.Rproj' -o -name DESCRIPTION \) \
+          -print -quit 2>/dev/null)" ]]; then
+      partes+=("$JANGADA_PATH/default/agentes/protocolo-r.md")
+    fi
+    cat "${partes[@]}" >"$estado_dir/protocolo-$sessao.md"
     protocolo="$estado_dir/protocolo-$sessao.md"
   fi
   arq_prompt="$estado_dir/prompt-$sessao.md"
@@ -340,9 +364,10 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
   # uma janela em que a barra apagaria o arquivo recém-gravado.
   amb=(-e "JANGADA_SESSAO=$sessao")
   for _v in "${PERFIL_AMBIENTE[@]}"; do
-    [[ "$_v" =~ ^JANGADA_VALIDAR_REVISOR= ]] && continue
+    [[ "$_v" =~ ^JANGADA_(VALIDAR_REVISOR|DELEGAR)= ]] && continue
     amb+=(-e "$_v")
   done
+  amb+=(-e "JANGADA_DELEGAR=$delegar")
   [[ -n "$revisor_efetivo" ]] && amb+=(-e "JANGADA_VALIDAR_REVISOR=$revisor_efetivo")
   "${JANGADA_TMUX[@]}" new-session -d -s "$sessao" -c "$dir" "${amb[@]}"
 
@@ -351,13 +376,14 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
     --arg agora "$(jangada_data_iso)" \
     --arg inicio "$( ((eh_git)) && git -C "$dir" rev-parse HEAD 2>/dev/null || true)" \
     --arg tarefa "$prompt" --arg perfil "$perfil" --arg comando "$cmd_base" \
-    --arg revisor "$revisor_efetivo" --argjson isolar "$([[ "$isolar" != 0 ]] && echo true || echo false)" \
+    --arg revisor "$revisor_efetivo" --arg delegar "$delegar" --argjson isolar "$([[ "$isolar" != 0 ]] && echo true || echo false)" \
     '{sessao:$sessao, dir:$dir, raiz:$raiz, worktree:$worktree, ramo:$ramo, base:$base,
       agente:$agente, comando:$comando, isolar:$isolar, estado:"iniciado", mensagem:"", desde:$agora, atualizado:$agora}
      + (if $tarefa != "" then {tarefa:$tarefa} else {} end)
      + (if $perfil != "" then {perfil:$perfil} else {} end)
      + (if $inicio != "" then {inicio:$inicio} else {} end)
-     + (if $revisor != "" then {revisor:$revisor} else {} end)' \
+     + (if $revisor != "" then {revisor:$revisor} else {} end)
+     + {delegar:$delegar}' \
     >"$estado_dir/$sessao.json"
 
   "${JANGADA_TMUX[@]}" send-keys -t "=$sessao:" "$cmd_agente" Enter

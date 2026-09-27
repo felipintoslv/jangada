@@ -257,6 +257,34 @@ Ganchos do usuário ficam em `~/.config/jangada/ganchos/EVENTO` ou
 `EVENTO.d/`, para os eventos `pos-update`, `pos-tema`, `pos-agente-fim`
 (recebe sessão, raiz e se houve integração) e `pos-validar` (sessão e status). Um exemplo útil: `pos-tema` rodando `jangada-sddm aplicar`.
 
+### Subagentes
+
+Quatro papéis, com o mesmo nome e o mesmo texto no Claude Code
+(`default/claude/agents/`, ligados em `~/.claude/agents/`) e no agy
+(`default/agy/agents/`, registrados em `~/.gemini/config/agents.json`). Nenhum
+edita arquivos, e todos citam caminho e linha, página, célula ou URL em cada
+afirmação.
+
+| Papel | Faz | Claude | agy |
+|---|---|---|---|
+| `explorador` | mapeia código, dados e registros; até ~300 palavras | haiku | flash (low) |
+| `leitor` | trechos pedidos de PDF, planilha ou relatório | haiku | flash (medium) |
+| `pesquisador` | documentação, normas e dados públicos na web | haiku | flash (medium) |
+| `verificador` | testes, lint e regras do AGENTS.md antes do `jangada-validar` | sonnet | flash (high) |
+
+O item 8 do protocolo diz a quem delegar, conforme `JANGADA_DELEGAR` do
+perfil (ou global), e o seletor mostra o destino:
+
+| `JANGADA_DELEGAR` | Perfis | Efeito |
+|---|---|---|
+| `agy` | `claude` (padrão do Claude) | `jangada-delegar PAPEL` manda ao agy Flash; o subagente do Claude só se ele recusar |
+| `claude` | `claude-claude` | subagentes do Claude dos papéis, nunca `general-purpose` |
+| `nativo` | `agy`, `agy-agy` (padrão do agy) | subagentes do próprio agy (`invoke_subagent`) |
+
+Sem o agy instalado, `agy` vira `claude`. Subagente não revisa a entrega: o
+`verificador` confere regras e testes, não o mérito, e o `jangada-validar`
+continua com o revisor de sempre.
+
 ### Isolamento
 
 O agente roda no bubblewrap, pelo `jangada-isolar`. Ele grava só na pasta da

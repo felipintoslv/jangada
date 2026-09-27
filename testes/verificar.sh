@@ -115,6 +115,9 @@ testes/barra.sh || falha "testes/barra.sh"
 passo "painel de indicadores"
 testes/painel.sh || falha "testes/painel.sh"
 
+passo "subagentes"
+testes/subagentes.sh || falha "testes/subagentes.sh"
+
 passo "versões"
 testes/versao.sh || falha "testes/versao.sh"
 
