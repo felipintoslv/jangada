@@ -220,6 +220,23 @@ JANGADA_VALIDAR_RODADAS=2 validar 'STATUS: REVISAR\n1. x' --reverter-se-limite; 
 conferir "caso 11c: limite de rodadas com reversão sai com 4" [ "$rc" = 4 ]
 conferir "caso 11c: arquivo pendente foi revertido" test ! -e "$tmp/projeto/pendente.txt"
 
+# 11d: arquivo novo, fora do git e com acento no nome, também passa pelo
+# portão: conflito e sintaxe de shell.
+sessao_de claude
+printf '<<<<<<< HEAD\na\n=======\nb\n>>>>>>> outro\n' >"$tmp/projeto/conflito-ação.txt"
+validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 11d: conflito em arquivo novo reprova" [ "$rc" = 3 ]
+conferir "caso 11d: o parecer aponta o arquivo novo pelo nome" grep -q "conflito do git não resolvido em conflito-ação.txt" "$estado/validacao-s-r1.md"
+rm -f "$tmp/projeto/conflito-ação.txt"
+if command -v shellcheck >/dev/null; then
+  sessao_de claude
+  printf '#!/usr/bin/env bash\necho $((1 +))\n' >"$tmp/projeto/novo.sh"
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 11d: script novo com erro reprova" [ "$rc" = 3 ]
+  conferir "caso 11d: o parecer aponta o script novo" grep -q "falha no shellcheck em novo.sh" "$estado/validacao-s-r1.md"
+  rm -f "$tmp/projeto/novo.sh"
+fi
+
 # Caso 12: lintr nos arquivos R, só nas linhas alteradas. O cat() da linha 1
 # de antigo.R vem da base e não conta; limpo.R serve para a remoção pura.
 if Rscript -e 'quit(status = !requireNamespace("lintr", quietly = TRUE))' >/dev/null 2>&1; then
