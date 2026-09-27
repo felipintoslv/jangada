@@ -235,7 +235,27 @@ if command -v shellcheck >/dev/null; then
   conferir "caso 11d: script novo com erro reprova" [ "$rc" = 3 ]
   conferir "caso 11d: o parecer aponta o script novo" grep -q "falha no shellcheck em novo.sh" "$estado/validacao-s-r1.md"
   rm -f "$tmp/projeto/novo.sh"
+  # Rastreado com acento: o git escaparia o nome sem -z.
+  printf '#!/usr/bin/env bash\necho ok\n' >"$tmp/projeto/ação.sh"
+  git -C "$tmp/projeto" add ação.sh
+  git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "script com acento"
+  sessao_de claude
+  echo 'echo $((1 +))' >>"$tmp/projeto/ação.sh"
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 11d: script rastreado com acento e erro reprova" [ "$rc" = 3 ]
+  conferir "caso 11d: o parecer aponta o script pelo nome" grep -q "falha no shellcheck em ação.sh" "$estado/validacao-s-r1.md"
+  git -C "$tmp/projeto" checkout -q -- ação.sh
 fi
+
+# 11e: nome com quebra de linha não cabe nas listas e reprova, mesmo quando
+# é a única mudança desde o commit aprovado.
+sessao_de claude
+echo "$(git -C "$tmp/projeto" rev-parse HEAD) 0" >"$estado/validacao-s.aprovado"
+touch "$tmp/projeto/nome"$'\n'"quebrado.txt"
+validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 11e: nome com quebra de linha reprova" [ "$rc" = 3 ]
+conferir "caso 11e: o parecer explica" grep -q "quebra de linha" "$estado/validacao-s-r1.md"
+rm -f "$tmp/projeto/nome"$'\n'"quebrado.txt"
 
 # Caso 12: lintr nos arquivos R, só nas linhas alteradas. O cat() da linha 1
 # de antigo.R vem da base e não conta; limpo.R serve para a remoção pura.
@@ -391,6 +411,15 @@ if command -v gitleaks >/dev/null 2>&1; then
   conferir "caso 16c: gitleaks:allow libera a linha" [ "$rc" = 0 ]
   git -C "$tmp/projeto" checkout -q -- rastreado.txt
 
+  # 16i: segredo como única linha nova, antes da linha antiga: prende a
+  # posição exata das linhas acrescentadas.
+  sessao_de claude
+  printf 'chave = "%s"\nrastreado\n' "$token" >"$tmp/projeto/rastreado.txt"
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 16i: segredo na linha 1 reprova" [ "$rc" = 3 ]
+  conferir "caso 16i: o parecer aponta a linha 1" grep -q "rastreado.txt:1: " "$estado/validacao-s-r1.md"
+  git -C "$tmp/projeto" checkout -q -- rastreado.txt
+
   # 16d: arquivo novo sem commit é conferido inteiro.
   sessao_de claude
   printf 'chave = "%s"\n' "$token" >"$tmp/projeto/novo.env"
@@ -398,6 +427,36 @@ if command -v gitleaks >/dev/null 2>&1; then
   conferir "caso 16d: segredo em arquivo novo reprova" [ "$rc" = 3 ]
   conferir "caso 16d: o parecer aponta o arquivo novo" grep -q "novo.env:1:" "$estado/validacao-s-r1.md"
   rm -f "$tmp/projeto/novo.env"
+
+  # 16f: arquivo renomeado com segredo antigo e uma linha nova limpa passa.
+  sessao_de claude
+  git -C "$tmp/projeto" mv legado.cfg renomeado.cfg
+  echo "linha nova" >>"$tmp/projeto/renomeado.cfg"
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 16f: renomear não faz o segredo antigo parecer novo" [ "$rc" = 0 ]
+  git -C "$tmp/projeto" reset -q --hard
+
+  # 16g: colchetes no nome não puxam as linhas novas de outro arquivo.
+  git -C "$tmp/projeto" checkout -q main
+  printf 'x\nlegado = "%s"\n' "$token" >"$tmp/projeto/a[1].txt"
+  echo x >"$tmp/projeto/a1.txt"
+  git -C "$tmp/projeto" add 'a[1].txt' a1.txt
+  git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "colchetes"
+  git -C "$tmp/projeto" checkout -q agente/x
+  git -C "$tmp/projeto" -c user.name=t -c user.email=t@t merge -q main -m "traz os colchetes"
+  sessao_de claude
+  echo "fim" >>"$tmp/projeto/a[1].txt"
+  printf 'b\nc\nd\n' >>"$tmp/projeto/a1.txt"
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 16g: colchetes no nome não acusam segredo antigo" [ "$rc" = 0 ]
+  git -C "$tmp/projeto" reset -q --hard
+
+  # 16h: nome com aspas, que o git escaparia sem -z, também é conferido.
+  sessao_de claude
+  printf 'chave = "%s"\n' "$token" >"$tmp/projeto/aspas\"x.env"
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 16h: segredo em arquivo com aspas no nome reprova" [ "$rc" = 3 ]
+  rm -f "$tmp/projeto/aspas\"x.env"
 else
   echo "pulado caso 16a-d: gitleaks não instalado"
 fi
@@ -411,6 +470,10 @@ echo "outra" >>"$tmp/projeto/rastreado.txt"
 PATH="$tmp/glquebrado:$PATH" validar 'STATUS: APROVADO'; rc=$?
 conferir "caso 16e: gitleaks com erro não reprova" [ "$rc" = 0 ]
 conferir "caso 16e: gitleaks com erro gera aviso" grep -q "gitleaks falhou" "$tmp/saida.log"
+printf '#!/usr/bin/env bash\necho "sem json"\n' >"$tmp/glquebrado/gitleaks"
+sessao_de claude
+PATH="$tmp/glquebrado:$PATH" validar 'STATUS: APROVADO'
+conferir "caso 16e: relatório que não é JSON gera aviso" grep -q "gitleaks falhou" "$tmp/saida.log"
 git -C "$tmp/projeto" checkout -q -- rastreado.txt
 
 # Caso 17: cada rodada vira uma linha em validar.jsonl, e --metricas resume.
@@ -421,7 +484,9 @@ rm -f "$metricas"
 printf 'm1\nm2\n' >"$tmp/projeto/metricas.txt"
 git -C "$tmp/projeto" add metricas.txt
 git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "métricas"
+printf 'n1\nn2\nn3\n' >"$tmp/projeto/extra.txt"
 validar 'STATUS: REVISAR\n1. um\n2. dois'
+rm -f "$tmp/projeto/extra.txt"
 printf '<<<<<<< HEAD\n>>>>>>> outro\n' >>"$tmp/projeto/metricas.txt"
 validar 'STATUS: APROVADO' --resposta "1 corrigido"
 git -C "$tmp/projeto" checkout -q -- metricas.txt
@@ -429,7 +494,7 @@ validar 'STATUS: APROVADO' --resposta "conflito resolvido"
 conferir "caso 17: uma linha por rodada" [ "$(wc -l <"$metricas")" = 3 ]
 conferir "caso 17: REVISAR do revisor com itens e tamanho" \
   jq -e 'select(.rodada == 1) | .resultado == "revisar" and .etapa == "revisor" and .revisor == "agy"
-         and .autor == "claude" and .itens == 2 and .mais == 2 and .arquivos == 1' "$metricas"
+         and .autor == "claude" and .itens == 2 and .mais == 5 and .arquivos == 2' "$metricas"
 conferir "caso 17: falha local registrada" \
   jq -e 'select(.rodada == 2) | .resultado == "revisar" and .etapa == "local"' "$metricas"
 conferir "caso 17: APROVADO na rodada 3" jq -e 'select(.rodada == 3) | .resultado == "aprovado"' "$metricas"
@@ -437,6 +502,24 @@ validar x --metricas
 conferir "caso 17: --metricas resume" \
   grep -q "projeto: 1 entrega(s) aprovada(s), 3 rodada(s) em média, 0% na primeira; 1 barrada(s) na verificação local" "$tmp/saida.log"
 conferir "caso 17: --metricas separa por revisor" grep -q "^  agy: 2 revisão(ões), 50% aprovadas" "$tmp/saida.log"
+# Resposta vazia do agy, duas vezes, é falha do revisor.
+echo "m3" >>"$tmp/projeto/metricas.txt"
+validar ''
+conferir "caso 17: falha do revisor registrada" \
+  bash -c '[ "$(tail -n1 "$1" | jq -r "[.resultado, .etapa] | join(\" \")")" = "erro revisor" ]' _ "$metricas"
+JANGADA_VALIDAR_RODADAS=0 validar 'STATUS: APROVADO'
+conferir "caso 17: limite registrado" [ "$(tail -n1 "$metricas" | jq -r .resultado)" = limite ]
+git -C "$tmp/projeto" checkout -q -- metricas.txt
+git -C "$tmp/projeto" worktree add -q -b agente/tarefa "$tmp/wt/minha-tarefa"
+sessao_de claude
+echo "no worktree" >"$tmp/wt/minha-tarefa/wt.txt"
+validar 'STATUS: APROVADO' "$tmp/wt/minha-tarefa"
+conferir "caso 17: no worktree, o projeto é o repositório e não a tarefa" \
+  [ "$(tail -n1 "$metricas" | jq -r .projeto)" = projeto ]
+echo '{"projeto":"projeto","rodada":' >>"$metricas"
+validar x --metricas; rc=$?
+conferir "caso 17: linha corrompida não derruba o --metricas" \
+  bash -c '[ "$1" = 0 ] && grep -q "^projeto: 2 entrega(s).* 1 no limite de rodadas, 1 falha(s) do revisor" "$2"' _ "$rc" "$tmp/saida.log"
 
 # Caso 13: o jangada-agente acrescenta as regras de R só em projeto com arquivos R.
 agente_em() {

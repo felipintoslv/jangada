@@ -54,11 +54,13 @@ done
 arq_metricas="$JANGADA_ESTADO/validar.jsonl"
 if ((metricas)); then
   [[ -s "$arq_metricas" ]] || { echo "jangada-validar: nenhuma rodada registrada em $arq_metricas"; exit 0; }
-  # A rodada do APROVADO é quantas rodadas a entrega levou.
-  jq -rs '
-    def media: if length > 0 then (add / length * 10 | round / 10) else "-" end;
+  # A rodada do APROVADO é quantas rodadas a entrega levou. Linha que não é
+  # objeto JSON fica de fora, e campo que não é número não entra na média.
+  jq -Rrn '
+    def media: map(numbers) | if length > 0 then (add / length * 10 | round / 10) else "-" end;
     def pct(n; t): if t > 0 then "\(n * 100 / t | round)%" else "-" end;
-    group_by(.projeto)[] | . as $p
+    [inputs | fromjson? | objects | .projeto |= (strings // "?") | .revisor |= (strings // "?")]
+    | group_by(.projeto)[] | . as $p
     | ([.[] | select(.resultado == "aprovado")]) as $ap
     | "\($p[0].projeto): \($ap | length) entrega(s) aprovada(s), \($ap | map(.rodada) | media) rodada(s) em média, "
       + "\(pct([$ap[] | select(.rodada == 1)] | length; $ap | length)) na primeira; "
@@ -77,7 +79,7 @@ fi
 registrar() {
   local itens=0
   [[ -f "${saida:-}" ]] && itens="$(grep -cE '^[[:space:]]*[0-9]+\.[[:space:]]' "$saida" || true)"
-  jq -nc --arg data "$(date -Iseconds)" --arg projeto "$(basename "$dir")" --arg rotulo "$rotulo" \
+  jq -nc --arg data "$(date -Iseconds)" --arg projeto "$projeto" --arg rotulo "$rotulo" \
     --argjson rodada "$rodada" --arg resultado "$1" --arg etapa "$2" --arg revisor "$revisor" \
     --arg modelo "$modelo" --arg autor "$autor" --argjson arquivos "$(grep -c . <<<"$arquivos" || true)" \
     --argjson mais "${mais:-0}" --argjson menos "${menos:-0}" --argjson itens "${itens:-0}" \
@@ -92,6 +94,10 @@ dir="$(realpath "${1:-$PWD}")"
 git -C "$dir" rev-parse --show-toplevel >/dev/null 2>&1 \
   || { echo "jangada-validar: $dir não é um repositório git" >&2; exit 1; }
 dir="$(git -C "$dir" rev-parse --show-toplevel)"
+# No worktree de um agente, a pasta tem o nome da tarefa; o repositório vem
+# da pasta .git comum.
+projeto="$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir)"
+projeto="$(basename "$(dirname "$projeto")")"
 
 rodadas_max="${JANGADA_VALIDAR_RODADAS:-3}"
 [[ "$rodadas_max" =~ ^[0-9]+$ ]] || rodadas_max=3
@@ -199,7 +205,20 @@ fi
 
 diff_conteudo="$(git -C "$dir" diff "$ponto" 2>/dev/null || true)"
 arquivos="$(git -C "$dir" diff --name-status "$ponto" 2>/dev/null || true)"
-novos="$(git -C "$dir" -c core.quotePath=false ls-files --others --exclude-standard 2>/dev/null || true)"
+# Com -z os nomes chegam crus; sem ele, aspas, barra invertida e tab vêm
+# escapados e o arquivo escaparia das verificações. Nome com quebra de linha
+# não cabe nas listas de uma linha por arquivo e reprova na verificação local.
+nomes_z() { awk -v RS='\0' '!/\n/'; }
+nome_quebrado() { awk -v RS='\0' '/\n/ { print; exit }'; }
+novos="$(git -C "$dir" ls-files -z --others --exclude-standard 2>/dev/null | nomes_z || true)"
+quebrado="$({ git -C "$dir" diff -z --name-only --diff-filter=d "$ponto"
+              git -C "$dir" ls-files -z --others --exclude-standard; } 2>/dev/null | nome_quebrado || true)"
+# Arquivo renomeado: o diff de um só caminho não vê a origem e daria o
+# arquivo inteiro como novo.
+declare -A origem=()
+while IFS= read -r -d '' st && IFS= read -r -d '' a; do
+  if [[ "$st" == R* ]]; then IFS= read -r -d '' b; origem[$b]="$a"; fi
+done < <(git -C "$dir" diff -M --name-status -z "$ponto" 2>/dev/null || true)
 # Tamanho da entrega para as métricas; arquivo novo conta as linhas inteiras.
 read -r mais menos < <(git -C "$dir" diff --numstat "$ponto" 2>/dev/null \
   | awk '$1 != "-" { m += $1; n += $2 } END { print m + 0, n + 0 }')
@@ -234,7 +253,7 @@ fi
 # 8 KB para não tomar o espaço do diff.
 commits="$(git -C "$dir" log -30 --format='%h %s%n%w(0,4,4)%b' "$ponto..HEAD" 2>/dev/null | head -c 8000 || true)"
 
-if [[ -z "$diff_conteudo" && -z "$novos" ]]; then
+if [[ -z "$diff_conteudo" && -z "$novos" && -z "$quebrado" ]]; then
   echo "jangada-validar: nada a revisar desde $(git -C "$dir" rev-parse --short "$ponto")" >&2
   exit 1
 fi
@@ -364,7 +383,9 @@ for (arq in args[-1]) {
 # Números das linhas que a entrega acrescentou ou mudou em ARQ, um por linha,
 # tirados dos trechos @@ -a,b +c,d @@ do diff sem contexto.
 linhas_novas() {
-  git -C "$dir" diff -U0 "$ponto" -- "$1" | awk '
+  local caminhos=("$1")
+  [[ -n "${origem[$1]:-}" ]] && caminhos+=("${origem[$1]}")
+  git -C "$dir" --literal-pathspecs diff -U0 -M "$ponto" -- "${caminhos[@]}" | awk '
     /^@@/ { split($3, a, ","); ini = substr(a[1], 2); n = (2 in a) ? a[2] : 1
             for (i = ini; i < ini + n; i++) print i }'
 }
@@ -374,9 +395,10 @@ linhas_novas() {
 verificar_local() {
   local erros=""
   local arq alterados
-  # Rastreados e novos, sem os apagados; os nomes com acento vêm sem aspas.
-  alterados="$(git -C "$dir" -c core.quotePath=false diff --name-only --diff-filter=d "$ponto" 2>/dev/null || true
+  # Rastreados e novos, sem os apagados.
+  alterados="$(git -C "$dir" diff -z --name-only --diff-filter=d "$ponto" 2>/dev/null | nomes_z || true
                printf '%s\n' "$novos")"
+  [[ -n "$quebrado" ]] && erros+="nome de arquivo com quebra de linha, que a verificação não confere: ${quebrado@Q}"$'\n'
 
   # 1. Marcadores de conflito do Git
   while IFS= read -r arq; do
@@ -464,8 +486,8 @@ verificar_local() {
 
   # 4. Segredos, com o gitleaks, só nas linhas que a entrega acrescentou. Cada
   # arquivo vira uma cópia com as demais linhas em branco, para a linha do
-  # achado ser a do arquivo real. O achado reprova, sem o segredo no parecer
-  # (--redact). Valem gitleaks:allow na linha e o .gitleaks.toml e o
+  # achado ser a do arquivo real. O achado reprova; o parecer leva só arquivo,
+  # linha e regra, e o --redact tira o segredo do relatório. Valem gitleaks:allow na linha e o .gitleaks.toml e o
   # .gitleaksignore do projeto.
   if command -v gitleaks >/dev/null 2>&1; then
     local espelho gl_args gl_saida gl_rc
@@ -486,8 +508,11 @@ verificar_local() {
       [[ -f "$dir/.gitleaks.toml" ]] && gl_args+=(--config "$dir/.gitleaks.toml")
       [[ -f "$dir/.gitleaksignore" ]] && gl_args+=(--gitleaks-ignore-path "$dir/.gitleaksignore")
       gl_saida="$(cd "$espelho" && gitleaks "${gl_args[@]}" 2>"$espelho.err")" && gl_rc=0 || gl_rc=$?
+      # Relatório que não é uma lista JSON (outra versão do gitleaks) conta
+      # como falha, para não aprovar em silêncio.
+      ((gl_rc == 0)) && ! jq -e 'type == "array"' <<<"$gl_saida" >/dev/null 2>&1 && gl_rc=1
       if ((gl_rc == 0)); then
-        gl_saida="$(jq -r '.[] | "\(.File):\(.StartLine): [\(.RuleID)] \(.Description)"' <<<"$gl_saida" 2>/dev/null || true)"
+        gl_saida="$(jq -r '.[] | "\(.File):\(.StartLine): [\(.RuleID)] \(.Description)"' <<<"$gl_saida")"
         [[ -n "$gl_saida" ]] && erros+="possível segredo nas linhas acrescentadas (gitleaks; se for falso positivo, ponha gitleaks:allow num comentário da linha):"$'\n'"$gl_saida"$'\n'
       else
         printf 'jangada-validar: gitleaks falhou, segredos não conferidos:\n%s\n' "$(tail -n 5 "$espelho.err")" >&2
