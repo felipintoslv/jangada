@@ -253,7 +253,7 @@ escrever uma shell própria.
 | A. Arquivos ignorados no worktree | feito | `bin/jangada-worktree-preparar` (`.worktreeinclude`, `.jangada/links`, `.jangada/preparar.sh`) |
 | B. Pular para o agente que espera | feito | `jangada-agentes --proximo` (SUPER+N) e `--anterior` (SUPER+SHIFT+N) |
 | C. Tarefa já com o prompt | feito | `jangada-agente --prompt` e `--prompt-arquivo`; o nome sai das primeiras palavras |
-| D. Skill do jangada | feito | `default/claude/skills/jangada/` |
+| D. Skill do jangada | feito; no agy em 26/09/2026 | `default/claude/skills/jangada/`, ligada em `~/.claude/skills` e `~/.gemini/config/skills` |
 | E. Hooks mais fiéis | feito | `SessionStart`, `SessionEnd`, tipo da notificação e `conversa` no estado |
 | F. Integrar e limpar num comando | feito | `jangada-agente-fim --integrar`; Alt+I no seletor |
 | G. Restaurar depois de reiniciar | feito | estado `interrompido` e `jangada-agentes --restaurar` (`claude --resume`) |

@@ -154,21 +154,21 @@ carregador_boot() {
 }
 
 # Liga cada skill de default/claude/skills (jangada, relatorio-tecnico,
-# relatorio-academico) em ~/.claude/skills/<nome>, apontando para o
-# repositório instalado: o jangada-update as atualiza junto com o resto. Um link
-# antigo do jangada (outro JANGADA_PATH) é trocado; uma pasta ou link alheio
-# com o mesmo nome fica como está, com aviso.
-ligar_skill_claude() {
-  local origem nome destino atual
+# relatorio-academico) em <pasta>/<nome>, apontando para o repositório
+# instalado: o jangada-update as atualiza junto com o resto. Um link antigo do
+# jangada (outro JANGADA_PATH) é trocado; uma pasta ou link alheio com o mesmo
+# nome fica como está, com aviso. Uso: ligar_skills <pasta> <agente>.
+ligar_skills() {
+  local pasta="$1" agente="$2" origem nome destino atual
   for origem in "$JANGADA_PATH"/default/claude/skills/*/; do
     origem="${origem%/}"
     [[ -f "$origem/SKILL.md" ]] || continue
     nome="${origem##*/}"
-    destino="$HOME/.claude/skills/$nome"
+    destino="$pasta/$nome"
     if [[ -L "$destino" ]]; then
       atual="$(readlink "$destino")"
       if [[ "$atual" == "$origem" ]]; then
-        ok "skill $nome do Claude Code já ligada: $destino"
+        ok "skill $nome do $agente já ligada: $destino"
         continue
       fi
       if [[ "$atual" != */default/claude/skills/"$nome" ]]; then
@@ -179,11 +179,19 @@ ligar_skill_claude() {
       aviso "$destino já existe e não é um link do jangada; mantido"
       continue
     fi
-    executar mkdir -p "$(dirname "$destino")"
+    executar mkdir -p "$pasta"
     executar ln -sfn "$origem" "$destino"
-    ok "skill $nome do Claude Code ligada: $destino -> $origem"
+    ok "skill $nome do $agente ligada: $destino -> $origem"
   done
 }
+
+# Skills no Claude Code: ~/.claude/skills/<nome>.
+ligar_skill_claude() { ligar_skills "$HOME/.claude/skills" "Claude Code"; }
+
+# Skills no Antigravity: ~/.gemini/config/skills/<nome>, a raiz global que o
+# agy percorre em toda conversa (a mesma pasta do hooks.json). O agy aceita o
+# link simbólico e o frontmatter do Claude Code como está.
+ligar_skill_agy() { ligar_skills "$HOME/.gemini/config/skills" "agy"; }
 
 # Instala os hooks do jangada para o Antigravity (default/agy/hooks.json) em
 # ~/.gemini/config/hooks.json, a pasta global que o agy lê em toda conversa. O

@@ -166,6 +166,12 @@ instalada: `git -C ~/.local/share/jangada pull --ff-only` e
   named hooks" no log (`~/.gemini/antigravity-cli/log/`). O hook roda com a
   pasta do `hooks.json` como diretório atual e herda o ambiente, inclusive
   `JANGADA_SESSAO`.
+- Skills do agy: a raiz global é `~/.gemini/config/skills/<nome>/SKILL.md`
+  (teste de 26/09/2026). Não é `~/.gemini/antigravity/skills` nem
+  `~/.gemini/antigravity-cli`, como sugerem textos da web. O agy segue link
+  simbólico e aceita o frontmatter do Claude Code (`name`, `description` com
+  `>`). A referência oficial vem no próprio CLI, em
+  `~/.gemini/antigravity-cli/builtin/skills/agy-customizations/docs/`.
 - **Não registre `PreToolUse` respondendo `{}`**: o agy trata como recusa e a
   ferramenta é negada ("tool call denied by pre-tool hook").
 - O Stop traz `fullyIdle`, `terminationReason` e `error`; não traz a última

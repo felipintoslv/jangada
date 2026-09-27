@@ -20,7 +20,7 @@ jangada/
 ├── install/               etapas numeradas, executadas em ordem
 │   └── pacotes/           listas de pacotes por grupo
 ├── bin/                   comandos jangada-* (entram no PATH)
-├── default/               padrões atualizáveis (hypr em Lua, waybar, matugen, tmux, hooks e skills do Claude Code)
+├── default/               padrões atualizáveis (hypr em Lua, waybar, matugen, tmux, hooks e skills dos agentes)
 ├── config/                modelos copiados uma única vez para ~/.config/jangada
 ├── shell/                 integração com bash e zsh
 ├── migrations/            ajustes aplicados em ordem a cada atualização
@@ -141,11 +141,12 @@ para pastas, escreva `/dados` no `.gitignore`, sem a barra final, porque o
 padrão `dados/` não cobre um link. Um worktree reaproveitado não é preparado de
 novo.
 
-## Skills do Claude Code
+## Skills do Claude Code e do agy
 
 A etapa de agentes liga cada pasta de `default/claude/skills` em
-`~/.claude/skills/<nome>`, e o Claude Code carrega a skill quando a tarefa
-combina com a descrição dela, mesmo aberto em outro projeto:
+`~/.claude/skills/<nome>` e, se o agy estiver instalado, em
+`~/.gemini/config/skills/<nome>`. Os dois agentes carregam a skill quando a
+tarefa combina com a descrição dela, mesmo abertos em outro projeto:
 
 - `jangada`: regras do projeto e pegadinhas já resolvidas (`hyprctl dispatch`
   só com Lua, hypridle que ignora `-c`, on-click da waybar com `setsid -f`,
@@ -156,8 +157,8 @@ combina com a descrição dela, mesmo aberto em outro projeto:
   de redigir, `[FALTA: ...]` no lugar de dado ou citação sem origem e o
   checklist de entrega.
 
-O agy não lê essas skills; para ele, diga na tarefa qual arquivo seguir, por
-exemplo "siga `~/.claude/skills/relatorio-tecnico/SKILL.md`".
+O agy lê o mesmo `SKILL.md`, sem ajuste no frontmatter. Uma pasta ou link
+alheio com o mesmo nome nas duas pastas fica como está, com aviso.
 
 ## Ciclo de uma tarefa com agentes
 

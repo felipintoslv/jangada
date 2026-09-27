@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Etapa 50: camada de agentes (tmux isolado, hooks e skills do Claude Code).
+# Etapa 50: camada de agentes (tmux isolado, hooks e skills do Claude Code e do agy).
 
 executar mkdir -p "$JANGADA_ESTADO/agentes"
 
@@ -15,6 +15,8 @@ else
 fi
 
 # Hooks do Antigravity (agy): estado da sessão na barra, como no Claude Code.
+# As mesmas skills vão para ~/.gemini/config/skills.
 if tem_comando agy || [[ -d "$HOME/.gemini" ]]; then
   mesclar_hooks_agy
+  ligar_skill_agy
 fi
