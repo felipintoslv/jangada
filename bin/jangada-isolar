@@ -5,21 +5,23 @@
 # Uso: jangada-isolar [--mostrar] [--] COMANDO [ARGUMENTOS]
 #   --mostrar   imprime a chamada ao bwrap, um argumento por linha, e sai
 #
-# Graváveis: a pasta atual, o .git comum do repositório (num worktree ele fica
-# fora da pasta), as pastas do Claude e do agy, o cache, o estado dos agentes,
-# as métricas do jangada-validar, o histórico de estados dos agentes, o
-# registro de delegações e o que estiver em JANGADA_ISOLAR_ESCRITA (caminhos
-# separados por ":"). O /tmp é próprio e some no fim; com ele some o socket do
-# tmux, e o agente não comanda as outras sessões. O agente SSH também fica de
-# fora. Ficam somente leitura, mesmo dentro dos graváveis, o config e os hooks
-# do git e o arquivo .git do worktree: por eles o git rodaria, fora do
-# isolamento, código que o agente escreveu. Ficam ocultas as chaves e os perfis
-# de navegador (JANGADA_ISOLAR_OCULTAR substitui a lista).
+# Graváveis: a pasta atual, do .git comum só o que um commit precisa, as
+# pastas do Claude e do agy, o estado dos agentes, as métricas do
+# jangada-validar, o histórico de estados, o registro de delegações e o que
+# estiver em JANGADA_ISOLAR_ESCRITA (caminhos separados por ":"). O ~/.cache,
+# os retratos do shell e o ambiente das sessões do Claude aparecem com o
+# conteúdo de fora, mas o que o agente grava neles some no fim. O /tmp e o
+# XDG_RUNTIME_DIR são próprios; com eles somem o socket do tmux, do Hyprland,
+# do Wayland e do gpg-agent. O D-Bus da sessão passa pelo xdg-dbus-proxy, que
+# só deixa falar com o keyring e com as notificações. O agente não vê os
+# processos de fora (namespace de PID próprio) nem o Docker.
 #
-# Protege contra o dano acidental: rm fora do projeto, edição de dotfiles,
-# leitura de chaves. Não é fronteira contra agente malicioso: a configuração
-# do Claude e do agy, que define hooks, segue gravável, e o D-Bus e o
-# Hyprland seguem ao alcance.
+# Ficam somente leitura, mesmo dentro dos graváveis, os arquivos que o git,
+# o Claude ou o agy leem como configuração ou executam fora do isolamento:
+# config, hooks, commondir e gitdir do git; settings, CLAUDE.md, commands,
+# agents, skills, hooks e plugins do Claude; os binários do agy; os clones
+# do AUR. Ficam ocultas as chaves e os perfis de navegador
+# (JANGADA_ISOLAR_OCULTAR substitui a lista).
 #
 # JANGADA_AGENTE_ISOLAR=0 desliga; já isolado (JANGADA_ISOLADO=1), o comando
 # roda direto; sem o bwrap, roda sem isolamento e com aviso.
@@ -31,7 +33,7 @@ mostrar=0
 while (($#)); do
   case "$1" in
     --mostrar) mostrar=1; shift ;;
-    -h|--ajuda|--help) sed -n '2,25s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    -h|--ajuda|--help) sed -n '2,28s/^# \{0,1\}//p' "$0"; exit 0 ;;
     --) shift; break ;;
     *) break ;;
   esac
@@ -48,24 +50,89 @@ fi
 
 pasta="$(pwd -P)"
 # /tmp próprio: um rm do agente ali não apaga os temporários do sistema.
-args=(--ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --die-with-parent)
+# PID próprio: o agente não mata nem inspeciona os processos da sessão, e
+# tudo o que ele deixou rodando morre com ele. Nenhum hook grava o pid de
+# dentro no estado; se um dia gravar, o número não vale fora.
+args=(--ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --unshare-pid --die-with-parent)
 
 gravavel() { [[ -e "$1" ]] && args+=(--bind "$1" "$1"); return 0; }
 somente_leitura() { [[ -e "$1" ]] && args+=(--ro-bind "$1" "$1"); return 0; }
+# Mostra o conteúdo de fora, e o que o agente grava fica numa camada em
+# memória que some no fim. Sem suporte no bwrap ou no kernel, fica gravável.
+sobreposicao_ok=""
+temporario() {
+  [[ -d "$1" ]] || return 0
+  if [[ -z "$sobreposicao_ok" ]]; then
+    sobreposicao_ok=0
+    bwrap --ro-bind / / --overlay-src "$1" --tmp-overlay "$1" true 2>/dev/null && sobreposicao_ok=1
+  fi
+  if ((sobreposicao_ok)); then
+    args+=(--overlay-src "$1" --tmp-overlay "$1")
+  else
+    args+=(--bind "$1" "$1")
+  fi
+}
+
+# Sockets de /run que dão root ou mudam a máquina: Docker (o grupo docker
+# equivale a root), containerd, podman, tailscale, o sshd local e o D-Bus do
+# sistema (desligar a rede, desligar a máquina).
+for p in /run/docker.sock /run/containerd /run/podman /run/tailscale /run/ssh-unix-local /run/dbus; do
+  if [[ -d "$p" ]]; then
+    args+=(--tmpfs "$p")
+  elif [[ -e "$p" ]]; then
+    args+=(--ro-bind /dev/null "$p")
+  fi
+done
+
+# XDG_RUNTIME_DIR próprio: some o socket do Hyprland (hyprctl dispatch roda
+# comando fora), do Wayland, do gpg-agent, do systemd do usuário, do
+# PipeWire e de outros programas. O D-Bus da sessão volta pelo proxy, que só
+# deixa falar com org.freedesktop.secrets (o agy lê o login do keyring) e
+# org.freedesktop.Notifications (os hooks avisam pelo notify-send). Sem
+# proxy, o agente fica sem D-Bus.
+dbus_sinc=""
+if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" ]]; then
+  args+=(--perms 0700 --tmpfs "$XDG_RUNTIME_DIR")
+  pasta_proxy="$XDG_RUNTIME_DIR/jangada-isolar"
+  if ((!mostrar)) && [[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]] \
+     && command -v xdg-dbus-proxy >/dev/null 2>&1 \
+     && { [[ -d "$pasta_proxy" ]] || mkdir -m 0700 "$pasta_proxy" 2>/dev/null; }; then
+    sock="$pasta_proxy/bus-$$"
+    rm -f "$sock"
+    # O proxy escreve um byte quando está pronto e sai quando o outro lado do
+    # cano fecha. O bwrap guarda esse lado (--sync-fd) enquanto o agente vive.
+    exec {dbus_sinc}< <(exec xdg-dbus-proxy "$DBUS_SESSION_BUS_ADDRESS" "$sock" \
+      --filter --talk=org.freedesktop.secrets --talk=org.freedesktop.Notifications \
+      --fd=1 2>/dev/null)
+    if read -r -N1 -t 5 -u "$dbus_sinc" _ && [[ -S "$sock" ]]; then
+      args+=(--ro-bind "$sock" "$XDG_RUNTIME_DIR/bus" --sync-fd "$dbus_sinc"
+             --setenv DBUS_SESSION_BUS_ADDRESS "unix:path=$XDG_RUNTIME_DIR/bus")
+    else
+      exec {dbus_sinc}<&-
+      dbus_sinc=""
+    fi
+  fi
+fi
+[[ -n "$dbus_sinc" ]] || args+=(--unsetenv DBUS_SESSION_BUS_ADDRESS)
 
 gravavel "$pasta"
 # Do Claude, a pasta ~/.claude: conversas, login e sessões. O ~/.claude.json
-# fica somente leitura; ele é gravado por rename, que um bind só do arquivo
-# não aceita, e perdê-lo só perde contadores. Do agy, a pasta do CLI; os hooks
-# dele, em ~/.gemini/config, ficam somente leitura. O login do agy vem do
-# keyring pelo D-Bus.
+# (servidores MCP e confiança por projeto) fica somente leitura; ele é
+# gravado por rename, que um bind só do arquivo não aceita, e perdê-lo só
+# perde contadores. Do agy, a pasta do CLI; os hooks dele, em
+# ~/.gemini/config, ficam somente leitura. O login do agy vem do keyring pelo
+# D-Bus.
 # Numa instalação nova as pastas ainda não existem, e sem o bind o agente não
 # conseguiria criá-las.
 mkdir -p "$HOME/.claude" "$HOME/.cache" 2>/dev/null || true
 command -v agy >/dev/null 2>&1 && { mkdir -p "$HOME/.gemini/antigravity-cli" 2>/dev/null || true; }
-for p in "$HOME/.claude" "$HOME/.gemini/antigravity-cli" "$HOME/.cache"; do
+for p in "$HOME/.claude" "$HOME/.gemini/antigravity-cli"; do
   gravavel "$p"
 done
+# O ~/.cache alimenta código que roda fora: clones do AUR que o yay compila
+# com sudo, cache de compilação do Go, rodas do pip, bytecode do nvim, a
+# atualização do Claude. O agente lê, e o que grava some no fim.
+temporario "$HOME/.cache"
 # Do estado do jangada, só o dos agentes, as métricas e o histórico de
 # estados: o resto (a barra, as marcas das migrações) alimenta código que roda
 # fora.
@@ -82,14 +149,84 @@ for p in "${extras[@]}"; do
   [[ -n "$p" ]] && gravavel "$(realpath -m "${p/#\~/$HOME}")"
 done
 
-# Depois dos graváveis, para valer por cima deles.
-if comum="$(git -C "$pasta" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
-  gravavel "$comum"
-  # Sem a pasta hooks, o agente poderia criá-la; o git init sempre cria.
-  mkdir -p "$comum/hooks" 2>/dev/null || true
-  somente_leitura "$comum/config"
-  somente_leitura "$comum/hooks"
-  raiz="$(git -C "$pasta" rev-parse --show-toplevel 2>/dev/null || true)"
+# Daqui em diante, somente leitura por cima dos graváveis.
+
+# Claude: o que define comandos que ele roda ou instruções que ele segue, e
+# que valeria na próxima sessão aberta fora do isolamento. O que falta é
+# criado vazio antes (um bind sobre caminho ausente deixaria no disco um
+# arquivo vazio, e um settings.json vazio não é JSON válido).
+c="$HOME/.claude"
+for f in settings.json settings.local.json; do
+  [[ -e "$c/$f" || -L "$c/$f" ]] || printf '{}\n' 2>/dev/null >"$c/$f" || true
+done
+[[ -e "$c/CLAUDE.md" || -L "$c/CLAUDE.md" ]] || : 2>/dev/null >>"$c/CLAUDE.md" || true
+for d in commands agents skills hooks plugins output-styles; do
+  [[ -e "$c/$d" || -L "$c/$d" ]] || mkdir -p "$c/$d" 2>/dev/null || true
+done
+for p in settings.json settings.local.json CLAUDE.md commands agents skills hooks plugins \
+         output-styles backups; do
+  somente_leitura "$c/$p"
+done
+# Scripts soltos na pasta (a linha de status costuma apontar para eles).
+for p in "$c"/*; do
+  [[ -f "$p" ]] || continue
+  case "$p" in
+    *.sh|*.bash|*.zsh|*.py|*.js|*.mjs|*.cjs|*.ts|*.rb|*.pl|*.lua) somente_leitura "$p" ;;
+    *) [[ -x "$p" ]] && somente_leitura "$p" ;;
+  esac
+done
+# Os retratos do shell e o ambiente das sessões são carregados antes de cada
+# comando Bash de toda sessão do Claude, inclusive das abertas fora; o painel
+# da IDE diz a qual servidor a sessão de fora se conecta. O agente enxerga
+# os de fora, e o que ele grava ali some no fim.
+for d in shell-snapshots session-env ide; do
+  mkdir -p "$c/$d" 2>/dev/null || true
+  temporario "$c/$d"
+done
+# agy: os executáveis que ele chama (agentapi, webm_encoder).
+somente_leitura "$HOME/.gemini/antigravity-cli/bin"
+# Clones do AUR, caso JANGADA_ISOLAR_ESCRITA tenha liberado o ~/.cache.
+somente_leitura "$HOME/.cache/yay"
+somente_leitura "$HOME/.cache/paru"
+
+# Git. Tudo o que ele lê como configuração ou redirecionamento roda fora do
+# isolamento no próximo git status: config (core.fsmonitor), hooks,
+# commondir (aponta para outro config), gitdir, config.worktree e os
+# submódulos em modules/.
+if gitdir="$(jangada_git_seguro -C "$pasta" rev-parse --path-format=absolute --absolute-git-dir 2>/dev/null)" \
+   && comum="$(jangada_git_seguro -C "$pasta" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
+  raiz="$(jangada_git_seguro -C "$pasta" rev-parse --show-toplevel 2>/dev/null || true)"
+  mkdir -p "$comum/hooks" "$comum/logs" "$comum/refs" "$comum/worktrees" "$comum/modules" 2>/dev/null || true
+  wt_config=0
+  [[ "$(git config --file "$comum/config" --type=bool --get extensions.worktreeConfig 2>/dev/null)" == true ]] && wt_config=1
+  if [[ "$gitdir" != "$comum" ]]; then
+    # Worktree: o .git comum inteiro fica somente leitura, e só se libera o
+    # que add, commit, branch, reset e stash gravam. Assim nenhum arquivo novo
+    # (commondir, config.worktree, rebase-merge) aparece no repositório
+    # principal. Apagar ramo ou tag e o git gc falham: eles regravam o
+    # packed-refs, que fica na raiz.
+    somente_leitura "$comum"
+    for d in objects refs logs rr-cache reftable; do
+      gravavel "$comum/$d"
+    done
+    gravavel "$gitdir"
+    ((wt_config)) && { [[ -e "$gitdir/config.worktree" ]] || : 2>/dev/null >>"$gitdir/config.worktree" || true; }
+    for f in commondir gitdir config.worktree; do
+      somente_leitura "$gitdir/$f"
+    done
+  else
+    # Repositório principal (--direto): o HEAD e o index ficam na raiz do
+    # .git, que precisa seguir gravável. Um commondir ausente seria criado
+    # pelo agente; em seu lugar fica um commondir que aponta para o próprio
+    # .git, que o git trata como se não existisse, e ele fica somente leitura.
+    gravavel "$comum"
+    [[ -e "$comum/commondir" || -L "$comum/commondir" ]] \
+      || printf '.\n' 2>/dev/null >"$comum/commondir" || true
+    ((wt_config)) && { [[ -e "$comum/config.worktree" ]] || : 2>/dev/null >>"$comum/config.worktree" || true; }
+    for f in config hooks commondir config.worktree worktrees modules; do
+      somente_leitura "$comum/$f"
+    done
+  fi
   [[ -f "$raiz/.git" ]] && somente_leitura "$raiz/.git"
 fi
 
@@ -111,6 +248,8 @@ for p in "${ocultos[@]}"; do
 done
 
 args+=(--unsetenv TMUX --unsetenv TMUX_PANE --unsetenv SSH_AUTH_SOCK
+       --unsetenv HYPRLAND_INSTANCE_SIGNATURE --unsetenv HYPRLAND_CMD
+       --unsetenv WAYLAND_DISPLAY --unsetenv DISPLAY --unsetenv GPG_AGENT_INFO
        --setenv JANGADA_ISOLADO 1 --chdir "$pasta" -- "$@")
 if ((mostrar)); then
   printf '%s\n' bwrap "${args[@]}"

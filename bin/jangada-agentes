@@ -179,63 +179,164 @@ marcar() {
     '.estado = $e | .mensagem = $m | .atualizado = $a' || rm -f "$tmp"
 }
 
-# Reabre a sessão S no tmux: na mesma pasta, com o mesmo agente e, no Claude
-# Code, na mesma conversa. Sem o id (instalação sem o hook novo) usa
-# --continue, que retoma a conversa mais recente daquela pasta.
+# Pasta em que uma sessão restaurada pode abrir. O caminho vem do estado, que o
+# agente isolado consegue gravar, e a pasta do agente fica gravável no
+# isolamento: sem esta conferência, ele se mudaria para a instalação do
+# jangada ou para a configuração do usuário. Vale um worktree do jangada, uma
+# pasta dentro de JANGADA_PROJETOS ou a raiz de outro repositório git fora das
+# pastas de configuração e de estado. Imprime o caminho resolvido.
+pasta_restauravel() {
+  local d="$1" real raiz p
+  [[ -n "$d" && "$d" == /* && "$d" != *[[:cntrl:]]* ]] || return 1
+  real="$(realpath -e -- "$d" 2>/dev/null)" || return 1
+  [[ -d "$real" && "$real" != *[[:cntrl:]]* ]] || return 1
+  for p in "$JANGADA_WORKTREES" "$JANGADA_PROJETOS"; do
+    [[ -n "$p" ]] || continue
+    p="$(realpath -m -- "$p")" || continue
+    [[ -n "$p" && "$p" != / ]] || continue
+    [[ "$real" == "$p"/* ]] && { printf '%s\n' "$real"; return 0; }
+  done
+  [[ "$real" != / && "$real" != "$HOME" ]] || return 1
+  for p in "$JANGADA_PATH" "$JANGADA_CONFIG" "$JANGADA_ESTADO" "$HOME/.config" "$HOME/.local" \
+           "$HOME/.cache" "$HOME/.ssh" "$HOME/.gnupg" "$HOME/.claude" "$HOME/.gemini"; do
+    p="$(realpath -m -- "$p")"
+    [[ "$real" == "$p" || "$real" == "$p"/* ]] && return 1
+  done
+  raiz="$(jangada_git_seguro -C "$real" rev-parse --show-toplevel 2>/dev/null)" || return 1
+  [[ "$(realpath -m -- "$raiz")" == "$real" ]] || return 1
+  printf '%s\n' "$real"
+}
+
+# Protocolo do Claude refeito das fontes do repositório para a sessão
+# restaurada, como o jangada-agente monta: o arquivo guardado fica na pasta de
+# estado, gravável pelo agente, e o shell da sessão o lê fora do isolamento.
+# O mv troca um link simbólico plantado ali em vez de segui-lo. Imprime o
+# caminho, ou nada quando o protocolo está desligado.
+refazer_protocolo() {
+  local s="$1" dir="$2" delegar="$3" revisor="$4" base tmp
+  base="$JANGADA_PATH/default/agentes/protocolo.md"
+  [[ "${JANGADA_AGENTE_PROTOCOLO:-1}" != 0 && -r "$base" ]] || return 0
+  command -v "$revisor" >/dev/null 2>&1 || return 0
+  local -a partes=("$base" "$JANGADA_PATH/default/agentes/protocolo-delegar-$delegar.md"
+                   "$JANGADA_PATH/default/agentes/protocolo-delegar.md")
+  if [[ -n "$(find "$dir" -maxdepth 2 -not -path '*/.git/*' \
+        \( -iname '*.R' -o -name '*.Rmd' -o -name '*.qmd' -o -name '*.Rproj' -o -name DESCRIPTION \) \
+        -print -quit 2>/dev/null)" ]]; then
+    partes+=("$JANGADA_PATH/default/agentes/protocolo-r.md")
+  fi
+  tmp="$(mktemp "$estado_dir/.protocolo-$s.XXXXXX")" || return 1
+  cat "${partes[@]}" >"$tmp" 2>/dev/null || { rm -f "$tmp"; return 1; }
+  mv -fT "$tmp" "$estado_dir/protocolo-$s.md" || { rm -f "$tmp"; return 1; }
+  printf '%s\n' "$estado_dir/protocolo-$s.md"
+}
+
+# Reabre a sessão S no tmux: na mesma pasta, com o mesmo agente e na mesma
+# conversa. Sem o id (instalação sem o hook novo) usa --continue, que retoma a
+# conversa mais recente daquela pasta.
+#
+# O estado fica ao alcance do agente isolado, e o comando digitado aqui roda
+# num shell fora do isolamento. Por isso nada do que é executado sai do JSON
+# como texto: o agente só pode ser claude ou agy, o id da conversa é um uuid,
+# a pasta passa pela pasta_restauravel, e os argumentos, o perfil e o
+# isolamento vêm da configuração do usuário. O .comando e o .isolar do estado
+# são ignorados; só JANGADA_AGENTE_ISOLAR=0 da configuração abre sem o
+# jangada-isolar. Estado que não passa na conferência é recusado.
 restaurar() {
-  local s="$1" arq agente dir conversa cmd
+  local s="$1" arq agente base dir conversa perfil worktree rev cmd exe args delegar
+  if [[ ! "$s" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+    echo "nome de sessão inválido: $s" >&2
+    return 1
+  fi
   arq="$estado_dir/$s.json"
   if "${JANGADA_TMUX[@]}" has-session -t "=$s" 2>/dev/null; then
     return 0
   fi
   [[ -f "$arq" ]] || { echo "sem estado para $s" >&2; return 1; }
   restauravel "$arq" || { echo "$s não pode ser restaurada (ciclo em par, ou pasta ausente)" >&2; return 1; }
-  agente="$(jq -r '.agente' "$arq")"
-  dir="$(jq -r '.dir' "$arq")"
-  conversa="$(jq -r '.conversa // ""' "$arq")"
-  cmd="$(jq -r '.comando // ""' "$arq")"
-  [[ -n "$cmd" ]] || { cmd="$agente"; [[ -n "$JANGADA_AGENTE_ARGS" ]] && cmd+=" $JANGADA_AGENTE_ARGS"; }
-  # O estado fica ao alcance do agente isolado. Se o prefixo sumiu do comando
-  # guardado, ele volta; só a sessão aberta com --sem-isolar (ou de antes do
-  # isolamento, com ele desligado) roda fora.
-  local isolar_pre
-  isolar_pre="$(printf '%q' "$JANGADA_PATH/bin/jangada-isolar") -- "
-  if [[ "$JANGADA_AGENTE_ISOLAR" != 0 && "$(jq -r '.isolar' "$arq")" != false \
-        && "$cmd" != "$isolar_pre"* ]]; then
-    cmd="$isolar_pre$cmd"
+  recusa() { echo "$s: $1; nada foi executado" >&2; }
+  agente="$(jq -r '.agente // "" | tostring' "$arq" 2>/dev/null)" || { recusa "estado ilegível"; return 1; }
+  dir="$(jq -r '.dir // "" | tostring' "$arq")"
+  conversa="$(jq -r '.conversa // "" | tostring' "$arq")"
+  perfil="$(jq -r '.perfil // "" | tostring' "$arq")"
+  worktree="$(jq -r '.worktree // "" | tostring' "$arq")"
+  rev="$(jq -r '.revisor // "" | tostring' "$arq")"
+
+  # O agente vem do perfil ou da configuração; do estado sai só o nome, que
+  # tem de ser um dos dois conhecidos.
+  base="$(basename -- "${agente%% *}" 2>/dev/null || true)"
+  [[ "$base" =~ ^(claude|agy)$ ]] || { recusa "agente inválido no estado"; return 1; }
+  PERFIL_AMBIENTE=()
+  if [[ -n "$perfil" ]]; then
+    jangada_perfil "$perfil" || { recusa "perfil $perfil não existe mais na configuração"; return 1; }
+    [[ "$(basename -- "${PERFIL_COMANDO%% *}")" == "$base" ]] \
+      || { recusa "o agente do estado ($base) difere do perfil $perfil"; return 1; }
+    exe="$PERFIL_COMANDO"; args="$PERFIL_ARGS"
+  else
+    # O JANGADA_AGENTE da configuração vale quando é o mesmo agente; aberto
+    # com --agente, fica o nome simples, procurado no PATH.
+    exe="$base"
+    [[ "$agente" == "$JANGADA_AGENTE" ]] && exe="$JANGADA_AGENTE"
+    args="$JANGADA_AGENTE_ARGS"
   fi
-  if [[ "$(basename "${agente%% *}")" == claude ]]; then
+  if [[ -n "$conversa" && ! "$conversa" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+    recusa "id de conversa inválido no estado"
+    return 1
+  fi
+  dir="$(pasta_restauravel "$dir")" \
+    || { recusa "pasta fora de JANGADA_WORKTREES e de JANGADA_PROJETOS, ou que não é repositório git"; return 1; }
+  if [[ -n "$rev" && ! "$rev" =~ ^(claude|agy)$ ]]; then
+    recusa "revisor inválido no estado"
+    return 1
+  fi
+
+  # Destino dos subagentes: do perfil, depois o global, como no jangada-agente.
+  local v
+  delegar="${JANGADA_DELEGAR:-}"
+  for v in "${PERFIL_AMBIENTE[@]}"; do
+    [[ "$v" =~ ^JANGADA_DELEGAR=(.*)$ ]] && delegar="${BASH_REMATCH[1]}"
+  done
+  delegar="$(jangada_delegacao "$base" "$delegar")"
+
+  cmd="$exe"
+  [[ -n "$args" ]] && cmd+=" $args"
+  if [[ "$JANGADA_AGENTE_ISOLAR" != 0 ]]; then
+    cmd="$(printf '%q' "$JANGADA_PATH/bin/jangada-isolar") -- $cmd"
+  fi
+  if [[ "$base" == claude ]]; then
+    local protocolo=""
+    protocolo="$(refazer_protocolo "$s" "$dir" "$delegar" "${rev:-agy}")" || protocolo=""
+    [[ -n "$protocolo" ]] && cmd+=" --append-system-prompt \"\$(cat $(printf '%q' "$protocolo"))\""
     # O --continue retoma a conversa mais recente da pasta. Num worktree ela é
     # desta sessão; direto no repositório pode ser de outro agente ou de uma
     # conversa aberta à mão, e aí é melhor começar uma nova.
     if [[ -n "$conversa" ]]; then
       cmd+=" --resume $(printf '%q' "$conversa")"
-    elif [[ -n "$(jq -r '.worktree // ""' "$arq")" ]]; then
+    elif [[ -n "$worktree" ]]; then
       cmd+=" --continue"
     else
       echo "$s: sem o id da conversa e sem worktree próprio; abrindo conversa nova" >&2
     fi
-  fi
-  if [[ "$(basename "${agente%% *}")" == agy ]]; then
+  else
     # O id vem do hook do agy (conversationId). Sem ele, o --continue retoma a
     # conversa mais recente do agy, que pode ser de outra pasta: só no worktree.
     if [[ -n "$conversa" ]]; then
       cmd+=" --conversation $(printf '%q' "$conversa")"
-    elif [[ -n "$(jq -r '.worktree // ""' "$arq")" ]]; then
+    elif [[ -n "$worktree" ]]; then
       cmd+=" --continue"
     else
       echo "$s: sem o id da conversa e sem worktree próprio; abrindo conversa nova" >&2
     fi
   fi
   # O ambiente do perfil é relido do arquivo, e não guardado no estado: pode
-  # trazer chave de API.
+  # trazer chave de API. O JANGADA_AGENTE_ISOLAR do perfil fica de fora: o
+  # nome do perfil vem do estado, e o agente que o trocasse por um perfil sem
+  # isolamento sairia do bwrap.
   local -a amb=(-e "JANGADA_SESSAO=$s")
-  local perfil v rev
-  perfil="$(jq -r '.perfil // ""' "$arq")"
-  if [[ -n "$perfil" ]] && jangada_perfil "$perfil"; then
-    for v in "${PERFIL_AMBIENTE[@]}"; do amb+=(-e "$v"); done
-  fi
-  rev="$(jq -r '.revisor // ""' "$arq")"
+  for v in "${PERFIL_AMBIENTE[@]}"; do
+    [[ "$v" =~ ^JANGADA_(VALIDAR_REVISOR|DELEGAR|AGENTE_ISOLAR)= ]] && continue
+    amb+=(-e "$v")
+  done
+  amb+=(-e "JANGADA_DELEGAR=$delegar")
   [[ -n "$rev" ]] && amb+=(-e "JANGADA_VALIDAR_REVISOR=$rev")
   "${JANGADA_TMUX[@]}" new-session -d -s "$s" -c "$dir" "${amb[@]}"
   marcar "$arq" iniciado "restaurada"

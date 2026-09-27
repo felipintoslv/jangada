@@ -23,23 +23,44 @@
 O agente aberto pelo `jangada-agente` roda no bubblewrap, com
 `JANGADA_ISOLADO=1` no ambiente. De dentro:
 
-- Grava só na pasta da tarefa (worktree, ou o repositório com `--direto`), no
-  `.git` comum do repositório, em `~/.claude`, `~/.gemini/antigravity-cli`,
-  `~/.cache`, `~/.local/state/jangada/agentes`, no `validar.jsonl`, no
-  `eventos-agentes.jsonl` e no que
-  estiver em `JANGADA_ISOLAR_ESCRITA`. O resto é somente leitura, inclusive
-  `~/.claude.json`, `~/.local/share/claude`, `~/.gemini/config` e o resto de
-  `~/.local/state/jangada`: escrever em `~/.config`, instalar pacote do R na
-  biblioteca do usuário ou rodar `pip install --user` falha com "Read-only
-  file system".
-- Commit funciona; `git config` e mudança em `.git/hooks` não. O `config`, os
-  `hooks` e o arquivo `.git` do worktree são somente leitura, porque o git
-  rodaria o que estivesse neles fora do isolamento.
+- Grava só na pasta da tarefa (worktree, ou o repositório com `--direto`), em
+  `~/.claude`, `~/.gemini/antigravity-cli`, `~/.local/state/jangada/agentes`,
+  no `validar.jsonl`, no `eventos-agentes.jsonl`, no `delegacoes.jsonl` e no
+  que estiver em `JANGADA_ISOLAR_ESCRITA`. O resto é somente leitura,
+  inclusive `~/.claude.json`, `~/.local/share/claude`, `~/.gemini/config` e o
+  resto de `~/.local/state/jangada`: escrever em `~/.config`, instalar pacote
+  do R na biblioteca do usuário ou rodar `pip install --user` falha com
+  "Read-only file system".
+- O `~/.cache`, `~/.claude/shell-snapshots`, `~/.claude/session-env` e
+  `~/.claude/ide` aceitam escrita, mas ela fica numa camada em memória que
+  some no fim (sobreposição do bwrap). Cache grande de compilação ocupa RAM
+  enquanto a sessão dura. `~/.cache/yay` e `~/.cache/paru` são somente
+  leitura.
+- Em `~/.claude` são somente leitura `settings.json`, `settings.local.json`,
+  `CLAUDE.md`, `commands`, `agents`, `skills`, `hooks`, `plugins`,
+  `output-styles`, `backups` e os scripts soltos. `/model` ou `/config` de
+  dentro não persistem.
+- Git num worktree: o `.git` comum é somente leitura, menos `objects`,
+  `refs`, `logs` e a pasta do próprio worktree (sem o `commondir` e o
+  `gitdir`). Commit, ramo, `checkout -b`, `reset` e `stash` funcionam; apagar
+  ramo ou tag e `git gc` falham (regravam o `packed-refs` da raiz). Com
+  `--direto`, a raiz do `.git` segue gravável, menos `config`, `hooks`,
+  `worktrees`, `modules` e `commondir`; o `jangada-isolar` cria um
+  `commondir` com `.` quando falta, porque um bind sobre arquivo ausente
+  deixaria no disco um arquivo vazio, e commondir vazio quebra o git.
+  `git config` e mudança em `.git/hooks` falham nos dois modos.
 - O `/tmp` é próprio da sessão e some quando ela acaba. Não deixe nele nada
   que o usuário ou outra sessão precise ler; use a pasta da tarefa.
 - Sem tmux: o socket fica no `/tmp` de fora, e `TMUX` e `TMUX_PANE` saem do
   ambiente. Não há como comandar outra sessão, e a notificação sai sem o botão
   Abrir.
+- O `XDG_RUNTIME_DIR` é próprio: sem Hyprland (`hyprctl` falha), Wayland, X,
+  gpg-agent e systemd do usuário. O D-Bus da sessão vem pelo
+  `xdg-dbus-proxy`, que só fala com `org.freedesktop.secrets` e
+  `org.freedesktop.Notifications`; o proxy vive enquanto o bwrap guarda o
+  cano de sincronização (`--sync-fd`). O D-Bus do sistema e o Docker ficam
+  ocultos, e o namespace de PID é próprio: `kill` e `ps` só alcançam os
+  processos da sessão, e um pid gravado de dentro não vale fora.
 - `~/.ssh`, `~/.gnupg`, `~/.git-credentials`, `~/.config/gh`, os chaveiros e
   os perfis de navegador aparecem vazios, e `SSH_AUTH_SOCK` sai do ambiente.
   `git push` por ssh ou com credencial guardada não funciona: o push é do

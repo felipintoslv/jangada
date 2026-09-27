@@ -325,33 +325,67 @@ continua com o revisor de sempre.
 ### Isolamento
 
 O agente roda no bubblewrap, pelo `jangada-isolar`. Ele grava só na pasta da
-tarefa (o worktree, ou o repositório com `--direto`), no `.git` comum do
-repositório, em `~/.claude`, em `~/.gemini/antigravity-cli`, em `~/.cache`, em
-`~/.local/state/jangada/agentes`, no `validar.jsonl`, no
-`eventos-agentes.jsonl` e no `delegacoes.jsonl`. O resto do sistema e da
-pasta pessoal fica somente leitura, inclusive `~/.claude.json` (perdê-lo só
-perde contadores), `~/.local/share/claude` (o Claude não se atualiza de
-dentro), os hooks do agy em `~/.gemini/config` e o resto do estado do jangada
-(barra, migrações), que alimenta código que roda fora. O `config` e os `hooks`
-do git e o arquivo `.git` do worktree ficam somente leitura mesmo dentro do
-`.git` comum: por eles o git rodaria, fora do isolamento, código escrito pelo
-agente. O `/tmp` é próprio da sessão e some no fim; com ele fica de fora o
-socket do tmux, e `TMUX`, `TMUX_PANE` e `SSH_AUTH_SOCK` saem do ambiente: o
-agente não comanda as outras sessões nem usa o agente SSH. A notificação de
-uma sessão isolada vem sem o botão Abrir. Ficam ocultos `~/.ssh`, `~/.gnupg`,
-`~/.password-store`, `~/.aws`, `~/.azure`, `~/.kube`, `~/.docker`, `~/.netrc`,
-`~/.git-credentials`, `~/.config/gh`, `~/.config/rclone`, os perfis do
-Chromium, do Chrome e do Firefox e `~/.local/share/keyrings`; por isso o
-`git push` fica com o usuário, fora da sessão. Dentro dela,
-`JANGADA_ISOLADO=1`, e um `jangada-isolar` chamado ali roda o comando direto,
-sem aninhar. A função `revisar` do jangada shell e o `.jangada/preparar.sh` do
-worktree também rodam isolados.
+tarefa (o worktree, ou o repositório com `--direto`), em `~/.claude`, em
+`~/.gemini/antigravity-cli`, em `~/.local/state/jangada/agentes`, no
+`validar.jsonl`, no `eventos-agentes.jsonl` e no `delegacoes.jsonl`. O resto
+do sistema e da pasta pessoal fica somente leitura, inclusive `~/.claude.json`
+(perdê-lo só perde contadores), `~/.local/share/claude` (o Claude não se
+atualiza de dentro), os hooks do agy em `~/.gemini/config` e o resto do estado
+do jangada (barra, migrações), que alimenta código que roda fora.
 
-A proteção é contra o dano acidental: `rm` fora do projeto, edição de
-dotfiles, leitura de chaves. Não é fronteira contra agente malicioso: o D-Bus
-da sessão fica aberto (o agy tira o login do chaveiro por ele), e por ele um
-`systemd-run --user` roda fora do isolamento; o IPC do Hyprland também fica ao
-alcance; e `~/.claude`, cujo `settings.json` define hooks, segue gravável.
+O que o git, o Claude ou o agy leem como configuração, e que valeria fora do
+isolamento, fica somente leitura mesmo dentro dos graváveis:
+
+- Git, num worktree: o `.git` comum inteiro, menos `objects`, `refs`, `logs`
+  e a pasta do próprio worktree em `worktrees/`, cujos `commondir` e `gitdir`
+  também ficam somente leitura. Commit, ramo novo, `checkout -b`, `reset` e
+  `stash` funcionam; apagar ramo ou tag e `git gc` falham, porque regravam o
+  `packed-refs` na raiz do `.git`.
+- Git, com `--direto`: a raiz do `.git` segue gravável (o `HEAD` e o `index`
+  ficam nela), menos `config`, `hooks`, `worktrees`, `modules` e `commondir`.
+  Como um bind sobre arquivo ausente criaria um arquivo vazio, o
+  `jangada-isolar` cria antes um `commondir` com `.` (o próprio `.git`), que o
+  git trata como se não existisse. O arquivo `.git` do worktree também é
+  somente leitura.
+- Claude: `settings.json`, `settings.local.json`, `CLAUDE.md`, `commands`,
+  `agents`, `skills`, `hooks`, `plugins`, `output-styles`, `backups` e os
+  scripts soltos em `~/.claude`. Os ausentes são criados vazios (`{}` nos
+  JSON). Mudar configuração de dentro (`/model`, `/config`) não persiste.
+- agy: os executáveis em `~/.gemini/antigravity-cli/bin`.
+
+O `~/.cache`, os retratos do shell (`~/.claude/shell-snapshots`), o ambiente
+das sessões (`~/.claude/session-env`) e `~/.claude/ide` aparecem com o
+conteúdo de fora, mas o que o agente grava neles fica numa camada em memória
+que some no fim: o `~/.cache` guarda os clones do AUR que o `yay` compila com
+sudo, e os retratos são carregados antes de cada comando de toda sessão do
+Claude, inclusive das abertas fora. Os clones do yay e do paru ficam, além
+disso, somente leitura.
+
+O `/tmp` e o `XDG_RUNTIME_DIR` são próprios da sessão e somem no fim; com
+eles ficam de fora os sockets do tmux, do Hyprland, do Wayland, do gpg-agent
+e do systemd do usuário, e `TMUX`, `TMUX_PANE`, `SSH_AUTH_SOCK`,
+`HYPRLAND_INSTANCE_SIGNATURE`, `WAYLAND_DISPLAY` e `DISPLAY` saem do
+ambiente. Colar imagem no Claude isolado não funciona. O D-Bus da sessão
+passa pelo `xdg-dbus-proxy`, que só deixa falar com `org.freedesktop.secrets`
+(o agy lê o login do chaveiro) e `org.freedesktop.Notifications` (os avisos
+dos hooks); sem o proxy, o agente fica sem D-Bus. O D-Bus do sistema e os
+sockets do Docker, do containerd, do podman e do tailscale ficam ocultos, e o
+agente tem namespace de PID próprio: não vê nem mata os processos de fora. A
+notificação de uma sessão isolada vem sem o botão Abrir. Ficam ocultos
+`~/.ssh`, `~/.gnupg`, `~/.password-store`, `~/.aws`, `~/.azure`, `~/.kube`,
+`~/.docker`, `~/.netrc`, `~/.git-credentials`, `~/.config/gh`,
+`~/.config/rclone`, os perfis do Chromium, do Chrome e do Firefox e
+`~/.local/share/keyrings`; por isso o `git push` fica com o usuário, fora da
+sessão. Dentro dela, `JANGADA_ISOLADO=1`, e um `jangada-isolar` chamado ali
+roda o comando direto, sem aninhar. A função `revisar` do jangada shell e o
+`.jangada/preparar.sh` do worktree também rodam isolados.
+
+Limites conhecidos: o agente lê todo o chaveiro pelo D-Bus; as conversas e a
+memória de outros projetos em `~/.claude/projects` e o `settings.json` do agy
+(permissões e pastas confiáveis) seguem graváveis; e um repositório aninhado
+criado no worktree e registrado no índice leva sua própria configuração, que
+um `git status` de fora carregaria. Por isso os scripts do jangada rodam o
+git sobre pastas de agentes com `jangada_git_seguro`.
 
 `JANGADA_ISOLAR_ESCRITA` no `jangada.conf` acrescenta pastas graváveis,
 separadas por `:` (`~/dados:~/R`). `JANGADA_ISOLAR_OCULTAR` substitui a lista

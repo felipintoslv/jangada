@@ -274,7 +274,9 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
     cmd_agente+=" $JANGADA_AGENTE_ARGS"
   fi
   ((${#extras[@]})) && cmd_agente+=" $(printf '%q ' "${extras[@]}")"
-  # Comando sem o prompt, guardado no estado para o --restaurar.
+  # Comando sem o prompt, guardado no estado só para consulta. O --restaurar
+  # não o usa: o estado é gravável pelo agente isolado, e o jangada-agentes
+  # recompõe o comando a partir de campos conferidos e da configuração.
   cmd_base="$cmd_agente"
   # O prompt vai por arquivo: digitado pelo send-keys, cada quebra de linha
   # seria um Enter e o agente receberia só a primeira linha. O shell da sessão
@@ -306,7 +308,8 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
       [[ "$_env" =~ ^JANGADA_AGENTE_ISOLAR=(.*)$ ]] && isolar="${BASH_REMATCH[1]}"
     done
   fi
-  # O prefixo entra no comando guardado, e a sessão restaurada volta isolada.
+  # O prefixo entra no comando guardado só para consulta: a sessão restaurada
+  # volta isolada pela configuração, e não pelo .isolar do estado.
   if [[ "$isolar" != 0 ]]; then
     cmd_agente="$(printf '%q' "$JANGADA_PATH/bin/jangada-isolar") -- $cmd_agente"
     cmd_base="$cmd_agente"
@@ -323,8 +326,8 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
   [[ "${JANGADA_AGENTE_PROTOCOLO:-1}" != 0 && -r "$protocolo" ]] || protocolo=""
   # Sem o revisor instalado, o protocolo mandaria rodar um comando que falharia.
   ! command -v "$revisor_efetivo" >/dev/null 2>&1 && protocolo=""
-  # O protocolo da sessão fica num arquivo próprio porque o comando guardado
-  # para o --restaurar lê o arquivo de novo. Leva o item de subagentes do
+  # O protocolo da sessão fica num arquivo próprio, lido pelo comando na hora
+  # (o --restaurar o refaz das mesmas fontes). Leva o item de subagentes do
   # destino da delegação e, em projeto com arquivos R, as regras de código R.
   if [[ -n "$protocolo" ]]; then
     partes=("$protocolo" "$JANGADA_PATH/default/agentes/protocolo-delegar-$delegar.md"

@@ -19,18 +19,31 @@ _jangada_confirmar() {
   esac
 }
 
+# Git no diretório atual, que pode ser o worktree de um agente isolado: sem
+# fsmonitor nem ganchos, que o agente poderia ter definido na configuração do
+# repositório e que rodariam aqui, fora do isolamento. Este arquivo não carrega
+# o bin/jangada-config, por isso a função repete as opções do jangada_git_seguro.
+# O paginador também viria dessa configuração: vale o do GIT_PAGER, o da
+# configuração global do git ou o do PAGER, nessa ordem.
+_jangada_git() {
+  local paginador
+  paginador="${GIT_PAGER:-$(git config --global --get core.pager 2>/dev/null || true)}"
+  git -c core.fsmonitor=false -c core.hooksPath=/dev/null -c core.sshCommand=ssh \
+    -c core.pager="${paginador:-${PAGER:-less}}" -c safe.bareRepository=explicit "$@"
+}
+
 # Ramo principal do repositório atual: o que o origin aponta, ou main, ou
 # master. Devolve vazio quando nenhum dos três existe.
 _jangada_ramo_base() {
   local base=""
-  base="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+  base="$(_jangada_git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || true)"
   base="${base#origin/}"
-  if [ -n "$base" ] && git rev-parse --verify --quiet "$base" >/dev/null 2>&1; then
+  if [ -n "$base" ] && _jangada_git rev-parse --verify --quiet "$base" >/dev/null 2>&1; then
     printf '%s\n' "$base"
     return 0
   fi
   for base in main master; do
-    if git rev-parse --verify --quiet "$base" >/dev/null 2>&1; then
+    if _jangada_git rev-parse --verify --quiet "$base" >/dev/null 2>&1; then
       printf '%s\n' "$base"
       return 0
     fi
@@ -77,8 +90,11 @@ mapa() {
 #
 # O nome não é "diff": um alias com esse nome sobrescreve o diff(1) do sistema
 # dentro da subshell, e qualquer "diff a b" passaria a comparar outra coisa.
+#
+# Sem diff externo nem textconv: os dois são programas que a configuração do
+# repositório pode definir.
 mudancas() {
-  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if ! _jangada_git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "o diretório atual não é um repositório git" >&2
     return 1
   fi
@@ -86,14 +102,14 @@ mudancas() {
   base="$(_jangada_ramo_base || true)"
   if [ -z "$base" ]; then
     echo "nenhum ramo base (main/master); mostrando o que não está em commit" >&2
-    git diff HEAD
+    _jangada_git diff --no-ext-diff --no-textconv HEAD
     return
   fi
-  if [ "$base" = "$(git rev-parse --abbrev-ref HEAD)" ]; then
-    git diff HEAD
+  if [ "$base" = "$(_jangada_git rev-parse --abbrev-ref HEAD)" ]; then
+    _jangada_git diff --no-ext-diff --no-textconv HEAD
     return
   fi
-  git diff "$base...HEAD"
+  _jangada_git diff --no-ext-diff --no-textconv "$base...HEAD"
 }
 
 # Identifica a sessão de agente ativa no diretório atual.
@@ -106,7 +122,7 @@ _jangada_sessao_atual() {
   fi
   local estado_dir="${JANGADA_ESTADO:-${XDG_STATE_HOME:-$HOME/.local/state}/jangada}/agentes"
   local toplevel
-  toplevel="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  toplevel="$(_jangada_git rev-parse --show-toplevel 2>/dev/null || true)"
   if [ -n "$toplevel" ] && [ -d "$estado_dir" ]; then
     local arqs arq
     arqs="$(find "$estado_dir" -maxdepth 1 -name '*.json' 2>/dev/null || true)"
@@ -133,13 +149,13 @@ concluir() {
     return $?
   fi
 
-  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if ! _jangada_git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "o diretório atual não é um repositório git" >&2
     return 1
   fi
 
   local ramo base
-  ramo="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  ramo="$(_jangada_git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
   base="$(_jangada_ramo_base || true)"
   if [ -n "$base" ] && [ "$ramo" = "$base" ]; then
     echo "você já está no ramo principal ($base). Entre no worktree de uma tarefa para concluir."
@@ -165,14 +181,14 @@ desistir() {
 
 # Reverte o worktree para o ponto inicial da tarefa após confirmação
 reverter() {
-  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if ! _jangada_git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "o diretório atual não é um repositório git" >&2
     return 1
   fi
   local base ponto ramo_atual dir_atual wt_padrao
   base="$(_jangada_ramo_base || true)"
-  ramo_atual="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-  dir_atual="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  ramo_atual="$(_jangada_git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  dir_atual="$(_jangada_git rev-parse --show-toplevel 2>/dev/null || true)"
   wt_padrao="${JANGADA_WORKTREES:-$HOME/.local/share/jangada-worktrees}"
 
   if [ -n "$base" ] && [ "$ramo_atual" = "$base" ]; then
@@ -188,13 +204,13 @@ reverter() {
     return 1
   fi
   if [ -n "$base" ]; then
-    ponto="$(git merge-base "$base" HEAD 2>/dev/null || true)"
+    ponto="$(_jangada_git merge-base "$base" HEAD 2>/dev/null || true)"
   fi
   ponto="${ponto:-HEAD}"
 
   if _jangada_confirmar "Deseja reverter todas as alterações deste worktree para o ponto inicial ($ponto)?"; then
-    git reset --hard "$ponto"
-    git clean -fd
+    _jangada_git reset --hard "$ponto"
+    _jangada_git clean -fd
     echo "worktree revertido para o ponto inicial limpo ($ponto)."
   fi
 }

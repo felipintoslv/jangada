@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Atualiza o jangada e o sistema, avisando quando o conjunto do Hyprland muda.
 #
-# Ordem: git pull do repositório, lista de atualizações, confirmação quando
-# houver mudança no Hyprland, pacman -Syu (snap-pac cria os snapshots),
-# AUR, migrações e, por fim, recarga com conferência de erros. Depois confere
-# o initramfs e o driver NVIDIA e roda os ganchos pos-update do usuário.
+# Ordem: busca do repositório (aplicada só com a sua confirmação), lista de
+# atualizações, confirmação quando houver mudança no Hyprland, pacman -Syu
+# (snap-pac cria os snapshots), AUR, migrações e, por fim, recarga com
+# conferência de erros. Depois confere o initramfs e o driver NVIDIA e roda os
+# ganchos pos-update do usuário.
 #
 # A cópia instalada acompanha o ramo JANGADA_CANAL (main ou estavel).
 set -euo pipefail
@@ -18,28 +19,75 @@ source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 # noctalia-shell-git do AUR; os dois contam.
 conjunto_hypr='^(hyprland|aquamarine|hyprutils|hyprlang|hyprgraphics|hyprcursor|hyprwire|hyprtoolkit|hyprland-guiutils|hyprlock|hypridle|hyprpolkitagent|xdg-desktop-portal-hyprland|quickshell(-git)?|noctalia-shell(-git)?|noctalia-qs(-git)?)$'
 
+# O git roda fora do isolamento sobre a cópia instalada: sem fsmonitor nem
+# ganchos, que viriam da configuração do repositório.
+g() { jangada_git_seguro -C "$JANGADA_PATH" "$@"; }
+
+# Mostra os commits de $1 até $2 e pede confirmação. A origem da cópia
+# instalada é a cópia de trabalho, cujas refs um agente isolado pode gravar:
+# nada que chega por ela roda (jangada-versao, migrações com sudo ainda
+# autenticado, ganchos) sem que você veja e aceite. Os assuntos e nomes passam
+# por um filtro de caracteres de controle, para que uma sequência de escape
+# não apague nem disfarce a lista. Sem terminal, a resposta é não.
+confirmar_novidades() {
+  local de="$1" ate="$2" sensiveis r=""
+  echo "commits novos na origem:"
+  g log --oneline "$de..$ate" | tr -d '\000-\010\013-\037\177' | sed 's/^/   /'
+  g diff --no-ext-diff --no-textconv --stat "$de..$ate" | tr -d '\000-\010\013-\037\177' | sed 's/^/   /'
+  sensiveis="$(g diff --no-ext-diff --no-textconv --name-only "$de..$ate" -- migrations install bin | tr -d '\000-\010\013-\037\177')"
+  if [[ -n "$sensiveis" ]]; then
+    echo "!! mudam código que roda fora do isolamento (migrations/, install/, bin/):"
+    printf '%s\n' "$sensiveis" | sed 's/^/   /'
+  fi
+  read -r -p "aplicar estas mudanças do jangada? [s/N] " r || r=""
+  [[ "${r,,}" == s* ]]
+}
+
+# Opções do avanço da cópia instalada. Para exigir commits assinados, basta
+# acrescentar aqui --verify-signatures.
+opcoes_merge=(--ff-only --quiet)
+
 echo "==> repositório jangada (canal $JANGADA_CANAL)"
-if [[ -z "$(git -C "$JANGADA_PATH" status --porcelain)" ]]; then
-  git -C "$JANGADA_PATH" fetch --quiet origin || echo "!! não consegui buscar o repositório de origem"
-  ramo_atual="$(git -C "$JANGADA_PATH" rev-parse --abbrev-ref HEAD)"
+if [[ -z "$(g status --porcelain --ignore-submodules=all)" ]]; then
+  # Só busca: nada chega à cópia instalada antes da confirmação abaixo.
+  g fetch --quiet origin || echo "!! não consegui buscar o repositório de origem"
+  ramo_atual="$(g rev-parse --abbrev-ref HEAD)"
   if [[ "$ramo_atual" != "$JANGADA_CANAL" ]]; then
-    if git -C "$JANGADA_PATH" show-ref --verify --quiet "refs/heads/$JANGADA_CANAL"; then
-      git -C "$JANGADA_PATH" switch --quiet "$JANGADA_CANAL"
-    elif git -C "$JANGADA_PATH" show-ref --verify --quiet "refs/remotes/origin/$JANGADA_CANAL"; then
-      git -C "$JANGADA_PATH" switch --quiet --track "origin/$JANGADA_CANAL"
+    if g show-ref --verify --quiet "refs/heads/$JANGADA_CANAL"; then
+      g switch --quiet "$JANGADA_CANAL"
+    elif g show-ref --verify --quiet "refs/remotes/origin/$JANGADA_CANAL"; then
+      # O ramo novo nasce no ponto da origem: passa pela mesma confirmação.
+      if confirmar_novidades HEAD "refs/remotes/origin/$JANGADA_CANAL"; then
+        g switch --quiet --track "origin/$JANGADA_CANAL"
+      else
+        echo "!! troca para o canal $JANGADA_CANAL não aplicada; a cópia segue em $ramo_atual"
+      fi
     else
       echo "!! o canal $JANGADA_CANAL não existe na origem; a cópia segue em $ramo_atual"
     fi
   fi
-  antes="$(git -C "$JANGADA_PATH" rev-parse HEAD)"
-  git -C "$JANGADA_PATH" pull --ff-only || echo "!! não foi possível atualizar o repositório (siga com o sistema)"
-  # O que chegou com o pull, nos grupos do CHANGELOG.md.
-  if [[ "$(git -C "$JANGADA_PATH" rev-parse HEAD)" != "$antes" ]]; then
+  antes="$(g rev-parse HEAD)"
+  novo="$(g rev-parse --verify --quiet '@{upstream}^{commit}' 2>/dev/null || true)"
+  if [[ -z "$novo" ]]; then
+    echo "!! o ramo $(g rev-parse --abbrev-ref HEAD) não acompanha um ramo da origem; nada a aplicar"
+  elif [[ "$novo" == "$antes" ]] || g merge-base --is-ancestor "$novo" "$antes"; then
+    echo "jangada já atualizado"
+  elif ! g merge-base --is-ancestor "$antes" "$novo"; then
+    echo "!! a origem não avança em linha reta a partir da cópia instalada; nada aplicado (siga com o sistema)"
+  elif confirmar_novidades "$antes" "$novo"; then
+    g merge "${opcoes_merge[@]}" "$novo" \
+      || echo "!! não foi possível atualizar o repositório (siga com o sistema)"
+  else
+    echo "!! mudanças do jangada não aplicadas; o sistema é atualizado com a versão atual e sem migrações novas"
+  fi
+  # O que chegou, nos grupos do CHANGELOG.md.
+  if [[ "$(g rev-parse HEAD)" != "$antes" ]]; then
     echo "jangada agora em $("$JANGADA_PATH/bin/jangada-versao" -C "$JANGADA_PATH")"
-    "$JANGADA_PATH/bin/jangada-versao" -C "$JANGADA_PATH" --novidades "$antes" HEAD | sed 's/^/   /' || true
+    "$JANGADA_PATH/bin/jangada-versao" -C "$JANGADA_PATH" --novidades "$antes" HEAD \
+      | tr -d '\000-\010\013-\037\177' | sed 's/^/   /' || true
   fi
 else
-  echo "!! há alterações locais em $JANGADA_PATH; git pull não executado"
+  echo "!! há alterações locais em $JANGADA_PATH; a cópia instalada não foi atualizada"
 fi
 
 echo "==> atualizações disponíveis"

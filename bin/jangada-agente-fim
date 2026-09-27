@@ -53,7 +53,15 @@ confirmar() {
 
 # Integração: as mesmas conferências da função concluir do shell, feitas antes
 # de qualquer limpeza. Se o merge falhar, nada é removido.
-atualizar_copia_instalada() {
+#
+# O git roda aqui fora do isolamento sobre o worktree e o repositório do
+# agente, cujo .git o agente pode alterar: todas as chamadas passam por
+# jangada_git_seguro (sem fsmonitor nem ganchos), e o status ignora submódulos.
+#
+# A cópia instalada não é atualizada aqui: o que entrou no repositório de
+# origem dela só chega pelo jangada-update, que mostra os commits e pede
+# confirmação antes de rodar migrações com sudo.
+avisar_copia_instalada() {
   local r="$1"
   [[ -d "$JANGADA_PATH/.git" ]] || return 0
 
@@ -70,7 +78,7 @@ atualizar_copia_instalada() {
   fi
 
   local origem
-  origem="$(git -C "$JANGADA_PATH" config --get remote.origin.url 2>/dev/null || true)"
+  origem="$(git config -f "$JANGADA_PATH/.git/config" --get remote.origin.url 2>/dev/null || true)"
   if [[ "$origem" == /* && -d "$origem/.git" ]]; then
     local origem_real
     origem_real="$(realpath "$origem" 2>/dev/null || true)"
@@ -78,25 +86,9 @@ atualizar_copia_instalada() {
   fi
 
   if ((e_repo)); then
-    local ramo_instalado
-    ramo_instalado="$(git -C "$JANGADA_PATH" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-    if [[ -n "$base" && "$ramo_instalado" != "$base" ]]; then
-      echo "cópia instalada ($JANGADA_PATH) está em '$ramo_instalado', não em '$base'; git pull não executado" >&2
-      return 0
-    fi
-    if [[ -z "$(git -C "$JANGADA_PATH" status --porcelain 2>/dev/null)" ]]; then
-      echo "atualizando a cópia instalada em $JANGADA_PATH..."
-      if git -C "$JANGADA_PATH" pull --ff-only; then
-        if [[ -x "$JANGADA_PATH/bin/jangada-migrar" ]]; then
-          "$JANGADA_PATH/bin/jangada-migrar" || echo "!! aviso: jangada-migrar retornou código de erro" >&2
-        fi
-      else
-        echo "!! não foi possível atualizar $JANGADA_PATH" >&2
-      fi
-    else
-      echo "!! cópia instalada ($JANGADA_PATH) tem alterações locais; git pull não executado" >&2
-    fi
+    echo "a cópia instalada ($JANGADA_PATH) não foi atualizada: rode jangada-update para conferir e aplicar o que entrou"
   fi
+  return 0
 }
 
 integrado=0
@@ -104,15 +96,15 @@ apagar_ramo=0
 if ((integrar)); then
   if [[ -z "$ramo" || -z "$base" || -z "$raiz" ]]; then
     echo "a sessão $s não tem ramo próprio (trabalho direto no repositório); nada a integrar"
-    [[ -n "$raiz" ]] && atualizar_copia_instalada "$raiz"
+    [[ -n "$raiz" ]] && avisar_copia_instalada "$raiz"
   else
-    if [[ -n "$worktree" && -d "$worktree" && -n "$(git -C "$worktree" status --porcelain)" ]]; then
+    if [[ -n "$worktree" && -d "$worktree" && -n "$(jangada_git_seguro -C "$worktree" status --porcelain --ignore-submodules=all)" ]]; then
       echo "alterações não salvas em commit no worktree $worktree:" >&2
-      git -C "$worktree" status --short | head -20 >&2
+      jangada_git_seguro -C "$worktree" status --short --ignore-submodules=all | head -20 >&2
       echo "faça commit delas (ou descarte) antes de integrar" >&2
       exit 1
     fi
-    atual="$(git -C "$raiz" rev-parse --abbrev-ref HEAD)"
+    atual="$(jangada_git_seguro -C "$raiz" rev-parse --abbrev-ref HEAD)"
     if [[ "$atual" != "$base" ]]; then
       echo "o repositório principal ($raiz) está em '$atual', não em '$base'; troque para $base e rode de novo" >&2
       exit 1
@@ -120,26 +112,26 @@ if ((integrar)); then
     # O git já recusa o merge com alteração no índice ou em arquivo que o ramo
     # toca; esta conferência diz o motivo antes, e cobre o arquivo alterado que o
     # merge deixaria passar e que depois ninguém sabe se veio do ramo ou não.
-    if [[ -n "$(git -C "$raiz" status --porcelain --untracked-files=no)" ]]; then
+    if [[ -n "$(jangada_git_seguro -C "$raiz" status --porcelain --untracked-files=no --ignore-submodules=all)" ]]; then
       echo "o repositório principal ($raiz) tem alterações sem commit:" >&2
-      git -C "$raiz" status --short --untracked-files=no | head -20 >&2
+      jangada_git_seguro -C "$raiz" status --short --untracked-files=no --ignore-submodules=all | head -20 >&2
       echo "faça commit delas (ou guarde com git stash) antes de integrar" >&2
       exit 1
     fi
-    novos="$(git -C "$raiz" log --oneline "$base..$ramo" 2>/dev/null || true)"
+    novos="$(jangada_git_seguro -C "$raiz" log --oneline "$base..$ramo" 2>/dev/null | tr -d '\000-\010\013-\037\177' || true)"
     if [[ -z "$novos" ]]; then
       echo "o ramo $ramo não tem commits além de $base; nada a integrar"
     else
       echo "commits de $ramo a integrar em $base ($raiz):"
       printf '%s\n' "$novos" | head -30
       confirmar "mesclar e encerrar a sessão?" || { echo "nada foi feito"; exit 1; }
-      if ! git -C "$raiz" merge --no-ff -m "Integra $ramo" "$ramo"; then
+      if ! jangada_git_seguro -C "$raiz" merge --no-ff -m "Integra $ramo" "$ramo"; then
         echo "o merge falhou; resolva em $raiz (git merge --abort desfaz). A sessão foi mantida." >&2
         exit 1
       fi
       echo "integrado em $base"
       integrado=1
-      atualizar_copia_instalada "$raiz"
+      avisar_copia_instalada "$raiz"
     fi
     apagar_ramo=1
   fi
@@ -147,7 +139,7 @@ fi
 
 forcar=0
 if [[ -n "$worktree" && -d "$worktree" ]]; then
-  pendentes="$(git -C "$worktree" status --porcelain)"
+  pendentes="$(jangada_git_seguro -C "$worktree" status --porcelain --ignore-submodules=all | tr -d '\000-\010\013-\037\177')"
   if [[ -n "$pendentes" ]]; then
     echo "alterações não salvas em commit no worktree $worktree:"
     printf '%s\n' "$pendentes" | head -20
@@ -155,7 +147,7 @@ if [[ -n "$worktree" && -d "$worktree" ]]; then
     forcar=1
   fi
   if ((!integrar)) && [[ -n "$base" && -n "$ramo" ]]; then
-    novos="$(git -C "$raiz" log --oneline "$base..$ramo" 2>/dev/null || true)"
+    novos="$(jangada_git_seguro -C "$raiz" log --oneline "$base..$ramo" 2>/dev/null | tr -d '\000-\010\013-\037\177' || true)"
     if [[ -n "$novos" ]]; then
       echo "commits no ramo $ramo que não estão em $base (continuarão no ramo):"
       printf '%s\n' "$novos" | head -20
@@ -176,9 +168,9 @@ limpar() {
   "${JANGADA_TMUX[@]}" kill-session -t "=$s" 2>/dev/null || true
   if [[ -n "$worktree" && -d "$worktree" ]]; then
     if ((forcar)); then
-      git -C "$raiz" worktree remove --force "$worktree"
+      jangada_git_seguro -C "$raiz" worktree remove --force "$worktree"
     else
-      git -C "$raiz" worktree remove "$worktree"
+      jangada_git_seguro -C "$raiz" worktree remove "$worktree"
     fi
     echo "worktree removido: $worktree"
   fi
@@ -186,7 +178,7 @@ limpar() {
   if ((apagar_ramo)); then
     # -d, não -D: o git só apaga se o ramo estiver mesclado, o que confere a
     # integração feita acima.
-    git -C "$raiz" branch -d "$ramo" && echo "ramo apagado: $ramo"
+    jangada_git_seguro -C "$raiz" branch -d "$ramo" && echo "ramo apagado: $ramo"
   elif [[ -n "$ramo" && -n "$worktree" ]]; then
     echo "ramo mantido: $ramo (apague com: git -C $raiz branch -d $ramo)"
   fi

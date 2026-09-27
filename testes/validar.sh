@@ -617,8 +617,8 @@ JANGADA_AGENTE_PROTOCOLO=0 agente_em "$tmp/comr"
 conferir "caso 13d: JANGADA_AGENTE_PROTOCOLO=0 desliga também as regras de R" \
   bash -c '! jq -r .comando "$1" | grep -q "append-system-prompt" && test ! -e "$2"' _ "$estado/comr.json" "$estado/protocolo-comr.md"
 
-# Caso 13e: o agente abre pelo jangada-isolar, e o comando guardado para a
-# restauração também; --sem-isolar e JANGADA_AGENTE_ISOLAR=0 tiram o prefixo.
+# Caso 13e: o agente abre pelo jangada-isolar, e o comando guardado para
+# consulta também; --sem-isolar e JANGADA_AGENTE_ISOLAR=0 tiram o prefixo.
 agente_em "$tmp/semr"
 conferir "caso 13e: o comando passa pelo jangada-isolar" \
   bash -c 'jq -r .comando "$1" | grep -q "bin/jangada-isolar -- claude"' _ "$estado/semr.json"
@@ -628,34 +628,6 @@ conferir "caso 13e: --sem-isolar tira o jangada-isolar" \
 JANGADA_AGENTE_ISOLAR=0 agente_em "$tmp/semr"
 conferir "caso 13e: JANGADA_AGENTE_ISOLAR=0 tira o jangada-isolar" \
   bash -c '! jq -r .comando "$1" | grep -q jangada-isolar' _ "$estado/semr.json"
-
-# Caso 13f: a restauração devolve o prefixo que sumiu do comando guardado, a
-# não ser na sessão aberta sem isolamento.
-mkdir -p "$tmp/binrest"
-cat >"$tmp/binrest/tmux" <<'EOF'
-#!/usr/bin/env bash
-for arg in "$@"; do [[ "$arg" == has-session ]] && exit 1; done
-[[ " $* " == *" send-keys "* ]] && printf '%s\n' "${@: -2:1}" >>"$TMUX_LOG"
-exit 0
-EOF
-chmod +x "$tmp/binrest/tmux"
-restaurar_com() {
-  rm -f "$tmp/tmux.log"
-  jq -n --arg dir "$tmp/semr" --argjson extra "$1" \
-    '{sessao:"rest", dir:$dir, agente:"claude", comando:"claude", estado:"trabalhando"} + $extra' >"$estado/rest.json"
-  env -u TMUX PATH="$tmp/binrest:$tmp/bin:$PATH" TMUX_LOG="$tmp/tmux.log" \
-    XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
-    "${@:2}" "$repo_jangada/bin/jangada-agentes" --restaurar rest >/dev/null 2>&1
-}
-restaurar_com '{}'
-conferir "caso 13f: restaurar recoloca o jangada-isolar" grep -q "bin/jangada-isolar -- claude" "$tmp/tmux.log"
-restaurar_com '{"isolar":false}'
-conferir "caso 13f: sessão aberta sem isolar volta sem ele" \
-  bash -c '! grep -q jangada-isolar "$1" && grep -q "^claude" "$1"' _ "$tmp/tmux.log"
-restaurar_com '{}' env JANGADA_AGENTE_ISOLAR=0
-conferir "caso 13f: JANGADA_AGENTE_ISOLAR=0 não recoloca" \
-  bash -c '! grep -q jangada-isolar "$1" && grep -q "^claude" "$1"' _ "$tmp/tmux.log"
-rm -f "$estado/rest.json"
 
 if ((falhas)); then
   echo "$falhas falha(s); saídas em $tmp (mantido)"

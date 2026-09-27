@@ -110,6 +110,7 @@ fi
 
 passo "isolamento dos agentes"
 testes/isolar.sh || falha "testes/isolar.sh"
+testes/restaurar.sh || falha "testes/restaurar.sh"
 
 passo "histórico de estados dos agentes"
 testes/eventos.sh || falha "testes/eventos.sh"
@@ -126,6 +127,9 @@ testes/delegar.sh || falha "testes/delegar.sh"
 
 passo "versões"
 testes/versao.sh || falha "testes/versao.sh"
+
+passo "atualização da cópia instalada"
+testes/update.sh || falha "testes/update.sh"
 
 passo "importação da configuração do niri"
 testes/importar.sh || falha "testes/importar.sh"
