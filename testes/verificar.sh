@@ -106,6 +106,9 @@ fi
 passo "isolamento dos agentes"
 testes/isolar.sh || falha "testes/isolar.sh"
 
+passo "versões"
+testes/versao.sh || falha "testes/versao.sh"
+
 passo "importação da configuração do niri"
 testes/importar.sh || falha "testes/importar.sh"
 

@@ -28,3 +28,7 @@ com agentes de IA. Leia o README.md antes de alterar qualquer coisa.
 8. **Pegadinhas resolvidas.** Um comportamento inesperado de ferramenta que
    custou investigação (API do Hyprland, waybar, agy) vai também para a skill
    em `default/claude/skills/jangada/`, no guia do assunto.
+9. **Mensagens de commit.** Elas alimentam o `CHANGELOG.md`. Use
+   `feat(área): ...` para novidade e `fix(área): ...` para correção. O
+   `CHANGELOG.md` não se edita à mão: ele é gerado por
+   `jangada-versao --lancar X.Y.Z`.

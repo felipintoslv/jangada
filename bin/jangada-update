@@ -31,7 +31,13 @@ if [[ -z "$(git -C "$JANGADA_PATH" status --porcelain)" ]]; then
       echo "!! o canal $JANGADA_CANAL não existe na origem; a cópia segue em $ramo_atual"
     fi
   fi
+  antes="$(git -C "$JANGADA_PATH" rev-parse HEAD)"
   git -C "$JANGADA_PATH" pull --ff-only || echo "!! não foi possível atualizar o repositório (siga com o sistema)"
+  # O que chegou com o pull, nos grupos do CHANGELOG.md.
+  if [[ "$(git -C "$JANGADA_PATH" rev-parse HEAD)" != "$antes" ]]; then
+    echo "jangada agora em $("$JANGADA_PATH/bin/jangada-versao" -C "$JANGADA_PATH")"
+    "$JANGADA_PATH/bin/jangada-versao" -C "$JANGADA_PATH" --novidades "$antes" HEAD | sed 's/^/   /' || true
+  fi
 else
   echo "!! há alterações locais em $JANGADA_PATH; git pull não executado"
 fi

@@ -24,7 +24,7 @@ jangada/
 ├── config/                modelos copiados uma única vez para ~/.config/jangada
 ├── shell/                 integração com bash e zsh
 ├── migrations/            ajustes aplicados em ordem a cada atualização
-├── testes/                verificar.sh (estático + testes do validar e do importar) e aninhado.sh
+├── testes/                verificar.sh (estático + testes do validar, do isolar, do importar e do versao) e aninhado.sh
 ├── mapeamento/            inventários do jangada-mapear (fora do git)
 └── revisao/               pareceres, avaliações e comparações; índice em revisao/README.md
 ```
@@ -80,8 +80,9 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 
 | Comando | Função |
 |---|---|
-| `jangada-update` | atualiza o repositório no ramo de `JANGADA_CANAL`, mostra se o conjunto do Hyprland mudou, atualiza o sistema, aplica migrações, confere initramfs e driver NVIDIA e roda o gancho `pos-update`. Se o pacman ou o AUR falhar, a conferência da imagem de boot roda mesmo assim, e as migrações e a recarga do Hyprland ficam para depois do conserto |
+| `jangada-update` | atualiza o repositório no ramo de `JANGADA_CANAL` e mostra as novidades que chegaram, mostra se o conjunto do Hyprland mudou, atualiza o sistema, aplica migrações, confere initramfs e driver NVIDIA e roda o gancho `pos-update`. Se o pacman ou o AUR falhar, a conferência da imagem de boot roda mesmo assim, e as migrações e a recarga do Hyprland ficam para depois do conserto |
 | `jangada-verificar` | confere pacotes, snapshots, sessão, hooks e erros de configuração do Hyprland; `--diagnostico` grava um relatório e `--agente` abre um agente com ele no repositório do jangada |
+| `jangada-versao` | mostra a versão da cópia (`0.1.0`, ou `0.1.0-3-gabc1234` com commits depois da tag); `--novidades [DE [ATE]]` lista as mudanças, `--registro` imprime o registro completo e `--lancar X.Y.Z` grava o `CHANGELOG.md`, faz o commit e cria a tag `vX.Y.Z` (sem push); `-C DIR` opera em outro repositório |
 | `jangada-migrar` | aplica as migrações pendentes (o `jangada-update` já chama) |
 | `jangada-snapshot "descrição"` | cria um snapshot manual do sistema |
 | `jangada-tema [imagem]` | gera as cores a partir de um papel de parede e recarrega a interface |
@@ -331,6 +332,14 @@ git -C ~/Projetos/jangada push drive estavel
 O `jangada-update` também tira a cópia instalada de um ramo `agente/...`, se
 ela tiver ficado num deles.
 
+### Versões
+
+As versões seguem o formato `v0.x.y`, em tags do git. O `CHANGELOG.md` é
+gerado das mensagens de commit pelo `jangada-versao --lancar X.Y.Z`: o que
+começa com `feat` entra em Novidades, o que começa com `fix` em Correções e o
+resto em Outras mudanças. Depois do `git pull`, o `jangada-update` mostra as
+novidades que chegaram. `jangada-versao` mostra a versão instalada.
+
 ## Desenvolvimento
 
 A cópia de trabalho fica em `~/Projetos/jangada` (`JANGADA_REPO`); a cópia
@@ -340,6 +349,7 @@ instalar, rode `JANGADA_PATH=$PWD bin/...`.
 | Teste | O que confere |
 |---|---|
 | `testes/verificar.sh` | shellcheck, sintaxe Lua, JSON e TOML, comandos citados na configuração, `jangada-validar` com claude e agy falsos, o `jangada-isolar` (o que fica gravável, somente leitura e oculto), `jangada-importar` com um config.kdl de exemplo |
+| `testes/versao.sh` | `jangada-versao` num repositório temporário: grupos e prefixos das novidades, o `CHANGELOG.md` e a tag do `--lancar` e as recusas (árvore suja, versão menor, tag existente, nada novo); também roda dentro do `verificar.sh` |
 | `testes/aninhado.sh` | sobe um Hyprland aninhado com a configuração (`--sem-usuario` só os padrões) e confere `configerrors` e o número de atalhos |
 
 A cada push, o GitHub Actions (`.github/workflows/verificar.yml`) roda o

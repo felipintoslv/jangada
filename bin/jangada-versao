@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# Versões do jangada e registro de mudanças (CHANGELOG.md), gerado das
+# mensagens de commit.
+#
+# Uso: jangada-versao [-C PASTA] [OPÇÃO]
+#   (sem opção)               mostra a versão da cópia
+#   --novidades [DE [ATE]]    lista as mudanças entre dois commits (padrão: da
+#                             última versão até o HEAD)
+#   --registro                imprime o registro completo, sem gravar
+#   --lancar X.Y.Z            regrava o CHANGELOG.md, faz o commit dele e cria
+#                             a tag vX.Y.Z; o push fica com você
+#   -C PASTA                  usa o repositório em PASTA (padrão: o da pasta
+#                             atual, ou a cópia do jangada fora de um)
+#
+# Os grupos saem do assunto do commit: "feat" vira novidade; "fix",
+# "correção" e "correções", correção; o resto, outra mudança. Merges, os
+# "Integra ..." e os commits de versão ficam de fora.
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+repo=""
+if [[ "${1:-}" == -C ]]; then
+  [[ -n "${2:-}" ]] || { echo "jangada-versao: -C pede uma pasta" >&2; exit 1; }
+  repo="$2"; shift 2
+fi
+if [[ -z "$repo" ]]; then
+  repo="$(git rev-parse --show-toplevel 2>/dev/null || echo "$JANGADA_PATH")"
+fi
+g() { git -C "$repo" "$@"; }
+g rev-parse --git-dir >/dev/null 2>&1 || { echo "jangada-versao: $repo não é um repositório git" >&2; exit 1; }
+
+# Tags de versão, da mais nova para a mais velha.
+versoes() { g tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname; }
+ultima() { versoes | head -n1; }
+
+# Mudanças no intervalo, em grupos. Sem argumento DE, desde o início.
+mudancas() {
+  local intervalo="$2" assunto novas="" correcoes="" outras=""
+  [[ -n "$1" ]] && intervalo="$1..$2"
+  while IFS= read -r assunto; do
+    case "$assunto" in
+      "Integra "*|chore\(versao\)*) continue ;;
+    esac
+    if [[ "$assunto" =~ ^feat(\(([^\)]*)\))?!?:\ *(.*)$ ]]; then
+      novas+="- ${BASH_REMATCH[2]:+${BASH_REMATCH[2]}: }${BASH_REMATCH[3]}"$'\n'
+    elif [[ "$assunto" =~ ^fix(\(([^\)]*)\))?!?:\ *(.*)$ ]]; then
+      correcoes+="- ${BASH_REMATCH[2]:+${BASH_REMATCH[2]}: }${BASH_REMATCH[3]}"$'\n'
+    elif [[ "$assunto" =~ ^corre(ção|ções):\ *(.*)$ ]]; then
+      correcoes+="- ${BASH_REMATCH[2]}"$'\n'
+    else
+      outras+="- $assunto"$'\n'
+    fi
+  done < <(g log --no-merges --format=%s "$intervalo")
+  local sep=""
+  [[ -n "$novas" ]] && { printf '### Novidades\n\n%s' "$novas"; sep=1; }
+  [[ -n "$correcoes" ]] && { [[ -n "$sep" ]] && echo; printf '### Correções\n\n%s' "$correcoes"; sep=1; }
+  [[ -n "$outras" ]] && { [[ -n "$sep" ]] && echo; printf '### Outras mudanças\n\n%s' "$outras"; }
+  return 0
+}
+
+# Registro completo. Com VERSÃO, o que ainda não tem tag entra sob ela, com a
+# data de hoje; sem, entra sob "Não lançado".
+registro() {
+  local nova="${1:-}" tags=() i corpo topo
+  mapfile -t tags < <(versoes)
+  printf '# Registro de mudanças\n\n'
+  printf 'Gerado das mensagens de commit por `jangada-versao --lancar`; não edite\n'
+  printf 'à mão. A versão instalada aparece em `jangada-versao`.\n'
+  corpo="$(mudancas "${tags[0]:-}" HEAD)"
+  if [[ -n "$corpo" ]]; then
+    if [[ -n "$nova" ]]; then
+      topo="## $nova ($(date +%F))"
+    else
+      topo="## Não lançado"
+    fi
+    printf '\n%s\n\n%s\n' "$topo" "$corpo"
+  fi
+  for ((i = 0; i < ${#tags[@]}; i++)); do
+    printf '\n## %s (%s)\n' "${tags[i]#v}" "$(g for-each-ref --format='%(creatordate:short)' "refs/tags/${tags[i]}")"
+    corpo="$(mudancas "${tags[i+1]:-}" "${tags[i]}")"
+    [[ -n "$corpo" ]] && printf '\n%s\n' "$corpo"
+  done
+  return 0
+}
+
+maior() {  # maior A B: A > B, em versão X.Y.Z
+  [[ "$1" != "$2" && "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" == "$1" ]]
+}
+
+case "${1:-}" in
+  "")
+    if v="$(g describe --tags --match 'v[0-9]*' 2>/dev/null)"; then
+      echo "${v#v}"
+    else
+      echo "sem versão ($(g rev-parse --short HEAD))"
+    fi
+    ;;
+  --novidades)
+    de="${2-$(ultima)}"
+    mudancas "$de" "${3:-HEAD}"
+    ;;
+  --registro)
+    registro
+    ;;
+  --lancar)
+    nova="${2:-}"
+    [[ "$nova" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "jangada-versao: versão inválida: '$nova' (use X.Y.Z)" >&2; exit 1; }
+    [[ -z "$(g status --porcelain)" ]] || { echo "jangada-versao: há mudanças sem commit em $repo" >&2; exit 1; }
+    ! g rev-parse -q --verify "refs/tags/v$nova" >/dev/null || { echo "jangada-versao: a tag v$nova já existe" >&2; exit 1; }
+    anterior="$(ultima)"
+    if [[ -n "$anterior" ]] && ! maior "$nova" "${anterior#v}"; then
+      echo "jangada-versao: $nova não é maior que ${anterior#v}" >&2; exit 1
+    fi
+    [[ -n "$(mudancas "$anterior" HEAD)" ]] || { echo "jangada-versao: nada mudou desde ${anterior#v}" >&2; exit 1; }
+    registro "$nova" >"$repo/CHANGELOG.md"
+    g add CHANGELOG.md
+    g commit -q -m "chore(versao): $nova" -- CHANGELOG.md
+    g tag -a "v$nova" -m "jangada $nova"
+    echo "versão $nova criada: commit $(g rev-parse --short HEAD), tag v$nova"
+    echo "para publicar: git -C $(printf '%q' "$repo") push origin HEAD v$nova"
+    ;;
+  -h|--ajuda|--help)
+    sed -n '2,18s/^# \{0,1\}//p' "$0"
+    ;;
+  *)
+    echo "jangada-versao: opção desconhecida: $1 (veja --ajuda)" >&2
+    exit 1
+    ;;
+esac

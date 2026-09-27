@@ -69,6 +69,8 @@ export JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_INTERFACE JANGADA_TERM
   JANGADA_AGENTE JANGADA_AGENTE_ARGS JANGADA_VALIDAR_REVISOR JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL \
   JANGADA_PAPEL_AJUSTE JANGADA_TEMA_ESQUEMA JANGADA_BARRA_POSICAO JANGADA_GPU \
   JANGADA_REPO JANGADA_CANAL JANGADA_AGENTE_ISOLAR JANGADA_ISOLAR_ESCRITA
+# Só quando definido: ausente e vazio têm sentidos diferentes no jangada-isolar.
+if [[ -n "${JANGADA_ISOLAR_OCULTAR+x}" ]]; then export JANGADA_ISOLAR_OCULTAR; fi
 
 # Dispositivos DRM com saída de vídeo conectada, um por linha, em caminho
 # estável (/dev/dri/by-path, porque a numeração de /dev/dri/cardN muda entre
