@@ -111,6 +111,7 @@ fi
 passo "isolamento dos agentes"
 testes/isolar.sh || falha "testes/isolar.sh"
 testes/restaurar.sh || falha "testes/restaurar.sh"
+testes/fim.sh || falha "testes/fim.sh"
 
 passo "histórico de estados dos agentes"
 testes/eventos.sh || falha "testes/eventos.sh"
@@ -133,6 +134,12 @@ testes/update.sh || falha "testes/update.sh"
 
 passo "importação da configuração do niri"
 testes/importar.sh || falha "testes/importar.sh"
+
+passo "utilitários (mapear, rede, calendário, reverter)"
+testes/mapear.sh || falha "testes/mapear.sh"
+testes/rede.sh || falha "testes/rede.sh"
+testes/calendario.sh || falha "testes/calendario.sh"
+testes/reverter.sh || falha "testes/reverter.sh"
 
 printf '\n'
 ((falhas == 0)) && echo "tudo certo" || echo "$falhas falha(s)"

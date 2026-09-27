@@ -119,7 +119,8 @@ echo "== jangada-agente-fim --integrar"
 
 # Sessão de agente num worktree da origem, com um commit a integrar.
 git -C "$origem" reset --quiet --hard "$novo"
-wt="$tmp/wt"
+# O caminho é o que o jangada-agente cria: $JANGADA_WORKTREES/REPO/NOME.
+wt="$HOME/.local/share/jangada-worktrees/origem/x"
 git -C "$origem" worktree add --quiet -b agente/x "$wt" main
 echo "tarefa" >"$wt/tarefa.txt"
 git -C "$wt" add tarefa.txt

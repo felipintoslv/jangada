@@ -40,7 +40,7 @@ formato usado nas avaliações de revisão cruzada.
 | 22/09/2026 | [avaliacao-gemini-20260922-agy-validar.md](avaliacao-gemini-20260922-agy-validar.md) | avaliação | do parecer acima | 7 aceitos, 1 rejeitado |
 | 22/09/2026 | [gemini-20260922-integrar-pull.md](gemini-20260922-integrar-pull.md) | parecer | atualização da cópia instalada e gancho pos-agente-fim | 4 apontamentos |
 | 22/09/2026 | [avaliacao-gemini-20260922-integrar-pull.md](avaliacao-gemini-20260922-integrar-pull.md) | avaliação | do parecer acima | 4 aceitos e aplicados |
-| 27/09/2026 | [auditoria-20260927.md](auditoria-20260927.md) | auditoria | repositório inteiro, pelo Claude com subagentes | 72 apontamentos; os 6 críticos corrigidos em f31f86a |
+| 27/09/2026 | [auditoria-20260927.md](auditoria-20260927.md) | auditoria | repositório inteiro, pelo Claude com subagentes | 72 apontamentos; críticos e altos corrigidos |
 
 ## Outros documentos
 

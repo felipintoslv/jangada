@@ -55,8 +55,36 @@ obter_wifi() {
   fi
 }
 
+# Tipo de chave da rede, pelo campo SECURITY da busca: wpa-psk para WPA1 e
+# WPA2 (inclusive a transição WPA2/WPA3), sae para WPA3 puro. Devolve vazio
+# para WEP e 802.1X, que pedem mais do que uma senha e ficam para o editor.
+tipo_chave_wifi() {
+  local ssid="$1" linha sec nome
+  while IFS= read -r linha; do
+    sec="${linha%%:*}"
+    nome="${linha#*:}"
+    # No modo -t, o nmcli escapa ":" e "\" dentro dos valores.
+    nome="${nome//\\:/:}"
+    nome="${nome//\\\\/\\}"
+    [[ "$nome" == "$ssid" ]] || continue
+    case "$sec" in
+      *802.1X*|*WEP*) return 0 ;;
+      *WPA1*|*WPA2*) echo wpa-psk; return 0 ;;
+      *WPA3*) echo sae; return 0 ;;
+    esac
+  done < <(nmcli -t -f SECURITY,SSID device wifi list 2>/dev/null || true)
+  echo wpa-psk
+}
+
+# UUID do perfil Wi-Fi com o nome dado, se houver. Perfis de outro tipo com
+# o mesmo nome (VPN, cabo) são ignorados.
+uuid_perfil_wifi() {
+  nmcli -g connection.type,connection.uuid connection show id "$1" 2>/dev/null |
+    sed -n 's/^802-11-wireless://p' | head -1 || true
+}
+
 conectar_wifi() {
-  local ssid="$1" senha=""
+  local ssid="$1" senha="" chave="" uuid=""
   notify-send -a jangada -u low "Rede" "Conectando a $ssid..." 2>/dev/null || true
   
   if nmcli -s device wifi connect "$ssid" >/dev/null 2>&1; then
@@ -67,7 +95,33 @@ conectar_wifi() {
   senha="$(jangada_fuzzel --password --prompt "senha para $ssid > " || true)"
   [[ -n "$senha" ]] || return 0
 
-  if nmcli device wifi connect "$ssid" password "$senha" >/dev/null 2>&1; then
+  # A senha não vai na linha de comando do nmcli, onde ficaria em
+  # /proc/PID/cmdline, legível por qualquer processo do usuário. O perfil é
+  # criado sem ela e a ativação a recebe pelo passwd-file, lido de um
+  # descritor alimentado pelo printf, que é embutido no bash e não cria
+  # processo com a senha nos argumentos. O NetworkManager guarda no perfil a
+  # senha recebida, como faz com a digitada no applet.
+  uuid="$(uuid_perfil_wifi "$ssid")"
+  if [[ -z "$uuid" ]]; then
+    chave="$(tipo_chave_wifi "$ssid")"
+    if [[ -z "$chave" ]]; then
+      notify-send -a jangada -u critical "Rede" "$ssid usa WEP ou 802.1X: configure pelo editor de rede" 2>/dev/null || true
+      return 0
+    fi
+    if ! nmcli connection add type wifi con-name "$ssid" ssid "$ssid" \
+      wifi-sec.key-mgmt "$chave" >/dev/null 2>&1; then
+      notify-send -a jangada -u critical "Rede" "Não foi possível criar o perfil de $ssid" 2>/dev/null || true
+      return 0
+    fi
+    uuid="$(uuid_perfil_wifi "$ssid")"
+  fi
+  if [[ -z "$uuid" ]]; then
+    notify-send -a jangada -u critical "Rede" "Perfil de $ssid não encontrado" 2>/dev/null || true
+    return 0
+  fi
+
+  if nmcli connection up uuid "$uuid" passwd-file /dev/fd/3 \
+    3< <(printf '802-11-wireless-security.psk:%s\n' "$senha") >/dev/null 2>&1; then
     notify-send -a jangada -u low "Rede" "Conectado a $ssid" 2>/dev/null || true
   else
     notify-send -a jangada -u critical "Rede" "Falha na autenticação com $ssid" 2>/dev/null || true

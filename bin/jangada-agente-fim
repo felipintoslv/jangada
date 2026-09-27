@@ -28,22 +28,98 @@ if [[ ! -f "$arq" ]] && ! "${JANGADA_TMUX[@]}" has-session -t "=$s" 2>/dev/null;
   exit 1
 fi
 
-worktree=""; ramo=""; base=""; raiz=""; estado=""
+worktree=""; ramo=""; base=""; raiz=""
 if [[ -f "$arq" ]]; then
-  worktree="$(jq -r '.worktree // ""' "$arq")"
-  ramo="$(jq -r '.ramo // ""' "$arq")"
-  base="$(jq -r '.base // ""' "$arq")"
-  raiz="$(jq -r '.raiz // ""' "$arq")"
-  estado="$(jq -r '.estado // ""' "$arq")"
+  worktree="$(jq -r '.worktree // "" | tostring' "$arq" 2>/dev/null)" || worktree=$'\n'
+  ramo="$(jq -r '.ramo // "" | tostring' "$arq" 2>/dev/null)" || ramo=$'\n'
+  base="$(jq -r '.base // "" | tostring' "$arq" 2>/dev/null)" || base=$'\n'
+  raiz="$(jq -r '.raiz // "" | tostring' "$arq" 2>/dev/null)" || raiz=$'\n'
 fi
 
-# Ciclo que já terminou fica no painel depois de o processo sair, então o pid
-# do arquivo pode ter sido reaproveitado pelo sistema. Nesse caso encerrar a
-# sessão é só arrumar a lista, e matar o pid mataria um processo alheio.
-matar_pid=1
-case "$estado" in
-  concluido|aguardando) matar_pid=0 ;;
-esac
+# O arquivo de estado fica na pasta agentes/, gravável de dentro do
+# jangada-isolar, e o que vem dele decide o merge, a remoção do worktree e o
+# branch -d feitos aqui fora do isolamento. Por isso nada é usado sem
+# conferência, e estado que não passa é recusado sem alterar nada:
+# - o pid não é lido: nenhum script grava mais, e matar um número vindo do
+#   estado encerraria qualquer processo do usuário;
+# - ramo e worktree vêm juntos, no formato que o jangada-agente cria:
+#   agente/NOME e $JANGADA_WORKTREES/REPO/NOME, sem link simbólico no caminho;
+# - com o worktree no disco, ele precisa estar registrado no repositório da
+#   raiz e os dois precisam ter o mesmo diretório git comum; sem ele, a raiz
+#   precisa ser a raiz de um repositório com o nome que deu REPO;
+# - a base precisa ser um nome de ramo válido que não comece com "-", para
+#   não virar opção do git log.
+recusar() {
+  echo "estado inválido em $arq: $1" >&2
+  echo "nada foi feito; confira o arquivo (ele é gravável pelo agente isolado)" >&2
+  exit 1
+}
+
+# O mesmo slug do jangada-agente, que dá o nome da pasta do repositório.
+slug() {
+  { iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null <<<"$1" || printf '%s\n' "$1"; } \
+    | LC_ALL=C tr '[:upper:]' '[:lower:]' \
+    | LC_ALL=C sed -E -e 's/[^a-z0-9_-]+/-/g' -e 's/^-+//' -e 's/-+$//'
+}
+
+# Caminho absoluto e canônico do diretório git comum de $1, ou nada.
+dir_comum() {
+  local d
+  d="$(jangada_git_seguro -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  realpath -e -- "$d" 2>/dev/null
+}
+
+conferir_estado() {
+  local c
+  for c in "$worktree" "$ramo" "$base" "$raiz"; do
+    [[ "$c" != *[[:cntrl:]]* ]] || recusar "campo com caractere de controle"
+  done
+  [[ -z "$raiz" || "$raiz" == /* ]] || recusar "raiz não é caminho absoluto: $raiz"
+  if [[ -z "$ramo" && -z "$worktree" ]]; then
+    # Sessão direto no repositório: sem ramo, a base não serve para nada.
+    base=""
+    return 0
+  fi
+  [[ -n "$ramo" && -n "$worktree" && -n "$raiz" ]] \
+    || recusar "ramo, worktree e raiz precisam vir juntos"
+  [[ "$ramo" =~ ^agente/([a-z0-9_][a-z0-9_-]*)$ ]] || recusar "ramo fora do padrão agente/NOME: $ramo"
+  local nome="${BASH_REMATCH[1]}" resto repo wts real
+  resto="${worktree#"$JANGADA_WORKTREES"/}"
+  [[ "$resto" != "$worktree" && "$resto" =~ ^([a-z0-9_-]*)/([a-z0-9_-]+)$ && "${BASH_REMATCH[2]}" == "$nome" ]] \
+    || recusar "worktree fora de $JANGADA_WORKTREES/REPO/${nome}: $worktree"
+  repo="${BASH_REMATCH[1]}"
+  wts="$(realpath -m -- "$JANGADA_WORKTREES")"
+  real="$(realpath -m -- "$worktree")"
+  [[ "$real" == "$wts/$repo/$nome" ]] || recusar "o caminho do worktree passa por link simbólico: $worktree"
+  [[ "$real" != "$(realpath -m -- "$raiz")" ]] || recusar "worktree e raiz são a mesma pasta: $worktree"
+  if [[ -n "$base" ]]; then
+    [[ "$base" != -* ]] && git check-ref-format "refs/heads/$base" \
+      || recusar "base não é nome de ramo: $base"
+  fi
+
+  local topo
+  topo="$(jangada_git_seguro -C "$raiz" rev-parse --show-toplevel 2>/dev/null)" \
+    || recusar "raiz não é repositório git: $raiz"
+  [[ "$(realpath -m -- "$topo")" == "$(realpath -m -- "$raiz")" ]] \
+    || recusar "raiz não é a raiz do repositório: $raiz"
+
+  if [[ -e "$worktree" || -L "$worktree" ]]; then
+    [[ -d "$worktree" && ! -L "$worktree" ]] || recusar "worktree não é pasta: $worktree"
+    local comum_wt comum_raiz linha registrado=0
+    comum_wt="$(dir_comum "$worktree")" || recusar "worktree sem repositório git: $worktree"
+    comum_raiz="$(dir_comum "$raiz")" || recusar "raiz sem repositório git: $raiz"
+    [[ "$comum_wt" == "$comum_raiz" ]] \
+      || recusar "worktree ($comum_wt) e raiz ($comum_raiz) são de repositórios diferentes"
+    while IFS= read -r -d '' linha; do
+      [[ "$linha" == "worktree "* && "$(realpath -m -- "${linha#worktree }")" == "$real" ]] && registrado=1
+    done < <(jangada_git_seguro -C "$raiz" worktree list --porcelain -z 2>/dev/null)
+    ((registrado)) || recusar "$worktree não é worktree registrado em $raiz"
+  else
+    [[ "$(slug "$(basename "$raiz")")" == "$repo" ]] \
+      || recusar "raiz ($raiz) não é o repositório do worktree $worktree"
+  fi
+}
+conferir_estado
 
 confirmar() {
   local r
@@ -160,11 +236,6 @@ fi
 # dentro da própria sessão, encerrar a sessão mataria este script no meio;
 # nesse caso a limpeza continua num processo separado, com registro em arquivo.
 limpar() {
-  local pid
-  pid="$(jq -r '.pid // empty' "$arq" 2>/dev/null || true)"
-  if ((matar_pid)) && [[ -n "$pid" ]]; then
-    kill "$pid" 2>/dev/null || true
-  fi
   "${JANGADA_TMUX[@]}" kill-session -t "=$s" 2>/dev/null || true
   if [[ -n "$worktree" && -d "$worktree" ]]; then
     if ((forcar)); then
@@ -194,7 +265,7 @@ limpar() {
 if [[ "${JANGADA_SESSAO:-}" == "$s" ]]; then
   registro="$JANGADA_ESTADO/agentes/fim-$s.log"
   echo "encerrando a partir da própria sessão; registro em $registro"
-  export s worktree ramo raiz arq forcar matar_pid apagar_ramo integrado
+  export s worktree ramo raiz arq forcar apagar_ramo integrado
   export -f limpar
   if command -v setsid >/dev/null 2>&1; then
     # shellcheck disable=SC1090,SC2016

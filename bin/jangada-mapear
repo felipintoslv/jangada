@@ -7,7 +7,45 @@
 # Chaves, senhas e tokens são mascarados; arquivos de credenciais são ignorados.
 #
 # Uso: jangada-mapear [pasta-de-saida]
+#      jangada-mapear --mascarar <entrada >saida
 set -uo pipefail
+
+# Expressões do sed (ERE) que mascaram valores sensíveis. A ordem importa:
+# primeiro os blocos de chave privada, que somem inteiros; depois os formatos
+# conhecidos de token, que valem em qualquer lugar da linha; por fim os pares
+# nome e valor, com o valor entre aspas mascarado até a aspa final.
+q="[\"']"
+nome_segredo='(api[_-]?key|apikey|access[_-]?key|secret[_-]?key|private[_-]?key|client[_-]?secret|secret|token|password|passwd|senha|bearer|authorization|credentials?)'
+mascara_sed=(
+  # Chave privada PEM ou PGP numa linha só (como no JSON de contas de serviço)
+  # e em várias linhas.
+  -e 's/-----BEGIN [A-Z0-9 ]*PRIVATE KEY[A-Z ]*-----.*-----END [A-Z0-9 ]*PRIVATE KEY[A-Z ]*-----/[chave privada removida]/g'
+  -e '/-----BEGIN [A-Z0-9 ]*PRIVATE KEY[A-Z ]*-----/,/-----END [A-Z0-9 ]*PRIVATE KEY[A-Z ]*-----/c\[chave privada removida]'
+  # Chaves e tokens com prefixo conhecido.
+  -e 's/\b(AKIA|ASIA)[A-Z0-9]{16}\b/\1***/g'
+  -e 's/\b(sk-ant-|sk-proj-|sk-)[A-Za-z0-9_-]{16,}/\1***/g'
+  -e 's/\b(github_pat_|gh[pousr]_)[A-Za-z0-9_]{20,}/\1***/g'
+  -e 's/\b(glpat-)[A-Za-z0-9_-]{20,}/\1***/g'
+  -e 's/\b(npm_|hf_)[A-Za-z0-9]{20,}/\1***/g'
+  -e 's/\b(AIza)[A-Za-z0-9_-]{20,}/\1***/g'
+  -e 's/\b(xox[abpr]-)[A-Za-z0-9-]+/\1***/g'
+  # JWT: três partes em base64url, as duas primeiras começando por eyJ.
+  -e 's/\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/eyJ***/g'
+  # Senha em URL (https://usuario:senha@host, postgres://usuario:senha@db).
+  -e 's#(://[^/:@[:space:]]+:)[^/@[:space:]]+@#\1***@#g'
+  # Cabeçalhos de autorização: Bearer e Basic.
+  -e "s/\\b(bearer|basic)([[:space:]]+)[^\"'[:space:]]{8,}/\\1\\2***/Ig"
+  # Pares nome e valor: entre aspas duplas, entre aspas simples e sem aspas.
+  -e "s/(${nome_segredo}${q}?[[:space:]]*[:=][[:space:]]*\")([^\"\\\\]|\\\\.)+\"/\\1***\"/Ig"
+  -e "s/(${nome_segredo}${q}?[[:space:]]*[:=][[:space:]]*')[^']+'/\\1***'/Ig"
+  -e "s/(${nome_segredo}${q}?[[:space:]]*[:=][[:space:]]*)[^\"'[:space:],}*][^\"'[:space:],}]*/\\1***/Ig"
+)
+
+# Com --mascarar, só aplica a máscara à entrada e escreve na saída padrão:
+# serve para conferir um arquivo antes de compartilhá-lo e para os testes.
+if [[ "${1:-}" == "--mascarar" ]]; then
+  exec sed -E "${mascara_sed[@]}"
+fi
 
 JANGADA_PATH="${JANGADA_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 C="${XDG_CONFIG_HOME:-$HOME/.config}"
@@ -50,13 +88,7 @@ copiar() {
 # Mascara valores sensíveis em todos os arquivos de texto da saída.
 mascarar() {
   grep -rIl . "$saida" 2>/dev/null | while IFS= read -r f; do
-    sed -i -E \
-      -e 's/((api[_-]?key|apikey|token|secret|password|passwd|senha|bearer|authorization|client[_-]?secret)["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"']?)[^"'"'"'[:space:],}]+/\1***/Ig' \
-      -e 's/(sk-[A-Za-z0-9_-]{8})[A-Za-z0-9_-]+/\1***/g' \
-      -e 's/(gh[pousr]_)[A-Za-z0-9]+/\1***/g' \
-      -e 's/(AIza)[A-Za-z0-9_-]+/\1***/g' \
-      -e 's/(xox[abpr]-)[A-Za-z0-9-]+/\1***/g' \
-      "$f"
+    sed -i -E "${mascara_sed[@]}" "$f"
   done
 }
 

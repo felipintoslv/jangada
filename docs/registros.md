@@ -75,13 +75,13 @@ Pasta `$JANGADA_ESTADO/agentes/`. Em 26/09/2026 havia 41 arquivos.
 
 | Arquivo | Qtd. | Período (mtime) | Quem escreve | Quem apaga |
 |---|---|---|---|---|
-| `validacao-SESSAO-rN.md` | 16 | 26/09 20:54 a 23:37 | `bin/jangada-validar:653` (e a reprovação local, linhas 577 a 588) | `bin/jangada-agente-fim:188`, ao encerrar a sessão |
-| `validacao-SESSAO.aprovado` | 1 | 26/09 | `bin/jangada-validar:669` | `bin/jangada-agente-fim:188` |
+| `validacao-SESSAO-rN.md` | 16 | 26/09 20:54 a 23:37 | `bin/jangada-validar:653` (e a reprovação local, linhas 577 a 588) | `bin/jangada-agente-fim:259`, ao encerrar a sessão |
+| `validacao-SESSAO.aprovado` | 1 | 26/09 | `bin/jangada-validar:669` | `bin/jangada-agente-fim:259` |
 | `parecer-SESSAO-rN.md` | 12 | 20/09 a 21/09 | antigo `bin/jangada-par` (removido no commit 411d273, 22/09) | ninguém |
 | `avaliacao-SESSAO-rN.md` | 2 | 21/09 | antigo `bin/jangada-par` (avaliação do Claude sobre o parecer, não é revisão) | ninguém |
 | `revisao-SESSAO-rN.log` | 5 | 20/09 a 21/09 | antigo `bin/jangada-par` (erro do agy, vários vazios) | ninguém |
 | `revisao-claude-*.md` | 1 | 22/09 | revisão feita à mão | ninguém |
-| `fim-SESSAO.log` | 2 | 22/09 e 25/09 | `bin/jangada-agente-fim:195` (saída do encerramento pela própria sessão) | sobrescrito no próximo fim da mesma sessão |
+| `fim-SESSAO.log` | 2 | 22/09 e 25/09 | `bin/jangada-agente-fim:266` (saída do encerramento pela própria sessão) | sobrescrito no próximo fim da mesma sessão |
 
 - **Primeira linha:** `STATUS: APROVADO` ou `STATUS: REVISAR`. O
   `jangada-validar` aceita marcação de Markdown (`## STATUS:`,
@@ -323,7 +323,15 @@ resultado.
   `aguardando`, `concluido`, `interrompido`), `mensagem`, `desde`,
   `atualizado`, e quando houver `tarefa`, `perfil`, `inicio` (commit),
   `revisor`, `conversa`, `validacao`, `delegar` (sempre gravado) e
-  `pid` (só o antigo par; nenhum script grava hoje).
+  `pid` (só o antigo par; nenhum script grava hoje, e o
+  `jangada-agente-fim` não o lê nem mata processo por ele).
+- `jangada-agente-fim` (função `conferir_estado`) recusa, sem alterar nada,
+  o estado cujo `ramo` não seja `agente/NOME`, cujo `worktree` não seja
+  `$JANGADA_WORKTREES/REPO/NOME` (sem link simbólico e registrado como
+  worktree da `raiz`, com o mesmo diretório git comum), cuja `raiz` não seja
+  a raiz de um repositório ou cuja `base` não seja nome de ramo. O
+  `--limpar-concluidos` de `bin/jangada-agentes` mostra as sessões marcadas
+  como `concluido` e só encerra depois de confirmação.
 - `comando` e `isolar` são só para consulta. A pasta `agentes/` é gravável
   de dentro do `jangada-isolar`, então a restauração (`restaurar` em
   `bin/jangada-agentes:244`) não executa o `comando` nem respeita o
@@ -334,7 +342,7 @@ resultado.
   `conversationId` do agy (nome do `.db`). É o único lugar que liga a sessão
   do jangada à conversa.
 - **Sobrescrito** a cada evento. Não tem histórico.
-- **Quem apaga:** `bin/jangada-agente-fim:185`, ao encerrar;
+- **Quem apaga:** `bin/jangada-agente-fim:256`, ao encerrar;
   `limpar_orfaos` em `bin/jangada-agentes:133` a `:159`, quando a sessão
   tmux não existe mais: estado `concluido` ou `aguardando` fica 24 horas
   (`JANGADA_AGENTES_GUARDAR`), `interrompido` fica 168 horas; sessão sem

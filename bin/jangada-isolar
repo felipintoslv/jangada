@@ -20,11 +20,11 @@
 # o Claude ou o agy leem como configuração ou executam fora do isolamento:
 # config, hooks, commondir e gitdir do git; settings, CLAUDE.md, commands,
 # agents, skills, hooks e plugins do Claude; os binários do agy; os clones
-# do AUR. Ficam ocultas as chaves e os perfis de navegador
-# (JANGADA_ISOLAR_OCULTAR substitui a lista).
+# do AUR. Ficam ocultas as chaves, os perfis de navegador e o histórico da
+# área de transferência (JANGADA_ISOLAR_OCULTAR substitui a lista).
 #
-# JANGADA_AGENTE_ISOLAR=0 desliga; já isolado (JANGADA_ISOLADO=1), o comando
-# roda direto; sem o bwrap, roda sem isolamento e com aviso.
+# JANGADA_AGENTE_ISOLAR=0 desliga; já isolado (JANGADA_ISOLADO=1 e a marca
+# que só o bwrap monta), o comando roda direto; sem o bwrap, recusa.
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
@@ -40,12 +40,22 @@ while (($#)); do
 done
 (($#)) || { echo "uso: jangada-isolar [--mostrar] [--] COMANDO" >&2; exit 1; }
 
-if [[ "$JANGADA_AGENTE_ISOLAR" == 0 || -n "${JANGADA_ISOLADO:-}" ]]; then
+# Marca do isolamento: um ponto de montagem no /tmp próprio. Fora, qualquer
+# processo cria um arquivo no /tmp, mas só quem monta cria um ponto de
+# montagem; por isso JANGADA_ISOLADO herdado do ambiente não basta.
+marca=/tmp/.jangada-isolado
+ja_isolado() {
+  [[ -n "${JANGADA_ISOLADO:-}" ]] || return 1
+  awk -v m="$marca" '$5 == m { achou = 1 } END { exit !achou }' /proc/self/mountinfo 2>/dev/null
+}
+
+if [[ "$JANGADA_AGENTE_ISOLAR" == 0 ]] || ja_isolado; then
   exec "$@"
 fi
-if ! command -v bwrap >/dev/null 2>&1; then
-  echo "jangada-isolar: aviso: bwrap não instalado, o agente roda sem isolamento (pacote bubblewrap)" >&2
-  exec "$@"
+if ((!mostrar)) && ! command -v bwrap >/dev/null 2>&1; then
+  echo "jangada-isolar: bwrap não instalado (pacote bubblewrap); o agente não abre sem isolamento." >&2
+  echo "Para abrir mesmo assim: jangada-agente --sem-isolar, ou JANGADA_AGENTE_ISOLAR=0 no jangada.conf." >&2
+  exit 1
 fi
 
 pasta="$(pwd -P)"
@@ -53,7 +63,8 @@ pasta="$(pwd -P)"
 # PID próprio: o agente não mata nem inspeciona os processos da sessão, e
 # tudo o que ele deixou rodando morre com ele. Nenhum hook grava o pid de
 # dentro no estado; se um dia gravar, o número não vale fora.
-args=(--ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --unshare-pid --die-with-parent)
+args=(--ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --ro-bind /dev/null "$marca"
+      --unshare-pid --die-with-parent)
 
 gravavel() { [[ -e "$1" ]] && args+=(--bind "$1" "$1"); return 0; }
 somente_leitura() { [[ -e "$1" ]] && args+=(--ro-bind "$1" "$1"); return 0; }
@@ -235,7 +246,13 @@ if [[ -n "${JANGADA_ISOLAR_OCULTAR+x}" ]]; then
 else
   ocultos=(.ssh .gnupg .password-store .aws .azure .kube .docker .netrc .git-credentials
            .config/gh .config/rclone .config/chromium .config/google-chrome .mozilla
-           .local/share/keyrings)
+           .local/share/keyrings "${XDG_CACHE_HOME:-$HOME/.cache}/cliphist")
+  # O banco do cliphist guarda tudo o que foi copiado, inclusive senhas, e o
+  # que o agente gravasse nele o usuário colaria depois pelo SUPER+V. A pasta
+  # é criada antes para ficar oculta mesmo numa instalação nova.
+  command -v cliphist >/dev/null 2>&1 \
+    && { [[ -d "${XDG_CACHE_HOME:-$HOME/.cache}/cliphist" ]] \
+         || mkdir -m 0700 "${XDG_CACHE_HOME:-$HOME/.cache}/cliphist" 2>/dev/null || true; }
 fi
 for p in "${ocultos[@]}"; do
   [[ -n "$p" ]] || continue

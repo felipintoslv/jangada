@@ -208,10 +208,50 @@ reverter() {
   fi
   ponto="${ponto:-HEAD}"
 
-  if _jangada_confirmar "Deseja reverter todas as alterações deste worktree para o ponto inicial ($ponto)?"; then
-    _jangada_git reset --hard "$ponto"
-    _jangada_git clean -fd
-    echo "worktree revertido para o ponto inicial limpo ($ponto)."
+  # Antes de perguntar, mostra o que se perde: os commits do ramo depois do
+  # ponto, as alterações ainda não commitadas e os arquivos não rastreados
+  # que o clean apaga (os ignorados pelo .gitignore ficam).
+  local commits alteracoes nao_rastreados copia=""
+  commits="$(_jangada_git log --oneline --no-decorate "$ponto..HEAD" 2>/dev/null || true)"
+  alteracoes="$(_jangada_git status --short --untracked-files=no 2>/dev/null || true)"
+  # Em LC_ALL=C a saída do clean -n é "Would remove X" em qualquer idioma.
+  nao_rastreados="$(LC_ALL=C _jangada_git clean -nd 2>/dev/null | sed 's/^Would remove //' || true)"
+  if [ -z "$commits$alteracoes$nao_rastreados" ]; then
+    echo "nada a reverter: o worktree já está no ponto inicial ($ponto)."
+    return 0
+  fi
+  echo "ponto inicial: $ponto"
+  if [ -n "$commits" ]; then
+    echo "commits que saem do ramo $ramo_atual (ficam no ramo de cópia):"
+    printf '%s\n' "$commits" | sed 's/^/  /'
+  fi
+  if [ -n "$alteracoes" ]; then
+    echo "alterações não commitadas que serão descartadas:"
+    printf '%s\n' "$alteracoes" | sed 's/^/  /'
+  fi
+  if [ -n "$nao_rastreados" ]; then
+    echo "arquivos não rastreados que serão apagados:"
+    printf '%s\n' "$nao_rastreados" | sed 's/^/  /'
+  fi
+
+  if ! _jangada_confirmar "Deseja reverter este worktree para o ponto inicial ($ponto)?"; then
+    echo "reverter cancelado."
+    return 0
+  fi
+  # Cópia do HEAD num ramo antes do reset, para os commits não ficarem só no
+  # reflog. O sufixo com segundos e o pid evita colidir com outra cópia.
+  if [ -n "$commits" ]; then
+    copia="backup/reverter-$(date +%Y%m%d-%H%M%S)-$$"
+    if ! _jangada_git branch "$copia" HEAD; then
+      echo "reverter cancelado: não foi possível criar o ramo de cópia $copia" >&2
+      return 1
+    fi
+  fi
+  _jangada_git reset --hard "$ponto" || return 1
+  _jangada_git clean -fd || return 1
+  echo "worktree revertido para o ponto inicial limpo ($ponto)."
+  if [ -n "$copia" ]; then
+    echo "os commits descartados estão no ramo $copia (git switch $copia para vê-los)."
   fi
 }
 

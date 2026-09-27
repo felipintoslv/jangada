@@ -18,16 +18,35 @@ import re
 import subprocess
 import datetime
 import calendar
-from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QLineEdit, QListWidget, QListWidgetItem,
-    QGridLayout, QFrame, QScrollArea, QMessageBox
-)
-from PyQt6.QtCore import Qt, QDate, QSize
-from PyQt6.QtGui import QFont, QColor, QPalette, QKeyEvent
+import contextlib
+import fcntl
+import tempfile
 
-CONFIG_DIR = os.path.expanduser("~/.config/jangada")
+# O Qt só é necessário para a janela. Sem ele, os subcomandos de linha de
+# comando (add, listar, importar) continuam funcionando e dá para testá-los.
+try:
+    from PyQt6.QtWidgets import (
+        QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+        QPushButton, QLineEdit, QListWidget, QListWidgetItem,
+        QGridLayout, QFrame, QScrollArea, QMessageBox
+    )
+    from PyQt6.QtCore import Qt, QDate, QSize
+    from PyQt6.QtGui import QFont, QColor, QPalette, QKeyEvent
+    TEM_QT = True
+except ImportError:
+    TEM_QT = False
+    QWidget = object
+    QKeyEvent = object
+
+CONFIG_DIR = os.path.join(
+    os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"),
+    "jangada",
+)
 EVENTOS_FILE = os.path.join(CONFIG_DIR, "eventos.json")
+TRAVA_FILE = os.path.join(CONFIG_DIR, ".eventos.json.trava")
+
+# Avisos (arquivo corrompido posto de lado) que a janela ainda não mostrou.
+AVISOS_PENDENTES = []
 CORES_FILE = os.path.join(CONFIG_DIR, "waybar/cores.css")
 
 MESES_PT = [
@@ -61,24 +80,126 @@ def carregar_cores():
             pass
     return cores
 
+class ErroEventos(Exception):
+    """Falha ao ler ou gravar o arquivo de eventos; nada foi gravado."""
+
+def avisar(mensagem):
+    print(f"jangada-calendario: {mensagem}", file=sys.stderr)
+    AVISOS_PENDENTES.append(mensagem)
+
+@contextlib.contextmanager
+def trava_eventos():
+    """Trava exclusiva entre processos para ler, alterar e gravar os eventos.
+
+    O arquivo de trava fica na mesma pasta e é aberto sem seguir link
+    simbólico, para ninguém apontar a trava para outro arquivo.
+    """
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    try:
+        fd = os.open(TRAVA_FILE, flags, 0o600)
+    except OSError as e:
+        raise ErroEventos(f"não consegui abrir a trava {TRAVA_FILE}: {e}") from e
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)  # fechar o descritor solta a trava
+
+def formato_valido(dados):
+    """Os eventos são um objeto {"aaaa-mm-dd": ["texto", ...]}."""
+    if not isinstance(dados, dict):
+        return False
+    return all(isinstance(k, str) and isinstance(v, list)
+               and all(isinstance(t, str) for t in v)
+               for k, v in dados.items())
+
+def por_de_lado(motivo):
+    """Move o arquivo ilegível para .corrompido-<data>, sem apagar nada."""
+    carimbo = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    destino = f"{EVENTOS_FILE}.corrompido-{carimbo}"
+    n = 1
+    while os.path.lexists(destino):
+        n += 1
+        destino = f"{EVENTOS_FILE}.corrompido-{carimbo}-{n}"
+    try:
+        os.rename(EVENTOS_FILE, destino)
+    except OSError as e:
+        raise ErroEventos(
+            f"{EVENTOS_FILE} está ilegível ({motivo}) e não consegui "
+            f"guardá-lo à parte: {e}. Nada foi gravado."
+        ) from e
+    avisar(
+        f"o arquivo de eventos estava ilegível ({motivo}). Ele foi guardado "
+        f"em {destino} e o calendário começa vazio; os eventos antigos podem "
+        "ser recuperados de lá."
+    )
+
+def _carregar_travado():
+    """Lê os eventos; quem chama já segura a trava."""
+    try:
+        with open(EVENTOS_FILE, "r", encoding="utf-8") as f:
+            dados = json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        por_de_lado(f"JSON inválido: {e}")
+        return {}
+    except OSError as e:
+        # Permissão negada, pasta no lugar do arquivo etc.: não é corrupção,
+        # e gravar por cima apagaria os dados; então para aqui.
+        raise ErroEventos(f"não consegui ler {EVENTOS_FILE}: {e}") from e
+    if not formato_valido(dados):
+        por_de_lado("formato inesperado")
+        return {}
+    return dados
+
 def carregar_eventos():
-    if not os.path.exists(CONFIG_DIR):
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-    if os.path.exists(EVENTOS_FILE):
-        try:
-            with open(EVENTOS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
+    with trava_eventos():
+        return _carregar_travado()
 
 def salvar_eventos(eventos):
+    """Grava de forma atômica: temporário na mesma pasta, fsync e os.replace.
+
+    Uma queda no meio deixa o arquivo antigo inteiro, nunca um pela metade.
+    Quem chama já segura a trava (use alterar_eventos).
+    """
     os.makedirs(CONFIG_DIR, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=CONFIG_DIR, prefix=".eventos.json.", suffix=".tmp")
     try:
-        with open(EVENTOS_FILE, "w", encoding="utf-8") as f:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(eventos, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"Erro ao salvar eventos: {e}", file=sys.stderr)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, EVENTOS_FILE)
+    except BaseException as e:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        if isinstance(e, OSError):
+            raise ErroEventos(f"não consegui gravar {EVENTOS_FILE}: {e}") from e
+        raise
+    # Garante que a troca de nome também chegou ao disco.
+    with contextlib.suppress(OSError):
+        dfd = os.open(CONFIG_DIR, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
+
+def alterar_eventos(mudanca):
+    """Aplica uma alteração sem perder as de outros processos.
+
+    Sob a trava: relê o arquivo do disco, aplica só a mudança pedida e grava.
+    Devolve os eventos como ficaram, para a janela se atualizar. A função
+    mudanca recebe o dicionário e o altera no lugar; se devolver False, nada
+    é gravado.
+    """
+    with trava_eventos():
+        eventos = _carregar_travado()
+        if mudanca(eventos) is not False:
+            salvar_eventos(eventos)
+        return eventos
 
 def normalizar_data(texto_data):
     hoje = datetime.date.today()
@@ -123,11 +244,7 @@ def cli_adicionar(args):
                 data_str = datetime.date.today().strftime("%Y-%m-%d")
                 texto = " ".join(args)
 
-    eventos = carregar_eventos()
-    if data_str not in eventos:
-        eventos[data_str] = []
-    eventos[data_str].append(texto)
-    salvar_eventos(eventos)
+    alterar_eventos(lambda eventos: eventos.setdefault(data_str, []).append(texto))
 
     ano, mes, dia = map(int, data_str.split("-"))
     print(f"✔ Compromisso adicionado em {dia:02d}/{mes:02d}/{ano}: {texto}")
@@ -180,8 +297,8 @@ def cli_importar(args):
         print(f"Arquivo não encontrado: {caminho}", file=sys.stderr)
         sys.exit(1)
 
-    eventos = carregar_eventos()
-    adicionados = 0
+    # Lê o .ics antes, fora da trava, e só depois aplica ao arquivo relido.
+    lidos = []
     with open(caminho, "r", encoding="utf-8", errors="ignore") as f:
         em_vevent = False
         data_evento = None
@@ -194,11 +311,7 @@ def cli_importar(args):
                 resumo = None
             elif linha == "END:VEVENT":
                 if data_evento and resumo:
-                    if data_evento not in eventos:
-                        eventos[data_evento] = []
-                    if resumo not in eventos[data_evento]:
-                        eventos[data_evento].append(resumo)
-                        adicionados += 1
+                    lidos.append((data_evento, resumo))
                 em_vevent = False
             elif em_vevent:
                 if linha.startswith("DTSTART"):
@@ -208,14 +321,30 @@ def cli_importar(args):
                 elif linha.startswith("SUMMARY:"):
                     resumo = linha[8:].strip()
 
-    salvar_eventos(eventos)
+    adicionados = 0
+
+    def importar(eventos):
+        nonlocal adicionados
+        for data_evento, resumo in lidos:
+            dia = eventos.setdefault(data_evento, [])
+            if resumo not in dia:
+                dia.append(resumo)
+                adicionados += 1
+        return adicionados > 0
+
+    alterar_eventos(importar)
     print(f"✔ {adicionados} evento(s) importados com sucesso para o calendário.")
 
 class CalendarioJangada(QWidget):
     def __init__(self):
         super().__init__()
         self.cores = carregar_cores()
-        self.eventos = carregar_eventos()
+        try:
+            self.eventos = carregar_eventos()
+        except ErroEventos as e:
+            # Sem conseguir ler, a janela não abre: gravar por cima perderia dados.
+            QMessageBox.critical(None, "Calendário", str(e))
+            raise SystemExit(1)
         
         hoje = datetime.date.today()
         self.ano_atual = hoje.year
@@ -225,6 +354,27 @@ class CalendarioJangada(QWidget):
         self.init_ui()
         self.atualizar_calendario()
         self.atualizar_painel_eventos()
+
+    def mostrar_avisos(self):
+        while AVISOS_PENDENTES:
+            QMessageBox.warning(self, "Calendário", AVISOS_PENDENTES.pop(0))
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.mostrar_avisos()
+
+    def aplicar(self, mudanca):
+        """Relê do disco sob trava, aplica só a mudança e mostra o que ficou."""
+        try:
+            self.eventos = alterar_eventos(mudanca)
+        except ErroEventos as e:
+            print(f"jangada-calendario: {e}", file=sys.stderr)
+            QMessageBox.critical(self, "Calendário", str(e))
+            return False
+        self.atualizar_calendario()
+        self.atualizar_painel_eventos()
+        self.mostrar_avisos()
+        return True
 
     def init_ui(self):
         self.setWindowTitle("Calendário Jangada")
@@ -522,25 +672,31 @@ class CalendarioJangada(QWidget):
         if not texto:
             return
         chave = self.data_selecionada.strftime("%Y-%m-%d")
-        if chave not in self.eventos:
-            self.eventos[chave] = []
-        self.eventos[chave].append(texto)
-        salvar_eventos(self.eventos)
-        self.txt_novo_evento.clear()
-        self.atualizar_calendario()
-        self.atualizar_painel_eventos()
+        if self.aplicar(lambda eventos: eventos.setdefault(chave, []).append(texto)):
+            self.txt_novo_evento.clear()
 
     def remover_evento_selecionado(self):
         linha = self.lista_eventos.currentRow()
         chave = self.data_selecionada.strftime("%Y-%m-%d")
         evs = self.eventos.get(chave, [])
-        if 0 <= linha < len(evs):
-            del evs[linha]
-            if not evs:
-                del self.eventos[chave]
-            salvar_eventos(self.eventos)
-            self.atualizar_calendario()
-            self.atualizar_painel_eventos()
+        if not 0 <= linha < len(evs):
+            return
+        # A posição na lista pode ter mudado no disco (outra janela, o add):
+        # remove pelo texto mostrado e, se ele já não existir, não mexe em nada.
+        texto = evs[linha]
+        # Entre repetições do mesmo texto, qual delas é a escolhida.
+        ocorrencia = evs[:linha].count(texto)
+
+        def remover(eventos):
+            dia = eventos.get(chave, [])
+            posicoes = [i for i, t in enumerate(dia) if t == texto]
+            if not posicoes:
+                return False
+            del dia[posicoes[min(ocorrencia, len(posicoes) - 1)]]
+            if not dia:
+                del eventos[chave]
+
+        self.aplicar(remover)
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key.Key_Escape:
@@ -560,7 +716,13 @@ A data aceita hoje, amanhã, depois de amanhã, dd/mm, dd/mm/aaaa ou aaaa-mm-dd.
 Sem data, o compromisso vai para hoje."""
 
 def main():
-    args = sys.argv[1:]
+    try:
+        executar(sys.argv[1:])
+    except ErroEventos as e:
+        print(f"jangada-calendario: {e}", file=sys.stderr)
+        sys.exit(1)
+
+def executar(args):
     if args:
         cmd = args[0].lower()
         if cmd in ["-h", "--ajuda", "ajuda", "help"]:
@@ -576,6 +738,9 @@ def main():
             cli_importar(args[1:])
             return
 
+    if not TEM_QT:
+        print("jangada-calendario: a janela precisa do PyQt6 (pacote python-pyqt6).", file=sys.stderr)
+        sys.exit(1)
     app = QApplication(sys.argv)
     app.setApplicationName("jangada-calendario")
     app.setDesktopFileName("org.jangada.calendario")

@@ -5,9 +5,10 @@ hl.on("hyprland.start", function()
   hl.exec_cmd("dbus-update-activation-environment --systemd --all")
   hl.exec_cmd("systemctl --user start hyprpolkitagent")
 
-  -- Histórico da área de transferência.
-  hl.exec_cmd("wl-paste --type text --watch cliphist store")
-  hl.exec_cmd("wl-paste --type image --watch cliphist store")
+  -- Histórico da área de transferência, limitado às 100 últimas cópias: o
+  -- banco guarda senhas e tokens copiados. O agente isolado não o enxerga.
+  hl.exec_cmd("wl-paste --type text --watch cliphist -max-items 100 store")
+  hl.exec_cmd("wl-paste --type image --watch cliphist -max-items 100 store")
 
   -- Bloqueio e suspensão por inatividade. O hypridle 0.1.7 aceita "-c" na linha
   -- de comando mas ignora o valor: ele só lê <XDG_CONFIG_HOME>/hypr/hypridle.conf.

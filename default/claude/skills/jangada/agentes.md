@@ -35,7 +35,8 @@ O agente aberto pelo `jangada-agente` roda no bubblewrap, com
   `~/.claude/ide` aceitam escrita, mas ela fica numa camada em memória que
   some no fim (sobreposição do bwrap). Cache grande de compilação ocupa RAM
   enquanto a sessão dura. `~/.cache/yay` e `~/.cache/paru` são somente
-  leitura.
+  leitura, e `~/.cache/cliphist` (histórico da área de transferência) fica
+  oculto.
 - Em `~/.claude` são somente leitura `settings.json`, `settings.local.json`,
   `CLAUDE.md`, `commands`, `agents`, `skills`, `hooks`, `plugins`,
   `output-styles`, `backups` e os scripts soltos. `/model` ou `/config` de
@@ -67,8 +68,11 @@ O agente aberto pelo `jangada-agente` roda no bubblewrap, com
   os perfis de navegador aparecem vazios, e `SSH_AUTH_SOCK` sai do ambiente.
   `git push` por ssh ou com credencial guardada não funciona: o push é do
   usuário, fora da sessão.
-- `jangada-isolar` chamado de dentro roda o comando direto, sem aninhar. O
-  `jangada-validar` chamado pelo agente roda, portanto, com as mesmas regras;
+- `jangada-isolar` chamado de dentro roda o comando direto, sem aninhar,
+  desde que `JANGADA_ISOLADO` venha com a marca `/tmp/.jangada-isolado`
+  montada pelo bwrap (conferida em `/proc/self/mountinfo`); só a variável
+  não basta. O `jangada-validar` chamado pelo agente roda, portanto, com as
+  mesmas regras;
   `revisar` no jangada shell e o `.jangada/preparar.sh` também passam pelo
   `jangada-isolar`. Pelo mesmo motivo, o `testes/isolar.sh` falha inteiro
   dentro de uma sessão isolada (`JANGADA_ISOLADO=1`): rode
@@ -88,8 +92,10 @@ só ficam protegidos quando o git de fora passa por `jangada_git_seguro`.
 `JANGADA_ISOLAR_OCULTAR` substitui a lista de ocultos. O estado guarda
 `comando` e `isolar` só para consulta: o `--restaurar` recompõe o comando e
 volta isolado, a menos que `JANGADA_AGENTE_ISOLAR=0` esteja no `jangada.conf`
-ou no ambiente (perfil e `--sem-isolar` não contam). Sem o `bwrap`, o agente
-abre sem isolamento e com aviso.
+ou no ambiente (perfil e `--sem-isolar` não contam). Sem o `bwrap`, o
+`jangada-isolar` sai com erro e o agente não abre: reabrir com
+`jangada-agente --sem-isolar` ou pôr `JANGADA_AGENTE_ISOLAR=0` no
+`jangada.conf`.
 
 ## Contrato de estado
 
@@ -143,8 +149,10 @@ como já pula o `foco`. `jangada-verificar` confere cada evento.
 A `mensagem` vem de `.message` (Notification), `.last_assistant_message`
 (Stop) ou `.prompt` (UserPromptSubmit), primeira linha; o `PostToolUse`
 mantém a anterior. Toda alteração do arquivo passa por
-`jangada_alterar_estado` (`bin/jangada-config`), que usa `flock` em
-`agentes/.trava`: os hooks rodam em paralelo.
+`jangada_alterar_estado` (`bin/jangada-config`), que usa `flock` na própria
+pasta `agentes/`, aberta só para leitura: os hooks rodam em paralelo. Não
+volte a um arquivo de trava aberto com `>`: o agente troca o arquivo por um
+link, e o `jangada-agentes` ou o `jangada-validar` de fora truncariam o alvo.
 
 `aguardando` e `concluido` são resultado, não processo: continuam no painel
 depois de o processo sair, até o `Ctrl+X` do seletor ou até vencer
@@ -224,7 +232,7 @@ porta de entrada. O que se aprendeu com ele vale para o revisor agy:
 - O revisor erra sobre `set -e`: falha dentro de uma lista `a && b && c`, fora
   do último comando, não encerra o script. Teste com `bash -c` antes de aceitar.
 - O `jangada-validar` executa uma checagem determinística local antes do revisor por IA (marcadores de conflito do Git, sintaxe de scripts alterados e `.jangada/validar.sh`). Se falhar, grava `STATUS: REVISAR (local)` sem acionar a API externa, economizando tokens. A opção `--pular-local` ignora o portão local.
-- Se o limite de rodadas for atingido, a opção `--reverter-se-limite` (ou o comando `reverter` no jangada shell) restaura o worktree para o ponto inicial limpo da tarefa.
+- Se o limite de rodadas for atingido, a opção `--reverter-se-limite` (ou o comando `reverter` no jangada shell) restaura o worktree para o ponto inicial limpo da tarefa. O `reverter` do shell mostra antes da confirmação os commits, as alterações e os arquivos não rastreados que se perdem, e guarda o HEAD anterior num ramo `backup/reverter-<data>-<pid>`, cujo nome informa ao terminar.
 
 Depois de integrar uma mudança no próprio jangada, confira a cópia
 instalada: `git -C ~/.local/share/jangada pull --ff-only` e

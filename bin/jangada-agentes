@@ -13,7 +13,7 @@
 #   jangada-agentes --proximo  foca o próximo agente ativo ou que espera (SUPER+N)
 #   jangada-agentes --anterior volta ao agente focado antes do atual (SUPER+SHIFT+N)
 #   jangada-agentes --restaurar [S]  reabre as sessões interrompidas (ou só S)
-#   jangada-agentes --limpar-concluidos  encerra em lote todas as sessões concluídas
+#   jangada-agentes --limpar-concluidos  lista as sessões concluídas e, confirmado, encerra todas
 #
 # Sessões terminadas em "concluido" ou "aguardando" continuam na lista depois de
 # o processo sair: são o resultado do ciclo, não um processo vivo. Saem com
@@ -647,20 +647,35 @@ case "${1:-}" in
     done
     ;;
   --limpar-concluidos)
+    # O "concluido" vem do arquivo de estado, que o agente isolado consegue
+    # gravar, inclusive o de outra sessão. Encerrar em lote só com o que ele
+    # diz derrubaria uma sessão viva sem perguntar; por isso a lista vai para
+    # a tela e só segue com confirmação, e sem terminal nada é encerrado.
     limpar_orfaos
     linhas="$(listar)"
-    concluidas=()
-    while IFS=$'\t' read -r est s _resto; do
-      [[ "$est" == "concluido" ]] && concluidas+=("$s")
+    vivas="$(sessoes_vivas)"
+    concluidas=(); lista=""
+    while IFS=$'\t' read -r est s dir atualizado _resto; do
+      [[ "$est" == "concluido" ]] && concluidas+=("$s") || continue
+      situacao="sem sessão no tmux"
+      grep -qxF "$s" <<<"$vivas" && situacao="sessão aberta no tmux"
+      # Tudo aqui saiu do estado ou do nome do arquivo: sem caracteres de
+      # controle na tela.
+      lista+="$(printf '  %s  %s  (%s, atualizado em %s)' "$s" "$dir" "$situacao" "$atualizado" \
+        | tr -d '\000-\037\177')"$'\n'
     done <<<"$linhas"
     if [[ "${#concluidas[@]}" -eq 0 ]]; then
       echo "nenhuma sessão concluída para limpar."
       exit 0
     fi
-    echo "sessões concluídas a limpar: ${#concluidas[@]}"
+    echo "sessões marcadas como concluídas (${#concluidas[@]}); o estado é gravado pelo próprio agente, confira:"
+    printf '%s' "$lista"
+    r=""
+    read -r -p "encerrar todas e remover os worktrees? [s/N] " r || true
+    [[ "${r,,}" == s* ]] || { echo "nada foi feito"; exit 0; }
     falhas=0
     for s in "${concluidas[@]}"; do
-      echo "==> limpando $s"
+      echo "==> limpando $(tr -d '\000-\037\177' <<<"$s")"
       "$JANGADA_PATH/bin/jangada-agente-fim" "$s" || falhas=$((falhas + 1))
     done
     if ((falhas > 0)); then

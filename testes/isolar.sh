@@ -14,7 +14,9 @@ conferir() { local d="$1"; shift; if "$@"; then ok "$d"; else falha "$d"; fi; }
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 casa="$tmp/casa"
-mkdir -p "$casa/.ssh" "$casa/.claude" "$casa/extra" "$casa/.cache/yay/pacote" "$tmp/config/jangada"
+mkdir -p "$casa/.ssh" "$casa/.claude" "$casa/extra" "$casa/.cache/yay/pacote" "$casa/.cache/cliphist" \
+  "$tmp/config/jangada"
+echo "senha copiada" >"$casa/.cache/cliphist/db"
 echo "chave" >"$casa/.ssh/id_teste"
 echo "senha" >"$casa/.netrc"
 echo "{}" >"$casa/.claude.json"
@@ -23,7 +25,7 @@ git -C "$tmp/repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m i
 git -C "$tmp/repo" worktree add -q -b agente/t "$tmp/wt"
 
 isolar() {
-  (cd "$1" && env HOME="$casa" XDG_STATE_HOME="$casa/.local/state" XDG_CONFIG_HOME="$tmp/config" \
+  (cd "$1" && env -u XDG_CACHE_HOME HOME="$casa" XDG_STATE_HOME="$casa/.local/state" XDG_CONFIG_HOME="$tmp/config" \
     JANGADA_PATH="$repo_jangada" "${@:2}")
 }
 mostrar() { isolar "$tmp/wt" "$@" "$repo_jangada/bin/jangada-isolar" --mostrar -- true >"$tmp/args"; }
@@ -53,6 +55,9 @@ conferir "caso 1: arquivo .git do worktree somente leitura" seguidos --ro-bind "
 conferir "caso 1: ~/.ssh oculto" seguidos --tmpfs "$casa/.ssh" ""
 conferir "caso 1: ~/.netrc oculto" seguidos --ro-bind /dev/null "$casa/.netrc"
 conferir "caso 1: /tmp próprio" seguidos --tmpfs /tmp ""
+conferir "caso 1: marca do isolamento montada no /tmp próprio" \
+  seguidos --ro-bind /dev/null /tmp/.jangada-isolado
+conferir "caso 1: histórico da área de transferência oculto" seguidos --tmpfs "$casa/.cache/cliphist" ""
 conferir "caso 1: termina com o comando" [ "$(tail -n1 "$tmp/args")" = true ]
 conferir "caso 1: estado dos agentes gravável" \
   seguidos --bind "$casa/.local/state/jangada/agentes" "$casa/.local/state/jangada/agentes"
@@ -90,8 +95,31 @@ echo "JANGADA_AGENTE_ISOLAR=0" >"$tmp/config/jangada/jangada.conf"
 saida="$(isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- sh -c 'echo "${JANGADA_ISOLADO:-fora}"')"
 conferir "caso 2: jangada.conf desliga" [ "$saida" = fora ]
 rm -f "$tmp/config/jangada/jangada.conf"
-saida="$(isolar "$tmp/wt" JANGADA_ISOLADO=1 "$repo_jangada/bin/jangada-isolar" -- sh -c 'echo "${JANGADA_ISOLADO:-fora}"')"
-conferir "caso 2: já isolado, roda direto sem aninhar" [ "$saida" = 1 ]
+# JANGADA_ISOLADO herdado, sem a marca que só o bwrap monta, não basta.
+mostrar JANGADA_ISOLADO=1
+conferir "caso 2: JANGADA_ISOLADO sem a marca não dispensa o isolamento" [ "$(head -n1 "$tmp/args")" = bwrap ]
+: >/tmp/.jangada-isolado-teste 2>/dev/null
+conferir "caso 2: arquivo comum no lugar da marca não vale" \
+  bash -c '! awk -v m="$1" '"'"'$5 == m { a = 1 } END { exit !a }'"'"' /proc/self/mountinfo' _ /tmp/.jangada-isolado-teste
+rm -f /tmp/.jangada-isolado-teste
+
+# Caso 2b: sem o bwrap, recusa em vez de rodar sem isolamento.
+sem_bwrap="$tmp/sem-bwrap"
+mkdir -p "$sem_bwrap"
+IFS=: read -ra dirs_path <<<"$PATH"
+for d in "${dirs_path[@]}"; do
+  for f in "$d"/*; do
+    n="${f##*/}"
+    [[ "$n" == bwrap || -e "$sem_bwrap/$n" || ! -x "$f" ]] || ln -s "$f" "$sem_bwrap/$n"
+  done
+done
+saida="$(isolar "$tmp/wt" PATH="$sem_bwrap" "$repo_jangada/bin/jangada-isolar" -- sh -c 'echo rodou' 2>"$tmp/erro")"
+rc=$?
+conferir "caso 2b: sem bwrap, não roda o comando" [ -z "$saida" ]
+conferir "caso 2b: sem bwrap, sai com erro" [ "$rc" -ne 0 ]
+conferir "caso 2b: sem bwrap, indica o --sem-isolar" grep -q -- --sem-isolar "$tmp/erro"
+saida="$(isolar "$tmp/wt" PATH="$sem_bwrap" JANGADA_AGENTE_ISOLAR=0 "$repo_jangada/bin/jangada-isolar" -- sh -c 'echo rodou')"
+conferir "caso 2b: sem bwrap e desligado, roda direto" [ "$saida" = rodou ]
 
 # Caso 3: o isolamento de verdade.
 if bwrap --ro-bind / / --dev /dev --proc /proc true 2>/dev/null; then
@@ -167,8 +195,35 @@ if bwrap --ro-bind / / --dev /dev --proc /proc true 2>/dev/null; then
   conferir "caso 3: ~/.cache/yay não é gravável" roda "! echo x >'$casa/.cache/yay/pacote/PKGBUILD'"
   roda "echo x >'$casa/.cache/outro'"
   conferir "caso 3: gravação no ~/.cache não chega ao disco" test ! -e "$casa/.cache/outro"
+  conferir "caso 3: histórico da área de transferência não é legível" \
+    roda "! grep -q senha '$casa/.cache/cliphist/db'"
+  roda "echo envenenado >'$casa/.cache/cliphist/db'"
+  conferir "caso 3: histórico da área de transferência não muda" \
+    [ "$(cat "$casa/.cache/cliphist/db")" = "senha copiada" ]
+
+  # Dentro, com a marca montada, o jangada-isolar roda direto, sem aninhar.
+  saida="$(isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- \
+    "$repo_jangada/bin/jangada-isolar" --mostrar -- true 2>/dev/null)"
+  conferir "caso 3: já isolado, roda direto sem aninhar" [ -z "$saida" ]
+  conferir "caso 3: a marca não é removível de dentro" roda '! rm -f /tmp/.jangada-isolado'
 else
   echo "pulado caso 3: bwrap não cria namespace aqui"
+fi
+
+# Caso 4: a trava do estado não abre para escrita um caminho que o agente
+# controla. Um link .trava para um arquivo de fora não pode truncá-lo.
+estado="$casa/.local/state/jangada/agentes"
+mkdir -p "$estado"
+echo '{"estado":"iniciado"}' >"$estado/s.json"
+echo "conteúdo de fora" >"$tmp/alvo"
+ln -sfn "$tmp/alvo" "$estado/.trava"
+if command -v flock >/dev/null 2>&1; then
+  isolar "$tmp/wt" bash -c 'source "$1/bin/jangada-config"; jangada_alterar_estado "$2/s.json" "$2/s.tmp" ".estado = \"ok\""' \
+    _ "$repo_jangada" "$estado"
+  conferir "caso 4: alvo do link da trava intacto" [ "$(cat "$tmp/alvo")" = "conteúdo de fora" ]
+  conferir "caso 4: estado alterado sob a trava" [ "$(jq -r .estado "$estado/s.json")" = ok ]
+else
+  echo "pulado caso 4: sem flock"
 fi
 
 if ((falhas)); then

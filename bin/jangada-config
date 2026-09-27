@@ -311,6 +311,9 @@ jangada_agy_ajustar_confianca() {
 # com mv, sob uma trava da pasta. O hook do Claude Code roda em paralelo quando
 # há ferramentas em paralelo, e o painel marca sessões interrompidas: sem a
 # trava, quem lê antes e grava depois apaga o campo que o outro gravou.
+# A trava é a própria pasta aberta só para leitura: um arquivo de trava aberto
+# para escrita seguiria um link simbólico posto pelo agente isolado e
+# truncaria o alvo fora do isolamento.
 # Uso: jangada_alterar_estado ARQ TMP ARGUMENTOS_DO_JQ...
 jangada_alterar_estado() {
   local arq="$1" tmp="$2"
@@ -320,7 +323,7 @@ jangada_alterar_estado() {
     (
       flock -w 5 9 || exit 1
       jq "$@" "$arq" >"$tmp" 2>/dev/null && mv "$tmp" "$arq"
-    ) 9>"$(dirname "$arq")/.trava"
+    ) 9<"$(dirname "$arq")"
   else
     local trava_dir
     trava_dir="$(dirname "$arq")/.trava.d"

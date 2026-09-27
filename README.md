@@ -31,7 +31,7 @@ jangada/
 
 ## Antes de instalar: mapear a máquina
 
-Em cada máquina, rode primeiro `bin/jangada-mapear`. Ele registra a configuração atual, inclusive as personalizações do Noctalia, em `mapeamento/` (fora do git). O roteiro de resgate está em `revisao/RESGATE.md`.
+Em cada máquina, rode primeiro `bin/jangada-mapear`. Ele registra a configuração atual, inclusive as personalizações do Noctalia, em `mapeamento/` (fora do git). Chaves, tokens, senhas, blocos de chave privada e senhas em URL são mascarados nas cópias; `bin/jangada-mapear --mascarar <arquivo` aplica a mesma máscara a qualquer texto, para conferir antes de compartilhar. O roteiro de resgate está em `revisao/RESGATE.md`.
 
 Quem vem do niri converte a configuração com `jangada-importar`, que lê `~/.config/niri/config.kdl` (ou uma pasta de mapeamento) e grava, sem sobrescrever nada:
 
@@ -257,9 +257,10 @@ Detalhes que valem para o dia a dia:
 
 - O `--integrar` recusa mesclar se o repositório principal tiver alterações
   sem commit.
-- Os arquivos de estado são alterados sob uma trava
-  (`~/.local/state/jangada/agentes/.trava`), porque os hooks do Claude Code
-  rodam em paralelo.
+- Os arquivos de estado são alterados sob uma trava (`flock` na própria pasta
+  `~/.local/state/jangada/agentes`, aberta só para leitura), porque os hooks
+  do Claude Code rodam em paralelo. Um arquivo de trava aberto para escrita
+  seguiria um link posto pelo agente e truncaria o alvo fora do isolamento.
 - O `jangada-agente` sem terminal exige `--nome`, `--prompt` ou `--direto`.
 
 Perfis de agente (outra conta, outro modelo, outro programa) ficam em
@@ -386,10 +387,14 @@ agente tem namespace de PID próprio: não vê nem mata os processos de fora. A
 notificação de uma sessão isolada vem sem o botão Abrir. Ficam ocultos
 `~/.ssh`, `~/.gnupg`, `~/.password-store`, `~/.aws`, `~/.azure`, `~/.kube`,
 `~/.docker`, `~/.netrc`, `~/.git-credentials`, `~/.config/gh`,
-`~/.config/rclone`, os perfis do Chromium, do Chrome e do Firefox e
-`~/.local/share/keyrings`; por isso o `git push` fica com o usuário, fora da
-sessão. Dentro dela, `JANGADA_ISOLADO=1`, e um `jangada-isolar` chamado ali
-roda o comando direto, sem aninhar. A função `revisar` do jangada shell e o
+`~/.config/rclone`, os perfis do Chromium, do Chrome e do Firefox,
+`~/.local/share/keyrings` e o histórico da área de transferência
+(`~/.cache/cliphist`, que guarda as 100 últimas cópias, senhas inclusive);
+por isso o `git push` fica com o usuário, fora da sessão. Dentro dela,
+`JANGADA_ISOLADO=1`, e um `jangada-isolar` chamado ali roda o comando direto,
+sem aninhar. A variável sozinha não basta: vale só com a marca
+`/tmp/.jangada-isolado` montada pelo bwrap, que um processo de fora cria
+como arquivo mas não como ponto de montagem. A função `revisar` do jangada shell e o
 `.jangada/preparar.sh` do worktree também rodam isolados.
 
 Limites conhecidos: o agente lê todo o chaveiro pelo D-Bus; as conversas e a
@@ -408,7 +413,9 @@ O estado guarda o comando e o campo `isolar` só para consulta: a restauração
 ignora os dois e volta sempre isolada, a menos que `JANGADA_AGENTE_ISOLAR=0`
 esteja no `jangada.conf` ou no ambiente. Uma sessão aberta com `--sem-isolar`
 ou com um perfil que desliga o isolamento volta, portanto, isolada. Sem o
-pacote `bubblewrap`, o agente abre sem isolamento e com aviso.
+pacote `bubblewrap`, o `jangada-isolar` recusa e o agente não abre; a
+mensagem fica no terminal da sessão e indica o `--sem-isolar` ou o
+`JANGADA_AGENTE_ISOLAR=0`.
 
 ## Painel de indicadores
 
@@ -546,6 +553,11 @@ e não mexe na instalada. Para testar a cópia de trabalho sem instalar, rode
 | `testes/subagentes.sh`, `testes/delegar.sh` | papéis de subagente e a instalação deles; `jangada-delegar` com agy falso |
 | `testes/versao.sh` | `jangada-versao` num repositório temporário: grupos e prefixos das novidades, o `CHANGELOG.md` e a tag do `--lancar` e as recusas (árvore suja, versão menor, tag existente, nada novo) |
 | `testes/importar.sh` | `jangada-importar` com um config.kdl de exemplo |
+| `testes/fim.sh` | `jangada-agente-fim` recusa estado adulterado (ramo, worktree, raiz, base) sem mexer em nada; `--limpar-concluidos` só age com `s` |
+| `testes/mapear.sh` | a máscara de segredos do `jangada-mapear` apaga tokens, chaves e senhas e preserva texto comum |
+| `testes/rede.sh` | `jangada-rede` com nmcli falso: a senha do Wi-Fi nunca aparece nos argumentos |
+| `testes/calendario.sh` | `jangada-calendario`: JSON corrompido guardado à parte, gravação atômica e gravações simultâneas sem perda |
+| `testes/reverter.sh` | `reverter` do jangada shell, no bash e no zsh: prévia do que se perde e ramo de cópia |
 | `testes/aninhado.sh` | sobe um Hyprland aninhado com a configuração (`--sem-usuario` só os padrões) e confere `configerrors` e o número de atalhos |
 
 A cada push, o GitHub Actions (`.github/workflows/verificar.yml`) roda o
@@ -561,8 +573,8 @@ Mudança que exige ajuste numa instalação existente ganha uma migração em
 `migrations/` (ver `migrations/README.md`). As revisões cruzadas e as
 avaliações estão indexadas em `revisao/README.md`; a última auditoria
 (`revisao/auditoria-20260927.md`) cobre o repositório inteiro, com 72
-apontamentos: os 6 críticos, todos de fuga do isolamento, foram corrigidos, e
-os demais seguem abertos.
+apontamentos: os 6 críticos, todos de fuga do isolamento, e os 8 altos foram
+corrigidos, e os médios e baixos seguem abertos.
 
 ## Estado
 
