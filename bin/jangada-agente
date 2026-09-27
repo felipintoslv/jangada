@@ -66,6 +66,7 @@ if ((janela)); then
   ((agente_dado)) && args+=(--agente "$agente")
   [[ -n "$perfil" ]] && args+=(--perfil "$perfil")
   ((revisor_dado)) && args+=(--revisor "$revisor")
+  ((isolar_dado)) && args+=(--sem-isolar)
   [[ -n "$prompt" ]] && args+=(--prompt "$prompt")
   ((${#extras[@]})) && args+=(-- "${extras[@]}")
   exec "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente -e "$0" "${args[@]}"
