@@ -4,7 +4,7 @@
   "position": "top",
   "height": 32,
   "spacing": 4,
-  "modules-left": ["custom/menu", "hyprland/workspaces", "custom/agentes", "hyprland/window"],
+  "modules-left": ["custom/menu", "hyprland/workspaces", "custom/agentes", "custom/indicadores", "hyprland/window"],
   "modules-center": ["clock"],
   "modules-right": [
     "mpris",
@@ -49,6 +49,23 @@
     "format": "{}",
     "on-click": "$JANGADA_PATH/bin/jangada-agentes --janela",
     "on-click-right": "$JANGADA_PATH/bin/jangada-agentes --painel",
+    "tooltip": true
+  },
+
+  // Painel de indicadores do uso de IA. O exec só lê o cache do
+  // jangada-painel, então roda barato; quem muda o estado (coleta, app que
+  // sobe ou sai, erro) avisa pelo sinal 9, e o intervalo longo é só a rede de
+  // segurança. O clique atualiza o cache e sobe o app R, o que leva segundos:
+  // roda solto (setsid -f) para não prender a barra. O botão direito encerra o
+  // app e libera a memória do R.
+  "custom/indicadores": {
+    "exec": "$JANGADA_PATH/bin/jangada-painel --waybar",
+    "return-type": "json",
+    "interval": 300,
+    "signal": 9,
+    "format": "{}",
+    "on-click": "setsid -f $JANGADA_PATH/bin/jangada-painel",
+    "on-click-right": "$JANGADA_PATH/bin/jangada-painel --parar",
     "tooltip": true
   },
 

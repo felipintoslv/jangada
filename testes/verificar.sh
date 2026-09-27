@@ -109,6 +109,9 @@ testes/isolar.sh || falha "testes/isolar.sh"
 passo "histórico de estados dos agentes"
 testes/eventos.sh || falha "testes/eventos.sh"
 
+passo "barra (módulos e migração)"
+testes/barra.sh || falha "testes/barra.sh"
+
 passo "painel de indicadores"
 testes/painel.sh || falha "testes/painel.sh"
 

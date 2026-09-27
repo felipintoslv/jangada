@@ -303,7 +303,7 @@ agente abre sem isolamento e com aviso.
 O `jangada-painel` junta os registros dos agentes num cache e abre um app
 Shiny em `127.0.0.1:8765` (`JANGADA_PAINEL_PORTA`). O app só existe enquanto
 está aberto: `jangada-painel --parar` libera a memória do R. Precisa de R com
-shiny, bslib, bsicons, plotly, DT, arrow e jsonlite, e do
+shiny, bslib, bsicons, plotly, visNetwork, igraph, DT, arrow e jsonlite, e do
 `python-pyarrow`; a instalação só avisa o que falta.
 
 Cada chamada roda o coletor (`default/painel/coletor.py`). Ele lê as
@@ -335,8 +335,29 @@ Definições:
   `eventos-agentes.jsonl`, que começou em 26/09/2026. O agy não tem estado
   aguardando.
 
+- **Ciclo de retrabalho**: editar um arquivo (Edit ou Write), os testes
+  falharem e editar o mesmo arquivo de novo, na mesma conversa. Um teste que
+  passa zera a conta. Edição por comando (sed, python) não entra, porque o
+  registro não diz o arquivo.
+- **Pontos quentes**: arquivos editados em mais de uma sessão, com o número
+  de itens REVISAR que os citam. O `validar.jsonl` não guarda os arquivos da
+  entrega; eles saem dos itens dos pareceres.
+- **Espaço de ferramentas** (exploratório): como o Product Space. Um projeto
+  tem vantagem numa capacidade (ferramenta, skill, subagente, servidor MCP ou
+  tipo de comando) quando a usa mais que a média; duas capacidades são
+  próximas quando os mesmos projetos têm vantagem nas duas. O grafo mostra a
+  árvore geradora máxima e as arestas acima do limiar.
+
+As redes cobrem só o Claude Code e mostram no máximo 40 nós por padrão; o
+painel tem controles para afrouxar a poda.
+
 Cada gráfico mostra o período e o número de observações coberto, com o aviso
 "pouco dado" abaixo de 10.
+
+Na barra, o módulo `custom/indicadores` fica ao lado do de agentes. O clique
+atualiza o cache e abre o painel; o botão direito encerra o app. A dica
+mostra os indicadores do dia. O módulo só lê o cache e é avisado pelo sinal
+9 (`pkill -RTMIN+9 -x waybar`), que fica reservado a ele.
 
 ## Várias máquinas
 

@@ -58,7 +58,7 @@ printf 'STATUS: APROVADO\n' >"$estado/agentes/validacao-meu-projeto-r2.md"
 touch -d "$depois" "$estado/agentes/validacao-meu-projeto-r2.md"
 # Pareceres antigos do jangada-par: o r1 foi sobrescrito depois do r2, e a
 # ordem certa é a do mtime. A avaliacao-* não é revisão.
-printf 'STATUS: REVISAR\n\n1. falta teste\n2. nome ruim\n' >"$estado/agentes/parecer-velho--tarefa-r2.md"
+printf 'STATUS: REVISAR\n\n1. falta teste em `src/a.R`\n2. nome ruim (app.R:12)\n3. sem arquivo\n' >"$estado/agentes/parecer-velho--tarefa-r2.md"
 touch -d '-10 days' "$estado/agentes/parecer-velho--tarefa-r2.md"
 printf '# Parecer\n\nSTATUS: APROVADO\n' >"$estado/agentes/parecer-velho--tarefa-r1.md"
 touch -d '-9 days' "$estado/agentes/parecer-velho--tarefa-r1.md"
@@ -130,6 +130,13 @@ t = pq.read_table(sys.argv[1] + "/validacoes.parquet").to_pylist()
 print(" ".join(f'{x["projeto"]}:{x["rodada"]}:{x["resultado"]}:{x["entrega"]}:{x["origem"][0]}' for x in t))
 PY
 )" = "meu-projeto:1:revisar:meu-projeto#1:v meu-projeto:2:aprovado:meu-projeto#1:v meu-projeto:1:aprovado:meu-projeto#2:v velho:1:revisar:velho--tarefa#1:p velho:2:aprovado:velho--tarefa#1:p" ]
+conferir "caso 1: arquivos citados nos itens do parecer REVISAR" \
+  [ "$(consulta <<'P'
+import sys, pyarrow.parquet as pq
+t = pq.read_table(sys.argv[1] + "/apontamentos.parquet").to_pylist()
+print(" ".join(sorted(l["projeto"] + ":" + l["arquivo"] for l in t)))
+P
+)" = "velho:app.R velho:src/a.R" ]
 conferir "caso 1: indicadores do dia" \
   jq_ok '.entregas_aprovadas == 2 and .aprovacao_1a_rodada == 50 and .tokens.saida == 340
     and .tokens.cache_lido == 4000 and .aguardando_segundos >= 55' "$cache/hoje.json"
@@ -153,6 +160,16 @@ echo "a coleta falhou" >"$cache/erro.txt"
 conferir "caso 3: --waybar com erro" jq_ok '.class == "erro" and (.tooltip | test("falhou"))' <(painel --waybar)
 rm -f "$cache/erro.txt"
 
+# Caso 3: --conferir aponta o que falta e não instala nada. Um Rscript que
+# falha faz faltar todos os pacotes R.
+mkdir -p "$tmp/rquebrado"
+printf '#!/bin/sh\nexit 1\n' >"$tmp/rquebrado/Rscript"
+chmod +x "$tmp/rquebrado/Rscript"
+rc=0
+rodar env PATH="$tmp/rquebrado:$PATH" "$repo_jangada/bin/jangada-painel" --conferir >"$tmp/conferir" 2>&1 || rc=$?
+conferir "caso 3: --conferir com o R quebrado lista os pacotes R" \
+  bash -c '[ "$1" = 1 ] && grep -q "falta pacotes R: shiny" "$2"' _ "$rc" "$tmp/conferir"
+
 # Caso 4: entrega nova que começa barrada na verificação local, e sessão
 # esquecida em aguardando (sem evento depois), que conta no máximo 12 horas.
 mkdir -p "$tmp/e5"
@@ -173,7 +190,7 @@ print(int(coletor.segundos_aguardando(evs, agora - dt.timedelta(hours=48), agora
 
 # Caso 5: indicadores em R e o app no ar.
 if ! command -v Rscript >/dev/null 2>&1 \
-  || ! Rscript -e 'for (p in c("shiny", "bslib", "bsicons", "plotly", "DT", "arrow", "jsonlite")) if (!requireNamespace(p, quietly = TRUE)) quit(status = 1)' 2>/dev/null; then
+  || ! Rscript -e 'for (p in c("shiny", "bslib", "bsicons", "plotly", "visNetwork", "igraph", "DT", "arrow", "jsonlite")) if (!requireNamespace(p, quietly = TRUE)) quit(status = 1)' 2>/dev/null; then
   echo "R ou pacotes do app ausentes; caso 5 ignorado"
 else
   conferir "caso 5: indicadores em R sobre o cache" \
@@ -185,6 +202,27 @@ else
       b <- consumo_por(d$mensagens[d$mensagens$modelo != "<synthetic>", ], "projeto")
       cat(nrow(e), r$primeira_pct, r$rodadas_media, b$saida[b$projeto == "meu-projeto"], nrow(sessoes_paradas(d$sessoes, e)))
     ' "$cache" 2>/dev/null)" = "3 50 1.5 347 0" ]
+  conferir "caso 5: redes sobre o cache (retrabalho, transições, pontos quentes)" \
+    [ "$(cd default/painel && Rscript -e '
+      source("indicadores.R")
+      d <- carregar_cache(commandArgs(TRUE)[1])
+      ch <- chamadas(d$ferramentas, d$resultados)
+      ci <- ciclos_retrabalho(ch)
+      g <- rede_transicoes(ch, peso_min = 1, destaque = basename(ci$arquivo))
+      q <- rede_pontos_quentes(edicoes(ch))
+      cat(nrow(ci), basename(ci$arquivo), "edição com retrabalho" %in% g$nos$group, nrow(q$nos), q$arestas$value)
+    ' "$cache" 2>/dev/null)" = "1 a.R TRUE 2 2" ]
+  conferir "caso 5: espaço de capacidades (RCA, proximidade e típico)" \
+    [ "$(cd default/painel && Rscript -e '
+      source("indicadores.R")
+      ch <- data.frame(projeto = rep(c("a", "b", "c"), each = 40), alvo = "",
+                       ferramenta = c(rep(c("Read", "Edit"), 20), rep(c("Read", "Edit"), 20), rep(c("Grep", "Bash"), 20)))
+      ch$alvo[ch$ferramenta == "Bash"] <- "testes"
+      e <- espaco_capacidades(ch)
+      r <- rede_capacidades(e, projeto = "c")
+      cat(e$proximidade["Read", "Edit"], e$proximidade["Read", "Grep"], e$projetos$projeto[1],
+          sort(unique(r$nos$group)))
+    ' 2>&1)" = "1 0 a outra vantagem de c" ]
   conferir "caso 5: sessão parada sem nenhuma entrega aprovada" \
     [ "$(cd default/painel && Rscript -e '
       source("indicadores.R")
@@ -200,9 +238,10 @@ else
       options(jangada.painel.cache = commandArgs(TRUE)[1])
       shiny::testServer(shiny::shinyAppDir("."), {
         session$setInputs(periodo = c(Sys.Date() - 30, Sys.Date()), projeto = NULL, agente = NULL, par = NULL)
-        cat(output$vb_primeira, output$vb_limite, output$vb_saida)
+        cat(output$vb_primeira, output$vb_limite, output$vb_saida, output$vb_ciclos, output$vb_multi)
       })
-    ' "$cache" 2>/dev/null)" = "33% 0 347" ]
+    ' "$cache" 2>/dev/null)" = "33% 0 347 1 0" ]
+  conferir "caso 5: --conferir com tudo instalado" painel --conferir
   if painel >/dev/null 2>"$tmp/erro4"; then
     ok "caso 5: o app sobe"
     conferir "caso 5: a página tem o título do painel" \

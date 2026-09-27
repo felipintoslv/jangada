@@ -10,6 +10,7 @@ eventos-agentes.jsonl). Grava em PASTA_DO_CACHE:
   validacoes.parquet   uma linha por rodada do jangada-validar
   eventos.parquet      o histórico de estados dos agentes
   sessoes.parquet      as sessões abertas agora (retrato dos SESSAO.json)
+  apontamentos.parquet o arquivo citado em cada item dos pareceres REVISAR
   mensagens/           uma linha por resposta do Claude, com o consumo
   ferramentas/         uma linha por chamada de ferramenta
   resultados/          uma linha por resultado de ferramenta (erro ou não)
@@ -175,6 +176,10 @@ ESQ_VALIDACOES = pa.schema([
     ("arquivos", pa.int64()), ("mais", pa.int64()), ("menos", pa.int64()),
     ("itens", pa.int64()), ("segundos", pa.int64()), ("entrega", pa.string()),
     ("origem", pa.string()),
+])
+ESQ_APONTAMENTOS = pa.schema([
+    ("data", TS), ("dia", pa.string()), ("projeto", pa.string()), ("rotulo", pa.string()),
+    ("arquivo", pa.string()),
 ])
 ESQ_SESSOES = pa.schema([
     ("sessao", pa.string()), ("projeto", pa.string()), ("agente", pa.string()),
@@ -421,6 +426,41 @@ def validacoes():
     return linhas
 
 
+# Arquivo citado no início de um item do parecer: "arq:12", "`arq`" ou
+# "[arq:12](file://...)". Itens sem arquivo (critérios em negrito) ficam de fora.
+ITEM = re.compile(r"^\s*\d+\.\s+(.*)")
+CITACAO_LINHA = re.compile(r"([\w.\-]+(?:/[\w.\-]+)*):\d+")
+CITACAO_CRASE = re.compile(r"`([\w.\-]*(?:/[\w.\-]+)*\.\w+|[\w.\-]+(?:/[\w.\-]+)+)`")
+
+
+def apontamentos():
+    """Arquivos citados nos itens dos pareceres REVISAR, um por item."""
+    linhas = []
+    padrao = re.compile(r"^(?:validacao|parecer)-(.+)-r\d+\.md$")
+    for caminho in glob.glob(os.path.join(ESTADO, "agentes", "*-r*.md")):
+        m = padrao.match(os.path.basename(caminho))
+        if not m:
+            continue
+        try:
+            t = dt.datetime.fromtimestamp(os.stat(caminho).st_mtime, UTC)
+            with open(caminho, encoding="utf-8", errors="replace") as f:
+                texto = f.read(200000).splitlines()
+        except OSError:
+            continue
+        if "REVISAR" not in "\n".join(texto[:5]):
+            continue
+        rotulo = m.group(1)
+        for l in texto:
+            item = ITEM.match(l)
+            if not item:
+                continue
+            c = CITACAO_LINHA.search(item.group(1)) or CITACAO_CRASE.search(item.group(1))
+            if c and ("/" in c.group(1) or "." in c.group(1).lstrip(".")):
+                linhas.append({"data": t, "dia": dia_de(t), "projeto": slug(rotulo.split("--")[0]),
+                               "rotulo": rotulo, "arquivo": c.group(1)})
+    return linhas
+
+
 def eventos():
     linhas = []
     try:
@@ -532,6 +572,7 @@ def main():
     gravar_tabela(os.path.join(cache, "validacoes.parquet"), vals, ESQ_VALIDACOES)
     gravar_tabela(os.path.join(cache, "eventos.parquet"), evs, ESQ_EVENTOS)
     gravar_tabela(os.path.join(cache, "sessoes.parquet"), sessoes(), ESQ_SESSOES)
+    gravar_tabela(os.path.join(cache, "apontamentos.parquet"), apontamentos(), ESQ_APONTAMENTOS)
     gravar_json(os.path.join(cache, "hoje.json"), indicadores_do_dia(cache, vals, evs, agora))
     resumo.update({"mensagens_novas": len(mens), "ferramentas_novas": len(ferr),
                    "resultados_novos": len(res), "validacoes": len(vals), "eventos": len(evs),

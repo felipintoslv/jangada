@@ -128,6 +128,19 @@ Registro novo que o painel precise ler entra no `coletor.py`, nunca no
 histórico existe só no cache. Resposta do Claude conta uma vez por
 `message.id` e `requestId`, com o maior `output_tokens`.
 
+Os grafos da aba Redes usam igraph para as métricas e visNetwork para
+desenhar. Poda sempre antes de desenhar (cerca de 40 nós, com o controle no
+painel): com mais nós o grafo vira bola. A física do visNetwork roda só até
+estabilizar e desliga, senão o grafo não para de tremer. No igraph 2.x use
+`get_edge_ids`; `union` de grafos com peso renomeia o atributo `weight`.
+O `validar.jsonl` não guarda quais arquivos a entrega mudou: os arquivos
+com REVISAR saem dos itens dos pareceres (`apontamentos.parquet`).
+
+O módulo `custom/indicadores` da barra roda `jangada-painel --waybar`, que
+só lê o cache. Nunca ponha a coleta no `exec`: ela leva segundos e a waybar
+a repete a cada intervalo. O `on-click` usa `setsid -f`; sem ele, a waybar
+espera o R subir. O sinal 9 é só dele.
+
 ## Scripts bash deste repositório
 
 - Trap só em `EXIT`. Um trap em `INT`/`TERM` não encerra o script: o bash roda

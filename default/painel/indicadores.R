@@ -35,6 +35,9 @@ carregar_cache <- function(cache) {
     eventos = ler("eventos.parquet", data.frame(
       data = ts, dia = character(), sessao = character(), projeto = character(),
       agente = character(), estado = character())),
+    apontamentos = ler("apontamentos.parquet", data.frame(
+      data = ts, dia = character(), projeto = character(), rotulo = character(),
+      arquivo = character())),
     sessoes = ler("sessoes.parquet", data.frame(
       sessao = character(), projeto = character(), agente = character(), estado = character(),
       desde = ts, atualizado = ts)),
@@ -231,4 +234,229 @@ sessoes_paradas <- function(sess, ent, dias = 3, agora = Sys.time()) {
   sess$dias_sem_entrega <- round((as.numeric(agora) - ref) / 86400, 1)
   sess[!is.na(sess$dias_sem_entrega) & sess$dias_sem_entrega > dias,
        c("sessao", "projeto", "agente", "estado", "desde", "ultima_aprovacao", "dias_sem_entrega")]
+}
+
+
+# D. Redes -----------------------------------------------------------------------
+
+EDICAO <- c("Edit", "Write", "NotebookEdit", "MultiEdit")
+
+slug <- function(x) {
+  x <- tolower(iconv(x, "UTF-8", "ASCII//TRANSLIT", sub = ""))
+  gsub("^-+|-+$", "", gsub("[^a-z0-9_-]+", "-", x))
+}
+
+# Caminho de arquivo sem a parte da máquina: "repo/caminho" para arquivos de
+# um projeto ou de uma worktree do jangada (a mesma tarefa em paralelo vira
+# o mesmo arquivo), "~/..." para o resto.
+normalizar_arquivo <- function(x,
+                               projetos = Sys.getenv("JANGADA_PROJETOS", path.expand("~/Projetos")),
+                               worktrees = Sys.getenv("JANGADA_WORKTREES", path.expand("~/.local/share/jangada-worktrees"))) {
+  sem <- function(x, pre) ifelse(startsWith(x, pre), substring(x, nchar(pre) + 1), NA_character_)
+  w <- sem(x, paste0(sub("/$", "", worktrees), "/"))
+  w <- ifelse(is.na(w), NA_character_, sub("^([^/]+)/[^/]+/", "\\1/", w))
+  p <- sem(x, paste0(sub("/$", "", projetos), "/"))
+  casa <- sem(x, paste0(path.expand("~"), "/"))
+  ifelse(!is.na(w), w, ifelse(!is.na(p), p, ifelse(!is.na(casa), paste0("~/", casa), x)))
+}
+
+# Chave para cruzar um arquivo editado com um arquivo citado num parecer:
+# projeto (em slug) e caminho dentro do repositório.
+chave_arquivo <- function(norm) {
+  ifelse(grepl("^~|^/", norm), norm, paste0(slug(sub("/.*", "", norm)), "/", sub("^[^/]+/", "", norm)))
+}
+
+# Chamadas de ferramenta com o resultado, em ordem dentro de cada conversa
+# (o subagente tem a própria sequência).
+chamadas <- function(f, r) {
+  f$erro <- r$erro[match(f$id, r$id)] %in% TRUE
+  f$fio <- paste(f$conversa, f$subagente)
+  f[order(f$fio, f$data), ]
+}
+
+# Ciclos de retrabalho: editar F, rodar os testes e falhar, editar F de novo.
+# Um teste que passa limpa a pendência; outras ferramentas não mudam nada.
+ciclos_retrabalho <- function(ch) {
+  vazio <- data.frame(conversa = character(), projeto = character(), sessao = character(),
+                      arquivo = character(), data = as.POSIXct(character()))
+  ch <- ch[(ch$ferramenta %in% EDICAO & nzchar(ch$arquivo)) | (ch$ferramenta == "Bash" & ch$alvo == "testes"), ]
+  if (!nrow(ch)) return(vazio)
+  achados <- lapply(split(seq_len(nrow(ch)), ch$fio), function(ix) {
+    editados <- character(); falhos <- character(); out <- integer(); arq <- character()
+    for (i in ix) {
+      if (ch$ferramenta[i] == "Bash") {
+        falhos <- if (ch$erro[i]) union(falhos, editados) else character()
+        editados <- character()
+      } else {
+        a <- ch$arquivo[i]
+        if (a %in% falhos) { out <- c(out, i); arq <- c(arq, a); falhos <- setdiff(falhos, a) }
+        editados <- union(editados, a)
+      }
+    }
+    out
+  })
+  i <- unlist(achados, use.names = FALSE)
+  if (!length(i)) return(vazio)
+  data.frame(conversa = ch$conversa[i], projeto = ch$projeto[i], sessao = ch$sessao[i],
+             arquivo = normalizar_arquivo(ch$arquivo[i]), data = ch$data[i], stringsAsFactors = FALSE)
+}
+
+# Grupo de um nó do grafo de transições, para a cor.
+grupo_no <- function(ferramenta, alvo) {
+  ifelse(ferramenta %in% EDICAO, "edição",
+    ifelse(ferramenta == "Bash" & alvo == "testes", "teste",
+      ifelse(ferramenta %in% c("Read", "Grep", "Glob") | alvo == "busca", "leitura e busca",
+        ifelse(ferramenta == "Bash", "shell", "outra"))))
+}
+
+# Grafo de transição entre chamadas: nó = ferramenta + alvo resumido, aresta =
+# uma chamada seguida da outra na mesma conversa. Poda: os max_nos nós mais
+# usados e as arestas com peso mínimo; as métricas vêm do igraph.
+rede_transicoes <- function(ch, max_nos = 40, peso_min = 2, destaque = character()) {
+  if (nrow(ch) < 2) return(NULL)
+  no <- ifelse(nzchar(ch$alvo), paste(ch$ferramenta, ch$alvo), ch$ferramenta)
+  n <- length(no)
+  mesmo <- ch$fio[-1] == ch$fio[-n]
+  e <- data.frame(from = no[-n][mesmo], to = no[-1][mesmo], stringsAsFactors = FALSE)
+  e <- e[e$from != e$to, ]
+  uso <- sort(table(no), decreasing = TRUE)
+  manter <- names(uso)[seq_len(min(max_nos, length(uso)))]
+  e <- e[e$from %in% manter & e$to %in% manter, ]
+  if (!nrow(e)) return(NULL)
+  e <- aggregate(list(peso = rep(1L, nrow(e))), e, sum)
+  e <- e[e$peso >= peso_min, ]
+  if (!nrow(e)) return(NULL)
+  ids <- unique(c(e$from, e$to))
+  g <- igraph::graph_from_data_frame(e, directed = TRUE, vertices = data.frame(name = ids))
+  entre <- igraph::betweenness(g, weights = 1 / e$peso)
+  prim <- match(ids, no)
+  nos <- data.frame(id = ids, label = ids, value = as.numeric(uso[ids]),
+                    group = grupo_no(ch$ferramenta[prim], ch$alvo[prim]),
+                    title = sprintf("%s<br>%d chamada(s)<br>intermediação: %.0f", ids, as.integer(uso[ids]), entre[ids]),
+                    stringsAsFactors = FALSE)
+  nos$group[nos$group == "edição" & sub("^\\S+ ", "", nos$id) %in% destaque] <- "edição com retrabalho"
+  list(nos = nos, arestas = data.frame(from = e$from, to = e$to, value = e$peso,
+                                       title = paste(e$peso, "vez(es)"), arrows = "to"), grafo = g)
+}
+
+# Pontos quentes: grafo bipartido sessão × arquivo editado. A sessão é a do
+# jangada (repo ou repo--tarefa); sem ela, a conversa.
+edicoes <- function(ch) {
+  # Rascunhos em /tmp não são arquivos do projeto.
+  ed <- ch[ch$ferramenta %in% EDICAO & nzchar(ch$arquivo) & !startsWith(ch$arquivo, "/tmp/"), ]
+  ed$quem <- ifelse(nzchar(ed$sessao), ed$sessao, substr(ed$conversa, 1, 8))
+  ed$arq <- normalizar_arquivo(ed$arquivo)
+  ed
+}
+
+pontos_quentes <- function(ed, apont = NULL) {
+  if (!nrow(ed)) return(data.frame())
+  a <- do.call(rbind, lapply(split(ed, ed$arq), function(x)
+    data.frame(arquivo = x$arq[1], sessoes = length(unique(x$quem)), conversas = length(unique(x$conversa)),
+               edicoes = nrow(x), ultima = max(x$data), stringsAsFactors = FALSE)))
+  if (!is.null(apont) && nrow(apont)) {
+    k <- table(paste0(apont$projeto, "/", apont$arquivo))
+    a$revisar <- as.integer(k[chave_arquivo(a$arquivo)])
+    a$revisar[is.na(a$revisar)] <- 0L
+  } else {
+    a$revisar <- 0L
+  }
+  rownames(a) <- NULL
+  a[order(-a$sessoes, -a$edicoes), ]
+}
+
+rede_pontos_quentes <- function(ed, max_nos = 40) {
+  if (!nrow(ed)) return(NULL)
+  pq <- pontos_quentes(ed)
+  # Arquivos primeiro pelos de mais sessões; cada arquivo traz as suas sessões.
+  arqs <- character(); sess <- character()
+  for (f in pq$arquivo) {
+    novas <- setdiff(unique(ed$quem[ed$arq == f]), sess)
+    if (length(arqs) + length(sess) + 1 + length(novas) > max_nos && length(arqs)) break
+    arqs <- c(arqs, f); sess <- c(sess, novas)
+  }
+  x <- ed[ed$arq %in% arqs, ]
+  e <- aggregate(list(value = rep(1L, nrow(x))), list(from = x$quem, to = x$arq), sum)
+  g <- igraph::graph_from_data_frame(e, directed = FALSE)
+  grau <- igraph::degree(g)
+  nos <- rbind(
+    data.frame(id = sess, label = sess, group = "sessão", shape = "square", value = 1,
+               title = paste(sess, "<br>", grau[sess], "arquivo(s)"), stringsAsFactors = FALSE),
+    data.frame(id = arqs, label = basename(arqs), group = ifelse(grau[arqs] > 1, "arquivo em várias sessões", "arquivo"),
+               shape = "dot", value = grau[arqs], title = paste(arqs, "<br>", grau[arqs], "sessão(ões)"),
+               stringsAsFactors = FALSE))
+  list(nos = nos, arestas = data.frame(from = e$from, to = e$to, value = e$value, title = paste(e$value, "edição(ões)")),
+       grafo = g)
+}
+
+# Capacidade de uma chamada, para o espaço de ferramentas: a ferramenta, com
+# o nome da skill, o tipo do subagente, o servidor MCP ou o tipo do comando.
+capacidade <- function(ferramenta, alvo) {
+  mcp <- grepl("^mcp__", ferramenta)
+  ifelse(mcp, paste("mcp", sub("^mcp__(.+?)__.*$", "\\1", ferramenta, perl = TRUE)),
+    ifelse(ferramenta == "Skill", paste("skill", alvo),
+      ifelse(ferramenta %in% c("Agent", "Task"), paste("subagente", alvo),
+        ifelse(ferramenta == "Bash", paste("Bash", alvo), ferramenta))))
+}
+
+# Espaço de capacidades, como o Product Space (Hidalgo e Hausmann): vantagem
+# relativa (RCA) de cada projeto em cada capacidade, M = RCA >= 1, e
+# proximidade entre capacidades i e j = projetos com vantagem nas duas sobre
+# o maior dos dois números de projetos com vantagem em cada uma. O quanto um
+# projeto é típico: cosseno entre o uso dele e o uso de todos.
+espaco_capacidades <- function(ch, min_chamadas = 30) {
+  ch <- ch[nzchar(ch$projeto), ]
+  if (!nrow(ch)) return(NULL)
+  x <- unclass(table(ch$projeto, capacidade(ch$ferramenta, ch$alvo)))
+  x <- x[rowSums(x) >= min_chamadas, , drop = FALSE]
+  x <- x[, colSums(x) > 0, drop = FALSE]
+  if (nrow(x) < 3 || ncol(x) < 3) return(NULL)
+  parte <- x / rowSums(x)
+  geral <- colSums(x) / sum(x)
+  rca <- sweep(parte, 2, geral, "/")
+  m <- (rca >= 1) * 1
+  ubiq <- colSums(m)
+  prox <- crossprod(m) / outer(ubiq, ubiq, pmax)
+  prox[!is.finite(prox)] <- 0
+  diag(prox) <- 0
+  tipico <- apply(parte, 1, function(s) sum(s * geral) / sqrt(sum(s^2) * sum(geral^2)))
+  vant <- apply(rca, 1, function(r) {
+    r <- sort(r[r >= 1], decreasing = TRUE)
+    paste(head(names(r), 4), collapse = ", ")
+  })
+  projetos <- data.frame(projeto = rownames(x), chamadas = rowSums(x), capacidades = rowSums(x > 0),
+                         com_vantagem = rowSums(m), tipico = round(100 * tipico), vantagens = vant,
+                         stringsAsFactors = FALSE)
+  rownames(projetos) <- NULL
+  list(uso = x, rca = rca, m = m, ubiquidade = ubiq, proximidade = prox,
+       projetos = projetos[order(-projetos$tipico), ])
+}
+
+# Rede das capacidades: a árvore geradora máxima da proximidade, para
+# ligar tudo, mais as arestas com proximidade >= limiar (como no Product
+# Space), entre as max_nos capacidades mais usadas.
+rede_capacidades <- function(esp, max_nos = 40, limiar = 0.5, projeto = NULL) {
+  if (is.null(esp)) return(NULL)
+  uso <- sort(colSums(esp$uso), decreasing = TRUE)
+  caps <- names(uso)[seq_len(min(max_nos, length(uso)))]
+  p <- esp$proximidade[caps, caps]
+  g <- igraph::graph_from_adjacency_matrix(p, mode = "undirected", weighted = TRUE, diag = FALSE)
+  if (!igraph::ecount(g)) return(NULL)
+  # Arestas da árvore, achadas no grafo original pelas pontas.
+  arv <- igraph::as_edgelist(igraph::mst(g, weights = 1 - igraph::E(g)$weight))
+  ids <- union(igraph::get_edge_ids(g, as.vector(t(arv))), which(igraph::E(g)$weight >= limiar))
+  h <- igraph::subgraph_from_edges(g, ids, delete.vertices = FALSE)
+  w <- igraph::E(h)$weight
+  el <- igraph::as_edgelist(h)
+  grupo <- if (length(projeto) == 1 && projeto %in% rownames(esp$m)) {
+    ifelse(esp$m[projeto, caps] > 0, paste("vantagem de", projeto), "outra")
+  } else {
+    ifelse(esp$ubiquidade[caps] >= stats::median(esp$ubiquidade[caps]), "comum", "rara")
+  }
+  nos <- data.frame(id = caps, label = caps, value = as.numeric(uso[caps]), group = grupo,
+                    title = sprintf("%s<br>%d chamada(s)<br>%d projeto(s) com vantagem", caps,
+                                    as.integer(uso[caps]), as.integer(esp$ubiquidade[caps])),
+                    stringsAsFactors = FALSE)
+  list(nos = nos, arestas = data.frame(from = el[, 1], to = el[, 2], value = w,
+                                       title = sprintf("proximidade %.2f", w)), grafo = h)
 }

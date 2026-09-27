@@ -89,6 +89,38 @@ curto <- function(n) {
   else if (n >= 1e3) sprintf("%.0f mil", n / 1e3) else as.character(round(n))
 }
 
+# Cores dos grupos dos grafos, na paleta dos outros gráficos.
+alerta <- "#e07a5f"
+cores_grupos <- c(
+  "edição" = cores[["primaria"]], "edição com retrabalho" = alerta, "teste" = cores[["atencao"]],
+  "leitura e busca" = "#888888", "shell" = "#b08968", "outra" = "#5f7f8f",
+  "sessão" = "#888888", "arquivo" = cores[["primaria"]], "arquivo em várias sessões" = alerta,
+  "comum" = cores[["primaria"]], "rara" = "#888888")
+
+# Grafo do visNetwork com layout do igraph (sem física, para não tremer) e
+# rótulos num cinza legível nos dois modos.
+grafo <- function(r) {
+  validate(need(!is.null(r), "sem dado no período"))
+  grupos <- unique(r$nos$group)
+  v <- visNetwork::visNetwork(r$nos, r$arestas, width = "100%") |>
+    # Física só até estabilizar: o layout fica compacto e depois para quieto.
+    visNetwork::visPhysics(solver = "forceAtlas2Based", stabilization = list(iterations = 400),
+                           forceAtlas2Based = list(gravitationalConstant = -60, avoidOverlap = 0.3)) |>
+    visNetwork::visEvents(stabilizationIterationsDone = "function() { this.setOptions({physics: false}); }") |>
+    visNetwork::visLayout(randomSeed = 1) |>
+    visNetwork::visNodes(font = list(color = "#8a8a8a", size = 18), scaling = list(min = 10, max = 40)) |>
+    visNetwork::visEdges(color = list(color = "#8888884d", highlight = cores[["primaria"]]),
+                         smooth = FALSE, scaling = list(min = 1, max = 8)) |>
+    visNetwork::visOptions(highlightNearest = list(enabled = TRUE, degree = 1, hover = TRUE)) |>
+    visNetwork::visInteraction(hover = TRUE, tooltipDelay = 100)
+  for (g in grupos) {
+    cor <- if (g %in% names(cores_grupos)) cores_grupos[[g]] else alerta
+    v <- visNetwork::visGroups(v, groupname = g, color = list(background = cor, border = "#777777",
+                               highlight = list(background = cor, border = cores[["texto"]])))
+  }
+  visNetwork::visLegend(v, useGroups = TRUE, position = "right", width = 0.22, zoom = FALSE)
+}
+
 cartao <- function(titulo, ..., cob = NULL) {
   card(full_screen = TRUE, card_header(titulo), card_body(...), if (!is.null(cob)) card_footer(cob))
 }
@@ -170,6 +202,49 @@ ui <- page_navbar(
       cartao("Trocas de foco por dia", plotly::plotlyOutput("c_foco", height = 260)),
       cartao("Sessões abertas sem entrega aprovada há mais de 3 dias", DT::DTOutput("c_paradas"))
     )
+  ),
+  nav_panel("Redes", icon = bsicons::bs_icon("diagram-3"),
+    layout_column_wrap(width = 1 / 3, fill = FALSE,
+      sliderInput("max_nos", "Nós por grafo (afrouxa a poda)", min = 10, max = 120, value = 40, step = 5),
+      sliderInput("peso_min", "Transições: vezes mínimas por aresta", min = 1, max = 10, value = 2),
+      sliderInput("limiar", "Capacidades: proximidade mínima", min = 0.2, max = 0.9, value = 0.5, step = 0.05)
+    ),
+    layout_column_wrap(width = 1 / 3, fill = FALSE,
+      value_box("Ciclos de retrabalho", textOutput("vb_ciclos"), showcase = bsicons::bs_icon("arrow-counterclockwise"),
+                p(textOutput("vb_ciclos_n", inline = TRUE))),
+      value_box("Testes que falharam", textOutput("vb_testes"), showcase = bsicons::bs_icon("bug"),
+                p(textOutput("vb_testes_n", inline = TRUE))),
+      value_box("Arquivos editados em mais de uma sessão", textOutput("vb_multi"), showcase = bsicons::bs_icon("files"),
+                p("risco de conflito entre agentes em paralelo"))
+    ),
+    layout_columns(col_widths = c(7, 5),
+      cartao("Transições entre chamadas de ferramenta", visNetwork::visNetworkOutput("d_transicoes", height = "480px"),
+             cob = div(class = "cobertura", "Ciclo de retrabalho: editar um arquivo, os testes falharem e editar o mesmo arquivo de novo. ",
+                       "Só conta edição pelas ferramentas Edit e Write: edição por comando (sed, python) não diz o arquivo.")),
+      navset_card_underline(title = "Retrabalho", full_screen = TRUE,
+        nav_panel("Por projeto", DT::DTOutput("d_ciclos_projeto")),
+        nav_panel("Por sessão", DT::DTOutput("d_ciclos_sessao")),
+        nav_panel("Arquivos", DT::DTOutput("d_ciclos_arquivo")))
+    ),
+    layout_columns(col_widths = c(7, 5),
+      cartao("Pontos quentes: sessão × arquivo editado", visNetwork::visNetworkOutput("d_quentes", height = "480px")),
+      navset_card_underline(title = "Arquivos", full_screen = TRUE,
+        nav_panel("Em mais sessões", DT::DTOutput("d_quentes_tab")),
+        nav_panel("Com mais REVISAR", DT::DTOutput("d_revisar"),
+                  p(class = "cobertura", "O arquivo citado em cada item dos pareceres REVISAR.")))
+    ),
+    card(full_screen = TRUE,
+      card_header("Espaço de ferramentas (exploratório, sem meta)"),
+      div(class = "alert alert-secondary",
+          "Como no Product Space (Hidalgo e Hausmann): um projeto tem vantagem numa capacidade quando a usa mais que a média ",
+          "(RCA >= 1); duas capacidades são próximas quando os mesmos projetos têm vantagem nas duas. ",
+          "Típico: o quanto o uso do projeto se parece com o de todos. Com um só projeto no filtro, o grafo marca as vantagens dele. ",
+          "Entram projetos com 30 chamadas ou mais no período, sem o filtro de projeto."),
+      layout_columns(col_widths = c(7, 5),
+        visNetwork::visNetworkOutput("d_capacidades", height = "520px"),
+        DT::DTOutput("d_projetos"))
+    ),
+    p(class = "cobertura", "Só o Claude Code: o agy não grava as chamadas de ferramenta de forma legível (docs/registros.md).")
   ),
   nav_spacer(),
   nav_item(input_dark_mode(id = "modo", mode = "dark"))
@@ -389,6 +464,75 @@ server <- function(input, output, session) {
     p$ultima_aprovacao <- ifelse(is.na(p$ultima_aprovacao), "nenhuma", format(p$ultima_aprovacao, "%d/%m %H:%M"))
     tabela(setNames(p, c("sessão", "projeto", "agente", "estado", "aberta em", "última aprovação", "dias sem entrega")))
   })
+
+  # D. Redes
+  todas <- reactive(chamadas(no_periodo(dados()$ferramentas), dados()$resultados))
+  ch <- reactive({
+    t <- todas()
+    if (length(input$projeto)) t <- t[t$projeto %in% input$projeto, ]
+    t
+  })
+  ciclos <- reactive(ciclos_retrabalho(ch()))
+  ed <- reactive(edicoes(ch()))
+  apont <- reactive(filtrar(no_periodo(dados()$apontamentos)))
+  quentes <- reactive(pontos_quentes(ed(), apont()))
+  output$vb_ciclos <- renderText(nrow(ciclos()))
+  output$vb_ciclos_n <- renderText({
+    n <- length(unique(ch()$conversa))
+    k <- length(unique(ciclos()$conversa))
+    paste0("em ", k, " de ", n, " conversa(s)")
+  })
+  testes <- reactive(ch()[ch()$ferramenta == "Bash" & ch()$alvo == "testes", ])
+  output$vb_testes <- renderText(if (nrow(testes())) paste0(round(100 * mean(testes()$erro)), "%") else "-")
+  output$vb_testes_n <- renderText(paste(milhar(sum(testes()$erro)), "de", milhar(nrow(testes())), "execuções de teste"))
+  output$vb_multi <- renderText(if (nrow(quentes())) sum(quentes()$sessoes > 1) else 0)
+  output$d_transicoes <- visNetwork::renderVisNetwork(
+    grafo(rede_transicoes(ch(), input$max_nos, input$peso_min, destaque = basename(ciclos()$arquivo))))
+  por <- function(col, rotulo) {
+    ci <- ciclos()
+    if (!nrow(ci)) return(tabela(data.frame()))
+    total <- tapply(ch()$conversa, ch()[[col]], function(x) length(unique(x)))
+    a <- do.call(rbind, lapply(split(ci, ci[[col]]), function(x)
+      data.frame(g = x[[col]][1], ciclos = nrow(x), com = length(unique(x$conversa)))))
+    a$conversas <- as.integer(total[a$g])
+    a$por_conversa <- format(round(a$ciclos / a$conversas, 2), decimal.mark = ",")
+    tabela(setNames(a[order(-a$ciclos), ], c(rotulo, "ciclos", "conversas com ciclo", "conversas", "ciclos por conversa")))
+  }
+  output$d_ciclos_projeto <- DT::renderDT(por("projeto", "projeto"))
+  output$d_ciclos_sessao <- DT::renderDT(por("sessao", "sessão"))
+  output$d_ciclos_arquivo <- DT::renderDT({
+    ci <- ciclos()
+    if (!nrow(ci)) return(tabela(data.frame()))
+    a <- aggregate(list(ciclos = rep(1L, nrow(ci))), list(arquivo = ci$arquivo), sum)
+    tabela(a[order(-a$ciclos), ])
+  })
+  output$d_quentes <- visNetwork::renderVisNetwork(grafo(rede_pontos_quentes(ed(), input$max_nos)))
+  output$d_quentes_tab <- DT::renderDT({
+    q <- quentes()
+    if (!nrow(q)) return(tabela(data.frame()))
+    q$ultima <- format(q$ultima, "%d/%m %H:%M")
+    tabela(setNames(q[c("sessoes", "edicoes", "revisar", "ultima", "arquivo")],
+                    c("sessões", "edições", "REVISAR", "última edição", "arquivo")))
+  })
+  output$d_revisar <- DT::renderDT({
+    a <- apont()
+    if (!nrow(a)) return(tabela(data.frame()))
+    r <- do.call(rbind, lapply(split(a, paste(a$projeto, a$arquivo)), function(x)
+      data.frame(projeto = x$projeto[1], arquivo = x$arquivo[1], itens = nrow(x),
+                 entregas = length(unique(x$rotulo)))))
+    tabela(setNames(r[order(-r$itens), ], c("projeto", "arquivo", "itens REVISAR", "rótulos")))
+  })
+  esp <- reactive(espaco_capacidades(todas()))
+  output$d_capacidades <- visNetwork::renderVisNetwork({
+    grafo(rede_capacidades(esp(), input$max_nos, input$limiar, projeto = input$projeto))
+  })
+  output$d_projetos <- DT::renderDT({
+    e <- esp()
+    if (is.null(e)) return(tabela(data.frame()))
+    tabela(setNames(e$projetos[c("projeto", "tipico", "com_vantagem", "chamadas", "vantagens")],
+                    c("projeto", "típico (%)", "com vantagem", "chamadas", "vantagens")))
+  })
+
 }
 
 shinyApp(ui, server)
