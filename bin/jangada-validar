@@ -99,8 +99,8 @@ resumo_subagentes() {
   [[ -n "${dir:-}" ]] || return 0
   if [[ -f "${arq_aprovado:-}" ]]; then
     desde="$(date -r "$arq_aprovado" -Iseconds)"
-  elif [[ -n "${inicio:-}" ]]; then
-    desde="$inicio"
+  elif [[ -n "${criada:-}" ]]; then
+    desde="$criada"
   elif [[ -n "${ponto:-}" ]]; then
     desde="$(git -C "$dir" log -1 --format=%cI "$ponto" 2>/dev/null || true)"
   fi
@@ -132,11 +132,13 @@ arq_estado=""
 rotulo="${sessao:-$(basename "$dir")}"
 rotulo="${rotulo//[^A-Za-z0-9_.-]/-}"
 
-tarefa=""; inicio=""; autor=""
+tarefa=""; inicio=""; autor=""; criada=""
 if [[ -n "$arq_estado" ]]; then
   [[ -n "$base" ]] || base="$(jq -r '.base // ""' "$arq_estado")"
   tarefa="$(jq -r '.tarefa // ""' "$arq_estado")"
   inicio="$(jq -r '.inicio // ""' "$arq_estado")"
+  # .inicio é o commit de partida; a data de criação da sessão é .desde.
+  criada="$(jq -r '.desde // ""' "$arq_estado")"
   autor="$(jq -r '.agente // ""' "$arq_estado")"
   autor="$(basename "${autor%% *}")"
   if ((!revisor_dado)); then

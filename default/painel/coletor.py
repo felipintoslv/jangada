@@ -17,6 +17,7 @@ eventos-agentes.jsonl). Grava em PASTA_DO_CACHE:
   posicoes.json        até onde cada jsonl foi lido
   coleta.json          resumo da última coleta
   hoje.json            os indicadores do dia (jangada-painel --json)
+  subagentes.json      os indicadores de subagentes e delegações (subagentes.py)
 
 As pastas mensagens, ferramentas e resultados recebem um arquivo novo por
 coleta com dado novo, e são compactadas num só quando passam de 40.
@@ -37,6 +38,9 @@ import unicodedata
 import pyarrow as pa
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import subagentes  # noqa: E402
 
 INICIO = time.monotonic()
 CASA = os.path.expanduser("~")
@@ -575,6 +579,12 @@ def main():
     gravar_tabela(os.path.join(cache, "sessoes.parquet"), sessoes(), ESQ_SESSOES)
     gravar_tabela(os.path.join(cache, "apontamentos.parquet"), apontamentos(), ESQ_APONTAMENTOS)
     gravar_json(os.path.join(cache, "hoje.json"), indicadores_do_dia(cache, vals, evs, agora))
+    # Os indicadores de subagentes não derrubam a coleta: um registro novo
+    # e estranho vira um aviso no log.
+    try:
+        gravar_json(os.path.join(cache, "subagentes.json"), subagentes.indicadores())
+    except Exception as e:  # noqa: BLE001
+        print(f"subagentes: {e!r}", file=sys.stderr)
     resumo.update({"mensagens_novas": len(mens), "ferramentas_novas": len(ferr),
                    "resultados_novos": len(res), "validacoes": len(vals), "eventos": len(evs),
                    "data": agora.astimezone(FUSO).isoformat(timespec="seconds"),

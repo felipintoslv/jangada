@@ -10,7 +10,9 @@ Lê, sem rede e só com a biblioteca padrão:
 Usado pelo jangada-subagentes (métrica e campo subagentes do validar.jsonl) e
 pelo coletor do painel. Medida ausente fica None ("sem medida"), nunca zero.
 
-Uso: subagentes.py --entrega PASTA [--desde ISO] [--ate ISO]
+Uso: subagentes.py [--json]
+       os oito indicadores de uso (texto, ou JSON com --json)
+     subagentes.py --entrega PASTA [--desde ISO] [--ate ISO]
        resumo de uma entrega em JSON (campo subagentes do validar.jsonl)
      subagentes.py --registros
        um JSON por linha para cada subagente e delegação lida
@@ -291,6 +293,32 @@ def mesma_pasta(a, b):
     return os.path.realpath(a) == os.path.realpath(b)
 
 
+def tokens_principal(pasta, ini=None, fim=None, raiz=None):
+    """Tokens da conversa principal do Claude na pasta, entre ini e fim
+    (segundos): entrada, saída e cache criado, e à parte o cache lido. Só as
+    conversas da pasta de projeto do Claude com o nome da pasta; a mesma
+    resposta em várias linhas conta uma vez (vale a última)."""
+    raiz = raiz or PROJETOS_CLAUDE
+    nome = re.sub(r"[^A-Za-z0-9]", "-", os.path.realpath(pasta))
+    uso = {}
+    for arq in glob.glob(os.path.join(raiz, nome, "*.jsonl")):
+        if fim is None and ini is not None and os.path.getmtime(arq) < ini:
+            continue
+        for d in linhas_json(arq):
+            if d.get("type") != "assistant" or d.get("isSidechain"):
+                continue
+            t = instante(d.get("timestamp"))
+            if t is None or (ini is not None and t < ini) or (fim is not None and t > fim):
+                continue
+            msg = d.get("message") or {}
+            u = msg.get("usage") or {}
+            if u and msg.get("model") != "<synthetic>":
+                uso[msg.get("id") or id(d)] = u
+    novo = sum((u.get("input_tokens") or 0) + (u.get("output_tokens") or 0)
+               + (u.get("cache_creation_input_tokens") or 0) for u in uso.values())
+    return novo, sum(u.get("cache_read_input_tokens") or 0 for u in uso.values())
+
+
 def entrega(pasta, desde=None, ate=None):
     """Resumo dos subagentes e delegações de uma entrega (campo subagentes
     do validar.jsonl): tudo o que rodou na pasta entre desde e ate."""
@@ -317,10 +345,14 @@ def entrega(pasta, desde=None, ate=None):
         v = [i.get(chave) for i in itens if isinstance(i.get(chave), (int, float))]
         return sum(v) if v else 0
 
-    agy_n = len(a) + sum(d.get("destino") == "agy" for d in atendidas)
+    delegadas_agy = sum(d.get("destino") == "agy" for d in atendidas)
+    agy_n = len(a) + delegadas_agy
+    principal, cache_lido = tokens_principal(pasta, ini, fim)
     return {
         "n": len(subs) + len(atendidas),
-        "claude": {"n": len(c), "tokens": soma(c, "tokens")},
+        "claude": {"n": len(c), "tokens": soma(c, "tokens"), "principal": principal,
+                   "principal_cache_lido": cache_lido},
+        "delegadas_agy": delegadas_agy,
         "agy": {"n": agy_n, "passos": soma(a, "passos") + soma(atendidas, "passos")},
         "papeis": papeis,
         "retorno_tokens": soma(c, "retorno_tokens") + soma(atendidas, "tokens_retorno"),
@@ -330,13 +362,272 @@ def entrega(pasta, desde=None, ate=None):
     }
 
 
+POUCO_DADO = 15
+RETORNO_GRANDE = 2000
+RECUSA_ANTES = 15 * 60
+
+
+def mediana(v):
+    v = sorted(x for x in v if isinstance(x, (int, float)))
+    if not v:
+        return None
+    m = len(v) // 2
+    return round(v[m] if len(v) % 2 else (v[m - 1] + v[m]) / 2, 1)
+
+
+def pct(parte, todo):
+    return round(100 * parte / todo, 1) if todo else None
+
+
+def entregas_aprovadas(caminho=None):
+    """Linhas APROVADO do validar.jsonl com o resumo de subagentes."""
+    saida = []
+    for d in linhas_json(caminho or os.path.join(ESTADO, "validar.jsonl")):
+        r = d.get("subagentes")
+        if d.get("resultado") != "aprovado" or not isinstance(r, dict):
+            continue
+        num = lambda k: d.get(k) if isinstance(d.get(k), int) else 0
+        c = r.get("claude") or {}
+        saida.append({
+            "data": d.get("data"), "projeto": d.get("projeto"), "rotulo": d.get("rotulo"),
+            "rodadas": d.get("rodada"), "diff": num("mais") + num("menos"),
+            "tokens_claude": (c.get("principal") or 0) + (c.get("tokens") or 0),
+            "com_agy": (r.get("delegadas_agy") or 0) > 0,
+            "com_verificador": ((r.get("papeis") or {}).get("verificador") or 0) > 0,
+        })
+    return saida
+
+
+def faixas(ents):
+    """Tercis do tamanho do diff (mais + menos): pequeno, médio, grande."""
+    v = sorted(e["diff"] for e in ents)
+    if not v:
+        return
+    c1, c2 = v[len(v) // 3], v[2 * len(v) // 3]
+    for e in ents:
+        e["faixa"] = "pequeno" if e["diff"] < c1 else "médio" if e["diff"] < c2 else "grande"
+
+
+def comparar(ents, chave, medida):
+    """Por faixa de diff, o grupo com e sem `chave`: n e a medida de cada um."""
+    linhas = []
+    for f in ("pequeno", "médio", "grande", "todas"):
+        linha = {"faixa": f}
+        for lado, val in (("com", True), ("sem", False)):
+            g = [e for e in ents if e[chave] == val and (f == "todas" or e.get("faixa") == f)]
+            linha[lado] = dict(n=len(g), pouco_dado=len(g) <= POUCO_DADO, **medida(g))
+        linhas.append(linha)
+    return linhas
+
+
+def aprovacao(g):
+    return {"primeira_pct": pct(sum(e["rodadas"] == 1 for e in g), len(g)),
+            "rodadas_media": round(sum(e["rodadas"] or 0 for e in g) / len(g), 2) if g else None}
+
+
+def indicadores(agora=None):
+    """Os oito indicadores da etapa 4 da especificação de subagentes."""
+    agora = agora or dt.datetime.now().astimezone()
+    subs = claude() + agy()
+    dels = delegacoes()
+    atendidas = [d for d in dels if not d.get("recusa")]
+    recusas = [d for d in dels if d.get("recusa")]
+    ents = entregas_aprovadas()
+    faixas(ents)
+
+    # 1. Tokens do Claude por entrega aprovada, com e sem delegação ao agy.
+    tokens = comparar(ents, "com_agy", lambda g: {"mediana_tokens": mediana(e["tokens_claude"] for e in g)})
+
+    # 2. Fração delegada ao agy e recusas do jangada-delegar.
+    por_papel = {}
+    for x in subs:
+        if x["origem"] == "claude" or x["papel"]:
+            chave = x["papel"] or x["tipo"] or "?"
+            por_papel.setdefault(chave, {"claude": 0, "agy": 0})[x["origem"]] += 1
+    for d in atendidas:
+        por_papel.setdefault(d.get("papel") or "?", {"claude": 0, "agy": 0})[
+            "agy" if d.get("destino") == "agy" else "claude"] += 1
+    motivos = {}
+    for d in recusas:
+        m = re.sub(r"\d+([.,]\d+)?%?", "N", d.get("motivo") or "")
+        m = re.sub(r"\(.*\)", "", m).strip()
+        motivos[m] = motivos.get(m, 0) + 1
+    agy_atendidas = sum(d.get("destino") == "agy" for d in atendidas)
+    fracao = {
+        "delegadas_agy": agy_atendidas, "subagentes_claude": sum(x["origem"] == "claude" for x in subs),
+        "subagentes_agy": sum(x["origem"] == "agy" for x in subs),
+        "fracao_agy_pct": pct(agy_atendidas, len(atendidas) + len(subs)),
+        "por_papel": por_papel,
+        "chamadas": len(dels), "recusas": len(recusas), "taxa_recusa_pct": pct(len(recusas), len(dels)),
+        "motivos": motivos,
+    }
+
+    # 3. Compressão: séries separadas, Claude em tokens e agy em passos.
+    serie_claude = [x for x in subs if x["origem"] == "claude" and x["casamento"]]
+    serie_agy = [d for d in atendidas if isinstance(d.get("passos"), (int, float)) and d.get("tokens_retorno")]
+    grandes = [{"origem": x["origem"], "id": x["id"], "papel": x["papel"] or x["tipo"], "inicio": x["inicio"],
+                "retorno_tokens": x["retorno_tokens"]}
+               for x in subs if (x["retorno_tokens"] or 0) > RETORNO_GRANDE]
+    grandes += [{"origem": "delegacao", "id": d.get("conversa"), "papel": d.get("papel"), "inicio": d.get("data"),
+                 "retorno_tokens": d.get("tokens_retorno")}
+                for d in atendidas if (d.get("tokens_retorno") or 0) > RETORNO_GRANDE]
+    compressao = {
+        "claude": {"n": len(serie_claude), "mediana": mediana(x["razao"] for x in serie_claude),
+                   "descasados": sum(x["casamento"] is False for x in subs),
+                   "sem_medida": sum(x["origem"] == "claude" and x["casamento"] is None for x in subs),
+                   "por_papel": {p: mediana(x["razao"] for x in serie_claude if (x["papel"] or x["tipo"]) == p)
+                                 for p in sorted({x["papel"] or x["tipo"] for x in serie_claude})}},
+        "agy": {"n": len(serie_agy),
+                "mediana_passos_por_mil_tokens": mediana(1000 * d["passos"] / d["tokens_retorno"] for d in serie_agy)},
+        "retornos_grandes": grandes,
+    }
+
+    # 4. Custo em cota do agy, em pontos percentuais do limite de 5 horas.
+    custos = [(d.get("data"), d["cota_antes"] - d["cota_depois"]) for d in atendidas
+              if isinstance(d.get("cota_antes"), (int, float)) and isinstance(d.get("cota_depois"), (int, float))]
+    semanas = {}
+    for data, c in custos:
+        t = instante(data)
+        if t is not None:
+            a, s_, _ = dt.datetime.fromtimestamp(t).isocalendar()
+            chave = f"{a}-S{s_:02d}"
+            semanas[chave] = round(semanas.get(chave, 0) + c, 2)
+    media = sum(c for _, c in custos) / len(custos) if custos else None
+    cota = {"n": len(custos), "media_pp": None if media is None else round(media, 2),
+            "abaixo_da_resolucao": sum(c <= 0 for _, c in custos),
+            "delegacoes_por_bloco": round(100 / media) if media and media > 0 else None,
+            "por_semana_pp": semanas}
+
+    # 5. Efeito na validação, com e sem verificador, e com e sem agy.
+    validacao = {"verificador": comparar(ents, "com_verificador", aprovacao),
+                 "agy": comparar(ents, "com_agy", aprovacao)}
+
+    # 6. Qualidade: afirmações sem fonte. O desmentido não é detectável.
+    sf = [x["sem_fonte"] for x in subs if x["sem_fonte"] is not None]
+    sf_d = [d.get("sem_fonte") for d in atendidas if isinstance(d.get("sem_fonte"), int)]
+    qualidade = {"claude": {"n": len(sf), "mediana": mediana(sf), "total": sum(sf)},
+                 "delegacoes": {"n": len(sf_d), "mediana": mediana(sf_d), "total": sum(sf_d)},
+                 "desmentidos": None}
+
+    # 7. Desvios do protocolo. Meta: zero em todos.
+    recusas_t = [(instante(d.get("data")), d.get("papel"), d.get("pasta")) for d in recusas]
+
+    def sem_recusa(x):
+        t = instante(x["inicio"])
+        return x["origem"] == "claude" and x["papel"] and t is not None and not any(
+            rt is not None and rp == x["papel"] and mesma_pasta(rpa, x["pasta"]) and 0 <= t - rt <= RECUSA_ANTES
+            for rt, rp, rpa in recusas_t)
+
+    def item(x):
+        return {"origem": x["origem"], "id": x["id"], "tipo": x["tipo"], "descricao": x["descricao"][:80],
+                "inicio": x["inicio"]}
+    desvios = {nome: [item(x) for x in subs if f(x)] for nome, f in (
+        ("edicoes", lambda x: (x["edicoes"] or 0) > 0),
+        ("autorrevisao", lambda x: x["autorrevisao"]),
+        ("generico", lambda x: x["generico"]),
+        ("claude_sem_recusa", sem_recusa))}
+
+    # 8. Árvore: pasta, conversa e seus subagentes e delegações.
+    arvore = {}
+    for x in subs:
+        ramo = arvore.setdefault(x["pasta"] or "?", {}).setdefault(f'{x["origem"]}:{x["conversa"]}', [])
+        ramo.append({"origem": x["origem"], "id": x["id"], "papel": x["papel"] or x["tipo"],
+                     "profundidade": x["profundidade"], "tokens": x["tokens"], "passos": x["passos"],
+                     "retorno_tokens": x["retorno_tokens"], "razao": x["razao"]})
+    for d in dels:
+        ramo = arvore.setdefault(d.get("pasta") or "?", {}).setdefault(f'delegar:{d.get("sessao") or "?"}', [])
+        ramo.append({"origem": "delegacao", "id": d.get("conversa") or "", "papel": d.get("papel"),
+                     "profundidade": 1, "tokens": d.get("tokens_agy"), "passos": d.get("passos"),
+                     "retorno_tokens": d.get("tokens_retorno"), "razao": None, "recusa": d.get("recusa")})
+    ramos = []
+    for pasta, convs in sorted(arvore.items()):
+        for conv, filhos in sorted(convs.items()):
+            tok = sum(f["tokens"] or 0 for f in filhos if f["origem"] == "claude")
+            ret = sum(f["retorno_tokens"] or 0 for f in filhos if f["origem"] == "claude")
+            ramos.append({"pasta": pasta, "conversa": conv, "n": len(filhos), "tokens_claude": tok,
+                          "retorno_tokens": ret, "razao": round(tok / ret, 1) if tok and ret else None,
+                          "passos_agy": sum(f["passos"] or 0 for f in filhos), "filhos": filhos})
+
+    return {
+        "data": agora.isoformat(timespec="seconds"), "pouco_dado": POUCO_DADO,
+        "entregas_com_resumo": len(ents),
+        "tokens_por_entrega": tokens, "fracao_agy": fracao, "compressao": compressao, "cota_agy": cota,
+        "validacao": validacao, "qualidade": qualidade, "desvios": desvios, "arvore": ramos,
+    }
+
+
+def texto(ind):
+    """Os indicadores em texto curto, para o terminal."""
+    n = lambda v, suf="": "-" if v is None else f"{v}{suf}".replace(".", ",")
+    li = [f"Subagentes e delegações ({ind['data'][:16].replace('T', ' ')})", ""]
+
+    def grupos(titulo, linhas, medida, fmt):
+        li.append(titulo)
+        for l in linhas:
+            partes = []
+            for lado in ("com", "sem"):
+                g = l[lado]
+                partes.append(f"{lado} {g['n']}: {fmt(g[medida])}{' (pouco dado)' if g['pouco_dado'] else ''}")
+            li.append(f"  {l['faixa']:8} " + "; ".join(partes))
+
+    li.append(f"Entregas aprovadas com resumo de subagentes: {ind['entregas_com_resumo']}"
+              f" (sem conclusão até {ind['pouco_dado']} em cada grupo)")
+    grupos("1. Tokens do Claude por entrega, com e sem delegação ao agy (mediana)",
+           ind["tokens_por_entrega"], "mediana_tokens", lambda v: n(v))
+    f = ind["fracao_agy"]
+    li.append(f"2. Fração delegada ao agy: {n(f['fracao_agy_pct'], '%')} ({f['delegadas_agy']} delegações;"
+              f" {f['subagentes_claude']} subagentes do Claude, {f['subagentes_agy']} do agy)")
+    for p, v in sorted(f["por_papel"].items()):
+        li.append(f"  {p}: Claude {v['claude']}, agy {v['agy']}")
+    li.append(f"  recusas do jangada-delegar: {f['recusas']} de {f['chamadas']} ({n(f['taxa_recusa_pct'], '%')})")
+    for m, q in sorted(f["motivos"].items(), key=lambda x: -x[1]):
+        li.append(f"    {q}x {m}")
+    c = ind["compressao"]
+    li.append(f"3. Compressão no Claude (tokens do subagente por token devolvido): mediana"
+              f" {n(c['claude']['mediana'])} em {c['claude']['n']}; {c['claude']['descasados']} descasado(s),"
+              f" {c['claude']['sem_medida']} sem medida")
+    for p, v in c["claude"]["por_papel"].items():
+        li.append(f"  {p}: {n(v)}")
+    li.append(f"  agy (passos por mil tokens devolvidos): mediana {n(c['agy']['mediana_passos_por_mil_tokens'])}"
+              f" em {c['agy']['n']}")
+    li.append(f"  retornos acima de {RETORNO_GRANDE} tokens: {len(c['retornos_grandes'])}")
+    for g in c["retornos_grandes"]:
+        li.append(f"    {g['origem']} {g['papel']} {g['id']}: {g['retorno_tokens']}")
+    k = ind["cota_agy"]
+    li.append(f"4. Cota do agy por delegação: {n(k['media_pp'], ' pp')} em média em {k['n']}"
+              f" ({k['abaixo_da_resolucao']} sem variação medida); cabem {n(k['delegacoes_por_bloco'])} por bloco de 5 horas")
+    for s_, v in sorted(k["por_semana_pp"].items()):
+        li.append(f"  {s_}: {n(v, ' pp')}")
+    grupos("5. Aprovação na 1ª rodada, com e sem verificador", ind["validacao"]["verificador"],
+           "primeira_pct", lambda v: n(v, "%"))
+    grupos("   e com e sem delegação ao agy", ind["validacao"]["agy"], "primeira_pct", lambda v: n(v, "%"))
+    q = ind["qualidade"]
+    li.append(f"6. Afirmações sem fonte: Claude {q['claude']['total']} em {q['claude']['n']} relatórios"
+              f" (mediana {n(q['claude']['mediana'])}); delegações {q['delegacoes']['total']} em"
+              f" {q['delegacoes']['n']} (mediana {n(q['delegacoes']['mediana'])}); desmentidos: não detectável")
+    d = ind["desvios"]
+    li.append("7. Desvios do protocolo (meta zero): " + ", ".join(f"{k_} {len(v)}" for k_, v in d.items()))
+    for k_, v in d.items():
+        for x in v[:5]:
+            li.append(f"  {k_}: {x['origem']} {x['tipo']} {x['id']} {x['descricao']!r}")
+    li.append(f"8. Árvore: {len(ind['arvore'])} ramo(s) (conversa ou sessão)")
+    for r in ind["arvore"][:15]:
+        li.append(f"  {os.path.basename(r['pasta'])} {r['conversa'][:30]}: {r['n']} filho(s),"
+                  f" {r['tokens_claude']} tokens no Claude, razão {n(r['razao'])}, {r['passos_agy']} passos no agy")
+    return "\n".join(li)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="jangada-subagentes")
     ap.add_argument("--entrega", metavar="PASTA")
     ap.add_argument("--desde")
     ap.add_argument("--ate")
     ap.add_argument("--registros", action="store_true")
+    ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
+    for nome in ("desde", "ate"):
+        if getattr(a, nome) and instante(getattr(a, nome)) is None:
+            ap.error(f"--{nome} não é uma data ISO 8601: {getattr(a, nome)}")
     if a.entrega:
         print(json.dumps(entrega(a.entrega, a.desde, a.ate), ensure_ascii=False))
     elif a.registros:
@@ -344,9 +635,10 @@ def main(argv=None):
             print(json.dumps(r, ensure_ascii=False))
         for d in delegacoes():
             print(json.dumps(dict(d, origem="delegacao"), ensure_ascii=False))
+    elif a.json:
+        print(json.dumps(indicadores(), ensure_ascii=False))
     else:
-        ap.print_usage(sys.stderr)
-        return 2
+        print(texto(indicadores()))
     return 0
 
 

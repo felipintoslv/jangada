@@ -41,7 +41,8 @@ carregar_cache <- function(cache) {
     sessoes = ler("sessoes.parquet", data.frame(
       sessao = character(), projeto = character(), agente = character(), estado = character(),
       desde = ts, atualizado = ts)),
-    coleta = tryCatch(jsonlite::read_json(file.path(cache, "coleta.json")), error = function(e) list())
+    coleta = tryCatch(jsonlite::read_json(file.path(cache, "coleta.json")), error = function(e) list()),
+    subagentes = tryCatch(suppressWarnings(jsonlite::read_json(file.path(cache, "subagentes.json"))), error = function(e) list())
   )
 }
 
@@ -460,4 +461,55 @@ rede_capacidades <- function(esp, max_nos = 40, limiar = 0.5, projeto = NULL) {
                     stringsAsFactors = FALSE)
   list(nos = nos, arestas = data.frame(from = el[, 1], to = el[, 2], value = w,
                                        title = sprintf("proximidade %.2f", w)), grafo = h)
+}
+
+# E. Subagentes e delegações ----------------------------------------------------
+# Os indicadores vêm prontos do subagentes.json (default/painel/subagentes.py);
+# aqui só viram tabelas e grafo.
+
+num_ou_na <- function(x) if (is.null(x)) NA_real_ else as.numeric(x)
+
+# Uma linha por faixa de diff: n e medida com e sem o grupo (agy ou verificador).
+tabela_comparar <- function(linhas, medida) {
+  if (!length(linhas)) return(data.frame(faixa = character(), com = character(), sem = character()))
+  lado <- function(l, k) {
+    g <- l[[k]]
+    v <- num_ou_na(g[[medida]])
+    paste0(if (is.na(v)) "-" else format(v, big.mark = ".", decimal.mark = ","), " (", g$n, ")",
+           if (isTRUE(g$pouco_dado)) "*" else "")
+  }
+  data.frame(faixa = vapply(linhas, function(l) l$faixa, ""),
+             com = vapply(linhas, lado, "", "com"), sem = vapply(linhas, lado, "", "sem"))
+}
+
+# Lista de registros (desvios, retornos grandes) em data.frame.
+tabela_lista <- function(itens, campos) {
+  if (!length(itens)) return(as.data.frame(setNames(rep(list(character()), length(campos)), campos)))
+  as.data.frame(lapply(setNames(campos, campos), function(k)
+    vapply(itens, function(i) if (is.null(i[[k]])) NA_character_ else as.character(i[[k]]), "")))
+}
+
+# Árvore de delegação em rede: pasta, conversa (ramo) e cada filho.
+arvore_rede <- function(ramos) {
+  if (!length(ramos)) return(NULL)
+  nos <- list(); arestas <- list()
+  for (r in ramos) {
+    pasta <- paste0("p:", r$pasta); ramo <- paste0("r:", r$conversa)
+    nos[[pasta]] <- data.frame(id = pasta, label = basename(r$pasta), group = "pasta", value = 3, title = r$pasta)
+    nos[[ramo]] <- data.frame(id = ramo, label = sub(":.*", "", r$conversa), group = "conversa", value = 2,
+      title = paste0(r$conversa, "<br>", r$n, " filho(s), ", r$tokens_claude, " tokens no Claude, razão ",
+                     if (is.null(r$razao)) "-" else r$razao, ", ", r$passos_agy, " passos no agy"))
+    arestas[[length(arestas) + 1]] <- data.frame(from = pasta, to = ramo)
+    for (f in r$filhos) {
+      id <- paste0("f:", f$origem, ":", f$id, ":", length(nos))
+      grupo <- if (isTRUE(f$recusa)) "recusa" else f$origem
+      nos[[id]] <- data.frame(id = id, label = if (is.null(f$papel)) "?" else f$papel, group = grupo,
+        value = 1 + log10(1 + num_ou_na(if (is.null(f$tokens)) 0 else f$tokens)) / 2,
+        title = paste0(f$origem, " ", f$id, "<br>profundidade ", if (is.null(f$profundidade)) "-" else f$profundidade,
+                       ", tokens ", if (is.null(f$tokens)) "-" else f$tokens,
+                       ", retorno ", if (is.null(f$retorno_tokens)) "-" else f$retorno_tokens))
+      arestas[[length(arestas) + 1]] <- data.frame(from = ramo, to = id)
+    }
+  }
+  list(nos = do.call(rbind, nos), arestas = do.call(rbind, arestas))
 }

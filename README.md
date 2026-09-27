@@ -302,6 +302,22 @@ retorno, edições e autorrevisões. O `jangada-validar` grava esse resumo no
 campo `subagentes` do `validar.jsonl`. Os registros estão em
 `docs/registros.md`.
 
+`jangada-subagentes [--json]` calcula os indicadores: tokens do Claude por
+entrega aprovada com e sem agy (por tamanho do diff), fração ao agy e
+recusas, compressão, cota gasta, aprovação na primeira rodada com e sem
+verificador, afirmações sem fonte, desvios do protocolo e a árvore de
+subagentes. A aba Subagentes do painel mostra os mesmos números; um `*`
+marca grupo com menos de 15 entregas.
+
+Regras de decisão:
+
+- Depois de 30 entregas com delegação ao agy, se os tokens do Claude por
+  entrega aprovada não caírem, sai a preferência pelo agy no protocolo.
+- Se a aprovação na primeira rodada cair nas entregas com delegação, os
+  papéis são revistos.
+- Se o verificador não subir a aprovação na primeira rodada em 30
+  entregas, ele sai.
+
 Sem o agy instalado, `agy` vira `claude`. Subagente não revisa a entrega: o
 `verificador` confere regras e testes, não o mérito, e o `jangada-validar`
 continua com o revisor de sempre.

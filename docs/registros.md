@@ -55,11 +55,14 @@ Caminhos usados abaixo:
   - `subagentes` (opcional, a partir de 27/09/2026): resumo dos subagentes
     e delegações da entrega, dado por `jangada-subagentes --entrega`. Conta
     o que rodou na pasta desde a última aprovação (mtime do
-    `validacao-*.aprovado`), desde o início da sessão ou desde a data do
-    commit base. Campos: `n` (subagentes mais delegações atendidas),
-    `claude` (`n`, `tokens`), `agy` (`n`, `passos`), `papeis` (contagem por
-    papel), `retorno_tokens`, `edicoes`, `autorrevisao` e `recusas`. Falta
-    nas linhas antigas e quando o módulo falha.
+    `validacao-*.aprovado`), desde a criação da sessão (`.desde` do
+    arquivo da sessão) ou desde a data do commit base. Campos: `n`
+    (subagentes mais delegações atendidas), `claude` (`n`, `tokens`;
+    `principal` e `principal_cache_lido`, tokens da conversa principal na
+    pasta, sem e com o cache lido), `agy` (`n`, `passos`), `delegadas_agy`
+    (delegações atendidas), `papeis` (contagem por papel),
+    `retorno_tokens`, `edicoes`, `autorrevisao` e `recusas`. Falta nas
+    linhas antigas e quando o módulo falha.
 - **Desde:** 26/09/2026 21:29 (primeira linha). Em 26/09/2026 havia 11
   linhas, todas do projeto jangada, revisor agy, autor claude, modelo vazio:
   7 aprovado e 4 revisar.
@@ -491,6 +494,9 @@ subagente tem `.db` próprio.
     palavras).
   - `passos`: linhas da tabela `steps` do `.db` da conversa do agy.
   - `tokens_agy`: `usage.total_tokens` da saída JSON do agy.
+  - `sem_fonte` (opcional): linhas do relatório com 25 caracteres ou mais,
+    fora de título, código, tabela e citação, sem caminho:linha, URL,
+    página ou célula. Aproxima as afirmações sem fonte.
   - `cota_antes`, `cota_depois`: `remaining_fraction` do balde `gemini-5h`
     do `/usage`, em porcentagem com duas casas. O antes pode vir do cache
     de 5 minutos. Uma delegação pequena não move esse número.
@@ -518,6 +524,14 @@ subagente tem `.db` próprio.
 | D | Ciclos de retrabalho | 3 (`tool_use`, `tool_result`) | falha = `is_error` com `Exit code N` |
 | D | Pontos quentes sessão × arquivo | 3 (Edit, Write, NotebookEdit); 1 e 2 para REVISAR | 1 não lista arquivos, só a contagem |
 | D | Espaço de ferramentas | 3 (`name`, `Skill`, `Agent`, `mcp__*`); agy só pelo `steps`, sem decodificar | exploratório |
+| E | Tokens do Claude por entrega, com e sem agy | 1 (`subagentes`) | só entregas validadas a partir de 27/09; por tercil do diff |
+| E | Fração ao agy e recusas por motivo | 9; 3 e agy para os subagentes | |
+| E | Compressão (tokens do subagente por token de retorno) | 3; 9 para o agy (passos por mil tokens) | séries separadas: o agy não dá tokens por passo |
+| E | Cota do agy por delegação e por semana | 9 (`cota_antes`, `cota_depois`) | uma delegação pequena fica abaixo da resolução |
+| E | Aprovação na 1ª rodada com e sem verificador ou agy | 1 (`subagentes.papeis`, `delegadas_agy`) | |
+| E | Afirmações sem fonte | 3 e 9 (`sem_fonte`) | desmentidos pelo revisor não são detectáveis |
+| E | Desvios do protocolo | 3, agy, 9 | edição, autorrevisão, `general-purpose`, Claude sem recusa antes |
+| E | Árvore pasta, conversa e subagentes | 3, agy, 9 | aba Subagentes do painel |
 
 ## Lacunas
 

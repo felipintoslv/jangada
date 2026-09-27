@@ -95,7 +95,9 @@ cores_grupos <- c(
   "edição" = cores[["primaria"]], "edição com retrabalho" = alerta, "teste" = cores[["atencao"]],
   "leitura e busca" = "#888888", "shell" = "#b08968", "outra" = "#5f7f8f",
   "sessão" = "#888888", "arquivo" = cores[["primaria"]], "arquivo em várias sessões" = alerta,
-  "comum" = cores[["primaria"]], "rara" = "#888888")
+  "comum" = cores[["primaria"]], "rara" = "#888888",
+  "pasta" = "#888888", "conversa" = "#5f7f8f", "claude" = cores[["primaria"]], "agy" = cores[["atencao"]],
+  "delegacao" = "#b08968", "recusa" = alerta)
 
 # Grafo do visNetwork com layout do igraph (sem física, para não tremer) e
 # rótulos num cinza legível nos dois modos.
@@ -245,6 +247,38 @@ ui <- page_navbar(
         DT::DTOutput("d_projetos"))
     ),
     p(class = "cobertura", "Só o Claude Code: o agy não grava as chamadas de ferramenta de forma legível (docs/registros.md).")
+  ),
+  nav_panel("Subagentes", icon = bsicons::bs_icon("people"),
+    div(class = "alert alert-secondary",
+        "Subagentes do Claude e do agy e delegações do jangada-delegar, desde o primeiro registro (sem os filtros ao lado). ",
+        "Regras de decisão no README, seção Subagentes. * = pouco dado (15 entregas ou menos no grupo)."),
+    layout_column_wrap(width = 1 / 4, fill = FALSE,
+      value_box("Delegado ao agy", textOutput("e_fracao"), showcase = bsicons::bs_icon("share"),
+                p(textOutput("e_fracao_n", inline = TRUE))),
+      value_box("Recusas do jangada-delegar", textOutput("e_recusas"), showcase = bsicons::bs_icon("slash-circle"),
+                p(textOutput("e_recusas_n", inline = TRUE))),
+      value_box("Cota do agy por delegação", textOutput("e_cota"), showcase = bsicons::bs_icon("battery-half"),
+                p(textOutput("e_cota_n", inline = TRUE))),
+      value_box("Desvios do protocolo (meta zero)", textOutput("e_desvios"), showcase = bsicons::bs_icon("exclamation-triangle"),
+                p(textOutput("e_desvios_n", inline = TRUE)))
+    ),
+    layout_columns(col_widths = c(6, 6),
+      cartao("Tokens do Claude por entrega aprovada (mediana e n)", DT::DTOutput("e_tokens"),
+             cob = div(class = "cobertura", "Conversa principal (sem o cache lido) mais os subagentes do Claude. Faixa: tercis de linhas mudadas.")),
+      navset_card_underline(title = "Aprovação na 1ª rodada (% e n)", full_screen = TRUE,
+        nav_panel("Com e sem verificador", DT::DTOutput("e_verificador")),
+        nav_panel("Com e sem agy", DT::DTOutput("e_agy")))
+    ),
+    layout_columns(col_widths = c(7, 5),
+      cartao("Árvore de delegação", visNetwork::visNetworkOutput("e_arvore", height = "480px"),
+             cob = div(class = "cobertura", "Pasta, conversa (ou sessão, nas delegações) e cada subagente ou delegação.")),
+      navset_card_underline(title = "Detalhes", full_screen = TRUE,
+        nav_panel("Compressão", DT::DTOutput("e_compressao"),
+                  p(class = "cobertura", "Claude: tokens do subagente por token devolvido. agy: passos por mil tokens devolvidos, série à parte.")),
+        nav_panel("Retornos grandes", DT::DTOutput("e_grandes")),
+        nav_panel("Desvios", DT::DTOutput("e_desvios_tab")),
+        nav_panel("Sem fonte", DT::DTOutput("e_fonte")))
+    )
   ),
   nav_spacer(),
   nav_item(input_dark_mode(id = "modo", mode = "dark"))
@@ -533,6 +567,62 @@ server <- function(input, output, session) {
                     c("projeto", "típico (%)", "com vantagem", "chamadas", "vantagens")))
   })
 
+
+  # E. Subagentes
+  sub <- reactive(dados()$subagentes)
+  pc <- function(v, suf = "%") if (is.null(v)) "-" else paste0(format(v, decimal.mark = ","), suf)
+  output$e_fracao <- renderText(pc(sub()$fracao_agy$fracao_agy_pct))
+  output$e_fracao_n <- renderText({
+    f <- sub()$fracao_agy
+    if (is.null(f)) "sem registro" else
+      paste0(f$delegadas_agy, " delegação(ões); ", f$subagentes_claude, " subagente(s) do Claude, ", f$subagentes_agy, " do agy")
+  })
+  output$e_recusas <- renderText(pc(sub()$fracao_agy$taxa_recusa_pct))
+  output$e_recusas_n <- renderText({
+    f <- sub()$fracao_agy
+    if (is.null(f)) "-" else paste0(f$recusas, " de ", f$chamadas, " chamada(s)")
+  })
+  output$e_cota <- renderText(pc(sub()$cota_agy$media_pp, " pp"))
+  output$e_cota_n <- renderText({
+    k <- sub()$cota_agy
+    if (is.null(k)) "-" else paste0(k$n, " medida(s), ", k$abaixo_da_resolucao, " sem variação; cabem ",
+                                    if (is.null(k$delegacoes_por_bloco)) "-" else k$delegacoes_por_bloco, " por bloco de 5 h")
+  })
+  output$e_desvios <- renderText(sum(lengths(sub()$desvios)))
+  output$e_desvios_n <- renderText({
+    d <- sub()$desvios
+    if (is.null(d)) "-" else paste(paste(sub("_", " ", names(d)), lengths(d)), collapse = ", ")
+  })
+  output$e_tokens <- DT::renderDT(tabela(setNames(tabela_comparar(sub()$tokens_por_entrega, "mediana_tokens"),
+                                                  c("faixa", "com agy", "sem agy"))))
+  output$e_verificador <- DT::renderDT(tabela(setNames(tabela_comparar(sub()$validacao$verificador, "primeira_pct"),
+                                                       c("faixa", "com verificador", "sem verificador"))))
+  output$e_agy <- DT::renderDT(tabela(setNames(tabela_comparar(sub()$validacao$agy, "primeira_pct"),
+                                               c("faixa", "com agy", "sem agy"))))
+  output$e_arvore <- visNetwork::renderVisNetwork(grafo(arvore_rede(sub()$arvore)))
+  output$e_compressao <- DT::renderDT({
+    c <- sub()$compressao
+    p <- c$claude$por_papel
+    d <- data.frame(serie = character(), papel = character(), mediana = numeric())
+    if (length(p)) d <- data.frame(serie = "Claude", papel = names(p), mediana = vapply(p, num_ou_na, 0))
+    a <- num_ou_na(c$agy$mediana_passos_por_mil_tokens)
+    if (!is.na(a)) d <- rbind(d, data.frame(serie = "agy", papel = "delegações", mediana = a))
+    tabela(d)
+  })
+  output$e_grandes <- DT::renderDT(tabela(tabela_lista(sub()$compressao$retornos_grandes,
+                                                       c("origem", "papel", "id", "inicio", "retorno_tokens"))))
+  output$e_desvios_tab <- DT::renderDT({
+    d <- sub()$desvios
+    itens <- unlist(lapply(names(d), function(k) lapply(d[[k]], function(x) c(list(desvio = k), x))), recursive = FALSE)
+    tabela(tabela_lista(itens, c("desvio", "origem", "tipo", "descricao", "inicio")))
+  })
+  output$e_fonte <- DT::renderDT({
+    q <- sub()$qualidade
+    if (is.null(q)) return(tabela(data.frame()))
+    tabela(data.frame(origem = c("subagentes do Claude", "delegações ao agy"),
+                      relatorios = c(q$claude$n, q$delegacoes$n), sem_fonte = c(q$claude$total, q$delegacoes$total),
+                      mediana = c(num_ou_na(q$claude$mediana), num_ou_na(q$delegacoes$mediana))))
+  })
 }
 
 shinyApp(ui, server)

@@ -4,8 +4,8 @@ Uso: python3 testes/amostras-subagentes.py RAIZ PASTA [INICIO]
 
 INICIO (ISO 8601) é o horário da primeira linha; o padrão é 27/09/2026 10h UTC.
 
-Em RAIZ/claude/projects: uma conversa com três subagentes do Claude, todos
-com cwd PASTA:
+Em RAIZ/claude/projects: uma conversa em PASTA, com uma resposta da conversa
+principal (1.000 tokens sem o cache lido) e três subagentes do Claude:
   a1  explorador, primeiro plano: totais e retorno no tool_result;
   a2  general-purpose "Revisar a entrega", segundo plano: totais no aviso
       de tarefa, relatório no SubagentHandback, uma edição (Edit);
@@ -17,11 +17,13 @@ uma recusada por cota.
 import datetime
 import json
 import os
+import re
 import sqlite3
 import sys
 
 raiz, pasta = sys.argv[1], sys.argv[2]
-proj = os.path.join(raiz, "claude", "projects", "-proj")
+# A pasta de projeto do Claude tem o caminho com "-" no lugar de cada sinal.
+proj = os.path.join(raiz, "claude", "projects", re.sub(r"[^A-Za-z0-9]", "-", os.path.realpath(pasta)))
 subs = os.path.join(proj, "sess1", "subagents")
 os.makedirs(subs, exist_ok=True)
 base = datetime.datetime.fromisoformat(sys.argv[3] if len(sys.argv) > 3 else "2026-09-27T10:00:00+00:00")
@@ -69,6 +71,12 @@ retorno_a1 = "Achei em bin/jangada-validar:82 a função registrar.\n" * 8
 relatorio_a2 = "Nada a apontar na entrega.\n" * 20
 gravar(os.path.join(proj, "sess1.jsonl"), [
     {"type": "user", "cwd": pasta, "timestamp": T(0), "message": {"role": "user", "content": "tarefa"}},
+    # A mesma resposta em duas linhas: conta uma vez, com o uso da última.
+    {"type": "assistant", "cwd": pasta, "timestamp": T(0), "message": {"id": "m-mae", "role": "assistant",
+     "content": [], "usage": {"input_tokens": 100, "output_tokens": 1, "cache_read_input_tokens": 7000}}},
+    {"type": "assistant", "cwd": pasta, "timestamp": T(0), "message": {"id": "m-mae", "role": "assistant",
+     "content": [], "usage": {"input_tokens": 100, "output_tokens": 400, "cache_creation_input_tokens": 500,
+                              "cache_read_input_tokens": 7000}}},
     {"type": "user", "cwd": pasta, "timestamp": T(3),
      "toolUseResult": {"status": "completed", "totalTokens": 20000, "totalDurationMs": 5000,
                        "totalToolUseCount": 3, "content": [{"type": "text", "text": retorno_a1}]},

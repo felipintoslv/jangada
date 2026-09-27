@@ -99,6 +99,11 @@ conferir "caso 7: arquivo completo existe" [ "$(wc -w <"${arq:-/nada}" 2>/dev/nu
 RESPOSTA="curto" delegar explorador "mapeie" --arquivo "$tmp/rel.md"
 conferir "caso 8: --arquivo grava o relatório" grep -qx curto "$tmp/rel.md"
 
+RESPOSTA="$(printf '%s\n' "# Um título comprido sem fonte nenhuma" "- a função está em bin/jangada-validar:82, perto do fim" \
+  "- esta afirmação comprida não tem fonte alguma" "- a norma está em https://exemplo.org/norma, item 3")" \
+  delegar leitor "leia"
+conferir "caso 8b: conta as afirmações sem fonte" jqok -se 'last | .sem_fonte == 1' "$reg"
+
 DELEGAR=claude delegar explorador "mapeie"
 conferir "caso 9: perfil claude recusa sem chamar o agy" \
   bash -c '[ "$1" = 4 ] && [ ! -e "$2" ]' _ "$(codigo)" "$tmp/falso/agy.args"

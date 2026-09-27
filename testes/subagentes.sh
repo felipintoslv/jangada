@@ -106,13 +106,46 @@ conferir "registros: sem totais na mãe, usa o contexto do último turno" \
 conferir "registros: subagente do agy com passos e escrita" \
   reg s1 '.origem == "agy" and .passos == 5 and .edicoes == 1 and .autorrevisao and .generico'
 subagentes --entrega "$amostra/projeto" >"$tmp/entrega.json"
-conferir "entrega: soma subagentes e delegações da pasta" jqok -e '.n == 5 and .claude == {n: 3, tokens: 70500}
+conferir "entrega: soma subagentes e delegações da pasta" jqok -e '.n == 5 and .claude == {n: 3, tokens: 70500, principal: 1000, principal_cache_lido: 7000}
+  and .delegadas_agy == 1
   and .agy == {n: 2, passos: 17} and .papeis == {explorador: 2} and .edicoes == 2 and .autorrevisao == 2
   and .recusas == 1' "$tmp/entrega.json"
 subagentes --entrega "$amostra/projeto" --desde 2026-09-27T10:05:30Z >"$tmp/entrega.json"
 conferir "entrega: --desde deixa só o que veio depois" jqok -e '.n == 0 and .recusas == 1' "$tmp/entrega.json"
 subagentes --entrega "$tmp" >"$tmp/entrega.json"
 conferir "entrega: outra pasta não conta nada" jqok -e '.n == 0 and .recusas == 0' "$tmp/entrega.json"
+
+# Os oito indicadores sobre as amostras, com duas entregas aprovadas: uma
+# com delegação ao agy e verificador, outra sem.
+{
+  jq -cn '{data: "2026-09-27T08:00:00-03:00", projeto: "proj", rotulo: "s", rodada: 1, resultado: "aprovado",
+           mais: 10, menos: 0, subagentes: {n: 2, claude: {n: 1, tokens: 1000, principal: 5000},
+           delegadas_agy: 1, papeis: {verificador: 1}}}'
+  jq -cn '{data: "2026-09-27T09:00:00-03:00", projeto: "proj", rotulo: "s", rodada: 2, resultado: "aprovado",
+           mais: 90, menos: 10, subagentes: {n: 0, claude: {n: 0, tokens: 0, principal: 20000},
+           delegadas_agy: 0, papeis: {}}}'
+  jq -cn '{data: "2026-09-27T09:30:00-03:00", projeto: "proj", rotulo: "s", rodada: 1, resultado: "aprovado"}'
+} >"$amostra/state/jangada/validar.jsonl"
+subagentes --json >"$tmp/ind.json"
+conferir "indicadores: só entregas com resumo" jqok -e '.entregas_com_resumo == 2' "$tmp/ind.json"
+conferir "indicadores 1: tokens do Claude com e sem agy" jqok -e '.tokens_por_entrega[-1]
+  | .faixa == "todas" and .com.mediana_tokens == 6000 and .sem.mediana_tokens == 20000 and .com.pouco_dado' "$tmp/ind.json"
+conferir "indicadores 2: fração ao agy e recusa com motivo" jqok -e '.fracao_agy
+  | .delegadas_agy == 1 and .fracao_agy_pct == 20 and .taxa_recusa_pct == 50
+    and (.motivos | keys == ["cota de N horas do Gemini em N, abaixo de N"])' "$tmp/ind.json"
+conferir "indicadores 3: compressão em séries separadas" jqok -e '.compressao
+  | .claude.n == 2 and .agy.n == 1 and .agy.mediana_passos_por_mil_tokens == 120' "$tmp/ind.json"
+conferir "indicadores 4: cota por delegação e por semana" jqok -e '.cota_agy
+  | .n == 1 and .media_pp == 0.4 and .delegacoes_por_bloco == 250 and (.por_semana_pp | length) == 1' "$tmp/ind.json"
+conferir "indicadores 5: aprovação com e sem verificador" jqok -e '.validacao.verificador[-1]
+  | .com.primeira_pct == 100 and .sem.primeira_pct == 0 and .sem.rodadas_media == 2' "$tmp/ind.json"
+conferir "indicadores 6: afirmações sem fonte" jqok -e '.qualidade.claude.total == 20 and .qualidade.desmentidos == null' "$tmp/ind.json"
+conferir "indicadores 7: desvios" jqok -e '.desvios | (.edicoes | length) == 2 and (.autorrevisao | length) == 2
+  and (.generico | length) == 3 and ([.claude_sem_recusa[].id] == ["a1"])' "$tmp/ind.json"
+conferir "indicadores 8: árvore por pasta e conversa" jqok -e '[.arvore[] | .conversa] | sort
+  == ["agy:c1", "claude:sess1", "delegar:s"]' "$tmp/ind.json"
+subagentes >"$tmp/ind.txt"
+conferir "indicadores: texto para o terminal" grep -q "^7. Desvios do protocolo" "$tmp/ind.txt"
 
 echo
 if ((falhas)); then

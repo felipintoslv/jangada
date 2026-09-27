@@ -33,7 +33,8 @@ porta=$((20000 + RANDOM % 20000))
 rodar() {
   env -u HYPRLAND_INSTANCE_SIGNATURE PATH="$tmp/bin:$PATH" XDG_STATE_HOME="$tmp/state" \
     XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" JANGADA_CLAUDE_PROJETOS="$conversas" \
-    JANGADA_PROJETOS="$tmp/Projetos" JANGADA_WORKTREES="$tmp/wt" JANGADA_PAINEL_PORTA="$porta" "$@"
+    JANGADA_PROJETOS="$tmp/Projetos" JANGADA_WORKTREES="$tmp/wt" JANGADA_PAINEL_PORTA="$porta" \
+    JANGADA_AGY_DIR="$tmp/sub/agy" "$@"
 }
 painel() { rodar "$repo_jangada/bin/jangada-painel" "$@"; }
 consulta() { python3 - "$cache"; }
@@ -63,6 +64,12 @@ touch -d '-10 days' "$estado/agentes/parecer-velho--tarefa-r2.md"
 printf '# Parecer\n\nSTATUS: APROVADO\n' >"$estado/agentes/parecer-velho--tarefa-r1.md"
 touch -d '-9 days' "$estado/agentes/parecer-velho--tarefa-r1.md"
 printf 'STATUS: APROVADO\n' >"$estado/agentes/avaliacao-velho--tarefa-r1.md"
+
+# Subagente do agy e delegações de testes/amostras-subagentes.py; as
+# conversas do Claude de lá ficam de fora, para não mudar as contas abaixo.
+mkdir -p "$tmp/sub/projeto"
+python3 testes/amostras-subagentes.py "$tmp/sub" "$tmp/sub/projeto"
+cp "$tmp/sub/state/jangada/delegacoes.jsonl" "$estado/"
 
 # Histórico de estados e uma sessão aberta. Foco e subagente não mudam o estado.
 {
@@ -254,6 +261,26 @@ else
         cat(output$vb_primeira, output$vb_limite, output$vb_saida, output$vb_ciclos, output$vb_multi)
       })
     ' "$cache" 2>/dev/null)" = "33% 0 347 1 0" ]
+  conferir "caso 5: a aba de subagentes calcula os cartões e o grafo" \
+    [ "$(cd default/painel && Rscript -e '
+      options(jangada.painel.cache = commandArgs(TRUE)[1])
+      shiny::testServer(shiny::shinyAppDir("."), {
+        session$setInputs(periodo = c(Sys.Date() - 30, Sys.Date()), projeto = NULL, agente = NULL, par = NULL)
+        cat(output$e_fracao, output$e_recusas, output$e_desvios, grepl("recusa", output$e_arvore),
+            grepl("com agy", output$e_tokens))
+      })
+    ' "$cache" 2>&1 | tail -n 1)" = "50% 50% 3 TRUE TRUE" ]
+  # Antes da primeira coleta com o módulo não há subagentes.json.
+  cp -r "$cache" "$tmp/cache-sem-sub" && rm -f "$tmp/cache-sem-sub/subagentes.json"
+  conferir "caso 5: a aba de subagentes sem subagentes.json" \
+    [ "$(cd default/painel && Rscript -e '
+      options(jangada.painel.cache = commandArgs(TRUE)[1])
+      shiny::testServer(shiny::shinyAppDir("."), {
+        session$setInputs(periodo = c(Sys.Date() - 30, Sys.Date()), projeto = NULL, agente = NULL, par = NULL)
+        cat(output$e_fracao, grepl("com agy", output$e_tokens), grepl("sem agy", output$e_agy),
+            grepl("desvio", output$e_desvios_tab))
+      })
+    ' "$tmp/cache-sem-sub" 2>&1 | tail -n 1)" = "- TRUE TRUE TRUE" ]
   conferir "caso 5: --conferir com tudo instalado" painel --conferir
   if painel >/dev/null 2>"$tmp/erro4"; then
     ok "caso 5: o app sobe"

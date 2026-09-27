@@ -550,6 +550,16 @@ conferir "caso 17b: campos antigos continuam" \
   bash -c 'tail -n1 "$1" | jq -e ".resultado == \"aprovado\" and .projeto == \"projeto\" and (.rodada | type) == \"number\"" >/dev/null' _ "$metricas"
 conferir "caso 17b: sem subagentes na pasta, o resumo vem zerado" \
   bash -c 'sed -n 1p "$1" | jq -e ".subagentes.n == 0" >/dev/null' _ "$metricas"
+# O .inicio da sessão é um commit; o corte vem do .desde (criação da sessão).
+# Sessão criada depois das amostras: nada entra no resumo.
+sessao_de claude
+jq --arg d "$(date -d '+1 hour' -Iseconds)" '. + {inicio: "0123456789abcdef0123456789abcdef01234567", desde: $d}' \
+  "$estado/s.json" >"$tmp/s.json" && mv "$tmp/s.json" "$estado/s.json"
+echo "m5" >>"$tmp/projeto/metricas.txt"
+JANGADA_ESTADO="$tmp/estado/jangada" JANGADA_CLAUDE_PROJETOS="$tmp/amostra/claude/projects" JANGADA_AGY_DIR="$tmp/amostra/agy" \
+  validar 'STATUS: APROVADO'
+conferir "caso 17b: o resumo conta desde a criação da sessão, não o commit de partida" \
+  bash -c 'tail -n1 "$1" | jq -e ".subagentes.n == 0 and .subagentes.recusas == 0" >/dev/null' _ "$metricas"
 rm -f "$tmp/estado/jangada/delegacoes.jsonl"
 git -C "$tmp/projeto" checkout -q -- metricas.txt
 
