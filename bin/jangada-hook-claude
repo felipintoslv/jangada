@@ -74,6 +74,8 @@
     arq="$estado_dir/$sessao.json"
     agora="$(jangada_data_iso)"
     [[ -f "$arq" ]] || jq -n --arg s "$sessao" --arg d "${cwd:-$PWD}" '{sessao:$s, dir:$d}' >"$arq"
+    anterior="$(jq -r '.estado // ""' "$arq" 2>/dev/null || true)"
+    projeto="$(jq -r '(.raiz // .dir // "") | split("/") | last // ""' "$arq" 2>/dev/null || true)"
     tmp="$(mktemp "$arq.XXXXXX")"
     # A conversa é gravada em todo evento: instalações sem o SessionStart
     # também ficam com o id para o --restaurar.
@@ -84,6 +86,14 @@
       | (if $e != "" and $m != "" then .mensagem = $m else . end)
     '
     rm -f "$tmp"
+    # Histórico para o painel: só a mudança de estado, porque o PostToolUse
+    # repete "trabalhando" a cada ferramenta. Início e fim contam sempre.
+    case "$evento" in
+      inicio) jangada_registrar_evento "$sessao" "${projeto:-$(basename "${cwd:-$PWD}")}" claude inicio ;;
+      fim) [[ -n "$estado" ]] && jangada_registrar_evento "$sessao" "${projeto:-$(basename "${cwd:-$PWD}")}" claude fim ;;
+      *) [[ -n "$estado" && "$estado" != "$anterior" ]] \
+           && jangada_registrar_evento "$sessao" "${projeto:-$(basename "${cwd:-$PWD}")}" claude "$estado" ;;
+    esac
   fi
   nome="${sessao:-$(basename "${cwd:-$PWD}")}"
 

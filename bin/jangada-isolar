@@ -7,10 +7,10 @@
 #
 # Graváveis: a pasta atual, o .git comum do repositório (num worktree ele fica
 # fora da pasta), as pastas do Claude e do agy, o cache, o estado dos
-# agentes e as métricas do jangada-validar, e o que estiver em
-# JANGADA_ISOLAR_ESCRITA (caminhos separados por ":"). O /tmp é próprio e some
-# no fim; com ele some o socket do tmux, e o agente não comanda as outras
-# sessões. O agente SSH também fica de fora. Ficam somente
+# agentes, as métricas do jangada-validar, o histórico de estados dos agentes
+# e o que estiver em JANGADA_ISOLAR_ESCRITA (caminhos separados por ":"). O
+# /tmp é próprio e some no fim; com ele some o socket do tmux, e o agente não
+# comanda as outras sessões. O agente SSH também fica de fora. Ficam somente
 # leitura, mesmo dentro dos graváveis, o config e os hooks do git e o arquivo
 # .git do worktree: por eles o git rodaria, fora do isolamento, código que o
 # agente escreveu. Ficam ocultas as chaves e os perfis de navegador
@@ -66,12 +66,16 @@ command -v agy >/dev/null 2>&1 && { mkdir -p "$HOME/.gemini/antigravity-cli" 2>/
 for p in "$HOME/.claude" "$HOME/.gemini/antigravity-cli" "$HOME/.cache"; do
   gravavel "$p"
 done
-# Do estado do jangada, só o dos agentes e as métricas: o resto (a barra, as
-# marcas das migrações) alimenta código que roda fora.
+# Do estado do jangada, só o dos agentes, as métricas e o histórico de
+# estados: o resto (a barra, as marcas das migrações) alimenta código que roda
+# fora.
 mkdir -p "$JANGADA_ESTADO/agentes" 2>/dev/null || true
-[[ -e "$JANGADA_ESTADO/validar.jsonl" ]] || : 2>/dev/null >>"$JANGADA_ESTADO/validar.jsonl" || true
+for p in validar.jsonl eventos-agentes.jsonl; do
+  [[ -e "$JANGADA_ESTADO/$p" ]] || : 2>/dev/null >>"$JANGADA_ESTADO/$p" || true
+done
 gravavel "$JANGADA_ESTADO/agentes"
 gravavel "$JANGADA_ESTADO/validar.jsonl"
+gravavel "$JANGADA_ESTADO/eventos-agentes.jsonl"
 IFS=: read -ra extras <<<"${JANGADA_ISOLAR_ESCRITA:-}"
 for p in "${extras[@]}"; do
   [[ -n "$p" ]] && gravavel "$(realpath -m "${p/#\~/$HOME}")"

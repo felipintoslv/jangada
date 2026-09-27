@@ -1,0 +1,494 @@
+# Mapa dos registros
+
+Levantamento feito em 26/09/2026 nesta máquina, para o `jangada-painel`.
+Cada seção diz onde o registro fica, quem escreve, o formato, desde quando
+existe, se é sobrescrito ou acumulado e quem apaga. Os números de linha são
+do repositório em 26/09/2026. Os exemplos são reais, resumidos, com textos
+trocados por `...`.
+
+Caminhos usados abaixo:
+
+- `$JANGADA_ESTADO` = `~/.local/state/jangada` (`bin/jangada-config:8`).
+- `$JANGADA_WORKTREES` = `~/.local/share/jangada-worktrees`
+  (`bin/jangada-config:23`, repetido em `~/.config/jangada/jangada.conf`).
+  O nome da pasta é `jangada-worktrees`, sem barra entre as palavras.
+- `$JANGADA_PROJETOS` = `~/Projetos`.
+
+## 1. validar.jsonl
+
+- **Caminho:** `$JANGADA_ESTADO/validar.jsonl`.
+- **Quem escreve:** `bin/jangada-validar`, função `registrar` (linhas 79 a
+  91). Chamada em quatro pontos: limite de rodadas (linha 291), reprovação
+  na verificação local (linha 578), falha do revisor (linha 631) e parecer
+  do revisor (linha 647). Registro criado no commit ed62434, de 26/09/2026.
+- **Formato:** JSON Lines, uma linha por rodada, gravada com `>>`.
+- **Exemplo:**
+
+  ```json
+  {"data":"2026-09-26T22:56:45-03:00","projeto":"jangada","rotulo":"jangada","rodada":1,"resultado":"revisar","etapa":"revisor","revisor":"agy","modelo":"","autor":"claude","arquivos":3,"mais":120,"menos":10,"itens":3,"segundos":180}
+  ```
+
+- **Campos:**
+  - `data`: `date -Iseconds`, com fuso.
+  - `projeto`: nome da pasta do repositório principal, tirado do
+    `--git-common-dir`. Num worktree dá o nome real do repositório (por
+    exemplo `Demanda CEBRAP`), não o nome da tarefa nem o slug.
+  - `rotulo`: nome da sessão (`JANGADA_SESSAO`); fora de sessão, nome da
+    pasta. Caracteres fora de `[A-Za-z0-9_.-]` viram `-`. Não é único no
+    tempo: uma sessão nova com o mesmo nome repete o rótulo.
+  - `rodada`: rodada da entrega atual. Recomeça em 1 depois de um APROVADO.
+    Não é o N do arquivo `validacao-*-rN.md`, que só cresce.
+  - `resultado`: `aprovado`, `revisar`, `erro` ou `limite`.
+  - `etapa`: `revisor`, `local` (barrado pela verificação determinística)
+    ou vazio (no `limite`).
+  - `revisor`: `claude` ou `agy`.
+  - `modelo`: modelo pedido ao revisor. Fica vazio quando o revisor é o agy
+    sem `--modelo`: o agy usa o padrão dele e o nome não é gravado. Com o
+    Claude, o padrão é `sonnet`.
+  - `autor`: primeira palavra de `.agente` do `SESSAO.json`. Vazio fora de
+    sessão.
+  - `arquivos`, `mais`, `menos`: tamanho do diff (arquivo novo conta as
+    linhas inteiras).
+  - `itens`: linhas do parecer que começam por `N.`. É 0 no `limite` e no
+    `erro`, que não têm parecer.
+  - `segundos`: `$SECONDS` do script, do início ao registro.
+- **Desde:** 26/09/2026 21:29 (primeira linha). Em 26/09/2026 havia 11
+  linhas, todas do projeto jangada, revisor agy, autor claude, modelo vazio:
+  7 aprovado e 4 revisar.
+- **Acumulado.** Ninguém apaga. O `bin/jangada-isolar` libera a escrita
+  desse arquivo para o agente isolado.
+
+## 2. Pareceres em agentes/
+
+Pasta `$JANGADA_ESTADO/agentes/`. Em 26/09/2026 havia 41 arquivos.
+
+| Arquivo | Qtd. | Período (mtime) | Quem escreve | Quem apaga |
+|---|---|---|---|---|
+| `validacao-SESSAO-rN.md` | 16 | 26/09 20:54 a 23:37 | `bin/jangada-validar:362` e `:634` (e a reprovação local, linhas 560 a 577) | `bin/jangada-agente-fim:196`, ao encerrar a sessão |
+| `validacao-SESSAO.aprovado` | 1 | 26/09 | `bin/jangada-validar:650` | `bin/jangada-agente-fim:196` |
+| `parecer-SESSAO-rN.md` | 12 | 20/09 a 21/09 | antigo `bin/jangada-par` (removido no commit 411d273, 22/09) | ninguém |
+| `avaliacao-SESSAO-rN.md` | 2 | 21/09 | antigo `bin/jangada-par` (avaliação do Claude sobre o parecer, não é revisão) | ninguém |
+| `revisao-SESSAO-rN.log` | 5 | 20/09 a 21/09 | antigo `bin/jangada-par` (erro do agy, vários vazios) | ninguém |
+| `revisao-claude-*.md` | 1 | 22/09 | revisão feita à mão | ninguém |
+| `fim-SESSAO.log` | 2 | 22/09 e 25/09 | `bin/jangada-agente-fim:203` (saída do encerramento pela própria sessão) | sobrescrito no próximo fim da mesma sessão |
+
+- **Primeira linha:** `STATUS: APROVADO` ou `STATUS: REVISAR`. O
+  `jangada-validar` aceita marcação de Markdown (`## STATUS:`,
+  `**STATUS:**`) com a expressão da linha 639:
+  `^[#[:space:]*]*STATUS:[[:space:]*]*APROVADO`. Exceções encontradas:
+  `parecer-demanda-cebrap-r1.md` traz o STATUS na linha 3, depois de um
+  título; os dois `avaliacao-*` começam com a mensagem de limite de sessão
+  do Claude. Procure o STATUS nas primeiras linhas, não só na primeira, e
+  deixe `avaliacao-*` e `revisao-*` fora da contagem de pareceres.
+- **Conteúdo do `.aprovado`:** uma linha `COMMIT N`, o commit aprovado e o
+  número do último parecer.
+- **O que dá para recuperar:**
+  - sessão, do nome: `validacao-<rotulo>-rN.md` e `parecer-<sessao>-rN.md`;
+  - projeto e tarefa: a sessão é `slug-do-repo` ou `slug-do-repo--tarefa`
+    (`bin/jangada-agente:248`). O projeto sai como slug, não como nome real;
+  - N do arquivo: número sequencial na sessão, não a rodada da entrega. A
+    rodada se reconstrói pela sequência: recomeça depois de cada APROVADO
+    (conferido: r6 a r16 batem com as rodadas do validar.jsonl);
+  - resultado: pela linha do STATUS;
+  - itens: linhas `N.` do parecer, como faz o `registrar`;
+  - data: só pelo mtime. Não é confiável nos antigos:
+    `parecer-cadeia_produtiva--fatores-r1.md` tem mtime depois do r2;
+  - revisor e autor: não estão no arquivo. No `parecer-*` (jangada-par) o
+    autor era o Claude e o revisor o agy. No `validacao-*`, só pelo
+    `SESSAO.json`, enquanto a sessão existir.
+  - Não há tamanho de diff nem duração.
+- **Como não contar duas vezes:** a data do validar.jsonl e o mtime do
+  parecer caem no mesmo segundo (conferido em r6 a r16). Um parecer entra
+  na conta só se não houver linha do validar.jsonl com o mesmo `rotulo` e
+  diferença de até 60 segundos entre `data` e mtime. Em 26/09/2026 isso
+  deixa de fora r6 a r16 e recupera r1 a r5 da sessão jangada e os 12
+  `parecer-*` do jangada-par. O `limite` e o `erro` não geram arquivo; esses
+  só existem no validar.jsonl.
+- **Perda:** os `validacao-*` de 22/09 a 26/09 de sessões já encerradas
+  foram apagados pelo `jangada-agente-fim`. Não há como recuperá-los.
+
+## 3. Conversas do Claude Code
+
+- **Caminho:** `~/.claude/projects/PASTA/SESSAO.jsonl` e, para subagentes,
+  `~/.claude/projects/PASTA/SESSAO/subagents/agent-ID.jsonl` com
+  `agent-ID.meta.json` ao lado. Na mesma pasta ficam `tool-results/`
+  (saídas grandes de ferramenta, em `.txt`) e `memory/` (`.md`).
+- **Quem escreve:** o Claude Code, a cada mensagem.
+- **Tamanho em 26/09/2026:** 115 arquivos `.jsonl` (104 conversas e 11
+  subagentes), 275,6 MB, o maior com 33,5 MB, em 30 pastas.
+- **Datas:** linha mais antiga em 28/08/2026 10:29 UTC; mais recente em
+  27/09/2026 02:42 UTC (26/09 23:42 no fuso local).
+- **Acumulado dentro do arquivo, mas apagado por idade.** O
+  `~/.claude/settings.json` não define `cleanupPeriodDays`, então vale o
+  padrão de 30 dias. Evidência: o `stats-cache.json` registra a primeira
+  sessão em 24/08/2026, e nenhuma linha anterior a 28/08 sobrou. A última
+  limpeza está em `~/.claude/.last-cleanup` (26/09/2026 22:56 UTC).
+- **Nome da pasta e cwd:** a pasta é o cwd do início da conversa com todo
+  caractere fora de `[A-Za-z0-9]` trocado por `-`
+  (`/home/u/.local/share/jangada-worktrees/cadeia_produtiva/mapa` vira
+  `-home-u--local-share-jangada-worktrees-cadeia-produtiva-mapa`;
+  `Construção` vira `Constru--o`). A troca perde informação: use o `cwd`
+  das linhas, não a pasta. O `cwd` muda dentro da conversa quando o agente
+  entra em subpastas (até 5 valores numa conversa, 96 na pasta `~`).
+- **Projeto a partir do cwd:**
+  1. Se começa por `$JANGADA_WORKTREES/`, o componente seguinte é o slug do
+     repositório e o outro é a tarefa
+     (`~/.local/share/jangada-worktrees/cadeia_produtiva/mapa/fontes` dá
+     `cadeia_produtiva`, tarefa `mapa`).
+  2. Se começa por `$JANGADA_PROJETOS/`, o componente seguinte é o nome
+     real (`Demanda CEBRAP`).
+  3. `/tmp/claude-1000/...` são testes aninhados em pastas temporárias;
+     `~` e o resto ficam como "outros".
+  O validar.jsonl e o eventos-agentes.jsonl gravam o nome real; o worktree e
+  o nome da sessão usam o slug (`bin/jangada-agente:120`: minúsculas,
+  transliteração ASCII, `[^a-z0-9_-]` vira `-`). Para cruzar, passe todos
+  pelo mesmo slug.
+
+### Tipos de linha
+
+Contagem em 26/09/2026 (conversas principais; subagentes entre parênteses):
+`assistant` 13.817 (775), `attachment` 10.654 (685), `user` 7.763 (455),
+`atis-latch` 2.671, `last-prompt` 2.646, `ai-title` 2.190, `mode` 2.175,
+`permission-mode` 2.172, `system` 1.087 (3), `bridge-session` 847,
+`file-history-snapshot` 560, `queue-operation` 495, `agent-name` 130,
+`cost-state` 109, `file-history-delta` 95, `frame-link` 94,
+`agent-setting` 13, `artifact-autoreact-ledger` 6,
+`artifact-comment-monitor` 4, `continued-in` 2.
+
+### Linhas `assistant`
+
+Campos de topo usados: `timestamp` (UTC, com `Z`), `cwd`, `sessionId`,
+`requestId`, `uuid`, `parentUuid`, `isSidechain`, `agentId` (subagente),
+`entrypoint`, `gitBranch`, `version`, `sessionKind` (`bg` em tarefa de
+fundo), `quotaLimits` (raro, ver abaixo).
+
+`entrypoint` separa a origem: `cli` (terminal), `sdk-cli` (`claude -p`,
+como a revisão do `jangada-validar` com o Claude e o antigo jangada-par) e
+`claude-vscode`.
+
+`message`: `id`, `model`, `content`, `stop_reason`, `usage` e outros.
+
+Modelos vistos: `claude-opus-5` (12.312 linhas), `claude-opus-5-5` (1.968),
+`claude-sonnet-5` (275), `claude-haiku-4-5-20251001` (16),
+`claude-opus-4-8` (5) e `<synthetic>` (16, mensagem gerada pelo próprio
+Claude Code, sem consumo; descarte).
+
+`message.usage`, com exemplo:
+
+```json
+{"input_tokens": 2, "cache_creation_input_tokens": 31930, "cache_read_input_tokens": 0,
+ "output_tokens": 590, "output_tokens_details": {"thinking_tokens": 330},
+ "server_tool_use": {"web_search_requests": 0, "web_fetch_requests": 0},
+ "service_tier": "standard",
+ "cache_creation": {"ephemeral_1h_input_tokens": 31930, "ephemeral_5m_input_tokens": 0},
+ "inference_geo": "not_available", "iterations": [{"input_tokens": 2, "output_tokens": 590, "...": "..."}],
+ "speed": "standard"}
+```
+
+- `input_tokens`, `output_tokens`, `cache_creation_input_tokens` e
+  `cache_read_input_tokens` estão em todas as 14.592 linhas.
+- `output_tokens_details.thinking_tokens` existe em 13.830 linhas (95%);
+  é maior que zero em 11.588. Faz parte de `output_tokens` (no exemplo,
+  330 de 590): não some os dois. Em 7 linhas passa de `output_tokens`,
+  provavelmente linhas parciais. As linhas antigas não têm o campo.
+- O texto do raciocínio não fica guardado: 5.346 dos 5.585 blocos
+  `thinking` estão vazios.
+- `iterations` repete o consumo por iteração. Use os campos de cima, não
+  some `iterations`.
+
+**Repetição:** a mesma resposta aparece em várias linhas, uma por bloco de
+conteúdo (texto, raciocínio, cada `tool_use`). Foram 14.592 linhas para
+7.183 respostas distintas por `(message.id, requestId)`. Além disso, 99
+respostas aparecem em mais de um arquivo (conversa retomada ou continuada),
+então a chave vale para o conjunto todo, não por arquivo. Em 10 respostas o
+`usage` difere entre as linhas: a primeira traz `output_tokens` parcial
+(por exemplo 16) e a última o valor final (250). O `bin/jangada-consumo`
+guarda a primeira linha vista e conta a menos nesses casos. O coletor deve
+ficar com a linha de maior `output_tokens` de cada chave.
+
+**Limite de uso:** `quotaLimits` aparece em 15 linhas, só quando o limite
+foi atingido: `{"status": "rejected", "rateLimitType": "five_hour",
+"resetsAt": 1789875600, ...}`. Mostra os blocos que bateram no limite, não
+os que chegaram perto.
+
+### Blocos `tool_use` (em `message.content` das linhas `assistant`)
+
+`{"type": "tool_use", "id": "toolu_...", "name": "Bash", "input": {"command": "...", "description": "..."}}`
+
+- Contagem: Bash 6.135, Read 539, Edit 149, Write 98, Grep 96, WebSearch
+  59, Glob 48, AskUserQuestion 33, ToolSearch 28, WebFetch 27, Agent 11,
+  Skill 10 e outros.
+- Alvo: `input.file_path` em Read, Edit e Write; `input.notebook_path` no
+  NotebookEdit (nenhum visto); `input.command` no Bash;
+  `input.run_in_background` no Bash em segundo plano.
+- Capacidades para o espaço de ferramentas: `input.skill` no `Skill`
+  (jangada, dataviz, artifact-design, run), `input.subagent_type` no
+  `Agent` (só `general-purpose`), nome `mcp__SERVIDOR__FERRAMENTA` nas
+  ferramentas MCP (nenhuma chamada registrada até 26/09/2026).
+
+### Resultado de ferramenta (linhas `user`)
+
+Em `message.content` vem
+`{"type": "tool_result", "tool_use_id": "toolu_...", "content": "...", "is_error": true}`.
+O nome da ferramenta não vem no resultado: ligue pelo `tool_use_id` ao
+`tool_use.id` da linha `assistant` anterior. `content` é texto ou lista de
+blocos `{"type": "text", "text": ...}`. `is_error` falta em 1.156 dos 7.299
+resultados; trate ausência como falso.
+
+A linha `user` traz também `toolUseResult`. No Bash que terminou com código
+zero é um objeto com `stdout`, `stderr`, `interrupted`, `isImage`,
+`noOutputExpected` e, às vezes, `returnCodeInterpretation`. No Bash com
+erro vira texto: `"Error: Exit code 1\n..."`.
+
+**Falha de Bash:** `is_error` verdadeiro e `content` começando por
+`Exit code N` (210 casos). Não existe campo numérico com o código de saída.
+Outros `is_error` do Bash não são falha de teste e devem ficar de fora:
+`Permission for this action was denied` (10), `The user doesn't want to
+proceed` (9), `<tool_use_error>Blocked: ...` (6), `This Bash command contains
+multiple operations` (2), `Interrupted` (1). O `returnCodeInterpretation`
+(`No matches found` em 81, `Files differ` em 4) marca código 1 que o Claude
+Code não trata como erro (grep sem resultado, diff com diferença); esses
+vêm com `is_error` falso. `interrupted` nunca foi verdadeiro. Bash em
+segundo plano devolve só o id da tarefa; a falha dele não aparece no
+resultado.
+
+### Subagentes
+
+- `agent-ID.jsonl`: mesmo formato; `sessionId` é o da conversa mãe,
+  `agentId` o do subagente, `isSidechain` verdadeiro. O `cwd` pode ser outro
+  (dois subagentes rodaram na pasta de memória).
+- `agent-ID.meta.json`: `{"agentType": "general-purpose", "description":
+  "...", "toolUseId": "toolu_...", "spawnDepth": 1, "requestShape":
+  "background", "requestNonInteractive": true}`. O `toolUseId` liga ao
+  `tool_use` do `Agent` na conversa mãe.
+- 11 subagentes em 26/09/2026. O `find -name '*.jsonl'` do
+  `jangada-consumo` já entra nessas pastas.
+
+### Outras linhas úteis
+
+- `cost-state` (109 linhas): totais da conversa calculados pelo Claude Code:
+  `totalCostUSD`, `totalAPIDuration`, `totalToolDuration`,
+  `totalDuration`, `totalLinesAdded`, `totalLinesRemoved`, `startTime` (ms)
+  e `modelUsage` por modelo. É cumulativo; use só a última linha de cada
+  sessão, se usar.
+- `ai-title`: título da conversa.
+- `continued-in`: `continuedInSessionId`, a conversa que continuou esta.
+
+## 4. SESSAO.json
+
+- **Caminho:** `$JANGADA_ESTADO/agentes/SESSAO.json`.
+- **Quem escreve:** `bin/jangada-agente:349` a `:361` cria;
+  `bin/jangada-hook-claude` (linha 82) e `bin/jangada-hook-agy`
+  atualizam `estado`, `mensagem`, `atualizado` e `conversa`;
+  `bin/jangada-validar:573` e `:642` gravam `validacao`; `bin/jangada-agentes` marca
+  `interrompido` (função `marcar`).
+- **Exemplo:**
+
+  ```json
+  {"sessao": "jangada", "dir": "~/Projetos/jangada", "raiz": "~/Projetos/jangada",
+   "worktree": "", "ramo": "", "base": "", "agente": "claude", "comando": "claude",
+   "isolar": true, "estado": "trabalhando", "mensagem": "...",
+   "desde": "2026-09-26T18:01:48-03:00", "atualizado": "2026-09-26T23:41:38-03:00",
+   "inicio": "fbaec5e...", "revisor": "agy",
+   "conversa": "bf9108eb-a715-46b6-8a8f-0b090376baa5", "validacao": "r1: APROVADO (agy)"}
+  ```
+
+- **Campos:** `sessao`, `dir`, `raiz`, `worktree`, `ramo`, `base`,
+  `agente`, `comando`, `isolar`, `estado` (`iniciado`, `trabalhando`,
+  `aguardando`, `concluido`, `interrompido`), `mensagem`, `desde`,
+  `atualizado`, e quando houver `tarefa`, `perfil`, `inicio` (commit),
+  `revisor`, `conversa`, `validacao`, `pid` (só o antigo par).
+- `conversa` é o `sessionId` do Claude (nome do `.jsonl`) ou o
+  `conversationId` do agy (nome do `.db`). É o único lugar que liga a sessão
+  do jangada à conversa.
+- **Sobrescrito** a cada evento. Não tem histórico.
+- **Quem apaga:** `bin/jangada-agente-fim:193`, ao encerrar;
+  `limpar_orfaos` em `bin/jangada-agentes:133` a `:159`, quando a sessão
+  tmux não existe mais: estado `concluido` ou `aguardando` fica 24 horas
+  (`JANGADA_AGENTES_GUARDAR`), `interrompido` fica 168 horas; sessão sem
+  pid em andamento vira `interrompido` em vez de sumir.
+- **Desde:** um arquivo por sessão viva. Em 26/09/2026 só havia
+  `jangada.json`.
+
+## 5. foco.historico
+
+- **Caminho:** `$JANGADA_ESTADO/agentes/foco.historico`.
+- **Quem escreve:** `registrar_foco` em `bin/jangada-agentes:249` a `:255`,
+  chamada por `focar`.
+- **Formato:** uma sessão por linha, a mais recente no fim, sem repetição
+  seguida. Sem horário. Exemplo: `jangada`, `tcc1`, `jangada`.
+- **Sobrescrito:** reescrito inteiro a cada troca, com as últimas 20
+  linhas. Em 26/09/2026 tinha 5 linhas.
+- Serve para o `--anterior`, não para medir. O horário da troca passa a ir
+  para o eventos-agentes.jsonl (seção 8).
+
+## 6. agy (Antigravity)
+
+### conversations/*.db
+
+- **Caminho:** `~/.gemini/antigravity-cli/conversations/ID.db`, um SQLite
+  por conversa, incluídas as conversas de subagente e as revisões feitas
+  pelo `jangada-validar` com `agy -p`.
+- **Tamanho em 26/09/2026:** 104 arquivos, 294 MB. Mais antigo em
+  19/09/2026, dia da instalação do agy (`installation_id`). Nada foi
+  apagado até agora; não achei regra de limpeza no `settings.json` do agy.
+- **Abrir só para leitura:** `sqlite3.connect("file:ARQ?mode=ro", uri=True)`.
+- **Tabelas:**
+  - `trajectory_meta(trajectory_id, cascade_id, trajectory_type, source)`:
+    uma linha; `cascade_id` é o nome do arquivo.
+  - `steps(idx, step_type, status, has_subtrajectory, metadata,
+    error_details, permissions, task_details, render_info, step_payload,
+    step_format)`: um passo por linha; colunas em protobuf.
+  - `gen_metadata(idx, data, size)`: uma linha por chamada ao modelo,
+    protobuf.
+  - `executor_metadata(idx, data)`, `parent_references(idx, data)`,
+    `battle_mode_infos(idx, data)`: protobuf.
+  - `trajectory_metadata_blob(id, data)`: uma linha, protobuf.
+- **Datas:** `google.protobuf.Timestamp` (`{1: segundos, 2: nanos}`) no
+  campo 1 de `steps.metadata` (criação do passo) e no campo 2 de
+  `trajectory_metadata_blob.data` (início).
+- **Pasta:** `trajectory_metadata_blob.data`, campo 1.1, em URI
+  (`file:///home/u/Projetos/jangada`); 1.3 traz o remoto git e 1.4 o ramo.
+- **Tokens:** não há esquema publicado. O que se vê decodificando o
+  protobuf sem o `.proto`:
+  - `gen_metadata.data`, campo 1.19: nome do modelo (`gemini-3.8-flash` em
+    5.187 das 5.197 chamadas);
+  - campo 1.4: inteiros nos campos 1, 2, 3, 5, 6, 9 e 10. Em 5.182 chamadas
+    vale 3 = 9 + 10, o que sugere saída total = raciocínio + resposta. O
+    campo 1 fica constante na conversa, o 5 cresce como cache lido, o 2
+    varia. O mesmo bloco se repete em `steps.metadata`, campo 9;
+  - campo 1.9.10: um número que cresce (contexto?) e 256000 (janela?).
+  Nenhum desses significados foi conferido com um valor que o agy mostre.
+  **Conclusão:** não há contagem de tokens confiável. O agy fica fora do
+  consumo, e o painel diz isso.
+
+### conversation_summaries.db
+
+`~/.gemini/antigravity-cli/conversation_summaries.db`, tabela
+`conversation_summaries`, em colunas SQL legíveis: `conversation_id`,
+`title`, `step_count`, `last_modified_time`, `workspace_uris` (lista JSON,
+às vezes vazia), `status`, `parent_conversation_id`, `nesting_depth` (0 ou
+1 para subagente), `last_user_input_time`, entre outras. 105 linhas, de
+19/09/2026 a 26/09/2026. Serve para contar conversas e passos por pasta sem
+decodificar protobuf. É sobrescrita por conversa.
+
+### Subagentes do agy
+
+`~/.gemini/antigravity-cli/brain/CONVERSA/.system_generated/subagents/ID.json`:
+`{"conversationId": "...", "subagentDescriptor": {"typeName": "research",
+"role": "..."}, "state": "SUBAGENT_STATE_ALIVE", "spawnStepIndex": 48,
+"workspaceUris": ["file:///home/u/Projetos/jangada"]}`. 10 arquivos, de
+22/09 a 25/09/2026. Sem data no conteúdo (só mtime). A conversa do
+subagente tem `.db` próprio.
+
+## 7. Outros registros
+
+- `~/.cache/jangada/consumo.json`: cache do `bin/jangada-consumo`,
+  sobrescrito a cada 60 segundos. Campos `ativo`, `inicio`, `fim`,
+  `mensagens`, `entrada`, `saida`, `cache_criado`, `cache_lido`, `total`.
+  Só o bloco de 5 horas atual; sem histórico.
+- `$JANGADA_ESTADO/migracoes/`: um arquivo vazio por migração aplicada,
+  criado por `bin/jangada-migrar:20`. O mtime é a data de aplicação. 9
+  arquivos, de 20/09 a 26/09/2026. Acumulado.
+- `$JANGADA_ESTADO/tarefas/*.md`: especificações de tarefa escritas à mão.
+- `~/.claude/history.jsonl`: um pedido digitado por linha, `display`,
+  `pastedContents`, `timestamp` (ms), `project` (cwd), `sessionId`. 2.617
+  linhas desde 02/05/2026; não é apagado pela limpeza de 30 dias. Serve
+  para contar pedidos por projeto e dia fora da janela das conversas.
+- `~/.claude/stats-cache.json`: resumo do próprio Claude Code, de
+  24/08/2026 a 21/09/2026 (`lastComputedDate`): `dailyActivity` (mensagens,
+  sessões e ferramentas por dia), `dailyModelTokens` (total de tokens por
+  modelo e dia, sem separar tipo), `modelUsage`, `hourCounts`. Sobrescrito;
+  cobre dias que as conversas já perderam.
+- `~/.gemini/antigravity-cli/history.jsonl`: pedidos ao agy, `display`,
+  `timestamp` (ms), `workspace`, `conversationId`. 187 linhas desde
+  19/09/2026.
+- `~/.gemini/antigravity-cli/log/cli-DATA.log`: log do agy no formato glog,
+  um por execução, 104 arquivos (6,2 MB) desde 19/09/2026. Não traz
+  consumo; serve para achar erros do revisor.
+- `~/.config/jangada/eventos.json`: agenda do `jangada-calendario`, sem
+  relação com os agentes.
+
+## 8. eventos-agentes.jsonl (novo, a partir de 26/09/2026)
+
+- **Caminho:** `$JANGADA_ESTADO/eventos-agentes.jsonl`.
+- **Quem escreve:** a função `jangada_registrar_evento` em
+  `bin/jangada-config`, chamada por `bin/jangada-hook-claude` (mudança de
+  estado, início e fim), `bin/jangada-hook-agy` (mudança de estado) e
+  `bin/jangada-agentes`, função `focar` (troca de foco).
+- **Formato:** uma linha por mudança de estado:
+
+  ```json
+  {"data": "2026-09-26T23:50:00-03:00", "sessao": "jangada--tarefa", "projeto": "jangada", "agente": "claude", "estado": "aguardando"}
+  ```
+
+  - `data`: ISO com fuso (`jangada_data_iso`).
+  - `projeto`: último componente de `.raiz` (ou `.dir`) do `SESSAO.json`,
+    nome real, não slug.
+  - `agente`: `claude` ou `agy`.
+  - `estado`: `inicio`, `trabalhando`, `aguardando`, `concluido`, `fim` ou
+    `foco`. O `SESSAO.json` grava `iniciado`; aqui o valor é `inicio`.
+- **Acumulado.** Ninguém apaga; o painel não depende de apagar.
+- **Limites do registro:**
+  - só sessões abertas pelo `jangada-agente` (com `JANGADA_SESSAO`);
+  - o agy não tem evento de início, fim nem pedido de permissão: só
+    `trabalhando` e `concluido`. Um agy parado numa pergunta conta como
+    trabalhando;
+  - no Claude, o aviso `idle_prompt` vira `concluido`, e o `SessionEnd`
+    do `/clear` não gera linha;
+  - os hooks rodam da cópia instalada em `~/.local/share/jangada/bin`
+    (`~/.claude/settings.json`, `~/.gemini/config/hooks.json`). O registro
+    só começa depois de instalar a versão nova.
+
+## Indicadores e registros
+
+| Grupo | Indicador | Registros | Observação |
+|---|---|---|---|
+| A | Aprovação na 1ª rodada | 1; 2 para o histórico anterior | rodada dos pareceres reconstruída pela sequência |
+| A | Rodadas até a aprovação | 1; 2 | par autor e revisor só no 1 (e no `parecer-*`, sempre claude e agy) |
+| A | Entregas no limite de rodadas | 1 | o limite não gera arquivo; só existe desde 26/09 |
+| A | Itens por REVISAR, tempo de revisão | 1 (`itens`, `segundos`); 2 só para itens | |
+| A | Diff das aprovadas de primeira e das reprovadas | 1 (`arquivos`, `mais`, `menos`) | sem equivalente nos pareceres |
+| B | Tokens por dia e projeto, por tipo | 3 (`usage`, `cwd`) | raciocínio dentro da saída; dias antes de 28/08 só no `stats-cache.json`, sem tipo |
+| B | Blocos de 5 horas por semana | 3 | regra do `jangada-consumo`; `quotaLimits` marca os que bateram no limite |
+| B | Tokens por entrega aprovada | 3 com 1, ligados por 4 (`conversa`) ou por pasta e horário | o 4 some no fim da sessão |
+| B | Uso por modelo | 3 (`message.model`) | agy fora |
+| C | Tempo em "aguardando" por dia | 8 | só a partir da instalação do registro novo |
+| C | Sessões simultâneas por hora | 8; 3 como aproximação (timestamps por sessionId) | |
+| C | Trocas de foco por dia | 8 (`foco`) | 5 não tem horário |
+| C | Sessões abertas sem entrega aprovada há mais de 3 dias | 4 com 1 e 8 | |
+| D | Ciclos de retrabalho | 3 (`tool_use`, `tool_result`) | falha = `is_error` com `Exit code N` |
+| D | Pontos quentes sessão × arquivo | 3 (Edit, Write, NotebookEdit); 1 e 2 para REVISAR | 1 não lista arquivos, só a contagem |
+| D | Espaço de ferramentas | 3 (`name`, `Skill`, `Agent`, `mcp__*`); agy só pelo `steps`, sem decodificar | exploratório |
+
+## Lacunas
+
+- **validar.jsonl só desde 26/09/2026 21:29.** Antes disso só há pareceres,
+  e os `validacao-*` das sessões encerradas foram apagados.
+- **Pareceres sem autor, revisor, diff nem duração.** A data vem do mtime,
+  que não é confiável nos arquivos antigos.
+- **Modelo vazio** no validar.jsonl quando o revisor é o agy com o modelo
+  padrão.
+- **Autor vazio** no validar.jsonl fora de sessão do jangada; `autor` é o
+  nome do comando, não o modelo.
+- **Projeto com nomes diferentes:** nome real no validar.jsonl e no
+  eventos-agentes.jsonl, slug no nome da sessão e no worktree, pasta
+  codificada no Claude. Normalizar pelo slug.
+- **Conversas do Claude apagadas depois de 30 dias** (`cleanupPeriodDays`
+  padrão). O coletor precisa guardar o que já leu no próprio cache, senão o
+  histórico encolhe.
+- **Contagem a menos no jangada-consumo** em respostas repetidas com
+  `usage` diferente (fica a primeira linha, não a final).
+- **Raciocínio só como número.** `thinking_tokens` falta nas linhas antigas
+  e o texto do raciocínio não é guardado.
+- **Código de saída do Bash só no texto** (`Exit code N`); Bash em segundo
+  plano não mostra a falha.
+- **agy sem tokens confiáveis:** fica fora do consumo.
+- **SESSAO.json sem histórico** e apagado no fim da sessão: a ligação
+  sessão → conversa (`conversa`) se perde, e o validar.jsonl não grava a
+  conversa.
+- **foco.historico sem horário** e limitado a 20 linhas; horário só no
+  eventos-agentes.jsonl, que começa em 26/09/2026.
+- **agy sem estado "aguardando"**: o tempo de espera do agy não é medido.
+- **Sessões fora do jangada-agente** (Claude aberto direto no terminal ou
+  no VS Code) não geram eventos nem SESSAO.json; só aparecem nas conversas.

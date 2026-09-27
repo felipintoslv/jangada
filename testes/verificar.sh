@@ -106,6 +106,9 @@ fi
 passo "isolamento dos agentes"
 testes/isolar.sh || falha "testes/isolar.sh"
 
+passo "histórico de estados dos agentes"
+testes/eventos.sh || falha "testes/eventos.sh"
+
 passo "versões"
 testes/versao.sh || falha "testes/versao.sh"
 

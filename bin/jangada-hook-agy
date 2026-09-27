@@ -44,6 +44,7 @@ echo '{}'
     *) exit 0 ;;
   esac
 
+  anterior="$(jq -r '.estado // ""' "$arq" 2>/dev/null || true)"
   tmp="$(mktemp "$arq.XXXXXX")"
   # shellcheck disable=SC2016  # $e, $m, $a e $c são variáveis do jq
   jangada_alterar_estado "$arq" "$tmp" \
@@ -53,6 +54,11 @@ echo '{}'
     | (if $m != "" then .mensagem = $m else . end)
   '
   rm -f "$tmp"
+  # Histórico para o painel, só na mudança de estado.
+  if [[ "$evento" != "$anterior" ]]; then
+    jangada_registrar_evento "$JANGADA_SESSAO" \
+      "$(jq -r '(.raiz // .dir // "") | split("/") | last // ""' "$arq" 2>/dev/null || true)" agy "$evento"
+  fi
 
   # Dentro do jangada-isolar o tmux fica fora de alcance, e a notificação vai
   # sem o botão.

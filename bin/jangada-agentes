@@ -277,7 +277,13 @@ focar() {
      && restauravel "$estado_dir/$s.json"; then
     restaurar "$s" >/dev/null || true
   fi
-  "${JANGADA_TMUX[@]}" has-session -t "=$s" 2>/dev/null && registrar_foco "$s"
+  if "${JANGADA_TMUX[@]}" has-session -t "=$s" 2>/dev/null; then
+    registrar_foco "$s"
+    # Com horário, para o painel; o foco.historico só guarda a ordem.
+    jangada_registrar_evento "$s" \
+      "$(jq -r '(.raiz // .dir // "") | split("/") | last // ""' "$estado_dir/$s.json" 2>/dev/null || true)" \
+      "$(jq -r '.agente // ""' "$estado_dir/$s.json" 2>/dev/null || true)" foco
+  fi
   if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
     endereco="$(hyprctl clients -j 2>/dev/null | jq -r --arg s "$s" 'map(select(.title == $s or (.title | test($s)))) | .[0].address // empty' 2>/dev/null || true)"
   fi

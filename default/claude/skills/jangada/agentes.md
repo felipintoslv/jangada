@@ -24,7 +24,8 @@ O agente aberto pelo `jangada-agente` roda no bubblewrap, com
 
 - Grava só na pasta da tarefa (worktree, ou o repositório com `--direto`), no
   `.git` comum do repositório, em `~/.claude`, `~/.gemini/antigravity-cli`,
-  `~/.cache`, `~/.local/state/jangada/agentes`, no `validar.jsonl` e no que
+  `~/.cache`, `~/.local/state/jangada/agentes`, no `validar.jsonl`, no
+  `eventos-agentes.jsonl` e no que
   estiver em `JANGADA_ISOLAR_ESCRITA`. O resto é somente leitura, inclusive
   `~/.claude.json`, `~/.local/share/claude`, `~/.gemini/config` e o resto de
   `~/.local/state/jangada`: escrever em `~/.config`, instalar pacote do R na
@@ -78,6 +79,16 @@ nova direto no repositório. O ambiente de um
 perfil é relido de `~/.config/jangada/agentes/NOME.conf` na restauração, nunca
 guardado no estado.
 
+Cada mudança de estado vira também uma linha em
+`~/.local/state/jangada/eventos-agentes.jsonl`, com `data`, `sessao`,
+`projeto` (nome da pasta da raiz), `agente` e `estado`. Além dos estados
+acima, o arquivo tem `inicio` e `fim` (SessionStart e SessionEnd do Claude)
+e `foco` (cada `--focar` numa sessão viva). Só gravam o histórico os hooks e
+o `jangada-agentes`, por `jangada_registrar_evento` (`bin/jangada-config`),
+que nunca falha: um erro ao gravar não pode derrubar o hook. O histórico só
+cresce; o mapa de todos os registros usados pelo painel de indicadores está
+em `docs/registros.md`.
+
 ## Hooks do Claude Code
 
 `default/claude/hooks.json` é mesclado em `~/.claude/settings.json` pela
@@ -102,6 +113,11 @@ A variável `JANGADA_SESSAO` da sessão tmux é o que liga o hook ao arquivo;
 agente aberto fora do `jangada-agente` só gera notificação. O título da janela
 do terminal é o nome da sessão (`set-titles-string "#S"`), e é por ele que o
 `--focar` encontra a janela.
+
+Os hooks rodam dentro do isolamento do agente. Arquivo novo que um hook
+precise gravar fora de `agentes/` tem de entrar como gravável no
+`jangada-isolar` (e existir antes do bind); sem isso a escrita falha calada,
+porque o hook engole o erro.
 
 ## Scripts bash deste repositório
 

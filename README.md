@@ -228,11 +228,16 @@ alheio com o mesmo nome nas duas pastas fica como está, com aviso.
    segundos), e `jangada-validar --metricas` resume por projeto e revisor:
    quantas rodadas uma entrega leva até o `APROVADO` e quanto cada revisor
    aprova.
-4. A barra acompanha o agy pelo hook `jangada-hook-agy`, instalado em
+4. Cada mudança de estado de uma sessão (início, trabalhando, aguardando,
+   concluído, fim e cada foco pelo jangada) vira uma linha em
+   `~/.local/state/jangada/eventos-agentes.jsonl`. É o histórico de onde saem
+   o tempo em espera e as sessões simultâneas; `docs/registros.md` descreve
+   este e os outros registros.
+5. A barra acompanha o agy pelo hook `jangada-hook-agy`, instalado em
    `~/.gemini/config/hooks.json`: trabalhando e concluído. O agy não tem
    evento de pedido de permissão, então não há "aguardando". `Enter` restaura
    com `agy --conversation`.
-5. Em cada worktree novo o agy pergunta se confia na pasta; responda na
+6. Em cada worktree novo o agy pergunta se confia na pasta; responda na
    janela. A confiança é por caminho exato.
 
 Detalhes que valem para o dia a dia:
@@ -256,7 +261,8 @@ Ganchos do usuário ficam em `~/.config/jangada/ganchos/EVENTO` ou
 O agente roda no bubblewrap, pelo `jangada-isolar`. Ele grava só na pasta da
 tarefa (o worktree, ou o repositório com `--direto`), no `.git` comum do
 repositório, em `~/.claude`, em `~/.gemini/antigravity-cli`, em `~/.cache`, em
-`~/.local/state/jangada/agentes` e no `validar.jsonl`. O resto do sistema e da
+`~/.local/state/jangada/agentes`, no `validar.jsonl` e no
+`eventos-agentes.jsonl`. O resto do sistema e da
 pasta pessoal fica somente leitura, inclusive `~/.claude.json` (perdê-lo só
 perde contadores), `~/.local/share/claude` (o Claude não se atualiza de
 dentro), os hooks do agy em `~/.gemini/config` e o resto do estado do jangada
