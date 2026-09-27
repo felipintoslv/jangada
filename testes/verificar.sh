@@ -96,6 +96,11 @@ for c in $(grep -ho 'j\.cmd("[a-z-]*"' default/hypr/*.lua | sed 's/j\.cmd("//; s
   [[ -x "bin/$c" ]] || falha "bin/$c citado mas ausente"
 done
 
+passo "comandos citados nos protocolos dos agentes existem em bin/"
+for c in $(grep -ho '`jangada-[a-z-]*' default/agentes/protocolo*.md | tr -d '`' | sort -u); do
+  [[ -x "bin/$c" ]] || falha "bin/$c citado no protocolo mas ausente"
+done
+
 passo "jangada-validar com claude e agy falsos"
 if command -v git >/dev/null && command -v jq >/dev/null; then
   testes/validar.sh || falha "testes/validar.sh"
@@ -117,6 +122,7 @@ testes/painel.sh || falha "testes/painel.sh"
 
 passo "subagentes"
 testes/subagentes.sh || falha "testes/subagentes.sh"
+testes/delegar.sh || falha "testes/delegar.sh"
 
 passo "versões"
 testes/versao.sh || falha "testes/versao.sh"

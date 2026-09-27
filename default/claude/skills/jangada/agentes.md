@@ -247,6 +247,14 @@ Testes de 27/09/2026, agy 1.2.12:
   (`denied_actions` no JSON e `response` vazio).
 - O JSON do `-p` traz `usage` (`input_tokens`, `output_tokens`,
   `total_tokens`) e `duration_seconds`.
+- `agy -p "/usage" --output-format json` responde em uns 3 segundos, sem
+  gastar cota: a fração restante fica em
+  `.command.data.groups[].buckets[]` com `id` `gemini-5h`, `gemini-weekly`,
+  `3p-5h` e `3p-weekly` (`remaining_fraction`, de 0 a 1).
+- `agy agents` sem terminal não imprime nada. Para saber se o agente
+  carregou, rode um `-p` curto com `--agent` e procure o "not found" no log.
+- `--dangerously-skip-permissions` não serve para delegar: libera escrita.
+  O `jangada-delegar` usa `--sandbox` e depende do `permissions.allow`.
 
 ## Perfis e ganchos
 

@@ -281,6 +281,19 @@ perfil (ou global), e o seletor mostra o destino:
 | `claude` | `claude-claude` | subagentes do Claude dos papéis, nunca `general-purpose` |
 | `nativo` | `agy`, `agy-agy` (padrão do agy) | subagentes do próprio agy (`invoke_subagent`) |
 
+`jangada-delegar PAPEL "pedido" [--arquivo SAIDA]` roda o agente do papel
+no agy (Flash low no explorador, medium no leitor e no pesquisador, high no
+verificador), com `--sandbox`, na raiz do repositório atual, e imprime só o
+relatório. Acima de 600 palavras (`JANGADA_DELEGAR_PALAVRAS`), o relatório
+sai cortado, com o caminho do texto completo. Antes, lê a cota do agy
+(`agy -p /usage`, guardada por 5 minutos) e recusa, com código 4 e uma
+linha indicando o subagente do Claude do mesmo papel, quando o limite de 5
+horas do Gemini está abaixo de 20% (`JANGADA_DELEGAR_COTA_MIN`), quando o
+agy falha ou passa de 300 segundos (`JANGADA_DELEGAR_TEMPO`) e quando o
+perfil não delega ao agy. Sem terminal, o agy só roda os comandos listados
+em `permissions.allow` de `~/.gemini/antigravity-cli/settings.json`; os
+outros ele nega, e o `jangada-delegar` mostra quais.
+
 Sem o agy instalado, `agy` vira `claude`. Subagente não revisa a entrega: o
 `verificador` confere regras e testes, não o mérito, e o `jangada-validar`
 continua com o revisor de sempre.

@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# Delega uma tarefa de leitura a um agente Flash do agy e devolve um relatório
+# curto. Poupa a cota do Claude: explorar código, ler documento longo,
+# pesquisar na web ou verificar antes do jangada-validar.
+#
+# Uso: jangada-delegar PAPEL "pedido" [--arquivo SAIDA]
+#   PAPEL             explorador, leitor, pesquisador ou verificador
+#                     (default/agy/agents/PAPEL/agent.md)
+#   --arquivo SAIDA   grava o relatório completo em SAIDA
+#
+# Roda na raiz do repositório atual (ou na pasta atual), com --sandbox e só
+# com as ferramentas de leitura do papel. Comando de terminal sem terminal só roda se estiver em
+# permissions.allow de ~/.gemini/antigravity-cli/settings.json; os outros o
+# agy nega e o jangada-delegar lista.
+#
+# Antes de rodar, lê a cota do agy (agy -p "/usage", guardada por
+# JANGADA_DELEGAR_CACHE minutos, padrão 5). Recusa se o limite de 5 horas do
+# Gemini estiver abaixo de JANGADA_DELEGAR_COTA_MIN (padrão 20%).
+#
+# Relatório acima de JANGADA_DELEGAR_PALAVRAS palavras (padrão 600) sai
+# cortado, com o caminho do arquivo completo.
+#
+# Código de saída: 0 relatório; 2 uso errado; 4 recusa (perfil sem delegação
+# ao agy, cota baixa, agy ausente, erro ou tempo esgotado). Na recusa, a
+# última linha diz qual subagente do Claude usar. Nunca chama o Claude.
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+uso() { sed -n '6,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+
+papel=""; pedido=""; arquivo=""
+while (($#)); do
+  case "$1" in
+    --arquivo) [[ $# -ge 2 ]] || uso; arquivo="$2"; shift 2 ;;
+    -h|--help) uso ;;
+    -*) echo "jangada-delegar: opção desconhecida: $1" >&2; uso ;;
+    *)
+      if [[ -z "$papel" ]]; then papel="$1"
+      elif [[ -z "$pedido" ]]; then pedido="$1"
+      else echo "jangada-delegar: argumento a mais: $1" >&2; uso
+      fi
+      shift ;;
+  esac
+done
+[[ -n "$papel" && -n "$pedido" ]] || uso
+declare -A esforco=([explorador]=low [leitor]=medium [pesquisador]=medium [verificador]=high)
+if [[ -z "${esforco[$papel]:-}" ]]; then
+  echo "jangada-delegar: papel desconhecido: $papel (explorador, leitor, pesquisador ou verificador)" >&2
+  exit 2
+fi
+modelo="gemini-3.8-flash-${esforco[$papel]}"
+
+recusar() {
+  echo "jangada-delegar: recusado: $1" >&2
+  echo "Use o subagente $papel do Claude (ferramenta Agent, subagent_type $papel)."
+  exit 4
+}
+
+# JANGADA_DELEGAR vem do perfil da sessão (jangada-agente). Fora de sessão
+# vale agy. O jangada-delegar é chamado pelo Claude: nativo não se aplica.
+destino="$(jangada_delegacao claude "${JANGADA_DELEGAR:-}")"
+if [[ "${JANGADA_DELEGAR:-}" == nativo ]]; then
+  echo "jangada-delegar: numa sessão do agy, use invoke_subagent com o papel $papel" >&2
+  exit 4
+fi
+if [[ "$destino" == claude ]]; then
+  command -v agy >/dev/null 2>&1 || recusar "agy não instalado"
+  recusar "o perfil da sessão não delega ao agy (JANGADA_DELEGAR=claude)"
+fi
+
+agy_limpo() { env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 agy "$@" </dev/null; }
+
+# Cota do Gemini (limite de 5 horas), em % restante.
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/jangada/agy-usage.json"
+mkdir -p "${cache%/*}"
+if [[ ! -s "$cache" || -n "$(find "$cache" -mmin "+${JANGADA_DELEGAR_CACHE:-5}" 2>/dev/null)" ]]; then
+  tmp="$(mktemp "$cache.XXXXXX")"
+  if agy_limpo -p "/usage" --output-format json --print-timeout 60s 2>/dev/null >"$tmp.cano" \
+     && jq -e '.command.data.groups' "$tmp.cano" >/dev/null 2>&1; then
+    mv "$tmp.cano" "$cache"
+  fi
+  rm -f "$tmp" "$tmp.cano"
+fi
+cota="$(jq -r '[.command.data.groups[].buckets[] | select(.id == "gemini-5h") | .remaining_fraction][0] // empty
+  | . * 100 | floor' "$cache" 2>/dev/null || true)"
+[[ -n "$cota" ]] || recusar "não consegui ler a cota do agy (agy -p /usage)"
+if ((cota < ${JANGADA_DELEGAR_COTA_MIN:-20})); then
+  recusar "cota de 5 horas do Gemini em $cota%, abaixo de ${JANGADA_DELEGAR_COTA_MIN:-20}%"
+fi
+
+# Sem terminal, o agy só roda em pasta confiável, e a confiança vale para o
+# caminho exato: roda na raiz do repositório (o worktree da sessão já é
+# confiável), e a confiança dada aqui sai no fim. O log do agy diz se o agente do papel não foi achado: nesse caso o
+# agy responde com o agente padrão, sem avisar.
+pasta="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+conf_agy="${JANGADA_AGY_SETTINGS:-$HOME/.gemini/antigravity-cli/settings.json}"
+confiou=0
+if [[ -f "$conf_agy" ]] && ! jq -e --arg w "$(realpath "$pasta")" '(.trustedWorkspaces // []) | index($w)' "$conf_agy" >/dev/null 2>&1; then
+  jangada_agy_ajustar_confianca adicionar "$pasta"
+  confiou=1
+fi
+log_agy="${JANGADA_AGY_LOG:-$HOME/.gemini/antigravity-cli/log}"
+marca="$(mktemp)"
+saida="$(mktemp)"
+limpar() {
+  ((confiou)) && jangada_agy_ajustar_confianca remover "$pasta"
+  rm -f "$marca" "$saida"
+}
+trap limpar EXIT
+
+tempo="${JANGADA_DELEGAR_TEMPO:-300}"
+codigo=0
+resposta="$(cd "$pasta" && timeout "$((tempo + 30))" env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 \
+  agy -p "$pedido" --agent "$papel" --model "$modelo" --sandbox \
+  --output-format json --print-timeout "${tempo}s" </dev/null 2>"$saida")" || codigo=$?
+if ((codigo == 124)); then recusar "tempo esgotado (${tempo}s)"; fi
+if ((codigo)); then recusar "o agy saiu com código $codigo: $(head -c 300 "$saida")"; fi
+if [[ -d "$log_agy" ]] && find "$log_agy" -name 'cli-*.log' -newer "$marca" -print0 2>/dev/null \
+     | xargs -0r grep -l "Agent \"$papel\" not found" 2>/dev/null | grep -q .; then
+  recusar "o agy não achou o agente $papel (rode ./install.sh 50)"
+fi
+status="$(jq -r '.status // ""' <<<"$resposta" 2>/dev/null || true)"
+[[ "$status" == SUCCESS ]] || recusar "o agy não respondeu (status ${status:-vazio})"
+texto="$(jq -r '.response // ""' <<<"$resposta")"
+[[ -n "${texto//[[:space:]]/}" ]] || recusar "o agy devolveu resposta vazia"
+
+negados="$(jq -r '.denied_actions // [] | map(tostring) | join("; ")' <<<"$resposta" 2>/dev/null || true)"
+[[ -n "$negados" ]] && echo "jangada-delegar: o agy negou: ${negados:0:300}" >&2
+
+palavras="$(wc -w <<<"$texto")"
+limite="${JANGADA_DELEGAR_PALAVRAS:-600}"
+if ((palavras > limite)) && [[ -z "$arquivo" ]]; then
+  # Dentro do jangada-isolar, do estado só a pasta agentes é gravável.
+  arquivo="$JANGADA_ESTADO/agentes/delegacao-$(date +%Y%m%d-%H%M%S)-$papel-$$.md"
+  mkdir -p "${arquivo%/*}"
+fi
+[[ -n "$arquivo" ]] && printf '%s\n' "$texto" >"$arquivo"
+if ((palavras > limite)); then
+  awk -v n="$limite" '
+    c + NF <= n { print; c += NF; next }
+    { l = ""; for (i = 1; i <= n - c; i++) l = l (i > 1 ? " " : "") $i; if (l != "") print l; exit }' <<<"$texto"
+  echo
+  echo "[relatório cortado em $limite de $palavras palavras; completo em $arquivo]"
+else
+  printf '%s\n' "$texto"
+fi
