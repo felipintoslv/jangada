@@ -140,7 +140,13 @@ conferir "base --output: nada gravado" test ! -e "$tmp/escrito"
 
 echo "== estado válido"
 gravar x "{\"raiz\": \"$proj\", \"worktree\": \"$wts/proj/x\", \"ramo\": \"agente/x\", \"base\": \"main\", \"estado\": \"concluido\"}"
+# Pareceres da sessão x e da vizinha x-rotas, com o mesmo prefixo.
+printf 'STATUS: APROVADO\n' >"$estado/validacao-x-r1.md"
+printf 'STATUS: APROVADO\n' >"$estado/validacao-x-rotas-r1.md"
 fim x
+conferir "pareceres da sessão apagados" test ! -e "$estado/validacao-x-r1.md"
+conferir "parecer da sessão vizinha mantido" test -f "$estado/validacao-x-rotas-r1.md"
+rm -f "$estado/validacao-x-rotas-r1.md"
 conferir "encerra ($rc)" test "$rc" -eq 0
 conferir "worktree removido" test ! -d "$wts/proj/x"
 conferir "estado apagado" test ! -f "$estado/x.json"

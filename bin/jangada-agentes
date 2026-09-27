@@ -493,6 +493,9 @@ previa() {
   if [[ -n "$validacao" ]]; then
     echo ""
     echo "--- $(basename "$validacao") ---"
+    # O jangada-validar roda no processo do agente, e o parecer fica numa pasta
+    # que ele pode gravar: é o que a sessão registrou, não prova de revisão.
+    echo "(gravado pela própria sessão; confira o diff antes de integrar)"
     head -60 "$validacao"
   fi
 }
@@ -503,8 +506,9 @@ previa() {
 mais_recente() {
   local -a achados=()
   local a
-  for a in "$1"*.md; do
-    [[ -e "$a" ]] && achados+=("$a")
+  # Só PREFIXO + número + .md: o parecer de proj--fix-rotas não é de proj--fix.
+  for a in "$1"[0-9]*.md; do
+    [[ -e "$a" && "${a#"$1"}" =~ ^[0-9]+\.md$ ]] && achados+=("$a")
   done
   ((${#achados[@]})) || return 0
   printf '%s\n' "${achados[@]}" | sort -V | tail -1

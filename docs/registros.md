@@ -17,10 +17,10 @@ Caminhos usados abaixo:
 ## 1. validar.jsonl
 
 - **Caminho:** `$JANGADA_ESTADO/validar.jsonl`.
-- **Quem escreve:** `bin/jangada-validar`, função `registrar` (linhas 79 a
-  91). Chamada em quatro pontos: limite de rodadas (linha 291), reprovação
-  na verificação local (linha 578), falha do revisor (linha 631) e parecer
-  do revisor (linha 647). Registro criado no commit ed62434, de 26/09/2026.
+- **Quem escreve:** `bin/jangada-validar`, função `registrar` (linhas 80 a
+  101). Chamada em quatro pontos: limite de rodadas (linha 328), reprovação
+  na verificação local (linha 691), falha do revisor (linha 744) e parecer
+  do revisor (linha 765). Registro criado no commit ed62434, de 26/09/2026.
 - **Formato:** JSON Lines, uma linha por rodada, gravada com `>>`.
 - **Exemplo:**
 
@@ -75,17 +75,18 @@ Pasta `$JANGADA_ESTADO/agentes/`. Em 26/09/2026 havia 41 arquivos.
 
 | Arquivo | Qtd. | Período (mtime) | Quem escreve | Quem apaga |
 |---|---|---|---|---|
-| `validacao-SESSAO-rN.md` | 16 | 26/09 20:54 a 23:37 | `bin/jangada-validar:653` (e a reprovação local, linhas 577 a 588) | `bin/jangada-agente-fim:259`, ao encerrar a sessão |
-| `validacao-SESSAO.aprovado` | 1 | 26/09 | `bin/jangada-validar:669` | `bin/jangada-agente-fim:259` |
+| `validacao-SESSAO-rN.md` | 16 | 26/09 20:54 a 23:37 | `bin/jangada-validar:747` (e a reprovação local, linhas 672 a 691) | `bin/jangada-agente-fim:261` a `:264`, ao encerrar a sessão |
+| `validacao-SESSAO.aprovado` | 1 | 26/09 | `bin/jangada-validar:768` | `bin/jangada-agente-fim:264` |
 | `parecer-SESSAO-rN.md` | 12 | 20/09 a 21/09 | antigo `bin/jangada-par` (removido no commit 411d273, 22/09) | ninguém |
 | `avaliacao-SESSAO-rN.md` | 2 | 21/09 | antigo `bin/jangada-par` (avaliação do Claude sobre o parecer, não é revisão) | ninguém |
 | `revisao-SESSAO-rN.log` | 5 | 20/09 a 21/09 | antigo `bin/jangada-par` (erro do agy, vários vazios) | ninguém |
 | `revisao-claude-*.md` | 1 | 22/09 | revisão feita à mão | ninguém |
-| `fim-SESSAO.log` | 2 | 22/09 e 25/09 | `bin/jangada-agente-fim:266` (saída do encerramento pela própria sessão) | sobrescrito no próximo fim da mesma sessão |
+| `fim-SESSAO.log` | 2 | 22/09 e 25/09 | `bin/jangada-agente-fim:271` (saída do encerramento pela própria sessão) | sobrescrito no próximo fim da mesma sessão |
 
 - **Primeira linha:** `STATUS: APROVADO` ou `STATUS: REVISAR`. O
-  `jangada-validar` aceita marcação de Markdown (`## STATUS:`,
-  `**STATUS:**`) com a expressão da linha 658:
+  `jangada-validar` lê só a primeira linha não vazia, para um apontamento
+  que cita o diff não aprovar a entrega, e aceita marcação de Markdown
+  (`## STATUS:`, `**STATUS:**`) com a expressão da linha 756:
   `^[#[:space:]*]*STATUS:[[:space:]*]*APROVADO`. Exceções encontradas:
   `parecer-demanda-cebrap-r1.md` traz o STATUS na linha 3, depois de um
   título; os dois `avaliacao-*` começam com a mensagem de limite de sessão
@@ -304,7 +305,7 @@ resultado.
 - **Quem escreve:** `bin/jangada-agente:377` a `:390` cria;
   `bin/jangada-hook-claude` (linha 82) e `bin/jangada-hook-agy`
   atualizam `estado`, `mensagem`, `atualizado` e `conversa`;
-  `bin/jangada-validar:592` e `:661` gravam `validacao`; `bin/jangada-agentes` marca
+  `bin/jangada-validar:686` e `:760` gravam `validacao`; `bin/jangada-agentes` marca
   `interrompido` (função `marcar`).
 - **Exemplo:**
 
@@ -342,7 +343,7 @@ resultado.
   `conversationId` do agy (nome do `.db`). É o único lugar que liga a sessão
   do jangada à conversa.
 - **Sobrescrito** a cada evento. Não tem histórico.
-- **Quem apaga:** `bin/jangada-agente-fim:256`, ao encerrar;
+- **Quem apaga:** `bin/jangada-agente-fim:264`, ao encerrar;
   `limpar_orfaos` em `bin/jangada-agentes:133` a `:159`, quando a sessão
   tmux não existe mais: estado `concluido` ou `aguardando` fica 24 horas
   (`JANGADA_AGENTES_GUARDAR`), `interrompido` fica 168 horas; sessão sem

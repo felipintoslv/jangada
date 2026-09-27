@@ -218,7 +218,8 @@ alheio com o mesmo nome nas duas pastas fica como está, com aviso.
    depois do commit aprovado e recomeça a contagem.
    `--revisor` escolhe o revisor à mão. O Claude revisa com o Sonnet
    (`JANGADA_VALIDAR_MODELO`).
-   Antes do revisor, uma verificação local procura conflitos do git, confere
+   Antes do revisor, uma verificação local procura conflitos do git, reprova
+   script com byte nulo (o revisor o receberia como binário), confere
    a sintaxe de shell e Lua e roda o `lintr` nos arquivos R, só nas linhas
    que o agente alterou (`cat()` e `print()` fora de métodos `print`, código
    comentado, `1:length()`, variável sem uso dentro de função). Do
@@ -228,13 +229,22 @@ alheio com o mesmo nome nas duas pastas fica como está, com aviso.
    achado só aparece como aviso. Sem R ou sem o pacote `lintr`, a etapa é
    pulada. O `gitleaks` procura segredos nas linhas acrescentadas; um achado
    reprova sem mostrar o segredo no parecer, e `gitleaks:allow` num comentário
-   da linha libera um falso positivo. Commit com `Co-Authored-By` gera aviso.
+   da linha libera um falso positivo. Sem o `gitleaks`, ou com ele falhando,
+   a entrega reprova; `JANGADA_VALIDAR_SEM_GITLEAKS=1` aceita o risco e só
+   avisa. O `.gitleaks.toml` e o `.gitleaksignore` valem como estão na base,
+   e não como a entrega os deixou; o `.lintr` também, salvo quando a base
+   não tem um. O `AGENTS.md` e o `CLAUDE.md` vão ao revisor lidos da base,
+   e uma entrega que muda o `.jangada/validar.sh` pede ao revisor que confira
+   se a validação ficou mais fraca. Commit com `Co-Authored-By` gera aviso.
    Na escrita, o revisor aponta só casos objetivos nas linhas novas: código
    comentado, comentário que narra a mudança, repete o código ou fala com o
    revisor, enchimento ("vale ressaltar", "basicamente"), documentação que
    contradiz o código, arquivo de resumo que ninguém pediu e corpo de commit
    que repete o diff em vez de dar o porquê.
-3. Os pareceres ficam em `~/.local/state/jangada/agentes/validacao-*`. No
+3. Os pareceres ficam em `~/.local/state/jangada/agentes/validacao-*`. O
+   jangada-validar roda no processo do agente, que pode gravar nessa pasta;
+   por isso a prévia do `jangada-agentes` avisa que o parecer foi gravado pela
+   própria sessão, e não serve de prova de revisão. No
    jangada shell, `revisar` roda o mesmo comando no diretório atual. Cada
    rodada acrescenta uma linha a `~/.local/state/jangada/validar.jsonl`
    (resultado, etapa, revisor, rodada, linhas alteradas, apontamentos e

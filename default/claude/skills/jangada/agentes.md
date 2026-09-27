@@ -11,7 +11,7 @@
 | `jangada-hook-agy` | o mesmo para o agy, pelo `~/.gemini/config/hooks.json` (PreInvocation e Stop) |
 | `jangada-filtrar` | condensa saídas longas de comandos no terminal para poupar tokens; atalho `resumir` no jangada shell |
 | `jangada-mapa` | extrai a estrutura de arquivos e assinaturas em Markdown; atalho `mapa` no jangada shell |
-| `jangada-validar` | revisão do diff por outro modelo ou pelo mesmo modelo isolado (claude ou agy), só leitura, chamada pelo agente antes de entregar; executa portão determinístico local antes (conflitos, sintaxe, lintr, gitleaks nas linhas acrescentadas); pareceres em `validacao-<sessao>-rN.md`; depois de um APROVADO, `validacao-<sessao>.aprovado` guarda o commit, e a próxima entrega parte dele com as rodadas zeradas; cada rodada vira uma linha em `~/.local/state/jangada/validar.jsonl`, resumida por `--metricas` |
+| `jangada-validar` | revisão do diff por outro modelo ou pelo mesmo modelo isolado (claude ou agy), só leitura, chamada pelo agente antes de entregar; executa portão determinístico local antes (conflitos, script com byte nulo, sintaxe, lintr, gitleaks nas linhas acrescentadas; sem gitleaks reprova, salvo `JANGADA_VALIDAR_SEM_GITLEAKS=1`; `.gitleaks.toml`, `.gitleaksignore`, `AGENTS.md` e `CLAUDE.md` valem da base, e `.lintr` também quando a base tem um); só a primeira linha não vazia do parecer decide o status; pareceres em `validacao-<sessao>-rN.md`; depois de um APROVADO, `validacao-<sessao>.aprovado` guarda o commit, e a próxima entrega parte dele com as rodadas zeradas; cada rodada vira uma linha em `~/.local/state/jangada/validar.jsonl`, resumida por `--metricas` |
 | `jangada-agentes` | seletor, painel, módulo da barra, `--focar`, `--proximo`, `--anterior`, `--restaurar` |
 | `jangada-agente-fim` | encerra a sessão e remove o worktree (mantém o ramo); `--integrar` faz o merge na base, atualiza a cópia instalada se for o repositório do jangada e apaga o ramo |
 | `jangada-consumo` | tokens do Claude no bloco de 5 horas, lidos de `~/.claude/projects` |
@@ -232,6 +232,11 @@ porta de entrada. O que se aprendeu com ele vale para o revisor agy:
 - O revisor erra sobre `set -e`: falha dentro de uma lista `a && b && c`, fora
   do último comando, não encerra o script. Teste com `bash -c` antes de aceitar.
 - O `jangada-validar` executa uma checagem determinística local antes do revisor por IA (marcadores de conflito do Git, sintaxe de scripts alterados e `.jangada/validar.sh`). Se falhar, grava `STATUS: REVISAR (local)` sem acionar a API externa, economizando tokens. A opção `--pular-local` ignora o portão local.
+- Um comentário de shell que começa pela palavra `shellcheck` vira diretiva e
+  quebra a análise do arquivo inteiro (SC1073). Reescreva a frase.
+- O `gitleaks dir` lê sozinho o `.gitleaks.toml` e o `.gitleaksignore` da
+  pasta examinada. O espelho das linhas novas não copia esses dois arquivos;
+  as regras vão por `--config` e `--gitleaks-ignore-path`, tiradas da base.
 - Se o limite de rodadas for atingido, a opção `--reverter-se-limite` (ou o comando `reverter` no jangada shell) restaura o worktree para o ponto inicial limpo da tarefa. O `reverter` do shell mostra antes da confirmação os commits, as alterações e os arquivos não rastreados que se perdem, e guarda o HEAD anterior num ramo `backup/reverter-<data>-<pid>`, cujo nome informa ao terminar.
 
 Depois de integrar uma mudança no próprio jangada, confira a cópia

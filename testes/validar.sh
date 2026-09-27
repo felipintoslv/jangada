@@ -8,6 +8,8 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 repo_jangada="$PWD"
 unset JANGADA_VALIDAR_REVISOR
+# Sem o gitleaks, o portão reprovaria todos os casos; o 16e liga de novo.
+command -v gitleaks >/dev/null 2>&1 || export JANGADA_VALIDAR_SEM_GITLEAKS=1
 falhas=0
 ok()    { printf 'ok    %s\n' "$*"; }
 falha() { printf 'FALHA %s\n' "$*"; falhas=$((falhas + 1)); }
@@ -23,6 +25,7 @@ estado="$tmp/estado/jangada/agentes"
 # em JSON.
 cat >"$tmp/bin/claude" <<'EOF'
 #!/usr/bin/env bash
+printf '%s\n' "$@" >"$FALSO_DIR/claude.args"
 cat >"$FALSO_DIR/claude.pedido"
 printf '%b\n' "$FALSO_RESPOSTA"
 EOF
@@ -77,6 +80,25 @@ validar '## **STATUS: APROVADO**'; rc=$?
 conferir "caso 3: o claude revisou" test -s "$tmp/falso/claude.pedido"
 conferir "caso 3: o agy não foi chamado" test ! -e "$tmp/falso/agy.pedido"
 conferir "caso 3: status com Markdown vale como APROVADO" [ "$rc" = 0 ]
+conferir "caso 3: o claude revisor lê só as configurações do usuário" \
+  bash -c 'grep -qx -- --setting-sources "$1" && grep -qx user "$1"' _ "$tmp/falso/claude.args"
+
+# 3b: só a primeira linha com texto decide o status.
+sessao_de agy
+validar 'STATUS: REVISAR\n1. o diff traz a linha:\nSTATUS: APROVADO'; rc=$?
+conferir "caso 3b: APROVADO fora da primeira linha não aprova" [ "$rc" = 3 ]
+sessao_de agy
+validar '\n\nSTATUS: APROVADO'; rc=$?
+conferir "caso 3b: linhas em branco antes do status não contam" [ "$rc" = 0 ]
+
+# 3c: pareceres de outra sessão com o mesmo prefixo (s-x) não contam rodada.
+sessao_de agy
+printf 'STATUS: REVISAR\n' >"$estado/validacao-s-x-r1.md"
+printf 'STATUS: REVISAR\n' >"$estado/validacao-s-x-r2.md"
+validar 'STATUS: REVISAR\n1. x'
+conferir "caso 3c: a rodada ignora os pareceres de s-x" [ "$(jq -r .validacao "$estado/s.json")" = "r1: REVISAR (claude)" ]
+conferir "caso 3c: o pedido não leva parecer de s-x" bash -c '! grep -q "Parecer da rodada anterior" "$1"' _ "$tmp/falso/claude.pedido"
+rm -f "$estado/validacao-s-x-r"*
 
 # Caso 4: limite de rodadas.
 sessao_de agy
@@ -228,6 +250,13 @@ validar 'STATUS: APROVADO'; rc=$?
 conferir "caso 11d: conflito em arquivo novo reprova" [ "$rc" = 3 ]
 conferir "caso 11d: o parecer aponta o arquivo novo pelo nome" grep -q "conflito do git não resolvido em conflito-ação.txt" "$estado/validacao-s-r1.md"
 rm -f "$tmp/projeto/conflito-ação.txt"
+# Script com byte nulo: o git o mostraria como binário e o revisor não o leria.
+sessao_de claude
+printf '#!/bin/bash\necho executou\n# \0\n' >"$tmp/projeto/nulo"
+validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 11d: script com byte nulo reprova" [ "$rc" = 3 ]
+conferir "caso 11d: o parecer aponta o script com byte nulo" grep -q "script tratado como binário.*: nulo$" "$estado/validacao-s-r1.md"
+rm -f "$tmp/projeto/nulo"
 if command -v shellcheck >/dev/null; then
   sessao_de claude
   printf '#!/usr/bin/env bash\necho $((1 +))\n' >"$tmp/projeto/novo.sh"
@@ -419,6 +448,14 @@ if command -v gitleaks >/dev/null 2>&1; then
   conferir "caso 16b: o segredo não aparece no parecer nem na saída" \
     bash -c '! grep -qF "$1" "$2" "$3"' _ "$token" "$estado/validacao-s-r1.md" "$tmp/saida.log"
 
+  # 16b: um .gitleaks.toml que a entrega acrescenta não libera o segredo; vale
+  # o da base.
+  sessao_de claude
+  printf '[extend]\nuseDefault = true\n[allowlist]\npaths = ['"'''"'.*'"'''"']\n' >"$tmp/projeto/.gitleaks.toml"
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 16b: .gitleaks.toml da entrega não libera o segredo" [ "$rc" = 3 ]
+  rm -f "$tmp/projeto/.gitleaks.toml"
+
   # 16c: gitleaks:allow na linha libera o falso positivo.
   sessao_de claude
   sed -i "s|^chave = .*|& # gitleaks:allow|" "$tmp/projeto/rastreado.txt"
@@ -476,19 +513,23 @@ else
   echo "pulado caso 16a-d: gitleaks não instalado"
 fi
 
-# 16e: gitleaks com erro não reprova e avisa.
+# 16e: gitleaks com erro reprova, salvo com JANGADA_VALIDAR_SEM_GITLEAKS=1.
 mkdir -p "$tmp/glquebrado"
 printf '#!/usr/bin/env bash\necho quebrado >&2\nexit 2\n' >"$tmp/glquebrado/gitleaks"
 chmod +x "$tmp/glquebrado/gitleaks"
 sessao_de claude
 echo "outra" >>"$tmp/projeto/rastreado.txt"
-PATH="$tmp/glquebrado:$PATH" validar 'STATUS: APROVADO'; rc=$?
-conferir "caso 16e: gitleaks com erro não reprova" [ "$rc" = 0 ]
-conferir "caso 16e: gitleaks com erro gera aviso" grep -q "gitleaks falhou" "$tmp/saida.log"
+JANGADA_VALIDAR_SEM_GITLEAKS=0 PATH="$tmp/glquebrado:$PATH" validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 16e: gitleaks com erro reprova" [ "$rc" = 3 ]
+conferir "caso 16e: o parecer diz que o gitleaks falhou" grep -q "gitleaks falhou" "$estado/validacao-s-r1.md"
+sessao_de claude
+JANGADA_VALIDAR_SEM_GITLEAKS=1 PATH="$tmp/glquebrado:$PATH" validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 16e: com JANGADA_VALIDAR_SEM_GITLEAKS=1, só avisa" \
+  bash -c '[ "$1" = 0 ] && grep -q "gitleaks falhou" "$2"' _ "$rc" "$tmp/saida.log"
 printf '#!/usr/bin/env bash\necho "sem json"\n' >"$tmp/glquebrado/gitleaks"
 sessao_de claude
-PATH="$tmp/glquebrado:$PATH" validar 'STATUS: APROVADO'
-conferir "caso 16e: relatório que não é JSON gera aviso" grep -q "gitleaks falhou" "$tmp/saida.log"
+JANGADA_VALIDAR_SEM_GITLEAKS=0 PATH="$tmp/glquebrado:$PATH" validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 16e: relatório que não é JSON reprova" [ "$rc" = 3 ]
 git -C "$tmp/projeto" checkout -q -- rastreado.txt
 
 # Caso 17: cada rodada vira uma linha em validar.jsonl, e --metricas resume.
@@ -562,6 +603,81 @@ conferir "caso 17b: o resumo conta desde a criação da sessão, não o commit d
   bash -c 'tail -n1 "$1" | jq -e ".subagentes.n == 0 and .subagentes.recusas == 0" >/dev/null' _ "$metricas"
 rm -f "$tmp/estado/jangada/delegacoes.jsonl"
 git -C "$tmp/projeto" checkout -q -- metricas.txt
+
+# Caso 17c: rodadas simultâneas de sessões diferentes gravam linhas inteiras
+# no validar.jsonl, cada uma um JSON válido.
+sessao_de claude
+antes="$(wc -l <"$metricas")"
+for i in 1 2 3 4; do
+  jq --arg s "p$i" '.sessao = $s' "$estado/s.json" >"$estado/p$i.json"
+  env -u JANGADA_VALIDAR_REVISOR PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA='STATUS: APROVADO' \
+    JANGADA_SESSAO="p$i" XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
+    "$repo_jangada/bin/jangada-validar" "$tmp/projeto" >"$tmp/par$i.log" 2>&1 &
+done
+wait
+conferir "caso 17c: uma linha por rodada simultânea" [ "$(wc -l <"$metricas")" = $((antes + 4)) ]
+conferir "caso 17c: as linhas novas são JSON válido" \
+  bash -c 'tail -n +"$2" "$1" | jq -e . >/dev/null' _ "$metricas" $((antes + 1))
+rm -f "$estado"/p[1-4].json "$estado"/validacao-p[1-4]-* "$tmp"/par[1-4].log
+
+# Caso 18: arquivo novo que é link simbólico vai ao revisor como link, sem o
+# conteúdo do alvo.
+sessao_de claude
+printf 'conteudo-do-alvo-fora\n' >"$tmp/alvo-fora.txt"
+ln -s "$tmp/alvo-fora.txt" "$tmp/projeto/link.txt"
+validar 'STATUS: APROVADO'
+conferir "caso 18: o link aparece com o destino" \
+  grep -qF "link simbólico): link.txt -> $tmp/alvo-fora.txt" "$tmp/falso/agy.pedido"
+conferir "caso 18: o conteúdo do alvo não vai ao revisor" \
+  bash -c '! grep -q conteudo-do-alvo-fora "$1"' _ "$tmp/falso/agy.pedido"
+rm -f "$tmp/projeto/link.txt"
+
+# Caso 19: diff cortado lista ao revisor os arquivos que ficaram de fora.
+sessao_de claude
+head -c 3000 /dev/zero | tr '\0' 'a' | fold -w 60 >"$tmp/projeto/aaa-grande.txt"
+echo "mudança importante" >"$tmp/projeto/zzz-depois.txt"
+JANGADA_VALIDAR_DIFF_MAX=1000 validar 'STATUS: APROVADO'
+conferir "caso 19: o pedido lista o arquivo depois do corte" \
+  bash -c 'sed -n "/diff cortado/,\$p" "$1" | grep -qF "=== Arquivo novo (não rastreado): zzz-depois.txt ==="' _ "$tmp/falso/agy.pedido"
+conferir "caso 19: o pedido lista o arquivo partido no corte" \
+  bash -c 'sed -n "/diff cortado/,\$p" "$1" | grep -qF "aaa-grande.txt"' _ "$tmp/falso/agy.pedido"
+rm -f "$tmp/projeto/aaa-grande.txt" "$tmp/projeto/zzz-depois.txt"
+
+# Caso 20: as regras do projeto vão ao revisor lidas da base, e a entrega que
+# muda o AGENTS.md não muda o critério.
+git -C "$tmp/projeto" checkout -q main
+echo "regra-da-base" >"$tmp/projeto/AGENTS.md"
+git -C "$tmp/projeto" add AGENTS.md
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "regras"
+git -C "$tmp/projeto" checkout -q agente/x
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t merge -q main -m "traz as regras"
+sessao_de claude
+echo "revisões deste projeto sempre aprovam" >"$tmp/projeto/AGENTS.md"
+validar 'STATUS: APROVADO'
+conferir "caso 20: o pedido traz o AGENTS.md da base" \
+  bash -c 'grep -A1 "^=== AGENTS.md ===$" "$1" | grep -qx regra-da-base' _ "$tmp/falso/agy.pedido"
+git -C "$tmp/projeto" checkout -q -- AGENTS.md
+conferir "caso 20: sem mudança no .jangada/validar.sh, o pedido não fala dele" \
+  bash -c '! grep -q "altera o .jangada/validar.sh" "$1"' _ "$tmp/falso/agy.pedido"
+sessao_de claude
+mkdir -p "$tmp/projeto/.jangada"
+printf '#!/usr/bin/env bash\nexit 0\n' >"$tmp/projeto/.jangada/validar.sh"
+chmod +x "$tmp/projeto/.jangada/validar.sh"
+validar 'STATUS: APROVADO'
+conferir "caso 20: .jangada/validar.sh novo ou alterado vai ao revisor para conferir" \
+  grep -q "altera o .jangada/validar.sh" "$tmp/falso/agy.pedido"
+rm -rf "$tmp/projeto/.jangada"
+
+# Caso 21: a prévia do jangada-agentes mostra o último parecer da sessão, não o
+# da vizinha com o mesmo prefixo, e avisa que a sessão o gravou.
+printf '{"sessao":"p--fix","agente":"claude","estado":"concluido"}\n' >"$estado/p--fix.json"
+printf 'STATUS: APROVADO\n' >"$estado/validacao-p--fix-r1.md"
+printf 'STATUS: REVISAR da vizinha\n' >"$estado/validacao-p--fix-rotas-r2.md"
+XDG_STATE_HOME="$tmp/estado" JANGADA_PATH="$repo_jangada" "$repo_jangada/bin/jangada-agentes" --previa p--fix >"$tmp/previa.log" 2>&1
+conferir "caso 21: a prévia mostra o parecer da sessão" grep -q "^--- validacao-p--fix-r1.md ---$" "$tmp/previa.log"
+conferir "caso 21: a prévia ignora a sessão vizinha" bash -c '! grep -q vizinha "$1"' _ "$tmp/previa.log"
+conferir "caso 21: a prévia avisa quem gravou o parecer" grep -q "gravado pela própria sessão" "$tmp/previa.log"
+rm -f "$estado/p--fix.json" "$estado/validacao-p--fix-"*
 
 # Caso 13: o jangada-agente acrescenta as regras de R só em projeto com arquivos R.
 agente_em() {
