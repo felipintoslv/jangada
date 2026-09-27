@@ -4,6 +4,22 @@
 
 POUCO_DADO <- 10
 
+# O visNetwork põe o title do nó em innerHTML. Nomes de arquivo, sessão, pasta
+# e ferramenta vêm de registros que o agente isolado grava, então passam por
+# aqui antes de entrar no HTML.
+esc <- function(x) htmltools::htmlEscape(as.character(x))
+
+# O app escuta só em 127.0.0.1, mas uma página qualquer aberta no navegador
+# alcança a porta: direto, com Origin de fora, ou por DNS rebinding, com Host
+# de fora. Vale a sessão cujo Host é local e cuja Origin, quando vem, é o
+# próprio Host. Sem Host (shiny::testServer), não há pedido HTTP a conferir.
+origem_local <- function(host, origem = NULL) {
+  if (is.null(host)) return(TRUE)
+  nome <- sub(":[0-9]+$", "", tolower(host))
+  if (!nome %in% c("127.0.0.1", "localhost")) return(FALSE)
+  is.null(origem) || !nzchar(origem) || tolower(origem) == paste0("http://", tolower(host))
+}
+
 # Lê o cache. Tabela ausente vira tabela vazia com as colunas certas.
 carregar_cache <- function(cache) {
   ler <- function(nome, vazia) {
@@ -12,6 +28,9 @@ carregar_cache <- function(cache) {
     if (!ok) return(vazia)
     d <- if (dir.exists(caminho)) as.data.frame(arrow::open_dataset(caminho)) else as.data.frame(arrow::read_parquet(caminho))
     for (col in names(d)) if (inherits(d[[col]], "POSIXct")) attr(d[[col]], "tzone") <- ""
+    # Uma compactação interrompida deixa a mesma linha em duas partes da pasta;
+    # a próxima compactação do coletor desfaz, e até lá a leitura descarta.
+    if ("id" %in% names(d)) d <- d[!duplicated(d$id), , drop = FALSE]
     d
   }
   ts <- as.POSIXct(character())
@@ -334,7 +353,7 @@ rede_transicoes <- function(ch, max_nos = 40, peso_min = 2, destaque = character
   prim <- match(ids, no)
   nos <- data.frame(id = ids, label = ids, value = as.numeric(uso[ids]),
                     group = grupo_no(ch$ferramenta[prim], ch$alvo[prim]),
-                    title = sprintf("%s<br>%d chamada(s)<br>intermediação: %.0f", ids, as.integer(uso[ids]), entre[ids]),
+                    title = sprintf("%s<br>%d chamada(s)<br>intermediação: %.0f", esc(ids), as.integer(uso[ids]), entre[ids]),
                     stringsAsFactors = FALSE)
   nos$group[nos$group == "edição" & sub("^\\S+ ", "", nos$id) %in% destaque] <- "edição com retrabalho"
   list(nos = nos, arestas = data.frame(from = e$from, to = e$to, value = e$peso,
@@ -383,9 +402,9 @@ rede_pontos_quentes <- function(ed, max_nos = 40) {
   grau <- igraph::degree(g)
   nos <- rbind(
     data.frame(id = sess, label = sess, group = "sessão", shape = "square", value = 1,
-               title = paste(sess, "<br>", grau[sess], "arquivo(s)"), stringsAsFactors = FALSE),
+               title = paste(esc(sess), "<br>", grau[sess], "arquivo(s)"), stringsAsFactors = FALSE),
     data.frame(id = arqs, label = basename(arqs), group = ifelse(grau[arqs] > 1, "arquivo em várias sessões", "arquivo"),
-               shape = "dot", value = grau[arqs], title = paste(arqs, "<br>", grau[arqs], "sessão(ões)"),
+               shape = "dot", value = grau[arqs], title = paste(esc(arqs), "<br>", grau[arqs], "sessão(ões)"),
                stringsAsFactors = FALSE))
   list(nos = nos, arestas = data.frame(from = e$from, to = e$to, value = e$value, title = paste(e$value, "edição(ões)")),
        grafo = g)
@@ -456,7 +475,7 @@ rede_capacidades <- function(esp, max_nos = 40, limiar = 0.5, projeto = NULL) {
     ifelse(esp$ubiquidade[caps] >= stats::median(esp$ubiquidade[caps]), "comum", "rara")
   }
   nos <- data.frame(id = caps, label = caps, value = as.numeric(uso[caps]), group = grupo,
-                    title = sprintf("%s<br>%d chamada(s)<br>%d projeto(s) com vantagem", caps,
+                    title = sprintf("%s<br>%d chamada(s)<br>%d projeto(s) com vantagem", esc(caps),
                                     as.integer(uso[caps]), as.integer(esp$ubiquidade[caps])),
                     stringsAsFactors = FALSE)
   list(nos = nos, arestas = data.frame(from = el[, 1], to = el[, 2], value = w,
@@ -495,19 +514,19 @@ arvore_rede <- function(ramos) {
   nos <- list(); arestas <- list()
   for (r in ramos) {
     pasta <- paste0("p:", r$pasta); ramo <- paste0("r:", r$conversa)
-    nos[[pasta]] <- data.frame(id = pasta, label = basename(r$pasta), group = "pasta", value = 3, title = r$pasta)
+    nos[[pasta]] <- data.frame(id = pasta, label = basename(r$pasta), group = "pasta", value = 3, title = esc(r$pasta))
     nos[[ramo]] <- data.frame(id = ramo, label = sub(":.*", "", r$conversa), group = "conversa", value = 2,
-      title = paste0(r$conversa, "<br>", r$n, " filho(s), ", r$tokens_claude, " tokens no Claude, razão ",
-                     if (is.null(r$razao)) "-" else r$razao, ", ", r$passos_agy, " passos no agy"))
+      title = paste0(esc(r$conversa), "<br>", esc(r$n), " filho(s), ", esc(r$tokens_claude), " tokens no Claude, razão ",
+                     if (is.null(r$razao)) "-" else esc(r$razao), ", ", esc(r$passos_agy), " passos no agy"))
     arestas[[length(arestas) + 1]] <- data.frame(from = pasta, to = ramo)
     for (f in r$filhos) {
       id <- paste0("f:", f$origem, ":", f$id, ":", length(nos))
       grupo <- if (isTRUE(f$recusa)) "recusa" else f$origem
       nos[[id]] <- data.frame(id = id, label = if (is.null(f$papel)) "?" else f$papel, group = grupo,
         value = 1 + log10(1 + num_ou_na(if (is.null(f$tokens)) 0 else f$tokens)) / 2,
-        title = paste0(f$origem, " ", f$id, "<br>profundidade ", if (is.null(f$profundidade)) "-" else f$profundidade,
-                       ", tokens ", if (is.null(f$tokens)) "-" else f$tokens,
-                       ", retorno ", if (is.null(f$retorno_tokens)) "-" else f$retorno_tokens))
+        title = paste0(esc(f$origem), " ", esc(f$id), "<br>profundidade ", if (is.null(f$profundidade)) "-" else esc(f$profundidade),
+                       ", tokens ", if (is.null(f$tokens)) "-" else esc(f$tokens),
+                       ", retorno ", if (is.null(f$retorno_tokens)) "-" else esc(f$retorno_tokens)))
       arestas[[length(arestas) + 1]] <- data.frame(from = ramo, to = id)
     }
   }

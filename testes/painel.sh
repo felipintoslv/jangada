@@ -196,6 +196,42 @@ agora = dt.datetime.now(dt.timezone.utc)
 evs = [{"sessao": "s", "estado": "aguardando", "data": agora - dt.timedelta(hours=30)}]
 print(int(coletor.segundos_aguardando(evs, agora - dt.timedelta(hours=48), agora, agora)))')" = "43200" ]
 
+# Caso 4: uma coleta interrompida no meio da gravação deixa o parcial com
+# ponto inicial, que a leitura da pasta ignora; interrompida no meio da
+# compactação, deixa as linhas em dobro, que a compactação seguinte desfaz.
+mkdir -p "$tmp/e6"
+conferir "caso 4: parcial de coleta interrompida e compactação sem repetidos" \
+  [ "$(cd "$tmp/e6" && PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$repo_jangada/default/painel" python3 -c '
+import os, shutil, coletor, pyarrow.dataset as ds
+esq = coletor.ESQ_RESULTADOS
+coletor.acrescentar("r", [{"id": "a", "erro": False}], esq, "1")
+print(os.path.basename(coletor.temporario("r/parte-2.parquet")), end=" ")
+open(coletor.temporario("r/parte-2.parquet"), "w").write("meio arquivo")
+shutil.copy("r/parte-1.parquet", "r/parte-1b.parquet")
+print(ds.dataset("r", format="parquet").count_rows(), end=" ")
+coletor.PARTES_MAX = 1
+coletor.acrescentar("r", [{"id": "b", "erro": True}], esq, "3")
+print(*sorted(ds.dataset("r", format="parquet").to_table().column("id").to_pylist()))
+')" = ".parte-2.parquet.tmp 2 a b" ]
+# Caso 4: delegacoes.jsonl é escrito por agentes; campo com tipo errado vira
+# ausente, e um erro nos indicadores de subagentes vai para o subagentes.json.
+mkdir -p "$tmp/e7/painel"
+printf '%s\n' '{"data": "2026-01-01T10:00:00-03:00", "papel": 7, "tokens_retorno": "9999", "passos": true, "recusa": "sim", "motivo": "x"}' \
+  >"$tmp/e7/delegacoes.jsonl"
+conferir "caso 4: delegação com tipos errados não derruba os indicadores" \
+  [ "$(JANGADA_ESTADO="$tmp/e7" PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=default/painel python3 -c '
+import subagentes
+d = subagentes.delegacoes()[0]
+subagentes.indicadores()
+print(d["papel"], d["tokens_retorno"], d["passos"], d["recusa"])')" = "None None None True" ]
+conferir "caso 4: erro nos indicadores de subagentes vai para o subagentes.json" \
+  bash -c 'JANGADA_ESTADO="$1" PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=default/painel python3 -c "
+import coletor, sys
+sys.argv = [\"coletor.py\", \"$1/painel\"]
+def quebra(): raise ValueError(\"quebrou\")
+coletor.subagentes.indicadores = quebra
+coletor.main()" >/dev/null 2>&1; jq -e ".erro | test(\"quebrou\")" "$1/painel/subagentes.json" >/dev/null' _ "$tmp/e7"
+
 # Caso 5: indicadores em R e o app no ar.
 if ! command -v Rscript >/dev/null 2>&1 \
   || ! Rscript -e 'for (p in c("shiny", "bslib", "bsicons", "plotly", "visNetwork", "igraph", "DT", "arrow", "jsonlite")) if (!requireNamespace(p, quietly = TRUE)) quit(status = 1)' 2>/dev/null; then
@@ -269,7 +305,7 @@ else
         cat(output$e_fracao, output$e_recusas, output$e_desvios, grepl("recusa", output$e_arvore),
             grepl("com agy", output$e_tokens))
       })
-    ' "$cache" 2>&1 | tail -n 1)" = "50% 50% 3 TRUE TRUE" ]
+    ' "$cache" 2>/dev/null)" = "50% 50% 3 TRUE TRUE" ]
   # Antes da primeira coleta com o módulo não há subagentes.json.
   cp -r "$cache" "$tmp/cache-sem-sub" && rm -f "$tmp/cache-sem-sub/subagentes.json"
   conferir "caso 5: a aba de subagentes sem subagentes.json" \
@@ -280,7 +316,31 @@ else
         cat(output$e_fracao, grepl("com agy", output$e_tokens), grepl("sem agy", output$e_agy),
             grepl("desvio", output$e_desvios_tab))
       })
-    ' "$tmp/cache-sem-sub" 2>&1 | tail -n 1)" = "- TRUE TRUE TRUE" ]
+    ' "$tmp/cache-sem-sub" 2>/dev/null)" = "- TRUE TRUE TRUE" ]
+  conferir "caso 5: a leitura descarta linha repetida de compactação interrompida" \
+    [ "$(cd default/painel && Rscript -e '
+      source("indicadores.R")
+      r <- file.path(commandArgs(TRUE)[1], "resultados")
+      p <- list.files(r, full.names = TRUE)[1]
+      invisible(file.copy(p, file.path(r, "parte-copia.parquet")))
+      n <- nrow(arrow::read_parquet(p))
+      cat(nrow(carregar_cache(commandArgs(TRUE)[1])$resultados) == n)
+      invisible(file.remove(file.path(r, "parte-copia.parquet")))
+    ' "$cache" 2>&1 | tail -n 1)" = "TRUE" ]
+  conferir "caso 5: a árvore de delegação escapa o HTML dos títulos" \
+    [ "$(cd default/painel && Rscript -e '
+      source("indicadores.R")
+      a <- arvore_rede(list(list(pasta = "/p/<img src=x onerror=alert(1)>", conversa = "c:1", n = 1,
+        tokens_claude = 10, passos_agy = 0, filhos = list(list(origem = "claude", id = "<b>", papel = "leitor")))))
+      cat(any(grepl("<img|<b>", a$nos$title)), any(grepl("&lt;img", a$nos$title)))
+    ' 2>&1 | tail -n 1)" = "FALSE TRUE" ]
+  conferir "caso 5: só Host e Origin locais abrem sessão" \
+    [ "$(cd default/painel && Rscript -e '
+      source("indicadores.R")
+      cat(origem_local("127.0.0.1:8765"), origem_local("localhost:8765", "http://localhost:8765"),
+          origem_local(NULL), origem_local("evil.example:8765"), origem_local("127.0.0.1:8765", "http://evil.example"),
+          origem_local("127.0.0.1.evil.example:8765"))
+    ' 2>&1 | tail -n 1)" = "TRUE TRUE TRUE FALSE FALSE FALSE" ]
   conferir "caso 5: --conferir com tudo instalado" painel --conferir
   if painel >/dev/null 2>"$tmp/erro4"; then
     ok "caso 5: o app sobe"

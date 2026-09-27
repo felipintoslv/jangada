@@ -267,8 +267,30 @@ def agy(raiz=None, pasta=None):
     return saida
 
 
+# Tipos dos campos que o jangada-delegar grava. O arquivo é gravável pelo
+# agente isolado; um campo de outro tipo vira None, em vez de derrubar os
+# indicadores no meio de uma soma.
+CAMPOS_NUM = ("segundos", "codigo_saida", "palavras", "tokens_retorno", "passos",
+              "tokens_agy", "cota_antes", "cota_depois", "sem_fonte")
+CAMPOS_TEXTO = ("data", "sessao", "projeto", "pasta", "papel", "destino", "modelo",
+                "motivo", "conversa")
+
+
+def delegacao_limpa(d):
+    for c in CAMPOS_NUM:
+        v = d.get(c)
+        if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float))):
+            d[c] = None
+    for c in CAMPOS_TEXTO:
+        if d.get(c) is not None and not isinstance(d[c], str):
+            d[c] = None
+    if not isinstance(d.get("recusa"), bool):
+        d["recusa"] = bool(d.get("motivo"))
+    return d
+
+
 def delegacoes(caminho=None):
-    return list(linhas_json(caminho or os.path.join(ESTADO, "delegacoes.jsonl")))
+    return [delegacao_limpa(d) for d in linhas_json(caminho or os.path.join(ESTADO, "delegacoes.jsonl"))]
 
 
 # caminho:linha com barra ou extensão (bin/jangada-validar:82, a.sh:3).

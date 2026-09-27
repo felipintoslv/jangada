@@ -285,6 +285,10 @@ ui <- page_navbar(
 )
 
 server <- function(input, output, session) {
+  if (!origem_local(session$request$HTTP_HOST, session$request$HTTP_ORIGIN)) {
+    session$close()
+    return(invisible())
+  }
   dados <- reactivePoll(3000, session,
     checkFunc = function() file.mtime(file.path(cache, "coleta.json")),
     valueFunc = function() carregar_cache(cache))
@@ -574,6 +578,8 @@ server <- function(input, output, session) {
   output$e_fracao <- renderText(pc(sub()$fracao_agy$fracao_agy_pct))
   output$e_fracao_n <- renderText({
     f <- sub()$fracao_agy
+    # Com erro, o coletor grava só o erro, e os outros quadros ficam em "-".
+    if (!is.null(sub()$erro)) paste0("indicadores não calculados na coleta de ", sub()$data, ": ", sub()$erro) else
     if (is.null(f)) "sem registro" else
       paste0(f$delegadas_agy, " delegação(ões); ", f$subagentes_claude, " subagente(s) do Claude, ", f$subagentes_agy, " do agy")
   })

@@ -145,8 +145,15 @@ def ler_json(caminho, padrao):
         return padrao
 
 
+def temporario(caminho):
+    """Nome do arquivo parcial, com ponto inicial: o arrow, no Python e no R,
+    ignora esses arquivos ao ler a pasta, e um parcial deixado por uma coleta
+    interrompida não quebra a leitura."""
+    return os.path.join(os.path.dirname(caminho), "." + os.path.basename(caminho) + ".tmp")
+
+
 def gravar_json(caminho, dado):
-    tmp = caminho + ".tmp"
+    tmp = temporario(caminho)
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(dado, f, ensure_ascii=False, indent=1)
     os.replace(tmp, caminho)
@@ -154,9 +161,22 @@ def gravar_json(caminho, dado):
 
 def gravar_tabela(caminho, linhas, esquema):
     tabela = pa.Table.from_pylist(linhas, schema=esquema)
-    tmp = caminho + ".tmp"
+    tmp = temporario(caminho)
     pq.write_table(tabela, tmp)
     os.replace(tmp, caminho)
+
+
+def sem_repetidos(tabela):
+    """Uma linha por id, a primeira. Uma compactação interrompida entre gravar
+    a tabela nova e apagar as partes deixa as linhas em dobro na pasta."""
+    if "id" not in tabela.column_names:
+        return tabela
+    vistos, manter = set(), []
+    for i, v in enumerate(tabela.column("id").to_pylist()):
+        if v not in vistos:
+            vistos.add(v)
+            manter.append(i)
+    return tabela if len(manter) == tabela.num_rows else tabela.take(manter)
 
 
 TS = pa.timestamp("ms", tz="UTC")
@@ -208,10 +228,11 @@ def acrescentar(pasta, linhas, esquema, carimbo):
         gravar_tabela(os.path.join(pasta, f"parte-{carimbo}.parquet"), linhas, esquema)
     partes = sorted(glob.glob(os.path.join(pasta, "parte-*.parquet")))
     if len(partes) > PARTES_MAX:
-        tabela = ds.dataset(partes, format="parquet", schema=esquema).to_table()
+        tabela = sem_repetidos(ds.dataset(partes, format="parquet", schema=esquema).to_table())
         destino = os.path.join(pasta, f"parte-{carimbo}-c.parquet")
-        pq.write_table(tabela, destino + ".tmp")
-        os.replace(destino + ".tmp", destino)
+        tmp = temporario(destino)
+        pq.write_table(tabela, tmp)
+        os.replace(tmp, destino)
         for p in partes:
             if p != destino:
                 os.remove(p)
@@ -579,12 +600,14 @@ def main():
     gravar_tabela(os.path.join(cache, "sessoes.parquet"), sessoes(), ESQ_SESSOES)
     gravar_tabela(os.path.join(cache, "apontamentos.parquet"), apontamentos(), ESQ_APONTAMENTOS)
     gravar_json(os.path.join(cache, "hoje.json"), indicadores_do_dia(cache, vals, evs, agora))
-    # Os indicadores de subagentes não derrubam a coleta: um registro novo
-    # e estranho vira um aviso no log.
+    # Os indicadores de subagentes não derrubam a coleta. O erro vai para o
+    # subagentes.json, e o painel o mostra em vez dos números da coleta anterior.
     try:
         gravar_json(os.path.join(cache, "subagentes.json"), subagentes.indicadores())
     except Exception as e:  # noqa: BLE001
         print(f"subagentes: {e!r}", file=sys.stderr)
+        gravar_json(os.path.join(cache, "subagentes.json"),
+                    {"erro": repr(e), "data": agora.astimezone(FUSO).isoformat(timespec="seconds")})
     resumo.update({"mensagens_novas": len(mens), "ferramentas_novas": len(ferr),
                    "resultados_novos": len(res), "validacoes": len(vals), "eventos": len(evs),
                    "data": agora.astimezone(FUSO).isoformat(timespec="seconds"),

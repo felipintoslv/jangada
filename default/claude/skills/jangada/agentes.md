@@ -177,6 +177,13 @@ Registro novo que o painel precise ler entra no `coletor.py`, nunca no
 histórico existe só no cache. Resposta do Claude conta uma vez por
 `message.id` e `requestId`, com o maior `output_tokens`.
 
+Arquivo parcial do cache leva ponto inicial (`coletor.temporario`): o arrow,
+no Python e no R, ignora esses arquivos ao ler a pasta, e um `.tmp` sem ponto
+deixado por uma coleta interrompida quebra toda leitura com ArrowInvalid.
+Texto que vem de registro (pasta, sessão, arquivo, ferramenta) passa por
+`esc()` antes de ir para o `title` de um nó: o visNetwork põe o `title` em
+innerHTML, e os registros são gravados pelo agente isolado.
+
 Os grafos da aba Redes usam igraph para as métricas e visNetwork para
 desenhar. Poda sempre antes de desenhar (cerca de 40 nós, com o controle no
 painel): com mais nós o grafo vira bola. A física do visNetwork roda só até
@@ -189,6 +196,10 @@ O módulo `custom/indicadores` da barra roda `jangada-painel --waybar`, que
 só lê o cache. Nunca ponha a coleta no `exec`: ela leva segundos e a waybar
 a repete a cada intervalo. O `on-click` usa `setsid -f`; sem ele, a waybar
 espera o R subir. O sinal 9 é só dele.
+
+O `setsid -f` passa ao filho os descritores abertos. O R sobe com `8>&-`,
+senão herda a trava da coleta e o segundo clique espera até o app fechar; e a
+trava é solta antes do `xdg-open`, que também a passaria ao navegador.
 
 ## Scripts bash deste repositório
 

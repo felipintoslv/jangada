@@ -50,7 +50,9 @@ gerar() {
   mkdir -p "$cache"
   command -v python3 >/dev/null 2>&1 || erro "python3 não instalado"
   python3 -c 'import pyarrow' 2>/dev/null || erro "falta o pyarrow do Python (pacote python-pyarrow)"
-  # Uma coleta por vez; um segundo clique espera a primeira terminar.
+  # Uma coleta por vez; um segundo clique espera a primeira terminar. A trava
+  # fica presa até o app subir: solta antes, o segundo clique sobe outro R
+  # antes de o primeiro gravar o PID, e sobra um app órfão que o --parar não vê.
   exec 8>"$cache/.trava"
   flock -w 120 8 || erro "outra coleta não terminou em 2 minutos"
   # Coleta interrompida não deixa a barra presa em "atualizando".
@@ -59,7 +61,6 @@ gerar() {
   local rc=0
   python3 "$app_dir/coletor.py" "$cache" >"$cache/coleta.log" 2>&1 || rc=$?
   rm -f "$marca"
-  exec 8>&-
   ((rc == 0)) || erro "a coleta falhou: $(tail -n 3 "$cache/coleta.log" | tr '\n' ' ')"
   rm -f "$errof"
   avisar_barra
@@ -84,7 +85,7 @@ subir() {
     options(jangada.painel.cache = a[[2]])
     shiny::runApp(a[[1]], host = "127.0.0.1", port = as.integer(a[[6]]), launch.browser = FALSE)
   ' "$app_dir" "$cache" "$errof" "${pacotes_r[*]}" "$pidf" "$JANGADA_PAINEL_PORTA" \
-    </dev/null >"$log" 2>&1
+    </dev/null >"$log" 2>&1 8>&-
   local i
   for ((i = 0; i < 100; i++)); do
     [[ -s "$errof" ]] && erro "$(cat "$errof")"
@@ -175,12 +176,10 @@ waybar() {
 case "${1:-}" in
   "")
     gerar
-    if no_ar; then
-      abrir
-    else
-      subir
-      abrir
-    fi
+    no_ar || subir
+    # Solta antes de abrir: o navegador aberto pelo xdg-open herdaria a trava.
+    exec 8>&-
+    abrir
     ;;
   --gerar) gerar; cat "$cache/coleta.json"; echo ;;
   --json) gerar; cat "$cache/hoje.json"; echo ;;
