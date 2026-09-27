@@ -10,7 +10,7 @@
 | `jangada-hook-agy` | o mesmo para o agy, pelo `~/.gemini/config/hooks.json` (PreInvocation e Stop) |
 | `jangada-filtrar` | condensa saídas longas de comandos no terminal para poupar tokens; atalho `resumir` no jangada shell |
 | `jangada-mapa` | extrai a estrutura de arquivos e assinaturas em Markdown; atalho `mapa` no jangada shell |
-| `jangada-validar` | revisão do diff por outro modelo ou pelo mesmo modelo isolado (claude ou agy), só leitura, chamada pelo agente antes de entregar; executa portão determinístico local antes (conflitos, sintaxe, lintr, gitleaks nas linhas acrescentadas); pareceres em `validacao-<sessao>-rN.md`; depois de um APROVADO, `validacao-<sessao>.aprovado` guarda o commit, e a próxima entrega parte dele com as rodadas zeradas |
+| `jangada-validar` | revisão do diff por outro modelo ou pelo mesmo modelo isolado (claude ou agy), só leitura, chamada pelo agente antes de entregar; executa portão determinístico local antes (conflitos, sintaxe, lintr, gitleaks nas linhas acrescentadas); pareceres em `validacao-<sessao>-rN.md`; depois de um APROVADO, `validacao-<sessao>.aprovado` guarda o commit, e a próxima entrega parte dele com as rodadas zeradas; cada rodada vira uma linha em `~/.local/state/jangada/validar.jsonl`, resumida por `--metricas` |
 | `jangada-agentes` | seletor, painel, módulo da barra, `--focar`, `--proximo`, `--anterior`, `--restaurar` |
 | `jangada-agente-fim` | encerra a sessão e remove o worktree (mantém o ramo); `--integrar` faz o merge na base, atualiza a cópia instalada se for o repositório do jangada e apaga o ramo |
 | `jangada-consumo` | tokens do Claude no bloco de 5 horas, lidos de `~/.claude/projects` |

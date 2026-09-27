@@ -17,6 +17,7 @@
 #   --forcar          passa do limite de rodadas (JANGADA_VALIDAR_RODADAS, 3)
 #   --pular-local     pula a verificação determinística local antes do revisor
 #   --reverter-se-limite reverte o worktree para o ponto inicial se atingir o limite
+#   --metricas        resume as rodadas registradas e sai
 #
 # A revisão pelo agy leva alguns minutos. Quem chama por uma ferramenta com
 # tempo limite deve dar pelo menos 10 minutos.
@@ -24,6 +25,7 @@
 # Saída: o parecer, que começa por "STATUS: APROVADO" ou "STATUS: REVISAR", e
 # fica gravado em ~/.local/state/jangada/agentes/validacao-SESSAO-rN.md.
 # Código de saída: 0 aprovado, 3 revisar, 4 limite de rodadas, 1 erro.
+# Cada rodada acrescenta uma linha JSON a ~/.local/state/jangada/validar.jsonl.
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
@@ -31,7 +33,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 base=""; modelo="${JANGADA_VALIDAR_MODELO:-}"; resposta=""; forcar=0
 revisor=""; revisor_dado=0
 pular_local="${JANGADA_VALIDAR_PULAR_LOCAL:-0}"
-reverter_se_limite=0
+reverter_se_limite=0; metricas=0
 while (($#)); do
   case "$1" in
     --revisor) revisor="$2"; revisor_dado=1; shift 2 ;;
@@ -41,12 +43,50 @@ while (($#)); do
     --forcar) forcar=1; shift ;;
     --pular-local) pular_local=1; shift ;;
     --reverter-se-limite) reverter_se_limite=1; shift ;;
-    -h|--ajuda|--help) sed -n '2,26s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    --metricas) metricas=1; shift ;;
+    -h|--ajuda|--help) sed -n '2,28s/^# \{0,1\}//p' "$0"; exit 0 ;;
     --) shift; break ;;
     -*) echo "opção desconhecida: $1" >&2; exit 1 ;;
     *) break ;;
   esac
 done
+
+arq_metricas="$JANGADA_ESTADO/validar.jsonl"
+if ((metricas)); then
+  [[ -s "$arq_metricas" ]] || { echo "jangada-validar: nenhuma rodada registrada em $arq_metricas"; exit 0; }
+  # A rodada do APROVADO é quantas rodadas a entrega levou.
+  jq -rs '
+    def media: if length > 0 then (add / length * 10 | round / 10) else "-" end;
+    def pct(n; t): if t > 0 then "\(n * 100 / t | round)%" else "-" end;
+    group_by(.projeto)[] | . as $p
+    | ([.[] | select(.resultado == "aprovado")]) as $ap
+    | "\($p[0].projeto): \($ap | length) entrega(s) aprovada(s), \($ap | map(.rodada) | media) rodada(s) em média, "
+      + "\(pct([$ap[] | select(.rodada == 1)] | length; $ap | length)) na primeira; "
+      + "\([$p[] | select(.etapa == "local")] | length) barrada(s) na verificação local, "
+      + "\([$p[] | select(.resultado == "limite")] | length) no limite de rodadas, "
+      + "\([$p[] | select(.resultado == "erro")] | length) falha(s) do revisor",
+      ($p | map(select(.etapa == "revisor")) | group_by(.revisor)[]
+       | "  \(.[0].revisor): \(length) revisão(ões), \(pct([.[] | select(.resultado == "aprovado")] | length; length)) aprovadas, "
+         + "\(map(.segundos) | media) s em média, \(map(select(.resultado == "revisar") | .itens) | media) apontamento(s) por REVISAR")
+  ' "$arq_metricas"
+  exit 0
+fi
+
+# Uma linha por rodada. Linha única e curta: o >> de agentes simultâneos não
+# se mistura.
+registrar() {
+  local itens=0
+  [[ -f "${saida:-}" ]] && itens="$(grep -cE '^[[:space:]]*[0-9]+\.[[:space:]]' "$saida" || true)"
+  jq -nc --arg data "$(date -Iseconds)" --arg projeto "$(basename "$dir")" --arg rotulo "$rotulo" \
+    --argjson rodada "$rodada" --arg resultado "$1" --arg etapa "$2" --arg revisor "$revisor" \
+    --arg modelo "$modelo" --arg autor "$autor" --argjson arquivos "$(grep -c . <<<"$arquivos" || true)" \
+    --argjson mais "${mais:-0}" --argjson menos "${menos:-0}" --argjson itens "${itens:-0}" \
+    --argjson segundos "$SECONDS" \
+    '{data: $data, projeto: $projeto, rotulo: $rotulo, rodada: $rodada, resultado: $resultado,
+      etapa: $etapa, revisor: $revisor, modelo: $modelo, autor: $autor, arquivos: $arquivos,
+      mais: $mais, menos: $menos, itens: $itens, segundos: $segundos}' \
+    >>"$arq_metricas" 2>/dev/null || true
+}
 
 dir="$(realpath "${1:-$PWD}")"
 git -C "$dir" rev-parse --show-toplevel >/dev/null 2>&1 \
@@ -160,6 +200,13 @@ fi
 diff_conteudo="$(git -C "$dir" diff "$ponto" 2>/dev/null || true)"
 arquivos="$(git -C "$dir" diff --name-status "$ponto" 2>/dev/null || true)"
 novos="$(git -C "$dir" -c core.quotePath=false ls-files --others --exclude-standard 2>/dev/null || true)"
+# Tamanho da entrega para as métricas; arquivo novo conta as linhas inteiras.
+read -r mais menos < <(git -C "$dir" diff --numstat "$ponto" 2>/dev/null \
+  | awk '$1 != "-" { m += $1; n += $2 } END { print m + 0, n + 0 }')
+while IFS= read -r n; do
+  [[ -n "$n" && -f "$dir/$n" ]] && grep -Iq '^' "$dir/$n" 2>/dev/null \
+    && mais=$((mais + $(wc -l <"$dir/$n")))
+done <<<"$novos"
 [[ -n "$novos" ]] && arquivos+="${arquivos:+$'\n'}$(sed 's/^/??\t/' <<<"$novos")"
 if [[ -n "$novos" ]]; then
   conteudo_novos=""
@@ -222,6 +269,7 @@ if ((rodada > rodadas_max && !forcar)); then
   else
     echo "Pare e descreva o que ficou pendente; o usuário decide se roda de novo com --forcar ou se reverte com jangada-shell 'reverter'." >&2
   fi
+  registrar limite ""
   exit 4
 fi
 ultimo=""
@@ -495,6 +543,7 @@ if ((!pular_local)) && [[ "${JANGADA_VALIDAR_TESTANDO:-0}" != "1" ]]; then
     fi
     echo >&2
     echo "jangada-validar: REVISAR (parecer em $saida)" >&2
+    registrar revisar local
     "$JANGADA_PATH/bin/jangada-gancho" pos-validar "$rotulo" "REVISAR" || true
     exit 3
   fi
@@ -547,6 +596,7 @@ revisar_agy() {
 if ! "revisar_$revisor"; then
   rm -f "$saida.tmp"
   echo "jangada-validar: a chamada ao $nome_revisor falhou" >&2
+  registrar erro revisor
   exit 1
 fi
 mv "$saida.tmp" "$saida"
@@ -562,6 +612,7 @@ if [[ -n "$arq_estado" ]]; then
 fi
 echo >&2
 echo "jangada-validar: $status (parecer em $saida)" >&2
+registrar "${status,,}" revisor
 "$JANGADA_PATH/bin/jangada-gancho" pos-validar "$rotulo" "$status" || true
 if [[ "$status" == APROVADO ]]; then
   printf '%s %s\n' "$cabeca" "$num" >"$arq_aprovado"

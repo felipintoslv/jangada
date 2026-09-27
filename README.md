@@ -218,7 +218,12 @@ exemplo "siga `~/.claude/skills/relatorio-tecnico/SKILL.md`".
    contradiz o código, arquivo de resumo que ninguém pediu e corpo de commit
    que repete o diff em vez de dar o porquê.
 3. Os pareceres ficam em `~/.local/state/jangada/agentes/validacao-*`. No
-   jangada shell, `revisar` roda o mesmo comando no diretório atual.
+   jangada shell, `revisar` roda o mesmo comando no diretório atual. Cada
+   rodada acrescenta uma linha a `~/.local/state/jangada/validar.jsonl`
+   (resultado, etapa, revisor, rodada, linhas alteradas, apontamentos e
+   segundos), e `jangada-validar --metricas` resume por projeto e revisor:
+   quantas rodadas uma entrega leva até o `APROVADO` e quanto cada revisor
+   aprova.
 4. A barra acompanha o agy pelo hook `jangada-hook-agy`, instalado em
    `~/.gemini/config/hooks.json`: trabalhando e concluído. O agy não tem
    evento de pedido de permissão, então não há "aguardando". `Enter` restaura

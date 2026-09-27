@@ -396,6 +396,31 @@ conferir "caso 16e: gitleaks com erro não reprova" [ "$rc" = 0 ]
 conferir "caso 16e: gitleaks com erro gera aviso" grep -q "gitleaks falhou" "$tmp/saida.log"
 git -C "$tmp/projeto" checkout -q -- rastreado.txt
 
+# Caso 17: cada rodada vira uma linha em validar.jsonl, e --metricas resume.
+metricas="$tmp/estado/jangada/validar.jsonl"
+sessao_de claude
+validar 'STATUS: APROVADO'
+rm -f "$metricas"
+printf 'm1\nm2\n' >"$tmp/projeto/metricas.txt"
+git -C "$tmp/projeto" add metricas.txt
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "métricas"
+validar 'STATUS: REVISAR\n1. um\n2. dois'
+printf '<<<<<<< HEAD\n>>>>>>> outro\n' >>"$tmp/projeto/metricas.txt"
+validar 'STATUS: APROVADO' --resposta "1 corrigido"
+git -C "$tmp/projeto" checkout -q -- metricas.txt
+validar 'STATUS: APROVADO' --resposta "conflito resolvido"
+conferir "caso 17: uma linha por rodada" [ "$(wc -l <"$metricas")" = 3 ]
+conferir "caso 17: REVISAR do revisor com itens e tamanho" \
+  jq -e 'select(.rodada == 1) | .resultado == "revisar" and .etapa == "revisor" and .revisor == "agy"
+         and .autor == "claude" and .itens == 2 and .mais == 2 and .arquivos == 1' "$metricas"
+conferir "caso 17: falha local registrada" \
+  jq -e 'select(.rodada == 2) | .resultado == "revisar" and .etapa == "local"' "$metricas"
+conferir "caso 17: APROVADO na rodada 3" jq -e 'select(.rodada == 3) | .resultado == "aprovado"' "$metricas"
+validar x --metricas
+conferir "caso 17: --metricas resume" \
+  grep -q "projeto: 1 entrega(s) aprovada(s), 3 rodada(s) em média, 0% na primeira; 1 barrada(s) na verificação local" "$tmp/saida.log"
+conferir "caso 17: --metricas separa por revisor" grep -q "^  agy: 2 revisão(ões), 50% aprovadas" "$tmp/saida.log"
+
 # Caso 13: o jangada-agente acrescenta as regras de R só em projeto com arquivos R.
 agente_em() {
   rm -f "$estado/"*.json "$estado/"protocolo-*.md "$estado/"prompt-*.md
