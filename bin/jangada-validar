@@ -313,8 +313,16 @@ for (arq in args[-1]) {
 }
 '
 
+# Números das linhas que a entrega acrescentou ou mudou em ARQ, um por linha,
+# tirados dos trechos @@ -a,b +c,d @@ do diff sem contexto.
+linhas_novas() {
+  git -C "$dir" diff -U0 "$ponto" -- "$1" | awk '
+    /^@@/ { split($3, a, ","); ini = substr(a[1], 2); n = (2 in a) ? a[2] : 1
+            for (i = ini; i < ini + n; i++) print i }'
+}
+
 # Portão determinístico local pré-revisão: valida marcadores de conflito, sintaxe,
-# lintr e testes antes de gastar tempo e tokens com o modelo revisor.
+# lintr, segredos e testes antes de gastar tempo e tokens com o modelo revisor.
 verificar_local() {
   local erros=""
   local arq
@@ -379,9 +387,7 @@ verificar_local() {
       if grep -qxF -- "$arq" <<<"$novos"; then
         linhas+="$arq"$'\t*\n'
       else
-        linhas+="$(git -C "$dir" diff -U0 "$ponto" -- "$arq" | awk -v f="$arq" '
-          /^@@/ { split($3, a, ","); ini = substr(a[1], 2); n = (2 in a) ? a[2] : 1
-                  for (i = ini; i < ini + n; i++) print f "\t" i }')"$'\n'
+        linhas+="$(linhas_novas "$arq" | awk -v f="$arq" '{ print f "\t" $0 }')"$'\n'
       fi
     done
     r_err="$(mktemp)"
@@ -405,7 +411,43 @@ verificar_local() {
     rm -f "$r_err"
   fi
 
-  # 4. Commit com Co-Authored-By, que o protocolo dos agentes proíbe. Checagem
+  # 4. Segredos, com o gitleaks, só nas linhas que a entrega acrescentou. Cada
+  # arquivo vira uma cópia com as demais linhas em branco, para a linha do
+  # achado ser a do arquivo real. O achado reprova, sem o segredo no parecer
+  # (--redact). Valem gitleaks:allow na linha e o .gitleaks.toml e o
+  # .gitleaksignore do projeto.
+  if command -v gitleaks >/dev/null 2>&1; then
+    local espelho gl_args gl_saida gl_rc
+    espelho="$(mktemp -d)"
+    while IFS= read -r arq; do
+      [[ -n "$arq" && -f "$dir/$arq" ]] || continue
+      grep -Iq '' "$dir/$arq" 2>/dev/null || continue
+      mkdir -p "$espelho/$(dirname "$arq")"
+      if grep -qxF -- "$arq" <<<"$novos"; then
+        cp "$dir/$arq" "$espelho/$arq"
+      else
+        awk 'NR == FNR { ok[$1] = 1; next } { print ((FNR in ok) ? $0 : "") }' \
+          <(linhas_novas "$arq") "$dir/$arq" >"$espelho/$arq"
+      fi
+    done <<<"$(git -C "$dir" -c core.quotePath=false diff --name-only --diff-filter=d "$ponto" 2>/dev/null || true; printf '%s\n' "$novos")"
+    if [[ -n "$(find "$espelho" -type f -print -quit)" ]]; then
+      gl_args=(dir . --no-banner --redact --report-format json --report-path - --exit-code 0 --log-level error)
+      [[ -f "$dir/.gitleaks.toml" ]] && gl_args+=(--config "$dir/.gitleaks.toml")
+      [[ -f "$dir/.gitleaksignore" ]] && gl_args+=(--gitleaks-ignore-path "$dir/.gitleaksignore")
+      gl_saida="$(cd "$espelho" && gitleaks "${gl_args[@]}" 2>"$espelho.err")" && gl_rc=0 || gl_rc=$?
+      if ((gl_rc == 0)); then
+        gl_saida="$(jq -r '.[] | "\(.File):\(.StartLine): [\(.RuleID)] \(.Description)"' <<<"$gl_saida" 2>/dev/null || true)"
+        [[ -n "$gl_saida" ]] && erros+="possível segredo nas linhas acrescentadas (gitleaks; se for falso positivo, ponha gitleaks:allow num comentário da linha):"$'\n'"$gl_saida"$'\n'
+      else
+        printf 'jangada-validar: gitleaks falhou, segredos não conferidos:\n%s\n' "$(tail -n 5 "$espelho.err")" >&2
+      fi
+    fi
+    rm -rf "$espelho" "$espelho.err"
+  else
+    echo "jangada-validar: aviso: gitleaks não instalado, segredos não conferidos (pacote gitleaks)" >&2
+  fi
+
+  # 5. Commit com Co-Authored-By, que o protocolo dos agentes proíbe. Checagem
   # exata, então fica aqui e não no revisor. Só avisa: corrigir exige
   # reescrever o histórico do ramo, e o agente decide.
   local coautor
@@ -415,7 +457,7 @@ verificar_local() {
     printf 'jangada-validar: aviso: commit com linha Co-Authored-By (o protocolo pede sem):\n%s\n' "$coautor" >&2
   fi
 
-  # 5. Validação do projeto se existir e não estiver em recursão
+  # 6. Validação do projeto se existir e não estiver em recursão
   if [[ -z "${JANGADA_VALIDAR_EM_CURSO:-}" ]]; then
     export JANGADA_VALIDAR_EM_CURSO=1
     if [[ -x "$dir/.jangada/validar.sh" ]]; then

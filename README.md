@@ -209,7 +209,9 @@ exemplo "siga `~/.claude/skills/relatorio-tecnico/SKILL.md`".
    lintr confunde as colunas do dplyr com variáveis). Com `.lintr` no projeto, um
    achado reprova sem chamar o revisor; sem ele, vale `default/r/lintr` e o
    achado só aparece como aviso. Sem R ou sem o pacote `lintr`, a etapa é
-   pulada. Commit com `Co-Authored-By` também gera aviso.
+   pulada. O `gitleaks` procura segredos nas linhas acrescentadas; um achado
+   reprova sem mostrar o segredo no parecer, e `gitleaks:allow` num comentário
+   da linha libera um falso positivo. Commit com `Co-Authored-By` gera aviso.
    Na escrita, o revisor aponta só casos objetivos nas linhas novas: código
    comentado, comentário que narra a mudança, repete o código ou fala com o
    revisor, enchimento ("vale ressaltar", "basicamente"), documentação que

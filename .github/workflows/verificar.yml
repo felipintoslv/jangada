@@ -12,7 +12,7 @@ jobs:
       # R e lintr ficam de fora: compilar o lintr leva minutos, e o caso 12 do
       # testes/validar.sh se pula sozinho sem eles.
       - name: Dependências
-        run: pacman -Syu --noconfirm --needed git sudo shellcheck lua jq python qt6-declarative
+        run: pacman -Syu --noconfirm --needed git sudo shellcheck lua jq python qt6-declarative gitleaks
 
       - uses: actions/checkout@v4
 

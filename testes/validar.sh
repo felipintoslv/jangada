@@ -334,6 +334,68 @@ validar 'STATUS: REVISAR\n1. y' --resposta "1 rejeitado"
 conferir "caso 15: a segunda chamada é a rodada 2" grep -q "rodada 2 de 3" "$tmp/saida.log"
 conferir "caso 15: a rodada 2 traz o parecer anterior" grep -q "Parecer da rodada anterior" "$tmp/falso/agy.pedido"
 
+# Caso 16: segredos com o gitleaks, só nas linhas acrescentadas. O token é
+# gerado aqui para o repositório não guardar nada com cara de segredo.
+echo "rastreado" >"$tmp/projeto/rastreado.txt"
+git -C "$tmp/projeto" add rastreado.txt
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "arquivo rastreado"
+if command -v gitleaks >/dev/null 2>&1; then
+  token="ghp_$(head -c 400 /dev/urandom | tr -dc 'A-Za-z0-9' | head -c 36)"
+  git -C "$tmp/projeto" checkout -q main
+  printf 'legado = "%s"\nfim\n' "$token" >"$tmp/projeto/legado.cfg"
+  git -C "$tmp/projeto" add legado.cfg
+  git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "segredo legado"
+  git -C "$tmp/projeto" checkout -q agente/x
+  git -C "$tmp/projeto" -c user.name=t -c user.email=t@t merge -q main -m "traz o legado"
+
+  # 16a: segredo que já estava na base não barra uma linha nova limpa.
+  sessao_de claude
+  echo "linha nova" >>"$tmp/projeto/legado.cfg"
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 16a: segredo antigo não barra linha nova limpa" [ "$rc" = 0 ]
+  git -C "$tmp/projeto" checkout -q -- legado.cfg
+
+  # 16b: segredo novo num arquivo rastreado reprova, com a linha real e sem o segredo.
+  sessao_de claude
+  printf 'a\nb\nchave = "%s"\n' "$token" >>"$tmp/projeto/rastreado.txt"
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 16b: segredo novo reprova" [ "$rc" = 3 ]
+  conferir "caso 16b: o revisor não foi chamado" test ! -e "$tmp/falso/agy.pedido"
+  linha="$(grep -n "^chave" "$tmp/projeto/rastreado.txt" | cut -d: -f1)"
+  conferir "caso 16b: o parecer aponta arquivo e linha" \
+    grep -q "rastreado.txt:$linha: \[github-pat\]" "$estado/validacao-s-r1.md"
+  conferir "caso 16b: o segredo não aparece no parecer nem na saída" \
+    bash -c '! grep -qF "$1" "$2" "$3"' _ "$token" "$estado/validacao-s-r1.md" "$tmp/saida.log"
+
+  # 16c: gitleaks:allow na linha libera o falso positivo.
+  sessao_de claude
+  sed -i "s|^chave = .*|& # gitleaks:allow|" "$tmp/projeto/rastreado.txt"
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 16c: gitleaks:allow libera a linha" [ "$rc" = 0 ]
+  git -C "$tmp/projeto" checkout -q -- rastreado.txt
+
+  # 16d: arquivo novo sem commit é conferido inteiro.
+  sessao_de claude
+  printf 'chave = "%s"\n' "$token" >"$tmp/projeto/novo.env"
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 16d: segredo em arquivo novo reprova" [ "$rc" = 3 ]
+  conferir "caso 16d: o parecer aponta o arquivo novo" grep -q "novo.env:1:" "$estado/validacao-s-r1.md"
+  rm -f "$tmp/projeto/novo.env"
+else
+  echo "pulado caso 16a-d: gitleaks não instalado"
+fi
+
+# 16e: gitleaks com erro não reprova e avisa.
+mkdir -p "$tmp/glquebrado"
+printf '#!/usr/bin/env bash\necho quebrado >&2\nexit 2\n' >"$tmp/glquebrado/gitleaks"
+chmod +x "$tmp/glquebrado/gitleaks"
+sessao_de claude
+echo "outra" >>"$tmp/projeto/rastreado.txt"
+PATH="$tmp/glquebrado:$PATH" validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 16e: gitleaks com erro não reprova" [ "$rc" = 0 ]
+conferir "caso 16e: gitleaks com erro gera aviso" grep -q "gitleaks falhou" "$tmp/saida.log"
+git -C "$tmp/projeto" checkout -q -- rastreado.txt
+
 # Caso 13: o jangada-agente acrescenta as regras de R só em projeto com arquivos R.
 agente_em() {
   rm -f "$estado/"*.json "$estado/"protocolo-*.md "$estado/"prompt-*.md

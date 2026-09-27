@@ -11,3 +11,4 @@ fastfetch
 tmux
 mise
 shellcheck
+gitleaks

@@ -13,10 +13,10 @@ durante toda a conversa.
    condensar a saída e economizar tokens do contexto. Para consultar a
    estrutura do repositório, utilize `jangada-mapa`.
 5. Antes de dizer que terminou, rode `jangada-validar`. Ele executa primeiro
-   uma verificação determinística local (conflitos do Git, sintaxe e testes do
-   projeto). Passando no teste local, manda o diff para o revisor técnico (por
-   padrão o outro modelo, ou o revisor configurado para a sessão) e imprime o
-   parecer. A revisão pode levar alguns minutos: se a ferramenta de comando
+   uma verificação determinística local (conflitos do Git, sintaxe, segredos
+   e testes do projeto). Passando no teste local, manda o diff para o revisor
+   técnico (por padrão o outro modelo, ou o revisor configurado para a sessão)
+   e imprime o parecer. A revisão pode levar alguns minutos: se a ferramenta de comando
    tiver tempo limite, dê 10 minutos.
    - `STATUS: APROVADO`: resuma o que foi feito e pare.
    - `STATUS: REVISAR`: o revisor pode errar. Confira cada apontamento no
