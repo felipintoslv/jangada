@@ -195,6 +195,15 @@ restaurar() {
   conversa="$(jq -r '.conversa // ""' "$arq")"
   cmd="$(jq -r '.comando // ""' "$arq")"
   [[ -n "$cmd" ]] || { cmd="$agente"; [[ -n "$JANGADA_AGENTE_ARGS" ]] && cmd+=" $JANGADA_AGENTE_ARGS"; }
+  # O estado fica ao alcance do agente isolado. Se o prefixo sumiu do comando
+  # guardado, ele volta; só a sessão aberta com --sem-isolar (ou de antes do
+  # isolamento, com ele desligado) roda fora.
+  local isolar_pre
+  isolar_pre="$(printf '%q' "$JANGADA_PATH/bin/jangada-isolar") -- "
+  if [[ "$JANGADA_AGENTE_ISOLAR" != 0 && "$(jq -r '.isolar' "$arq")" != false \
+        && "$cmd" != "$isolar_pre"* ]]; then
+    cmd="$isolar_pre$cmd"
+  fi
   if [[ "$(basename "${agente%% *}")" == claude ]]; then
     # O --continue retoma a conversa mais recente da pasta. Num worktree ela é
     # desta sessão; direto no repositório pode ser de outro agente ou de uma

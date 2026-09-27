@@ -59,7 +59,8 @@ fim() {
 # revisa o Claude e o Claude revisa o agy. Fora de sessão, o revisor é o
 # Claude; "revisar --revisor agy" troca.
 revisar() {
-  "$JANGADA_PATH/bin/jangada-validar" "$@"
+  # O revisor e o .jangada/validar.sh do projeto rodam isolados, como o agente.
+  "$JANGADA_PATH/bin/jangada-isolar" -- "$JANGADA_PATH/bin/jangada-validar" "$@"
 }
 
 # Filtra comandos de terminal longos para economizar tokens do contexto

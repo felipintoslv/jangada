@@ -270,3 +270,4 @@ escrever uma shell própria.
 | 4.5 Canal de atualização | feito | `JANGADA_CANAL` (padrão `main`); ramo `estavel` criado no repositório |
 | 5. Barra em Quickshell | adiado | a waybar continua; o contrato de estado vale para qualquer barra |
 | 3.3 Não fazer | mantido | aprovação automática, coordenador, acesso remoto, kanban, contêiner, navegador |
+| Isolamento do agente (3.3, contêiner) | feito em 26/09/2026, sem contêiner | `bin/jangada-isolar` com bubblewrap: pasta da tarefa gravável, resto somente leitura, chaves ocultas |

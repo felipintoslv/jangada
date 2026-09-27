@@ -168,7 +168,8 @@ if [[ -f "$raiz/.jangada/preparar.sh" ]]; then
   else
     echo "preparar: rodando .jangada/preparar.sh"
     (cd "$worktree" && JANGADA_RAIZ="$raiz" JANGADA_WORKTREE="$worktree" \
-      bash "$raiz/.jangada/preparar.sh") || avisar ".jangada/preparar.sh terminou com erro"
+      "$JANGADA_PATH/bin/jangada-isolar" -- bash "$raiz/.jangada/preparar.sh") \
+      || avisar ".jangada/preparar.sh terminou com erro"
   fi
 fi
 

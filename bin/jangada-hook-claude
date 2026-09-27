@@ -88,7 +88,8 @@
   nome="${sessao:-$(basename "${cwd:-$PWD}")}"
 
   # Avisos. A notificação com botão fica esperando em segundo plano; um clique
-  # leva à janela do agente.
+  # leva à janela do agente. Dentro do jangada-isolar o tmux fica fora de
+  # alcance, e a notificação vai sem o botão.
   if ((avisar)) && [[ "$estado" == "aguardando" || "$estado" == "concluido" ]] \
      && command -v notify-send >/dev/null 2>&1; then
     if [[ "$estado" == "aguardando" ]]; then
@@ -97,10 +98,14 @@
       titulo="Agente concluiu: $nome"; urg=normal
     fi
     corpo="${mensagem:-sem mensagem}"
-    setsid -f bash -c '
-      r="$(notify-send -a jangada-agente -u "$1" -A abrir=Abrir "$2" "$3" 2>/dev/null)"
-      [[ "$r" == "abrir" && -n "$5" ]] && "$4/jangada-agentes" --focar "$5"
-    ' _ "$urg" "$titulo" "$corpo" "$dir_bin" "$sessao" >/dev/null 2>&1
+    if [[ -n "${JANGADA_ISOLADO:-}" ]]; then
+      notify-send -a jangada-agente -u "$urg" "$titulo" "$corpo" 2>/dev/null || true
+    else
+      setsid -f bash -c '
+        r="$(notify-send -a jangada-agente -u "$1" -A abrir=Abrir "$2" "$3" 2>/dev/null)"
+        [[ "$r" == "abrir" && -n "$5" ]] && "$4/jangada-agentes" --focar "$5"
+      ' _ "$urg" "$titulo" "$corpo" "$dir_bin" "$sessao" >/dev/null 2>&1
+    fi
   fi
 } >/dev/null 2>&1
 

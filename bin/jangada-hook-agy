@@ -54,12 +54,18 @@ echo '{}'
   '
   rm -f "$tmp"
 
+  # Dentro do jangada-isolar o tmux fica fora de alcance, e a notificação vai
+  # sem o botão.
   if [[ "$evento" == concluido ]] && command -v notify-send >/dev/null 2>&1; then
-    # shellcheck disable=SC2016  # expandido pelo bash de dentro
-    setsid -f bash -c '
-      r="$(notify-send -a jangada-agente -u normal -A abrir=Abrir "$1" "$2" 2>/dev/null)"
-      [[ "$r" == "abrir" ]] && "$3/jangada-agentes" --focar "$4"
-    ' _ "Agente concluiu: $JANGADA_SESSAO" "$mensagem" "$dir_bin" "$JANGADA_SESSAO" >/dev/null 2>&1
+    if [[ -n "${JANGADA_ISOLADO:-}" ]]; then
+      notify-send -a jangada-agente -u normal "Agente concluiu: $JANGADA_SESSAO" "$mensagem" 2>/dev/null || true
+    else
+      # shellcheck disable=SC2016  # expandido pelo bash de dentro
+      setsid -f bash -c '
+        r="$(notify-send -a jangada-agente -u normal -A abrir=Abrir "$1" "$2" 2>/dev/null)"
+        [[ "$r" == "abrir" ]] && "$3/jangada-agentes" --focar "$4"
+      ' _ "Agente concluiu: $JANGADA_SESSAO" "$mensagem" "$dir_bin" "$JANGADA_SESSAO" >/dev/null 2>&1
+    fi
   fi
 } >/dev/null 2>&1
 exit 0

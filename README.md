@@ -85,7 +85,8 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-migrar` | aplica as migrações pendentes (o `jangada-update` já chama) |
 | `jangada-snapshot "descrição"` | cria um snapshot manual do sistema |
 | `jangada-tema [imagem]` | gera as cores a partir de um papel de parede e recarrega a interface |
-| `jangada-agente` | escolhe o agente (Claude ou agy), o projeto e cria um worktree, e abre o agente numa sessão tmux (`--prompt`, `--prompt-arquivo`, `--perfil`) |
+| `jangada-agente` | escolhe o agente (Claude ou agy), o projeto e cria um worktree, e abre o agente numa sessão tmux, isolado pelo `jangada-isolar` (`--prompt`, `--prompt-arquivo`, `--perfil`, `--sem-isolar`) |
+| `jangada-isolar` | roda um comando no bubblewrap, com o sistema somente leitura e a pasta atual gravável; `--mostrar` imprime a chamada ao `bwrap` |
 | `jangada-validar` | manda o diff do worktree para o outro modelo revisar (o agy revisa o Claude, o Claude revisa o agy) e devolve `STATUS: APROVADO` ou `REVISAR`; o agente chama antes de entregar |
 | `jangada-shell` | inicia subshell enriquecida com comandos diretos de agentes e projetos |
 | `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir, integrar ou encerrar (`--proximo`, `--anterior`, `--restaurar`) |
@@ -247,6 +248,46 @@ Ganchos do usuário ficam em `~/.config/jangada/ganchos/EVENTO` ou
 `EVENTO.d/`, para os eventos `pos-update`, `pos-tema`, `pos-agente-fim`
 (recebe sessão, raiz e se houve integração) e `pos-validar` (sessão e status). Um exemplo útil: `pos-tema` rodando `jangada-sddm aplicar`.
 
+### Isolamento
+
+O agente roda no bubblewrap, pelo `jangada-isolar`. Ele grava só na pasta da
+tarefa (o worktree, ou o repositório com `--direto`), no `.git` comum do
+repositório, em `~/.claude`, em `~/.gemini/antigravity-cli`, em `~/.cache`, em
+`~/.local/state/jangada/agentes` e no `validar.jsonl`. O resto do sistema e da
+pasta pessoal fica somente leitura, inclusive `~/.claude.json` (perdê-lo só
+perde contadores), `~/.local/share/claude` (o Claude não se atualiza de
+dentro), os hooks do agy em `~/.gemini/config` e o resto do estado do jangada
+(barra, migrações), que alimenta código que roda fora. O `config` e os `hooks`
+do git e o arquivo `.git` do worktree ficam somente leitura mesmo dentro do
+`.git` comum: por eles o git rodaria, fora do isolamento, código escrito pelo
+agente. O `/tmp` é próprio da sessão e some no fim; com ele fica de fora o
+socket do tmux, e `TMUX`, `TMUX_PANE` e `SSH_AUTH_SOCK` saem do ambiente: o
+agente não comanda as outras sessões nem usa o agente SSH. A notificação de
+uma sessão isolada vem sem o botão Abrir. Ficam ocultos `~/.ssh`, `~/.gnupg`,
+`~/.password-store`, `~/.aws`, `~/.azure`, `~/.kube`, `~/.docker`, `~/.netrc`,
+`~/.git-credentials`, `~/.config/gh`, `~/.config/rclone`, os perfis do
+Chromium, do Chrome e do Firefox e `~/.local/share/keyrings`; por isso o
+`git push` fica com o usuário, fora da sessão. Dentro dela,
+`JANGADA_ISOLADO=1`, e um `jangada-isolar` chamado ali roda o comando direto,
+sem aninhar. A função `revisar` do jangada shell e o `.jangada/preparar.sh` do
+worktree também rodam isolados.
+
+A proteção é contra o dano acidental: `rm` fora do projeto, edição de
+dotfiles, leitura de chaves. Não é fronteira contra agente malicioso: o D-Bus
+da sessão fica aberto (o agy tira o login do chaveiro por ele), e por ele um
+`systemd-run --user` roda fora do isolamento; o IPC do Hyprland também fica ao
+alcance; e `~/.claude`, cujo `settings.json` define hooks, segue gravável.
+
+`JANGADA_ISOLAR_ESCRITA` no `jangada.conf` acrescenta pastas graváveis,
+separadas por `:` (`~/dados:~/R`). `JANGADA_ISOLAR_OCULTAR` substitui a lista
+de ocultos, com caminhos relativos à pasta pessoal ou absolutos; definida
+vazia, não oculta nada. Para desligar: `jangada-agente --sem-isolar` numa
+sessão, `JANGADA_AGENTE_ISOLAR=0` num perfil ou no `jangada.conf` para todas.
+O prefixo `jangada-isolar` entra no comando guardado, e o estado registra
+`isolar`; na restauração, se o prefixo tiver sumido do comando de uma sessão
+isolada, o `jangada-agentes` o põe de volta. Sem o pacote `bubblewrap`, o
+agente abre sem isolamento e com aviso.
+
 ## Várias máquinas
 
 O repositório é o mesmo em todas as máquinas; o que muda de uma para outra
@@ -298,7 +339,7 @@ instalar, rode `JANGADA_PATH=$PWD bin/...`.
 
 | Teste | O que confere |
 |---|---|
-| `testes/verificar.sh` | shellcheck, sintaxe Lua, JSON e TOML, comandos citados na configuração, `jangada-validar` com claude e agy falsos, `jangada-importar` com um config.kdl de exemplo |
+| `testes/verificar.sh` | shellcheck, sintaxe Lua, JSON e TOML, comandos citados na configuração, `jangada-validar` com claude e agy falsos, o `jangada-isolar` (o que fica gravável, somente leitura e oculto), `jangada-importar` com um config.kdl de exemplo |
 | `testes/aninhado.sh` | sobe um Hyprland aninhado com a configuração (`--sem-usuario` só os padrões) e confere `configerrors` e o número de atalhos |
 
 A cada push, o GitHub Actions (`.github/workflows/verificar.yml`) roda o

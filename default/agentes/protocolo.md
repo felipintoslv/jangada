@@ -3,6 +3,8 @@ durante toda a conversa.
 
 1. Trabalhe só dentro da pasta atual. Nunca edite `~/.local/share/jangada`
    (cópia instalada) nem arquivos de configuração fora do projeto.
+   Com JANGADA_ISOLADO=1 você roda isolado: só grava na pasta da tarefa, e o
+   push é do usuário.
 2. Leia o `AGENTS.md` (ou `CLAUDE.md`) do projeto antes de alterar qualquer
    coisa e siga as regras dele, inclusive a de testes.
 3. Faça commits pequenos, com mensagem em português e sem linha

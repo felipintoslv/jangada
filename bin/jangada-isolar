@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+# Roda um comando no bubblewrap, com o sistema somente leitura e a pasta atual
+# gravável. O jangada-agente abre o agente por aqui.
+#
+# Uso: jangada-isolar [--mostrar] [--] COMANDO [ARGUMENTOS]
+#   --mostrar   imprime a chamada ao bwrap, um argumento por linha, e sai
+#
+# Graváveis: a pasta atual, o .git comum do repositório (num worktree ele fica
+# fora da pasta), as pastas do Claude e do agy, o cache, o estado dos
+# agentes e as métricas do jangada-validar, e o que estiver em
+# JANGADA_ISOLAR_ESCRITA (caminhos separados por ":"). O /tmp é próprio e some
+# no fim; com ele some o socket do tmux, e o agente não comanda as outras
+# sessões. O agente SSH também fica de fora. Ficam somente
+# leitura, mesmo dentro dos graváveis, o config e os hooks do git e o arquivo
+# .git do worktree: por eles o git rodaria, fora do isolamento, código que o
+# agente escreveu. Ficam ocultas as chaves e os perfis de navegador
+# (JANGADA_ISOLAR_OCULTAR substitui a lista).
+#
+# Protege contra o dano acidental: rm fora do projeto, edição de dotfiles,
+# leitura de chaves. Não é fronteira contra agente malicioso: a configuração
+# do Claude e do agy, que define hooks, segue gravável, e o D-Bus e o
+# Hyprland seguem ao alcance.
+#
+# JANGADA_AGENTE_ISOLAR=0 desliga; já isolado (JANGADA_ISOLADO=1), o comando
+# roda direto; sem o bwrap, roda sem isolamento e com aviso.
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+mostrar=0
+while (($#)); do
+  case "$1" in
+    --mostrar) mostrar=1; shift ;;
+    -h|--ajuda|--help) sed -n '2,25s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    --) shift; break ;;
+    *) break ;;
+  esac
+done
+(($#)) || { echo "uso: jangada-isolar [--mostrar] [--] COMANDO" >&2; exit 1; }
+
+if [[ "$JANGADA_AGENTE_ISOLAR" == 0 || -n "${JANGADA_ISOLADO:-}" ]]; then
+  exec "$@"
+fi
+if ! command -v bwrap >/dev/null 2>&1; then
+  echo "jangada-isolar: aviso: bwrap não instalado, o agente roda sem isolamento (pacote bubblewrap)" >&2
+  exec "$@"
+fi
+
+pasta="$(pwd -P)"
+# /tmp próprio: um rm do agente ali não apaga os temporários do sistema.
+args=(--ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --die-with-parent)
+
+gravavel() { [[ -e "$1" ]] && args+=(--bind "$1" "$1"); return 0; }
+somente_leitura() { [[ -e "$1" ]] && args+=(--ro-bind "$1" "$1"); return 0; }
+
+gravavel "$pasta"
+# Do Claude, a pasta ~/.claude: conversas, login e sessões. O ~/.claude.json
+# fica somente leitura; ele é gravado por rename, que um bind só do arquivo
+# não aceita, e perdê-lo só perde contadores. Do agy, a pasta do CLI; os hooks
+# dele, em ~/.gemini/config, ficam somente leitura. O login do agy vem do
+# keyring pelo D-Bus.
+# Numa instalação nova as pastas ainda não existem, e sem o bind o agente não
+# conseguiria criá-las.
+mkdir -p "$HOME/.claude" "$HOME/.cache" 2>/dev/null || true
+command -v agy >/dev/null 2>&1 && { mkdir -p "$HOME/.gemini/antigravity-cli" 2>/dev/null || true; }
+for p in "$HOME/.claude" "$HOME/.gemini/antigravity-cli" "$HOME/.cache"; do
+  gravavel "$p"
+done
+# Do estado do jangada, só o dos agentes e as métricas: o resto (a barra, as
+# marcas das migrações) alimenta código que roda fora.
+mkdir -p "$JANGADA_ESTADO/agentes" 2>/dev/null || true
+[[ -e "$JANGADA_ESTADO/validar.jsonl" ]] || : 2>/dev/null >>"$JANGADA_ESTADO/validar.jsonl" || true
+gravavel "$JANGADA_ESTADO/agentes"
+gravavel "$JANGADA_ESTADO/validar.jsonl"
+IFS=: read -ra extras <<<"${JANGADA_ISOLAR_ESCRITA:-}"
+for p in "${extras[@]}"; do
+  [[ -n "$p" ]] && gravavel "$(realpath -m "${p/#\~/$HOME}")"
+done
+
+# Depois dos graváveis, para valer por cima deles.
+if comum="$(git -C "$pasta" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
+  gravavel "$comum"
+  # Sem a pasta hooks, o agente poderia criá-la; o git init sempre cria.
+  mkdir -p "$comum/hooks" 2>/dev/null || true
+  somente_leitura "$comum/config"
+  somente_leitura "$comum/hooks"
+  raiz="$(git -C "$pasta" rev-parse --show-toplevel 2>/dev/null || true)"
+  [[ -f "$raiz/.git" ]] && somente_leitura "$raiz/.git"
+fi
+
+if [[ -n "${JANGADA_ISOLAR_OCULTAR+x}" ]]; then
+  IFS=: read -ra ocultos <<<"$JANGADA_ISOLAR_OCULTAR"
+else
+  ocultos=(.ssh .gnupg .password-store .aws .azure .kube .docker .netrc .git-credentials
+           .config/gh .config/rclone .config/chromium .config/google-chrome .mozilla
+           .local/share/keyrings)
+fi
+for p in "${ocultos[@]}"; do
+  [[ -n "$p" ]] || continue
+  [[ "$p" == /* ]] || p="$HOME/$p"
+  if [[ -d "$p" ]]; then
+    args+=(--tmpfs "$p")
+  elif [[ -e "$p" ]]; then
+    args+=(--ro-bind /dev/null "$p")
+  fi
+done
+
+args+=(--unsetenv TMUX --unsetenv TMUX_PANE --unsetenv SSH_AUTH_SOCK
+       --setenv JANGADA_ISOLADO 1 --chdir "$pasta" -- "$@")
+if ((mostrar)); then
+  printf '%s\n' bwrap "${args[@]}"
+  exit 0
+fi
+exec bwrap "${args[@]}"

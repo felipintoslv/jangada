@@ -4,7 +4,8 @@
 
 | Peça | Papel |
 |---|---|
-| `jangada-agente` | escolhe projeto, cria worktree `agente/<nome>` e abre o agente numa sessão `tmux -L jangada`; `--prompt`/`--prompt-arquivo` já entregam a tarefa, `--perfil` escolhe o agente |
+| `jangada-agente` | escolhe projeto, cria worktree `agente/<nome>` e abre o agente numa sessão `tmux -L jangada`; `--prompt`/`--prompt-arquivo` já entregam a tarefa, `--perfil` escolhe o agente, `--sem-isolar` abre fora do bubblewrap |
+| `jangada-isolar` | roda o agente no bubblewrap: sistema somente leitura, pasta da tarefa gravável; `--mostrar` imprime a chamada ao `bwrap` |
 | `jangada-worktree-preparar` | copia para o worktree novo os ignorados do `.worktreeinclude`, liga o que está em `.jangada/links` e roda `.jangada/preparar.sh` |
 | `jangada-hook-claude` | chamado pelos hooks do Claude Code; grava o estado e notifica |
 | `jangada-hook-agy` | o mesmo para o agy, pelo `~/.gemini/config/hooks.json` (PreInvocation e Stop) |
@@ -16,11 +17,55 @@
 | `jangada-consumo` | tokens do Claude no bloco de 5 horas, lidos de `~/.claude/projects` |
 | `jangada-gancho` | roda os ganchos do usuário em `~/.config/jangada/ganchos/` |
 
+## Isolamento (`jangada-isolar`)
+
+O agente aberto pelo `jangada-agente` roda no bubblewrap, com
+`JANGADA_ISOLADO=1` no ambiente. De dentro:
+
+- Grava só na pasta da tarefa (worktree, ou o repositório com `--direto`), no
+  `.git` comum do repositório, em `~/.claude`, `~/.gemini/antigravity-cli`,
+  `~/.cache`, `~/.local/state/jangada/agentes`, no `validar.jsonl` e no que
+  estiver em `JANGADA_ISOLAR_ESCRITA`. O resto é somente leitura, inclusive
+  `~/.claude.json`, `~/.local/share/claude`, `~/.gemini/config` e o resto de
+  `~/.local/state/jangada`: escrever em `~/.config`, instalar pacote do R na
+  biblioteca do usuário ou rodar `pip install --user` falha com "Read-only
+  file system".
+- Commit funciona; `git config` e mudança em `.git/hooks` não. O `config`, os
+  `hooks` e o arquivo `.git` do worktree são somente leitura, porque o git
+  rodaria o que estivesse neles fora do isolamento.
+- O `/tmp` é próprio da sessão e some quando ela acaba. Não deixe nele nada
+  que o usuário ou outra sessão precise ler; use a pasta da tarefa.
+- Sem tmux: o socket fica no `/tmp` de fora, e `TMUX` e `TMUX_PANE` saem do
+  ambiente. Não há como comandar outra sessão, e a notificação sai sem o botão
+  Abrir.
+- `~/.ssh`, `~/.gnupg`, `~/.git-credentials`, `~/.config/gh`, os chaveiros e
+  os perfis de navegador aparecem vazios, e `SSH_AUTH_SOCK` sai do ambiente.
+  `git push` por ssh ou com credencial guardada não funciona: o push é do
+  usuário, fora da sessão.
+- `jangada-isolar` chamado de dentro roda o comando direto, sem aninhar. O
+  `jangada-validar` chamado pelo agente roda, portanto, com as mesmas regras;
+  `revisar` no jangada shell e o `.jangada/preparar.sh` também passam pelo
+  `jangada-isolar`.
+- Se a tarefa precisa gravar fora dessas pastas, pare e peça ao usuário:
+  acrescentar a pasta em `JANGADA_ISOLAR_ESCRITA` no `jangada.conf` ou reabrir
+  com `jangada-agente --sem-isolar`. Não contorne o isolamento.
+
+O isolamento protege do dano acidental, não de agente malicioso: o D-Bus da
+sessão fica aberto (o agy tira o login do chaveiro por ele), e um
+`systemd-run --user` por ele roda fora; o IPC do Hyprland também fica ao
+alcance; e `~/.claude`, com os hooks do `settings.json`, segue gravável.
+`JANGADA_AGENTE_ISOLAR=0` desliga (no `jangada.conf` ou num perfil), e
+`JANGADA_ISOLAR_OCULTAR` substitui a lista de ocultos. O prefixo
+`jangada-isolar` fica no `comando` guardado e o estado tem `isolar`
+(true/false); se o prefixo sumir do comando de uma sessão isolada, o
+`--restaurar` o põe de volta. Sem o `bwrap`, o agente abre sem isolamento e
+com aviso.
+
 ## Contrato de estado
 
 Um JSON por sessão em `~/.local/state/jangada/agentes/<sessao>.json`, com
 `sessao`, `dir`, `raiz`, `worktree`, `ramo`, `base`, `agente`, `revisor`, `estado`,
-`mensagem`, `desde`, `atualizado`, `comando`, `perfil`, `tarefa`, `conversa`
+`mensagem`, `desde`, `atualizado`, `comando`, `isolar`, `perfil`, `tarefa`, `conversa`
 (id da conversa, gravado pelo hook), `inicio` (HEAD na criação) e
 `validacao` (última rodada do `jangada-validar`, com o revisor).
 Estados: `iniciado`, `trabalhando`, `aguardando`, `concluido`, `interrompido`.
@@ -145,6 +190,7 @@ instalada: `git -C ~/.local/share/jangada pull --ff-only` e
   `DESCRICAO=` e
   outras chaves em maiúsculas, que viram ambiente só daquela sessão (exemplo
   em `default/agentes/exemplo.conf`). O arquivo é lido, não executado.
+  `JANGADA_AGENTE_ISOLAR=0` no perfil abre aquele agente fora do bubblewrap.
   Use para outra conta, outro modelo ou outro agente.
 - Ganchos: executável `~/.config/jangada/ganchos/EVENTO` ou arquivos em
   `EVENTO.d/`. Eventos: `pos-tema`, `pos-agente-fim` (sessão, raiz, integrado),

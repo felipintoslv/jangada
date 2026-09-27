@@ -103,6 +103,9 @@ else
   echo "git ou jq ausente; etapa ignorada"
 fi
 
+passo "isolamento dos agentes"
+testes/isolar.sh || falha "testes/isolar.sh"
+
 passo "importação da configuração do niri"
 testes/importar.sh || falha "testes/importar.sh"
 
