@@ -1,0 +1,37 @@
+name: verificar
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      # R e lintr ficam de fora: compilar o lintr leva minutos, e o caso 12 do
+      # testes/validar.sh se pula sozinho sem eles.
+      - name: Dependências
+        run: pacman -Syu --noconfirm --needed git sudo shellcheck lua jq python qt6-declarative
+
+      - uses: actions/checkout@v4
+
+      - name: Testes
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global user.name ci
+          git config --global user.email ci@localhost
+          testes/verificar.sh
+
+      # O install.sh recusa root e exige o sudo instalado. O usuário ci não
+      # tem permissão no sudo, então qualquer escrita real fora do HOME falha,
+      # e o HOME novo precisa sair vazio.
+      - name: Simulação da instalação
+        run: |
+          useradd -m ci
+          runuser -u ci -- env HOME=/home/ci JANGADA_SIMULAR=1 "$GITHUB_WORKSPACE/install.sh" </dev/null
+          sobras="$(find /home/ci -mindepth 1 -not -name '.bash*' -print -quit)"
+          if [ -n "$sobras" ]; then
+            echo "a simulação escreveu em $sobras"
+            exit 1
+          fi

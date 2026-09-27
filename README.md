@@ -1,5 +1,7 @@
 # jangada
 
+[![verificar](https://github.com/felipintoslv/jangada/actions/workflows/verificar.yml/badge.svg)](https://github.com/felipintoslv/jangada/actions/workflows/verificar.yml)
+
 Camada de configuração para Arch Linux com Hyprland puro, organizada para o trabalho com agentes de IA. Reúne a estrutura de repositório e de atualização do Omarchy, a geração de cores a partir do papel de parede usada pelo Noctalia e uma camada própria para lançar, acompanhar e encerrar sessões de agentes.
 
 ## Princípios
@@ -291,6 +293,11 @@ instalar, rode `JANGADA_PATH=$PWD bin/...`.
 |---|---|
 | `testes/verificar.sh` | shellcheck, sintaxe Lua, JSON e TOML, comandos citados na configuração, `jangada-validar` com claude e agy falsos, `jangada-importar` com um config.kdl de exemplo |
 | `testes/aninhado.sh` | sobe um Hyprland aninhado com a configuração (`--sem-usuario` só os padrões) e confere `configerrors` e o número de atalhos |
+
+A cada push, o GitHub Actions (`.github/workflows/verificar.yml`) roda o
+`testes/verificar.sh` num contêiner Arch e simula a instalação como usuário
+sem sudo, conferindo que nada foi escrito. R e `lintr` ficam de fora da CI, e
+o caso do `lintr` só roda na máquina local.
 
 Os testes nunca tocam a configuração real: rodam com `XDG_CONFIG_HOME` e
 `XDG_STATE_HOME` temporários, e o `jangada-tema` respeita o
