@@ -24,7 +24,7 @@ jangada/
 ├── config/                modelos copiados uma única vez para ~/.config/jangada
 ├── shell/                 integração com bash e zsh
 ├── migrations/            ajustes aplicados em ordem a cada atualização
-├── testes/                verificar.sh (estático + testes do validar, do isolar, do importar e do versao) e aninhado.sh
+├── testes/                verificar.sh (estático + os demais testes) e aninhado.sh
 ├── mapeamento/            inventários do jangada-mapear (fora do git)
 └── revisao/               pareceres, avaliações e comparações; índice em revisao/README.md
 ```
@@ -80,7 +80,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 
 | Comando | Função |
 |---|---|
-| `jangada-update` | atualiza o repositório no ramo de `JANGADA_CANAL` e mostra as novidades que chegaram, mostra se o conjunto do Hyprland mudou, atualiza o sistema, aplica migrações, confere initramfs e driver NVIDIA e roda o gancho `pos-update`. Se o pacman ou o AUR falhar, a conferência da imagem de boot roda mesmo assim, e as migrações e a recarga do Hyprland ficam para depois do conserto |
+| `jangada-update` | busca o ramo de `JANGADA_CANAL`, mostra os commits novos, o resumo por arquivo e um aviso quando mudam `migrations/`, `install/` ou `bin/`, e só os aplica se a resposta for `s` (sem terminal não aplica); mostra se o conjunto do Hyprland mudou, atualiza o sistema, aplica migrações, confere initramfs e driver NVIDIA e roda o gancho `pos-update`. Se o pacman ou o AUR falhar, a conferência da imagem de boot roda mesmo assim, e as migrações e a recarga do Hyprland ficam para depois do conserto |
 | `jangada-verificar` | confere pacotes, snapshots, sessão, hooks e erros de configuração do Hyprland; `--diagnostico` grava um relatório e `--agente` abre um agente com ele no repositório do jangada |
 | `jangada-versao` | mostra a versão da cópia (`0.1.0`, ou `0.1.0-3-gabc1234` com commits depois da tag); `--novidades [DE [ATE]]` lista as mudanças, `--registro` imprime o registro completo e `--lancar X.Y.Z` grava o `CHANGELOG.md`, faz o commit e cria a tag `vX.Y.Z` (sem push); `-C DIR` opera em outro repositório |
 | `jangada-migrar` | aplica as migrações pendentes (o `jangada-update` já chama) |
@@ -88,16 +88,25 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-tema [imagem]` | gera as cores a partir de um papel de parede e recarrega a interface |
 | `jangada-agente` | escolhe o agente (Claude ou agy), o projeto e cria um worktree, e abre o agente numa sessão tmux, isolado pelo `jangada-isolar` (`--prompt`, `--prompt-arquivo`, `--perfil`, `--sem-isolar`) |
 | `jangada-isolar` | roda um comando no bubblewrap, com o sistema somente leitura e a pasta atual gravável; `--mostrar` imprime a chamada ao `bwrap` |
+| `jangada-delegar PAPEL "pedido"` | manda leitura, pesquisa ou verificação a um agente Flash do agy e devolve um relatório curto; recusa com código 4 quando a cota está baixa (ver [Subagentes](#subagentes)) |
+| `jangada-subagentes` | indicadores de subagentes e delegações (`--json`), o resumo de uma entrega (`--entrega PASTA`) e os registros por subagente (`--registros`) |
+| `jangada-filtrar` | roda um comando e condensa a saída para o agente (`-m`, `-e`, `-p`); prefira `jangada-filtrar -- COMANDO` ao modo cano, que não vê o código de saída |
+| `jangada-mapa [PASTA]` | mapa compacto do repositório (arquivos e assinaturas de funções) para dar contexto a um agente |
+| `jangada-worktree-preparar` | leva para um worktree novo os arquivos ignorados que o projeto precisa (chamado pelo `jangada-agente`) |
 | `jangada-validar` | manda o diff do worktree para o outro modelo revisar (o agy revisa o Claude, o Claude revisa o agy) e devolve `STATUS: APROVADO` ou `REVISAR`; o agente chama antes de entregar |
 | `jangada-shell` | inicia subshell enriquecida com comandos diretos de agentes e projetos |
 | `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir, integrar ou encerrar (`--proximo`, `--anterior`, `--restaurar`) |
-| `jangada-agente-fim` | encerra uma sessão e remove o worktree, com conferência de alterações pendentes; `--integrar` faz antes o merge na base, atualiza a cópia instalada se for o repositório do jangada e apaga o ramo |
+| `jangada-agente-fim` | encerra uma sessão e remove o worktree, com conferência de alterações pendentes; `--integrar` faz antes o merge na base e apaga o ramo; no repositório do jangada, avisa para rodar `jangada-update`, que atualiza a cópia instalada |
 | `jangada-consumo` | tokens do Claude Code no bloco de 5 horas em andamento (também no tooltip da barra) |
 | `jangada-painel` | painel de indicadores do uso de IA num app Shiny local; `--json` imprime os do dia, `--parar` encerra o app, `--conferir` lista o que falta |
 | `jangada-gancho` | roda os ganchos do usuário de um evento (chamado pelos outros comandos) |
 | `jangada-importar` | converte a configuração do niri em arquivos `.importado` |
 | `jangada-atalhos` | mostra todos os atalhos ativos, lidos do próprio Hyprland (`--lista` para o terminal) |
 | `jangada-sddm aplicar` | deixa o jangada como única sessão no SDDM, com o tema de login do jangada (`restaurar`, `status`, `testar`) |
+| `jangada-barra` | sobe ou reinicia a waybar do jangada; `--posicao topo\|base\|esquerda\|direita\|ciclo` troca a borda |
+| `jangada-recarregar` | recarrega o Hyprland e mostra os erros de configuração |
+| `jangada-rede`, `jangada-bluetooth`, `jangada-audio`, `jangada-energia` | menus no fuzzel para Wi-Fi e cabo, dispositivos Bluetooth, saída e entrada de áudio, e perfil de energia e bateria (abertos pela barra) |
+| `jangada-calendario`, `jangada-captura`, `jangada-monitor`, `jangada-atualizacoes` | calendário com eventos, captura de tela (`regiao\|tela`), monitor do sistema e atualizações pendentes (abertos pela barra e pelos atalhos) |
 | `jangada-menu` | menu central com as ações acima, mais bloquear, suspender, reiniciar, desligar e sair |
 | `jangada-logo` | mostra o símbolo do jangada com as informações do sistema (fastfetch; neofetch como alternativa) |
 | `jangada-mapear` | inventário da configuração atual da máquina (Hyprland, Noctalia, terminal, agentes), sem alterar nada |
@@ -178,7 +187,10 @@ alheio com o mesmo nome nas duas pastas fica como está, com aviso.
    interrompidas: `Enter` no seletor ou `jangada-agentes --restaurar` reabre
    cada uma na mesma pasta e na mesma conversa (`claude --resume`). Sem o id
    da conversa, o worktree usa `--continue`; direto no repositório abre uma
-   conversa nova, porque a mais recente da pasta pode ser de outro agente.
+   conversa nova, porque a mais recente da pasta pode ser de outro agente. O
+   comando é recomposto de campos conferidos (agente, pasta, perfil, conversa
+   e revisor) e da configuração atual, nunca copiado do estado, que o agente
+   isolado consegue gravar.
 
 ### Quem implementa e quem revisa
 
@@ -392,10 +404,11 @@ separadas por `:` (`~/dados:~/R`). `JANGADA_ISOLAR_OCULTAR` substitui a lista
 de ocultos, com caminhos relativos à pasta pessoal ou absolutos; definida
 vazia, não oculta nada. Para desligar: `jangada-agente --sem-isolar` numa
 sessão, `JANGADA_AGENTE_ISOLAR=0` num perfil ou no `jangada.conf` para todas.
-O prefixo `jangada-isolar` entra no comando guardado, e o estado registra
-`isolar`; na restauração, se o prefixo tiver sumido do comando de uma sessão
-isolada, o `jangada-agentes` o põe de volta. Sem o pacote `bubblewrap`, o
-agente abre sem isolamento e com aviso.
+O estado guarda o comando e o campo `isolar` só para consulta: a restauração
+ignora os dois e volta sempre isolada, a menos que `JANGADA_AGENTE_ISOLAR=0`
+esteja no `jangada.conf` ou no ambiente. Uma sessão aberta com `--sem-isolar`
+ou com um perfil que desliga o isolamento volta, portanto, isolada. Sem o
+pacote `bubblewrap`, o agente abre sem isolamento e com aviso.
 
 ## Painel de indicadores
 
@@ -506,19 +519,33 @@ ela tiver ficado num deles.
 As versões seguem o formato `v0.x.y`, em tags do git. O `CHANGELOG.md` é
 gerado das mensagens de commit pelo `jangada-versao --lancar X.Y.Z`: o que
 começa com `feat` entra em Novidades, o que começa com `fix` em Correções e o
-resto em Outras mudanças. Depois do `git pull`, o `jangada-update` mostra as
-novidades que chegaram. `jangada-versao` mostra a versão instalada.
+resto em Outras mudanças. O `jangada-update` busca a origem, mostra os
+commits e as novidades que chegariam, avisa quando mudam `migrations/`,
+`install/` ou `bin/` (código que roda na máquina) e só aplica com `s`; sem
+terminal para confirmar, não aplica nada. `jangada-versao` mostra a versão
+instalada.
 
 ## Desenvolvimento
 
 A cópia de trabalho fica em `~/Projetos/jangada` (`JANGADA_REPO`); a cópia
-instalada só recebe `git pull --ff-only`. Para testar a cópia de trabalho sem
-instalar, rode `JANGADA_PATH=$PWD bin/...`.
+instalada só recebe avanço rápido (`--ff-only`) pelo `jangada-update`, depois
+da confirmação. O `jangada-agente-fim --integrar` integra na cópia de trabalho
+e não mexe na instalada. Para testar a cópia de trabalho sem instalar, rode
+`JANGADA_PATH=$PWD bin/...`.
 
 | Teste | O que confere |
 |---|---|
-| `testes/verificar.sh` | shellcheck, sintaxe Lua, JSON e TOML, comandos citados na configuração, `jangada-validar` com claude e agy falsos, o `jangada-isolar` (o que fica gravável, somente leitura e oculto), `jangada-importar` com um config.kdl de exemplo |
-| `testes/versao.sh` | `jangada-versao` num repositório temporário: grupos e prefixos das novidades, o `CHANGELOG.md` e a tag do `--lancar` e as recusas (árvore suja, versão menor, tag existente, nada novo); também roda dentro do `verificar.sh` |
+| `testes/verificar.sh` | shellcheck, sintaxe Lua, JSON e TOML, comandos citados na configuração e, em seguida, todos os testes abaixo menos o `aninhado.sh` |
+| `testes/validar.sh` | `jangada-validar` com claude e agy falsos: veredito, rodadas, pareceres e métricas |
+| `testes/isolar.sh` | `jangada-isolar`: o que fica gravável, somente leitura e oculto, no worktree e direto no repositório |
+| `testes/restaurar.sh` | `jangada-agentes --restaurar` com tmux falso: o comando sai de campos conferidos, nunca do estado |
+| `testes/update.sh` | `jangada-update` só aplica com confirmação; `jangada-agente-fim --integrar` não mexe na cópia instalada nem roda ganchos do repositório do agente |
+| `testes/eventos.sh` | histórico de estados dos agentes gravado pelos hooks e pela troca de foco |
+| `testes/barra.sh` | módulo `custom/indicadores`, barra em pé do `jangada-barra` e a migração que o acrescenta |
+| `testes/painel.sh` | coletor do painel sobre registros de exemplo e, com os pacotes R, o app no ar |
+| `testes/subagentes.sh`, `testes/delegar.sh` | papéis de subagente e a instalação deles; `jangada-delegar` com agy falso |
+| `testes/versao.sh` | `jangada-versao` num repositório temporário: grupos e prefixos das novidades, o `CHANGELOG.md` e a tag do `--lancar` e as recusas (árvore suja, versão menor, tag existente, nada novo) |
+| `testes/importar.sh` | `jangada-importar` com um config.kdl de exemplo |
 | `testes/aninhado.sh` | sobe um Hyprland aninhado com a configuração (`--sem-usuario` só os padrões) e confere `configerrors` e o número de atalhos |
 
 A cada push, o GitHub Actions (`.github/workflows/verificar.yml`) roda o
@@ -533,9 +560,9 @@ Os testes nunca tocam a configuração real: rodam com `XDG_CONFIG_HOME` e
 Mudança que exige ajuste numa instalação existente ganha uma migração em
 `migrations/` (ver `migrations/README.md`). As revisões cruzadas e as
 avaliações estão indexadas em `revisao/README.md`; a última auditoria
-(`revisao/avaliacao-gemini-20260921-fechamento.md`) cobre os commits do
-fechamento do benchmark, com 13 dos 15 apontamentos aplicados no todo ou em
-parte.
+(`revisao/auditoria-20260927.md`) cobre o repositório inteiro, com 72
+apontamentos: os 6 críticos, todos de fuga do isolamento, foram corrigidos, e
+os demais seguem abertos.
 
 ## Estado
 

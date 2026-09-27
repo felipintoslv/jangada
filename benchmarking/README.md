@@ -247,7 +247,8 @@ eficiência de recursos.
   real para a barra, exibindo status ativo e tempo.
 - Esforço estimado: Médio.
 - Como encaixaria: Módulo `custom/gravacao` em `config.jsonc` com escuta de sinal
-  dedicado (ex: sinal 9), controlado por script em `bin/jangada-gravar` e atalho
+  dedicado (o 8 e o 9 já são do custom/atualizacoes e do custom/indicadores; seria o
+  10), controlado por `bin/jangada-gravar` (a criar) e atalho
   em `default/hypr/atalhos.lua`.
 
 ### 6. Indicador de snapshots do Snapper (`custom/snapshots`)

@@ -13,3 +13,4 @@ mise
 shellcheck
 gitleaks
 bubblewrap
+xdg-dbus-proxy

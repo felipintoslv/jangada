@@ -28,12 +28,17 @@ qualquer coisa:
 | Papel | Caminho |
 |---|---|
 | Repositório de trabalho (editar e fazer commit aqui) | `~/Projetos/jangada` |
-| Cópia instalada (só `git pull`, nunca editar) | `~/.local/share/jangada` (`$JANGADA_PATH` na sessão) |
+| Cópia instalada (só `jangada-update`, nunca editar) | `~/.local/share/jangada` (`$JANGADA_PATH` na sessão) |
 | Ajustes do usuário, carregados depois dos padrões | `~/.config/jangada` (`jangada.conf`, `hypr/hyprland.lua`, `hypr/usuario.lua`, `hypr/monitores.lua`) |
 | Estado (sessões de agentes, pareceres) | `~/.local/state/jangada` |
 
-O `jangada-update` faz `git pull --ff-only` na cópia instalada e se recusa a
-rodar com alterações locais: por isso a edição acontece na cópia de trabalho.
+O `jangada-update` busca a origem, mostra os commits novos e só aplica
+(`--ff-only`) depois de o usuário confirmar num terminal; ele se recusa a rodar
+com alterações locais na cópia instalada: por isso a edição acontece na cópia
+de trabalho. O `jangada-agente-fim --integrar` também não atualiza a cópia
+instalada, só avisa para rodar o `jangada-update`. Git sobre pasta que um
+agente pode ter gravado roda com `jangada_git_seguro` (`bin/jangada-config`),
+que desliga fsmonitor, hooks, pager e `sshCommand` do repositório.
 
 ## Regras que não mudam
 

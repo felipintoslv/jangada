@@ -41,8 +41,8 @@ O agente aberto pelo `jangada-agente` roda no bubblewrap, com
   `output-styles`, `backups` e os scripts soltos. `/model` ou `/config` de
   dentro não persistem.
 - Git num worktree: o `.git` comum é somente leitura, menos `objects`,
-  `refs`, `logs` e a pasta do próprio worktree (sem o `commondir` e o
-  `gitdir`). Commit, ramo, `checkout -b`, `reset` e `stash` funcionam; apagar
+  `refs`, `logs`, `rr-cache`, `reftable` e a pasta do próprio worktree (sem
+  o `commondir`, o `gitdir` e o `config.worktree`). Commit, ramo, `checkout -b`, `reset` e `stash` funcionam; apagar
   ramo ou tag e `git gc` falham (regravam o `packed-refs` da raiz). Com
   `--direto`, a raiz do `.git` segue gravável, menos `config`, `hooks`,
   `worktrees`, `modules` e `commondir`; o `jangada-isolar` cria um
@@ -58,7 +58,9 @@ O agente aberto pelo `jangada-agente` roda no bubblewrap, com
   gpg-agent e systemd do usuário. O D-Bus da sessão vem pelo
   `xdg-dbus-proxy`, que só fala com `org.freedesktop.secrets` e
   `org.freedesktop.Notifications`; o proxy vive enquanto o bwrap guarda o
-  cano de sincronização (`--sync-fd`). O D-Bus do sistema e o Docker ficam
+  cano de sincronização (`--sync-fd`). Esse cano é aberto com
+  `exec {fd}< <(...)`, e não com `coproc`: o bash fecha os descritores do
+  coproc no `exec bwrap`, e o proxy morreria antes de o agente abrir. O D-Bus do sistema e o Docker ficam
   ocultos, e o namespace de PID é próprio: `kill` e `ps` só alcançam os
   processos da sessão, e um pid gravado de dentro não vale fora.
 - `~/.ssh`, `~/.gnupg`, `~/.git-credentials`, `~/.config/gh`, os chaveiros e
@@ -68,38 +70,49 @@ O agente aberto pelo `jangada-agente` roda no bubblewrap, com
 - `jangada-isolar` chamado de dentro roda o comando direto, sem aninhar. O
   `jangada-validar` chamado pelo agente roda, portanto, com as mesmas regras;
   `revisar` no jangada shell e o `.jangada/preparar.sh` também passam pelo
-  `jangada-isolar`.
+  `jangada-isolar`. Pelo mesmo motivo, o `testes/isolar.sh` falha inteiro
+  dentro de uma sessão isolada (`JANGADA_ISOLADO=1`): rode
+  `env -u JANGADA_ISOLADO testes/verificar.sh`, e apague o `/tmp/isolar-teste`
+  que uma rodada sem isso deixa, ou o caso do `/tmp` próprio falha depois.
 - Se a tarefa precisa gravar fora dessas pastas, pare e peça ao usuário:
   acrescentar a pasta em `JANGADA_ISOLAR_ESCRITA` no `jangada.conf` ou reabrir
   com `jangada-agente --sem-isolar`. Não contorne o isolamento.
 
-O isolamento protege do dano acidental, não de agente malicioso: o D-Bus da
-sessão fica aberto (o agy tira o login do chaveiro por ele), e um
-`systemd-run --user` por ele roda fora; o IPC do Hyprland também fica ao
-alcance; e `~/.claude`, com os hooks do `settings.json`, segue gravável.
+O isolamento fecha os caminhos conhecidos para rodar código fora do bwrap
+(estado executado na restauração, configuração do git, hooks do Claude,
+sockets do Hyprland e do sistema), mas não é uma barreira completa: o
+chaveiro inteiro é legível pelo D-Bus filtrado, `~/.claude/projects` e o
+`settings.json` do agy seguem graváveis, e repositórios aninhados no índice
+só ficam protegidos quando o git de fora passa por `jangada_git_seguro`.
 `JANGADA_AGENTE_ISOLAR=0` desliga (no `jangada.conf` ou num perfil), e
-`JANGADA_ISOLAR_OCULTAR` substitui a lista de ocultos. O prefixo
-`jangada-isolar` fica no `comando` guardado e o estado tem `isolar`
-(true/false); se o prefixo sumir do comando de uma sessão isolada, o
-`--restaurar` o põe de volta. Sem o `bwrap`, o agente abre sem isolamento e
-com aviso.
+`JANGADA_ISOLAR_OCULTAR` substitui a lista de ocultos. O estado guarda
+`comando` e `isolar` só para consulta: o `--restaurar` recompõe o comando e
+volta isolado, a menos que `JANGADA_AGENTE_ISOLAR=0` esteja no `jangada.conf`
+ou no ambiente (perfil e `--sem-isolar` não contam). Sem o `bwrap`, o agente
+abre sem isolamento e com aviso.
 
 ## Contrato de estado
 
 Um JSON por sessão em `~/.local/state/jangada/agentes/<sessao>.json`, com
 `sessao`, `dir`, `raiz`, `worktree`, `ramo`, `base`, `agente`, `revisor`, `estado`,
 `mensagem`, `desde`, `atualizado`, `comando`, `isolar`, `perfil`, `tarefa`, `conversa`
-(id da conversa, gravado pelo hook), `inicio` (HEAD na criação) e
-`validacao` (última rodada do `jangada-validar`, com o revisor).
+(id da conversa, gravado pelo hook), `inicio` (HEAD na criação),
+`delegar` (destino dos subagentes) e `validacao` (última rodada do
+`jangada-validar`, com o revisor). `comando` e `isolar` são só para consulta:
+o estado é gravável de dentro do isolamento, e nada dele é executado como
+texto.
 Estados: `iniciado`, `trabalhando`, `aguardando`, `concluido`, `interrompido`.
 
 `interrompido` é a sessão cujo tmux sumiu (reinício, queda do servidor) com
 worktree ainda presente. Ela fica guardada por 168 horas; `--restaurar` (ou o
 `--focar` nela) recria a sessão tmux e retoma a conversa com
 `claude --resume <conversa>`; sem o id, `--continue` num worktree e conversa
-nova direto no repositório. O ambiente de um
-perfil é relido de `~/.config/jangada/agentes/NOME.conf` na restauração, nunca
-guardado no estado.
+nova direto no repositório. O comando sai de campos conferidos (agente
+`claude` ou `agy`, conversa em formato uuid, pasta dentro de
+`JANGADA_WORKTREES` ou `JANGADA_PROJETOS`, revisor) e da configuração; estado
+que não passa na conferência é recusado. O ambiente de um perfil é relido de
+`~/.config/jangada/agentes/NOME.conf` na restauração, nunca guardado no
+estado.
 
 Cada mudança de estado vira também uma linha em
 `~/.local/state/jangada/eventos-agentes.jsonl`, com `data`, `sessao`,
@@ -225,8 +238,9 @@ instalada: `git -C ~/.local/share/jangada pull --ff-only` e
   repositório e perdem para perfis de mesmo nome em `~/.config/jangada/agentes`.
 - O protocolo é `default/agentes/protocolo.md`. No agy a tarefa vai por `-i`,
   precedida dele; sem tarefa, vai só o protocolo. O agy não aceita a tarefa
-  como argumento solto. No Claude vai por `--append-system-prompt`, dentro do
-  `comando` guardado, para valer também na restauração.
+  como argumento solto. No Claude vai por `--append-system-prompt`; na restauração o
+  `jangada-agentes` monta o protocolo de novo (`refazer_protocolo`), sem ler o
+  `comando` guardado.
 - Hooks do agy: só o global `~/.gemini/config/hooks.json` foi carregado pelo
   CLI nos testes de 22/09/2026. O `.agents/hooks.json` do projeto deu "loaded 0
   named hooks" no log (`~/.gemini/antigravity-cli/log/`). O hook roda com a
