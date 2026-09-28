@@ -53,7 +53,7 @@ if [[ -f "$JANGADA_CONFIG/jangada.conf" ]]; then
     _valor="${_valor/#\$HOME/$HOME}"
     _valor="${_valor/#\~/$HOME}"
     printf -v "$_chave" '%s' "$_valor"
-  done < <(sed -e 's/#.*//' -e 's/[[:space:]]*$//' "$JANGADA_CONFIG/jangada.conf")
+  done < <(sed -e 's/^[[:space:]]*#.*//' -e 's/[[:space:]]*$//' "$JANGADA_CONFIG/jangada.conf")
   unset _chave _valor
 fi
 if [[ -z "$JANGADA_REPO" && -d "$JANGADA_PROJETOS/jangada/.git" ]]; then
@@ -316,38 +316,48 @@ jangada_agy_ajustar_confianca() {
   return 0
 }
 
-# Aplica um filtro do jq ao arquivo de estado ARQ, gravando em TMP e trocando
+# Executa comando ou função sob trava da pasta. A trava é a própria pasta
+# aberta só para leitura: um arquivo de trava aberto para escrita seguiria um
+# link simbólico posto pelo agente isolado e truncaria o alvo fora do isolamento.
+# Uso: jangada_com_trava_dir DIR COMANDO [ARGUMENTOS...]
+jangada_com_trava_dir() {
+  local dir="$1"
+  shift
+  local rc=0
+  if command -v flock >/dev/null 2>&1; then
+    (
+      flock -w 5 9 || exit 1
+      "$@"
+    ) 9<"$dir" || rc=$?
+  else
+    local trava_dir="$dir/.trava.d"
+    if ! _jangada_trava_obter "$trava_dir"; then
+      return 1
+    fi
+    "$@" || rc=$?
+    rmdir "$trava_dir" 2>/dev/null || true
+  fi
+  return $rc
+}
+
+# Altera um arquivo de estado JSON com jq de forma atômica e segura: regrava
 # com mv, sob uma trava da pasta. O hook do Claude Code roda em paralelo quando
 # há ferramentas em paralelo, e o painel marca sessões interrompidas: sem a
 # trava, quem lê antes e grava depois apaga o campo que o outro gravou.
-# A trava é a própria pasta aberta só para leitura: um arquivo de trava aberto
-# para escrita seguiria um link simbólico posto pelo agente isolado e
-# truncaria o alvo fora do isolamento.
 # Uso: jangada_alterar_estado ARQ TMP ARGUMENTOS_DO_JQ...
 jangada_alterar_estado() {
   local arq="$1" tmp="$2"
   [[ -n "$arq" && -n "$tmp" ]] || return 1
   shift 2
-  if command -v flock >/dev/null 2>&1; then
-    (
-      flock -w 5 9 || exit 1
-      jq "$@" "$arq" >"$tmp" 2>/dev/null && mv "$tmp" "$arq"
-    ) 9<"$(dirname "$arq")"
-  else
-    local trava_dir
-    trava_dir="$(dirname "$arq")/.trava.d"
-    if ! _jangada_trava_obter "$trava_dir"; then
-      return 1
-    fi
-    local rc=0
-    if jq "$@" "$arq" >"$tmp" 2>/dev/null; then
-      mv "$tmp" "$arq" || rc=$?
-    else
-      rc=$?
-    fi
-    rmdir "$trava_dir" 2>/dev/null || true
-    return $rc
+  local rc=0
+  _aplicar_jq() {
+    jq "$@" "$arq" >"$tmp" 2>/dev/null && mv "$tmp" "$arq"
+  }
+  jangada_com_trava_dir "$(dirname "$arq")" _aplicar_jq "$@" || rc=$?
+  if ((rc == 0)); then
+    pkill -RTMIN+10 -x waybar 2>/dev/null || true
   fi
+  return $rc
 }
 
 # Notificação do sistema compatível com Linux (notify-send) e macOS (osascript).

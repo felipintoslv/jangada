@@ -9,10 +9,12 @@ menu() {
   jangada_fuzzel --prompt "${1:-jangada} > "
 }
 b="$JANGADA_PATH/bin"
-term() { setsid -f "$b/jangada-terminal" -e bash -c "$1; echo; read -r -p 'Enter para fechar'" >/dev/null 2>&1; }
+term() { setsid -f "$b/jangada-terminal" -e bash -c '"$@"; echo; read -r -p "Enter para fechar"' _ "$@" >/dev/null 2>&1; }
 
 if [[ "${1:-}" == "area-transferencia" ]]; then
-  cliphist list | menu "copiar" | cliphist decode | wl-copy
+  item="$(cliphist list | menu "copiar")" || exit 0
+  [[ -n "$item" ]] || exit 0
+  printf '%s\n' "$item" | cliphist decode | wl-copy
   exit 0
 fi
 
@@ -60,9 +62,9 @@ case "$opcao" in
   "Atualizar sistema") term "$b/jangada-update" ;;
   "Verificar sistema") term "$b/jangada-verificar" ;;
   "Diagnosticar com agente") exec "$b/jangada-verificar" --agente ;;
-  "Snapshot manual") term "read -r -p 'descrição: ' d; $b/jangada-snapshot \"\$d\"" ;;
+  "Snapshot manual") setsid -f "$b/jangada-terminal" -e bash -c 'read -r -p "descrição: " d; "$1" "$d"; echo; read -r -p "Enter para fechar"' _ "$b/jangada-snapshot" >/dev/null 2>&1 ;;
   "Trocar papel de parede") exec "$b/jangada-tema" --escolher ;;
-  "Configurar tela de login (SDDM)") term "$b/jangada-sddm aplicar" ;;
+  "Configurar tela de login (SDDM)") term "$b/jangada-sddm" aplicar ;;
   "Recarregar configuração") exec "$b/jangada-recarregar" ;;
   "Área de transferência") exec "$0" area-transferencia ;;
   "Atalhos do teclado") exec "$b/jangada-atalhos" ;;

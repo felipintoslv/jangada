@@ -58,7 +58,7 @@ gravar_borda() {
   local valor="$1" conf="$JANGADA_CONFIG/jangada.conf"
   [[ -f "$conf" ]] || { erro "sem $conf; a borda vale só até a barra reiniciar"; return 0; }
   if grep -q '^JANGADA_BARRA_POSICAO=' "$conf"; then
-    sed -i "s|^JANGADA_BARRA_POSICAO=.*|JANGADA_BARRA_POSICAO=$valor|" "$conf"
+    sed -i --follow-symlinks "s|^JANGADA_BARRA_POSICAO=.*|JANGADA_BARRA_POSICAO=$valor|" "$conf"
   else
     printf 'JANGADA_BARRA_POSICAO=%s\n' "$valor" >>"$conf"
   fi
@@ -110,7 +110,7 @@ CABECALHO
 EM_PE
     fi
     cat <<RODAPE
-  "include": ["$cfg"]
+  "include": [$(printf '%s' "$cfg" | jq -R .)]
 }
 RODAPE
   } >"$gerado"

@@ -37,17 +37,18 @@ obter_wifi() {
   fi
 
   # Escaneia redes disponíveis
-  local redes
-  redes="$(nmcli -t -f IN-USE,SSID,SIGNAL,SECURITY device wifi list 2>/dev/null | awk -F: '
-    $2 != "" {
-      in_use = ($1 == "*") ? "✔ " : "  "
-      sec = ($4 != "") ? "🔒" : "🔓"
-      printf "%s 󰤨  Wi-Fi: %s (%s%% · %s)\n", in_use, $2, $3, sec
-    }
-  ' | head -15 || true)"
+  local redes="" uso sinal seg ssid in_use sec
+  while IFS=: read -r uso sinal seg ssid; do
+    [[ -n "$ssid" ]] || continue
+    in_use="  "
+    [[ "$uso" == "*" ]] && in_use="✔ "
+    sec="🔓"
+    [[ -n "$seg" ]] && sec="🔒"
+    redes+="$(printf '%s 󰤨  Wi-Fi: %s (%s%% · %s)\n' "$in_use" "$ssid" "$sinal" "$sec")"$'\n'
+  done < <(nmcli -t -e no -f IN-USE,SIGNAL,SECURITY,SSID device wifi list 2>/dev/null | head -15 || true)
 
   if [[ -n "$redes" ]]; then
-    printf '%s\n' "$redes"
+    printf '%s' "$redes"
     printf '   󰤮  Desativar Wi-Fi\n'
   else
     printf '   󰤨  Nenhuma rede Wi-Fi ao alcance\n'
@@ -174,7 +175,7 @@ menu_rede() {
       ;;
     *"Wi-Fi:"*)
       local ssid
-      ssid="$(sed -E 's/^[✔ ]* 󰤨  Wi-Fi: //; s/ \(.*//' <<<"$escolha")"
+      ssid="$(sed -E -e 's/^[✔ ]* 󰤨  Wi-Fi: //' -e 's/ \([0-9]+% · [🔒🔓]\)$//' <<<"$escolha")"
       conectar_wifi "$ssid"
       ;;
     *"Reiniciar conexões"*)

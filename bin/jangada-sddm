@@ -33,7 +33,7 @@ conteudo_sessao() {
     "[Desktop Entry]" \
     "Name=jangada" \
     "Comment=Hyprland com a configuração jangada" \
-    "Exec=$JANGADA_PATH/bin/jangada-sessao" \
+    "Exec=\"$JANGADA_PATH/bin/jangada-sessao\"" \
     "Type=Application" \
     "DesktopNames=Hyprland"
 }
