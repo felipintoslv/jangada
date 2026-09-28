@@ -23,6 +23,24 @@ conjunto_hypr='^(hyprland|aquamarine|hyprutils|hyprlang|hyprgraphics|hyprcursor|
 # ganchos, que viriam da configuração do repositório.
 g() { jangada_git_seguro -C "$JANGADA_PATH" "$@"; }
 
+# Com ~/.config/jangada/allowed_signers, todo commit de $1 até $2 precisa de
+# assinatura válida por esse arquivo; o jangada-assinar assina, fora do
+# isolamento, os commits que os agentes fizeram. O arquivo fica fora da cópia
+# de trabalho e somente leitura no isolamento, então um agente não põe nele
+# uma chave própria. O programa de verificação é fixo, porque o
+# gpg.ssh.program da configuração do repositório rodaria aqui.
+assinantes="$JANGADA_CONFIG/allowed_signers"
+assinaturas_ok() {
+  local de="$1" ate="$2" faltam
+  [[ -f "$assinantes" ]] || return 0
+  faltam="$(g -c gpg.ssh.allowedSignersFile="$assinantes" -c gpg.ssh.program=ssh-keygen \
+    log --format='%G? %h %s' "$de..$ate" | grep -v '^G ' | tr -d '\000-\010\013-\037\177')" || true
+  [[ -z "$faltam" ]] && return 0
+  echo "!! commits sem assinatura válida por $assinantes (rode jangada-assinar na cópia de trabalho):"
+  printf '%s\n' "$faltam" | sed 's/^/   /'
+  return 1
+}
+
 # Mostra os commits de $1 até $2 e pede confirmação. A origem da cópia
 # instalada é a cópia de trabalho, cujas refs um agente isolado pode gravar:
 # nada que chega por ela roda (jangada-versao, migrações com sudo ainda
@@ -31,6 +49,7 @@ g() { jangada_git_seguro -C "$JANGADA_PATH" "$@"; }
 # não apague nem disfarce a lista. Sem terminal, a resposta é não.
 confirmar_novidades() {
   local de="$1" ate="$2" sensiveis r=""
+  assinaturas_ok "$de" "$ate" || return 1
   echo "commits novos na origem:"
   g log --oneline "$de..$ate" | tr -d '\000-\010\013-\037\177' | sed 's/^/   /'
   g diff --no-ext-diff --no-textconv --stat "$de..$ate" | tr -d '\000-\010\013-\037\177' | sed 's/^/   /'
@@ -43,8 +62,8 @@ confirmar_novidades() {
   [[ "${r,,}" == s* ]]
 }
 
-# Opções do avanço da cópia instalada. Para exigir commits assinados, basta
-# acrescentar aqui --verify-signatures.
+# Opções do avanço da cópia instalada. As assinaturas são conferidas commit a
+# commit em assinaturas_ok; o --verify-signatures do merge só olharia o último.
 opcoes_merge=(--ff-only --quiet)
 
 echo "==> repositório jangada (canal $JANGADA_CANAL)"

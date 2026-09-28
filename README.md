@@ -104,6 +104,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-update` | busca o ramo de `JANGADA_CANAL`, mostra os commits novos, o resumo por arquivo e um aviso quando mudam `migrations/`, `install/` ou `bin/`, e só os aplica se a resposta for `s` (sem terminal não aplica); mostra se o conjunto do Hyprland mudou, atualiza o sistema, aplica migrações, confere initramfs e driver NVIDIA e roda o gancho `pos-update`. Se o pacman ou o AUR falhar, a conferência da imagem de boot roda mesmo assim, e as migrações e a recarga do Hyprland ficam para depois do conserto |
 | `jangada-verificar` | confere pacotes, snapshots, sessão, hooks e erros de configuração do Hyprland; `--diagnostico` grava um relatório e `--agente` abre um agente com ele no repositório do jangada; do `hyprland.log` entram só erros e avisos, e o log e o relatório de falha vão marcados como dados |
 | `jangada-versao` | mostra a versão da cópia (`0.1.0`, ou `0.1.0-3-gabc1234` com commits depois da tag); `--novidades [DE [ATE]]` lista as mudanças, `--registro` imprime o registro completo e `--lancar X.Y.Z` grava o `CHANGELOG.md`, faz o commit e cria a tag `vX.Y.Z` (sem push); `-C DIR` opera em outro repositório |
+| `jangada-assinar` | assina com a chave SSH (`JANGADA_ASSINATURA_CHAVE`) os commits da cópia de trabalho ainda não enviados e sem assinatura válida, depois da confirmação; roda num terminal comum, porque o isolamento oculta o `~/.ssh` |
 | `jangada-migrar` | aplica as migrações pendentes (o `jangada-update` já chama) |
 | `jangada-snapshot "descrição"` | cria um snapshot manual do sistema; com `--agente`, o do `jangada-agente --snapshot`, fora da limpeza do snapper e limitado aos `JANGADA_SNAPSHOTS_AGENTE` mais recentes |
 | `jangada-tema [imagem]` | gera as cores a partir de um papel de parede e recarrega a interface |
@@ -593,6 +594,25 @@ git -C ~/Projetos/jangada push drive estavel
 O `jangada-update` também tira a cópia instalada de um ramo `agente/...`, se
 ela tiver ficado num deles.
 
+### Commits assinados
+
+Com `~/.config/jangada/allowed_signers`, o `jangada-update` só aplica commits
+assinados por uma chave desse arquivo. O arquivo fica fora da cópia de
+trabalho e é somente leitura para o agente isolado, que também não vê a
+chave: os commits dos agentes chegam sem assinatura, e o `jangada-assinar`
+os assina antes do push. Para ligar, num terminal comum:
+
+```sh
+ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519   # se ainda não houver chave
+echo "$(git config user.email) namespaces=\"git\" $(cat ~/.ssh/id_ed25519.pub)" \
+  >~/.config/jangada/allowed_signers
+jangada-assinar          # antes de cada push
+```
+
+Outra chave vai em `JANGADA_ASSINATURA_CHAVE` no `jangada.conf`. Nas outras
+máquinas, o mesmo `allowed_signers` faz o `jangada-update` recusar o que
+chega do remoto sem assinatura.
+
 ### Versões
 
 As versões seguem o formato `v0.x.y`, em tags do git. O `CHANGELOG.md` é
@@ -620,7 +640,7 @@ e não mexe na instalada. Para testar a cópia de trabalho sem instalar, rode
 | `testes/validar.sh` | `jangada-validar` com claude e agy falsos: veredito, rodadas, pareceres e métricas |
 | `testes/isolar.sh` | `jangada-isolar`: o que fica gravável, somente leitura e oculto, no worktree e direto no repositório |
 | `testes/restaurar.sh` | `jangada-agentes --restaurar` com tmux falso: o comando sai de campos conferidos, nunca do estado |
-| `testes/update.sh` | `jangada-update` só aplica com confirmação; `jangada-agente-fim --integrar` não mexe na cópia instalada nem roda ganchos do repositório do agente |
+| `testes/update.sh` | `jangada-update` só aplica com confirmação e, com `allowed_signers`, só commits assinados; `jangada-assinar`; `jangada-agente-fim --integrar` não mexe na cópia instalada nem roda ganchos do repositório do agente |
 | `testes/eventos.sh` | histórico de estados dos agentes gravado pelos hooks e pela troca de foco |
 | `testes/barra.sh` | módulo `custom/indicadores`, barra em pé do `jangada-barra` e a migração que o acrescenta |
 | `testes/painel.sh` | coletor do painel sobre registros de exemplo e, com os pacotes R, o app no ar |

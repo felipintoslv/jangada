@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Assina com a chave SSH os commits da cópia de trabalho que ainda não estão
+# no ramo da origem e não têm assinatura válida. Os agentes fazem commit no
+# isolamento, onde a chave não aparece; este comando roda num terminal comum,
+# mostra os commits e só assina com confirmação. Com
+# ~/.config/jangada/allowed_signers, o jangada-update só aplica commits
+# assinados por uma chave desse arquivo.
+#
+# Uso: jangada-assinar [PASTA]
+#   PASTA  repositório a assinar (padrão: JANGADA_REPO)
+# A chave é JANGADA_ASSINATURA_CHAVE no jangada.conf (padrão ~/.ssh/id_ed25519).
+# Reescreve os commits a partir do primeiro sem assinatura válida; os
+# anteriores, que o jangada-update pode já ter aplicado, ficam como estão.
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+case "${1:-}" in
+  -h|--ajuda) sed -n '2,13s/^# \{0,1\}//p' "$0"; exit 0 ;;
+esac
+
+erro() { echo "jangada-assinar: $*" >&2; exit 1; }
+repo="${1:-$JANGADA_REPO}"
+chave="$JANGADA_ASSINATURA_CHAVE"
+publica="${chave%.pub}.pub"
+assinantes="$JANGADA_CONFIG/allowed_signers"
+# O programa de assinatura é fixo: o gpg.ssh.program da configuração do
+# repositório rodaria aqui, fora do isolamento. As opções valem também para o
+# git commit que o rebase chama.
+g() {
+  jangada_git_seguro -C "$repo" -c gpg.format=ssh -c user.signingkey="$chave" \
+    -c gpg.ssh.program=ssh-keygen -c gpg.ssh.allowedSignersFile="$assinantes" "$@"
+}
+sem_controle() { tr -d '\000-\010\013-\037\177'; }
+
+[[ -n "$repo" && -d "$repo/.git" ]] || erro "${repo:-JANGADA_REPO vazio}: não é uma cópia de trabalho do git"
+[[ -r "$chave" && -r "$publica" ]] \
+  || erro "chave $chave (e $publica) não encontrada; no isolamento o ~/.ssh fica oculto, rode num terminal comum"
+[[ -f "$assinantes" ]] \
+  || erro "$assinantes não existe; crie com: echo \"\$(git config user.email) namespaces=\\\"git\\\" \$(cat $publica)\" >$assinantes"
+grep -qF -- "$(cut -d' ' -f2 "$publica")" "$assinantes" || erro "a chave $publica não está em $assinantes"
+[[ -z "$(g status --porcelain --ignore-submodules=all)" ]] || erro "há alterações sem commit em $repo"
+g symbolic-ref -q HEAD >/dev/null || erro "o HEAD de $repo não está num ramo"
+base="$(g rev-parse --verify --quiet '@{upstream}^{commit}')" || erro "o ramo de $repo não acompanha um ramo da origem"
+[[ -z "$(g rev-list --merges "$base..HEAD")" ]] || erro "há commits de merge depois de $base; assine à mão"
+
+primeiro="$(g log --reverse --format='%G? %H' "$base..HEAD" | awk '$1 != "G" { print $2; exit }')"
+if [[ -z "$primeiro" ]]; then
+  echo "nada a assinar: os commits depois de $(g rev-parse --abbrev-ref '@{upstream}') já têm assinatura válida"
+  exit 0
+fi
+echo "commits a assinar em $repo:"
+g log --format='%h %an: %s' "$primeiro^..HEAD" | sem_controle | sed 's/^/   /'
+r=""
+read -r -p "assinar estes commits com $chave? [s/N] " r || r=""
+[[ "${r,,}" == s* ]] || { echo "nada assinado"; exit 1; }
+
+g rebase --quiet --exec 'git commit --quiet --amend --no-edit --no-verify -S' "$primeiro^" \
+  || erro "o rebase parou; resolva em $repo (git rebase --abort desfaz)"
+faltam="$(g log --format='%G? %h %s' "$base..HEAD" | grep -v '^G ' | sem_controle)" || true
+[[ -z "$faltam" ]] || erro "ainda sem assinatura válida:"$'\n'"$faltam"
+echo "assinados; confira com git log --show-signature e rode o push"

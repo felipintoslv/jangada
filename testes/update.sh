@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Testa, em repositórios temporários, o que chega à cópia instalada: o
-# jangada-update só aplica commits novos da origem com confirmação, e o
+# jangada-update só aplica commits novos da origem com confirmação e, com
+# allowed_signers, só os assinados, que o jangada-assinar assina; o
 # jangada-agente-fim --integrar não atualiza a cópia instalada nem roda o git
 # com fsmonitor ou ganchos do repositório do agente; o install.sh recusa a
 # cópia de trabalho e os worktrees. pacman, checkupdates,
@@ -155,6 +156,86 @@ conferir "worktree removido" test ! -d "$wt"
 conferir "cópia instalada não é atualizada" test "$(head_instalado)" = "$antes_fim"
 conferir "pede para rodar jangada-update" grep -q 'rode jangada-update' "$tmp/saida"
 conferir "fsmonitor e ganchos do repositório não rodam" test ! -e "$alerta"
+
+echo "== assinaturas"
+
+# A cópia instalada alcança a origem antes de as assinaturas valerem; o que
+# já foi enviado a um remoto (o GitHub, na máquina) não é reescrito.
+atualizar <<<s
+remoto="$tmp/remoto.git"
+git init --quiet --bare "$remoto"
+git -C "$origem" remote add github "$remoto"
+git -C "$origem" push --quiet -u github main 2>/dev/null
+mkdir -p "$HOME/.ssh" "$XDG_CONFIG_HOME/jangada"
+ssh-keygen -q -t ed25519 -N '' -C t -f "$HOME/.ssh/id_ed25519"
+ssh-keygen -q -t ed25519 -N '' -C outra -f "$tmp/outra"
+printf 't@t namespaces="git" %s\n' "$(cat "$HOME/.ssh/id_ed25519.pub")" >"$XDG_CONFIG_HOME/jangada/allowed_signers"
+assinar() { (cd "$tmp" && "$repo_jangada/bin/jangada-assinar" "$origem") >"$tmp/saida" 2>&1; rc=$?; }
+assinatura() { git -C "$origem" -c gpg.ssh.allowedSignersFile="$XDG_CONFIG_HOME/jangada/allowed_signers" log -1 --format=%G? "$1"; }
+
+echo c1 >"$origem/c1.txt"
+git -C "$origem" add c1.txt
+git -C "$origem" commit --quiet -m "feat(teste): sem assinatura"
+antes_ass="$(head_instalado)"
+atualizar <<<s
+conferir "sem assinatura: a cópia instalada não avança" test "$(head_instalado)" = "$antes_ass"
+conferir "sem assinatura: diz o commit e o jangada-assinar" \
+  bash -c 'grep -q "sem assinatura válida" "$1" && grep -q "feat(teste): sem assinatura" "$1"' _ "$tmp/saida"
+
+assinar </dev/null
+conferir "assinar sem terminal: não assina ($rc)" [ "$rc" -ne 0 ]
+conferir "assinar sem terminal: o commit segue sem assinatura" [ "$(assinatura HEAD)" != G ]
+assinar <<<s
+conferir "assinar: termina sem erro ($rc)" [ "$rc" -eq 0 ]
+conferir "assinar: mostra o commit" grep -q "feat(teste): sem assinatura" "$tmp/saida"
+conferir "assinar: o commit tem assinatura válida" [ "$(assinatura HEAD)" = G ]
+conferir "assinar: o já enviado não muda" [ "$(git -C "$origem" rev-parse "main@{upstream}")" = "$(git -C "$remoto" rev-parse main)" ]
+c1="$(git -C "$origem" rev-parse HEAD)"
+assinar <<<s
+conferir "assinar de novo: nada a assinar" grep -q "nada a assinar" "$tmp/saida"
+atualizar <<<s
+conferir "assinado: a cópia instalada avança" test "$(head_instalado)" = "$c1"
+
+# Assinado por uma chave fora do allowed_signers vale como sem assinatura, e
+# o jangada-assinar só reescreve dali em diante.
+echo c2 >"$origem/c2.txt"
+git -C "$origem" add c2.txt
+git -C "$origem" -c gpg.format=ssh -c user.signingkey="$tmp/outra" commit --quiet -S -m "feat(teste): outra chave"
+atualizar <<<s
+conferir "outra chave: a cópia instalada não avança" test "$(head_instalado)" = "$c1"
+assinar <<<s
+conferir "outra chave: assinar só reescreve o commit dela" \
+  bash -c '[ "$(git -C "$1" rev-parse HEAD^)" = "$2" ] && ! grep -q "feat(teste): sem assinatura" "$3"' _ "$origem" "$c1" "$tmp/saida"
+atualizar <<<s
+conferir "outra chave, depois de assinar: a cópia instalada avança" \
+  test "$(head_instalado)" = "$(git -C "$origem" rev-parse HEAD)"
+
+# O gpg.ssh.program do repositório não roda na assinatura nem na conferência.
+printf '#!/bin/sh\ntouch "%s"\nexit 1\n' "$alerta" >"$tmp/programa.sh"
+chmod +x "$tmp/programa.sh"
+git -C "$origem" config gpg.ssh.program "$tmp/programa.sh"
+git -C "$instalado" config gpg.ssh.program "$tmp/programa.sh"
+echo c3 >"$origem/c3.txt"
+git -C "$origem" add c3.txt
+git -C "$origem" commit --quiet -m "feat(teste): terceiro"
+assinar <<<s
+atualizar <<<s
+conferir "gpg.ssh.program do repositório: assina e aplica" test "$(head_instalado)" = "$(git -C "$origem" rev-parse HEAD)"
+conferir "gpg.ssh.program do repositório: não roda" test ! -e "$alerta"
+git -C "$origem" config --unset gpg.ssh.program
+git -C "$instalado" config --unset gpg.ssh.program
+
+# Sem a chave (como no isolamento, com o ~/.ssh oculto), recusa com o motivo.
+mv "$HOME/.ssh" "$HOME/.ssh-fora"
+echo c4 >"$origem/c4.txt"
+git -C "$origem" add c4.txt
+git -C "$origem" commit --quiet -m "feat(teste): sem chave"
+assinar <<<s
+conferir "sem a chave: recusa ($rc)" [ "$rc" -ne 0 ]
+conferir "sem a chave: indica o terminal comum" grep -q "terminal comum" "$tmp/saida"
+mv "$HOME/.ssh-fora" "$HOME/.ssh"
+git -C "$origem" reset --quiet --hard HEAD^
+rm -f "$XDG_CONFIG_HOME/jangada/allowed_signers"
 
 echo "== install.sh só da cópia instalada"
 
