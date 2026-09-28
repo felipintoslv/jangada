@@ -78,17 +78,19 @@ fi
 # em mais de um write; a linha é montada antes e gravada sob a trava da pasta,
 # para rodadas simultâneas não se intercalarem.
 registrar() {
-  local itens=0 linha
+  local itens=0 linha resumo resumo_erro
   [[ -f "${saida:-}" ]] && itens="$(grep -cE '^[[:space:]]*[0-9]+\.[[:space:]]' "$saida" || true)"
+  resumo_subagentes
   linha="$(jq -nc --arg data "$(date -Iseconds)" --arg projeto "$projeto" --arg rotulo "$rotulo" \
     --argjson rodada "$rodada" --arg resultado "$1" --arg etapa "$2" --arg revisor "$revisor" \
     --arg modelo "$modelo" --arg autor "$autor" --argjson arquivos "$(grep -c . <<<"$arquivos" || true)" \
     --argjson mais "${mais:-0}" --argjson menos "${menos:-0}" --argjson itens "${itens:-0}" \
-    --argjson segundos "$SECONDS" --arg subagentes "$(resumo_subagentes)" \
+    --argjson segundos "$SECONDS" --arg subagentes "$resumo" --arg subagentes_erro "$resumo_erro" \
     '{data: $data, projeto: $projeto, rotulo: $rotulo, rodada: $rodada, resultado: $resultado,
       etapa: $etapa, revisor: $revisor, modelo: $modelo, autor: $autor, arquivos: $arquivos,
       mais: $mais, menos: $menos, itens: $itens, segundos: $segundos}
-     + ($subagentes | fromjson? // null | if type == "object" then {subagentes: .} else {} end)' \
+     + (if $subagentes != "" then {subagentes: ($subagentes | fromjson)} else {} end)
+     + (if $subagentes_erro != "" then {subagentes_erro: $subagentes_erro} else {} end)' \
     2>/dev/null)" || return 0
   if command -v flock >/dev/null 2>&1; then
     (
@@ -101,11 +103,15 @@ registrar() {
 }
 
 # Subagentes e delegações da entrega: os que rodaram na pasta desde a última
-# aprovação (ou o início da sessão, ou o commit de partida). Campo opcional:
-# sem python3 ou com erro de leitura, a linha sai sem ele.
+# aprovação (ou o início da sessão, ou o commit de partida). Sem python3 a
+# linha sai sem o campo. Se a leitura falhar, o motivo vai para
+# subagentes_erro e para o stderr: sem ele, a entrega some dos indicadores
+# sem ninguém saber por quê.
 resumo_subagentes() {
-  local desde=""
+  local desde="" rc=0
+  resumo=""; resumo_erro=""
   [[ -n "${dir:-}" ]] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
   if [[ -f "${arq_aprovado:-}" ]]; then
     desde="$(date -r "$arq_aprovado" -Iseconds)"
   elif [[ -n "${criada:-}" ]]; then
@@ -113,7 +119,19 @@ resumo_subagentes() {
   elif [[ -n "${ponto:-}" ]]; then
     desde="$(git -C "$dir" log -1 --format=%cI "$ponto" 2>/dev/null || true)"
   fi
-  timeout 30 "$JANGADA_PATH/bin/jangada-subagentes" --entrega "$dir" ${desde:+--desde "$desde"} 2>/dev/null || true
+  resumo="$(timeout 30 "$JANGADA_PATH/bin/jangada-subagentes" --entrega "$dir" ${desde:+--desde "$desde"} 2>/dev/null)" || rc=$?
+  if ((rc == 124)); then
+    resumo_erro="tempo esgotado (30 s)"
+  elif ((rc)); then
+    resumo_erro="jangada-subagentes saiu com código $rc"
+  elif ! jq -e 'type == "object"' <<<"$resumo" >/dev/null 2>&1; then
+    resumo_erro="a saída do jangada-subagentes não é um objeto JSON"
+  fi
+  if [[ -n "$resumo_erro" ]]; then
+    resumo=""
+    echo "jangada-validar: resumo de subagentes não gravado: $resumo_erro" >&2
+  fi
+  return 0
 }
 
 dir="$(realpath "${1:-$PWD}")"

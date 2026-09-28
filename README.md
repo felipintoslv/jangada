@@ -337,8 +337,8 @@ tamanho do retorno, passos do agy e a cota antes e depois.
 `jangada-subagentes --entrega PASTA` resume os subagentes do Claude, os do
 agy e as delegações que rodaram na pasta: quantos, tokens, tamanho do
 retorno, edições e autorrevisões. O `jangada-validar` grava esse resumo no
-campo `subagentes` do `validar.jsonl`. Os registros estão em
-`docs/registros.md`.
+campo `subagentes` do `validar.jsonl`; se a leitura falhar, grava o motivo
+em `subagentes_erro` e avisa. Os registros estão em `docs/registros.md`.
 
 `jangada-subagentes [--json]` calcula os indicadores: tokens do Claude por
 entrega aprovada com e sem agy (por tamanho do diff), fração ao agy e

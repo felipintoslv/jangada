@@ -613,6 +613,26 @@ JANGADA_ESTADO="$tmp/estado/jangada" JANGADA_CLAUDE_PROJETOS="$tmp/amostra/claud
 conferir "caso 17b: o resumo conta desde a criação da sessão, não o commit de partida" \
   bash -c 'tail -n1 "$1" | jq -e ".subagentes.n == 0 and .subagentes.recusas == 0" >/dev/null' _ "$metricas"
 rm -f "$tmp/estado/jangada/delegacoes.jsonl"
+# Leitura dos subagentes que falha ou devolve lixo: a linha sai sem o resumo,
+# com o motivo em subagentes_erro, e o validar avisa.
+mkdir -p "$tmp/py"
+cat >"$tmp/py/python3" <<EOF
+#!/usr/bin/env bash
+case "\$1" in
+  */subagentes.py) [[ "\$FALSO_SUBAGENTES" == lixo ]] && { echo "não é JSON"; exit 0; }; exit 1 ;;
+esac
+exec $(command -v python3) "\$@"
+EOF
+chmod +x "$tmp/py/python3"
+for modo in falha lixo; do
+  sessao_de claude
+  echo "m-$modo" >>"$tmp/projeto/metricas.txt"
+  PATH="$tmp/py:$PATH" FALSO_SUBAGENTES="$modo" validar 'STATUS: APROVADO'
+  conferir "caso 17b ($modo): a linha sai sem resumo e com o motivo" \
+    bash -c 'tail -n1 "$1" | jq -e "(has(\"subagentes\") | not) and (.subagentes_erro | length > 0) and .resultado == \"aprovado\"" >/dev/null' _ "$metricas"
+  conferir "caso 17b ($modo): o validar avisa que o resumo não foi gravado" \
+    grep -q "resumo de subagentes não gravado" "$tmp/saida.log"
+done
 git -C "$tmp/projeto" checkout -q -- metricas.txt
 
 # Caso 17c: rodadas simultâneas de sessões diferentes gravam linhas inteiras
