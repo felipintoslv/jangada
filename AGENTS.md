@@ -32,3 +32,8 @@ com agentes de IA. Leia o README.md antes de alterar qualquer coisa.
    `feat(área): ...` para novidade e `fix(área): ...` para correção. O
    `CHANGELOG.md` não se edita à mão: ele é gerado por
    `jangada-versao --lancar X.Y.Z`.
+10. **Modelo de ameaça.** O agente é tratado como possivelmente hostil: ele lê
+    conteúdo de fora, e uma injeção de prompt o faz agir contra o usuário.
+    Nada que ele pode gravar (worktree, cópia de trabalho, estado das sessões)
+    roda fora do isolamento sem conferência, e conteúdo de fora que chega a
+    um agente (log, título de janela, página) vai como dado, não instrução.

@@ -6,6 +6,17 @@ fica somente leitura, e os segredos ficam ocultos. O objetivo é que nada do
 que o agente fizer rode depois fora do isolamento: um hook do git, um
 `settings.json` do Claude, um clone do AUR compilado com sudo.
 
+## Modelo de ameaça
+
+O agente é tratado como possivelmente hostil. Ele lê páginas, issues, logs e
+documentos, e um texto preparado ali (injeção de prompt) faz um agente
+comum agir contra o usuário. Por isso a pergunta que decide cada caso é: o
+que o agente grava pode rodar depois fora do isolamento? Se pode, o jangada
+confere antes (o `restaurar` recompõe o comando, o `jangada-validar` lê as
+regras da base, o `jangada-update` mostra os commits) ou recusa (o
+`install.sh` não instala da cópia de trabalho). O isolamento não protege
+contra falha do próprio bubblewrap nem do kernel.
+
 ## Decisão de isolar
 
 ```mermaid

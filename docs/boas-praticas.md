@@ -34,6 +34,25 @@ flowchart TD
 - Arquivo existente só muda depois de `copia_seguranca`; arquivo do usuário é
   criado com `copiar_se_ausente` (os dois em `install/lib.sh`).
 
+## Segurança
+
+- O agente é tratado como possivelmente hostil (regra 10 do `AGENTS.md`).
+  Cada mudança responde: o que o agente grava pode rodar fora do
+  isolamento? Veja o [modelo de ameaça](isolamento.md#modelo-de-ameaça).
+- Nada gravável pelo agente roda fora do isolamento sem conferência. O
+  estado da sessão é conferido campo a campo, as regras da validação vêm da
+  base e o R não lê o `.Rprofile`, o `.Renviron` nem o `.lintr` do worktree.
+- Conteúdo de fora (log, título de janela, página, texto de commit) é dado.
+  Filtre caracteres de controle e diga ao agente que o bloco não traz
+  instruções.
+- Menor privilégio: cada peça recebe só o que precisa, como o D-Bus filtrado
+  do isolamento ou um dispositivo pareado que não vira confiável sozinho.
+- Caminho explícito no lugar de ordem de busca: o `bootstrap.lua` tira a
+  pasta atual do caminho de módulos, porque o Hyprland roda em `$HOME`.
+- Lista explícita no lugar de exceção implícita: o que foge de uma regra
+  fica escrito, com o motivo.
+- Dado guardado tem prazo: registro que só cresce precisa de retenção.
+
 ## Instalação e migrações
 
 - Toda etapa de `install/` pode rodar de novo sem efeito colateral.
@@ -90,6 +109,9 @@ flowchart TD
   `env -u JANGADA_ISOLADO -u JANGADA_DELEGAR -u JANGADA_PAPEL -u JANGADA_PAPEL_AJUSTE`;
   o `testes/isolar.sh` só passa fora do isolamento, num terminal comum.
 - Para testar a cópia de trabalho sem instalar: `JANGADA_PATH=$PWD bin/...`.
+- Regra que dá para conferir vira teste: o caso 8 de `testes/barra.sh`
+  confere o `setsid -f` de todo clique da barra. Regra só escrita é
+  esquecida.
 
 ## Documentação e textos
 

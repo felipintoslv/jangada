@@ -3,7 +3,9 @@
 Pedido: `revisao/PROMPT_AUDITORIA.md`. Base: commit 0246292 (main).
 
 Situação: todos os 72 itens apontados pela auditoria (críticos, altos, médios e
-baixos) foram devidamente corrigidos nos commits de 27/09/2026.
+baixos) foram devidamente corrigidos nos commits de 27/09/2026. Das 14
+perguntas ao autor, 8 estão resolvidas e 6 têm resposta com trabalho
+pendente; veja "Respostas do autor", no fim.
 
 Método: o repositório foi dividido em cinco partes (isolamento e sessões;
 atualização e instalação; validar, delegar e segredos; Hyprland, barra e
@@ -852,3 +854,22 @@ modelo de ameaça 1 do pedido. Ver "Perguntas ao autor".
 12. O Hyprland roda com cwd em $HOME. A pasta da configuração entra no `package.path` antes de `./?.lua`? Se entrar depois, um `~/cores.lua` seria carregado no lugar do arquivo do jangada. Para conferir: `print(package.path)` no bootstrap, em testes/aninhado.sh.
 13. O `escanear` do jangada-bluetooth marca como confiável (`trust`) todo dispositivo pareado (:92). É a intenção?
 14. Os cliques do relógio (config.jsonc:154) e o botão direito da rede (:216) abrem janela sem `setsid -f`, ao contrário da regra da skill. Convém padronizar?
+
+## Respostas do autor (28/09/2026)
+
+| # | Resposta | Situação |
+|---|---|---|
+| 1 | O isolamento é defesa contra injeção de prompt: o agente é tratado como possivelmente hostil. | Resolvida: regra 10 do `AGENTS.md` e seção "Modelo de ameaça" do `docs/isolamento.md`. |
+| 2 | O `--unshare-pid` já entrou. A rede fica, porque o agente fala com a API; o painel deve cobrar um token guardado numa pasta oculta. | Pendente: token no painel. |
+| 3 | Dá para recompor. | Resolvida: o `restaurar` do `jangada-agentes` monta o comando dos campos conferidos. |
+| 4 | Sim, com chave SSH fora do isolamento e `allowed_signers` fora da cópia de trabalho. | Pendente: assinar os commits e ligar `--verify-signatures` no `jangada-update`. |
+| 5 | Roda, e nada do repositório avaliado pode rodar fora do isolamento. | Parcial: o R não lê mais o `.Rprofile`, o `.Renviron` nem o `.lintr` do worktree (caso 12g de `testes/validar.sh`). Pendente: rodar o `.jangada/validar.sh` pelo `jangada-isolar`. |
+| 6 | O `agy -p` do jangada usa `--sandbox`; a confiança libera agentes, regras e MCP da pasta. | Pendente: o `jangada-worktree-preparar` deve confiar no worktree só se o repositório principal já for confiável. |
+| 7 | As exceções entram numa lista explícita no `AGENTS.md`. | Pendente: a lista e um teste que a confira. |
+| 8 | Deve recusar. | Resolvida: o `install.sh` recusa a cópia de trabalho, worktrees e `JANGADA_WORKTREES`, e só simula ali (`testes/update.sh`). |
+| 9 | O log é entrada não confiável. | Pendente: filtrar as linhas de erro e aviso, tirar caracteres de controle e marcar o bloco como dados. |
+| 10 | Não é intencional. | Pendente: limpeza própria para os snapshots do agente. |
+| 11 | O cache ganha prazo de retenção. | Pendente: definir o prazo e a agregação dos dias antigos. |
+| 12 | A pasta atual não pode entrar. | Resolvida: o `bootstrap.lua` tira as entradas `./` do `package.path` e do `package.cpath`; a simulação em `testes/verificar.sh` roda com `usuario.lua` na pasta atual. |
+| 13 | Parear não implica confiar. | Pendente: `trust` só por escolha no menu. |
+| 14 | Sim. | Resolvida: `setsid -f` em todo clique que abre janela, conferido no caso 8 de `testes/barra.sh`, com migração para a cópia própria. |
