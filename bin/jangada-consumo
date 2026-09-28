@@ -62,8 +62,11 @@ for caminho in sys.stdin.buffer.read().split(b"\0"):
             if chave in vistos:
                 continue
             vistos.add(chave)
-            t = dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
-            if agora - t > 2 * janela:
+            try:
+                t = dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                if agora - t > 2 * janela:
+                    continue
+            except (ValueError, TypeError):
                 continue
             msgs.append((t, u))
 msgs.sort(key=lambda x: x[0])
