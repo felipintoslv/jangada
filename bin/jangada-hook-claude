@@ -87,28 +87,37 @@
     estado_dir="$JANGADA_ESTADO/agentes"
     mkdir -p "$estado_dir"
     arq="$estado_dir/$sessao.json"
+    if [[ "$evento" == fim && ! -f "$arq" ]]; then
+      exit 0
+    fi
     agora="$(jangada_data_iso)"
     [[ -f "$arq" ]] || jq -n --arg s "$sessao" --arg d "${cwd:-$PWD}" '{sessao:$s, dir:$d}' >"$arq"
-    anterior="$(jq -r '.estado // ""' "$arq" 2>/dev/null || true)"
-    projeto="$(jq -r '(.raiz // .dir // "") | split("/") | last // ""' "$arq" 2>/dev/null || true)"
     tmp="$(mktemp "$arq.XXXXXX")"
-    # A conversa é gravada em todo evento: instalações sem o SessionStart
-    # também ficam com o id para o --restaurar.
-    jangada_alterar_estado "$arq" "$tmp" \
-      --arg e "$estado" --arg m "$mensagem" --arg a "$agora" --arg c "$conversa" '
-      (if $c != "" then .conversa = $c else . end)
-      | (if $e != "" then .estado = $e | .atualizado = $a else . end)
-      | (if $e != "" and $m != "" then .mensagem = $m else . end)
-    '
+    atualizar() {
+      local anterior projeto
+      anterior="$(jq -r '.estado // ""' "$arq" 2>/dev/null || true)"
+      projeto="$(jq -r '(.raiz // .dir // "") | split("/") | last // ""' "$arq" 2>/dev/null || true)"
+      # A conversa é gravada em todo evento: instalações sem o SessionStart
+      # também ficam com o id para o --restaurar.
+      # shellcheck disable=SC2016  # variáveis do jq
+      jq --arg e "$estado" --arg m "$mensagem" --arg a "$agora" --arg c "$conversa" '
+        (if $c != "" then .conversa = $c else . end)
+        | (if $e != "" then .estado = $e | .atualizado = $a else . end)
+        | (if $e != "" and $m != "" then .mensagem = $m else . end)
+      ' "$arq" >"$tmp" 2>/dev/null && mv "$tmp" "$arq" || return 1
+      # Histórico para o painel: só a mudança de estado, porque o PostToolUse
+      # repete "trabalhando" a cada ferramenta. Início e fim contam sempre.
+      case "$evento" in
+        inicio) jangada_registrar_evento "$sessao" "${projeto:-$(basename "${cwd:-$PWD}")}" claude inicio ;;
+        fim) [[ -n "$estado" ]] && jangada_registrar_evento "$sessao" "${projeto:-$(basename "${cwd:-$PWD}")}" claude fim ;;
+        *) [[ -n "$estado" && "$estado" != "$anterior" ]] \
+             && jangada_registrar_evento "$sessao" "${projeto:-$(basename "${cwd:-$PWD}")}" claude "$estado" ;;
+      esac
+    }
+    if jangada_com_trava_dir "$estado_dir" atualizar; then
+      pkill -RTMIN+10 -x waybar 2>/dev/null || true
+    fi
     rm -f "$tmp"
-    # Histórico para o painel: só a mudança de estado, porque o PostToolUse
-    # repete "trabalhando" a cada ferramenta. Início e fim contam sempre.
-    case "$evento" in
-      inicio) jangada_registrar_evento "$sessao" "${projeto:-$(basename "${cwd:-$PWD}")}" claude inicio ;;
-      fim) [[ -n "$estado" ]] && jangada_registrar_evento "$sessao" "${projeto:-$(basename "${cwd:-$PWD}")}" claude fim ;;
-      *) [[ -n "$estado" && "$estado" != "$anterior" ]] \
-           && jangada_registrar_evento "$sessao" "${projeto:-$(basename "${cwd:-$PWD}")}" claude "$estado" ;;
-    esac
   fi
   nome="${sessao:-$(basename "${cwd:-$PWD}")}"
 

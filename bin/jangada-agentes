@@ -102,7 +102,7 @@ listar() {
     [[ -n "$s" ]] || continue
     arq="$estado_dir/$s.json"
     if [[ -f "$arq" ]]; then
-      dados="$(jq -r '[ (.estado // "ativo"), (.dir // ""), (.atualizado // ""), (.ramo // ""), ((.tarefa // "") | split("\n") | (.[0] // "") | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;") | if length > 50 then .[0:47] + "..." else . end) ] | map(tostring | gsub("[\t\n\u001f]"; " ")) | join("\u001f")' "$arq" 2>/dev/null || printf 'ativo%s%s%s%s' "$US" "$US" "$US" "$US")"
+      dados="$(jq -r '[ (.estado // "ativo"), (.dir // ""), (.atualizado // ""), ((.ramo // "") | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;")), ((.tarefa // "") | split("\n") | (.[0] // "") | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;") | if length > 50 then .[0:47] + "..." else . end) ] | map(tostring | gsub("[\t\n\u001f]"; " ")) | join("\u001f")' "$arq" 2>/dev/null || printf 'ativo%s%s%s%s' "$US" "$US" "$US" "$US")"
     else
       dados="$(printf 'ativo%s%s%s%s' "$US" "$US" "$US" "$US")"
     fi
@@ -115,7 +115,7 @@ listar() {
     s="$(basename "$arq" .json)"
     grep -qxF "$s" <<<"$vivas" && continue
     pid="$(jq -r '.pid // empty' "$arq" 2>/dev/null || true)"
-    dados="$(jq -r '[ (.estado // "ativo"), (.dir // ""), (.atualizado // ""), (.ramo // ""), ((.tarefa // "") | split("\n") | (.[0] // "") | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;") | if length > 50 then .[0:47] + "..." else . end) ] | map(tostring | gsub("[\t\n\u001f]"; " ")) | join("\u001f")' "$arq" 2>/dev/null || printf 'ativo%s%s%s%s' "$US" "$US" "$US" "$US")"
+    dados="$(jq -r '[ (.estado // "ativo"), (.dir // ""), (.atualizado // ""), ((.ramo // "") | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;")), ((.tarefa // "") | split("\n") | (.[0] // "") | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;") | if length > 50 then .[0:47] + "..." else . end) ] | map(tostring | gsub("[\t\n\u001f]"; " ")) | join("\u001f")' "$arq" 2>/dev/null || printf 'ativo%s%s%s%s' "$US" "$US" "$US" "$US")"
     IFS="$US" read -r estado dir atualizado ramo tarefa <<<"$dados"
     # Ou o processo ainda responde, ou o ciclo terminou e o resultado fica à
     # vista até alguém encerrar a sessão.
@@ -386,7 +386,7 @@ focar() {
       "$(jq -r '.agente // ""' "$estado_dir/$s.json" 2>/dev/null || true)" foco
   fi
   if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
-    endereco="$(hyprctl clients -j 2>/dev/null | jq -r --arg s "$s" 'map(select(.title == $s or (.title | test($s)))) | .[0].address // empty' 2>/dev/null || true)"
+    endereco="$(hyprctl clients -j 2>/dev/null | jq -r --arg s "$s" '(map(select(.title == $s)) + map(select(.title | startswith($s)))) | .[0].address // empty' 2>/dev/null || true)"
   fi
   if [[ -n "$endereco" ]]; then
     hyprctl dispatch "hl.dsp.focus({ window = \"address:$endereco\" })" >/dev/null
@@ -566,6 +566,9 @@ case "${1:-}" in
       if ((cont > 10)); then
         continue
       fi
+      s_pango="${s//&/&amp;}"
+      s_pango="${s_pango//</&lt;}"
+      s_pango="${s_pango//>/&gt;}"
       case "$est" in
         aguardando) simb="󰂞" ;;
         trabalhando) simb="󰑮" ;;
@@ -573,7 +576,7 @@ case "${1:-}" in
         interrompido) simb="󰜺" ;;
         *) simb="●" ;;
       esac
-      dica+=$'\n\n'"$simb $s [$est]"
+      dica+=$'\n\n'"$simb $s_pango [$est]"
       [[ -n "$ramo" ]] && dica+=$'\n   ramo: '"$ramo"
       [[ -n "$tarefa" ]] && dica+=$'\n   tarefa: '"$tarefa"
     done < <(campos "$linhas")

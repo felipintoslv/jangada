@@ -44,21 +44,27 @@ echo '{}'
     *) exit 0 ;;
   esac
 
-  anterior="$(jq -r '.estado // ""' "$arq" 2>/dev/null || true)"
   tmp="$(mktemp "$arq.XXXXXX")"
-  # shellcheck disable=SC2016  # $e, $m, $a e $c são variáveis do jq
-  jangada_alterar_estado "$arq" "$tmp" \
-    --arg e "$evento" --arg m "$mensagem" --arg a "$(jangada_data_iso)" --arg c "$conversa" '
-    (if $c != "" then .conversa = $c else . end)
-    | .estado = $e | .atualizado = $a
-    | (if $m != "" then .mensagem = $m else . end)
-  '
-  rm -f "$tmp"
-  # Histórico para o painel, só na mudança de estado.
-  if [[ "$evento" != "$anterior" ]]; then
-    jangada_registrar_evento "$JANGADA_SESSAO" \
-      "$(jq -r '(.raiz // .dir // "") | split("/") | last // ""' "$arq" 2>/dev/null || true)" agy "$evento"
+  atualizar() {
+    local anterior projeto
+    anterior="$(jq -r '.estado // ""' "$arq" 2>/dev/null || true)"
+    projeto="$(jq -r '(.raiz // .dir // "") | split("/") | last // ""' "$arq" 2>/dev/null || true)"
+    # shellcheck disable=SC2016  # $e, $m, $a e $c são variáveis do jq
+    jq --arg e "$evento" --arg m "$mensagem" --arg a "$(jangada_data_iso)" --arg c "$conversa" '
+      (if $c != "" then .conversa = $c else . end)
+      | .estado = $e | .atualizado = $a
+      | (if $m != "" then .mensagem = $m else . end)
+    ' "$arq" >"$tmp" 2>/dev/null && mv "$tmp" "$arq" || return 1
+    # Histórico para o painel, só na mudança de estado.
+    if [[ "$evento" != "$anterior" ]]; then
+      jangada_registrar_evento "$JANGADA_SESSAO" \
+        "${projeto:-$(basename "$arq" .json)}" agy "$evento"
+    fi
+  }
+  if jangada_com_trava_dir "$(dirname "$arq")" atualizar; then
+    pkill -RTMIN+10 -x waybar 2>/dev/null || true
   fi
+  rm -f "$tmp"
 
   # Dentro do jangada-isolar o tmux fica fora de alcance, e a notificação vai
   # sem o botão.

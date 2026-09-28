@@ -34,7 +34,7 @@ set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
-janela=0; projeto=""; nome=""; direto=0; snapshot=0
+janela=0; projeto=""; nome=""; nome_dado=0; direto=0; snapshot=0
 agente="$JANGADA_AGENTE"; extras=(); prompt=""; perfil=""; agente_dado=0
 revisor="${JANGADA_VALIDAR_REVISOR:-}"; revisor_dado=0
 isolar="$JANGADA_AGENTE_ISOLAR"; isolar_dado=0
@@ -42,7 +42,7 @@ while (($#)); do
   case "$1" in
     --janela) janela=1; shift ;;
     --projeto) projeto="$2"; shift 2 ;;
-    --nome) nome="$2"; shift 2 ;;
+    --nome) nome="$2"; nome_dado=1; shift 2 ;;
     --direto) direto=1; shift ;;
     --snapshot) snapshot=1; shift ;;
     --agente) agente="$2"; agente_dado=1; shift 2 ;;
@@ -161,6 +161,7 @@ if git -C "$projeto" rev-parse --show-toplevel >/dev/null 2>&1; then
   raiz="$(git -C "$projeto" rev-parse --show-toplevel)"
 fi
 repo="$(slug "$(basename "$raiz")")"
+[[ -n "$repo" ]] || repo="projeto-$(printf '%s' "$raiz" | md5sum | cut -c1-8)"
 
 if ((eh_git)) && ((!direto)) && [[ -z "$nome" ]]; then
   if [[ -n "$prompt" ]]; then
@@ -182,6 +183,8 @@ if ((eh_git)) && ((!direto)) && [[ -z "$nome" ]]; then
   fi
 fi
 nome="$(slug "$nome")"
+[[ -z "$nome" ]] && { ((nome_dado)) || { [[ -n "$prompt" ]] && ((!direto)); }; } \
+  && nome="tarefa-$(date +%Y%m%d-%H%M%S)"
 
 dir="$raiz"; worktree=""; ramo=""; base=""; worktree_novo=0
 if ((eh_git)) && [[ -n "$nome" ]]; then

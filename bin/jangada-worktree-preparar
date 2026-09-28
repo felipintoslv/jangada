@@ -110,6 +110,9 @@ if [[ -f "$raiz/.worktreeinclude" ]]; then
       fi
     fi
     for c in "${itens[@]}"; do
+      if [[ "$c" =~ (\.env|\.Renviron|\.pem|credentials|token|senha|secret) ]]; then
+        avisar "arquivo com potenciais segredos copiado para o worktree: $c"
+      fi
       if ((simular)); then
         echo "copiaria $c"
       else
@@ -166,10 +169,19 @@ if [[ -f "$raiz/.jangada/preparar.sh" ]]; then
   if ((simular)); then
     echo "rodaria .jangada/preparar.sh em $worktree"
   else
-    echo "preparar: rodando .jangada/preparar.sh"
-    (cd "$worktree" && JANGADA_RAIZ="$raiz" JANGADA_WORKTREE="$worktree" \
-      "$JANGADA_PATH/bin/jangada-isolar" -- bash "$raiz/.jangada/preparar.sh") \
-      || avisar ".jangada/preparar.sh terminou com erro"
+    executar_script=1
+    if [[ -t 0 ]]; then
+      read -r -p "executar .jangada/preparar.sh em $worktree? [s/N] " r || r=n
+      [[ "${r,,}" == s* ]] || executar_script=0
+    fi
+    if ((executar_script)); then
+      echo "preparar: rodando .jangada/preparar.sh"
+      (cd "$worktree" && JANGADA_RAIZ="$raiz" JANGADA_WORKTREE="$worktree" \
+        "$JANGADA_PATH/bin/jangada-isolar" -- bash "$raiz/.jangada/preparar.sh") \
+        || avisar ".jangada/preparar.sh terminou com erro"
+    else
+      echo "preparar: .jangada/preparar.sh ignorado pelo usuário"
+    fi
   fi
 fi
 
