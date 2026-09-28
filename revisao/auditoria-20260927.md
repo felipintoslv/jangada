@@ -4,7 +4,7 @@ Pedido: `revisao/PROMPT_AUDITORIA.md`. Base: commit 0246292 (main).
 
 Situação: todos os 72 itens apontados pela auditoria (críticos, altos, médios e
 baixos) foram devidamente corrigidos nos commits de 27/09/2026. Das 14
-perguntas ao autor, 12 estão resolvidas e 2 têm resposta com trabalho
+perguntas ao autor, 13 estão resolvidas e 1 tem resposta com trabalho
 pendente; veja "Respostas do autor", no fim.
 
 Método: o repositório foi dividido em cinco partes (isolamento e sessões;
@@ -860,7 +860,7 @@ modelo de ameaça 1 do pedido. Ver "Perguntas ao autor".
 | # | Resposta | Situação |
 |---|---|---|
 | 1 | O isolamento é defesa contra injeção de prompt: o agente é tratado como possivelmente hostil. | Resolvida: regra 10 do `AGENTS.md` e seção "Modelo de ameaça" do `docs/isolamento.md`. |
-| 2 | O `--unshare-pid` já entrou. A rede fica, porque o agente fala com a API; o painel deve cobrar um token guardado numa pasta oculta. | Pendente: token no painel. |
+| 2 | O `--unshare-pid` já entrou. A rede fica, porque o agente fala com a API; o painel deve cobrar um token guardado numa pasta oculta. | Resolvida: o app só abre sessão com o token de `painel-chave/token` na URL, que o `jangada-painel` grava e passa ao navegador e o `jangada-isolar` oculta sempre (caso 1 de `testes/isolar.sh` e caso 5 de `testes/painel.sh`). |
 | 3 | Dá para recompor. | Resolvida: o `restaurar` do `jangada-agentes` monta o comando dos campos conferidos. |
 | 4 | Sim, com chave SSH fora do isolamento e `allowed_signers` fora da cópia de trabalho. | Pendente: assinar os commits e ligar `--verify-signatures` no `jangada-update`. |
 | 5 | Roda, e nada do repositório avaliado pode rodar fora do isolamento. | Resolvida: o R não lê mais o `.Rprofile`, o `.Renviron` nem o `.lintr` do worktree (caso 12g de `testes/validar.sh`), e o `.jangada/validar.sh` roda pelo `jangada-isolar`, que recusa sem o bwrap (casos 20b e 20c). |

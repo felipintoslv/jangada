@@ -21,7 +21,8 @@
 # config, hooks, commondir e gitdir do git; settings, CLAUDE.md, commands,
 # agents, skills, hooks e plugins do Claude; os binários do agy; os clones
 # do AUR. Ficam ocultas as chaves, os perfis de navegador e o histórico da
-# área de transferência (JANGADA_ISOLAR_OCULTAR substitui a lista).
+# área de transferência (JANGADA_ISOLAR_OCULTAR substitui a lista), e sempre
+# o token do jangada-painel.
 #
 # JANGADA_AGENTE_ISOLAR=0 desliga; já isolado (JANGADA_ISOLADO=1 e a marca
 # que só o bwrap monta), o comando roda direto; sem o bwrap, recusa.
@@ -254,6 +255,11 @@ else
     && { [[ -d "${XDG_CACHE_HOME:-$HOME/.cache}/cliphist" ]] \
          || mkdir -m 0700 "${XDG_CACHE_HOME:-$HOME/.cache}/cliphist" 2>/dev/null || true; }
 fi
+# O token do jangada-painel fica oculto sempre, com ou sem a lista acima: sem
+# ele, o agente alcança a porta do painel mas não abre sessão. A pasta é
+# criada antes, para um token gravado depois não aparecer no isolamento.
+(umask 077; mkdir -p "$JANGADA_ESTADO/painel-chave" 2>/dev/null) || true
+ocultos+=("$JANGADA_ESTADO/painel-chave")
 for p in "${ocultos[@]}"; do
   [[ -n "$p" ]] || continue
   [[ "$p" == /* ]] || p="$HOME/$p"

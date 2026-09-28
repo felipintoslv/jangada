@@ -13,12 +13,16 @@
 # O cache fica em ~/.local/state/jangada/painel: uma tabela Parquet por fonte,
 # gravada pelo default/painel/coletor.py, que lê os jsonl do Claude a partir
 # de onde parou. O app (default/painel/app.R) só lê o cache e recarrega
-# sozinho quando ele muda. Porta: JANGADA_PAINEL_PORTA (8765).
+# sozinho quando ele muda. Porta: JANGADA_PAINEL_PORTA (8765). O app só abre
+# sessão com o token de ~/.local/state/jangada/painel-chave na URL.
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
 cache="$JANGADA_ESTADO/painel"
+# O token que o app cobra na URL. A pasta fica oculta no jangada-isolar: o
+# agente isolado alcança a porta, mas não sabe o token.
+chave="$JANGADA_ESTADO/painel-chave/token"
 pidf="$cache/app.pid"
 errof="$cache/erro.txt"
 marca="$cache/atualizando"
@@ -67,9 +71,20 @@ gerar() {
   avisar_barra
 }
 
+# Gera o token uma vez; a aba aberta continua valendo quando o app reinicia.
+preparar_chave() {
+  (umask 077; mkdir -p "${chave%/*}")
+  chmod 700 "${chave%/*}"
+  if [[ ! -s "$chave" ]]; then
+    (umask 077; od -An -N32 -tx1 /dev/urandom | tr -d ' \n' >"$chave.tmp" && mv "$chave.tmp" "$chave") \
+      || erro "não foi possível gravar o token em $chave"
+  fi
+}
+
 subir() {
   mkdir -p "$cache"
   command -v Rscript >/dev/null 2>&1 || erro "R não instalado (pacote r)"
+  preparar_chave
   rm -f "$errof"
   # O "jangada-painel-app" no comando identifica o processo no --parar.
   # shellcheck disable=SC2016  # código R
@@ -83,9 +98,9 @@ subir() {
       quit(status = 2)
     }
     writeLines(as.character(Sys.getpid()), a[[5]])
-    options(jangada.painel.cache = a[[2]])
+    options(jangada.painel.cache = a[[2]], jangada.painel.chave = a[[7]])
     shiny::runApp(a[[1]], host = "127.0.0.1", port = as.integer(a[[6]]), launch.browser = FALSE)
-  ' "$app_dir" "$cache" "$errof" "${pacotes_r[*]}" "$pidf" "$JANGADA_PAINEL_PORTA" \
+  ' "$app_dir" "$cache" "$errof" "${pacotes_r[*]}" "$pidf" "$JANGADA_PAINEL_PORTA" "$chave" \
     </dev/null >"$log" 2>&1 8>&-
   local i
   for ((i = 0; i < 100; i++)); do
@@ -112,7 +127,10 @@ abrir() {
       return 0
     fi
   fi
-  setsid -f xdg-open "$url" >/dev/null 2>&1 || echo "abra $url"
+  preparar_chave
+  local endereco
+  endereco="$url/?token=$(cat "$chave")"
+  setsid -f xdg-open "$endereco" >/dev/null 2>&1 || echo "abra $endereco"
 }
 
 parar() {

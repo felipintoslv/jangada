@@ -467,7 +467,8 @@ git sobre pastas de agentes com `jangada_git_seguro`.
 `JANGADA_ISOLAR_ESCRITA` no `jangada.conf` acrescenta pastas graváveis,
 separadas por `:` (`~/dados:~/R`). `JANGADA_ISOLAR_OCULTAR` substitui a lista
 de ocultos, com caminhos relativos à pasta pessoal ou absolutos; definida
-vazia, não oculta nada. Para desligar: `jangada-agente --sem-isolar` numa
+vazia, não oculta nada. A pasta do token do `jangada-painel` fica oculta
+sempre. Para desligar: `jangada-agente --sem-isolar` numa
 sessão, `JANGADA_AGENTE_ISOLAR=0` num perfil ou no `jangada.conf` para todas.
 O estado guarda o comando e o campo `isolar` só para consulta: a restauração
 ignora os dois e volta sempre isolada, a menos que `JANGADA_AGENTE_ISOLAR=0`
@@ -486,8 +487,11 @@ Shiny em `127.0.0.1:8765` (`JANGADA_PAINEL_PORTA`). O app só existe enquanto
 está aberto: `jangada-painel --parar` libera a memória do R. Precisa de R com
 shiny, bslib, bsicons, plotly, visNetwork, igraph, DT, arrow, jsonlite e
 htmltools, e do `python-pyarrow`; a instalação só avisa o que falta. O app só abre sessão
-para `127.0.0.1` ou `localhost` na porta dele: uma página de fora, aberta no
-mesmo navegador, não lê os indicadores.
+para `127.0.0.1` ou `localhost` na porta dele e com o token de
+`~/.local/state/jangada/painel-chave/token` na URL, que o `jangada-painel`
+passa ao navegador: uma página de fora, aberta no mesmo navegador, não lê os
+indicadores, e um agente no `jangada-isolar`, que não vê a pasta do token,
+também não.
 
 Cada chamada roda o coletor (`default/painel/coletor.py`). Ele lê as
 conversas do Claude Code a partir de onde parou, então só a primeira coleta

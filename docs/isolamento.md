@@ -70,7 +70,7 @@ ficar somente leitura dentro deles vem depois.
 | Camada temporária | `~/.cache` e, do Claude, `shell-snapshots`, `session-env` e `ide` | o agente lê o conteúdo de fora, e o que grava some no fim (sobreposição do bwrap; sem suporte, fica gravável) |
 | Somente leitura | do Claude: `settings*.json`, `CLAUDE.md`, `commands`, `agents`, `skills`, `hooks`, `plugins`, scripts soltos; do agy: `bin`; clones do AUR | tudo isso define comando ou instrução que valeria numa sessão aberta fora |
 | Git | num worktree, o `.git` comum inteiro somente leitura, liberados `objects`, `refs`, `logs` e o gitdir do worktree; direto no repositório, `config`, `hooks`, `commondir`, `worktrees` e `modules` somente leitura | `core.fsmonitor`, hooks e `commondir` rodariam fora no próximo `git status` |
-| Ocultos | `.ssh`, `.gnupg`, `.password-store`, `.aws`, `.azure`, `.kube`, `.docker`, `.netrc`, `.git-credentials`, `gh`, `rclone`, perfis de navegador, keyrings e o banco do `cliphist`; `JANGADA_ISOLAR_OCULTAR` troca a lista | segredos e o histórico da área de transferência |
+| Ocultos | `.ssh`, `.gnupg`, `.password-store`, `.aws`, `.azure`, `.kube`, `.docker`, `.netrc`, `.git-credentials`, `gh`, `rclone`, perfis de navegador, keyrings e o banco do `cliphist`; `JANGADA_ISOLAR_OCULTAR` troca a lista. A pasta `painel-chave` do estado, com o token do `jangada-painel`, fica oculta sempre | segredos e o histórico da área de transferência; o painel responde a quem alcança a porta, e o agente isolado alcança |
 
 Para ver os argumentos sem abrir nada: `jangada-isolar --mostrar -- true`.
 

@@ -1,7 +1,7 @@
 # Painel de indicadores do jangada. Só lê o cache em Parquet que o
 # coletor.py grava (padrão ~/.local/state/jangada/painel) e recarrega quando
-# o coleta.json muda. Sobe pelo jangada-painel, em 127.0.0.1; nenhum recurso
-# vem da rede.
+# o coleta.json muda. Sobe pelo jangada-painel, em 127.0.0.1, e só abre
+# sessão com o token do painel-chave na URL; nenhum recurso vem da rede.
 
 library(shiny)
 library(bslib)
@@ -9,8 +9,9 @@ library(bslib)
 pasta_app <- getwd()
 source(file.path(pasta_app, "indicadores.R"), local = TRUE)
 
-cache <- getOption("jangada.painel.cache",
-  file.path(Sys.getenv("XDG_STATE_HOME", file.path(Sys.getenv("HOME"), ".local/state")), "jangada/painel"))
+estado <- file.path(Sys.getenv("XDG_STATE_HOME", file.path(Sys.getenv("HOME"), ".local/state")), "jangada")
+cache <- getOption("jangada.painel.cache", file.path(estado, "painel"))
+chave <- getOption("jangada.painel.chave", file.path(estado, "painel-chave", "token"))
 
 # Cores do matugen, as mesmas da barra. O arquivo traz a paleta escura; no
 # modo claro, a cor de destaque é a do texto sobre a primária.
@@ -285,7 +286,8 @@ ui <- page_navbar(
 )
 
 server <- function(input, output, session) {
-  if (!origem_local(session$request$HTTP_HOST, session$request$HTTP_ORIGIN)) {
+  if (!origem_local(session$request$HTTP_HOST, session$request$HTTP_ORIGIN)
+      || !token_certo(session$request$HTTP_HOST, isolate(session$clientData$url_search), chave)) {
     session$close()
     return(invisible())
   }

@@ -101,6 +101,13 @@ Toda gravação é num temporário na mesma pasta, seguido de troca de nome.
 - `origem_local` só abre sessão com `Host` `127.0.0.1` ou `localhost` e
   `Origin` vazio ou igual ao `Host`: uma página de fora, aberta no mesmo
   navegador, não lê os indicadores.
+- `token_certo` só abre sessão com `?token=` igual à primeira linha de
+  `~/.local/state/jangada/painel-chave/token`. O `jangada-painel` grava o
+  token (64 dígitos hexadecimais, arquivo 600 numa pasta 700) antes de subir
+  o app e o põe na URL que abre; o token fica entre reinícios, para uma aba
+  aberta continuar valendo. O `jangada-isolar` oculta a pasta sempre, mesmo
+  com `JANGADA_ISOLAR_OCULTAR`, e um agente isolado, que alcança a porta
+  pela rede, não abre sessão.
 - `esc` escapa o HTML de nomes de arquivo, sessão e ferramenta antes de irem
   para o título dos nós do grafo.
 - A leitura do cache descarta linhas repetidas por id, que sobram de uma
@@ -121,5 +128,5 @@ botão direito, `--parar`. O script avisa a barra pelo sinal 9
 
 | Arquivo | O que cobre |
 |---|---|
-| `testes/painel.sh` | coletor sobre registros de exemplo: coleta incremental, resposta repetida, rodadas e pareceres antigos, `--waybar` em cada estado, `--conferir`, coleta interrompida, erro nos subagentes; com R, os indicadores, as redes, as abas, o escape do HTML e a checagem de Host e Origin |
+| `testes/painel.sh` | coletor sobre registros de exemplo: coleta incremental, resposta repetida, rodadas e pareceres antigos, `--waybar` em cada estado, `--conferir`, coleta interrompida, erro nos subagentes; com R, os indicadores, as redes, as abas, o escape do HTML e a checagem de Host, Origin e token |
 | `testes/barra.sh` | módulo `custom/indicadores` e a migração que o acrescenta |

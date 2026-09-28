@@ -20,6 +20,18 @@ origem_local <- function(host, origem = NULL) {
   is.null(origem) || !nzchar(origem) || tolower(origem) == paste0("http://", tolower(host))
 }
 
+# O agente isolado também alcança a porta, e com Host local. A sessão só abre
+# com o token do arquivo CHAVE na URL (?token=), que o jangada-painel passa
+# ao navegador e o jangada-isolar oculta. Sem o arquivo, nenhuma sessão abre.
+# Sem Host (shiny::testServer), não há pedido HTTP a conferir.
+token_certo <- function(host, busca, chave) {
+  if (is.null(host)) return(TRUE)
+  esperado <- tryCatch(suppressWarnings(readLines(chave, n = 1, warn = FALSE)),
+                       error = function(e) "")
+  recebido <- if (is.character(busca) && length(busca) == 1) shiny::parseQueryString(busca)$token
+  length(esperado) == 1 && nchar(esperado) >= 32 && identical(recebido, esperado)
+}
+
 # Lê o cache. Tabela ausente vira tabela vazia com as colunas certas.
 carregar_cache <- function(cache) {
   ler <- function(nome, vazia) {

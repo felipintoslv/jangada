@@ -58,6 +58,9 @@ conferir "caso 1: /tmp próprio" seguidos --tmpfs /tmp ""
 conferir "caso 1: marca do isolamento montada no /tmp próprio" \
   seguidos --ro-bind /dev/null /tmp/.jangada-isolado
 conferir "caso 1: histórico da área de transferência oculto" seguidos --tmpfs "$casa/.cache/cliphist" ""
+conferir "caso 1: token do painel oculto" seguidos --tmpfs "$casa/.local/state/jangada/painel-chave" ""
+conferir "caso 1: a pasta do token existe antes do agente, só para o dono" \
+  [ "$(stat -c %a "$casa/.local/state/jangada/painel-chave" 2>/dev/null)" = 700 ]
 conferir "caso 1: termina com o comando" [ "$(tail -n1 "$tmp/args")" = true ]
 conferir "caso 1: estado dos agentes gravável" \
   seguidos --bind "$casa/.local/state/jangada/agentes" "$casa/.local/state/jangada/agentes"
@@ -76,7 +79,9 @@ conferir "caso 1: pasta ausente não entra" bash -c '! grep -qxF "$1" "$2"' _ "$
 mostrar JANGADA_ISOLAR_ESCRITA="$casa/extra:"
 conferir "caso 1: JANGADA_ISOLAR_ESCRITA acrescenta gravável" seguidos --bind "$casa/extra" "$casa/extra"
 mostrar JANGADA_ISOLAR_OCULTAR=
-conferir "caso 1: JANGADA_ISOLAR_OCULTAR vazio não oculta nada" bash -c '! grep -qxF "$1" "$2"' _ "$casa/.ssh" "$tmp/args"
+conferir "caso 1: JANGADA_ISOLAR_OCULTAR vazio não oculta a lista padrão" bash -c '! grep -qxF "$1" "$2"' _ "$casa/.ssh" "$tmp/args"
+conferir "caso 1: JANGADA_ISOLAR_OCULTAR vazio ainda oculta o token do painel" \
+  seguidos --tmpfs "$casa/.local/state/jangada/painel-chave" ""
 
 # Caso 1b: repositório principal (--direto).
 isolar "$tmp/repo" "$repo_jangada/bin/jangada-isolar" --mostrar -- true >"$tmp/args"

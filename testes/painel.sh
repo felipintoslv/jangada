@@ -385,12 +385,60 @@ else
           origem_local(NULL), origem_local("evil.example:8765"), origem_local("127.0.0.1:8765", "http://evil.example"),
           origem_local("127.0.0.1.evil.example:8765"))
     ' 2>&1 | tail -n 1)" = "TRUE TRUE TRUE FALSE FALSE FALSE" ]
+  printf 'x%.0s' {1..64} >"$tmp/chave-certa"; printf 'curto' >"$tmp/chave-curta"
+  conferir "caso 5: a sessão só abre com o token do arquivo na URL" \
+    [ "$(cd default/painel && Rscript -e '
+      source("indicadores.R")
+      a <- commandArgs(TRUE); certo <- paste0("?token=", strrep("x", 64))
+      cat(token_certo(NULL, "", a[1]), token_certo("127.0.0.1:1", certo, a[1]),
+          token_certo("127.0.0.1:1", "?token=errado", a[1]), token_certo("127.0.0.1:1", "", a[1]),
+          token_certo("127.0.0.1:1", NULL, a[1]), token_certo("127.0.0.1:1", certo, a[3]),
+          token_certo("127.0.0.1:1", "?token=curto", a[2]), token_certo("127.0.0.1:1", "?token=", a[3]))
+    ' "$tmp/chave-certa" "$tmp/chave-curta" "$tmp/sem-chave" 2>&1 | tail -n 1)" = "TRUE TRUE FALSE FALSE FALSE FALSE FALSE FALSE" ]
   conferir "caso 5: --conferir com tudo instalado" painel --conferir
   if painel >/dev/null 2>"$tmp/erro4"; then
     ok "caso 5: o app sobe"
     conferir "caso 5: a página tem o título do painel" \
       grep -q "Indicadores do jangada" <(curl -s --max-time 5 "http://127.0.0.1:$porta")
     conferir "caso 5: --waybar vê o app no ar" jq_ok '.class == "no-ar"' <(painel --waybar)
+    chave="$estado/painel-chave/token"
+    conferir "caso 5: o token tem 64 dígitos hexadecimais" grep -qxE '[0-9a-f]{64}' "$chave"
+    conferir "caso 5: o token e a pasta dele são só do dono" \
+      [ "$(stat -c %a "$chave" "${chave%/*}" | paste -sd' ')" = "600 700" ]
+    printf '#!/bin/sh\nprintf "%%s" "$1" >"%s"\n' "$tmp/xdg.url" >"$tmp/bin/xdg-open"
+    painel >/dev/null 2>&1
+    for _ in 1 2 3 4 5 6 7 8 9 10; do [[ -s "$tmp/xdg.url" ]] && break; sleep 0.2; done
+    conferir "caso 5: o navegador abre com o token na URL" \
+      [ "$(cat "$tmp/xdg.url" 2>/dev/null)" = "http://127.0.0.1:$porta/?token=$(cat "$chave")" ]
+    # Pelo websocket, como o navegador: o init leva a URL, e o server lê o
+    # token dela. Aberta é a sessão que recebe os valores das saídas.
+    if python3 -c 'import websockets' 2>/dev/null; then
+      sessao() {
+        timeout 20 python3 - "$porta" "$1" <<'PY'
+import asyncio, json, sys, time, websockets
+async def main(porta, busca):
+    async with websockets.connect(f"ws://127.0.0.1:{porta}/websocket/") as ws:
+        await ws.send(json.dumps({"method": "init", "data": {".clientdata_url_search": busca}}))
+        fim = time.time() + 5
+        while time.time() < fim:
+            try:
+                m = json.loads(await asyncio.wait_for(ws.recv(), 1))
+            except asyncio.TimeoutError:
+                continue
+            except websockets.ConnectionClosed:
+                return "fechada"
+            if isinstance(m, dict) and "values" in m:
+                return "aberta"
+        return "sem valores"
+print(asyncio.run(main(*sys.argv[1:])))
+PY
+      }
+      conferir "caso 5: com o token, a sessão abre" [ "$(sessao "?token=$(cat "$chave")")" = aberta ]
+      conferir "caso 5: com outro token, a sessão fecha" [ "$(sessao "?token=$(printf 'f%.0s' {1..64})")" = fechada ]
+      conferir "caso 5: sem token, a sessão fecha" [ "$(sessao "")" = fechada ]
+    else
+      echo "--    caso 5: sem o módulo websockets do Python; sessões pelo websocket não testadas"
+    fi
     painel --parar >/dev/null
     sleep 1
     conferir "caso 5: --parar encerra o app" \
