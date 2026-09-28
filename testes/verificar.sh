@@ -104,6 +104,9 @@ for c in $(grep -ho 'j\.cmd("[a-z-]*"' default/hypr/*.lua | sed 's/j\.cmd("//; s
   [[ -x "bin/$c" ]] || falha "bin/$c citado mas ausente"
 done
 
+passo "escritas fora das pastas do jangada estão nas exceções da regra 1"
+testes/regra1.sh || falha "testes/regra1.sh"
+
 passo "comandos citados nos protocolos dos agentes existem em bin/"
 for c in $(grep -ho '`jangada-[a-z-]*' default/agentes/protocolo*.md | tr -d '`' | sort -u); do
   [[ -x "bin/$c" ]] || falha "bin/$c citado no protocolo mas ausente"

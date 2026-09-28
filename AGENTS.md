@@ -9,6 +9,8 @@ com agentes de IA. Leia o README.md antes de alterar qualquer coisa.
 1. **Isolamento.** Nada do jangada pode escrever em `~/.config/hypr`, na
    configuração do Noctalia ou em outra sessão existente. Tudo vai para
    `~/.config/jangada`, `~/.local/share/jangada` e `~/.local/state/jangada`.
+   As únicas exceções são as de "Exceções à regra 1", abaixo; uma escrita
+   nova fora dessas pastas entra na lista antes de entrar no código.
 2. **Instalação repetível.** Cada etapa de `install/` precisa poder rodar de
    novo sem efeito colateral e respeitar `JANGADA_SIMULAR=1` (usar `executar`
    e `como_root` de `install/lib.sh` para todo comando que altera o sistema).
@@ -37,3 +39,36 @@ com agentes de IA. Leia o README.md antes de alterar qualquer coisa.
     Nada que ele pode gravar (worktree, cópia de trabalho, estado das sessões)
     roda fora do isolamento sem conferência, e conteúdo de fora que chega a
     um agente (log, título de janela, página) vai como dado, não instrução.
+
+## Exceções à regra 1
+
+Escritas fora de `~/.config/jangada`, `~/.local/share/jangada` e
+`~/.local/state/jangada`, cada uma com o motivo. O `testes/regra1.sh` confere
+que todo caminho de fora escrito por extenso em `bin/`, `install/`,
+`migrations/`, `install.sh` e `install-macos.sh` está nesta lista ou na lista
+de caminhos só lidos do próprio teste. Caminho montado em variável escapa da
+conferência e precisa entrar aqui do mesmo jeito.
+
+| Caminho | Quem grava | Para quê |
+|---|---|---|
+| `~/.bashrc`, `~/.zshrc` | `install/30-shell.sh`, `install-macos.sh` | bloco entre marcas que carrega o ambiente do jangada |
+| `~/.claude/settings.json`, `~/.claude/skills`, `~/.claude/agents` | `install/50-agentes.sh`, migrações | hooks das sessões e links para as skills e os subagentes de `default/` |
+| `~/.claude` (`settings.local.json`, `CLAUDE.md`, `commands`, `hooks`, `plugins`, `output-styles`, `shell-snapshots`, `session-env`, `ide`) | `jangada-isolar` | criados vazios quando faltam, para o bind do isolamento |
+| `~/.gemini/config` (`hooks.json`, `agents.json`, `skills`) | `install/50-agentes.sh`, migrações | hooks, subagentes e skills do agy |
+| `~/.gemini/antigravity-cli/settings.json` | `jangada-worktree-preparar`, `jangada-agente-fim` | confiança do agy no worktree, que só herda a da raiz; o original fica em `settings.json.jangada-orig` |
+| `~/.local/share/jangada-worktrees` | `jangada-agente` | worktrees das sessões de agente |
+| Repositórios em `JANGADA_PROJETOS` | `jangada-agente`, `jangada-agente-fim` | ramos `agente/*`, registro dos worktrees e a integração que o usuário confirma |
+| `~/.cache/jangada` | `jangada-consumo`, `jangada-delegar` | cache do consumo e da cota do agy |
+| `~/.cache/cliphist` | `jangada-isolar` | pasta criada com 0700 para poder ocultá-la do agente |
+| `$XDG_RUNTIME_DIR/jangada-isolar` | `jangada-isolar` | soquetes do proxy do D-Bus |
+| `~/Imagens/Capturas` ou `~/Pictures/Screenshots` | `jangada-captura` | capturas de tela |
+| `~/Projetos` | `install-macos.sh` | pasta de projetos padrão |
+| `/usr/share/wayland-sessions/jangada.desktop` | `install/40-interface.sh` | sessão no gerenciador de login |
+| `/etc/snapper/configs/root`, `/.snapshots` | `install/20-snapshots.sh`, `jangada-snapshot` | configuração do snapper e snapshots |
+| `/etc/sddm.conf.d/zz-jangada.conf`, `/usr/share/sddm/themes/jangada`, `/usr/local/share/jangada` | `jangada-sddm` | tema e sessões da tela de login, só com o comando do usuário |
+| `~/.config/raycast/commands`, `~/Applications` | `install-macos.sh` | atalhos do jangada no macOS |
+
+Pacotes, serviços do systemd e o estado dos serviços (redes do
+NetworkManager, aparelhos do bluetooth, snapshots) mudam pelos comandos do
+próprio sistema (`pacman`, `systemctl`, `nmcli`, `bluetoothctl`, `snapper`) e
+não entram na conta.
