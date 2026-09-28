@@ -3,6 +3,15 @@
 # Compatível com bash e zsh. Sem comandos perigosos, sem eval desprotegido.
 
 # Garante que variáveis críticas existam
+if [ -z "${JANGADA_PATH:-}" ]; then
+  # shellcheck disable=SC3028
+  _jangada_arquivo="${BASH_SOURCE:-$0}"
+  [ -n "$ZSH_VERSION" ] && eval '_jangada_arquivo=${(%):-%x}'
+  case "$_jangada_arquivo" in
+    */shell/jangada-shell.sh) JANGADA_PATH="${_jangada_arquivo%/shell/jangada-shell.sh}" ;;
+  esac
+  unset _jangada_arquivo
+fi
 : "${JANGADA_PATH:=$HOME/.local/share/jangada}"
 : "${JANGADA_PROJETOS:=$HOME/Projetos}"
 
