@@ -311,7 +311,9 @@ server <- function(input, output, session) {
 
   no_periodo <- function(d, col = "data") {
     if (!nrow(d)) return(d)
-    dia <- as.Date(format(d[[col]], "%Y-%m-%d"))
+    v <- d[[col]]
+    # A coluna dia já vem em texto; data e inicio são carimbos.
+    dia <- if (is.character(v)) as.Date(v, "%Y-%m-%d") else as.Date(format(v, "%Y-%m-%d"))
     d[!is.na(dia) & dia >= input$periodo[1] & dia <= input$periodo[2], , drop = FALSE]
   }
   filtrar <- function(d, projeto = "projeto", agente = NULL) {
@@ -386,7 +388,11 @@ server <- function(input, output, session) {
   output$a_diff_cob <- renderUI(cobertura_ui(cobertura(ent()$fim[ent()$aprovada & !is.na(ent()$diff)])))
 
   # B. Consumo
-  msg <- reactive(filtrar(no_periodo(dados()$mensagens[dados()$mensagens$modelo != "<synthetic>", ])))
+  # Por dia: os dias antigos só existem somados (JANGADA_PAINEL_RETENCAO).
+  msg <- reactive({
+    d <- consumo_diario(dados()$mensagens, dados()$mensagens_dias)
+    filtrar(no_periodo(d[!d$modelo %in% "<synthetic>", , drop = FALSE], "dia"))
+  })
   soma <- function(col) sum(msg()[[col]], na.rm = TRUE)
   output$vb_saida <- renderText(curto(soma("saida")))
   output$vb_raciocinio <- renderText(curto(soma("raciocinio")))
@@ -399,11 +405,10 @@ server <- function(input, output, session) {
   blocos <- reactive(no_periodo(blocos_5h(filtrar(dados()$mensagens)), "inicio"))
   output$vb_blocos <- renderText(sum(blocos()$perto_limite))
   output$vb_blocos_n <- renderText(paste(nrow(blocos()), "bloco(s) no período"))
-  output$b_cob <- renderUI(cobertura_ui(cobertura(msg()$data)))
+  output$b_cob <- renderUI(cobertura_ui(cobertura(as.Date(msg()$dia), sum(msg()$respostas))))
   output$b_dia <- plotly::renderPlotly({
     m <- msg()
     if (!nrow(m)) return(vazio())
-    m$raciocinio[is.na(m$raciocinio)] <- 0
     # A saída inclui o raciocínio; a série "saída" mostra só o texto.
     m$saida_texto <- pmax(m$saida - m$raciocinio, 0)
     a <- aggregate(m[c("entrada", "saida_texto", "raciocinio", "cache_criado")], list(dia = as.Date(m$dia)), sum)

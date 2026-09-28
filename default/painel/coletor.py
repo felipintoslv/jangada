@@ -14,16 +14,22 @@ eventos-agentes.jsonl). Grava em PASTA_DO_CACHE:
   mensagens/           uma linha por resposta do Claude, com o consumo
   ferramentas/         uma linha por chamada de ferramenta
   resultados/          uma linha por resultado de ferramenta (erro ou não)
+  mensagens-dias.parquet  o consumo por dia, projeto e modelo dos dias que
+                       já saíram de mensagens/
   posicoes.json        até onde cada jsonl foi lido
   coleta.json          resumo da última coleta
   hoje.json            os indicadores do dia (jangada-painel --json)
   subagentes.json      os indicadores de subagentes e delegações (subagentes.py)
 
 As pastas mensagens, ferramentas e resultados recebem um arquivo novo por
-coleta com dado novo, e são compactadas num só quando passam de 40.
+coleta com dado novo, e são compactadas num só quando passam de 40. Guardam
+só os últimos JANGADA_PAINEL_RETENCAO dias (padrão 180; 0 guarda tudo); o
+que é mais antigo sai por dia inteiro, e o consumo desses dias fica em
+mensagens-dias.parquet.
 
 Variáveis: JANGADA_ESTADO, JANGADA_CLAUDE_PROJETOS (padrão
-~/.claude/projects), JANGADA_PROJETOS e JANGADA_WORKTREES.
+~/.claude/projects), JANGADA_PROJETOS, JANGADA_WORKTREES e
+JANGADA_PAINEL_RETENCAO.
 """
 
 import datetime as dt
@@ -36,6 +42,7 @@ import time
 import unicodedata
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 
@@ -52,6 +59,7 @@ WORKTREES = os.environ.get("JANGADA_WORKTREES") or os.path.join(CASA, ".local/sh
 FUSO = dt.datetime.now().astimezone().tzinfo
 UTC = dt.timezone.utc
 PARTES_MAX = 40
+RETENCAO_PADRAO = 180
 
 # Comandos do Bash que contam como teste no retrabalho: testes, lint,
 # verificação de sintaxe e execução de script R ou Python.
@@ -193,6 +201,10 @@ ESQ_FERRAMENTAS = pa.schema([
     ("ferramenta", pa.string()), ("alvo", pa.string()), ("arquivo", pa.string()),
 ])
 ESQ_RESULTADOS = pa.schema([("id", pa.string()), ("data", TS), ("erro", pa.bool_())])
+TOKENS = ["entrada", "saida", "cache_criado", "cache_lido", "raciocinio"]
+ESQ_MENSAGENS_DIAS = pa.schema(
+    [("dia", pa.string()), ("projeto", pa.string()), ("modelo", pa.string()), ("respostas", pa.int64())]
+    + [(c, pa.int64()) for c in TOKENS])
 ESQ_VALIDACOES = pa.schema([
     ("data", TS), ("dia", pa.string()), ("projeto", pa.string()), ("rotulo", pa.string()),
     ("rodada", pa.int64()), ("resultado", pa.string()), ("etapa", pa.string()),
@@ -221,6 +233,17 @@ def ids_existentes(pasta):
     return set(ds.dataset(pasta, format="parquet").to_table(columns=["id"]).column("id").to_pylist())
 
 
+def reescrever(pasta, partes, tabela, destino):
+    """Troca as PARTES da pasta por um só arquivo com a TABELA."""
+    destino = os.path.join(pasta, destino)
+    tmp = temporario(destino)
+    pq.write_table(tabela, tmp)
+    os.replace(tmp, destino)
+    for p in partes:
+        if p != destino:
+            os.remove(p)
+
+
 def acrescentar(pasta, linhas, esquema, carimbo):
     """Grava as linhas novas como mais um arquivo da pasta; compacta se preciso."""
     os.makedirs(pasta, exist_ok=True)
@@ -229,13 +252,76 @@ def acrescentar(pasta, linhas, esquema, carimbo):
     partes = sorted(glob.glob(os.path.join(pasta, "parte-*.parquet")))
     if len(partes) > PARTES_MAX:
         tabela = sem_repetidos(ds.dataset(partes, format="parquet", schema=esquema).to_table())
-        destino = os.path.join(pasta, f"parte-{carimbo}-c.parquet")
-        tmp = temporario(destino)
-        pq.write_table(tabela, tmp)
-        os.replace(tmp, destino)
-        for p in partes:
-            if p != destino:
-                os.remove(p)
+        reescrever(pasta, partes, tabela, f"parte-{carimbo}-c.parquet")
+
+
+# Retenção
+
+def retencao():
+    """Dias de detalhe que o cache guarda (JANGADA_PAINEL_RETENCAO); 0 guarda tudo."""
+    v = os.environ.get("JANGADA_PAINEL_RETENCAO", "").strip()
+    if not v:
+        return RETENCAO_PADRAO
+    if v.isdigit():
+        return int(v)
+    print(f"JANGADA_PAINEL_RETENCAO inválido ({v!r}); usando {RETENCAO_PADRAO}", file=sys.stderr)
+    return RETENCAO_PADRAO
+
+
+def agregar_dias(caminho, antigas):
+    """Soma o consumo das mensagens ANTIGAS por dia, projeto e modelo e junta
+    ao que já está em CAMINHO. Um dia já agregado fica como está: se a poda
+    parou entre gravar a soma e apagar o detalhe, ou se os jsonl foram relidos
+    do começo, as mesmas linhas voltam, e somá-las de novo contaria em dobro."""
+    velhas = pq.read_table(caminho) if os.path.exists(caminho) else ESQ_MENSAGENS_DIAS.empty_table()
+    feitos = set(velhas.column("dia").to_pylist())
+    antigas = antigas.filter(pc.invert(pc.is_in(antigas.column("dia"), value_set=pa.array(sorted(feitos), pa.string()))))
+    if not antigas.num_rows:
+        return 0
+    soma = antigas.group_by(["dia", "projeto", "modelo"]).aggregate(
+        [("id", "count")] + [(c, "sum") for c in TOKENS])
+    soma = soma.rename_columns([{"id_count": "respostas"}.get(n, n.removesuffix("_sum")) for n in soma.column_names])
+    soma = soma.select(ESQ_MENSAGENS_DIAS.names).cast(ESQ_MENSAGENS_DIAS)
+    tabela = pa.concat_tables([velhas.cast(ESQ_MENSAGENS_DIAS), soma]).sort_by(
+        [("dia", "ascending"), ("projeto", "ascending"), ("modelo", "ascending")])
+    tmp = temporario(caminho)
+    pq.write_table(tabela, tmp)
+    os.replace(tmp, caminho)
+    return len(set(soma.column("dia").to_pylist()))
+
+
+def podar(cache, agora, carimbo, dias):
+    """Tira de mensagens/, ferramentas/ e resultados/ o que é de antes dos
+    últimos DIAS dias, por dia inteiro. O consumo desses dias fica somado em
+    mensagens-dias.parquet; as chamadas e os resultados só saem, porque os
+    indicadores de ferramentas dependem da sequência das chamadas, que uma
+    contagem por dia não guarda. Devolve (dias agregados, linhas tiradas)."""
+    if dias <= 0:
+        return 0, 0
+    limite = (agora.astimezone(FUSO).date() - dt.timedelta(days=dias)).isoformat()
+    # Resultados não têm dia: vale a meia-noite local do dia limite.
+    limite_ts = dt.datetime.combine(dt.date.fromisoformat(limite), dt.time(), FUSO).astimezone(UTC)
+    agregados = tirados = 0
+    for nome, esquema, campo, corte in (("mensagens", ESQ_MENSAGENS, "dia", limite),
+                                        ("ferramentas", ESQ_FERRAMENTAS, "dia", limite),
+                                        ("resultados", ESQ_RESULTADOS, "data", limite_ts)):
+        pasta = os.path.join(cache, nome)
+        partes = sorted(glob.glob(os.path.join(pasta, "parte-*.parquet")))
+        if not partes:
+            continue
+        dados = ds.dataset(partes, format="parquet", schema=esquema)
+        antigo = ds.field(campo) < pa.scalar(corte, esquema.field(campo).type)
+        n = dados.count_rows(filter=antigo)
+        if not n:
+            continue
+        if nome == "mensagens":
+            agregados = agregar_dias(os.path.join(cache, "mensagens-dias.parquet"),
+                                     dados.to_table(filter=antigo))
+        # Linha sem data fica: não há como saber se é antiga.
+        manter = sem_repetidos(dados.to_table(filter=~antigo | ds.field(campo).is_null()))
+        reescrever(pasta, partes, manter, f"parte-{carimbo}-p.parquet")
+        tirados += n
+    return agregados, tirados
 
 
 # Conversas do Claude Code
@@ -616,6 +702,7 @@ def main():
     # As posições só são gravadas depois das tabelas: uma coleta interrompida
     # relê o trecho, e os ids evitam a duplicata.
     gravar_json(arq_pos, novas)
+    agregados, tirados = podar(cache, agora, carimbo, retencao())
     vals = validacoes()
     evs = eventos()
     gravar_tabela(os.path.join(cache, "validacoes.parquet"), vals, ESQ_VALIDACOES)
@@ -632,7 +719,8 @@ def main():
         gravar_json(os.path.join(cache, "subagentes.json"),
                     {"erro": repr(e), "data": agora.astimezone(FUSO).isoformat(timespec="seconds")})
     resumo.update({"mensagens_novas": len(mens), "ferramentas_novas": len(ferr),
-                   "resultados_novos": len(res), "validacoes": len(vals), "eventos": len(evs),
+                   "resultados_novos": len(res), "dias_agregados": agregados, "linhas_podadas": tirados,
+                   "validacoes": len(vals), "eventos": len(evs),
                    "data": agora.astimezone(FUSO).isoformat(timespec="seconds"),
                    "segundos": round(time.monotonic() - INICIO, 2)})
     gravar_json(os.path.join(cache, "coleta.json"), resumo)

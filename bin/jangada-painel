@@ -59,7 +59,8 @@ gerar() {
   trap 'rm -f "$marca"; avisar_barra' EXIT
   : >"$marca"; avisar_barra
   local rc=0
-  python3 "$app_dir/coletor.py" "$cache" >"$cache/coleta.log" 2>&1 || rc=$?
+  JANGADA_PAINEL_RETENCAO="${JANGADA_PAINEL_RETENCAO:-}" \
+    python3 "$app_dir/coletor.py" "$cache" >"$cache/coleta.log" 2>&1 || rc=$?
   rm -f "$marca"
   ((rc == 0)) || erro "a coleta falhou: $(tail -n 3 "$cache/coleta.log" | tr '\n' ' ')"
   rm -f "$errof"

@@ -215,6 +215,41 @@ coletor.PARTES_MAX = 1
 coletor.acrescentar("r", [{"id": "b", "erro": True}], esq, "3")
 print(*sorted(ds.dataset("r", format="parquet").to_table().column("id").to_pylist()))
 ')" = ".parte-2.parquet.tmp 2 a b" ]
+# Caso 4: a retenção tira, por dia inteiro, o que é de antes dos últimos
+# JANGADA_PAINEL_RETENCAO dias e soma o consumo desses dias; as mesmas linhas
+# de volta (poda interrompida ou jsonl relido) não contam em dobro.
+mkdir -p "$tmp/e8"
+conferir "caso 4: retenção do cache, com o consumo dos dias antigos somado" \
+  [ "$(cd "$tmp/e8" && PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$repo_jangada/default/painel" python3 -c '
+import datetime as dt, coletor as c, pyarrow.dataset as ds, pyarrow.parquet as pq
+agora = dt.datetime.now(c.UTC)
+def t(dias): return agora - dt.timedelta(days=dias)
+def m(i, dias, proj="p"):
+    return {"id": f"m{i}", "data": t(dias), "dia": c.dia_de(t(dias)), "conversa": "c", "subagente": "",
+            "projeto": proj, "sessao": "", "cwd": "", "modelo": "opus", "entrada": 1, "saida": 10,
+            "cache_criado": 0, "cache_lido": 5, "raciocinio": 2}
+c.acrescentar("mensagens", [m(1, 200), m(2, 200), m(3, 200, "q"), m(4, 5)], c.ESQ_MENSAGENS, "1")
+c.acrescentar("ferramentas", [{"id": f"f{i}", "data": t(d), "dia": c.dia_de(t(d)), "ferramenta": "Bash"}
+                              for i, d in ((1, 200), (2, 1))], c.ESQ_FERRAMENTAS, "1")
+c.acrescentar("resultados", [{"id": "f1", "data": t(200), "erro": True}, {"id": "f2", "data": t(1), "erro": False}],
+              c.ESQ_RESULTADOS, "1")
+ids = lambda n: ",".join(ds.dataset(n).to_table().column("id").to_pylist())
+print(*c.podar(".", agora, "2", 180), ids("mensagens"), ids("ferramentas"), ids("resultados"), end=" ")
+c.acrescentar("mensagens", [m(1, 200), m(2, 200)], c.ESQ_MENSAGENS, "3")
+print(*c.podar(".", agora, "4", 180), end=" ")
+s = pq.read_table("mensagens-dias.parquet")
+print(",".join(f"{p}:{r}:{sa}" for p, r, sa in zip(*(s.column(k).to_pylist() for k in ("projeto", "respostas", "saida")))), end=" ")
+print(c.podar(".", agora, "5", 0), end=" ")
+import os
+os.environ["JANGADA_PAINEL_RETENCAO"] = "x"
+print(c.retencao())
+' 2>/dev/null)" = "1 5 m4 f2 f2 0 2 p:2:20,q:1:10 (0, 0) 180" ]
+mkdir -p "$tmp/config/jangada"
+echo "JANGADA_PAINEL_RETENCAO=x" >"$tmp/config/jangada/jangada.conf"
+painel --gerar >/dev/null 2>&1
+conferir "caso 4: o JANGADA_PAINEL_RETENCAO do jangada.conf chega ao coletor" \
+  grep -q "JANGADA_PAINEL_RETENCAO inválido ('x')" "$cache/coleta.log"
+rm "$tmp/config/jangada/jangada.conf"
 # Caso 4: delegacoes.jsonl é escrito por agentes; campo com tipo errado vira
 # ausente, e um erro nos indicadores de subagentes vai para o subagentes.json.
 mkdir -p "$tmp/e7/painel"
@@ -248,6 +283,13 @@ else
       b <- consumo_por(d$mensagens[d$mensagens$modelo != "<synthetic>", ], "projeto")
       cat(nrow(e), r$primeira_pct, r$rodadas_media, b$saida[b$projeto == "meu-projeto"], nrow(sessoes_paradas(d$sessoes, e)))
     ' "$cache" 2>/dev/null)" = "3 50 1.5 347 0" ]
+  conferir "caso 5: o consumo junta o detalhe e os dias somados pela retenção" \
+    [ "$(cd default/painel && Rscript -e '
+      source("indicadores.R")
+      d <- carregar_cache(commandArgs(TRUE)[1])
+      b <- consumo_por(consumo_diario(d$mensagens, d$mensagens_dias), "projeto")
+      cat(paste(b$projeto, b$respostas, b$saida, b$raciocinio, sep = ":"))
+    ' "$tmp/e8" 2>/dev/null)" = "p:3:30:6 q:1:10:2" ]
   conferir "caso 5: redes sobre o cache (retrabalho, transições, pontos quentes)" \
     [ "$(cd default/painel && Rscript -e '
       source("indicadores.R")

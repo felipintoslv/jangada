@@ -41,6 +41,10 @@ carregar_cache <- function(cache) {
       modelo = character(), autor = character(), arquivos = integer(), mais = integer(),
       menos = integer(), itens = integer(), segundos = integer(), entrega = character(),
       origem = character())),
+    mensagens_dias = ler("mensagens-dias.parquet", data.frame(
+      dia = character(), projeto = character(), modelo = character(), respostas = numeric(),
+      entrada = numeric(), saida = numeric(), cache_criado = numeric(), cache_lido = numeric(),
+      raciocinio = numeric())),
     mensagens = ler("mensagens", data.frame(
       id = character(), data = ts, dia = character(), conversa = character(),
       subagente = character(), projeto = character(), sessao = character(), cwd = character(),
@@ -135,11 +139,21 @@ resumo_aprovacao <- function(ent, por = NULL) {
 TIPOS_TOKEN <- c(entrada = "entrada nova", saida = "saída", raciocinio = "raciocínio",
                  cache_criado = "cache criado", cache_lido = "cache lido")
 
+# Consumo por dia, projeto e modelo: as mensagens guardadas em detalhe, uma
+# resposta por linha, e os dias que já saíram delas, somados pelo coletor.
+consumo_diario <- function(m, dias) {
+  cols <- c("dia", "projeto", "modelo", "respostas", names(TIPOS_TOKEN))
+  m$respostas <- rep(1, nrow(m))
+  d <- rbind(m[cols], dias[cols])
+  d$raciocinio[is.na(d$raciocinio)] <- 0
+  d
+}
+
 consumo_por <- function(m, por) {
   if (!nrow(m)) return(data.frame())
   m$raciocinio[is.na(m$raciocinio)] <- 0
-  a <- aggregate(m[names(TIPOS_TOKEN)], list(grupo = m[[por]]), sum)
-  a$respostas <- as.vector(table(m[[por]])[a$grupo])
+  if (!"respostas" %in% names(m)) m$respostas <- rep(1, nrow(m))
+  a <- aggregate(m[c(names(TIPOS_TOKEN), "respostas")], list(grupo = m[[por]]), sum)
   a$total <- a$entrada + a$saida + a$cache_criado + a$cache_lido
   a$lido_pct <- round(100 * a$cache_lido / pmax(a$total, 1))
   names(a)[1] <- por

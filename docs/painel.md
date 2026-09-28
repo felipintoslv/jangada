@@ -75,14 +75,21 @@ flowchart TD
    Parquet novas; com muitas partes, junta numa só sem repetidos.
 3. Grava `posicoes.json` só depois das tabelas: uma coleta interrompida relê
    o trecho, e os ids evitam a duplicata.
-4. `validacoes` (do `validar.jsonl` e, antes dele, dos pareceres),
+4. `podar`: tira de mensagens, ferramentas e resultados o que é de antes dos
+   últimos `JANGADA_PAINEL_RETENCAO` dias (180; 0 guarda tudo), por dia
+   inteiro. O consumo desses dias fica em `mensagens-dias.parquet`, somado
+   por dia, projeto e modelo; um dia já somado não muda, para uma poda
+   interrompida ou um jsonl relido do início não contarem em dobro. As
+   chamadas e os resultados só saem: os indicadores de ferramentas dependem
+   da sequência das chamadas, que uma contagem por dia não guarda.
+5. `validacoes` (do `validar.jsonl` e, antes dele, dos pareceres),
    `eventos`, `sessoes` e `apontamentos` (arquivos citados nos itens
    REVISAR): cada um vira uma tabela Parquet inteira.
-5. `indicadores_do_dia` grava o `hoje.json`, lido pela barra.
-6. `subagentes.indicadores()` grava o `subagentes.json`. Um erro ali não
+6. `indicadores_do_dia` grava o `hoje.json`, lido pela barra.
+7. `subagentes.indicadores()` grava o `subagentes.json`. Um erro ali não
    derruba a coleta: vai para o próprio arquivo, e o painel o mostra em vez
    dos números da coleta anterior.
-7. `coleta.json` com o resumo (arquivos, linhas e bytes lidos, segundos).
+8. `coleta.json` com o resumo (arquivos, linhas e bytes lidos, segundos).
 
 Toda gravação é num temporário na mesma pasta, seguido de troca de nome.
 

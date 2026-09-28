@@ -491,7 +491,11 @@ Cada chamada roda o coletor (`default/painel/coletor.py`). Ele lê as
 conversas do Claude Code a partir de onde parou, então só a primeira coleta
 lê os ~280 MB de `~/.claude/projects`. O cache fica em
 `~/.local/state/jangada/painel`, em Parquet, e guarda o que o Claude Code já
-apagou (ele apaga conversas com mais de 30 dias). O mapa de cada registro,
+apagou (ele apaga conversas com mais de 30 dias). O detalhe de respostas e
+ferramentas fica pelos últimos `JANGADA_PAINEL_RETENCAO` dias (180; 0 guarda
+tudo); dos dias mais antigos sobra o consumo somado por dia, projeto e
+modelo, que o bloco de consumo mostra, e os indicadores de ferramentas, de
+blocos de 5 horas e de tokens por entrega ficam só dentro do prazo. O mapa de cada registro,
 com campos e lacunas, está em `docs/registros.md`.
 
 Definições:
