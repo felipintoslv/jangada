@@ -391,6 +391,17 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
      + (if $revisor != "" then {revisor:$revisor} else {} end)
      + {delegar:$delegar}' \
     >"$estado_dir/$sessao.json"
+  # Cópia dos metadados em revisoes/, que o jangada-isolar oculta: o
+  # jangada-validar rodado fora do isolamento lê base, tarefa, autor e
+  # revisor dali, e não do estado acima, que o agente grava. Criada dentro do
+  # isolamento, a cópia cairia na pasta que some no fim.
+  if [[ -z "${JANGADA_ISOLADO:-}" ]]; then
+    (umask 077; mkdir -p "$JANGADA_ESTADO/revisoes") \
+      && jq '{sessao, raiz, worktree, ramo, base, agente, desde, tarefa, inicio, revisor}
+             | with_entries(select(.value != null))' "$estado_dir/$sessao.json" \
+           >"$JANGADA_ESTADO/revisoes/$sessao.json" \
+      || echo "aviso: não gravei a cópia da sessão em $JANGADA_ESTADO/revisoes" >&2
+  fi
 
   "${JANGADA_TMUX[@]}" send-keys -t "=$sessao:" "$cmd_agente" Enter
 elif [[ -n "$prompt" ]]; then

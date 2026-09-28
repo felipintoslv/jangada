@@ -9,11 +9,12 @@
 | `jangada-worktree-preparar` | copia para o worktree novo os ignorados do `.worktreeinclude`, liga o que está em `.jangada/links` e roda `.jangada/preparar.sh` |
 | `jangada-hook-claude` | chamado pelos hooks do Claude Code; grava o estado e notifica |
 | `jangada-hook-agy` | o mesmo para o agy, pelo `~/.gemini/config/hooks.json` (PreInvocation e Stop) |
+| `jangada-hook-leitor` | PreToolUse do leitor: só comandos de leitura no terminal; no Claude pelo frontmatter do agente, no agy (`--agy`) pelo `PreToolUse` do `run_command` no `~/.gemini/config/hooks.json` |
 | `jangada-filtrar` | condensa saídas longas de comandos no terminal para poupar tokens; atalho `resumir` no jangada shell |
 | `jangada-mapa` | extrai a estrutura de arquivos e assinaturas em Markdown; atalho `mapa` no jangada shell |
 | `jangada-validar` | revisão do diff por outro modelo ou pelo mesmo modelo isolado (claude ou agy), só leitura, chamada pelo agente antes de entregar; executa portão determinístico local antes (conflitos, script com byte nulo, sintaxe, lintr, gitleaks nas linhas acrescentadas; sem gitleaks reprova, salvo `JANGADA_VALIDAR_SEM_GITLEAKS=1`; `.gitleaks.toml`, `.gitleaksignore`, `AGENTS.md` e `CLAUDE.md` valem da base, e `.lintr` também quando a base tem um); só a primeira linha não vazia do parecer decide o status; pareceres em `validacao-<sessao>-rN.md`; depois de um APROVADO, `validacao-<sessao>.aprovado` guarda o commit, e a próxima entrega parte dele com as rodadas zeradas; cada rodada vira uma linha em `~/.local/state/jangada/validar.jsonl`, resumida por `--metricas` |
 | `jangada-agentes` | seletor, painel, módulo da barra, `--focar`, `--proximo`, `--anterior`, `--restaurar` |
-| `jangada-agente-fim` | encerra a sessão e remove o worktree (mantém o ramo); `--integrar` faz o merge na base, atualiza a cópia instalada se for o repositório do jangada e apaga o ramo |
+| `jangada-agente-fim` | encerra a sessão e remove o worktree (mantém o ramo); `--integrar` exige aprovação feita fora do isolamento (`revisoes/`, commit atual do ramo, worktree limpo), roda o `jangada-validar` fora se não houver e, sem APROVADO, pede confirmação (`--sem-revisao` pula a revisão); faz o merge na base, atualiza a cópia instalada se for o repositório do jangada e apaga o ramo |
 | `jangada-consumo` | tokens do Claude no bloco de 5 horas, lidos de `~/.claude/projects` |
 | `jangada-painel` | indicadores num app Shiny em 127.0.0.1; `default/painel/coletor.py` grava o cache em Parquet (`~/.local/state/jangada/painel`), `default/painel/app.R` só lê o cache |
 | `jangada-gancho` | roda os ganchos do usuário em `~/.config/jangada/ganchos/` |
@@ -213,6 +214,9 @@ trava é solta antes do `xdg-open`, que também a passaria ao navegador.
 - Em sessões diretas no repositório (sem ramo nem worktree), `jangada-agente-fim`
   com `--integrar` não deve falhar: avisa que não há ramo a integrar e encerra a
   sessão normalmente.
+- `read -p` só mostra o texto quando a entrada é um terminal. Aviso que um
+  teste precisa ver (ou quem responde por cano) sai num `echo` antes da
+  pergunta.
 
 ## Revisão cruzada (`jangada-validar`)
 
@@ -242,6 +246,14 @@ porta de entrada. O que se aprendeu com ele vale para o revisor agy:
   limite à ferramenta de comando.
 - O revisor erra sobre `set -e`: falha dentro de uma lista `a && b && c`, fora
   do último comando, não encerra o script. Teste com `bash -c` antes de aceitar.
+- Dentro do isolamento, parecer, `.aprovado` e `validar.jsonl` ficam onde o
+  agente grava e não provam revisão. Fora dele (`JANGADA_ISOLADO` vazio), o
+  `jangada-validar` grava em `revisoes/`, oculta pelo `jangada-isolar`, e lê
+  base, tarefa e revisor da cópia `revisoes/SESSAO.json`. Os testes que
+  chamam o `jangada-validar` sem querer esse modo passam `JANGADA_ISOLADO=1`.
+- `.aprovado` com `sujo` (worktree com alteração sem commit) não move o ponto
+  de comparação: com o commit igual ao `HEAD`, a próxima rodada daria "nada a
+  revisar" sem ninguém ter visto o commit sozinho.
 - O `jangada-validar` executa uma checagem determinística local antes do revisor por IA (marcadores de conflito do Git, sintaxe de scripts alterados e `.jangada/validar.sh`). Se falhar, grava `STATUS: REVISAR (local)` sem acionar a API externa, economizando tokens. A opção `--pular-local` ignora o portão local.
 - Um comentário de shell que começa pela palavra `shellcheck` vira diretiva e
   quebra a análise do arquivo inteiro (SC1073). Reescreva a frase.
@@ -304,6 +316,29 @@ instalada: `git -C ~/.local/share/jangada pull --ff-only` e
   de dentro de `referencia/` logo após clonar.
 
 ## Subagentes do agy
+
+Hooks do agy, testados em 28/09/2026:
+
+- `~/.gemini/config/hooks.json` agrupa por nome (`{"jangada": {EVENTO:
+  [...]}}`). `PreInvocation` e `Stop` levam os comandos direto na lista;
+  `PreToolUse` leva `{"matcher": "run_command", "hooks": [{"command": ...}]}`.
+- O `PreToolUse` recebe JSON em camelCase (`conversationId`,
+  `toolCall.name`, `toolCall.args.CommandLine`) e precisa responder JSON:
+  `{"decision": "allow|deny|ask|force_ask", "reason": ...}`. `{}` conta como
+  recusa, e saída inválida dá erro na ferramenta. Por isso o
+  `jangada-hook-leitor --agy` responde `deny` também quando o Python falha.
+- O hook global dispara para todos os agentes, também para subagentes. O
+  `conversationId` é o do subagente, e o tipo dele está em
+  `brain/MAE/.system_generated/subagents/CONVERSA.json`
+  (`subagentDescriptor.typeName`). No `agy -p --agent PAPEL` não há esse
+  arquivo: o papel vem da variável `JANGADA_AGY_PAPEL`.
+- Sem terminal, `allow` e `ask` só deixam passar o que está em
+  `permissions.allow`; `ask` é a resposta neutra.
+- Para testar um hook que recusa, peça um comando que o modelo ache de
+  leitura e que esteja no `permissions.allow` (como `sort`). Com `cp`, o
+  próprio leitor recusa pelo texto do papel, e o hook nem é chamado.
+
+Agentes personalizados:
 
 Testes de 27/09/2026, agy 1.2.12:
 

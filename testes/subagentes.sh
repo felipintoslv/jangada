@@ -79,6 +79,49 @@ conferir "hook do leitor: outra ferramenta passa" \
   bash -c 'jq -cn "{tool_name: \"Read\", tool_input: {file_path: \"a\"}}" | bin/jangada-hook-leitor'
 conferir "hook do leitor: evento ilegível recusa" bash -c '! echo x | bin/jangada-hook-leitor 2>/dev/null'
 
+# No agy o hook é global (~/.gemini/config/hooks.json) e responde em JSON:
+# "deny" para o comando recusado do leitor, "ask" no resto, que segue as
+# permissões do agy. O leitor vem do JANGADA_AGY_PAPEL (jangada-delegar) ou do
+# json do subagente na pasta brain da conversa-mãe.
+leitor_id=0b7c2f4e-1111-4222-8333-444455556666
+outro_id=0b7c2f4e-1111-4222-8333-777788889999
+mkdir -p "$tmp/agy/brain/mae/.system_generated/subagents"
+echo '{"subagentDescriptor": {"typeName": "leitor"}}' >"$tmp/agy/brain/mae/.system_generated/subagents/$leitor_id.json"
+echo '{"subagentDescriptor": {"typeName": "explorador"}}' >"$tmp/agy/brain/mae/.system_generated/subagents/$outro_id.json"
+hook_agy() { # conversa, comando; demais argumentos vão para o env
+  local conv="$1" cmd="$2"; shift 2
+  jq -cn --arg i "$conv" --arg c "$cmd" '{conversationId: $i, toolCall: {name: "run_command", args: {CommandLine: $c}}}' \
+    | env -u JANGADA_AGY_PAPEL JANGADA_AGY_DIR="$tmp/agy" "$@" bin/jangada-hook-leitor --agy
+}
+decisao() { hook_agy "$@" | jq -r .decision; }
+export -f hook_agy decisao
+export tmp
+conferir "hook do agy: leitor pelo papel, comando que grava recusado" \
+  [ "$(decisao x "cp a b" JANGADA_AGY_PAPEL=leitor)" = deny ]
+conferir "hook do agy: a recusa traz o motivo" \
+  bash -c 'hook_agy x "cat a > b" JANGADA_AGY_PAPEL=leitor | jq -e ".reason | test(\"não é permitido\")" >/dev/null'
+conferir "hook do agy: leitor pelo papel, leitura segue as permissões" \
+  [ "$(decisao x "head a.txt" JANGADA_AGY_PAPEL=leitor)" = ask ]
+conferir "hook do agy: subagente leitor pelo json da conversa" [ "$(decisao "$leitor_id" "rm a")" = deny ]
+conferir "hook do agy: outro subagente não é limitado" [ "$(decisao "$outro_id" "rm a")" = ask ]
+conferir "hook do agy: agente principal não é limitado" \
+  [ "$(decisao 0b7c2f4e-1111-4222-8333-000000000000 "rm a")" = ask ]
+conferir "hook do agy: conversa fora do formato não vira caminho" \
+  [ "$(decisao "../../mae/.system_generated/subagents/$leitor_id" "rm a")" = ask ]
+conferir "hook do agy: JANGADA_HOOK_DESLIGADO não solta o leitor" \
+  [ "$(decisao x "rm a" JANGADA_AGY_PAPEL=leitor JANGADA_HOOK_DESLIGADO=1)" = deny ]
+conferir "hook do agy: evento ilegível do leitor recusa" \
+  [ "$(echo x | JANGADA_AGY_PAPEL=leitor bin/jangada-hook-leitor --agy | jq -r .decision)" = deny ]
+conferir "hook do agy: evento ilegível de outro agente segue as permissões" \
+  [ "$(echo x | env -u JANGADA_AGY_PAPEL bin/jangada-hook-leitor --agy | jq -r .decision)" = ask ]
+mkdir -p "$tmp/pyquebrado"
+printf '#!/bin/sh\nexit 1\n' >"$tmp/pyquebrado/python3"
+chmod +x "$tmp/pyquebrado/python3"
+conferir "hook do agy: falha do Python recusa" \
+  [ "$(decisao x "head a" PATH="$tmp/pyquebrado:$PATH")" = deny ]
+conferir "hook do agy: PreToolUse do run_command no hooks.json do jangada" \
+  jqok -e '.jangada.PreToolUse | any(.matcher == "run_command" and any(.hooks[]; .command == "@JANGADA_PATH@/bin/jangada-hook-leitor --agy"))' default/agy/hooks.json
+
 # O revisor do jangada-validar lê a entrega, conteúdo não confiável: no agy
 # roda só com ferramentas de leitura e não aparece como subagente.
 rev=default/agy/agents/revisor/agent.md

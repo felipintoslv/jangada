@@ -31,6 +31,7 @@ if [[ "$2" == /usage ]]; then
   exit 0
 fi
 printf '%s\n' "$@" >"$FALSO_DIR/agy.args"
+printf '%s\n' "${JANGADA_AGY_PAPEL:-}" >"$FALSO_DIR/agy.papel"
 pwd >"$FALSO_DIR/agy.pasta"
 [[ -n "${FALSO_LOG:-}" ]] && echo "$FALSO_LOG" >"$HOME/.gemini/antigravity-cli/log/cli-1.log"
 [[ "${FALSO_CODIGO:-0}" != 0 ]] && { echo "falha falsa" >&2; exit "$FALSO_CODIGO"; }
@@ -41,6 +42,8 @@ EOF
 chmod +x "$tmp/bin/agy"
 conf_agy="$tmp/home/.gemini/antigravity-cli/settings.json"
 jq -n --arg w "$(realpath "$tmp/projeto")" '{trustedWorkspaces: [$w]}' >"$conf_agy"
+mkdir -p "$tmp/home/.gemini/config"
+sed "s|@JANGADA_PATH@|$repo_jangada|g" default/agy/hooks.json >"$tmp/home/.gemini/config/hooks.json"
 
 delegar() {
   rm -f "$tmp/falso/agy.args"
@@ -58,6 +61,7 @@ codigo() { cat "$tmp/codigo"; }
 delegar explorador "mapeie"
 conferir "caso 1: código 0" [ "$(codigo)" = 0 ]
 conferir "caso 1: imprime o relatório" grep -qx "relatorio em a.sh:1" "$tmp/saida"
+conferir "caso 1: o agy recebe o papel, que o hook do leitor lê" grep -qx explorador "$tmp/falso/agy.papel"
 conferir "caso 1: agente do papel" grep -qx -- explorador "$tmp/falso/agy.args"
 conferir "caso 1: Flash low para o explorador" grep -qx -- gemini-3.8-flash-low "$tmp/falso/agy.args"
 conferir "caso 1: roda com --sandbox" grep -qx -- --sandbox "$tmp/falso/agy.args"
@@ -183,6 +187,16 @@ preparar
 conferir "caso 17: raiz confiável, worktree confiável" \
   jqok -e --arg w "$(realpath "$tmp/wt")" '.trustedWorkspaces | index($w)' "$conf_agy"
 jq -n --arg w "$(realpath "$tmp/projeto")" '{trustedWorkspaces: [$w]}' >"$conf_agy"
+
+# O leitor sem o jangada-hook-leitor no agy teria no terminal o
+# permissions.allow do usuário inteiro.
+jq 'del(.jangada.PreToolUse)' "$tmp/home/.gemini/config/hooks.json" >"$tmp/h" && cp "$tmp/h" "$tmp/home/.gemini/config/hooks.json"
+delegar leitor "leia"
+conferir "caso 18: leitor sem o hook no agy recusa antes do pedido" \
+  bash -c '[ "$1" = 4 ] && [ ! -e "$2" ] && grep -q "hook do leitor" "$3"' _ "$(codigo)" "$tmp/falso/agy.args" "$tmp/erro"
+delegar explorador "mapeie"
+conferir "caso 18: os outros papéis não dependem do hook" [ "$(codigo)" = 0 ]
+sed "s|@JANGADA_PATH@|$repo_jangada|g" default/agy/hooks.json >"$tmp/home/.gemini/config/hooks.json"
 
 delegar revisor "revise"
 conferir "caso 11: papel desconhecido dá código 2" [ "$(codigo)" = 2 ]

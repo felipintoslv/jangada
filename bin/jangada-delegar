@@ -121,6 +121,13 @@ fi
 if ! agy_limpo agents 2>/dev/null | grep -qx -- "$papel"; then
   recusar "o agy não achou o agente $papel (rode ./install.sh 50)"
 fi
+# O leitor lê documentos de fora; o que o limita no terminal é o
+# jangada-hook-leitor, que o reconhece pelo JANGADA_AGY_PAPEL. Sem o hook, o
+# permissions.allow do usuário (que pode ter cp, curl) valeria para ele.
+if [[ "$papel" == leitor ]] && ! jq -e --arg bin "${JANGADA_PATH%/}/bin/jangada-hook-leitor"      '[.[]?.PreToolUse[]? | select(.matcher == "run_command") | .hooks[]?.command]
+      | any(. == ($bin + " --agy"))' "$HOME/.gemini/config/hooks.json" >/dev/null 2>&1; then
+  recusar "o hook do leitor não está em ~/.gemini/config/hooks.json (rode jangada-migrar ou ./install.sh 50)"
+fi
 
 # Cota do Gemini (limite de 5 horas), em % restante, com duas casas.
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/jangada/agy-usage.json"
@@ -156,7 +163,7 @@ Se uma ferramenta ou comando for negado, não pare: responda com o que já
 achou e liste o que foi negado."
 tempo="${JANGADA_DELEGAR_TEMPO:-300}"
 codigo=0
-resposta="$(cd "$pasta" && timeout "$((tempo + 30))" env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 \
+resposta="$(cd "$pasta" && timeout "$((tempo + 30))" env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 JANGADA_AGY_PAPEL="$papel" \
   agy -p "$pedido" --agent "$papel" --model "$modelo" --sandbox \
   --output-format json --print-timeout "${tempo}s" </dev/null 2>"$saida")" || codigo=$?
 if ((codigo == 124)); then recusar "tempo esgotado (${tempo}s)"; fi

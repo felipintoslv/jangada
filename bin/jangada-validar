@@ -26,6 +26,11 @@
 # fica gravado em ~/.local/state/jangada/agentes/validacao-SESSAO-rN.md.
 # Código de saída: 0 aprovado, 3 revisar, 4 limite de rodadas, 1 erro.
 # Cada rodada acrescenta uma linha JSON a ~/.local/state/jangada/validar.jsonl.
+#
+# Fora do jangada-isolar (sem JANGADA_ISOLADO), pareceres, marca de aprovação
+# e métricas vão para ~/.local/state/jangada/revisoes, que o isolamento oculta:
+# o agente não forja o que está ali. Os metadados da sessão (base, tarefa,
+# autor, revisor) vêm da cópia que o jangada-agente grava ali ao criá-la.
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
@@ -51,26 +56,48 @@ while (($#)); do
   esac
 done
 
-arq_metricas="$JANGADA_ESTADO/validar.jsonl"
+# Dentro do isolamento tudo fica em pastas que o agente grava; fora, em
+# revisoes/, oculta para ele. A decisão pela variável basta: dentro do bwrap,
+# sem ela, a gravação cai na pasta vazia que oculta revisoes/ e some no fim.
+fora=0
+[[ -z "${JANGADA_ISOLADO:-}" ]] && fora=1
+revisoes_dir="$JANGADA_ESTADO/revisoes"
+# Fora do isolamento, o git roda sobre o worktree do agente, que divide o
+# .git com o repositório principal.
+((fora)) && jangada_git_blindar
+if ((fora)); then
+  arq_metricas="$revisoes_dir/validar.jsonl"
+else
+  arq_metricas="$JANGADA_ESTADO/validar.jsonl"
+fi
 if ((metricas)); then
-  [[ -s "$arq_metricas" ]] || { echo "jangada-validar: nenhuma rodada registrada em $arq_metricas"; exit 0; }
+  # O resumo junta as duas origens; a de revisoes/ é contada à parte.
+  fontes=()
+  for f in "$JANGADA_ESTADO/validar.jsonl" "$revisoes_dir/validar.jsonl"; do
+    [[ -s "$f" ]] && fontes+=("$f")
+  done
+  ((${#fontes[@]})) || { echo "jangada-validar: nenhuma rodada registrada"; exit 0; }
+  [[ -s "$JANGADA_ESTADO/validar.jsonl" ]] \
+    && echo "(as rodadas de $JANGADA_ESTADO/validar.jsonl foram registradas dentro do isolamento, num arquivo gravável pelo agente)"
   # A rodada do APROVADO é quantas rodadas a entrega levou. Linha que não é
   # objeto JSON fica de fora, e campo que não é número não entra na média.
-  jq -Rrn '
+  jq -Rrn --arg revisoes "$revisoes_dir/validar.jsonl" '
     def media: map(numbers) | if length > 0 then (add / length * 10 | round / 10) else "-" end;
     def pct(n; t): if t > 0 then "\(n * 100 / t | round)%" else "-" end;
-    [inputs | fromjson? | objects | .projeto |= (strings // "?") | .revisor |= (strings // "?")]
+    [inputs as $l | $l | fromjson? | objects | .fora = (input_filename == $revisoes)
+     | .projeto |= (strings // "?") | .revisor |= (strings // "?")]
     | group_by(.projeto)[] | . as $p
     | ([.[] | select(.resultado == "aprovado")]) as $ap
     | "\($p[0].projeto): \($ap | length) entrega(s) aprovada(s), \($ap | map(.rodada) | media) rodada(s) em média, "
       + "\(pct([$ap[] | select(.rodada == 1)] | length; $ap | length)) na primeira; "
       + "\([$p[] | select(.etapa == "local")] | length) barrada(s) na verificação local, "
       + "\([$p[] | select(.resultado == "limite")] | length) no limite de rodadas, "
-      + "\([$p[] | select(.resultado == "erro")] | length) falha(s) do revisor",
+      + "\([$p[] | select(.resultado == "erro")] | length) falha(s) do revisor"
+      + (if any($p[]; .fora) then "; \([$ap[] | select(.fora)] | length) aprovada(s) fora do isolamento" else "" end),
       ($p | map(select(.etapa == "revisor")) | group_by(.revisor)[]
        | "  \(.[0].revisor): \(length) revisão(ões), \(pct([.[] | select(.resultado == "aprovado")] | length; length)) aprovadas, "
          + "\(map(.segundos) | media) s em média, \(map(select(.resultado == "revisar") | .itens) | media) apontamento(s) por REVISAR")
-  ' "$arq_metricas"
+  ' "${fontes[@]}"
   exit 0
 fi
 
@@ -152,24 +179,41 @@ diff_max="${JANGADA_VALIDAR_DIFF_MAX:-150000}"
 
 estado_dir="$JANGADA_ESTADO/agentes"
 mkdir -p "$estado_dir"
+# pareceres_dir guarda pareceres e marca de aprovação.
+pareceres_dir="$estado_dir"
+if ((fora)); then
+  pareceres_dir="$revisoes_dir"
+  (umask 077; mkdir -p "$revisoes_dir")
+fi
 sessao="${JANGADA_SESSAO:-}"
+[[ "$sessao" =~ ^[A-Za-z0-9_.-]+$ ]] || sessao=""
 arq_estado=""
 [[ -n "$sessao" && -f "$estado_dir/$sessao.json" ]] && arq_estado="$estado_dir/$sessao.json"
+# Metadados lidos: fora, os da cópia em revisoes/; o estado em agentes/ só
+# recebe o resultado da rodada, que a lista mostra.
+arq_meta="$arq_estado"
+if ((fora)) && [[ -n "$sessao" ]]; then
+  if [[ -f "$revisoes_dir/$sessao.json" ]]; then
+    arq_meta="$revisoes_dir/$sessao.json"
+  elif [[ -n "$arq_estado" ]]; then
+    echo "jangada-validar: aviso: sem cópia da sessão em $revisoes_dir; base, tarefa e revisor vêm do estado gravável pelo agente" >&2
+  fi
+fi
 # Fora de uma sessão, os pareceres ficam com o nome da pasta.
 rotulo="${sessao:-$(basename "$dir")}"
 rotulo="${rotulo//[^A-Za-z0-9_.-]/-}"
 
 tarefa=""; inicio=""; autor=""; criada=""
-if [[ -n "$arq_estado" ]]; then
-  [[ -n "$base" ]] || base="$(jq -r '.base // ""' "$arq_estado")"
-  tarefa="$(jq -r '.tarefa // ""' "$arq_estado")"
-  inicio="$(jq -r '.inicio // ""' "$arq_estado")"
+if [[ -n "$arq_meta" ]]; then
+  [[ -n "$base" ]] || base="$(jq -r '.base // ""' "$arq_meta")"
+  tarefa="$(jq -r '.tarefa // ""' "$arq_meta")"
+  inicio="$(jq -r '.inicio // ""' "$arq_meta")"
   # .inicio é o commit de partida; a data de criação da sessão é .desde.
-  criada="$(jq -r '.desde // ""' "$arq_estado")"
-  autor="$(jq -r '.agente // ""' "$arq_estado")"
+  criada="$(jq -r '.desde // ""' "$arq_meta")"
+  autor="$(jq -r '.agente // ""' "$arq_meta")"
   autor="$(basename "${autor%% *}")"
   if ((!revisor_dado)); then
-    revisor="$(jq -r '.revisor // ""' "$arq_estado")"
+    revisor="$(jq -r '.revisor // ""' "$arq_meta")"
   fi
 fi
 [[ -n "$revisor" ]] || revisor="${JANGADA_VALIDAR_REVISOR:-}"
@@ -238,12 +282,15 @@ fi
 # Depois de um APROVADO, a próxima chamada é outra entrega: a revisão parte do
 # commit aprovado e as rodadas recomeçam. Sem isso, uma sessão longa revisava
 # de novo tudo desde o início e somava as rodadas de entregas diferentes.
-arq_aprovado="$estado_dir/validacao-$rotulo.aprovado"
-aprovado_commit=""; aprovado_num=0
+arq_aprovado="$pareceres_dir/validacao-$rotulo.aprovado"
+# Aprovação com alteração sem commit ("sujo") não prova que o commit sozinho
+# foi aprovado: as rodadas recomeçam, mas a revisão parte do ponto de antes.
+aprovado_commit=""; aprovado_num=0; aprovado_estado=""
 if [[ -f "$arq_aprovado" ]]; then
-  read -r aprovado_commit aprovado_num <"$arq_aprovado" || true
+  read -r aprovado_commit aprovado_num aprovado_estado <"$arq_aprovado" || true
   [[ "$aprovado_num" =~ ^[0-9]+$ ]] || aprovado_num=0
-  if git -C "$dir" merge-base --is-ancestor "$ponto" "$aprovado_commit" 2>/dev/null \
+  if [[ "$aprovado_estado" != sujo ]] \
+     && git -C "$dir" merge-base --is-ancestor "$ponto" "$aprovado_commit" 2>/dev/null \
      && git -C "$dir" merge-base --is-ancestor "$aprovado_commit" HEAD 2>/dev/null; then
     ponto="$(git -C "$dir" rev-parse "$aprovado_commit")"
   fi
@@ -313,8 +360,8 @@ fi
 # Rodada atual e parecer anterior.
 anteriores=()
 # Só -rN.md: a sessão proj--fix não pode contar os pareceres de proj--fix-rotas.
-for f in "$estado_dir/validacao-$rotulo-r"[0-9]*.md; do
-  [[ -e "$f" && "${f#"$estado_dir/validacao-$rotulo-r"}" =~ ^[0-9]+\.md$ ]] && anteriores+=("$f")
+for f in "$pareceres_dir/validacao-$rotulo-r"[0-9]*.md; do
+  [[ -e "$f" && "${f#"$pareceres_dir/validacao-$rotulo-r"}" =~ ^[0-9]+\.md$ ]] && anteriores+=("$f")
 done
 # num numera o arquivo do parecer; rodada conta só a entrega atual.
 num=$((${#anteriores[@]} + 1))
@@ -451,7 +498,7 @@ correção sugerida, do mais grave para o menos grave.
 EOF
 )"
 
-saida="$estado_dir/validacao-$rotulo-r$num.md"
+saida="$pareceres_dir/validacao-$rotulo-r$num.md"
 
 # Roda o lintr e imprime arquivo, linha, linter e mensagem separados por
 # tabulação. Argumentos: arquivo de configuração e os arquivos R. Sai com 2
@@ -750,7 +797,7 @@ revisar_agy() {
     echo "jangada-validar: o agy não achou o agente revisor (rode ./install.sh 50)" >&2
     return 1
   fi
-  args=(-p "$pedido" --agent revisor --sandbox --output-format json --add-dir "$dir" --add-dir "$estado_dir")
+  args=(-p "$pedido" --agent revisor --sandbox --output-format json --add-dir "$dir" --add-dir "$pareceres_dir")
   [[ -n "$modelo" ]] && args+=(--model "$modelo")
   [[ -n "${JANGADA_VALIDAR_ESFORCO:-high}" ]] && args+=(--effort "${JANGADA_VALIDAR_ESFORCO:-high}")
   # A saída vem por cano: o agy reabre o próprio descritor de saída, e com
@@ -799,7 +846,12 @@ echo "jangada-validar: $status (parecer em $saida)" >&2
 registrar "${status,,}" revisor
 "$JANGADA_PATH/bin/jangada-gancho" pos-validar "$rotulo" "$status" || true
 if [[ "$status" == APROVADO ]]; then
-  printf '%s %s\n' "$cabeca" "$num" >"$arq_aprovado"
+  # O terceiro campo diz se havia alteração sem commit: o
+  # jangada-agente-fim --integrar só aceita a aprovação do ramo limpo, que é
+  # o que o merge leva.
+  limpo=limpo
+  [[ -z "$(git -C "$dir" status --porcelain --ignore-submodules=all 2>/dev/null)" ]] || limpo=sujo
+  printf '%s %s %s\n' "$cabeca" "$num" "$limpo" >"$arq_aprovado"
   exit 0
 fi
 exit 3

@@ -96,8 +96,11 @@ Pasta `$JANGADA_ESTADO/agentes/`. Em 26/09/2026 havia 41 arquivos.
   título; os dois `avaliacao-*` começam com a mensagem de limite de sessão
   do Claude. Procure o STATUS nas primeiras linhas, não só na primeira, e
   deixe `avaliacao-*` e `revisao-*` fora da contagem de pareceres.
-- **Conteúdo do `.aprovado`:** uma linha `COMMIT N`, o commit aprovado e o
-  número do último parecer.
+- **Conteúdo do `.aprovado`:** uma linha `COMMIT N ESTADO`, o commit
+  aprovado, o número do último parecer e `limpo` ou `sujo` (worktree com
+  alteração sem commit na aprovação; desde 28/09/2026). Marca `sujo` não
+  move o ponto de comparação da próxima entrega. Esta pasta é gravável pelo
+  agente isolado; a marca que o `--integrar` aceita fica na seção 2b.
 - **O que dá para recuperar:**
   - sessão, do nome: `validacao-<rotulo>-rN.md` e `parecer-<sessao>-rN.md`;
   - projeto e tarefa: a sessão é `slug-do-repo` ou `slug-do-repo--tarefa`
@@ -122,6 +125,27 @@ Pasta `$JANGADA_ESTADO/agentes/`. Em 26/09/2026 havia 41 arquivos.
   só existem no validar.jsonl.
 - **Perda:** os `validacao-*` de 22/09 a 26/09 de sessões já encerradas
   foram apagados pelo `jangada-agente-fim`. Não há como recuperá-los.
+
+## 2b. Revisões feitas fora do isolamento (revisoes/)
+
+Pasta `$JANGADA_ESTADO/revisoes/`, modo 700, criada a partir de 28/09/2026.
+O `jangada-isolar` a oculta, então o agente isolado não lê nem grava ali.
+
+| Arquivo | Quem escreve | Quem apaga |
+|---|---|---|
+| `SESSAO.json` | `bin/jangada-agente`, fora do isolamento, ao abrir a sessão: `sessao`, `raiz`, `worktree`, `ramo`, `base`, `agente`, `desde`, `tarefa`, `inicio`, `revisor` | `bin/jangada-agente-fim`, ao encerrar |
+| `validacao-SESSAO-rN.md` | `bin/jangada-validar` rodado fora do isolamento, em geral pelo `--integrar` | `bin/jangada-agente-fim`, ao encerrar |
+| `validacao-SESSAO.aprovado` | idem, no APROVADO: `COMMIT N limpo` ou `COMMIT N sujo` | `bin/jangada-agente-fim`, ao encerrar |
+| `validar.jsonl` | idem, uma linha por rodada, no formato da seção 1 | ninguém |
+
+- O `jangada-validar --metricas` lê os dois `validar.jsonl` e diz quantas
+  aprovações vieram de fora.
+- O painel marca a origem `revisoes` e forma entregas próprias
+  (`ROTULO#fora-N`), sem somá-las às taxas das rodadas da sessão.
+- Sessão aberta antes de 28/09/2026 não tem a cópia `SESSAO.json`; o
+  `jangada-validar` avisa que base, tarefa e revisor vêm do estado gravável.
+- Sessão aberta com `--sem-isolar` alcança esta pasta: nela a revisão de fora
+  não protege nada.
 
 ## 3. Conversas do Claude Code
 

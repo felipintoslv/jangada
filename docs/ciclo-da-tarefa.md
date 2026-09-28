@@ -106,6 +106,13 @@ flowchart TD
   agente padrão, com todas as ferramentas; por isso a validação para.
 - **Registro.** Cada rodada grava `validacao-ROTULO-rN.md` e uma linha em
   `validar.jsonl` (`registrar`), e atualiza o campo `validacao` do estado.
+  Dentro do isolamento, isso vai para `agentes/` e para o `validar.jsonl` do
+  estado, que o agente pode alterar. Fora dele (sem `JANGADA_ISOLADO`), vai
+  para `revisoes/`, que o `jangada-isolar` oculta, e a base, a tarefa e o
+  revisor saem da cópia `revisoes/SESSAO.json` que o `jangada-agente` grava
+  ao abrir a sessão. O `.aprovado` guarda `COMMIT N limpo|sujo`: `sujo`
+  quando o worktree tinha alteração sem commit, e aí o commit sozinho não foi
+  o que o revisor viu.
 
 | Código | Significado |
 |---|---|
@@ -124,7 +131,14 @@ flowchart TD
     C --> D{--integrar?}
     D -- sim --> E{repositório principal<br>sem alteração pendente?}
     E -- não --> X2[recusa, código 1]
-    E -- sim --> F[merge --no-ff na base]
+    E -- sim --> R{aprovação em revisoes/<br>do commit do ramo, limpa?}
+    R -- não --> V[jangada-validar fora<br>do isolamento]
+    V --> Q{aprovou?}
+    Q -- não --> C2{confirma mesclar<br>sem aprovação?}
+    C2 -- não --> X4[nada foi feito, código 1]
+    C2 -- sim --> F
+    Q -- sim --> F
+    R -- sim --> F[merge --no-ff na base]
     F --> G
     D -- não --> G{alterações pendentes<br>no worktree?}
     G -- sim --> H{confirma?}
@@ -138,6 +152,13 @@ flowchart TD
   fora de `agente/NOME`, worktree fora de `JANGADA_WORKTREES` e worktree de
   outro repositório. O estado é gravável de dentro do isolamento, então nada
   dele é aceito sem conferência.
+- O parecer que a sessão grava em `agentes/` não conta para o `--integrar`:
+  o agente pode escrevê-lo. Vale só a marca em `revisoes/` para o commit
+  atual do ramo, com o worktree limpo. Sem ela, o `--integrar` roda o
+  `jangada-validar` fora do isolamento e, se não sair APROVADO, pede
+  confirmação para mesclar assim mesmo. `--sem-revisao` pula essa revisão e
+  vai direto à confirmação. Dentro do isolamento a revisão não roda, porque
+  não valeria como aprovação.
 - `--integrar` mescla no repositório de trabalho e nunca na cópia instalada;
   ela só avança pelo `jangada-update` ([atualização](atualizacao-e-migracoes.md)).
 - Chamado de dentro da própria sessão, o `limpar` roda em segundo plano,
@@ -149,7 +170,7 @@ flowchart TD
 | Arquivo | O que cobre |
 |---|---|
 | `testes/validar.sh` | veredito, rodadas, limite, ponto de comparação, verificação local, pareceres e métricas, com claude e agy falsos |
-| `testes/fim.sh` | recusa de estado adulterado (ramo, worktree, raiz, base) e `--limpar-concluidos` |
+| `testes/fim.sh` | recusa de estado adulterado (ramo, worktree, raiz, base), aprovação de fora no `--integrar` (marca forjada em `agentes/`, marca `sujo`, `--sem-revisao`, chamada de dentro do isolamento) e `--limpar-concluidos` |
 | `testes/update.sh` | `--integrar` não mexe na cópia instalada nem roda ganchos do repositório do agente |
 | `testes/eventos.sh` | histórico de estados gravado pelos hooks e pela troca de foco |
 | `testes/restaurar.sh` | volta de uma sessão interrompida |

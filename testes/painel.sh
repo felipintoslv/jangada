@@ -191,6 +191,23 @@ conferir "caso 4: rodada 1 barrada na verificação local abre outra entrega" \
   [ "$(JANGADA_ESTADO="$tmp/e5" PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=default/painel python3 -c '
 import coletor
 print(" ".join(l["entrega"] for l in coletor.validacoes()))')" = "x#1 x#2" ]
+# Revisão de fora do isolamento (revisoes/): mesma tarefa, entrega própria,
+# e apontamentos lidos também de lá.
+mkdir -p "$tmp/e5b/revisoes"
+jq -cn --arg d "$agora" '{data: $d, projeto: "x", rotulo: "x", rodada: 1, resultado: "aprovado", etapa: "revisor", revisor: "agy", modelo: "", autor: "claude"}' \
+  >"$tmp/e5b/validar.jsonl"
+{
+  jq -cn --arg d "$agora" '{data: $d, projeto: "x", rotulo: "x", rodada: 1, resultado: "revisar", etapa: "revisor", revisor: "claude", modelo: "", autor: "claude"}'
+  jq -cn --arg d "$agora" '{data: $d, projeto: "x", rotulo: "x", rodada: 2, resultado: "aprovado", etapa: "revisor", revisor: "claude", modelo: "", autor: "claude"}'
+} >"$tmp/e5b/revisoes/validar.jsonl"
+printf 'STATUS: REVISAR\n\n1. falta teste em `b.sh`\n' >"$tmp/e5b/revisoes/validacao-x-r1.md"
+conferir "caso 4: revisão de fora forma entrega própria e tem apontamentos" \
+  [ "$(JANGADA_ESTADO="$tmp/e5b" PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=default/painel python3 -c '
+import coletor
+v = coletor.validacoes()
+print(" ".join(l["entrega"] + ":" + l["origem"] for l in v), end=" ")
+print(" ".join(l["arquivo"] for l in coletor.apontamentos()))')" \
+    = "x#1:validar.jsonl x#fora-1:revisoes x#fora-1:revisoes b.sh" ]
 conferir "caso 4: sessão esquecida em aguardando conta no máximo 12 horas" \
   [ "$(PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=default/painel python3 -c '
 import datetime as dt, coletor
@@ -283,6 +300,16 @@ else
       b <- consumo_por(d$mensagens[d$mensagens$modelo != "<synthetic>", ], "projeto")
       cat(nrow(e), r$primeira_pct, r$rodadas_media, b$saida[b$projeto == "meu-projeto"], nrow(sessoes_paradas(d$sessoes, e)))
     ' "$cache" 2>/dev/null)" = "3 50 1.5 347 0" ]
+  conferir "caso 5: entrega revisada fora do isolamento marcada" \
+    [ "$(cd default/painel && JANGADA_ESTADO="$tmp/e5b" PYTHONDONTWRITEBYTECODE=1 python3 -c '
+import coletor, json
+print(json.dumps(coletor.validacoes(), default=str))' | Rscript -e '
+      source("indicadores.R")
+      v <- jsonlite::fromJSON(file("stdin"))
+      v$data <- as.POSIXct(v$data, format = "%Y-%m-%dT%H:%M:%OS", tz = "UTC")
+      e <- entregas(v)
+      cat(paste(e$entrega, e$fora, e$rodadas, sep = ":"))
+    ' 2>&1)" = "x#1:FALSE:1 x#fora-1:TRUE:2" ]
   conferir "caso 5: o consumo junta o detalhe e os dias somados pela retenção" \
     [ "$(cd default/painel && Rscript -e '
       source("indicadores.R")

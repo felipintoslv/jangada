@@ -24,7 +24,9 @@ export GIT_CONFIG_GLOBAL="$tmp/gitconfig" GIT_CONFIG_NOSYSTEM=1
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 export HOME="$tmp/home" XDG_CONFIG_HOME="$tmp/home/.config" XDG_STATE_HOME="$tmp/home/.local/state"
 export JANGADA_PATH="$repo_jangada"
-unset HYPRLAND_INSTANCE_SIGNATURE JANGADA_SESSAO JANGADA_REPO JANGADA_SIMULAR JANGADA_WORKTREES
+unset HYPRLAND_INSTANCE_SIGNATURE JANGADA_SESSAO JANGADA_REPO JANGADA_SIMULAR JANGADA_WORKTREES JANGADA_ISOLADO
+unset JANGADA_VALIDAR_REVISOR JANGADA_VALIDAR_MODELO
+export JANGADA_VALIDAR_SEM_GITLEAKS=1
 estado="$XDG_STATE_HOME/jangada/agentes"
 wts="$HOME/.local/share/jangada-worktrees"
 mkdir -p "$estado" "$wts" "$tmp/bin"
@@ -39,7 +41,15 @@ case " $* " in
   *" kill-session "*) printf '%s\n' "${*: -1}" >>"$FALSO_DIR/mortas" ;;
 esac
 EOF
-chmod +x "$tmp/bin/tmux"
+# Revisor falso do jangada-validar: registra a chamada e responde
+# $FALSO_RESPOSTA.
+cat >"$tmp/bin/claude" <<'EOF'
+#!/usr/bin/env bash
+cat >/dev/null
+: >>"$FALSO_DIR/revisor-chamado"
+printf '%b\n' "${FALSO_RESPOSTA:-STATUS: REVISAR}"
+EOF
+chmod +x "$tmp/bin/tmux" "$tmp/bin/claude"
 export PATH="$tmp/bin:$PATH"
 
 # Repositório do projeto e um segundo repositório, alvo do agente.
@@ -151,6 +161,68 @@ conferir "encerra ($rc)" test "$rc" -eq 0
 conferir "worktree removido" test ! -d "$wts/proj/x"
 conferir "estado apagado" test ! -f "$estado/x.json"
 conferir "ramo mantido" git -C "$proj" show-ref --quiet --verify refs/heads/agente/x
+: >"$tmp/mortas"
+
+echo "== --integrar e a revisão fora do isolamento"
+revisoes="$XDG_STATE_HOME/jangada/revisoes"
+mkdir -p "$revisoes"
+integrar_teste() { # sessão, resposta à confirmação, opções extras
+  local s="$1" r="$2"; shift 2
+  rm -f "$tmp/revisor-chamado"
+  "$repo_jangada/bin/jangada-agente-fim" --integrar "$@" "$s" <<<"$r" >"$tmp/saida" 2>&1; rc=$?
+}
+preparar() { # sessão
+  novo_worktree "$proj" "$1"
+  echo "$1" >"$wts/proj/$1/$1.txt"
+  git -C "$wts/proj/$1" add "$1.txt"
+  git -C "$wts/proj/$1" commit --quiet -m "$1"
+  gravar "$1" "{\"raiz\": \"$proj\", \"worktree\": \"$wts/proj/$1\", \"ramo\": \"agente/$1\", \"base\": \"main\", \"estado\": \"concluido\"}"
+}
+
+# Aprovação de fora para o commit do ramo: integra sem chamar o revisor.
+preparar i1
+printf '%s 1 limpo\n' "$(git -C "$proj" rev-parse agente/i1)" >"$revisoes/validacao-i1.aprovado"
+printf 'STATUS: APROVADO\n' >"$revisoes/validacao-i1-r1.md"
+integrar_teste i1 s
+conferir "aprovação de fora: integra ($rc)" test "$rc" -eq 0
+conferir "aprovação de fora: diz que vale" grep -q "aprovado fora do isolamento no commit" "$tmp/saida"
+conferir "aprovação de fora: o revisor não roda" test ! -e "$tmp/revisor-chamado"
+conferir "aprovação de fora: mesclado" test -e "$proj/i1.txt"
+conferir "aprovação de fora: a revisão sai com a sessão" \
+  bash -c 'test ! -e "$1/validacao-i1.aprovado" && test ! -e "$1/validacao-i1-r1.md"' _ "$revisoes"
+
+# Marca forjada em agentes/ e aprovação de fora com o worktree sujo não
+# contam: o revisor roda, reprova, e a resposta n não integra.
+preparar i2
+printf '%s 1 limpo\n' "$(git -C "$proj" rev-parse agente/i2)" >"$estado/validacao-i2.aprovado"
+printf 'STATUS: APROVADO\n' >"$estado/validacao-i2-r1.md"
+printf '%s 1 sujo\n' "$(git -C "$proj" rev-parse agente/i2)" >"$revisoes/validacao-i2.aprovado"
+FALSO_RESPOSTA='STATUS: REVISAR\n1. i2.txt:1: problema' integrar_teste i2 n
+conferir "marca forjada: o revisor roda fora" test -e "$tmp/revisor-chamado"
+conferir "marca forjada: o parecer vai para revisoes/" grep -q problema "$revisoes/validacao-i2-r1.md"
+conferir "marca forjada: pede confirmação sem aprovação" grep -q "sem aprovação feita fora do isolamento" "$tmp/saida"
+conferir "marca forjada: resposta n não integra ($rc)" bash -c '[ "$1" -ne 0 ] && test ! -e "$2/i2.txt"' _ "$rc" "$proj"
+conferir "marca forjada: sessão mantida" test -f "$estado/i2.json"
+
+# Revisor aprova: a marca nova vale e o merge segue.
+FALSO_RESPOSTA='STATUS: APROVADO' integrar_teste i2 s
+conferir "revisão aprovada fora: integra ($rc)" bash -c '[ "$1" -eq 0 ] && test -e "$2/i2.txt"' _ "$rc" "$proj"
+conferir "revisão aprovada fora: pergunta sem o aviso" bash -c '! grep -q "sem aprovação feita fora" "$1"' _ "$tmp/saida"
+
+# --sem-revisao: não chama o revisor e pede a confirmação explícita.
+preparar i3
+integrar_teste i3 n --sem-revisao
+conferir "--sem-revisao: o revisor não roda" test ! -e "$tmp/revisor-chamado"
+conferir "--sem-revisao: pede confirmação sem aprovação" grep -q "sem aprovação feita fora do isolamento" "$tmp/saida"
+conferir "--sem-revisao: resposta n não integra" test ! -e "$proj/i3.txt"
+integrar_teste i3 s --sem-revisao
+conferir "--sem-revisao: resposta s integra ($rc)" bash -c '[ "$1" -eq 0 ] && test -e "$2/i3.txt"' _ "$rc" "$proj"
+
+# Dentro do isolamento não há revisão que valha: nem roda o revisor.
+preparar i4
+JANGADA_ISOLADO=1 integrar_teste i4 n
+conferir "dentro do isolamento: o revisor não roda" test ! -e "$tmp/revisor-chamado"
+conferir "dentro do isolamento: explica" grep -q "rode o --integrar fora dele" "$tmp/saida"
 : >"$tmp/mortas"
 
 echo "== --limpar-concluidos"

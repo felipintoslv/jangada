@@ -171,7 +171,8 @@ if command -v agy >/dev/null 2>&1 || [[ -d "$HOME/.gemini" ]]; then
   if [[ -f "$HOME/.gemini/config/hooks.json" ]]; then
     _faltam_agy="$(jq -r --slurpfile p "$JANGADA_PATH/default/agy/hooks.json" --arg bin "${JANGADA_PATH%/}/bin/" '
       ($p[0].jangada | keys) - [(.jangada // {}) | to_entries[]
-        | select([.value[]?.command // ""] | any(startswith($bin) and test("jangada-hook-agy"))) | .key]
+        | select([.value[]? | (.command // empty), (.hooks[]?.command // empty)]
+          | any(startswith($bin) and test("jangada-hook-(agy|leitor)"))) | .key]
       | join(" ")' "$HOME/.gemini/config/hooks.json" 2>/dev/null || echo "?")"
     if [[ -z "$_faltam_agy" ]]; then
       ok "hooks instalados em todos os eventos"

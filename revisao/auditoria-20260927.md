@@ -8,8 +8,10 @@ perguntas ao autor estão resolvidas; veja "Respostas do autor", no fim.
 A conferência item a item de 28/09/2026 achou dois itens incompletos, já
 fechados: o 40 (o Bash do leitor passa pelo `jangada-hook-leitor`) e o 63
 (os indicadores de subagentes guardam um memo por subagente e só releem o
-que mudou). No 21 ficou a correção mínima, o aviso na prévia; a marca
-`.aprovado` e o `validar.jsonl` seguem graváveis pelo agente.
+que mudou). O 21 também foi fechado por inteiro: o `--integrar` revisa fora do
+isolamento e guarda parecer, marca e métrica em `revisoes/`, que o agente
+isolado não alcança. O leitor do agy, que no 40 ficava só com o texto do
+papel, passou pelo mesmo hook (`jangada-hook-leitor --agy`).
 
 Método: o repositório foi dividido em cinco partes (isolamento e sessões;
 atualização e instalação; validar, delegar e segredos; Hyprland, barra e
@@ -332,6 +334,7 @@ modelo de ameaça 1 do pedido. Ver "Perguntas ao autor".
 - Cenário: o validar roda dentro do bwrap e grava em `agentes/` e `validar.jsonl`, graváveis. O agente pode escrever `validacao-SESSAO-r9.md` com "STATUS: APROVADO", que a prévia do seletor mostra, criar a marca `.aprovado` com o HEAD (o validar seguinte revisa só dali em diante) e forjar linhas do `validar.jsonl`, que alimentam o painel. A integração não exige aprovação, então isso engana o usuário e os indicadores, mas não integra nada sozinho.
 - Problema: o parecer não prova que houve revisão.
 - Correção proposta: na prévia, marcar "parecer gerado dentro da sessão". Para valer como garantia, disparar a revisão fora do isolamento (no `jangada-agente-fim --integrar`) e guardar marca e métrica numa pasta somente leitura para o agente.
+- Situação (28/09/2026): corrigido. Fora do isolamento, o `jangada-validar` grava em `$JANGADA_ESTADO/revisoes/`, que o `jangada-isolar` oculta, e lê base, tarefa e revisor da cópia da sessão que o `jangada-agente` grava ali. O `jangada-agente-fim --integrar` só aceita a marca de lá para o commit atual do ramo com o worktree limpo; sem ela, roda a revisão e, sem APROVADO, pede confirmação (`--sem-revisao` pula a revisão). A prévia e o painel separam as duas origens. Resta: sessão com `--sem-isolar` alcança `revisoes/`.
 
 ### 22. O glob dos pareceres mistura sessões com o mesmo prefixo seguido de "-r"
 - Arquivo e linha: bin/jangada-validar:282 e :314; bin/jangada-agentes:391 e :405; bin/jangada-agente-fim:196
@@ -530,6 +533,7 @@ modelo de ameaça 1 do pedido. Ver "Perguntas ao autor".
 - Cenário: o leitor lê um PDF com injeção; com Bash (e as permissões herdadas da sessão), pode gravar ou apagar.
 - Problema: "não edite" está no texto, não na ferramenta.
 - Correção proposta: tirar Bash do explorador do Claude (Read, Grep e Glob bastam); no leitor, restringir o Bash a comandos de leitura se o frontmatter permitir (a confirmar na documentação de subagentes).
+- Situação (28/09/2026): corrigido no Claude e no agy. O `jangada-hook-leitor` recusa o que não é comando de leitura: no Claude pelo `PreToolUse` do frontmatter do leitor, no agy pelo `PreToolUse` do `run_command` em `~/.gemini/config/hooks.json`, que reconhece o leitor pelo `JANGADA_AGY_PAPEL` do `jangada-delegar` ou pelo json do subagente. O `jangada-delegar` recusa o leitor sem o hook instalado.
 
 ### 41. Arquivo novo que é link simbólico manda ao revisor o conteúdo do alvo
 - Arquivo e linha: bin/jangada-validar:245-259

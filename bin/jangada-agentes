@@ -487,15 +487,37 @@ previa() {
     echo "(sessão encerrada; Alt+I integra, Ctrl+X $dica_x)"
   fi
 
-  # Último parecer do revisor, pedido pelo agente com jangada-validar.
-  local validacao
+  # Último parecer feito fora do isolamento (revisoes/, oculta para o agente),
+  # com a marca de aprovação conferida contra o commit atual do ramo.
+  local revisoes="$JANGADA_ESTADO/revisoes" validacao fora ramo_s raiz_s cabeca c="" l=""
+  fora="$(mais_recente "$revisoes/validacao-$s-r")"
+  if [[ -n "$fora" ]]; then
+    echo ""
+    echo "--- $(basename "$fora") (fora do isolamento) ---"
+    # Ramo e raiz da cópia que o jangada-agente gravou em revisoes/, e não do
+    # estado, que o agente grava.
+    ramo_s="$(jq -r '.ramo // "" | tostring' "$revisoes/$s.json" 2>/dev/null || true)"
+    raiz_s="$(jq -r '.raiz // "" | tostring' "$revisoes/$s.json" 2>/dev/null || true)"
+    cabeca=""
+    [[ "$ramo_s" =~ ^agente/[a-z0-9_][a-z0-9_-]*$ && "$raiz_s" == /* && -d "$raiz_s" ]] \
+      && cabeca="$(jangada_git_seguro -C "$raiz_s" rev-parse --verify --quiet "$ramo_s^{commit}" 2>/dev/null || true)"
+    [[ -f "$revisoes/validacao-$s.aprovado" ]] && read -r c _ l <"$revisoes/validacao-$s.aprovado"
+    if [[ -n "$c" && "$c" == "$cabeca" && "$l" == limpo ]]; then
+      echo "(aprovação vale para o commit atual do ramo, ${c:0:12})"
+    elif [[ -n "$c" ]]; then
+      echo "(a última aprovação, ${c:0:12}, não é do commit atual do ramo)"
+    fi
+    head -60 "$fora"
+  fi
+
+  # Último parecer pedido pelo agente com jangada-validar dentro do isolamento.
   validacao="$(mais_recente "$estado_dir/validacao-$s-r")"
   if [[ -n "$validacao" ]]; then
     echo ""
     echo "--- $(basename "$validacao") ---"
     # O jangada-validar roda no processo do agente, e o parecer fica numa pasta
     # que ele pode gravar: é o que a sessão registrou, não prova de revisão.
-    echo "(gravado pela própria sessão; confira o diff antes de integrar)"
+    echo "(gravado pela própria sessão; o --integrar revisa de novo fora do isolamento)"
     head -60 "$validacao"
   fi
 }

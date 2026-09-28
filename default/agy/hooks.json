@@ -13,6 +13,18 @@
         "command": "@JANGADA_PATH@/bin/jangada-hook-agy concluido",
         "timeout": 5
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "@JANGADA_PATH@/bin/jangada-hook-leitor --agy",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }

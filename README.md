@@ -118,7 +118,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-validar` | manda o diff do worktree para o outro modelo revisar (o agy revisa o Claude, o Claude revisa o agy) e devolve `STATUS: APROVADO` ou `REVISAR`; o agente chama antes de entregar |
 | `jangada-shell` | inicia subshell enriquecida com comandos diretos de agentes e projetos |
 | `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir, integrar ou encerrar (`--proximo`, `--anterior`, `--restaurar`) |
-| `jangada-agente-fim` | encerra uma sessão e remove o worktree, com conferência de alterações pendentes; `--integrar` faz antes o merge na base e apaga o ramo; no repositório do jangada, avisa para rodar `jangada-update`, que atualiza a cópia instalada |
+| `jangada-agente-fim` | encerra uma sessão e remove o worktree, com conferência de alterações pendentes; `--integrar` revisa fora do isolamento, faz o merge na base e apaga o ramo; no repositório do jangada, avisa para rodar `jangada-update`, que atualiza a cópia instalada |
 | `jangada-consumo` | tokens do Claude Code no bloco de 5 horas em andamento (também no tooltip da barra) |
 | `jangada-painel` | painel de indicadores do uso de IA num app Shiny local; `--json` imprime os do dia, `--parar` encerra o app, `--conferir` lista o que falta |
 | `jangada-gancho` | roda os ganchos do usuário de um evento (chamado pelos outros comandos) |
@@ -275,7 +275,11 @@ O fluxo completo, com fluxogramas, está em
 3. Os pareceres ficam em `~/.local/state/jangada/agentes/validacao-*`. O
    jangada-validar roda no processo do agente, que pode gravar nessa pasta;
    por isso a prévia do `jangada-agentes` avisa que o parecer foi gravado pela
-   própria sessão, e não serve de prova de revisão. No
+   própria sessão, e não serve de prova de revisão. A prova é a revisão que o
+   `jangada-agente-fim --integrar` roda fora do isolamento, gravada em
+   `~/.local/state/jangada/revisoes/`, que o agente isolado não alcança: sem
+   uma aprovação dali para o commit atual do ramo, o `--integrar` pede
+   confirmação para mesclar (`--sem-revisao` pula a revisão). No
    jangada shell, `revisar` roda o mesmo comando no diretório atual. Cada
    rodada acrescenta uma linha a `~/.local/state/jangada/validar.jsonl`
    (resultado, etapa, revisor, rodada, linhas alteradas, apontamentos e
@@ -291,7 +295,11 @@ O fluxo completo, com fluxogramas, está em
    `~/.gemini/config/hooks.json`: trabalhando e concluído. O agy não tem
    evento de pedido de permissão, então não há "aguardando". `Enter` restaura
    com `agy --conversation`.
-6. Em cada worktree novo o agy pergunta se confia na pasta; responda na
+6. O leitor do agy passa pelo `jangada-hook-leitor --agy`, no `PreToolUse`
+   do `run_command` do mesmo `hooks.json`: só roda comandos de leitura,
+   mesmo que o `permissions.allow` libere outros. O `jangada-delegar` recusa
+   o leitor sem esse hook (`jangada-migrar` instala).
+7. Em cada worktree novo o agy pergunta se confia na pasta; responda na
    janela. A confiança é por caminho exato. O `jangada-worktree-preparar`
    confia no worktree que cria só se você já confiou no repositório
    principal, e o fim da sessão tira; a primeira alteração guarda o original

@@ -239,9 +239,24 @@ jangada_registrar_evento() {
 # desliga o fsmonitor e os hooks que uma configuração plantada definiria.
 # É defesa a mais: a principal é o jangada-isolar manter somente leitura
 # o que o git lê como configuração (config, commondir, gitdir).
+_jangada_git_blindagem=(core.fsmonitor=false core.hooksPath=/dev/null core.sshCommand=ssh
+  core.pager=cat safe.bareRepository=explicit)
 jangada_git_seguro() {
-  git -c core.fsmonitor=false -c core.hooksPath=/dev/null -c core.sshCommand=ssh \
-    -c core.pager=cat -c safe.bareRepository=explicit "$@"
+  local c args=()
+  for c in "${_jangada_git_blindagem[@]}"; do args+=(-c "$c"); done
+  git "${args[@]}" "$@"
+}
+
+# O mesmo para todo git que o script e os filhos rodarem, pelas variáveis
+# GIT_CONFIG_KEY_N/GIT_CONFIG_VALUE_N (valem como -c).
+jangada_git_blindar() {
+  local c n="${GIT_CONFIG_COUNT:-0}"
+  [[ "$n" =~ ^[0-9]+$ ]] || n=0
+  for c in "${_jangada_git_blindagem[@]}"; do
+    export "GIT_CONFIG_KEY_$n=${c%%=*}" "GIT_CONFIG_VALUE_$n=${c#*=}"
+    n=$((n + 1))
+  done
+  export GIT_CONFIG_COUNT="$n"
 }
 
 # Obtém trava baseada em diretório com verificação de bloqueio abandonado.

@@ -469,16 +469,27 @@ def conversas_claude(cache, posicoes, resumo):
 
 # Registros do jangada
 
+# Pastas dos pareceres: agentes/, gravável pelo agente isolado, e revisoes/,
+# das revisões feitas fora do isolamento, que ele não alcança.
+PASTAS_PARECERES = ("agentes", "revisoes")
+
+
 def validacoes():
-    """Rodadas do validar.jsonl e, antes dele, as dos pareceres antigos."""
+    """Rodadas do validar.jsonl e, antes dele, as dos pareceres antigos.
+
+    A origem diz quem gravou: "validar.jsonl" é o jangada-validar rodado
+    dentro do isolamento, num arquivo que o agente pode alterar; "revisoes" é
+    o rodado fora dele."""
     linhas = []
-    arq = os.path.join(ESTADO, "validar.jsonl")
-    try:
-        with open(arq, encoding="utf-8", errors="replace") as f:
-            brutas = f.readlines()
-    except OSError:
-        brutas = []
-    for bruta in brutas:
+    brutas = []
+    for arq, origem in ((os.path.join(ESTADO, "validar.jsonl"), "validar.jsonl"),
+                        (os.path.join(ESTADO, "revisoes", "validar.jsonl"), "revisoes")):
+        try:
+            with open(arq, encoding="utf-8", errors="replace") as f:
+                brutas += [(b, origem) for b in f]
+        except OSError:
+            pass
+    for bruta, origem in brutas:
         try:
             d = json.loads(bruta)
         except ValueError:
@@ -496,7 +507,7 @@ def validacoes():
             "revisor": str(d.get("revisor") or ""), "modelo": str(d.get("modelo") or ""),
             "autor": str(d.get("autor") or ""), "arquivos": num("arquivos"), "mais": num("mais"),
             "menos": num("menos"), "itens": num("itens"), "segundos": num("segundos"),
-            "origem": "validar.jsonl",
+            "origem": origem,
         })
     # Pareceres antigos: a validação grava o parecer no mesmo segundo da linha
     # do validar.jsonl; um parecer só entra se não houver linha do mesmo rótulo
@@ -505,7 +516,8 @@ def validacoes():
     # sobrescrevia o arquivo. A ordem vem do mtime.
     ja = {}
     for l in linhas:
-        ja.setdefault(l["rotulo"], []).append(l["data"])
+        if l["origem"] == "validar.jsonl":
+            ja.setdefault(l["rotulo"], []).append(l["data"])
     padrao = re.compile(r"^(validacao|parecer)-(.+)-r(\d+)\.md$")
     antigos = []
     for caminho in glob.glob(os.path.join(ESTADO, "agentes", "*-r*.md")):
@@ -547,15 +559,18 @@ def validacoes():
             rodada = 0
     linhas += antigos
     # Entrega: as rodadas de um rótulo até um APROVADO (ou até a próxima
-    # rodada 1, quando a entrega foi abandonada sem aprovação).
-    linhas.sort(key=lambda l: (l["rotulo"], l["data"]))
+    # rodada 1, quando a entrega foi abandonada sem aprovação). As revisões de
+    # fora contam as rodadas à parte e formam entregas próprias.
+    fora = lambda l: l["origem"] == "revisoes"
+    linhas.sort(key=lambda l: (l["rotulo"], fora(l), l["data"]))
     seq, rot_ant, fechada = 0, None, True
     for l in linhas:
-        if l["rotulo"] != rot_ant:
-            seq, rot_ant, fechada = 1, l["rotulo"], False
+        chave = (l["rotulo"], fora(l))
+        if chave != rot_ant:
+            seq, rot_ant, fechada = 1, chave, False
         elif fechada or l["rodada"] == 1:
             seq, fechada = seq + 1, False
-        l["entrega"] = f'{l["rotulo"]}#{seq}'
+        l["entrega"] = f'{l["rotulo"]}#{"fora-" if fora(l) else ""}{seq}'
         if l["resultado"] == "aprovado":
             fechada = True
     return linhas
@@ -572,7 +587,8 @@ def apontamentos():
     """Arquivos citados nos itens dos pareceres REVISAR, um por item."""
     linhas = []
     padrao = re.compile(r"^(?:validacao|parecer)-(.+)-r\d+\.md$")
-    for caminho in glob.glob(os.path.join(ESTADO, "agentes", "*-r*.md")):
+    caminhos = [c for p in PASTAS_PARECERES for c in glob.glob(os.path.join(ESTADO, p, "*-r*.md"))]
+    for caminho in caminhos:
         m = padrao.match(os.path.basename(caminho))
         if not m:
             continue
@@ -662,7 +678,9 @@ def indicadores_do_dia(cache, vals, evs, agora):
     hoje = dia_de(agora)
     ini = dt.datetime.combine(agora.astimezone(FUSO).date(), dt.time(), FUSO).astimezone(UTC)
     fim = ini + dt.timedelta(days=1)
-    aprov = [v for v in vals if v["dia"] == hoje and v["resultado"] == "aprovado"]
+    # A revisão de fora repete, na integração, uma entrega já revisada dentro.
+    aprov = [v for v in vals if v["dia"] == hoje and v["resultado"] == "aprovado"
+             and v["origem"] != "revisoes"]
     primeira = [v for v in aprov if v["rodada"] == 1]
     saida = entrada = criado = lido = 0
     pasta = os.path.join(cache, "mensagens")

@@ -53,8 +53,12 @@ sessao_de() {
     >"$estado/s.json"
   rm -f "$estado/validacao-s-r"* "$estado/validacao-s.aprovado" "$tmp/falso/"*.pedido
 }
+# Por padrão, como o agente chama: dentro do isolamento (JANGADA_ISOLADO).
+# VALIDAR_FORA=1 roda como o usuário, fora dele.
 validar() {
-  env -u JANGADA_VALIDAR_REVISOR PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA="$1" JANGADA_SESSAO=s \
+  local isolado=(JANGADA_ISOLADO=1)
+  [[ "${VALIDAR_FORA:-0}" == 1 ]] && isolado=()
+  env -u JANGADA_VALIDAR_REVISOR -u JANGADA_ISOLADO "${isolado[@]}" PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA="$1" JANGADA_SESSAO=s \
     XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
     "$repo_jangada/bin/jangada-validar" "${@:2}" "$tmp/projeto" >"$tmp/saida.log" 2>&1
 }
@@ -165,7 +169,7 @@ conferir "caso 8: perfis agy-agy e claude-claude definem comando e revisor" [ "$
 
 # Caso 9: auto-revisão fora de sessão com --revisor mesmo.
 rm -f "$tmp/falso/"*.pedido
-env PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA='STATUS: APROVADO' \
+env JANGADA_ISOLADO=1 PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA='STATUS: APROVADO' \
   XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
   "$repo_jangada/bin/jangada-validar" --revisor mesmo "$tmp/projeto" >"$tmp/saida.log" 2>&1; rc=$?
 conferir "caso 9: --revisor mesmo fora de sessão sai com 0" [ "$rc" = 0 ]
@@ -219,7 +223,7 @@ conferir "caso 10d: JANGADA_VALIDAR_REVISOR=mesmo global resolve para o agente d
 
 # 10e: Revisor do estado prevalece sobre JANGADA_VALIDAR_REVISOR global no jangada-validar
 sessao_de agy agy
-env PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA='STATUS: APROVADO' JANGADA_SESSAO=s \
+env JANGADA_ISOLADO=1 PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA='STATUS: APROVADO' JANGADA_SESSAO=s \
   XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
   JANGADA_VALIDAR_REVISOR=claude \
   "$repo_jangada/bin/jangada-validar" "$tmp/projeto" >/dev/null 2>&1
@@ -582,6 +586,7 @@ conferir "caso 17: falha local registrada" \
   jq -e 'select(.rodada == 2) | .resultado == "revisar" and .etapa == "local"' "$metricas"
 conferir "caso 17: APROVADO na rodada 3" jq -e 'select(.rodada == 3) | .resultado == "aprovado"' "$metricas"
 validar x --metricas
+cp "$tmp/saida.log" "$tmp/metricas17.log"
 conferir "caso 17: --metricas resume" \
   grep -q "projeto: 1 entrega(s) aprovada(s), 3 rodada(s) em média, 0% na primeira; 1 barrada(s) na verificação local" "$tmp/saida.log"
 conferir "caso 17: --metricas separa por revisor" grep -q "^  agy: 2 revisão(ões), 50% aprovadas" "$tmp/saida.log"
@@ -657,7 +662,7 @@ sessao_de claude
 antes="$(wc -l <"$metricas")"
 for i in 1 2 3 4; do
   jq --arg s "p$i" '.sessao = $s' "$estado/s.json" >"$estado/p$i.json"
-  env -u JANGADA_VALIDAR_REVISOR PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA='STATUS: APROVADO' \
+  env -u JANGADA_VALIDAR_REVISOR JANGADA_ISOLADO=1 PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA='STATUS: APROVADO' \
     JANGADA_SESSAO="p$i" XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
     "$repo_jangada/bin/jangada-validar" "$tmp/projeto" >"$tmp/par$i.log" 2>&1 &
 done
@@ -723,7 +728,7 @@ echo "${JANGADA_ISOLADO:-}" >.jangada/isolado
 exit 0
 ' \
     "$tmp/validar-fora" >"$tmp/projeto/.jangada/validar.sh"
-  validar 'STATUS: APROVADO'; rc=$?
+  VALIDAR_FORA=1 validar 'STATUS: APROVADO'; rc=$?
   conferir "caso 20b: o .jangada/validar.sh isolado passa" [ "$rc" = 0 ]
   conferir "caso 20b: o .jangada/validar.sh roda no isolamento" \
     [ "$(cat "$tmp/projeto/.jangada/isolado" 2>/dev/null)" = 1 ]
@@ -744,11 +749,45 @@ done
 sessao_de claude
 printf '#!/usr/bin/env bash\n: >.jangada/rodou\nexit 0\n' >"$tmp/projeto/.jangada/validar.sh"
 chmod +x "$tmp/projeto/.jangada/validar.sh"
-PATH="$sem_bwrap" validar 'STATUS: APROVADO'; rc=$?
+PATH="$sem_bwrap" VALIDAR_FORA=1 validar 'STATUS: APROVADO'; rc=$?
 conferir "caso 20c: sem o bwrap, a validação reprova" [ "$rc" = 3 ]
 conferir "caso 20c: sem o bwrap, o .jangada/validar.sh não roda" test ! -e "$tmp/projeto/.jangada/rodou"
 conferir "caso 20c: o motivo é o bwrap" grep -q "bwrap não instalado" "$tmp/saida.log"
 rm -rf "$tmp/projeto/.jangada"
+rm -rf "$tmp/estado/jangada/revisoes"
+
+# Caso 20d: fora do isolamento, pareceres, marca e métricas vão para
+# revisoes/, e os metadados vêm da cópia da sessão; o que o agente grava em
+# agentes/ (marca forjada, autor trocado) não conta.
+revisoes="$tmp/estado/jangada/revisoes"
+sessao_de agy
+mkdir -p "$revisoes"
+jq -n '{sessao:"s", agente:"claude", base:"main", tarefa:"tarefa da copia"}' >"$revisoes/s.json"
+echo "linha-20d" >"$tmp/projeto/vinte-d.txt"
+git -C "$tmp/projeto" add vinte-d.txt
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "caso 20d"
+printf '%s 1 limpo\n' "$(git -C "$tmp/projeto" rev-parse HEAD)" >"$estado/validacao-s.aprovado"
+metricas_antes="$(wc -l <"$tmp/estado/jangada/validar.jsonl")"
+VALIDAR_FORA=1 validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 20d: aprovado fora do isolamento" [ "$rc" = 0 ]
+conferir "caso 20d: o autor vem da cópia (claude, revisado pelo agy)" test -s "$tmp/falso/agy.pedido"
+conferir "caso 20d: a tarefa vem da cópia" grep -q "tarefa da copia" "$tmp/falso/agy.pedido"
+conferir "caso 20d: a marca forjada em agentes/ não encurta o diff" grep -q "^+linha-20d$" "$tmp/falso/agy.pedido"
+conferir "caso 20d: o parecer vai para revisoes/" test -s "$revisoes/validacao-s-r1.md"
+conferir "caso 20d: nenhum parecer novo em agentes/" test ! -e "$estado/validacao-s-r1.md"
+conferir "caso 20d: a marca em revisoes/ traz o HEAD e o estado do worktree" \
+  bash -c 'read -r c n l <"$1" && [ "$c" = "$(git -C "$2" rev-parse HEAD)" ] && [ "$n" = 1 ] && [[ "$l" =~ ^(limpo|sujo)$ ]]' \
+  _ "$revisoes/validacao-s.aprovado" "$tmp/projeto"
+conferir "caso 20d: a métrica vai para revisoes/validar.jsonl" \
+  bash -c '[ "$(wc -l <"$1")" = "$2" ] && [ "$(jq -r .resultado "$3")" = aprovado ]' \
+  _ "$tmp/estado/jangada/validar.jsonl" "$metricas_antes" "$revisoes/validar.jsonl"
+env XDG_STATE_HOME="$tmp/estado" JANGADA_PATH="$repo_jangada" "$repo_jangada/bin/jangada-validar" --metricas >"$tmp/metricas.log" 2>&1
+conferir "caso 20d: --metricas conta a aprovação de fora à parte" grep -q "1 aprovada(s) fora do isolamento" "$tmp/metricas.log"
+rm -f "$revisoes/s.json"
+VALIDAR_FORA=1 validar 'STATUS: REVISAR\n1. x'
+conferir "caso 20d: sem a cópia da sessão, avisa que os metadados vêm do estado gravável" \
+  grep -q "sem cópia da sessão" "$tmp/saida.log"
+rm -f "$estado/validacao-s.aprovado"
 
 # Caso 21: a prévia do jangada-agentes mostra o último parecer da sessão, não o
 # da vizinha com o mesmo prefixo, e avisa que a sessão o gravou.
@@ -759,12 +798,27 @@ XDG_STATE_HOME="$tmp/estado" JANGADA_PATH="$repo_jangada" "$repo_jangada/bin/jan
 conferir "caso 21: a prévia mostra o parecer da sessão" grep -q "^--- validacao-p--fix-r1.md ---$" "$tmp/previa.log"
 conferir "caso 21: a prévia ignora a sessão vizinha" bash -c '! grep -q vizinha "$1"' _ "$tmp/previa.log"
 conferir "caso 21: a prévia avisa quem gravou o parecer" grep -q "gravado pela própria sessão" "$tmp/previa.log"
-rm -f "$estado/p--fix.json" "$estado/validacao-p--fix-"*
+conferir "caso 21: sem revisão de fora, a prévia não mostra nenhuma" bash -c '! grep -q "fora do isolamento) ---" "$1"' _ "$tmp/previa.log"
+# 21b: a revisão de fora aparece com a marca conferida contra o ramo, lido da
+# cópia em revisoes/.
+git -C "$tmp/projeto" branch -f agente/p-fix HEAD
+jq -n --arg raiz "$tmp/projeto" '{sessao:"p--fix", raiz:$raiz, ramo:"agente/p-fix"}' >"$revisoes/p--fix.json"
+printf 'STATUS: APROVADO\nde fora\n' >"$revisoes/validacao-p--fix-r2.md"
+printf '%s 2 limpo\n' "$(git -C "$tmp/projeto" rev-parse HEAD)" >"$revisoes/validacao-p--fix.aprovado"
+XDG_STATE_HOME="$tmp/estado" JANGADA_PATH="$repo_jangada" "$repo_jangada/bin/jangada-agentes" --previa p--fix >"$tmp/previa.log" 2>&1
+conferir "caso 21b: a prévia mostra a revisão de fora" grep -q "^--- validacao-p--fix-r2.md (fora do isolamento) ---$" "$tmp/previa.log"
+conferir "caso 21b: a aprovação de fora vale para o commit do ramo" grep -q "vale para o commit atual do ramo" "$tmp/previa.log"
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -q --allow-empty -m depois
+git -C "$tmp/projeto" branch -f agente/p-fix HEAD
+XDG_STATE_HOME="$tmp/estado" JANGADA_PATH="$repo_jangada" "$repo_jangada/bin/jangada-agentes" --previa p--fix >"$tmp/previa.log" 2>&1
+conferir "caso 21b: com commit novo no ramo, a aprovação de fora não vale" grep -q "não é do commit atual do ramo" "$tmp/previa.log"
+git -C "$tmp/projeto" branch -D -q agente/p-fix
+rm -f "$estado/p--fix.json" "$estado/validacao-p--fix-"* "$revisoes/p--fix.json" "$revisoes/validacao-p--fix"*
 
 # Caso 13: o jangada-agente acrescenta as regras de R só em projeto com arquivos R.
 agente_em() {
   rm -f "$estado/"*.json "$estado/"protocolo-*.md "$estado/"prompt-*.md
-  env -u TMUX -u HYPRLAND_INSTANCE_SIGNATURE PATH="$tmp/bin:$PATH" \
+  env -u TMUX -u HYPRLAND_INSTANCE_SIGNATURE -u JANGADA_ISOLADO PATH="$tmp/bin:$PATH" \
     XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
     JANGADA_AGENTE_ESCOLHER=0 "$repo_jangada/bin/jangada-agente" --projeto "$1" --direto "${@:2}" </dev/null >/dev/null 2>&1
 }
@@ -772,6 +826,11 @@ mkdir -p "$tmp/semr" "$tmp/comr/R"
 echo "x" >"$tmp/semr/notas.txt"
 echo "x <- 1" >"$tmp/comr/R/analise.R"
 
+rm -rf "$tmp/estado/jangada/revisoes"
+agente_em "$tmp/semr" --prompt "tarefa copiada"
+conferir "caso 13: a cópia da sessão em revisoes/ traz tarefa e autor" \
+  bash -c '[ "$(jq -r .tarefa "$1")" = "tarefa copiada" ] && [ "$(jq -r .agente "$1")" = claude ] && [ "$(stat -c %a "$(dirname "$1")")" = 700 ]' \
+  _ "$tmp/estado/jangada/revisoes/semr.json"
 agente_em "$tmp/semr"
 conferir "caso 13a: sem R, o Claude recebe o protocolo da sessão" \
   bash -c 'jq -r .comando "$1" | grep -q "protocolo-semr.md"' _ "$estado/semr.json"

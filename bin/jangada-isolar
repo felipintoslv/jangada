@@ -266,6 +266,11 @@ fi
 # criada antes, para um token gravado depois não aparecer no isolamento.
 (umask 077; mkdir -p "$JANGADA_ESTADO/painel-chave" 2>/dev/null) || true
 ocultos+=("$JANGADA_ESTADO/painel-chave")
+# As revisões feitas fora do isolamento (pareceres, marca de aprovação,
+# métricas e a cópia dos metadados de cada sessão) também: o agente não as lê
+# nem forja, e o jangada-validar rodado dentro grava na pasta vazia, que some.
+(umask 077; mkdir -p "$JANGADA_ESTADO/revisoes" 2>/dev/null) || true
+ocultos+=("$JANGADA_ESTADO/revisoes")
 for p in "${ocultos[@]}"; do
   [[ -n "$p" ]] || continue
   [[ "$p" == /* ]] || p="$HOME/$p"

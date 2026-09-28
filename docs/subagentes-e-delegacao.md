@@ -32,8 +32,17 @@ Claude, o hook `PreToolUse` do frontmatter chama o `jangada-hook-leitor`, que
 só deixa passar comandos de leitura (`pdftotext` com saída `-`, `pdfinfo`,
 `grep`, `head`, `tail`, `wc`, `cut`, `tr`, `cat`, `ls`) ligados por `|`, sem
 redirecionamento, `;`, `&` nem expansão. Sem o script no PATH, o comando é
-recusado. No agy, o limite do leitor segue só no texto e no isolamento da
-sessão. O verificador roda os testes do projeto e fica com o terminal livre.
+recusado. No agy, o mesmo script responde ao `PreToolUse` do `run_command`
+(`jangada-hook-leitor --agy`, em `~/.gemini/config/hooks.json`). Esse hook
+dispara para todo agente do agy: reconhece o leitor pela variável
+`JANGADA_AGY_PAPEL=leitor`, que o `jangada-delegar` põe no agy que roda o
+papel, ou, quando o leitor é subagente de uma sessão, pelo
+`brain/*/.system_generated/subagents/CONVERSA.json` com o `typeName`
+`leitor`. Para o leitor, o comando fora da lista recebe `deny`; o resto
+recebe `ask`, que segue as permissões do agy. Sem terminal, o agy só roda o
+que está em `permissions.allow`, e essa lista vale para todos os agentes
+(pode ter `cp` ou `curl`); por isso o `jangada-delegar` recusa o leitor
+quando o hook não está instalado. O verificador roda os testes do projeto e fica com o terminal livre.
 
 ## Instalação
 
@@ -137,6 +146,6 @@ Os campos de cada arquivo estão em [registros](registros.md).
 
 | Arquivo | O que cobre |
 |---|---|
-| `testes/subagentes.sh` | papéis do Claude e do agy e a instalação deles |
-| `testes/delegar.sh` | `jangada-delegar` com agy falso: recusas, cota, corte do relatório e registro |
+| `testes/subagentes.sh` | papéis do Claude e do agy e a instalação deles; hook do leitor no Claude e no agy (papel pela variável, subagente pelo json da conversa, conversa fora do formato, falha do Python) |
+| `testes/delegar.sh` | `jangada-delegar` com agy falso: recusas (entre elas o leitor sem o hook no agy), cota, corte do relatório e registro |
 | `testes/validar.sh` | o campo `subagentes` e o `subagentes_erro` do `validar.jsonl` |

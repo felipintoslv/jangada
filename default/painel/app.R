@@ -159,7 +159,7 @@ ui <- page_navbar(
     layout_columns(col_widths = c(6, 6),
       cartao("Por projeto", DT::DTOutput("a_projeto"), cob = uiOutput("a_cob")),
       cartao("Por par autor → revisor", DT::DTOutput("a_par"),
-             cob = div(class = "cobertura", "* pouco dado: menos de 10 aprovadas. Sem registro: validações antigas, de antes do validar.jsonl."))
+             cob = div(class = "cobertura", "* pouco dado: menos de 10 aprovadas. Sem registro: validações antigas, de antes do validar.jsonl. As taxas contam as rodadas registradas pela própria sessão, num arquivo que o agente isolado pode alterar."))
     ),
     layout_columns(col_widths = c(6, 6),
       cartao("Entregas no limite de rodadas", DT::DTOutput("a_limite")),
@@ -335,12 +335,15 @@ server <- function(input, output, session) {
     tabela(setNames(r[c("grupo", "entregas", "aprovadas", "primeira_pct", "rodadas", "no_limite")],
                     c(rotulo, "entregas", "aprovadas", "1ª rodada (%)", "rodadas (média / máx.)", "no limite")))
   }
-  ent <- reactive({
+  # As revisões feitas fora do isolamento repetem, na integração, entregas já
+  # revisadas dentro: ficam fora das taxas e aparecem só na contagem abaixo.
+  ent_todas <- reactive({
     e <- entregas(dados()$validacoes)
     e <- filtrar(no_periodo(e, "fim"), agente = "autor")
     if (length(input$par)) e <- e[e$par %in% input$par, ]
     e
   })
+  ent <- reactive(ent_todas()[!ent_todas()$fora, ])
   rodadas <- reactive({
     v <- filtrar(no_periodo(dados()$validacoes), agente = "autor")
     v[v$entrega %in% ent()$entrega, ]
@@ -351,7 +354,9 @@ server <- function(input, output, session) {
   })
   output$vb_primeira_n <- renderText({
     n <- sum(ent()$aprovada)
-    paste0(n, " entrega(s) aprovada(s)", if (n < POUCO_DADO) " · pouco dado" else "")
+    f <- ent_todas()[ent_todas()$fora, ]
+    paste0(n, " entrega(s) aprovada(s)", if (n < POUCO_DADO) " · pouco dado" else "",
+           " · fora do isolamento: ", sum(f$aprovada), " de ", nrow(f), " aprovada(s)")
   })
   output$vb_rodadas <- renderText({
     ap <- ent()[ent()$aprovada, ]

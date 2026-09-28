@@ -103,7 +103,8 @@ entregas <- function(v) {
                       autor = character(), revisor = character(), par = character(),
                       inicio = as.POSIXct(character()), fim = as.POSIXct(character()),
                       aprovada = logical(), rodadas = integer(), primeira = logical(),
-                      limite = logical(), reprovacoes = integer(), diff = numeric()))
+                      limite = logical(), reprovacoes = integer(), diff = numeric(),
+                      fora = logical()))
   }
   v <- v[order(v$data), ]
   do.call(rbind, lapply(split(v, v$entrega), function(e) {
@@ -122,6 +123,8 @@ entregas <- function(v) {
       limite = any(e$resultado == "limite"),
       reprovacoes = sum(e$resultado == "revisar"),
       diff = if (is.na(ult$mais)) NA_real_ else ult$mais + ult$menos,
+      # Revisão feita fora do isolamento (revisoes/), que o agente não altera.
+      fora = isTRUE(ult$origem == "revisoes"),
       stringsAsFactors = FALSE)
   }))
 }

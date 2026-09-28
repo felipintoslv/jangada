@@ -82,7 +82,9 @@ flowchart TD
    interrompida ou um jsonl relido do início não contarem em dobro. As
    chamadas e os resultados só saem: os indicadores de ferramentas dependem
    da sequência das chamadas, que uma contagem por dia não guarda.
-5. `validacoes` (do `validar.jsonl` e, antes dele, dos pareceres),
+5. `validacoes` (do `validar.jsonl` e, antes dele, dos pareceres; o
+   `revisoes/validar.jsonl`, das revisões feitas fora do isolamento, entra
+   com origem `revisoes` e entregas próprias, fora das taxas),
    `eventos`, `sessoes` e `apontamentos` (arquivos citados nos itens
    REVISAR): cada um vira uma tabela Parquet inteira.
 6. `indicadores_do_dia` grava o `hoje.json`, lido pela barra.

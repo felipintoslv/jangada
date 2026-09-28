@@ -4,21 +4,28 @@
 # Com --integrar, antes mescla o ramo na base (merge --no-ff no repositório
 # principal) e, depois da limpeza, apaga o ramo já integrado.
 #
-# Uso: jangada-agente-fim [--integrar] SESSAO
+# A aprovação que vale para integrar é a feita fora do isolamento, gravada em
+# ~/.local/state/jangada/revisoes para o commit exato do ramo. Sem ela, o
+# --integrar roda o jangada-validar aqui; sem aprovação, pede confirmação
+# explícita. Com --sem-revisao, não roda o revisor e pede a mesma confirmação.
+#
+# Uso: jangada-agente-fim [--integrar [--sem-revisao]] SESSAO
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
-integrar=0; s=""
+integrar=0; sem_revisao=0; s=""
 while (($#)); do
   case "$1" in
-    -h|--ajuda) sed -n '2,8s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    -h|--ajuda) sed -n '2,13s/^# \{0,1\}//p' "$0"; exit 0 ;;
     --integrar) integrar=1; shift ;;
+    --sem-revisao) sem_revisao=1; shift ;;
     -*) echo "opção desconhecida: $1" >&2; exit 1 ;;
     *) [[ -z "$s" ]] || { echo "sessão repetida: $1" >&2; exit 1; }; s="$1"; shift ;;
   esac
 done
 [[ -n "$s" ]] || { echo "informe a sessão (veja jangada-agentes --lista)" >&2; exit 1; }
+[[ "$s" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "nome de sessão inválido: $s" >&2; exit 1; }
 arq="$JANGADA_ESTADO/agentes/$s.json"
 
 # Sem arquivo de estado e sem sessão no tmux não há o que encerrar. Sem esta
@@ -167,6 +174,49 @@ avisar_copia_instalada() {
   return 0
 }
 
+# Aprovação do revisor que vale para o merge: gravada em revisoes/, que o
+# jangada-isolar oculta, para o commit exato do ramo e com o worktree limpo
+# (o merge leva só o que tem commit). Os pareceres em agentes/ são graváveis
+# pelo agente e não contam. Sem a aprovação, roda o jangada-validar aqui, com
+# a base já conferida (o repositório principal está nela).
+revisao_fora() {
+  local cabeca_ramo marca="$JANGADA_ESTADO/revisoes/validacao-$s.aprovado" rc=0
+  cabeca_ramo="$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet "$ramo^{commit}")" || return 1
+  aprovada() {
+    local c="" l=""
+    [[ -f "$marca" ]] && read -r c _ l <"$marca" && [[ "$c" == "$cabeca_ramo" && "$l" == limpo ]]
+  }
+  if aprovada; then
+    echo "aprovado fora do isolamento no commit ${cabeca_ramo:0:12}"
+    return 0
+  fi
+  if ((sem_revisao)); then
+    echo "revisão fora do isolamento pulada (--sem-revisao)"
+    return 1
+  fi
+  if [[ -n "${JANGADA_ISOLADO:-}" ]]; then
+    echo "dentro do isolamento a revisão não vale como aprovação; rode o --integrar fora dele"
+    return 1
+  fi
+  if [[ -z "$worktree" || ! -d "$worktree" ]]; then
+    echo "sem o worktree, a revisão fora do isolamento não roda"
+    return 1
+  fi
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "sem o jq, a revisão fora do isolamento não roda"
+    return 1
+  fi
+  echo "revisando fora do isolamento com o jangada-validar (pode levar alguns minutos)..."
+  # --forcar: o limite de rodadas segura um agente em ciclo, e aqui quem pede
+  # é o usuário.
+  JANGADA_SESSAO="$s" "$JANGADA_PATH/bin/jangada-validar" --base "$base" --forcar "$worktree" || rc=$?
+  if ((rc == 0)) && aprovada; then
+    return 0
+  fi
+  ((rc == 0)) || echo "o jangada-validar terminou com código $rc (3 é REVISAR)"
+  return 1
+}
+
 integrado=0
 apagar_ramo=0
 if ((integrar)); then
@@ -200,7 +250,12 @@ if ((integrar)); then
     else
       echo "commits de $ramo a integrar em $base ($raiz):"
       printf '%s\n' "$novos" | head -30
-      confirmar "mesclar e encerrar a sessão?" || { echo "nada foi feito"; exit 1; }
+      if revisao_fora; then
+        confirmar "mesclar e encerrar a sessão?" || { echo "nada foi feito"; exit 1; }
+      else
+        echo "sem aprovação feita fora do isolamento para o commit atual de $ramo"
+        confirmar "mesclar assim mesmo e encerrar a sessão?" || { echo "nada foi feito"; exit 1; }
+      fi
       if ! jangada_git_seguro -C "$raiz" merge --no-ff -m "Integra $ramo" "$ramo"; then
         echo "o merge falhou; resolva em $raiz (git merge --abort desfaz). A sessão foi mantida." >&2
         exit 1
@@ -263,6 +318,13 @@ limpar() {
   done
   rm -f "$JANGADA_ESTADO/agentes/validacao-$s.aprovado" "$JANGADA_ESTADO/agentes/prompt-$s.md" \
     "$JANGADA_ESTADO/agentes/protocolo-$s.md"
+  # As revisões feitas fora, pelo mesmo motivo. Dentro do isolamento a pasta
+  # é a vazia que o oculta, e nada sai do disco; a marca que sobra vale só
+  # para o commit dela.
+  for parecer in "$JANGADA_ESTADO/revisoes/validacao-$s-r"[0-9]*.md; do
+    [[ "${parecer#"$JANGADA_ESTADO/revisoes/validacao-$s-r"}" =~ ^[0-9]+\.md$ ]] && rm -f "$parecer"
+  done
+  rm -f "$JANGADA_ESTADO/revisoes/validacao-$s.aprovado" "$JANGADA_ESTADO/revisoes/$s.json"
   echo "sessão encerrada: $s"
   "$JANGADA_PATH/bin/jangada-gancho" pos-agente-fim "$s" "$raiz" "$integrado"
 }
