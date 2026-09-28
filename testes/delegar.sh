@@ -21,7 +21,7 @@ mkdir -p "$tmp/bin" "$tmp/home/.gemini/antigravity-cli/log" "$tmp/falso" "$tmp/p
 cat >"$tmp/bin/agy" <<'EOF'
 #!/usr/bin/env bash
 if [[ "$1" == agents ]]; then
-  printf '%s\n' ${FALSO_AGENTES:-explorador leitor pesquisador verificador}
+  printf '%s\n' ${FALSO_AGENTES:-explorador leitor pesquisador verificador auditor arquiteto otimizador redator}
   exit 0
 fi
 if [[ "$2" == /usage ]]; then
