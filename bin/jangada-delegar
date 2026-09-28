@@ -110,12 +110,10 @@ command -v agy >/dev/null 2>&1 || recusar "agy não instalado"
 # caminho exato. O jangada-delegar não confia por conta própria: a pergunta de
 # confiança do agy barra agentes, regras e MCP da própria pasta, que num clone
 # de fora mandariam no subagente. Vale o worktree da sessão, que o
-# jangada-worktree-preparar confia, ou a pasta que o usuário já confiou.
+# jangada-worktree-preparar confia quando o usuário já confiou no repositório
+# principal, ou a pasta que o usuário já confiou.
 conf_agy="${JANGADA_AGY_SETTINGS:-$HOME/.gemini/antigravity-cli/settings.json}"
-# O agy pode ter gravado o caminho com o link simbólico por onde a pasta foi
-# aberta, então vale o caminho resolvido ou o original.
-if ! jq -e --arg w "$(realpath "$pasta")" --arg o "$pasta" \
-     '(.trustedWorkspaces // []) as $t | ($t | index($w)) or ($t | index($o))' "$conf_agy" >/dev/null 2>&1; then
+if ! jangada_agy_confia "$pasta"; then
   recusar "o agy não confia em $pasta (abra o agy nessa pasta e responda à pergunta de confiança, ou trabalhe num worktree do jangada)"
 fi
 # Com --agent de nome desconhecido o agy roda o agente padrão, com todas as

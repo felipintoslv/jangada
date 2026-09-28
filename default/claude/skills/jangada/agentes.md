@@ -287,8 +287,11 @@ instalada: `git -C ~/.local/share/jangada pull --ff-only` e
   `~/.gemini/antigravity-cli/settings.json`; confiar em `~` não cobre as
   subpastas). Só o `jangada-worktree-preparar` e o fim da sessão mexem
   nela; o `jangada-delegar` recusa pasta sem confiança em vez de confiar,
-  porque a confiança libera agentes, regras e MCP da própria pasta. Todo worktree novo abre com a pergunta "Do you trust the
-  contents of this project?", que o usuário responde na janela.
+  porque a confiança libera agentes, regras e MCP da própria pasta. O
+  worktree só herda a confiança da raiz: se o usuário não confiou no
+  repositório principal, o `jangada-worktree-preparar` não confia no
+  worktree, e o agy abre com a pergunta "Do you trust the contents of this
+  project?", que o usuário responde na janela.
 - Para testar hooks sem tocar no estado real, mude `XDG_STATE_HOME`; o
   `jangada-config` recalcula `JANGADA_ESTADO` a partir dele.
 - Clones de referência em subpastas (como `referencia/`): se contiverem

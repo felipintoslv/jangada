@@ -290,8 +290,9 @@ O fluxo completo, com fluxogramas, está em
    com `agy --conversation`.
 6. Em cada worktree novo o agy pergunta se confia na pasta; responda na
    janela. A confiança é por caminho exato. O `jangada-worktree-preparar`
-   confia no worktree que cria e o fim da sessão tira; a primeira alteração
-   guarda o original em `settings.json.jangada-orig`.
+   confia no worktree que cria só se você já confiou no repositório
+   principal, e o fim da sessão tira; a primeira alteração guarda o original
+   em `settings.json.jangada-orig`.
 
 Detalhes que valem para o dia a dia:
 

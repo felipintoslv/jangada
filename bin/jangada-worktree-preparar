@@ -187,8 +187,12 @@ fi
 
 # 4. Confiança de pasta para o Antigravity (agy).
 # Evita a pergunta interativa de segurança por caminho absoluto ao abrir um
-# agente agy no worktree recém-criado.
-if ((simular)); then
+# agente agy no worktree recém-criado. A confiança libera os agentes, as regras
+# e o MCP da pasta, então o worktree só herda a do repositório principal: se o
+# usuário não confiou na raiz, o agy pergunta no worktree como perguntaria nela.
+if ! jangada_agy_confia "$raiz"; then
+  echo "preparar: o agy não confia em $raiz; o worktree fica sem confiança"
+elif ((simular)); then
   echo "adicionaria $worktree a trustedWorkspaces"
 else
   jangada_agy_ajustar_confianca adicionar "$worktree" || true

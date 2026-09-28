@@ -164,6 +164,24 @@ conferir "caso 16: confiança adicionada e removida por caminho" \
   jqok -e --arg w "$(realpath "$tmp/falso")" '.trustedWorkspaces == [$w] and .outra == 1' "$conf_agy"
 conferir "caso 16: cópia do settings.json de antes da primeira alteração" \
   jqok -e '.trustedWorkspaces == [] and .outra == 1' "$conf_agy.jangada-orig"
+
+# O worktree só herda a confiança do repositório principal: com a raiz fora
+# do trustedWorkspaces, o jangada-worktree-preparar não confia no worktree.
+git init --quiet "$tmp/raiz"
+git -C "$tmp/raiz" -c user.name=t -c user.email=t@t commit --quiet --allow-empty -m inicio
+git -C "$tmp/raiz" worktree add --quiet -b agente/t "$tmp/wt"
+preparar() {
+  env HOME="$tmp/home" XDG_STATE_HOME="$tmp/estado" JANGADA_PATH="$repo_jangada" \
+    "$repo_jangada/bin/jangada-worktree-preparar" "$tmp/raiz" "$tmp/wt" </dev/null >"$tmp/saida-preparar" 2>&1
+}
+echo '{"trustedWorkspaces": []}' >"$conf_agy"
+preparar
+conferir "caso 17: raiz sem confiança, worktree sem confiança" jqok -e '.trustedWorkspaces == []' "$conf_agy"
+conferir "caso 17: avisa que o worktree fica sem confiança" grep -q "fica sem confiança" "$tmp/saida-preparar"
+jq -n --arg w "$(realpath "$tmp/raiz")" '{trustedWorkspaces: [$w]}' >"$conf_agy"
+preparar
+conferir "caso 17: raiz confiável, worktree confiável" \
+  jqok -e --arg w "$(realpath "$tmp/wt")" '.trustedWorkspaces | index($w)' "$conf_agy"
 jq -n --arg w "$(realpath "$tmp/projeto")" '{trustedWorkspaces: [$w]}' >"$conf_agy"
 
 delegar revisor "revise"

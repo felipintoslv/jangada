@@ -96,7 +96,8 @@ flowchart TD
 
 - A pasta é a raiz do repositório atual, que o agy precisa confiar; um
   worktree do jangada entra em `trustedWorkspaces` pelo
-  `jangada-worktree-preparar` e sai no `jangada-agente-fim`.
+  `jangada-worktree-preparar`, só se a raiz já estiver lá, e sai no
+  `jangada-agente-fim`.
 - A cota vem de `agy -p "/usage"`, guardada por `JANGADA_DELEGAR_CACHE`
   minutos (5). Abaixo de `JANGADA_DELEGAR_COTA_MIN` (20%), recusa.
 - O tempo limite é `JANGADA_DELEGAR_TEMPO` segundos (300).
