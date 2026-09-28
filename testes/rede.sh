@@ -29,8 +29,8 @@ tudo="$*"
 case "$*" in
   "radio wifi") echo enabled ;;
   "-t -f TYPE device") echo wifi ;;
-  "-t -f IN-USE,SSID,SIGNAL,SECURITY device wifi list")
-    echo " :Minha Rede:80:$(cat "$FALSO/seguranca")" ;;
+  "-t -e no -f IN-USE,SIGNAL,SECURITY,SSID device wifi list")
+    echo " :80:$(cat "$FALSO/seguranca"):Minha Rede"; echo " :70:WPA2:Rede:Casa" ;;
   "-t -f SECURITY,SSID device wifi list")
     echo "WPA2:Outra"; echo "$(cat "$FALSO/seguranca"):Minha Rede" ;;
   "-s device wifi connect Minha Rede") exit 4 ;;
@@ -44,12 +44,13 @@ case "$*" in
   *) exit 0 ;;
 esac
 EOF
-# fuzzel falso: escolhe a rede no menu e digita a senha no pedido de senha.
+# fuzzel falso: guarda o menu, escolhe a rede e digita a senha no pedido de
+# senha.
 cat >"$tmp/bin/fuzzel" <<'EOF'
 #!/usr/bin/env bash
 case " $* " in
   *" --password "*) printf '%s\n' "$FALSA_SENHA" ;;
-  *) grep -m1 "Wi-Fi: Minha Rede" ;;
+  *) tee "$FALSO/menu" | grep -m1 "Wi-Fi: Minha Rede" ;;
 esac
 EOF
 cat >"$tmp/bin/notify-send" <<'EOF'
@@ -59,7 +60,7 @@ EOF
 chmod +x "$tmp/bin/"*
 
 rodar() {
-  rm -f "$FALSO"/{argv,avisos,chave,passwd,perfil}
+  rm -f "$FALSO"/{argv,avisos,chave,passwd,perfil,menu}
   printf '%s\n' "$1" >"$FALSO/seguranca"
   [[ "${2:-}" == perfil ]] && : >"$FALSO/perfil"
   PATH="$tmp/bin:$PATH" "$repo_jangada/bin/jangada-rede" menu >/dev/null 2>&1
@@ -72,6 +73,9 @@ conferir "WPA2: perfil criado com wpa-psk" test "$(cat "$FALSO/chave" 2>/dev/nul
 conferir "WPA2: passwd-file no formato do nmcli" \
   test "$(cat "$FALSO/passwd" 2>/dev/null)" = "802-11-wireless-security.psk:$senha"
 conferir "WPA2: avisa que conectou" grep -q "Conectado a Minha Rede" "$FALSO/avisos"
+# O SSID vem por último na leitura: um ":" no nome não corta a rede.
+conferir "SSID com dois pontos aparece inteiro no menu" \
+  grep -qF "Wi-Fi: Rede:Casa (70% · 🔒)" "$FALSO/menu"
 
 # Transição WPA2/WPA3 fica em wpa-psk; WPA3 puro usa sae.
 rodar "WPA2 WPA3"
