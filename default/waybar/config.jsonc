@@ -45,7 +45,8 @@
   "custom/agentes": {
     "exec": "$JANGADA_PATH/bin/jangada-agentes --waybar",
     "return-type": "json",
-    "interval": 3,
+    "interval": 30,
+    "signal": 10,
     "format": "{}",
     "on-click": "$JANGADA_PATH/bin/jangada-agentes --janela",
     "on-click-right": "$JANGADA_PATH/bin/jangada-agentes --painel",
@@ -91,7 +92,7 @@
     "interval": 3600,
     "signal": 8,
     "format": "{}",
-    "on-click": "setsid -f sh -c \"$JANGADA_PATH/bin/jangada-terminal --titulo 'jangada update' -e $JANGADA_PATH/bin/jangada-update; pkill -RTMIN+8 -x waybar\"",
+    "on-click": "setsid -f sh -c '\"$1\"/bin/jangada-terminal --titulo \"jangada update\" -e \"$1\"/bin/jangada-update; pkill -RTMIN+8 -x waybar' _ \"$JANGADA_PATH\"",
     "tooltip": true
   },
 
@@ -267,7 +268,7 @@
     "tooltip": true,
     "tooltip-format": "Energia e sessão (botão direito: bloquear tela)",
     "on-click": "$JANGADA_PATH/bin/jangada-energia",
-    "on-click-right": "setsid -f $JANGADA_PATH/bin/jangada-bloquear"
+    "on-click-right": "setsid -f \"$JANGADA_PATH\"/bin/jangada-bloquear"
   },
 
   // show-passive-items mostra também o que está em repouso, que é o caso de
