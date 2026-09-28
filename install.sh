@@ -14,6 +14,28 @@ source "$JANGADA_PATH/install/lib.sh"
 
 [[ $EUID -ne 0 ]] || morrer "execute como usuário comum; o script pede sudo quando precisa"
 
+# A pasta de onde o install.sh roda vira o JANGADA_PATH dos hooks e da sessão.
+# A cópia de trabalho e os worktrees dos agentes são graváveis de dentro do
+# isolamento, então instalar dali faria rodar fora dele o código que o agente
+# muda. A simulação não executa nada e continua liberada, para testar a
+# instalação na cópia de trabalho.
+# shellcheck source=bin/jangada-config
+source "$JANGADA_PATH/bin/jangada-config"
+_aqui="$(cd "$JANGADA_PATH" && pwd -P)"
+_motivo=""
+if [[ -f "$JANGADA_PATH/.git" ]]; then
+  _motivo="$_aqui é um worktree"
+elif [[ -n "$JANGADA_REPO" && -d "$JANGADA_REPO" && "$(cd "$JANGADA_REPO" && pwd -P)" == "$_aqui" ]]; then
+  _motivo="$_aqui é a cópia de trabalho (JANGADA_REPO)"
+elif [[ -d "$JANGADA_WORKTREES" && "$_aqui/" == "$(cd "$JANGADA_WORKTREES" && pwd -P)/"* ]]; then
+  _motivo="$_aqui fica em JANGADA_WORKTREES"
+fi
+if [[ -n "$_motivo" ]]; then
+  simulando || morrer "$_motivo, gravável pelos agentes; instale de um clone em ~/.local/share/jangada (git clone $_aqui ~/.local/share/jangada)"
+  aviso "$_motivo; só a simulação roda daqui"
+fi
+unset _aqui _motivo
+
 simulando && aviso "modo simulação: nenhum comando será executado"
 
 etapas=("$JANGADA_PATH"/install/[0-9][0-9]-*.sh)

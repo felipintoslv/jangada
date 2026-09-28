@@ -11,7 +11,9 @@ existente chega por uma migração, aplicada uma única vez pelo `jangada-migrar
 flowchart TD
     A[./install.sh ETAPAS] --> B{usuário root?}
     B -- sim --> X[recusa]
-    B -- não --> C[install/NN-*.sh em ordem numérica]
+    B -- não --> B2{cópia de trabalho,<br>worktree ou JANGADA_WORKTREES?}
+    B2 -- sim, sem simulação --> X
+    B2 -- não, ou simulação --> C[install/NN-*.sh em ordem numérica]
     C --> D[00 verificações] --> E[10 pacotes] --> F[20 snapshots]
     F --> G[30 shell] --> H[40 interface] --> I[50 agentes]
     I --> J[90 marca todas as migrações<br>como aplicadas]
@@ -19,6 +21,10 @@ flowchart TD
 
 - Com argumentos, roda só as etapas com esse prefixo: `./install.sh 20 50`.
 - `JANGADA_SIMULAR=1 ./install.sh` mostra o que seria feito sem executar.
+- A pasta de onde o `install.sh` roda vira o `JANGADA_PATH`. A cópia de
+  trabalho e os worktrees são graváveis de dentro do isolamento, então
+  instalar dali faria os hooks e a sessão rodarem o que o agente muda. Nelas
+  só a simulação roda.
 - A etapa 90 marca as migrações como aplicadas porque uma instalação nova já
   recebe os padrões atualizados.
 
@@ -123,7 +129,7 @@ verdade, pular uma migração que nunca foi aplicada.
 
 | Arquivo | O que cobre |
 |---|---|
-| `testes/update.sh` | só aplica com `s`; sem terminal não aplica; migração nova roda e grava marca; filtro de caracteres de controle; origem reescrita recusada; `jangada-agente-fim --integrar` não mexe na cópia instalada |
+| `testes/update.sh` | só aplica com `s`; sem terminal não aplica; migração nova roda e grava marca; filtro de caracteres de controle; origem reescrita recusada; `jangada-agente-fim --integrar` não mexe na cópia instalada; `install.sh` recusa a cópia de trabalho, um worktree e `JANGADA_WORKTREES` |
 | `testes/barra.sh` | exemplo de migração testada: a que acrescenta o módulo de indicadores |
 | `.github/workflows/verificar.yml` | a CI simula a instalação como usuário sem sudo e confere que nada foi escrito |
 

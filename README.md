@@ -72,6 +72,11 @@ JANGADA_SIMULAR=1 ./install.sh   # confere o que será feito
 ./install.sh                     # aplica
 ```
 
+O `install.sh` recusa rodar da cópia de trabalho (`JANGADA_REPO`), de um
+worktree ou de `JANGADA_WORKTREES`: essas pastas são graváveis de dentro do
+isolamento, e a pasta da instalação vira o `JANGADA_PATH` dos hooks e da
+sessão. Nelas só a simulação roda.
+
 Depois, encerre a sessão atual e escolha **jangada** no gerenciador de login.
 
 ### Máquinas com duas GPUs

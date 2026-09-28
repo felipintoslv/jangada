@@ -2,7 +2,8 @@
 # Testa, em repositórios temporários, o que chega à cópia instalada: o
 # jangada-update só aplica commits novos da origem com confirmação, e o
 # jangada-agente-fim --integrar não atualiza a cópia instalada nem roda o git
-# com fsmonitor ou ganchos do repositório do agente. pacman, checkupdates,
+# com fsmonitor ou ganchos do repositório do agente; o install.sh recusa a
+# cópia de trabalho e os worktrees. pacman, checkupdates,
 # sudo, paru e tmux são substituídos por scripts falsos.
 #
 # Uso: testes/update.sh
@@ -154,6 +155,45 @@ conferir "worktree removido" test ! -d "$wt"
 conferir "cópia instalada não é atualizada" test "$(head_instalado)" = "$antes_fim"
 conferir "pede para rodar jangada-update" grep -q 'rode jangada-update' "$tmp/saida"
 conferir "fsmonitor e ganchos do repositório não rodam" test ! -e "$alerta"
+
+echo "== install.sh só da cópia instalada"
+
+# Cópia só com o install.sh, a lib, a configuração e uma etapa que só marca
+# que rodou.
+inst="$tmp/inst"; mkdir -p "$inst/install" "$inst/bin"
+cp "$repo_jangada/install.sh" "$inst/"
+echo 'touch "$HOME/etapa-rodou"' >"$inst/install/00-teste.sh"
+cp "$repo_jangada/install/lib.sh" "$inst/install/"
+cp "$repo_jangada/bin/jangada-config" "$inst/bin/"
+git -C "$inst" init --quiet -b main
+git -C "$inst" add -A
+git -C "$inst" commit --quiet -m "feat(base): instalação"
+instalar() { env -u JANGADA_PATH "$@" >"$tmp/saida" 2>&1; }
+mkdir -p "$XDG_CONFIG_HOME/jangada"
+
+instalar "$inst/install.sh"; rc=$?
+conferir "instala de um clone comum ($rc)" test "$rc" -eq 0
+conferir "a etapa rodou" test -e "$HOME/etapa-rodou"
+rm -f "$HOME/etapa-rodou"
+
+printf 'JANGADA_REPO=%s\n' "$inst" >"$XDG_CONFIG_HOME/jangada/jangada.conf"
+instalar "$inst/install.sh"; rc=$?
+conferir "recusa a cópia de trabalho ($rc)" test "$rc" -ne 0
+conferir "diz por que recusou" grep -q 'cópia de trabalho (JANGADA_REPO)' "$tmp/saida"
+conferir "nenhuma etapa rodou" test ! -e "$HOME/etapa-rodou"
+instalar env JANGADA_SIMULAR=1 "$inst/install.sh"; rc=$?
+conferir "simula na cópia de trabalho ($rc)" test "$rc" -eq 0
+conferir "a simulação avisa" grep -q 'só a simulação roda daqui' "$tmp/saida"
+rm -f "$XDG_CONFIG_HOME/jangada/jangada.conf"
+
+git -C "$inst" worktree add --quiet -b agente/inst "$tmp/inst-wt" main
+instalar "$tmp/inst-wt/install.sh"; rc=$?
+conferir "recusa um worktree ($rc)" test "$rc" -ne 0
+
+mkdir -p "$HOME/.local/share/jangada-worktrees"
+git clone --quiet "$inst" "$HOME/.local/share/jangada-worktrees/copia"
+instalar "$HOME/.local/share/jangada-worktrees/copia/install.sh"; rc=$?
+conferir "recusa um clone em JANGADA_WORKTREES ($rc)" test "$rc" -ne 0
 
 if ((falhas)); then
   echo "--- última saída"; cat "$tmp/saida"
