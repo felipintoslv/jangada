@@ -310,7 +310,7 @@ if ((rodada > rodadas_max && !forcar)); then
     wt_padrao="${JANGADA_WORKTREES:-$HOME/.local/share/jangada-worktrees}"
     dir_valido=0
     [[ "$dir/" == "$wt_padrao"/* || "$dir" == /tmp/* ]] && dir_valido=1
-    [[ -n "${TMPDIR:-}" && "$dir" == "$TMPDIR"* ]] && dir_valido=1
+    [[ -n "${TMPDIR:-}" && "$dir/" == "${TMPDIR%/}"/* ]] && dir_valido=1
 
     if [[ "$ramo_atual" == "$base_efetiva" || "$ramo_atual" == "main" || "$ramo_atual" == "master" ]]; then
       echo "jangada-validar: reversão cancelada para proteção do ramo base ($ramo_atual)." >&2
