@@ -454,8 +454,8 @@ EOF
 saida="$estado_dir/validacao-$rotulo-r$num.md"
 
 # Roda o lintr e imprime arquivo, linha, linter e mensagem separados por
-# tabulação. Argumentos: arquivo de configuração (vazio para o .lintr do
-# projeto) e os arquivos R. Sai com 2 se o lintr não estiver instalado.
+# tabulação. Argumentos: arquivo de configuração e os arquivos R. Sai com 2
+# se o lintr não estiver instalado.
 # Do object_usage_linter fica só a variável sem uso: o "no visible binding"
 # dispara em toda coluna do dplyr.
 lintr_r='
@@ -497,8 +497,8 @@ verificar_local() {
   [[ -n "$quebrado" ]] && erros+="nome de arquivo com quebra de linha, que a verificação não confere: ${quebrado@Q}"$'\n'
 
   # As regras do portão vêm da base, para a entrega não afrouxar o critério que
-  # a avalia. Um .lintr que a base não tem vale do worktree, porque só
-  # acrescenta rigor ao padrão do jangada.
+  # a avalia. O .lintr é código R (o lintr avalia os campos), então o do
+  # worktree nunca é lido, nem quando a base não tem um.
   local -A regras=()
   local regras_dir r
   regras_dir="$(mktemp -d)"
@@ -574,10 +574,10 @@ verificar_local() {
     local config="" bloqueia=0 linhas=$'#\t#\n' achados r_rc r_err
     if [[ -n "${regras[.lintr]:-}" ]]; then
       bloqueia=1; config="${regras[.lintr]}"
-    elif [[ -f "$dir/.lintr" ]]; then
-      bloqueia=1
     else
       config="$JANGADA_PATH/default/r/lintr"
+      [[ -f "$dir/.lintr" ]] &&
+        printf 'jangada-validar: o .lintr do worktree não está na base e não foi usado; ele passa a valer depois de integrado\n' >&2
     fi
     for arq in "${r_arqs[@]}"; do
       if grep -qxF -- "$arq" <<<"$novos"; then
@@ -587,7 +587,12 @@ verificar_local() {
       fi
     done
     r_err="$(mktemp)"
-    achados="$(cd "$dir" && Rscript -e "$lintr_r" "$config" "${r_arqs[@]}" 2>"$r_err")" && r_rc=0 || r_rc=$?
+    # Com a pasta em $dir, o R leria o .Rprofile e o .Renviron do worktree, e
+    # o lintr procuraria o .lintr a partir da pasta de cada arquivo. As três
+    # variáveis apontam para arquivos fora dele: o validar também roda fora do
+    # isolamento, e ali seria código do repositório avaliado rodando solto.
+    achados="$(cd "$dir" && R_PROFILE_USER="$HOME/.Rprofile" R_ENVIRON_USER="$HOME/.Renviron" \
+      R_LINTR_LINTER_FILE="$config" Rscript -e "$lintr_r" "$config" "${r_arqs[@]}" 2>"$r_err")" && r_rc=0 || r_rc=$?
     if ((r_rc == 0)) && [[ -n "$achados" ]]; then
       # NF >= 2: um arquivo só com linhas apagadas deixa linha vazia em $linhas.
       achados="$(awk -F'\t' 'NR == FNR { if (NF >= 2) ok[$1 FS $2] = 1; next }

@@ -325,9 +325,26 @@ if Rscript -e 'quit(status = !requireNamespace("lintr", quietly = TRUE))' >/dev/
   conferir "caso 12b: o aviso aponta a linha nova" grep -q "antigo.R:3: \[undesirable_function_linter\]" "$tmp/saida.log"
   conferir "caso 12b: o revisor foi chamado" test -s "$tmp/falso/agy.pedido"
 
-  # 12c: com .lintr no projeto, o achado reprova antes do revisor.
+  # 12g: o .lintr e o .Rprofile do worktree são código do repositório
+  # avaliado: não rodam, e o .lintr que a base não tem não reprova.
   sessao_de claude
+  printf 'linters: file.create("%s")\n' "$tmp/lintr-rodou" >"$tmp/projeto/.lintr"
+  printf 'invisible(file.create("%s"))\n' "$tmp/rprofile-rodou" >"$tmp/projeto/.Rprofile"
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 12g: .lintr só no worktree não reprova" [ "$rc" = 0 ]
+  conferir "caso 12g: o .lintr do worktree não rodou" test ! -e "$tmp/lintr-rodou"
+  conferir "caso 12g: o .Rprofile do worktree não rodou" test ! -e "$tmp/rprofile-rodou"
+  conferir "caso 12g: avisa que o .lintr não foi usado" grep -q "não está na base" "$tmp/saida.log"
+  rm -f "$tmp/projeto/.lintr" "$tmp/projeto/.Rprofile"
+
+  # 12c: com .lintr na base, o achado reprova antes do revisor.
+  git -C "$tmp/projeto" checkout -q main
   cp "$repo_jangada/default/r/lintr" "$tmp/projeto/.lintr"
+  git -C "$tmp/projeto" add .lintr
+  git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "regras do lintr"
+  git -C "$tmp/projeto" checkout -q agente/x
+  git -C "$tmp/projeto" -c user.name=t -c user.email=t@t merge -q main -m "traz o .lintr"
+  sessao_de claude
   validar 'STATUS: APROVADO'; rc=$?
   conferir "caso 12c: com .lintr, cat() novo reprova" [ "$rc" = 3 ]
   conferir "caso 12c: o revisor não foi chamado" test ! -e "$tmp/falso/agy.pedido"
@@ -367,7 +384,6 @@ if Rscript -e 'quit(status = !requireNamespace("lintr", quietly = TRUE))' >/dev/
   rm -f "$tmp/projeto/novo.R"
 
   # 12f: com .lintr, a variável sem uso reprova; a coluna do dplyr, não.
-  cp "$repo_jangada/default/r/lintr" "$tmp/projeto/.lintr"
   printf 'f <- function(df) {\n  df |> dplyr::filter(idade > 10)\n}\n' >"$tmp/projeto/colunas.R"
   sessao_de claude
   validar 'STATUS: APROVADO'; rc=$?
@@ -379,7 +395,7 @@ if Rscript -e 'quit(status = !requireNamespace("lintr", quietly = TRUE))' >/dev/
   conferir "caso 12f: o parecer aponta a variável" \
     grep -q "sobra.R:2: \[object_usage_linter\]" "$estado/validacao-s-r1.md"
   rm -f "$tmp/projeto/colunas.R" "$tmp/projeto/sobra.R"
-  rm -f "$tmp/projeto/metodo.R" "$tmp/projeto/.lintr"
+  rm -f "$tmp/projeto/metodo.R"
 else
   echo "pulado caso 12: R ou lintr não instalado"
 fi

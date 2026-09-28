@@ -14,4 +14,5 @@
    - Prefira vetorização e `vapply()` ou `purrr::map_*()`; use `seq_along()`
      em vez de `1:length()`; `return()` só para saída antecipada.
    - O `jangada-validar` roda o `lintr` nas linhas R que você alterou. Com
-     `.lintr` no projeto, um achado reprova a entrega.
+     `.lintr` já integrado ao projeto, um achado reprova a entrega; um
+     `.lintr` que só a sua entrega traz não é lido.

@@ -245,7 +245,7 @@ O fluxo completo, com fluxogramas, está em
    que o agente alterou (`cat()` e `print()` fora de métodos `print`, código
    comentado, `1:length()`, variável sem uso dentro de função). Do
    `object_usage_linter` só vale a variável sem uso; o aviso de variável
-   global, que dispara em toda coluna do dplyr, é descartado. Com `.lintr` no projeto, um
+   global, que dispara em toda coluna do dplyr, é descartado. Com `.lintr` na base do projeto, um
    achado reprova sem chamar o revisor; sem ele, vale `default/r/lintr` e o
    achado só aparece como aviso. Sem R ou sem o pacote `lintr`, a etapa é
    pulada. O `gitleaks` procura segredos nas linhas acrescentadas; um achado
@@ -253,8 +253,10 @@ O fluxo completo, com fluxogramas, está em
    da linha libera um falso positivo. Sem o `gitleaks`, ou com ele falhando,
    a entrega reprova; `JANGADA_VALIDAR_SEM_GITLEAKS=1` aceita o risco e só
    avisa. O `.gitleaks.toml` e o `.gitleaksignore` valem como estão na base,
-   e não como a entrega os deixou; o `.lintr` também, salvo quando a base
-   não tem um. O `AGENTS.md` e o `CLAUDE.md` vão ao revisor lidos da base,
+   e não como a entrega os deixou; o `.lintr` também, e um que só a entrega
+   traz não é lido. O R roda sem o `.Rprofile` e o `.Renviron` do worktree:
+   os três são código do repositório avaliado, e o `jangada-validar` também
+   roda fora do isolamento. O `AGENTS.md` e o `CLAUDE.md` vão ao revisor lidos da base,
    e uma entrega que muda o `.jangada/validar.sh` pede ao revisor que confira
    se a validação ficou mais fraca. Commit com `Co-Authored-By` gera aviso.
    Na escrita, o revisor aponta só casos objetivos nas linhas novas: código
