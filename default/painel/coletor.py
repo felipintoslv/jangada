@@ -278,16 +278,39 @@ def conversas_claude(cache, posicoes, resumo):
             novas_posicoes[caminho] = {"ino": st.st_ino, "pos": pos}
             continue
         resumo["arquivos_lidos"] += 1
+        linhas = []
+        bytes_lidos = 0
         with open(caminho, "rb") as f:
             f.seek(pos)
-            bloco = f.read()
-        fim = bloco.rfind(b"\n")
-        if fim < 0:
+            for linha in f:
+                if not linha.endswith(b"\n"):
+                    break
+                linhas.append(linha)
+                bytes_lidos += len(linha)
+        if not linhas:
             novas_posicoes[caminho] = {"ino": st.st_ino, "pos": pos}
             continue
-        novas_posicoes[caminho] = {"ino": st.st_ino, "pos": pos + fim + 1}
-        resumo["bytes_lidos"] += fim + 1
-        for bruto in bloco[:fim].split(b"\n"):
+        # Se a última linha lida for de assistant com stop_reason nulo, a resposta
+        # ainda está sendo escrita pelo Claude; não avança a posição sobre ela
+        # para que seja lida por inteiro na coleta seguinte.
+        ultima = linhas[-1]
+        if b'"assistant"' in ultima and b'"stop_reason"' in ultima:
+            try:
+                d_ult = json.loads(ultima)
+                if isinstance(d_ult, dict) and d_ult.get("type") == "assistant":
+                    m_ult = d_ult.get("message")
+                    if isinstance(m_ult, dict) and "stop_reason" in m_ult and m_ult.get("stop_reason") is None:
+                        descartada = linhas.pop()
+                        bytes_lidos -= len(descartada)
+            except ValueError:
+                pass
+        if not linhas:
+            novas_posicoes[caminho] = {"ino": st.st_ino, "pos": pos}
+            continue
+        novas_posicoes[caminho] = {"ino": st.st_ino, "pos": pos + bytes_lidos}
+        resumo["bytes_lidos"] += bytes_lidos
+        for linha in linhas:
+            bruto = linha.rstrip(b"\r\n")
             resumo["linhas_lidas"] += 1
             tem_uso = b'"usage"' in bruto
             tem_ferr = b'"tool_use"' in bruto

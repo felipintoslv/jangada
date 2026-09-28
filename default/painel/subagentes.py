@@ -34,7 +34,10 @@ ESTADO = os.environ.get("JANGADA_ESTADO") or os.path.join(
 PROJETOS_CLAUDE = os.environ.get("JANGADA_CLAUDE_PROJETOS") or os.path.join(CASA, ".claude/projects")
 AGY = os.environ.get("JANGADA_AGY_DIR") or os.path.join(CASA, ".gemini/antigravity-cli")
 
-PAPEIS = ("explorador", "leitor", "pesquisador", "verificador")
+PAPEIS = (
+    "explorador", "leitor", "pesquisador", "verificador",
+    "auditor", "arquiteto", "otimizador", "redator",
+)
 EDICAO_CLAUDE = {"Edit", "Write", "NotebookEdit", "MultiEdit"}
 EDICAO_AGY = (b"write_to_file", b"replace_file_content", b"multi_replace_file_content")
 REVISAO = re.compile(r"revis|validar|review", re.I)
@@ -148,12 +151,24 @@ def indice_mae(caminho):
     return frente, fundo, volta
 
 
-def claude(raiz=None, pasta=None):
+def claude(raiz=None, pasta=None, desde=None):
     """Um dicionário por subagente do Claude (só os da pasta, se dada)."""
     raiz = raiz or PROJETOS_CLAUDE
+    ini_limite = instante(desde) if desde else None
+    padrao_proj = "*"
+    if pasta:
+        candidato = re.sub(r"[^A-Za-z0-9]", "-", os.path.realpath(pasta))
+        if os.path.isdir(os.path.join(raiz, candidato)):
+            padrao_proj = candidato
     maes = {}
     saida = []
-    for meta in sorted(glob.glob(os.path.join(raiz, "*", "*", "subagents", "agent-*.meta.json"))):
+    for meta in sorted(glob.glob(os.path.join(raiz, padrao_proj, "*", "subagents", "agent-*.meta.json"))):
+        if ini_limite is not None:
+            try:
+                if os.path.getmtime(meta) < ini_limite:
+                    continue
+            except OSError:
+                continue
         try:
             m = json.load(open(meta, encoding="utf-8"))
         except (OSError, ValueError):
@@ -351,7 +366,7 @@ def entrega(pasta, desde=None, ate=None):
         t = instante(t)
         return t is not None and (ini is None or t >= ini) and (fim is None or t <= fim)
 
-    subs = [s for s in claude(pasta=pasta) + agy(pasta=pasta) if dentro(s["inicio"])]
+    subs = [s for s in claude(pasta=pasta, desde=desde) + agy(pasta=pasta) if dentro(s["inicio"])]
     dels = [d for d in delegacoes() if mesma_pasta(d.get("pasta"), pasta) and dentro(d.get("data"))]
     atendidas = [d for d in dels if not d.get("recusa")]
     c = [s for s in subs if s["origem"] == "claude"]

@@ -12,13 +12,14 @@ ok()    { printf 'ok    %s\n' "$*"; }
 falha() { printf 'FALHA %s\n' "$*"; falhas=$((falhas + 1)); }
 conferir() { local d="$1"; shift; if "$@"; then ok "$d"; else falha "$d"; fi; }
 
+export PYTHONDONTWRITEBYTECODE=1
+
 if ! python3 -c 'import pyarrow' 2>/dev/null; then
   echo "pyarrow do Python ausente; testes do painel ignorados"
   exit 0
 fi
 
 tmp="$(mktemp -d)"
-trap '[[ -n "${PAINEL_MANTER:-}" ]] || rm -rf "$tmp"' EXIT
 estado="$tmp/state/jangada"
 cache="$estado/painel"
 conversas="$tmp/claude/projects"
@@ -37,6 +38,7 @@ rodar() {
     JANGADA_AGY_DIR="$tmp/sub/agy" "$@"
 }
 painel() { rodar "$repo_jangada/bin/jangada-painel" "$@"; }
+trap 'painel --parar >/dev/null 2>&1 || true; [[ -n "${PAINEL_MANTER:-}" ]] || rm -rf "$tmp"' EXIT
 consulta() { python3 - "$cache"; }
 jq_ok() { jq -e "$@" >/dev/null; }
 
