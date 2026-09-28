@@ -4,7 +4,8 @@
 
 - **Todo on-click que abre janela usa `setsid -f`.** A waybar espera o fim do
   on-click antes de rodar o `exec` do módulo de novo; um terminal em primeiro
-  plano congela o contador da barra onde houve o clique.
+  plano congela o contador da barra onde houve o clique. Só `--parar` e
+  `toggle`, que terminam na hora, ficam sem ele; o `testes/barra.sh` confere.
 - Para atualizar um módulo na hora, o módulo declara `"signal": N` e quem
   mudou o estado roda `pkill -RTMIN+N -x waybar`.
 - A barra é gerada pelo `jangada-barra`, que inclui o `config.jsonc` em uso e

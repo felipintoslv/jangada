@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Testa a configuração da barra: o módulo custom/indicadores no config.jsonc,
 # na barra em pé gerada pelo jangada-barra e no base.css, o sinal 9 reservado
-# a ele e a migração que o acrescenta à cópia própria do usuário.
+# a ele e a migração que o acrescenta à cópia própria do usuário; os cliques
+# que abrem janela com setsid -f e a migração que os solta.
 #
 # Uso: testes/barra.sh
 set -uo pipefail
@@ -105,6 +106,31 @@ conferir "caso 6: sem custom/agentes, não altera o arquivo" iguais "$alvo" "$tm
 rm -f "$alvo"
 conferir "caso 7: sem cópia própria, sai sem erro" migrar
 conferir "caso 7: sem cópia própria, não cria o arquivo" [ ! -e "$alvo" ]
+
+# Caso 8: todo clique que chama script do jangada roda solto, senão a waybar
+# congela o módulo enquanto a janela estiver aberta. --parar e toggle terminam
+# na hora e ficam de fora.
+presos="$(jq -r '[to_entries[] | .key as $m | .value | objects | to_entries[]
+  | select(.key | test("^on-click")) | select(.value | type == "string")
+  | select(.value | test("^\\$JANGADA_PATH/bin/"))
+  | select(.value | test(" (--parar|toggle)$") | not) | "\($m).\(.key)"] | join(" ")' "$tmp/config.json")"
+conferir "caso 8: nenhum clique que abre janela sem setsid -f ($presos)" [ -z "$presos" ]
+
+# Caso 9: migração que solta os cliques na cópia própria.
+migracao=migrations/202609281200-barra-cliques-soltos.sh
+sed -E 's#setsid -f (\$JANGADA_PATH/bin/jangada-(calendario|rede|monitor))#\1#' default/waybar/config.jsonc >"$alvo"
+conferir "caso 9: a barra de antes tem clique preso" grep -q '"on-click": "$JANGADA_PATH/bin/jangada-calendario"' "$alvo"
+cp "$alvo" "$tmp/antes.jsonc"
+JANGADA_SIMULAR=1 migrar
+conferir "caso 9: simulação não altera o arquivo" iguais "$alvo" "$tmp/antes.jsonc"
+conferir "caso 9: migração roda sem erro" migrar
+conferir "caso 9: resultado igual ao padrão" iguais "$alvo" default/waybar/config.jsonc
+conferir "caso 9: deixa uma cópia de segurança" \
+  [ "$(compgen -G "$alvo.jangada-*.bak" | wc -l)" = 1 ]
+conferir "caso 9: segunda passada roda sem erro" migrar
+conferir "caso 9: segunda passada não muda nada" iguais "$alvo" default/waybar/config.jsonc
+conferir "caso 9: segunda passada não faz outra cópia" \
+  [ "$(compgen -G "$alvo.jangada-*.bak" | wc -l)" = 1 ]
 
 if ((falhas)); then
   echo "$falhas teste(s) da barra falharam"
