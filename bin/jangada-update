@@ -116,8 +116,10 @@ fi
 
 echo "==> atualizações disponíveis"
 atualizacoes=""
-if ! atualizacoes="$(checkupdates 2>/dev/null)"; then
-  rc=$?
+# Código 2 é "nenhuma atualização". Com "if !", o $? seria o da negação, 0.
+rc=0
+atualizacoes="$(checkupdates 2>/dev/null)" || rc=$?
+if ((rc != 0)); then
   if ((rc != 2)); then
     echo "!! checkupdates falhou (código $rc)"
   fi

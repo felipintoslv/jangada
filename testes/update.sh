@@ -99,6 +99,7 @@ conferir "mostra o commit novo" grep -q 'migração \[2Jnova' "$tmp/saida"
 conferir "assunto sem o caractere ESC" bash -c '! grep -q $'"'"'\e'"'"' "$1"' _ "$tmp/saida"
 conferir "destaca a mudança em migrations/" grep -q '^   migrations/900-teste.sh' "$tmp/saida"
 conferir "avisa que não aplicou" grep -q 'não aplicadas' "$tmp/saida"
+conferir "checkupdates sem atualização não é falha" bash -c '! grep -q "checkupdates falhou" "$1"' _ "$tmp/saida"
 
 atualizar </dev/null
 conferir "sem terminal: termina sem erro ($rc)" test "$rc" -eq 0
