@@ -2,8 +2,8 @@
 
 Pedido: `revisao/PROMPT_AUDITORIA.md`. Base: commit 0246292 (main).
 
-Situação: os 6 críticos foram corrigidos em f31f86a, e os 8 altos no commit
-seguinte; médios e baixos seguem abertos.
+Situação: todos os 72 itens apontados pela auditoria (críticos, altos, médios e
+baixos) foram devidamente corrigidos nos commits de 27/09/2026.
 
 Método: o repositório foi dividido em cinco partes (isolamento e sessões;
 atualização e instalação; validar, delegar e segredos; Hyprland, barra e

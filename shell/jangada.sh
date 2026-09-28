@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Integração do jangada com bash e zsh. Carregado pelo arquivo de inicialização.
 # Compatível com as duas shells; evita recursos exclusivos de uma delas.
 
@@ -8,6 +9,7 @@
 if [ -z "${JANGADA_PATH:-}" ]; then
   # shellcheck disable=SC3028  # BASH_SOURCE no bash, $0 no zsh, vazio nas demais
   _jangada_arquivo="${BASH_SOURCE:-$0}"
+  [ -n "$ZSH_VERSION" ] && eval '_jangada_arquivo=${(%):-%x}'
   case "$_jangada_arquivo" in
     */shell/jangada.sh) JANGADA_PATH="${_jangada_arquivo%/shell/jangada.sh}" ;;
   esac

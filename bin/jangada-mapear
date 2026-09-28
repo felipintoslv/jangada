@@ -41,21 +41,32 @@ mascara_sed=(
   -e "s/(${nome_segredo}${q}?[[:space:]]*[:=][[:space:]]*)[^\"'[:space:],}*][^\"'[:space:],}]*/\\1***/Ig"
 )
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--ajuda" || "${1:-}" == "--help" ]]; then
+  sed -n '2,10s/^# \{0,1\}//p' "$0"
+  exit 0
+fi
+
 # Com --mascarar, só aplica a máscara à entrada e escreve na saída padrão:
 # serve para conferir um arquivo antes de compartilhá-lo e para os testes.
 if [[ "${1:-}" == "--mascarar" ]]; then
   exec sed -E "${mascara_sed[@]}"
 fi
 
+if [[ -n "${1:-}" && -f "$1" ]]; then
+  echo "jangada-mapear: destino não pode ser um arquivo existente ($1)" >&2
+  exit 1
+fi
+
 JANGADA_PATH="${JANGADA_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 C="${XDG_CONFIG_HOME:-$HOME/.config}"
 host="$(cat /etc/hostname 2>/dev/null || uname -n)"
 saida="${1:-$JANGADA_PATH/mapeamento/$host-$(date +%Y%m%d-%H%M)}"
-mkdir -p "$saida"/{config,sistema,hyprland,noctalia,agentes}
+mkdir -p "$saida"/{config,sistema,hyprland,noctalia,agentes} || exit 1
 # Caminho absoluto: o restante do script roda dentro de "$saida", e a máscara
 # de dados sensíveis percorre "$saida" de novo, o que falharia se fosse relativo.
 saida="$(realpath "$saida")"
 cd "$saida" || exit 1
+trap mascarar EXIT
 
 log() { printf '==> %s\n' "$*"; }
 tem() { command -v "$1" >/dev/null 2>&1; }
@@ -87,7 +98,7 @@ copiar() {
 
 # Mascara valores sensíveis em todos os arquivos de texto da saída.
 mascarar() {
-  grep -rIl . "$saida" 2>/dev/null | while IFS= read -r f; do
+  grep -rIlZ . "$saida" 2>/dev/null | while IFS= read -r -d '' f; do
     sed -i -E "${mascara_sed[@]}" "$f"
   done
 }
