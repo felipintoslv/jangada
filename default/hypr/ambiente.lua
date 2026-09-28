@@ -1,6 +1,7 @@
 -- Variáveis de ambiente da sessão.
 
 hl.env("JANGADA_PATH", j.path)
+hl.env("JANGADA_CONFIG", j.config)
 hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_SIZE", "24")
 

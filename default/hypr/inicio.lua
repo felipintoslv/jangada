@@ -14,14 +14,14 @@ hl.on("hyprland.start", function()
   -- de comando mas ignora o valor: ele só lê <XDG_CONFIG_HOME>/hypr/hypridle.conf.
   -- Por isso apontamos o XDG_CONFIG_HOME dele para a pasta do jangada, em vez de
   -- escrever em ~/.config/hypr, que a sessão não toca.
-  hl.exec_cmd("env XDG_CONFIG_HOME=" .. j.path .. "/default/hypridle hypridle")
+  hl.exec_cmd("env XDG_CONFIG_HOME=" .. string.format("%q", j.path .. "/default/hypridle") .. " hypridle")
 
   if j.interface() == "noctalia" then
     -- O Noctalia cuida de barra, notificações, lançador e papel de parede.
     hl.exec_cmd("qs -c noctalia-shell")
   else
     hl.exec_cmd(j.cmd("jangada-barra"))
-    hl.exec_cmd("mako --config " .. j.config .. "/mako/config")
+    hl.exec_cmd("mako --config " .. string.format("%q", j.config .. "/mako/config"))
     hl.exec_cmd(j.cmd("jangada-tema", "--aplicar-papel"))
   end
 end)

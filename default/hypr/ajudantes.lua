@@ -25,7 +25,7 @@ local function ler_conf()
     for linha in arquivo:lines() do
       -- A variável do for é constante a partir do Lua 5.5; o texto sem
       -- comentário vai para uma local própria.
-      local texto = linha:gsub("#.*", "")
+      local texto = linha:match("^%s*#") and "" or linha
       local chave, valor = texto:match("^%s*(JANGADA_[%u_]+)=(.-)%s*$")
       if chave then
         valor = valor:gsub("^%$HOME", home):gsub("^~", home)
@@ -49,7 +49,7 @@ end
 
 -- Caminho completo de um comando jangada-*.
 function j.cmd(nome, argumentos)
-  local c = j.bin .. "/" .. nome
+  local c = string.format("%q", j.bin .. "/" .. nome)
   if argumentos and argumentos ~= "" then
     c = c .. " " .. argumentos
   end

@@ -7,7 +7,7 @@ local lancador
 if j.interface() == "noctalia" then
   lancador = "qs -c noctalia-shell ipc call launcher toggle"
 else
-  lancador = "fuzzel --config " .. j.config .. "/fuzzel/fuzzel.ini"
+  lancador = "fuzzel --config " .. string.format("%q", j.config .. "/fuzzel/fuzzel.ini")
 end
 
 -- Programas
