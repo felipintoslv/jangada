@@ -5,6 +5,11 @@ Pedido: `revisao/PROMPT_AUDITORIA.md`. Base: commit 0246292 (main).
 Situação: todos os 72 itens apontados pela auditoria (críticos, altos, médios e
 baixos) foram devidamente corrigidos nos commits de 27/09/2026. As 14
 perguntas ao autor estão resolvidas; veja "Respostas do autor", no fim.
+A conferência item a item de 28/09/2026 achou dois itens incompletos, já
+fechados: o 40 (o Bash do leitor passa pelo `jangada-hook-leitor`) e o 63
+(os indicadores de subagentes guardam um memo por subagente e só releem o
+que mudou). No 21 ficou a correção mínima, o aviso na prévia; a marca
+`.aprovado` e o `validar.jsonl` seguem graváveis pelo agente.
 
 Método: o repositório foi dividido em cinco partes (isolamento e sessões;
 atualização e instalação; validar, delegar e segredos; Hyprland, barra e

@@ -20,6 +20,7 @@ eventos-agentes.jsonl). Grava em PASTA_DO_CACHE:
   coleta.json          resumo da última coleta
   hoje.json            os indicadores do dia (jangada-painel --json)
   subagentes.json      os indicadores de subagentes e delegações (subagentes.py)
+  subagentes-memo.json um registro por subagente, com a assinatura dos arquivos lidos
 
 As pastas mensagens, ferramentas e resultados recebem um arquivo novo por
 coleta com dado novo, e são compactadas num só quando passam de 40. Guardam
@@ -712,8 +713,16 @@ def main():
     gravar_json(os.path.join(cache, "hoje.json"), indicadores_do_dia(cache, vals, evs, agora))
     # Os indicadores de subagentes não derrubam a coleta. O erro vai para o
     # subagentes.json, e o painel o mostra em vez dos números da coleta anterior.
+    # O memo guarda um registro por subagente com a assinatura dos arquivos
+    # lidos; só os que mudaram são relidos. É gravado depois dos indicadores,
+    # e um memo ilegível apenas faz reler tudo.
     try:
-        gravar_json(os.path.join(cache, "subagentes.json"), subagentes.indicadores())
+        arq_memo = os.path.join(cache, "subagentes-memo.json")
+        memo = ler_json(arq_memo, {})
+        if not isinstance(memo, dict):
+            memo = {}
+        gravar_json(os.path.join(cache, "subagentes.json"), subagentes.indicadores(memo=memo))
+        gravar_json(arq_memo, memo)
     except Exception as e:  # noqa: BLE001
         print(f"subagentes: {e!r}", file=sys.stderr)
         gravar_json(os.path.join(cache, "subagentes.json"),

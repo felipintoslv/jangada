@@ -265,7 +265,7 @@ conferir "caso 4: erro nos indicadores de subagentes vai para o subagentes.json"
   bash -c 'JANGADA_ESTADO="$1" PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=default/painel python3 -c "
 import coletor, sys
 sys.argv = [\"coletor.py\", \"$1/painel\"]
-def quebra(): raise ValueError(\"quebrou\")
+def quebra(**_): raise ValueError(\"quebrou\")
 coletor.subagentes.indicadores = quebra
 coletor.main()" >/dev/null 2>&1; jq -e ".erro | test(\"quebrou\")" "$1/painel/subagentes.json" >/dev/null' _ "$tmp/e7"
 

@@ -88,7 +88,11 @@ flowchart TD
 6. `indicadores_do_dia` grava o `hoje.json`, lido pela barra.
 7. `subagentes.indicadores()` grava o `subagentes.json`. Um erro ali não
    derruba a coleta: vai para o próprio arquivo, e o painel o mostra em vez
-   dos números da coleta anterior.
+   dos números da coleta anterior. O `subagentes-memo.json` guarda um
+   registro por subagente com o mtime e o tamanho dos arquivos lidos
+   (meta.json, jsonl e conversa mãe no Claude; json e banco da conversa no
+   agy): só o subagente com arquivo mudado é relido, e o que sumiu sai do
+   memo.
 8. `coleta.json` com o resumo (arquivos, linhas e bytes lidos, segundos).
 
 Toda gravação é num temporário na mesma pasta, seguido de troca de nome.

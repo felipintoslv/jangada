@@ -151,8 +151,33 @@ def indice_mae(caminho):
     return frente, fundo, volta
 
 
-def claude(raiz=None, pasta=None, desde=None):
-    """Um dicionário por subagente do Claude (só os da pasta, se dada)."""
+def assinatura(*caminhos):
+    """mtime e tamanho de cada arquivo (None se faltar): muda quando o arquivo
+    muda, e é o que decide se o registro guardado ainda vale."""
+    saida = []
+    for c in caminhos:
+        try:
+            st = os.stat(c)
+            saida.append([st.st_mtime_ns, st.st_size])
+        except OSError:
+            saida.append(None)
+    return saida
+
+
+def guardado(memo, chave, assin):
+    """Registro de memo[chave], se a assinatura dos arquivos é a mesma."""
+    e = (memo or {}).get(chave)
+    if isinstance(e, dict) and e.get("assinatura") == assin and isinstance(e.get("registro"), dict):
+        return e["registro"]
+    return None
+
+
+def claude(raiz=None, pasta=None, desde=None, memo=None):
+    """Um dicionário por subagente do Claude (só os da pasta, se dada).
+
+    Com memo (dicionário de uma leitura anterior), o subagente cujo meta.json,
+    jsonl e conversa mãe não mudaram sai do memo, sem reler; ao fim o memo fica
+    só com os subagentes vistos nesta leitura."""
     raiz = raiz or PROJETOS_CLAUDE
     ini_limite = instante(desde) if desde else None
     padrao_proj = "*"
@@ -162,6 +187,7 @@ def claude(raiz=None, pasta=None, desde=None):
             padrao_proj = candidato
     maes = {}
     saida = []
+    novo = {}
     for meta in sorted(glob.glob(os.path.join(raiz, padrao_proj, "*", "subagents", "agent-*.meta.json"))):
         if ini_limite is not None:
             try:
@@ -169,11 +195,19 @@ def claude(raiz=None, pasta=None, desde=None):
                     continue
             except OSError:
                 continue
+        sessdir = os.path.dirname(os.path.dirname(meta))
+        mae = sessdir + ".jsonl"
+        assin = assinatura(meta, meta[:-len(".meta.json")] + ".jsonl", mae)
+        reg = guardado(memo, meta, assin)
+        if reg is not None:
+            novo[meta] = {"assinatura": assin, "registro": reg}
+            if not pasta or mesma_pasta(reg.get("pasta"), pasta):
+                saida.append(reg)
+            continue
         try:
             m = json.load(open(meta, encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        sessdir = os.path.dirname(os.path.dirname(meta))
         agente = os.path.basename(meta)[len("agent-"):-len(".meta.json")]
         cwd = None; ini = fim = None; pedido = ""
         tokens_proprios = 0; edicoes = 0; ferramentas = 0
@@ -201,7 +235,6 @@ def claude(raiz=None, pasta=None, desde=None):
                     edicoes += b.get("name") in EDICAO_CLAUDE
         if pasta and not mesma_pasta(cwd, pasta):
             continue
-        mae = sessdir + ".jsonl"
         if mae not in maes:
             maes[mae] = indice_mae(mae)
         frente, fundo, volta = maes[mae]
@@ -212,7 +245,7 @@ def claude(raiz=None, pasta=None, desde=None):
         razao = round(tokens / ret_tok, 1) if tokens and ret_tok else None
         tipo = m.get("agentType") or ""
         descricao = m.get("description") or ""
-        saida.append({
+        reg = {
             "origem": "claude", "id": agente, "conversa": os.path.basename(sessdir),
             "pasta": cwd, "inicio": iso(ini), "fim": iso(fim), "tipo": tipo,
             "papel": tipo if tipo in PAPEIS else None, "descricao": descricao,
@@ -224,13 +257,22 @@ def claude(raiz=None, pasta=None, desde=None):
             "autorrevisao": tipo not in PAPEIS and bool(REVISAO.search(descricao + " " + pedido[:200])),
             "generico": tipo == "general-purpose",
             "sem_fonte": sem_fonte(retorno) if retorno else None,
-        })
+        }
+        novo[meta] = {"assinatura": assin, "registro": reg}
+        saida.append(reg)
+    if memo is not None:
+        memo.clear()
+        memo.update(novo)
     return saida
+
+
+def banco_agy(conversa):
+    return os.path.join(AGY, "conversations", conversa + ".db")
 
 
 def passos_agy(conversa):
     """(passos, passos de escrita) de uma conversa do agy, ou (None, None)."""
-    banco = os.path.join(AGY, "conversations", conversa + ".db")
+    banco = banco_agy(conversa)
     if not os.path.exists(banco):
         return None, None
     try:
@@ -249,11 +291,22 @@ def passos_agy(conversa):
     return n, escrita
 
 
-def agy(raiz=None, pasta=None):
-    """Um dicionário por subagente do agy (só os da pasta, se dada)."""
+def agy(raiz=None, pasta=None, memo=None):
+    """Um dicionário por subagente do agy (só os da pasta, se dada). O memo
+    funciona como no claude(), com o json do subagente e o banco da conversa."""
     raiz = raiz or AGY
     saida = []
+    novo = {}
     for arq in sorted(glob.glob(os.path.join(raiz, "brain", "*", ".system_generated", "subagents", "*.json"))):
+        # O banco tem o nome da conversa, que só se sabe lendo o json: a
+        # assinatura usa a conversa do registro guardado.
+        ant = ((memo or {}).get(arq) or {}).get("registro") or {}
+        reg = guardado(memo, arq, assinatura(arq, banco_agy(str(ant.get("id")))))
+        if reg is not None:
+            novo[arq] = memo[arq]
+            if not pasta or mesma_pasta(reg.get("pasta"), pasta):
+                saida.append(reg)
+            continue
         try:
             d = json.load(open(arq, encoding="utf-8"))
         except (OSError, ValueError):
@@ -267,7 +320,7 @@ def agy(raiz=None, pasta=None):
         if pasta and not mesma_pasta(onde, pasta):
             continue
         passos, escrita = passos_agy(conversa)
-        saida.append({
+        reg = {
             "origem": "agy", "id": conversa,
             "conversa": arq.split(os.sep + "brain" + os.sep)[1].split(os.sep)[0],
             "pasta": onde, "inicio": iso(os.path.getmtime(arq)), "fim": None, "tipo": tipo,
@@ -278,7 +331,12 @@ def agy(raiz=None, pasta=None):
             "autorrevisao": tipo == "self" or "review" in papel_nome.lower(),
             "generico": tipo in ("self", "general", "research") and tipo not in PAPEIS,
             "sem_fonte": None,
-        })
+        }
+        novo[arq] = {"assinatura": assinatura(arq, banco_agy(conversa)), "registro": reg}
+        saida.append(reg)
+    if memo is not None:
+        memo.clear()
+        memo.update(novo)
     return saida
 
 
@@ -462,10 +520,18 @@ def aprovacao(g):
             "rodadas_media": round(sum(e["rodadas"] or 0 for e in g) / len(g), 2) if g else None}
 
 
-def indicadores(agora=None):
-    """Os oito indicadores da etapa 4 da especificação de subagentes."""
+def indicadores(agora=None, memo=None):
+    """Os oito indicadores da etapa 4 da especificação de subagentes. O memo
+    ({"claude": {}, "agy": {}}, guardado entre coletas) evita reler os
+    subagentes cujos arquivos não mudaram."""
     agora = agora or dt.datetime.now().astimezone()
-    subs = claude() + agy()
+    if memo is None:
+        subs = claude() + agy()
+    else:
+        for k in ("claude", "agy"):
+            if not isinstance(memo.get(k), dict):
+                memo[k] = {}
+        subs = claude(memo=memo["claude"]) + agy(memo=memo["agy"])
     dels = delegacoes()
     atendidas = [d for d in dels if not d.get("recusa")]
     recusas = [d for d in dels if d.get("recusa")]

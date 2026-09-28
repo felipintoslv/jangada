@@ -179,6 +179,37 @@ conferir "indicadores 8: árvore por pasta e conversa" jqok -e '[.arvore[] | .co
 subagentes >"$tmp/ind.txt"
 conferir "indicadores: texto para o terminal" grep -q "^7. Desvios do protocolo" "$tmp/ind.txt"
 
+# Com memo (o do coletor do painel), o subagente cujos arquivos não mudaram
+# sai do memo: sem permissão de leitura, o resultado é o mesmo. O que muda é
+# relido, e o que some sai do memo.
+memo() {
+  env -u JANGADA_ESTADO JANGADA_CLAUDE_PROJETOS="$amostra/claude/projects" JANGADA_AGY_DIR="$amostra/agy" \
+    XDG_STATE_HOME="$amostra/state" PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$repo_jangada/default/painel" python3 -c '
+import json, sys, subagentes
+m = json.load(open(sys.argv[1])) if sys.argv[2] == "de-novo" else {}
+r = subagentes.indicadores(memo=m)
+json.dump(m, open(sys.argv[1], "w"))
+r.pop("data", None)
+print(json.dumps(r, sort_keys=True))' "$tmp/memo.json" "$1"
+}
+jq -S 'del(.data)' "$tmp/ind.json" | jq -c . >"$tmp/ind-sem-memo.json"
+memo inicio | jq -Sc . >"$tmp/ind-memo1.json"
+conferir "memo: mesmo resultado que sem memo" cmp -s "$tmp/ind-sem-memo.json" "$tmp/ind-memo1.json"
+conferir "memo: um registro por subagente" jqok -e '(.claude | length) == 3 and (.agy | length) == 1' "$tmp/memo.json"
+mapfile -t lidos < <(find "$amostra/claude/projects" "$amostra/agy" -type f \( -name '*.json' -o -name '*.jsonl' -o -name '*.db' \))
+chmod a-r "${lidos[@]}"
+memo de-novo | jq -Sc . >"$tmp/ind-memo2.json"
+chmod u+r "${lidos[@]}"
+conferir "memo: a segunda leitura não abre arquivo sem mudança" cmp -s "$tmp/ind-memo1.json" "$tmp/ind-memo2.json"
+a1="$(find "$amostra/claude/projects" -name 'agent-a1.jsonl')"
+jq -c '.' "$a1" | tail -n 1 | jq -c '.message.content = [{type: "tool_use", name: "Edit", id: "novo"}]' >>"$a1"
+memo de-novo >/dev/null
+conferir "memo: arquivo alterado é relido" \
+  jqok -e '[.claude[] | .registro | select(.id == "a1")][0].edicoes == 1' "$tmp/memo.json"
+rm "$(find "$amostra/claude/projects" -name 'agent-a3.meta.json')"
+memo de-novo >/dev/null
+conferir "memo: subagente apagado sai do memo" jqok -e '(.claude | length) == 2' "$tmp/memo.json"
+
 echo
 if ((falhas)); then
   echo "$falhas teste(s) falharam"
