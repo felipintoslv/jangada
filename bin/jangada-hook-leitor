@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Hook PreToolUse do subagente leitor do Claude: só deixa passar comandos de
+# leitura no Bash. Sai com 0 para liberar e com 2 para recusar.
+#
+# Uso (no frontmatter de default/claude/agents/leitor.md):
+#   jangada-hook-leitor
+# Recebe o JSON do evento pela entrada padrão.
+#
+# A conferência fica em default/claude/hook-leitor.py.
+set -uo pipefail
+python3 "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../default/claude/hook-leitor.py" || exit 2

@@ -26,6 +26,15 @@ Cada papel existe nos dois agentes, com o mesmo nome: no Claude em
 O agy tem também o `revisor`, usado só pelo `jangada-validar`, com
 ferramentas de leitura.
 
+Só o leitor e o verificador têm terminal (Bash no Claude, `run_command` no
+agy). O leitor lê documentos de fora, que podem trazer injeção de prompt: no
+Claude, o hook `PreToolUse` do frontmatter chama o `jangada-hook-leitor`, que
+só deixa passar comandos de leitura (`pdftotext` com saída `-`, `pdfinfo`,
+`grep`, `head`, `tail`, `wc`, `cut`, `tr`, `cat`, `ls`) ligados por `|`, sem
+redirecionamento, `;`, `&` nem expansão. Sem o script no PATH, o comando é
+recusado. No agy, o limite do leitor segue só no texto e no isolamento da
+sessão. O verificador roda os testes do projeto e fica com o terminal livre.
+
 ## Instalação
 
 ```mermaid

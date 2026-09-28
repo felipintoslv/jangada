@@ -3,6 +3,12 @@ name: leitor
 description: Lê documentos longos (PDF, planilhas, relatórios) sem editar nada e devolve só os trechos pedidos, com página ou célula. Use no lugar de ler o documento inteiro no contexto principal.
 tools: Read, Grep, Glob, Bash
 model: haiku
+hooks:
+  PreToolUse:
+    - matcher: Bash
+      hooks:
+        - type: command
+          command: jangada-hook-leitor || exit 2
 ---
 
 # Leitor

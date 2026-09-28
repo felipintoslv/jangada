@@ -54,6 +54,31 @@ for p in "${papeis[@]}"; do
   conferir "$p: run_command no agy se e só se Bash no Claude" [ "$bash_claude" = "$cmd_agy" ]
 done
 
+# O leitor lê documentos de fora; o Bash dele passa pelo jangada-hook-leitor,
+# que só deixa comandos de leitura. O verificador roda os testes do projeto e
+# fica com o Bash livre.
+conferir "leitor: hook PreToolUse no Bash" \
+  bash -c 'sed -n "/^hooks:/,/^---$/p" "$1" | grep -qx "          command: jangada-hook-leitor || exit 2"' _ default/claude/agents/leitor.md
+conferir "papel com Bash sem hook: só o verificador" [ "$(for p in "${papeis[@]}"; do
+    f="default/claude/agents/$p.md"
+    grep -qE '^tools:.*\bBash\b' "$f" && ! grep -q 'jangada-hook-leitor' "$f" && echo "$p"
+  done)" = verificador ]
+hook_leitor() { jq -cn --arg c "$1" '{tool_name: "Bash", tool_input: {command: $c}}' | bin/jangada-hook-leitor 2>/dev/null; }
+export -f hook_leitor
+for c in "pdftotext -layout -f 2 -l 3 'Relatório final.pdf' - | grep -n 'Total' | head -40" \
+         "grep -c 'fim\$' notas.txt" "ls -la docs" "pdfinfo a.pdf" "tail -n 5 a.csv | cut -d, -f2"; do
+  conferir "hook do leitor libera: $c" hook_leitor "$c"
+done
+for c in "pdftotext a.pdf saida.txt" "cat a.pdf > b" "grep x a; rm -rf ~" "echo \$(id)" "head \`id\`" \
+         "rm a" "python3 -c 1" "head a && touch b" "grep x a &" "A=1 grep x a" "grep x \$HOME/.ssh/id" \
+         "cat a | sh" "tee b" $'head a\ntouch b' "grep 'x" "grep x a |" "cat <a"; do
+  conferir "hook do leitor recusa: ${c//$'\n'/\\n}" bash -c '! hook_leitor "$1"' _ "$c"
+done
+conferir "hook do leitor: recusa sai com 2" bash -c 'hook_leitor "rm a"; [ $? = 2 ]'
+conferir "hook do leitor: outra ferramenta passa" \
+  bash -c 'jq -cn "{tool_name: \"Read\", tool_input: {file_path: \"a\"}}" | bin/jangada-hook-leitor'
+conferir "hook do leitor: evento ilegível recusa" bash -c '! echo x | bin/jangada-hook-leitor 2>/dev/null'
+
 # O revisor do jangada-validar lê a entrega, conteúdo não confiável: no agy
 # roda só com ferramentas de leitura e não aparece como subagente.
 rev=default/agy/agents/revisor/agent.md
