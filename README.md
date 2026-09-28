@@ -447,8 +447,8 @@ mensagem fica no terminal da sessão e indica o `--sem-isolar` ou o
 O `jangada-painel` junta os registros dos agentes num cache e abre um app
 Shiny em `127.0.0.1:8765` (`JANGADA_PAINEL_PORTA`). O app só existe enquanto
 está aberto: `jangada-painel --parar` libera a memória do R. Precisa de R com
-shiny, bslib, bsicons, plotly, visNetwork, igraph, DT, arrow e jsonlite, e do
-`python-pyarrow`; a instalação só avisa o que falta. O app só abre sessão
+shiny, bslib, bsicons, plotly, visNetwork, igraph, DT, arrow, jsonlite e
+htmltools, e do `python-pyarrow`; a instalação só avisa o que falta. O app só abre sessão
 para `127.0.0.1` ou `localhost` na porta dele: uma página de fora, aberta no
 mesmo navegador, não lê os indicadores.
 

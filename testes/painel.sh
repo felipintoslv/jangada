@@ -236,7 +236,7 @@ coletor.main()" >/dev/null 2>&1; jq -e ".erro | test(\"quebrou\")" "$1/painel/su
 
 # Caso 5: indicadores em R e o app no ar.
 if ! command -v Rscript >/dev/null 2>&1 \
-  || ! Rscript -e 'for (p in c("shiny", "bslib", "bsicons", "plotly", "visNetwork", "igraph", "DT", "arrow", "jsonlite")) if (!requireNamespace(p, quietly = TRUE)) quit(status = 1)' 2>/dev/null; then
+  || ! Rscript -e 'for (p in c("shiny", "bslib", "bsicons", "plotly", "visNetwork", "igraph", "DT", "arrow", "jsonlite", "htmltools")) if (!requireNamespace(p, quietly = TRUE)) quit(status = 1)' 2>/dev/null; then
   echo "R ou pacotes do app ausentes; caso 5 ignorado"
 else
   conferir "caso 5: indicadores em R sobre o cache" \
