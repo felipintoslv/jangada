@@ -48,7 +48,9 @@ hl = {
 }
 
 -- O Hyprland inclui a pasta da configuração principal no caminho de módulos.
-package.path = raiz .. "/config/hypr/?.lua;" .. package.path
+-- Ela entra no fim, depois do ./?.lua, que é o pior caso: sem o bootstrap tirar
+-- a pasta atual, um usuario.lua nela seria carregado no lugar deste.
+package.path = package.path .. ";" .. raiz .. "/config/hypr/?.lua"
 os.getenv_original = os.getenv
 local env_falso = { JANGADA_PATH = raiz, XDG_CONFIG_HOME = arg[2] }
 os.getenv = function(k) return env_falso[k] or os.getenv_original(k) end

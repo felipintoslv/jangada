@@ -41,6 +41,14 @@ if [[ -n "$lua_bin" ]]; then
   tmp_cfg="$(mktemp -d)"; mkdir -p "$tmp_cfg/jangada"
   echo "JANGADA_INTERFACE=noctalia" >"$tmp_cfg/jangada/jangada.conf"
   "$lua_bin" testes/simular-hypr.lua "$PWD" "$tmp_cfg" || falha "simulação no modo noctalia"
+  # O Hyprland roda com a pasta atual em $HOME: um usuario.lua ou cores.lua ali
+  # não pode tomar o lugar dos da configuração.
+  mkdir -p "$tmp_cfg/casa"
+  for m in usuario monitores cores; do
+    echo "error('carregou $m.lua da pasta atual')" >"$tmp_cfg/casa/$m.lua"
+  done
+  (cd "$tmp_cfg/casa" && "$lua_bin" "$OLDPWD/testes/simular-hypr.lua" "$OLDPWD") >/dev/null \
+    || falha "simulação com usuario.lua na pasta atual"
   rm -rf "$tmp_cfg"
 fi
 
