@@ -1,0 +1,132 @@
+# Subagentes e delegação
+
+O agente da sessão pode passar trabalho de leitura a um subagente: explorar
+código, ler documento longo, pesquisar na web, verificar antes do
+`jangada-validar`, auditar segurança, analisar arquitetura, procurar gargalo
+ou revisar redação. O subagente só lê e devolve um relatório curto com
+`caminho:linha`; quem edita é sempre o agente da sessão, porque o worktree é
+um só. Paralelismo de implementação é outra sessão do jangada.
+
+## Papéis
+
+Cada papel existe nos dois agentes, com o mesmo nome: no Claude em
+`default/claude/agents/PAPEL.md`, no agy em `default/agy/agents/PAPEL/agent.md`.
+
+| Papel | Uso | Claude | agy (`jangada-delegar`) |
+|---|---|---|---|
+| explorador | localizar código e ligações entre partes | haiku | Flash, esforço baixo |
+| leitor | trechos de PDF, planilha, relatório | haiku | Flash, médio |
+| pesquisador | documentação e dados públicos na web | haiku | Flash, médio |
+| verificador | testes, lint e regras antes do `jangada-validar` | sonnet | Flash, alto |
+| auditor | segurança: injeção, credenciais, permissões | sonnet | Flash, alto |
+| arquiteto | módulos, contratos e impacto de mudança | sonnet | Flash, alto |
+| otimizador | gargalos, leituras redundantes, memória | sonnet | Flash, médio |
+| redator | clareza e regras de texto do `AGENTS.md` | haiku | Flash, baixo |
+
+O agy tem também o `revisor`, usado só pelo `jangada-validar`, com
+ferramentas de leitura.
+
+## Instalação
+
+```mermaid
+flowchart TD
+    A[install/50-agentes.sh<br>ou migração] --> B{claude ou ~/.claude?}
+    B -- sim --> C[ligar_agentes_claude:<br>links em ~/.claude/agents]
+    A --> D{agy ou ~/.gemini?}
+    D -- sim --> E[mesclar_agentes_agy:<br>caminho em ~/.gemini/config]
+    A --> F[mesclar_hooks_claude:<br>SubagentStart e SubagentStop]
+```
+
+As funções ficam em `install/lib.sh`. Papel novo entra numa instalação
+existente por migração, como `migrations/202609272200-subagentes-novos.sh`.
+
+## Para onde vai a delegação
+
+```mermaid
+flowchart TD
+    A[agente da sessão] --> B{agente}
+    B -- agy --> N[nativo:<br>invoke_subagent do agy]
+    B -- claude --> C{JANGADA_DELEGAR<br>do perfil ou global}
+    C -- claude ou nativo --> CL[subagente do Claude]
+    C -- vazio ou agy --> D{agy instalado?}
+    D -- não --> CL
+    D -- sim --> AG[jangada-delegar]
+    AG -- recusa, código 4 --> CL
+```
+
+`jangada_delegacao` em `bin/jangada-config` decide o destino, e o
+`jangada-agente` monta o protocolo da sessão com o arquivo do destino:
+
+| Destino | Arquivo | O que manda |
+|---|---|---|
+| `agy` | `default/agentes/protocolo-delegar-agy.md` | usar primeiro `jangada-delegar PAPEL "pedido"`; só na recusa, o subagente do Claude do mesmo papel |
+| `claude` | `default/agentes/protocolo-delegar-claude.md` | usar os subagentes do Claude |
+| `nativo` | `default/agentes/protocolo-delegar-nativo.md` | usar os subagentes do próprio agy |
+
+Os três são seguidos de `default/agentes/protocolo-delegar.md`, com as regras
+comuns: citar a fonte, conferir no arquivo o que decide a mudança, não editar
+e não substituir o `jangada-validar`. Em nenhum caso vale o
+`general-purpose` para esses papéis.
+
+## jangada-delegar
+
+```mermaid
+flowchart TD
+    A[jangada-delegar PAPEL pedido] --> B{papel conhecido<br>e pedido presente?}
+    B -- não --> X2[uso errado, código 2]
+    B -- sim --> C{perfil com<br>JANGADA_DELEGAR=claude?}
+    C -- sim --> R[recusa, código 4]
+    C -- não --> D{agy instalado e<br>pasta em trustedWorkspaces?}
+    D -- não --> R
+    D -- sim --> E{papel instalado no agy?}
+    E -- não --> R
+    E -- sim --> F{cota de 5 horas acima<br>de JANGADA_DELEGAR_COTA_MIN?}
+    F -- não --> R
+    F -- sim --> G[timeout agy -p --agent PAPEL<br>--sandbox --output-format json]
+    G -- 124 ou erro --> R
+    G -- ok --> H{status SUCCESS e<br>resposta não vazia?}
+    H -- não --> R
+    H -- sim --> I{mais de<br>JANGADA_DELEGAR_PALAVRAS?}
+    I -- sim --> J[imprime cortado e grava<br>o completo no estado]
+    I -- não --> K[imprime o relatório, código 0]
+    J --> K
+    R --> L[registra em delegacoes.jsonl]
+    K --> L
+```
+
+- A pasta é a raiz do repositório atual, que o agy precisa confiar; um
+  worktree do jangada entra em `trustedWorkspaces` pelo
+  `jangada-worktree-preparar` e sai no `jangada-agente-fim`.
+- A cota vem de `agy -p "/usage"`, guardada por `JANGADA_DELEGAR_CACHE`
+  minutos (5). Abaixo de `JANGADA_DELEGAR_COTA_MIN` (20%), recusa.
+- O tempo limite é `JANGADA_DELEGAR_TEMPO` segundos (300).
+- Comando de terminal que o agy nega aparece listado; libera-se em
+  `permissions.allow` do `settings.json` do agy.
+- O relatório conta as frases sem fonte (`caminho:linha`, URL, página ou
+  célula), que entram no registro.
+- Na recusa, a última linha diz qual subagente do Claude usar. O
+  `jangada-delegar` nunca chama o Claude.
+
+## Registro e medição
+
+- Cada chamada do `jangada-delegar`, atendida ou recusada, vira uma linha em
+  `delegacoes.jsonl`, com papel, modelo, segundos, código, palavras, cota
+  antes e depois e motivo da recusa.
+- Os hooks `SubagentStart` e `SubagentStop` do Claude
+  (`default/claude/hooks.json`, `bin/jangada-hook-claude`) gravam
+  `subagente-inicio` e `subagente-fim` em `eventos-agentes.jsonl`, com o id e
+  o tipo do subagente.
+- `default/painel/subagentes.py` lê esses registros e as conversas dos
+  subagentes. O `bin/jangada-subagentes` mostra os indicadores, o resumo de
+  uma entrega (`--entrega`, que o `jangada-validar` grava no campo
+  `subagentes` do `validar.jsonl`) e os registros crus (`--registros`).
+
+Os campos de cada arquivo estão em [registros](registros.md).
+
+## Testes
+
+| Arquivo | O que cobre |
+|---|---|
+| `testes/subagentes.sh` | papéis do Claude e do agy e a instalação deles |
+| `testes/delegar.sh` | `jangada-delegar` com agy falso: recusas, cota, corte do relatório e registro |
+| `testes/validar.sh` | o campo `subagentes` e o `subagentes_erro` do `validar.jsonl` |

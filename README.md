@@ -24,10 +24,26 @@ jangada/
 ├── config/                modelos copiados uma única vez para ~/.config/jangada
 ├── shell/                 integração com bash e zsh
 ├── migrations/            ajustes aplicados em ordem a cada atualização
+├── docs/                  processos com fluxogramas, registros e boas práticas
 ├── testes/                verificar.sh (estático + os demais testes) e aninhado.sh
 ├── mapeamento/            inventários do jangada-mapear (fora do git)
 └── revisao/               pareceres, avaliações e comparações; índice em revisao/README.md
 ```
+
+## Documentação dos processos
+
+Cada processo tem um documento em `docs/`, com fluxograma, passos por
+arquivo e função, falhas e os testes que o cobrem:
+
+| Documento | Processo |
+|---|---|
+| [docs/ciclo-da-tarefa.md](docs/ciclo-da-tarefa.md) | abertura da sessão, `jangada-validar` e `jangada-agente-fim` |
+| [docs/isolamento.md](docs/isolamento.md) | o que o `jangada-isolar` deixa gravável, somente leitura e oculto, e a restauração |
+| [docs/subagentes-e-delegacao.md](docs/subagentes-e-delegacao.md) | papéis, destino da delegação e `jangada-delegar` |
+| [docs/atualizacao-e-migracoes.md](docs/atualizacao-e-migracoes.md) | instalação, `jangada-update` e `jangada-migrar` |
+| [docs/painel.md](docs/painel.md) | coletor, cache, app e módulo da barra |
+| [docs/registros.md](docs/registros.md) | campos de cada registro usado pelo painel |
+| [docs/boas-praticas.md](docs/boas-praticas.md) | regras de código, testes, textos e commits |
 
 ## Antes de instalar: mapear a máquina
 
@@ -172,6 +188,9 @@ alheio com o mesmo nome nas duas pastas fica como está, com aviso.
 
 ## Ciclo de uma tarefa com agentes
 
+O fluxo completo, com fluxogramas, está em
+[docs/ciclo-da-tarefa.md](docs/ciclo-da-tarefa.md).
+
 1. `SUPER + A` (ou `jangada-agente --prompt "..."`) pergunta o agente e abre
    num worktree `agente/<nome>`. Cada opção diz entre parênteses quem
    implementa, quem revisa e qual economiza mais tokens do Claude.
@@ -286,6 +305,9 @@ Ganchos do usuário ficam em `~/.config/jangada/ganchos/EVENTO` ou
 
 ### Subagentes
 
+Fluxogramas em
+[docs/subagentes-e-delegacao.md](docs/subagentes-e-delegacao.md).
+
 Oito papéis, com o mesmo nome e o mesmo texto no Claude Code
 (`default/claude/agents/`, ligados em `~/.claude/agents/`) e no agy
 (`default/agy/agents/`, registrados em `~/.gemini/config/agents.json`). Nenhum
@@ -361,6 +383,9 @@ Sem o agy instalado, `agy` vira `claude`. Subagente não revisa a entrega: o
 continua com o revisor de sempre.
 
 ### Isolamento
+
+Fluxogramas e a tabela das camadas em
+[docs/isolamento.md](docs/isolamento.md).
 
 O agente roda no bubblewrap, pelo `jangada-isolar`. Ele grava só na pasta da
 tarefa (o worktree, ou o repositório com `--direto`), em `~/.claude`, em
@@ -443,6 +468,8 @@ mensagem fica no terminal da sessão e indica o `--sem-isolar` ou o
 `JANGADA_AGENTE_ISOLAR=0`.
 
 ## Painel de indicadores
+
+O funcionamento de cada peça está em [docs/painel.md](docs/painel.md).
 
 O `jangada-painel` junta os registros dos agentes num cache e abre um app
 Shiny em `127.0.0.1:8765` (`JANGADA_PAINEL_PORTA`). O app só existe enquanto
@@ -601,7 +628,7 @@ Mudança que exige ajuste numa instalação existente ganha uma migração em
 avaliações estão indexadas em `revisao/README.md`; a última auditoria
 (`revisao/auditoria-20260927.md`) cobre o repositório inteiro, com 72
 apontamentos: os 6 críticos, todos de fuga do isolamento, e os 8 altos foram
-corrigidos, e os médios e baixos seguem abertos.
+corrigidos, assim como os médios e os baixos.
 
 ## Estado
 
