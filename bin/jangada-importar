@@ -95,9 +95,25 @@ def blocos(nome, t=texto):
             i += 1
         yield m.group(1).strip(), t[m.end():i - 1]
 
+def decodificar_escape(m):
+    g = m.group(1)
+    if g == 'n': return '\n'
+    if g == 'r': return '\r'
+    if g == 't': return '\t'
+    if g == '"': return '"'
+    if g == '\\': return '\\'
+    if g.startswith('u{') and g.endswith('}'):
+        try:
+            return chr(int(g[2:-1], 16))
+        except (ValueError, OverflowError):
+            return m.group(0)
+    return g
+
+def decodificar_str(s):
+    return re.sub(r'\\(u\{[0-9a-fA-F]+\}|["\\nrt])', decodificar_escape, s)
+
 def textos(s):
-    return [bytes(x, "utf-8").decode("unicode_escape").encode("latin-1").decode("utf-8")
-            for x in re.findall(r'"((?:[^"\\]|\\.)*)"', s)]
+    return [decodificar_str(x) for x in re.findall(r'"((?:[^"\\]|\\.)*)"', s)]
 
 def valor(bloco, chave):
     m = re.search(r'(?m)^\s*' + re.escape(chave) + r'\s+("?)([^"\n;]*)\1', bloco)
@@ -145,7 +161,10 @@ def teclas_niri(t):
     return normalizar(" + ".join(mods + [tecla]))
 
 def lua_str(s):
-    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r") + '"'
+
+def coment(s):
+    return re.sub(r"[\r\n]+", " ", str(s))
 
 def lua_teclas(t):
     if t.startswith("SUPER + "):
@@ -219,9 +238,9 @@ def acao_niri(acao, arg):
     if acao == "toggle-window-floating":
         return 'hl.dsp.window.float({ action = "toggle" })', "Alternar flutuante"
     if acao == "focus-workspace" and arg:
-        return f'hl.dsp.focus({{ workspace = "{arg}" }})', "Workspace " + arg
+        return f'hl.dsp.focus({{ workspace = {lua_str(arg)} }})', "Workspace " + coment(arg)
     if acao in ("move-column-to-workspace", "move-window-to-workspace") and arg:
-        return f'hl.dsp.window.move({{ workspace = "{arg}" }})', "Mover para workspace " + arg
+        return f'hl.dsp.window.move({{ workspace = {lua_str(arg)} }})', "Mover para workspace " + coment(arg)
     if acao in ("focus-workspace-down", "focus-workspace-up"):
         d = "+1" if acao.endswith("down") else "-1"
         return f'hl.dsp.focus({{ workspace = "e{d}" }})', "Workspace " + ("seguinte" if d == "+1" else "anterior")
@@ -383,7 +402,7 @@ if inicio:
     u += ["-- Programas ao iniciar"] + [f"j.ao_iniciar({lua_cmd(c)})" for c in inicio] + [""]
 if inicio_pulado:
     u += ["-- Ficaram de fora (o jangada ou o Hyprland já cuidam disto):"]
-    u += [f"--   {c}" for c in inicio_pulado] + [""]
+    u += [f"--   {coment(c)}" for c in inicio_pulado] + [""]
 if ativos:
     u += ["-- Atalhos"] + ativos + [""]
 if conflitos:
@@ -396,7 +415,7 @@ if conflitos:
     u += [""]
 if sem_par:
     u += ["-- Sem equivalente direto (ajuste à mão, se quiser):"]
-    u += [f"--   {t}: {a}" for t, a in sem_par] + [""]
+    u += [f"--   {coment(t)}: {coment(a)}" for t, a in sem_par] + [""]
 
 arquivos = {os.path.join(saida, "hypr", "usuario.lua.importado"): "\n".join(u).rstrip() + "\n"}
 
