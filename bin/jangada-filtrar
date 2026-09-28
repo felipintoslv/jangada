@@ -50,7 +50,7 @@ if (($# == 0)); then
     if ((total <= max_linhas)); then
       cat "$tmp_in"
     else
-      echo "[ok] saída condensada ($total linhas totais):"
+      echo "[saída condensada: $total linhas totais; o código de saída não é visto aqui; prefira jangada-filtrar -- COMANDO]:"
       tail -n "$max_linhas" "$tmp_in"
     fi
   fi
