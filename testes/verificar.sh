@@ -146,6 +146,9 @@ testes/update.sh || falha "testes/update.sh"
 passo "diagnóstico do jangada-verificar"
 testes/diagnostico.sh || falha "testes/diagnostico.sh"
 
+passo "hooks com a configuração vazia ou inválida"
+testes/hooks.sh || falha "testes/hooks.sh"
+
 passo "importação da configuração do niri"
 testes/importar.sh || falha "testes/importar.sh"
 

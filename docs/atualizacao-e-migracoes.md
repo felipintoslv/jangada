@@ -144,6 +144,7 @@ verdade, pular uma migração que nunca foi aplicada.
 | Arquivo | O que cobre |
 |---|---|
 | `testes/update.sh` | só aplica com `s`; sem terminal não aplica; migração nova roda e grava marca; filtro de caracteres de controle; origem reescrita recusada; com `allowed_signers`, commit sem assinatura ou com chave de fora não é aplicado, o `jangada-assinar` assina só a partir do primeiro sem assinatura, não roda sem terminal nem sem a chave e ignora o `gpg.ssh.program` do repositório; `jangada-agente-fim --integrar` não mexe na cópia instalada; `install.sh` recusa a cópia de trabalho, um worktree e `JANGADA_WORKTREES` |
+| `testes/hooks.sh` | `mesclar_hooks_claude` e `mesclar_hooks_agy` com o arquivo vazio gravam os hooks (o vazio conta como `{}`); com JSON inválido, avisam e não gravam; o `jangada-verificar` aponta o arquivo vazio ou inválido |
 | `testes/barra.sh` | exemplo de migração testada: a que acrescenta o módulo de indicadores |
 | `.github/workflows/verificar.yml` | a CI simula a instalação como usuário sem sudo e confere que nada foi escrito |
 

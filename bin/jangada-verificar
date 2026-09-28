@@ -150,7 +150,11 @@ else
 fi
 
 echo "== hooks do Claude Code"
-if [[ -f "$HOME/.claude/settings.json" ]]; then
+if [[ -f "$HOME/.claude/settings.json" ]] && ! jq -e 'type == "object"' "$HOME/.claude/settings.json" >/dev/null 2>&1; then
+  # Vazio ou inválido: o jq não devolve nada para uma entrada vazia, e a
+  # conferência abaixo dava tudo certo.
+  falha "$HOME/.claude/settings.json vazio ou inválido: o Claude não carrega hooks nem configurações dele (restaure um settings.json.jangada-*.bak e rode ./install.sh 50 da cópia instalada)"
+elif [[ -f "$HOME/.claude/settings.json" ]]; then
   # Evento por evento: uma instalação antiga tem só parte dos hooks, e o
   # grep simples dava tudo certo.
   _faltam="$(jq -r --slurpfile p "$JANGADA_PATH/default/claude/hooks.json" --arg bin "${JANGADA_PATH%/}/bin/" '
@@ -168,7 +172,9 @@ fi
 
 if command -v agy >/dev/null 2>&1 || [[ -d "$HOME/.gemini" ]]; then
   echo "== hooks do Antigravity (agy)"
-  if [[ -f "$HOME/.gemini/config/hooks.json" ]]; then
+  if [[ -f "$HOME/.gemini/config/hooks.json" ]] && ! jq -e 'type == "object"' "$HOME/.gemini/config/hooks.json" >/dev/null 2>&1; then
+    falha "$HOME/.gemini/config/hooks.json vazio ou inválido (rode jangada-migrar ou ./install.sh 50)"
+  elif [[ -f "$HOME/.gemini/config/hooks.json" ]]; then
     _faltam_agy="$(jq -r --slurpfile p "$JANGADA_PATH/default/agy/hooks.json" --arg bin "${JANGADA_PATH%/}/bin/" '
       ($p[0].jangada | keys) - [(.jangada // {}) | to_entries[]
         | select([.value[]? | (.command // empty), (.hooks[]?.command // empty)]

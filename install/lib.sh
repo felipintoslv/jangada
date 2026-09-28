@@ -256,7 +256,9 @@ mesclar_agentes_agy() {
 # Instala os hooks do jangada para o Antigravity (default/agy/hooks.json) em
 # ~/.gemini/config/hooks.json, a pasta global que o agy lê em toda conversa. O
 # arquivo é um objeto de hooks com nome; o do jangada fica na chave "jangada",
-# substituída inteira, e os demais ficam como estão.
+# substituída inteira, e os demais ficam como estão. Arquivo vazio conta como
+# {} (o jq não devolve nada para uma entrada vazia, e a mescla dava os hooks
+# por instalados sem gravar nada).
 mesclar_hooks_agy() {
   local cfg="$HOME/.gemini/config/hooks.json" novos tmp existia=0
   novos="$(sed "s|@JANGADA_PATH@|$JANGADA_PATH|g" "$JANGADA_PATH/default/agy/hooks.json")"
@@ -267,7 +269,7 @@ mesclar_hooks_agy() {
   mkdir -p "$(dirname "$cfg")"
   if [[ -f "$cfg" ]]; then existia=1; else echo '{}' >"$cfg"; fi
   tmp="$(mktemp)"
-  if ! jq --argjson novos "$novos" '. + $novos' "$cfg" >"$tmp"; then
+  if ! jq -n --argjson novos "$novos" '(first(inputs) // {}) + $novos' "$cfg" >"$tmp"; then
     rm -f "$tmp"
     aviso "não consegui ler $cfg; hooks do agy não instalados"
     return 0
@@ -288,7 +290,7 @@ mesclar_hooks_agy() {
 # pelo comando sem o caminho (a cópia instalada pode ter mudado de lugar), não
 # é duplicado; hooks alheios ficam como estão. Rodar de novo não muda nada, e
 # por isso a mesma função serve à instalação e às migrações que trazem hooks
-# novos.
+# novos. Arquivo vazio conta como {}, como em mesclar_hooks_agy.
 mesclar_hooks_claude() {
   local cfg="$HOME/.claude/settings.json" novos tmp
   executar mkdir -p "$HOME/.claude"
@@ -299,10 +301,11 @@ mesclar_hooks_claude() {
     return 0
   fi
   tmp="$(mktemp)"
-  if ! jq --argjson novos "$novos" --arg path "$JANGADA_PATH" '
+  if ! jq -n --argjson novos "$novos" --arg path "$JANGADA_PATH" '
       def chave: (.command // "") | sub("^.*/bin/"; "");
       def comandos: [.[]?.hooks[]? | chave];
-      ((.hooks // {})
+      (first(inputs) // {})
+      | ((.hooks // {})
        | walk(if type == "object" and has("command") and ((.command // "") | test("/bin/jangada-hook-"))
               then .command |= sub("^.*/bin/"; ($path + "/bin/"))
               else . end)) as $atuais

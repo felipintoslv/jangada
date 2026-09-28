@@ -296,6 +296,13 @@ instalada: `git -C ~/.local/share/jangada pull --ff-only` e
   ferramenta é negada ("tool call denied by pre-tool hook").
 - O Stop traz `fullyIdle`, `terminationReason` e `error`; não traz a última
   resposta. No jq, `.fullyIdle // true` dá `true` mesmo com `false`.
+- **Arquivo de configuração vazio passa calado pelo jq**: `jq FILTRO arq` com
+  `arq` de 0 bytes não devolve nada e sai com 0. Uma conferência que espera
+  saída vazia para "nada falta" dava os hooks por instalados, e a mescla os
+  dava por já instalados sem gravar. Leia com `jq -n '(first(inputs) // {})'`
+  ou confira antes com `jq -e 'type == "object"'`. Em 28/09/2026 o
+  `~/.claude/settings.json` real apareceu com 0 bytes, sem causa achada, e o
+  `jangada-verificar` dizia que estava tudo certo.
 - Chamadas auxiliares desligam os hooks da sessão: o `jangada-validar` chama
   o revisor com `env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1`, que os dois
   hooks respeitam.
