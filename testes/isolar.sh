@@ -15,7 +15,8 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 casa="$tmp/casa"
 mkdir -p "$casa/.ssh" "$casa/.claude" "$casa/extra" "$casa/.cache/yay/pacote" "$casa/.cache/cliphist" \
-  "$tmp/config/jangada"
+  "$casa/.gemini/antigravity-cli/bin" "$tmp/config/jangada"
+echo "exec agy" >"$casa/.gemini/antigravity-cli/bin/agentapi"
 echo "senha copiada" >"$casa/.cache/cliphist/db"
 echo "chave" >"$casa/.ssh/id_teste"
 echo "senha" >"$casa/.netrc"
@@ -74,7 +75,11 @@ conferir "caso 1: o resto do estado não é gravável" \
   bash -c '! grep -qxF "$1" "$2"' _ "$casa/.local/state/jangada" "$tmp/args"
 conferir "caso 1: fora do tmux e do agente SSH" \
   bash -c 'grep -qxF TMUX "$1" && grep -qxF SSH_AUTH_SOCK "$1" && ! grep -q "tmux-" "$1"' _ "$tmp/args"
-conferir "caso 1: pasta ausente não entra" bash -c '! grep -qxF "$1" "$2"' _ "$casa/.gemini" "$tmp/args"
+conferir "caso 1: pasta ausente não entra" bash -c '! grep -qxF "$1" "$2"' _ "$casa/.cache/paru" "$tmp/args"
+conferir "caso 1: bin do agy em camada temporária ou somente leitura" bash -c \
+  'grep -A1 -xF -- --tmp-overlay "$2" | grep -qxF "$1" || grep -A1 -xF -- --ro-bind "$2" | grep -qxF "$1"' \
+  _ "$casa/.gemini/antigravity-cli/bin" "$tmp/args"
+grep -A1 -xF -- --tmp-overlay "$tmp/args" | grep -qxF "$casa/.gemini/antigravity-cli/bin" && sobreposicao=1 || sobreposicao=0
 
 mostrar JANGADA_ISOLAR_ESCRITA="$casa/extra:"
 conferir "caso 1: JANGADA_ISOLAR_ESCRITA acrescenta gravável" seguidos --bind "$casa/extra" "$casa/extra"
@@ -200,6 +205,14 @@ if bwrap --ro-bind / / --dev /dev --proc /proc true 2>/dev/null; then
   conferir "caso 3: ~/.cache/yay não é gravável" roda "! echo x >'$casa/.cache/yay/pacote/PKGBUILD'"
   roda "echo x >'$casa/.cache/outro'"
   conferir "caso 3: gravação no ~/.cache não chega ao disco" test ! -e "$casa/.cache/outro"
+  if ((sobreposicao)); then
+    conferir "caso 3: o agy regrava o agentapi dentro" \
+      roda "echo envenenado >'$casa/.gemini/antigravity-cli/bin/agentapi'"
+  else
+    roda "echo envenenado >'$casa/.gemini/antigravity-cli/bin/agentapi'"
+  fi
+  conferir "caso 3: o agentapi regravado dentro não chega ao disco" \
+    [ "$(cat "$casa/.gemini/antigravity-cli/bin/agentapi")" = "exec agy" ]
   conferir "caso 3: histórico da área de transferência não é legível" \
     roda "! grep -q senha '$casa/.cache/cliphist/db'"
   roda "echo envenenado >'$casa/.cache/cliphist/db'"

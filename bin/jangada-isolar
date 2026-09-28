@@ -70,7 +70,8 @@ args=(--ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --ro-bind /dev/null "$m
 gravavel() { [[ -e "$1" ]] && args+=(--bind "$1" "$1"); return 0; }
 somente_leitura() { [[ -e "$1" ]] && args+=(--ro-bind "$1" "$1"); return 0; }
 # Mostra o conteúdo de fora, e o que o agente grava fica numa camada em
-# memória que some no fim. Sem suporte no bwrap ou no kernel, fica gravável.
+# memória que some no fim. Sem suporte no bwrap ou no kernel, fica gravável,
+# ou somente leitura com "ro" no segundo argumento.
 sobreposicao_ok=""
 temporario() {
   [[ -d "$1" ]] || return 0
@@ -80,6 +81,8 @@ temporario() {
   fi
   if ((sobreposicao_ok)); then
     args+=(--overlay-src "$1" --tmp-overlay "$1")
+  elif [[ "${2:-}" == ro ]]; then
+    args+=(--ro-bind "$1" "$1")
   else
     args+=(--bind "$1" "$1")
   fi
@@ -195,8 +198,11 @@ for d in shell-snapshots session-env ide; do
   mkdir -p "$c/$d" 2>/dev/null || true
   temporario "$c/$d"
 done
-# agy: os executáveis que ele chama (agentapi, webm_encoder).
-somente_leitura "$HOME/.gemini/antigravity-cli/bin"
+# agy: os executáveis que ele chama (agentapi, webm_encoder). Ele regrava o
+# agentapi antes de cada comando, e somente leitura impediria todo comando.
+# Sem a pasta, o agente a criaria no disco pela pasta do CLI, gravável.
+[[ -d "$HOME/.gemini/antigravity-cli" ]] && { mkdir -p "$HOME/.gemini/antigravity-cli/bin" 2>/dev/null || true; }
+temporario "$HOME/.gemini/antigravity-cli/bin" ro
 # Clones do AUR, caso JANGADA_ISOLAR_ESCRITA tenha liberado o ~/.cache.
 somente_leitura "$HOME/.cache/yay"
 somente_leitura "$HOME/.cache/paru"

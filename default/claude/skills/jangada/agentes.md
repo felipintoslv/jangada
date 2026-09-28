@@ -276,6 +276,10 @@ instalada: `git -C ~/.local/share/jangada pull --ff-only` e
   simbólico e aceita o frontmatter do Claude Code (`name`, `description` com
   `>`). A referência oficial vem no próprio CLI, em
   `~/.gemini/antigravity-cli/builtin/skills/agy-customizations/docs/`.
+- Antes de cada comando, o agy regrava `~/.gemini/antigravity-cli/bin/agentapi`
+  (teste de 28/09/2026). Com a pasta somente leitura, todo comando falha com
+  "failed to write agentapi script: read-only file system"; por isso o
+  `jangada-isolar` a monta em camada temporária.
 - **Não registre `PreToolUse` respondendo `{}`**: o agy trata como recusa e a
   ferramenta é negada ("tool call denied by pre-tool hook").
 - O Stop traz `fullyIdle`, `terminationReason` e `error`; não traz a última
