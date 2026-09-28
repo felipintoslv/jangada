@@ -143,6 +143,9 @@ testes/versao.sh || falha "testes/versao.sh"
 passo "atualização da cópia instalada"
 testes/update.sh || falha "testes/update.sh"
 
+passo "diagnóstico do jangada-verificar"
+testes/diagnostico.sh || falha "testes/diagnostico.sh"
+
 passo "importação da configuração do niri"
 testes/importar.sh || falha "testes/importar.sh"
 

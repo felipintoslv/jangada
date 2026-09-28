@@ -4,7 +4,7 @@ Pedido: `revisao/PROMPT_AUDITORIA.md`. Base: commit 0246292 (main).
 
 Situação: todos os 72 itens apontados pela auditoria (críticos, altos, médios e
 baixos) foram devidamente corrigidos nos commits de 27/09/2026. Das 14
-perguntas ao autor, 9 estão resolvidas, 1 em parte e 4 têm resposta com
+perguntas ao autor, 10 estão resolvidas, 1 em parte e 3 têm resposta com
 trabalho pendente; veja "Respostas do autor", no fim.
 
 Método: o repositório foi dividido em cinco partes (isolamento e sessões;
@@ -867,7 +867,7 @@ modelo de ameaça 1 do pedido. Ver "Perguntas ao autor".
 | 6 | O `agy -p` do jangada usa `--sandbox`; a confiança libera agentes, regras e MCP da pasta. | Resolvida: o `jangada-worktree-preparar` só confia no worktree se o repositório principal já estiver em `trustedWorkspaces` (caso 17 de `testes/delegar.sh`). |
 | 7 | As exceções entram numa lista explícita no `AGENTS.md`. | Resolvida: seção "Exceções à regra 1" do `AGENTS.md`, com quem grava e para quê, conferida por `testes/regra1.sh`. |
 | 8 | Deve recusar. | Resolvida: o `install.sh` recusa a cópia de trabalho, worktrees e `JANGADA_WORKTREES`, e só simula ali (`testes/update.sh`). |
-| 9 | O log é entrada não confiável. | Pendente: filtrar as linhas de erro e aviso, tirar caracteres de controle e marcar o bloco como dados. |
+| 9 | O log é entrada não confiável. | Resolvida: o diagnóstico leva só os erros e avisos do `hyprland.log`, sem caracteres de controle nem crases, e o log e o relatório de falha vão marcados como dados, também no pedido ao agente (`testes/diagnostico.sh`). |
 | 10 | Não é intencional. | Resolvida: o `jangada-agente --snapshot` cria o snapshot fora da limpeza do snapper, marcado com `jangada=agente`, e o `jangada-snapshot --agente` guarda só os `JANGADA_SNAPSHOTS_AGENTE` mais recentes (`testes/snapshot.sh`). |
 | 11 | O cache ganha prazo de retenção. | Pendente: definir o prazo e a agregação dos dias antigos. |
 | 12 | A pasta atual não pode entrar. | Resolvida: o `bootstrap.lua` tira as entradas `./` do `package.path` e do `package.cpath`; a simulação em `testes/verificar.sh` roda com `usuario.lua` na pasta atual. |
