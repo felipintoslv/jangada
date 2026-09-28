@@ -89,7 +89,9 @@ subir() {
   local i
   for ((i = 0; i < 100; i++)); do
     [[ -s "$errof" ]] && erro "$(cat "$errof")"
-    if curl -s --max-time 1 "$url" 2>/dev/null | grep -q "Indicadores do jangada"; then
+    # A página passa do tamanho do cano: com grep -q, o grep sai no título e
+    # o curl falha ao escrever o resto, o que o pipefail conta como falha.
+    if [[ "$(curl -s --max-time 1 "$url" 2>/dev/null)" == *"Indicadores do jangada"* ]]; then
       avisar_barra
       return 0
     fi
