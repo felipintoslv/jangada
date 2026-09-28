@@ -48,8 +48,10 @@ else
     fi
   fi
 
-  copia_seguranca /etc/snapper/configs/root
-  como_root install -m 0644 "$JANGADA_PATH/default/snapper/root" /etc/snapper/configs/root
+  if ! cmp -s "$JANGADA_PATH/default/snapper/root" /etc/snapper/configs/root 2>/dev/null; then
+    copia_seguranca /etc/snapper/configs/root
+    como_root install -m 0644 "$JANGADA_PATH/default/snapper/root" /etc/snapper/configs/root
+  fi
   como_root systemctl disable --now snapper-timeline.timer || true
   como_root systemctl enable --now snapper-cleanup.timer || aviso "snapper-cleanup.timer não habilitado"
 

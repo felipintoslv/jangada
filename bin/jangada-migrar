@@ -8,6 +8,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 JANGADA_SIMULAR="${JANGADA_SIMULAR:-0}"
 feitas="$JANGADA_ESTADO/migracoes"
 mkdir -p "$feitas"
+if command -v flock >/dev/null 2>&1; then
+  exec 9<"$feitas"
+  flock -w 60 9 || { echo "outra migração em andamento" >&2; exit 1; }
+fi
 n=0
 for m in "$JANGADA_PATH"/migrations/*.sh; do
   [[ -e "$m" ]] || continue

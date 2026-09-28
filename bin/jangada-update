@@ -48,10 +48,10 @@ confirmar_novidades() {
 opcoes_merge=(--ff-only --quiet)
 
 echo "==> repositório jangada (canal $JANGADA_CANAL)"
-if [[ -z "$(g status --porcelain --ignore-submodules=all)" ]]; then
+if estado="$(g status --porcelain --ignore-submodules=all 2>&1)" && [[ -z "$estado" ]]; then
   # Só busca: nada chega à cópia instalada antes da confirmação abaixo.
   g fetch --quiet origin || echo "!! não consegui buscar o repositório de origem"
-  ramo_atual="$(g rev-parse --abbrev-ref HEAD)"
+  ramo_atual="$(g rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
   if [[ "$ramo_atual" != "$JANGADA_CANAL" ]]; then
     if g show-ref --verify --quiet "refs/heads/$JANGADA_CANAL"; then
       g switch --quiet "$JANGADA_CANAL"
@@ -69,7 +69,7 @@ if [[ -z "$(g status --porcelain --ignore-submodules=all)" ]]; then
   antes="$(g rev-parse HEAD)"
   novo="$(g rev-parse --verify --quiet '@{upstream}^{commit}' 2>/dev/null || true)"
   if [[ -z "$novo" ]]; then
-    echo "!! o ramo $(g rev-parse --abbrev-ref HEAD) não acompanha um ramo da origem; nada a aplicar"
+    echo "!! o ramo $(g rev-parse --abbrev-ref HEAD 2>/dev/null || echo "$ramo_atual") não acompanha um ramo da origem; nada a aplicar"
   elif [[ "$novo" == "$antes" ]] || g merge-base --is-ancestor "$novo" "$antes"; then
     echo "jangada já atualizado"
   elif ! g merge-base --is-ancestor "$antes" "$novo"; then
@@ -87,24 +87,47 @@ if [[ -z "$(g status --porcelain --ignore-submodules=all)" ]]; then
       | tr -d '\000-\010\013-\037\177' | sed 's/^/   /' || true
   fi
 else
-  echo "!! há alterações locais em $JANGADA_PATH; a cópia instalada não foi atualizada"
+  if [[ -n "${estado:-}" ]]; then
+    echo "!! o repositório em $JANGADA_PATH não está limpo ou reportou erro; a cópia instalada não foi atualizada:"
+    printf '%s\n' "$estado" | sed 's/^/   /'
+  else
+    echo "!! há alterações locais em $JANGADA_PATH; a cópia instalada não foi atualizada"
+  fi
 fi
 
 echo "==> atualizações disponíveis"
-atualizacoes="$(checkupdates 2>/dev/null || true)"
+atualizacoes=""
+if ! atualizacoes="$(checkupdates 2>/dev/null)"; then
+  rc=$?
+  if ((rc != 2)); then
+    echo "!! checkupdates falhou (código $rc)"
+  fi
+  atualizacoes=""
+fi
+
+atualizacoes_aur=""
+for aur_cmd in paru yay; do
+  if command -v "$aur_cmd" >/dev/null 2>&1; then
+    atualizacoes_aur="$("$aur_cmd" -Qua 2>/dev/null || true)"
+    break
+  fi
+done
+
 if [[ -z "$atualizacoes" ]]; then
   echo "nenhuma atualização nos repositórios oficiais"
 else
   printf '%s\n' "$atualizacoes"
-  hypr="$(awk '{print $1}' <<<"$atualizacoes" | grep -E "$conjunto_hypr" || true)"
-  if [[ -n "$hypr" ]]; then
-    echo
-    echo "!! esta atualização muda o conjunto do Hyprland:"
-    grep -E "^($(paste -sd'|' <<<"$hypr")) " <<<"$atualizacoes" | sed 's/^/   /'
-    echo "   notas de versão: https://github.com/hyprwm/Hyprland/releases"
-    read -r -p "continuar com a atualização completa? [s/N] " r
-    [[ "${r,,}" == s* ]] || { echo "atualização cancelada"; exit 0; }
-  fi
+fi
+
+todas_atualizacoes="${atualizacoes}${atualizacoes:+$'\n'}${atualizacoes_aur}"
+hypr="$(awk '{print $1}' <<<"$todas_atualizacoes" | grep -E "$conjunto_hypr" || true)"
+if [[ -n "$hypr" ]]; then
+  echo
+  echo "!! esta atualização muda o conjunto do Hyprland:"
+  grep -E "^($(paste -sd'|' <<<"$hypr")) " <<<"$todas_atualizacoes" | sed 's/^/   /'
+  echo "   notas de versão: https://github.com/hyprwm/Hyprland/releases"
+  read -r -p "continuar com a atualização completa? [s/N] " r || r=n
+  [[ "${r,,}" == s* ]] || { echo "atualização cancelada"; exit 0; }
 fi
 
 if [[ "$(findmnt -no FSTYPE /)" != "btrfs" ]] || ! pacman -Qq snap-pac >/dev/null 2>&1; then
@@ -136,12 +159,14 @@ fi
 
 if [[ -z "$falhou" ]]; then
   echo "==> migrações"
-  "$JANGADA_PATH/bin/jangada-migrar"
-  if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+  "$JANGADA_PATH/bin/jangada-migrar" || falhou="migrações"
+  if [[ -z "$falhou" && -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
     echo "==> recarregando o Hyprland"
     "$JANGADA_PATH/bin/jangada-recarregar" || echo "!! há erros de configuração; veja acima"
   fi
-else
+fi
+
+if [[ -n "$falhou" ]]; then
   # Pacote do AUR compilado contra a versão anterior de uma biblioteca do
   # repositório oficial pode não abrir mais: recarregar agora trocaria uma
   # sessão que funciona por uma quebrada.

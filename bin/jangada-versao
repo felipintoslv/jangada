@@ -55,7 +55,7 @@ mudancas() {
     else
       outras+="- $assunto"$'\n'
     fi
-  done < <(g log --no-merges --format=%s "$intervalo")
+  done < <(g log --no-merges --format=%s "$intervalo" | tr -d '\000-\010\013-\037\177')
   local sep=""
   [[ -n "$novas" ]] && { printf '### Novidades\n\n%s' "$novas"; sep=1; }
   [[ -n "$correcoes" ]] && { [[ -n "$sep" ]] && echo; printf '### Correções\n\n%s' "$correcoes"; sep=1; }

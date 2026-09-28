@@ -249,7 +249,7 @@ mesclar_agentes_agy() {
     return 0
   fi
   ((existia)) && copia_seguranca "$cfg"
-  mv "$tmp" "$cfg"
+  cat "$tmp" >"$cfg" && rm -f "$tmp"
   ok "subagentes do agy registrados em $cfg"
 }
 
@@ -279,7 +279,7 @@ mesclar_hooks_agy() {
   fi
   # Arquivo criado agora não precisa de cópia de segurança.
   ((existia)) && copia_seguranca "$cfg"
-  mv "$tmp" "$cfg"
+  cat "$tmp" >"$cfg" && rm -f "$tmp"
   ok "hooks do agy instalados em $cfg"
 }
 
@@ -299,18 +299,21 @@ mesclar_hooks_claude() {
     return 0
   fi
   tmp="$(mktemp)"
-  if ! jq --argjson novos "$novos" '
+  if ! jq --argjson novos "$novos" --arg path "$JANGADA_PATH" '
       def chave: (.command // "") | sub("^.*/bin/"; "");
       def comandos: [.[]?.hooks[]? | chave];
-      .hooks = (
-        (.hooks // {}) as $atuais
-        | reduce ($novos.hooks | keys[]) as $ev ($atuais;
+      ((.hooks // {})
+       | walk(if type == "object" and has("command") and ((.command // "") | test("/bin/jangada-hook-"))
+              then .command |= sub("^.*/bin/"; ($path + "/bin/"))
+              else . end)) as $atuais
+      | .hooks = (
+          reduce ($novos.hooks | keys[]) as $ev ($atuais;
             (.[$ev] // []) as $lista
             | .[$ev] = $lista + [
                 $novos.hooks[$ev][]
                 | select((.hooks | map(chave)) - ($lista | comandos) | length > 0)
               ])
-      )' "$cfg" >"$tmp"; then
+        )' "$cfg" >"$tmp"; then
     rm -f "$tmp"
     aviso "não consegui ler $cfg; hooks não mesclados"
     return 0
@@ -322,6 +325,6 @@ mesclar_hooks_claude() {
     return 0
   fi
   copia_seguranca "$cfg"
-  mv "$tmp" "$cfg"
+  cat "$tmp" >"$cfg" && rm -f "$tmp"
   ok "hooks do Claude Code mesclados em $cfg"
 }
