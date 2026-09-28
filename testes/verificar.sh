@@ -143,9 +143,10 @@ testes/update.sh || falha "testes/update.sh"
 passo "importação da configuração do niri"
 testes/importar.sh || falha "testes/importar.sh"
 
-passo "utilitários (mapear, rede, calendário, reverter)"
+passo "utilitários (mapear, rede, bluetooth, calendário, reverter)"
 testes/mapear.sh || falha "testes/mapear.sh"
 testes/rede.sh || falha "testes/rede.sh"
+testes/bluetooth.sh || falha "testes/bluetooth.sh"
 testes/calendario.sh || falha "testes/calendario.sh"
 testes/reverter.sh || falha "testes/reverter.sh"
 

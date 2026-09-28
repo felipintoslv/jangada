@@ -88,8 +88,19 @@ escanear() {
 
   if [[ -n "$mac" ]]; then
     notify-send -a jangada -u low "Bluetooth" "Pareando com $nome..." 2>/dev/null || true
-    bluetoothctl pair "$mac" >/dev/null 2>&1 || true
-    bluetoothctl trust "$mac" >/dev/null 2>&1 || true
+    if ! bluetoothctl pair "$mac" >/dev/null 2>&1; then
+      notify-send -a jangada -u normal "Bluetooth" "Não foi possível parear com $nome" 2>/dev/null || true
+      return 0
+    fi
+    # Parear não implica confiar: um aparelho confiável se reconecta sozinho
+    # sempre que estiver por perto. Só confia quem escolher no menu; fechar o
+    # menu vale como não confiar.
+    local op
+    op="$(printf '%s\n' \
+      "Não confiar (conecta só quando você pedir)" \
+      "Confiar (reconecta sozinho quando estiver por perto)" |
+      menu_fuzzel "confiar em $nome")" || op=""
+    [[ "$op" == Confiar* ]] && bluetoothctl trust "$mac" >/dev/null 2>&1 || true
     bluetoothctl connect "$mac" >/dev/null 2>&1 || true
   fi
 }
