@@ -4,7 +4,8 @@
 # pesquisar na web ou verificar antes do jangada-validar.
 #
 # Uso: jangada-delegar PAPEL "pedido" [--arquivo SAIDA]
-#   PAPEL             explorador, leitor, pesquisador ou verificador
+#   PAPEL             explorador, leitor, pesquisador, verificador,
+#                     auditor, arquiteto, otimizador ou redator
 #                     (default/agy/agents/PAPEL/agent.md)
 #   --arquivo SAIDA   grava o relatório completo em SAIDA
 #
@@ -49,9 +50,9 @@ while (($#)); do
   esac
 done
 [[ -n "$papel" && -n "$pedido" ]] || uso
-declare -A esforco=([explorador]=low [leitor]=medium [pesquisador]=medium [verificador]=high)
+declare -A esforco=([explorador]=low [leitor]=medium [pesquisador]=medium [verificador]=high [auditor]=high [arquiteto]=high [otimizador]=medium [redator]=low)
 if [[ -z "${esforco[$papel]:-}" ]]; then
-  echo "jangada-delegar: papel desconhecido: $papel (explorador, leitor, pesquisador ou verificador)" >&2
+  echo "jangada-delegar: papel desconhecido: $papel (explorador, leitor, pesquisador, verificador, auditor, arquiteto, otimizador ou redator)" >&2
   exit 2
 fi
 modelo="gemini-3.8-flash-${esforco[$papel]}"

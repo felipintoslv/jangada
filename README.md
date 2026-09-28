@@ -286,13 +286,13 @@ Ganchos do usuário ficam em `~/.config/jangada/ganchos/EVENTO` ou
 
 ### Subagentes
 
-Quatro papéis, com o mesmo nome e o mesmo texto no Claude Code
+Oito papéis, com o mesmo nome e o mesmo texto no Claude Code
 (`default/claude/agents/`, ligados em `~/.claude/agents/`) e no agy
 (`default/agy/agents/`, registrados em `~/.gemini/config/agents.json`). Nenhum
 edita arquivos, e todos citam caminho e linha, página, célula ou URL em cada
-afirmação. O explorador e o pesquisador não têm terminal; o leitor e o
-verificador têm, e o "só leitura" deles vale pela instrução e, no agy, pelo
-`permissions.allow`.
+afirmação. O explorador, o pesquisador, o auditor, o arquiteto, o otimizador e o
+redator não têm terminal; o leitor e o verificador têm, e o "só leitura" deles
+vale pela instrução e, no agy, pelo `permissions.allow`.
 
 | Papel | Faz | Claude | agy |
 |---|---|---|---|
@@ -300,6 +300,10 @@ verificador têm, e o "só leitura" deles vale pela instrução e, no agy, pelo
 | `leitor` | trechos pedidos de PDF, planilha ou relatório | haiku | flash (medium) |
 | `pesquisador` | documentação, normas e dados públicos na web | haiku | flash (medium) |
 | `verificador` | testes, lint e regras do AGENTS.md antes do `jangada-validar` | sonnet | flash (high) |
+| `auditor` | auditoria de segurança (injeções, caminhos, permissões, CWEs) | sonnet | flash (high) |
+| `arquiteto` | estrutura de módulos, contratos de API e impacto de mudanças | sonnet | flash (high) |
+| `otimizador` | gargalos de desempenho, complexidade e uso de memória | sonnet | flash (medium) |
+| `redator` | conformidade textual, clareza e regras de escrita do AGENTS.md | haiku | flash (low) |
 
 O item 8 do protocolo diz a quem delegar, conforme `JANGADA_DELEGAR` do
 perfil (ou global), e o seletor mostra o destino:
@@ -311,9 +315,9 @@ perfil (ou global), e o seletor mostra o destino:
 | `nativo` | `agy`, `agy-agy` (padrão do agy) | subagentes do próprio agy (`invoke_subagent`) |
 
 `jangada-delegar PAPEL "pedido" [--arquivo SAIDA]` roda o agente do papel
-no agy (Flash low no explorador, medium no leitor e no pesquisador, high no
-verificador), com `--sandbox`, na raiz do repositório atual, e imprime só o
-relatório. A pasta precisa ser confiável para o agy (o worktree da sessão
+no agy (Flash low no explorador e no redator, medium no leitor, no pesquisador e
+no otimizador, high no verificador, no auditor e no arquiteto), com `--sandbox`,
+na raiz do repositório atual, e imprime só o relatório. A pasta precisa ser confiável para o agy (o worktree da sessão
 é, e as outras só se você já respondeu à pergunta do agy nelas): o
 `jangada-delegar` não confia por conta própria, porque a confiança libera
 agentes, regras e MCP da própria pasta. Acima de 600 palavras

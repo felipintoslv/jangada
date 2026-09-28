@@ -16,7 +16,7 @@ jqok() { jq "$@" >/dev/null; }
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-papeis=(explorador leitor pesquisador verificador)
+papeis=(explorador leitor pesquisador verificador auditor arquiteto otimizador redator)
 
 # Frontmatter e corpo de um agent.md: o corpo começa depois do segundo "---".
 cabeca() { awk 'NR > 1 && /^---$/ { exit } NR > 1' "$1"; }
@@ -24,7 +24,7 @@ corpo() { awk 'f; /^---$/ && ++n == 2 { f = 1 }' "$1"; }
 campo() { cabeca "$1" | sed -n "s/^$2: //p"; }
 
 # Papéis: mesmos nomes e mesmo texto nos dois agentes; só o frontmatter muda.
-declare -A modelo_claude=([explorador]=haiku [leitor]=haiku [pesquisador]=haiku [verificador]=sonnet)
+declare -A modelo_claude=([explorador]=haiku [leitor]=haiku [pesquisador]=haiku [verificador]=sonnet [auditor]=sonnet [arquiteto]=sonnet [otimizador]=sonnet [redator]=haiku)
 for p in "${papeis[@]}"; do
   c="default/claude/agents/$p.md"
   a="default/agy/agents/$p/agent.md"
