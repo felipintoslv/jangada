@@ -4,8 +4,8 @@ Pedido: `revisao/PROMPT_AUDITORIA.md`. Base: commit 0246292 (main).
 
 Situação: todos os 72 itens apontados pela auditoria (críticos, altos, médios e
 baixos) foram devidamente corrigidos nos commits de 27/09/2026. Das 14
-perguntas ao autor, 8 estão resolvidas e 6 têm resposta com trabalho
-pendente; veja "Respostas do autor", no fim.
+perguntas ao autor, 8 estão resolvidas, 1 em parte e 5 têm resposta com
+trabalho pendente; veja "Respostas do autor", no fim.
 
 Método: o repositório foi dividido em cinco partes (isolamento e sessões;
 atualização e instalação; validar, delegar e segredos; Hyprland, barra e
@@ -864,12 +864,12 @@ modelo de ameaça 1 do pedido. Ver "Perguntas ao autor".
 | 3 | Dá para recompor. | Resolvida: o `restaurar` do `jangada-agentes` monta o comando dos campos conferidos. |
 | 4 | Sim, com chave SSH fora do isolamento e `allowed_signers` fora da cópia de trabalho. | Pendente: assinar os commits e ligar `--verify-signatures` no `jangada-update`. |
 | 5 | Roda, e nada do repositório avaliado pode rodar fora do isolamento. | Parcial: o R não lê mais o `.Rprofile`, o `.Renviron` nem o `.lintr` do worktree (caso 12g de `testes/validar.sh`). Pendente: rodar o `.jangada/validar.sh` pelo `jangada-isolar`. |
-| 6 | O `agy -p` do jangada usa `--sandbox`; a confiança libera agentes, regras e MCP da pasta. | Pendente: o `jangada-worktree-preparar` deve confiar no worktree só se o repositório principal já for confiável. |
+| 6 | O `agy -p` do jangada usa `--sandbox`; a confiança libera agentes, regras e MCP da pasta. | Resolvida: o `jangada-worktree-preparar` só confia no worktree se o repositório principal já estiver em `trustedWorkspaces` (caso 17 de `testes/delegar.sh`). |
 | 7 | As exceções entram numa lista explícita no `AGENTS.md`. | Pendente: a lista e um teste que a confira. |
 | 8 | Deve recusar. | Resolvida: o `install.sh` recusa a cópia de trabalho, worktrees e `JANGADA_WORKTREES`, e só simula ali (`testes/update.sh`). |
 | 9 | O log é entrada não confiável. | Pendente: filtrar as linhas de erro e aviso, tirar caracteres de controle e marcar o bloco como dados. |
-| 10 | Não é intencional. | Pendente: limpeza própria para os snapshots do agente. |
+| 10 | Não é intencional. | Resolvida: o `jangada-agente --snapshot` cria o snapshot fora da limpeza do snapper, marcado com `jangada=agente`, e o `jangada-snapshot --agente` guarda só os `JANGADA_SNAPSHOTS_AGENTE` mais recentes (`testes/snapshot.sh`). |
 | 11 | O cache ganha prazo de retenção. | Pendente: definir o prazo e a agregação dos dias antigos. |
 | 12 | A pasta atual não pode entrar. | Resolvida: o `bootstrap.lua` tira as entradas `./` do `package.path` e do `package.cpath`; a simulação em `testes/verificar.sh` roda com `usuario.lua` na pasta atual. |
-| 13 | Parear não implica confiar. | Pendente: `trust` só por escolha no menu. |
+| 13 | Parear não implica confiar. | Resolvida: depois do pareamento o `jangada-bluetooth` pergunta se confia, e fechar o menu vale como não confiar (`testes/bluetooth.sh`). |
 | 14 | Sim. | Resolvida: `setsid -f` em todo clique que abre janela, conferido no caso 8 de `testes/barra.sh`, com migração para a cópia própria. |
