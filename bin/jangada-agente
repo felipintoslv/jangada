@@ -268,7 +268,7 @@ estado_dir="$JANGADA_ESTADO/agentes"
 mkdir -p "$estado_dir"
 
 if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
-  ((snapshot)) && "$JANGADA_PATH/bin/jangada-snapshot" "antes do agente $sessao" || true
+  ((snapshot)) && "$JANGADA_PATH/bin/jangada-snapshot" --agente "antes do agente $sessao" || true
 
   cmd_agente="$agente"
   if [[ -n "$perfil" ]]; then

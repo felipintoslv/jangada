@@ -1,6 +1,7 @@
 # Configuração do snapper para a raiz, instalada pelo jangada.
 # Guarda poucos snapshots, só os criados antes e depois do pacman (snap-pac)
-# e os manuais (jangada-snapshot). Sem linha do tempo.
+# e os manuais (jangada-snapshot). Sem linha do tempo. Os do agente
+# (jangada-snapshot --agente) ficam fora desta limpeza e têm a própria.
 SUBVOLUME="/"
 FSTYPE="btrfs"
 ALLOW_USERS=""
