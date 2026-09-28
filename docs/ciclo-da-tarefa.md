@@ -97,7 +97,9 @@ flowchart TD
   linhas acrescentadas, aviso de `Co-Authored-By` e, por último, o
   `.jangada/validar.sh` do projeto. As regras vêm da base, para a entrega não
   afrouxar o critério que a avalia. O R roda sem o `.Rprofile`, o `.Renviron`
-  e o `.lintr` do worktree, que são código do repositório avaliado.
+  e o `.lintr` do worktree, que são código do repositório avaliado. Pelo
+  mesmo motivo, o `.jangada/validar.sh` roda pelo `jangada-isolar`, que numa
+  sessão isolada roda direto e fora dela abre o bwrap.
 - **Revisor.** O hook do revisor fica desligado, para o Stop dele não marcar
   a sessão como concluída. Pedido acima de 131.072 bytes leva o diff num
   arquivo que o agy lê. Sem o agente `revisor` instalado, o agy cairia no

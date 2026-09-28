@@ -263,7 +263,9 @@ O fluxo completo, com fluxogramas, está em
    os três são código do repositório avaliado, e o `jangada-validar` também
    roda fora do isolamento. O `AGENTS.md` e o `CLAUDE.md` vão ao revisor lidos da base,
    e uma entrega que muda o `.jangada/validar.sh` pede ao revisor que confira
-   se a validação ficou mais fraca. Commit com `Co-Authored-By` gera aviso.
+   se a validação ficou mais fraca. O `.jangada/validar.sh` roda pelo
+   `jangada-isolar`: grava no projeto, mas não fora dele, e sem o bwrap a
+   validação reprova. Commit com `Co-Authored-By` gera aviso.
    Na escrita, o revisor aponta só casos objetivos nas linhas novas: código
    comentado, comentário que narra a mudança, repete o código ou fala com o
    revisor, enchimento ("vale ressaltar", "basicamente"), documentação que

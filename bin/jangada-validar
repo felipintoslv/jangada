@@ -672,12 +672,15 @@ verificar_local() {
     printf 'jangada-validar: aviso: commit com linha Co-Authored-By (o protocolo pede sem):\n%s\n' "$coautor" >&2
   fi
 
-  # 6. Validação do projeto se existir e não estiver em recursão
+  # 6. Validação do projeto se existir e não estiver em recursão. O script é
+  # código do repositório avaliado, na versão da entrega: roda pelo
+  # jangada-isolar, que numa sessão isolada roda direto e fora dela abre o
+  # bwrap (sem o bwrap, recusa, e a validação falha).
   if [[ -z "${JANGADA_VALIDAR_EM_CURSO:-}" ]]; then
     export JANGADA_VALIDAR_EM_CURSO=1
     if [[ -x "$dir/.jangada/validar.sh" ]]; then
       local val_out
-      if ! val_out="$(cd "$dir" && .jangada/validar.sh 2>&1)"; then
+      if ! val_out="$(cd "$dir" && "$JANGADA_PATH/bin/jangada-isolar" -- .jangada/validar.sh 2>&1)"; then
         erros+="falha na validação do projeto (.jangada/validar.sh):"$'\n'"$val_out"$'\n'
       fi
     fi

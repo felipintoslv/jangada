@@ -713,6 +713,41 @@ chmod +x "$tmp/projeto/.jangada/validar.sh"
 validar 'STATUS: APROVADO'
 conferir "caso 20: .jangada/validar.sh novo ou alterado vai ao revisor para conferir" \
   grep -q "altera o .jangada/validar.sh" "$tmp/falso/agy.pedido"
+# Caso 20b: o .jangada/validar.sh é código do repositório avaliado e roda
+# pelo jangada-isolar: grava no projeto, mas não fora dele.
+if command -v bwrap >/dev/null 2>&1; then
+  sessao_de claude
+  printf '#!/usr/bin/env bash
+echo "${JANGADA_ISOLADO:-}" >.jangada/isolado
+: >"%s" 2>/dev/null
+exit 0
+' \
+    "$tmp/validar-fora" >"$tmp/projeto/.jangada/validar.sh"
+  validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 20b: o .jangada/validar.sh isolado passa" [ "$rc" = 0 ]
+  conferir "caso 20b: o .jangada/validar.sh roda no isolamento" \
+    [ "$(cat "$tmp/projeto/.jangada/isolado" 2>/dev/null)" = 1 ]
+  conferir "caso 20b: o .jangada/validar.sh não grava fora do projeto" test ! -e "$tmp/validar-fora"
+else
+  echo "bwrap ausente; caso 20b ignorado"
+fi
+# Caso 20c: sem o bwrap, o .jangada/validar.sh não roda e a validação reprova.
+sem_bwrap="$tmp/sem-bwrap"
+mkdir -p "$sem_bwrap"
+IFS=: read -ra dirs_path <<<"$tmp/bin:$PATH"
+for d in "${dirs_path[@]}"; do
+  for f in "$d"/*; do
+    n="${f##*/}"
+    [[ "$n" == bwrap || -e "$sem_bwrap/$n" || ! -x "$f" ]] || ln -s "$f" "$sem_bwrap/$n"
+  done
+done
+sessao_de claude
+printf '#!/usr/bin/env bash\n: >.jangada/rodou\nexit 0\n' >"$tmp/projeto/.jangada/validar.sh"
+chmod +x "$tmp/projeto/.jangada/validar.sh"
+PATH="$sem_bwrap" validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 20c: sem o bwrap, a validação reprova" [ "$rc" = 3 ]
+conferir "caso 20c: sem o bwrap, o .jangada/validar.sh não roda" test ! -e "$tmp/projeto/.jangada/rodou"
+conferir "caso 20c: o motivo é o bwrap" grep -q "bwrap não instalado" "$tmp/saida.log"
 rm -rf "$tmp/projeto/.jangada"
 
 # Caso 21: a prévia do jangada-agentes mostra o último parecer da sessão, não o
