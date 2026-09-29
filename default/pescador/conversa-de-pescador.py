@@ -28,6 +28,7 @@ import os
 import re
 import json
 import time
+import select
 import shutil
 import argparse
 import subprocess
@@ -908,6 +909,38 @@ def processar_consulta(
     return registro
 
 
+def ler_entrada_usuario(prompt_str: str) -> str:
+    """Lê a entrada do usuário no chat, drenando automaticamente linhas coladas em bloco."""
+    try:
+        primeira_linha = input(prompt_str)
+    except (EOFError, KeyboardInterrupt):
+        raise
+
+    linhas = [primeira_linha]
+
+    # Se colou um bloco de texto com múltiplas linhas, drena o buffer do stdin
+    if sys.stdin.isatty():
+        while True:
+            r, _, _ = select.select([sys.stdin], [], [], 0.05)
+            if r:
+                linha_extra = sys.stdin.readline()
+                if not linha_extra:
+                    break
+                linhas.append(linha_extra.rstrip("\r\n"))
+            else:
+                break
+    else:
+        resto = sys.stdin.read()
+        if resto:
+            linhas.extend(resto.splitlines())
+
+    texto = "\n".join(linhas).strip()
+    if len(linhas) > 1 and texto:
+        print(f"{C_DIM}[Colagem detectada: {len(linhas)} linhas reunidas em turno único]{C_RESET}")
+
+    return texto
+
+
 def modo_interativo(sessao_id: str = None, par: str = "claude-agy", rodadas: int = 2, falar_voz: bool = False):
     """Loop conversacional interativo com encadeamento de turnos e gerenciamento de sessões."""
     print(BANNER)
@@ -928,7 +961,7 @@ def modo_interativo(sessao_id: str = None, par: str = "claude-agy", rodadas: int
     while True:
         try:
             prompt_str = f"{C_BOLD}{C_CYAN}pescador [{sessao_atual}] > {C_RESET}"
-            entrada = input(prompt_str).strip()
+            entrada = ler_entrada_usuario(prompt_str)
 
             if not entrada:
                 continue
@@ -997,10 +1030,26 @@ def modo_interativo(sessao_id: str = None, par: str = "claude-agy", rodadas: int
                         print(f" {C_CYAN}Turno {t_num}:{C_RESET} {p}")
                     print()
                 continue
+            elif entrada in ("/colar", "/bloco", "/multi"):
+                print(f"\n{C_CYAN}Modo de colagem ativado.{C_RESET}")
+                print(f"{C_DIM}Cole ou digite o texto. Finalize com uma linha em branco ou digite /fim:{C_RESET}")
+                bloco = []
+                while True:
+                    try:
+                        linha = input().rstrip("\r\n")
+                        if linha.strip() == "/fim" or (not linha and bloco):
+                            break
+                        bloco.append(linha)
+                    except (KeyboardInterrupt, EOFError):
+                        break
+                entrada = "\n".join(bloco).strip()
+                if not entrada:
+                    continue
             elif entrada in ("/ajuda", "/help", "ajuda", "help"):
                 print(f"\n{C_BOLD}Comandos do Chat:{C_RESET}")
                 print("  /par [nome]    - Alterna o par de modelos (claude-agy, agy-claude, agy-agy, claude-claude)")
                 print("  /rodadas [N]   - Ajusta o número de rodadas de refinamento/purificação (1 a 4)")
+                print("  /colar         - Modo de colagem multilinha (listas de deck, código ou blocos)")
                 print("  /sessao [nome] - Mostra ou alterna a sessão encadeada ativa")
                 print("  /novo          - Inicia uma nova conversa limpa")
                 print("  /contexto      - Mostra os turnos acumulados na sessão atual")
