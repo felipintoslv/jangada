@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Atalho para conversa-de-pescador no padrão de comandos jangada-*.
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+dir_raiz="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
+cmd="$dir_raiz/conversa-de-pescador"
+[[ -x "$cmd" ]] || cmd="$JANGADA_PATH/bin/conversa-de-pescador"
+
+exec "$cmd" "$@"

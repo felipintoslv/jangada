@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Conversa de Pescador: chat com auditoria multi-agente, busca de fontes e voz em português.
+#
+# Uso:
+#   conversa-de-pescador [PERGUNTA] [OPÇÕES]
+#
+# Opções:
+#   -f, --falar       Narra a resposta e o veredito em voz alta via Piper TTS
+#   -o, --ouvir       Grava a pergunta pelo microfone (PipeWire)
+#   -r, --rapido      Resposta direta sem a rodada completa de auditoria
+#   --json            Emite o resultado estruturado em JSON
+#   --historico       Exibe o histórico de consultas
+#   -h, --help, --ajuda  Mostra esta mensagem de ajuda
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+dir_raiz="$(dirname "$(realpath "${BASH_SOURCE[0]}")")/.."
+script="$dir_raiz/default/pescador/conversa-de-pescador.py"
+[[ -f "$script" ]] || script="$JANGADA_PATH/default/pescador/conversa-de-pescador.py"
+
+exec python3 "$script" "$@"
