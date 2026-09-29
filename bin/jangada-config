@@ -19,6 +19,7 @@ JANGADA_VALIDAR_REVISOR="${JANGADA_VALIDAR_REVISOR:-}"
 # dele; definido, mesmo vazio, substitui a lista.
 JANGADA_AGENTE_ISOLAR="${JANGADA_AGENTE_ISOLAR:-1}"
 JANGADA_ISOLAR_ESCRITA="${JANGADA_ISOLAR_ESCRITA:-}"
+JANGADA_DELEGAR="${JANGADA_DELEGAR:-}"
 JANGADA_PROJETOS="$HOME/Projetos"
 JANGADA_WORKTREES="$HOME/.local/share/jangada-worktrees"
 JANGADA_PAPEL=
@@ -73,7 +74,7 @@ fi
 export JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_INTERFACE JANGADA_TERMINAL \
   JANGADA_AGENTE JANGADA_AGENTE_ARGS JANGADA_VALIDAR_REVISOR JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL \
   JANGADA_PAPEL_AJUSTE JANGADA_TEMA_ESQUEMA JANGADA_BARRA_POSICAO JANGADA_GPU \
-  JANGADA_REPO JANGADA_CANAL JANGADA_AGENTE_ISOLAR JANGADA_ISOLAR_ESCRITA JANGADA_PAINEL_PORTA \
+  JANGADA_REPO JANGADA_CANAL JANGADA_AGENTE_ISOLAR JANGADA_ISOLAR_ESCRITA JANGADA_DELEGAR JANGADA_PAINEL_PORTA \
   JANGADA_ASSINATURA_CHAVE
 # Só quando definido: ausente e vazio têm sentidos diferentes no jangada-isolar.
 if [[ -n "${JANGADA_ISOLAR_OCULTAR+x}" ]]; then export JANGADA_ISOLAR_OCULTAR; fi
@@ -388,15 +389,11 @@ jangada_alterar_estado() {
   return $rc
 }
 
-# Notificação do sistema compatível com Linux (notify-send) e macOS (osascript).
+# Notificação do sistema via notify-send.
 jangada_notificar() {
   local titulo="$1" msg="$2"
   if command -v notify-send >/dev/null 2>&1; then
     notify-send -a jangada "$titulo" "$msg" 2>/dev/null || true
-  elif command -v osascript >/dev/null 2>&1; then
-    osascript -e 'on run argv' \
-      -e 'display notification (item 2 of argv) with title (item 1 of argv)' \
-      -e 'end run' "$titulo" "$msg" 2>/dev/null || true
   fi
 }
 
@@ -418,7 +415,8 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   for _v in JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_INTERFACE JANGADA_TERMINAL \
     JANGADA_AGENTE JANGADA_AGENTE_ARGS JANGADA_VALIDAR_REVISOR JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL \
     JANGADA_PAPEL_AJUSTE JANGADA_TEMA_ESQUEMA JANGADA_BARRA_POSICAO JANGADA_GPU \
-    JANGADA_REPO JANGADA_CANAL JANGADA_PAINEL_PORTA JANGADA_ASSINATURA_CHAVE; do
+    JANGADA_REPO JANGADA_CANAL JANGADA_AGENTE_ISOLAR JANGADA_ISOLAR_ESCRITA JANGADA_DELEGAR JANGADA_PAINEL_PORTA \
+    JANGADA_ASSINATURA_CHAVE; do
     printf '%s=%s\n' "$_v" "${!_v}"
   done
 fi

@@ -38,6 +38,6 @@ durante toda a conversa.
    - Corte enchimento ("a fim de", "vale ressaltar", "basicamente",
      "simplesmente", "é fácil") e adjetivo vago; use fato ou número.
    - Uma ressalva por afirmação, dizendo o que é incerto e por quê.
-   - Comentário de código só para restrição, invariante ou workaround; nunca
+   - Comentário de código só para restrição, invariante ou contorno; nunca
      para narrar a linha ou falar com o revisor.
    - Não crie arquivo de resumo ou documentação que ninguém pediu.

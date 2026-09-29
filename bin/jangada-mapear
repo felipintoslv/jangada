@@ -159,9 +159,23 @@ if tem hyprctl && [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
   grava hyprland/erros-config.txt hyprctl configerrors
   # Só classes das janelas abertas; títulos podem conter informação pessoal.
   grava hyprland/classes-janelas.txt sh -c 'hyprctl clients -j | jq -r ".[].class" | sort | uniq -c | sort -rn'
-  if tem jq; then
+  if tem jq && jq -e . hyprland/atalhos.json >/dev/null 2>&1; then
     jq -r '.[] | "\(.modmask)\t\(.key)\t\(.dispatcher)\t\(.arg)"' hyprland/atalhos.json \
       >hyprland/atalhos.tsv 2>/dev/null
+  else
+    hyprctl binds 2>/dev/null | awk '
+      /^[a-z]+$/        { mod = ""; key = ""; disp = ""; arg = ""; next }
+      /^\tmodmask:/     { mod = $2; next }
+      /^\tkey:/         { key = $2; next }
+      /^\tdispatcher:/  { disp = substr($0, 14); next }
+      /^\targ:/         { arg = substr($0, 7); next }
+      /^$/ {
+        if (key != "") {
+          printf "%s\t%s\t%s\t%s\n", mod, key, disp, arg
+          key = ""
+        }
+      }
+    ' >hyprland/atalhos.tsv
   fi
 else
   echo "Hyprland não está em execução nesta sessão; só os arquivos foram copiados" >hyprland/LEIA.txt

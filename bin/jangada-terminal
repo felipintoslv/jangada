@@ -23,19 +23,6 @@ if [[ -z "$term" ]]; then
   for t in ghostty kitty foot alacritty; do
     command -v "$t" >/dev/null 2>&1 && { term="$t"; break; }
   done
-  if [[ -z "$term" && "$(uname -s)" == "Darwin" ]]; then
-    if [[ -x "/Applications/Ghostty.app/Contents/MacOS/ghostty" ]]; then
-      term="/Applications/Ghostty.app/Contents/MacOS/ghostty"
-    elif [[ -x "/Applications/Kitty.app/Contents/MacOS/kitty" ]]; then
-      term="/Applications/Kitty.app/Contents/MacOS/kitty"
-    elif [[ -x "/Applications/Alacritty.app/Contents/MacOS/alacritty" ]]; then
-      term="/Applications/Alacritty.app/Contents/MacOS/alacritty"
-    elif [[ -d "/Applications/iTerm.app" ]]; then
-      term="iterm"
-    else
-      term="terminal.app"
-    fi
-  fi
 fi
 [[ -n "$term" ]] || { jangada_notificar "jangada" "nenhum terminal encontrado"; exit 1; }
 
@@ -60,22 +47,6 @@ case "$term" in
     [[ -n "$classe" ]] && args+=(--class "$classe")
     [[ -n "$titulo" ]] && args+=(--title "$titulo")
     ((${#comando[@]})) && args+=(-e "${comando[@]}")
-    ;;
-  iterm)
-    cmd_str="$(printf '%q ' "${comando[@]}")"
-    exec osascript -e 'on run argv' \
-      -e 'tell application "iTerm"' \
-      -e '  create window with default profile command (item 1 of argv)' \
-      -e 'end tell' \
-      -e 'end run' "$cmd_str"
-    ;;
-  terminal.app)
-    cmd_str="$(printf '%q ' "${comando[@]}")"
-    exec osascript -e 'on run argv' \
-      -e 'tell application "Terminal"' \
-      -e '  do script (item 1 of argv)' \
-      -e 'end tell' \
-      -e 'end run' "$cmd_str"
     ;;
   *)
     ((${#comando[@]})) && args+=(-e "${comando[@]}")

@@ -481,7 +481,7 @@ só estes casos, e só em linhas que o diff acrescenta:
 - código comentado;
 - comentário que narra a mudança ("agora faz", "alterado para", "novo"),
   repete o que o código diz ou fala com o revisor, em vez de explicar
-  restrição, invariante ou workaround;
+  restrição, invariante ou contorno;
 - enchimento ("a fim de", "vale ressaltar", "é importante destacar",
   "basicamente", "simplesmente", "é fácil") e abertura ou fecho de cortesia;
 - documentação que contradiz o código do mesmo diff;

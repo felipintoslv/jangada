@@ -10,7 +10,7 @@ if tem_comando claude || [[ -d "$HOME/.claude" ]]; then
   # Skills de default/claude/skills: regras e pegadinhas do jangada e os
   # protocolos de relatório técnico e acadêmico.
   ligar_skill_claude
-  # Papéis de subagente (explorador, leitor, pesquisador, verificador).
+  # Papéis de subagente (explorador, leitor, pesquisador, verificador, auditor, arquiteto, otimizador, redator).
   ligar_agentes_claude
 else
   aviso "Claude Code não encontrado; hooks e skills não instalados (rode ./install.sh 50 depois de instalar)"

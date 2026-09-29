@@ -14,7 +14,7 @@
 | `jangada-mapa` | extrai a estrutura de arquivos e assinaturas em Markdown; atalho `mapa` no jangada shell |
 | `jangada-validar` | revisão do diff por outro modelo ou pelo mesmo modelo isolado (claude ou agy), só leitura, chamada pelo agente antes de entregar; executa portão determinístico local antes (conflitos, script com byte nulo, sintaxe, lintr, gitleaks nas linhas acrescentadas; sem gitleaks reprova, salvo `JANGADA_VALIDAR_SEM_GITLEAKS=1`; `.gitleaks.toml`, `.gitleaksignore`, `AGENTS.md` e `CLAUDE.md` valem da base, e `.lintr` também quando a base tem um); só a primeira linha não vazia do parecer decide o status; pareceres em `validacao-<sessao>-rN.md`; depois de um APROVADO, `validacao-<sessao>.aprovado` guarda o commit, e a próxima entrega parte dele com as rodadas zeradas; cada rodada vira uma linha em `~/.local/state/jangada/validar.jsonl`, resumida por `--metricas` |
 | `jangada-agentes` | seletor, painel, módulo da barra, `--focar`, `--proximo`, `--anterior`, `--restaurar` |
-| `jangada-agente-fim` | encerra a sessão e remove o worktree (mantém o ramo); `--integrar` exige aprovação feita fora do isolamento (`revisoes/`, commit atual do ramo, worktree limpo), roda o `jangada-validar` fora se não houver e, sem APROVADO, pede confirmação (`--sem-revisao` pula a revisão); faz o merge na base, atualiza a cópia instalada se for o repositório do jangada e apaga o ramo |
+| `jangada-agente-fim` | encerra a sessão e remove o worktree (mantém o ramo); `--integrar` exige aprovação feita fora do isolamento (`revisoes/`, commit atual do ramo, worktree limpo), roda o `jangada-validar` fora se não houver e, sem APROVADO, pede confirmação (`--sem-revisao` pula a revisão); faz o merge na base, avisa para rodar o `jangada-update` se for o repositório do jangada e apaga o ramo |
 | `jangada-consumo` | tokens do Claude no bloco de 5 horas, lidos de `~/.claude/projects` |
 | `jangada-painel` | indicadores num app Shiny em 127.0.0.1; `default/painel/coletor.py` grava o cache em Parquet (`~/.local/state/jangada/painel`), `default/painel/app.R` só lê o cache |
 | `jangada-gancho` | roda os ganchos do usuário em `~/.config/jangada/ganchos/` |
@@ -262,9 +262,8 @@ porta de entrada. O que se aprendeu com ele vale para o revisor agy:
   as regras vão por `--config` e `--gitleaks-ignore-path`, tiradas da base.
 - Se o limite de rodadas for atingido, a opção `--reverter-se-limite` (ou o comando `reverter` no jangada shell) restaura o worktree para o ponto inicial limpo da tarefa. O `reverter` do shell mostra antes da confirmação os commits, as alterações e os arquivos não rastreados que se perdem, e guarda o HEAD anterior num ramo `backup/reverter-<data>-<pid>`, cujo nome informa ao terminar.
 
-Depois de integrar uma mudança no próprio jangada, confira a cópia
-instalada: `git -C ~/.local/share/jangada pull --ff-only` e
-`jangada-migrar`.
+Depois de integrar uma mudança no próprio jangada, confira e
+atualize a cópia instalada com `jangada-update`.
 
 ## agy como agente da sessão
 

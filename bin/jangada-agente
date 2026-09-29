@@ -340,10 +340,12 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
           -print -quit 2>/dev/null)" ]]; then
       partes+=("$JANGADA_PATH/default/agentes/protocolo-r.md")
     fi
+    rm -f "$estado_dir/protocolo-$sessao.md"
     cat "${partes[@]}" >"$estado_dir/protocolo-$sessao.md"
     protocolo="$estado_dir/protocolo-$sessao.md"
   fi
   arq_prompt="$estado_dir/prompt-$sessao.md"
+  rm -f "$arq_prompt"
   if [[ "$base_agente" == agy ]]; then
     {
       [[ -n "$protocolo" ]] && { cat "$protocolo"; printf '\n'; }
@@ -377,6 +379,7 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
   [[ -n "$revisor_efetivo" ]] && amb+=(-e "JANGADA_VALIDAR_REVISOR=$revisor_efetivo")
   "${JANGADA_TMUX[@]}" new-session -d -s "$sessao" -c "$dir" "${amb[@]}"
 
+  rm -f "$estado_dir/$sessao.json"
   jq -n --arg sessao "$sessao" --arg dir "$dir" --arg raiz "$raiz" --arg worktree "$worktree" \
     --arg ramo "$ramo" --arg base "$base" --arg agente "$agente" \
     --arg agora "$(jangada_data_iso)" \

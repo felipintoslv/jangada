@@ -119,7 +119,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-shell` | inicia subshell enriquecida com comandos diretos de agentes e projetos |
 | `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir, integrar ou encerrar (`--proximo`, `--anterior`, `--restaurar`) |
 | `jangada-agente-fim` | encerra uma sessão e remove o worktree, com conferência de alterações pendentes; `--integrar` revisa fora do isolamento, faz o merge na base e apaga o ramo; no repositório do jangada, avisa para rodar `jangada-update`, que atualiza a cópia instalada |
-| `jangada-consumo` | tokens do Claude Code no bloco de 5 horas em andamento (também no tooltip da barra) |
+| `jangada-consumo` | tokens do Claude Code no bloco de 5 horas em andamento (também na dica da barra) |
 | `jangada-painel` | painel de indicadores do uso de IA num app Shiny local; `--json` imprime os do dia, `--parar` encerra o app, `--conferir` lista o que falta |
 | `jangada-gancho` | roda os ganchos do usuário de um evento (chamado pelos outros comandos) |
 | `jangada-importar` | converte a configuração do niri em arquivos `.importado` |
@@ -260,7 +260,7 @@ O fluxo completo, com fluxogramas, está em
    a entrega reprova; `JANGADA_VALIDAR_SEM_GITLEAKS=1` aceita o risco e só
    avisa. O `.gitleaks.toml` e o `.gitleaksignore` valem como estão na base,
    e não como a entrega os deixou; o `.lintr` também, e um que só a entrega
-   traz não é lido. O R roda sem o `.Rprofile` e o `.Renviron` do worktree:
+   traz não é lido. O R roda sem o `.lintr`, o `.Rprofile` e o `.Renviron` do worktree:
    os três são código do repositório avaliado, e o `jangada-validar` também
    roda fora do isolamento. O `AGENTS.md` e o `CLAUDE.md` vão ao revisor lidos da base,
    e uma entrega que muda o `.jangada/validar.sh` pede ao revisor que confira
@@ -656,7 +656,7 @@ e não mexe na instalada. Para testar a cópia de trabalho sem instalar, rode
 | `testes/subagentes.sh`, `testes/delegar.sh` | papéis de subagente e a instalação deles; `jangada-delegar` com agy falso |
 | `testes/versao.sh` | `jangada-versao` num repositório temporário: grupos e prefixos das novidades, o `CHANGELOG.md` e a tag do `--lancar` e as recusas (árvore suja, versão menor, tag existente, nada novo) |
 | `testes/importar.sh` | `jangada-importar` com um config.kdl de exemplo |
-| `testes/fim.sh` | `jangada-agente-fim` recusa estado adulterado (ramo, worktree, raiz, base) sem mexer em nada; `--limpar-concluidos` só age com `s` |
+| `testes/fim.sh` | `jangada-agente-fim` recusa estado adulterado (ramo, worktree, raiz, base) sem mexer em nada; `jangada-agentes --limpar-concluidos` só age com `s` |
 | `testes/mapear.sh` | a máscara de segredos do `jangada-mapear` apaga tokens, chaves e senhas e preserva texto comum |
 | `testes/rede.sh` | `jangada-rede` com nmcli falso: a senha do Wi-Fi nunca aparece nos argumentos |
 | `testes/bluetooth.sh` | `jangada-bluetooth` com bluetoothctl falso: parear não confia no aparelho sem a escolha no menu |

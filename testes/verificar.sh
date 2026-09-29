@@ -3,6 +3,7 @@
 # Requer: shellcheck, luac (pacote lua), jq, python3.
 set -uo pipefail
 export LC_ALL=C.UTF-8
+unset JANGADA_ISOLADO JANGADA_DELEGAR JANGADA_VALIDAR_REVISOR
 cd "$(dirname "$0")/.." || exit 1
 falhas=0
 passo() { printf '\n== %s\n' "$*"; }

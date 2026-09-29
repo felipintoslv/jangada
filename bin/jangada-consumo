@@ -3,7 +3,7 @@
 # de conversa em ~/.claude/projects (sem rede, sem ccusage).
 #
 # Uso: jangada-consumo [--curto] [--json]
-#   --curto   uma linha, para o tooltip da barra
+#   --curto   uma linha, para a dica da barra
 #   --json    o resultado em JSON
 #
 # O bloco segue a regra do ccusage: começa na hora cheia da primeira mensagem e

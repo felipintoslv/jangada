@@ -7,7 +7,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 repo_jangada="$PWD"
-unset JANGADA_VALIDAR_REVISOR
+unset JANGADA_VALIDAR_REVISOR JANGADA_DELEGAR
 # Sem o gitleaks, o portão reprovaria todos os casos; o 16e liga de novo.
 command -v gitleaks >/dev/null 2>&1 || export JANGADA_VALIDAR_SEM_GITLEAKS=1
 falhas=0

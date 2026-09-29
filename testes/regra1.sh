@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Testa a regra 1 do AGENTS.md: todo caminho de fora de ~/.config/jangada,
 # ~/.local/share/jangada e ~/.local/state/jangada escrito por extenso em bin/,
-# install/, migrations/, install.sh e install-macos.sh está em "Exceções à
-# regra 1" ou na lista de caminhos só lidos abaixo. Um caminho novo reprova
-# até alguém decidir em qual das duas listas ele entra.
+# install/, migrations/ e install.sh está em "Exceções à regra 1" ou na lista
+# de caminhos só lidos abaixo. Um caminho novo reprova até alguém decidir em
+# qual das duas listas ele entra.
 #
 # Uso: testes/regra1.sh
 set -uo pipefail
@@ -30,9 +30,7 @@ cat >"$tmp/leituras" <<'FIM'
 /usr/share/noctalia-shell
 /usr/share/xsessions
 /usr/lib/modules
-/opt/homebrew
 /usr/local/bin
-/Applications
 ~/.Renviron
 ~/.Rprofile
 ~/.cache/hyprland
@@ -46,13 +44,13 @@ cat >"$tmp/leituras" <<'FIM'
 ~/.config/noctalia
 ~/.gemini/GEMINI.md
 ~/.gemini/settings.json
-~/.gemini/antigravity-cli/bin
 ~/.gemini/antigravity-cli/conversations
 ~/.gemini/antigravity-cli/log
 ~/.gnupg
 ~/.ssh
 ~/Imagens/Papeis
 ~/Pictures/Wallpapers
+~/Projetos
 FIM
 
 # Imprime os caminhos citados em RAIZ que nenhuma das listas cobre, com o
@@ -81,7 +79,7 @@ permitidos += [l.strip() for l in open(leituras) if l.strip()]
 
 # Com aspas opcionais entre a raiz e o resto, como em "$HOME"/.cache/x.
 casa = re.compile(r'(?:\$HOME|\$\{HOME\}|~|\$\{XDG_(?:CACHE|CONFIG|STATE)_HOME:-\$HOME/[.a-z/]+\})"?(?:/[A-Za-z0-9_.-]+)+')
-sistema = re.compile(r"(?<![\w.$}-])/(?:etc|usr|opt|\.snapshots|Applications|Library)(?:/[A-Za-z0-9_.-]+)*")
+sistema = re.compile(r"(?<![\w.$}-])/(?:etc|usr|opt|\.snapshots)(?:/[A-Za-z0-9_.-]+)*")
 xdg = {"CACHE": "~/.cache", "CONFIG": "~/.config", "STATE": "~/.local/state"}
 
 def normal(c):
@@ -95,7 +93,7 @@ def coberto(c):
     return any(c == p or c.startswith(p + "/") or p.startswith(c + "/") for p in permitidos)
 
 arqs = [p for d in ("bin", "install", "migrations") for p in sorted((raiz / d).rglob("*")) if p.is_file()]
-arqs += [raiz / "install.sh", raiz / "install-macos.sh"]
+arqs += [raiz / "install.sh"]
 vistos = {}
 for arq in arqs:
     try:
@@ -120,7 +118,7 @@ conferir "caso 1: todo caminho de fora está nas exceções ou nas leituras${for
 
 # Caso 2: uma escrita nova fora das listas reprova.
 mkdir -p "$tmp/copia"
-cp -r AGENTS.md bin install migrations install.sh install-macos.sh "$tmp/copia/"
+cp -r AGENTS.md bin install migrations install.sh "$tmp/copia/"
 printf '#!/bin/sh\necho x >"$HOME/.novo/arquivo"\n' >"$tmp/copia/bin/jangada-novo"
 fora="$(varrer "$tmp/copia")"
 conferir "caso 2: escrita nova em ~/.novo é apontada" grep -q '^~/.novo/arquivo (bin/jangada-novo:2)$' <<<"$fora"

@@ -80,7 +80,7 @@ EOF
     ZDOTDIR="$tmp_dir" zsh -i
     ;;
   *)
-    # Fallback seguro para bash
+    # Alternativa segura para bash
     {
       # shellcheck disable=SC2016  # a expansão é do arquivo gerado, não daqui
       echo '[[ -f "$HOME/.bashrc" ]] && source "$HOME/.bashrc"'

@@ -12,7 +12,9 @@ falha() { printf 'FALHA %s\n' "$*"; falhas=$((falhas + 1)); }
 conferir() { local d="$1"; shift; if "$@"; then ok "$d"; else falha "$d"; fi; }
 
 tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
+trap 'rm -rf "$tmp" /tmp/isolar-teste' EXIT
+rm -f /tmp/isolar-teste
+marca_teste="$tmp/.jangada-isolado-teste"
 casa="$tmp/casa"
 mkdir -p "$casa/.ssh" "$casa/.claude" "$casa/extra" "$casa/.cache/yay/pacote" "$casa/.cache/cliphist" \
   "$casa/.gemini/antigravity-cli/bin" "$tmp/config/jangada"
@@ -26,8 +28,8 @@ git -C "$tmp/repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m i
 git -C "$tmp/repo" worktree add -q -b agente/t "$tmp/wt"
 
 isolar() {
-  (cd "$1" && env -u XDG_CACHE_HOME HOME="$casa" XDG_STATE_HOME="$casa/.local/state" XDG_CONFIG_HOME="$tmp/config" \
-    JANGADA_PATH="$repo_jangada" "${@:2}")
+  (cd "$1" && env -u XDG_CACHE_HOME -u JANGADA_ISOLADO HOME="$casa" XDG_STATE_HOME="$casa/.local/state" XDG_CONFIG_HOME="$tmp/config" \
+    JANGADA_PATH="$repo_jangada" JANGADA_MARCA_ISOLADO="$marca_teste" "${@:2}")
 }
 mostrar() { isolar "$tmp/wt" "$@" "$repo_jangada/bin/jangada-isolar" --mostrar -- true >"$tmp/args"; }
 seguidos() { grep -A2 -xF -- "$1" "$tmp/args" | paste -sd' ' | grep -qF -- "$1 $2 $3"; }
@@ -57,7 +59,7 @@ conferir "caso 1: ~/.ssh oculto" seguidos --tmpfs "$casa/.ssh" ""
 conferir "caso 1: ~/.netrc oculto" seguidos --ro-bind /dev/null "$casa/.netrc"
 conferir "caso 1: /tmp próprio" seguidos --tmpfs /tmp ""
 conferir "caso 1: marca do isolamento montada no /tmp próprio" \
-  seguidos --ro-bind /dev/null /tmp/.jangada-isolado
+  seguidos --ro-bind /dev/null "$marca_teste"
 conferir "caso 1: histórico da área de transferência oculto" seguidos --tmpfs "$casa/.cache/cliphist" ""
 conferir "caso 1: token do painel oculto" seguidos --tmpfs "$casa/.local/state/jangada/painel-chave" ""
 conferir "caso 1: a pasta do token existe antes do agente, só para o dono" \
@@ -114,10 +116,10 @@ rm -f "$tmp/config/jangada/jangada.conf"
 # JANGADA_ISOLADO herdado, sem a marca que só o bwrap monta, não basta.
 mostrar JANGADA_ISOLADO=1
 conferir "caso 2: JANGADA_ISOLADO sem a marca não dispensa o isolamento" [ "$(head -n1 "$tmp/args")" = bwrap ]
-: >/tmp/.jangada-isolado-teste 2>/dev/null
+: >"$marca_teste" 2>/dev/null
 conferir "caso 2: arquivo comum no lugar da marca não vale" \
-  bash -c '! awk -v m="$1" '"'"'$5 == m { a = 1 } END { exit !a }'"'"' /proc/self/mountinfo' _ /tmp/.jangada-isolado-teste
-rm -f /tmp/.jangada-isolado-teste
+  bash -c '! awk -v m="$1" '"'"'$5 == m { a = 1 } END { exit !a }'"'"' /proc/self/mountinfo' _ "$marca_teste"
+rm -f "$marca_teste"
 
 # Caso 2b: sem o bwrap, recusa em vez de rodar sem isolamento.
 sem_bwrap="$tmp/sem-bwrap"
@@ -229,7 +231,7 @@ if bwrap --ro-bind / / --dev /dev --proc /proc true 2>/dev/null; then
   saida="$(isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- \
     "$repo_jangada/bin/jangada-isolar" --mostrar -- true 2>/dev/null)"
   conferir "caso 3: já isolado, roda direto sem aninhar" [ -z "$saida" ]
-  conferir "caso 3: a marca não é removível de dentro" roda '! rm -f /tmp/.jangada-isolado'
+  conferir "caso 3: a marca não é removível de dentro" roda "! rm -f '$marca_teste'"
 else
   echo "pulado caso 3: bwrap não cria namespace aqui"
 fi

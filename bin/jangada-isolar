@@ -44,7 +44,7 @@ done
 # Marca do isolamento: um ponto de montagem no /tmp próprio. Fora, qualquer
 # processo cria um arquivo no /tmp, mas só quem monta cria um ponto de
 # montagem; por isso JANGADA_ISOLADO herdado do ambiente não basta.
-marca=/tmp/.jangada-isolado
+marca="${JANGADA_MARCA_ISOLADO:-/tmp/.jangada-isolado}"
 ja_isolado() {
   [[ -n "${JANGADA_ISOLADO:-}" ]] || return 1
   awk -v m="$marca" '$5 == m { achou = 1 } END { exit !achou }' /proc/self/mountinfo 2>/dev/null

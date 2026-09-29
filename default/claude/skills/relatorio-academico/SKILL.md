@@ -102,7 +102,7 @@ curta, adjetivo trocado por número). As específicas de texto acadêmico:
 > Antes: Os resultados demonstram claramente que o modelo proposto é
 > significativamente superior, o que comprova a eficácia da abordagem.
 >
-> Depois: O modelo acertou 84,1% (IC 95%: 82,7–85,5) contra 80,3% da linha
+> Depois: O modelo acertou 84,1% (IC 95%: 82,7 a 85,5) contra 80,3% da linha
 > de base, no mesmo conjunto de teste. A diferença se mantém nas três
 > sementes, mas não foi testada fora do domínio jurídico.
 
