@@ -25,10 +25,6 @@ j.atalho(SUPER .. " + CTRL + A", "Painel de agentes", j.cmd("jangada-agentes", "
 j.atalho(SUPER .. " + N", "Próximo agente que espera", j.cmd("jangada-agentes", "--proximo"))
 j.atalho(SUPER .. " + SHIFT + N", "Agente focado antes do atual", j.cmd("jangada-agentes", "--anterior"))
 
--- Conversa de Pescador
-j.atalho(SUPER .. " + P", "Conversa de pescador", j.cmd("jangada-pescador", "--janela"))
-j.atalho(SUPER .. " + SHIFT + P", "Histórico de pesquisas do pescador", j.cmd("jangada-pescador", "--historico-janela"))
-
 -- Sessão
 j.atalho(SUPER .. " + CTRL + R", "Recarregar e mostrar erros", j.cmd("jangada-recarregar"))
 j.atalho(SUPER .. " + CTRL + T", "Trocar papel de parede e cores", j.cmd("jangada-tema", "--escolher"))

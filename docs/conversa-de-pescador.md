@@ -56,9 +56,8 @@ O parâmetro `--rodadas N` (padrão: 2; ajustável entre 1 e 4) controla o teto 
 
 - **Isolamento e Segurança (Regra 1):** nenhum dado é lido ou gravado na árvore de código dos projetos. O histórico e as sessões ficam isolados em `~/.local/state/jangada/pescador` (com fallback automático para `$XDG_RUNTIME_DIR/jangada-pescador` em ambientes com restrição de permissão).
 - **Painel Shiny de Indicadores:** o coletor do painel (`jangada-painel`) lê as consultas do Pescador e as consolida em `pesquisas.parquet`, exibindo volume de perguntas, evolução do termômetro de fato e distribuição por par de modelos.
-- **Atalhos no Hyprland:**
-  - `SUPER + P`: abre o chat conversacional em janela flutuante no terminal.
-  - `SUPER + SHIFT + P`: abre o repositório de histórico com busca interativa via fzf e pré-visualização completa.
+- **Acesso pelo Menu Central:**
+  - O chat e o histórico são acessíveis pelo menu central (`jangada-menu`).
 - **Voz Neural em Português:** com `-f, --falar`, narra a resposta e o diagnóstico via Piper TTS local; com `-o, --ouvir`, grava a dúvida via microfone pelo PipeWire e transcreve localmente via whisper-cpp.
 
 ## Comandos do Chat Interativo

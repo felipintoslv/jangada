@@ -29,7 +29,7 @@ hl.window_rule({
   center = true,
 })
 
--- Conversa de Pescador e Histórico (SUPER+P e SUPER+SHIFT+P): janela flutuante no centro.
+-- Conversa de Pescador e Histórico: janela flutuante no centro.
 hl.window_rule({
   name = "pescador",
   match = { class = "^org\\.jangada\\.pescador.*$" },
