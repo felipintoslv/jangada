@@ -281,6 +281,17 @@ ui <- page_navbar(
         nav_panel("Sem fonte", DT::DTOutput("e_fonte")))
     )
   ),
+  nav_panel("Pesquisas", icon = bsicons::bs_icon("search"),
+    div(class = "alert alert-secondary",
+        "Histórico e verificação de fatos do Conversa de Pescador. Consultas rápidas com auditoria cética multi-agente, sem dependência de projeto."),
+    layout_column_wrap(width = 1 / 3, fill = FALSE,
+      value_box("Total de pesquisas", textOutput("f_total"), showcase = bsicons::bs_icon("chat-dots")),
+      value_box("Termômetro de veracidade", textOutput("f_fato"), showcase = bsicons::bs_icon("shield-check"),
+                p("média de fatos comprovados")),
+      value_box("Consultas hoje", textOutput("f_hoje"), showcase = bsicons::bs_icon("calendar-check"))
+    ),
+    cartao("Consultas realizadas e veredito do auditor", DT::DTOutput("f_tabela"))
+  ),
   nav_spacer(),
   nav_item(input_dark_mode(id = "modo", mode = "dark"))
 )
@@ -640,6 +651,39 @@ server <- function(input, output, session) {
     tabela(data.frame(origem = c("subagentes do Claude", "delegações ao agy"),
                       relatorios = c(q$claude$n, q$delegacoes$n), sem_fonte = c(q$claude$total, q$delegacoes$total),
                       mediana = c(num_ou_na(q$claude$mediana), num_ou_na(q$delegacoes$mediana))))
+  })
+
+  # F. Pesquisas (Conversa de Pescador)
+  pesqs <- reactive(dados()$pesquisas)
+  output$f_total <- renderText({
+    p <- pesqs()
+    if (nrow(p) == 0) "0" else as.character(nrow(p))
+  })
+  output$f_fato <- renderText({
+    p <- pesqs()
+    if (nrow(p) == 0) "-" else paste0(round(mean(p$grau_fato, na.rm = TRUE)), "% Fato")
+  })
+  output$f_hoje <- renderText({
+    p <- pesqs()
+    if (nrow(p) == 0) "0" else as.character(sum(p$dia == as.character(Sys.Date()), na.rm = TRUE))
+  })
+  output$f_tabela <- DT::renderDT({
+    p <- pesqs()
+    if (nrow(p) == 0) {
+      return(tabela(data.frame(aviso = "Nenhuma pesquisa registrada no Pescador.")))
+    }
+    ord <- order(p$data, decreasing = TRUE)
+    df <- data.frame(
+      data = format(p$data[ord], "%d/%m %H:%M"),
+      sessao = p$sessao[ord],
+      pergunta = p$pergunta[ord],
+      termo = paste0(p$grau_fato[ord], "%"),
+      veredito = p$veredito[ord],
+      fontes = p$fontes_qtd[ord],
+      segundos = sprintf("%.1fs", p$segundos[ord]),
+      stringsAsFactors = FALSE
+    )
+    tabela(setNames(df, c("data", "sessão", "pergunta", "fato (%)", "diagnóstico do auditor", "fontes", "tempo")))
   })
 }
 

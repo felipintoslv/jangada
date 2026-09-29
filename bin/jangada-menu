@@ -24,6 +24,8 @@ opcao="$(printf '%s\n' \
   "Lista de agentes" \
   "Painel de agentes" \
   "Restaurar agentes interrompidos" \
+  "Conversa de pescador" \
+  "Histórico de pesquisas (Pescador)" \
   "Monitor do sistema" \
   "Energia e bateria" \
   "Dispositivos de áudio" \
@@ -53,6 +55,8 @@ case "$opcao" in
   "Restaurar agentes interrompidos")
     r="$("$b/jangada-agentes" --restaurar 2>&1 | tail -n1)"
     notify-send -a jangada "Agentes" "$r" 2>/dev/null || true ;;
+  "Conversa de pescador") exec "$b/jangada-pescador" --janela ;;
+  "Histórico de pesquisas (Pescador)") exec "$b/jangada-pescador" --historico-janela ;;
   "Monitor do sistema") exec "$b/jangada-monitor" ;;
   "Energia e bateria") exec "$b/jangada-energia" ;;
   "Dispositivos de áudio") exec "$b/jangada-audio" ;;

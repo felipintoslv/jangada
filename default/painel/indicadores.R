@@ -76,6 +76,10 @@ carregar_cache <- function(cache) {
     sessoes = ler("sessoes.parquet", data.frame(
       sessao = character(), projeto = character(), agente = character(), estado = character(),
       desde = ts, atualizado = ts)),
+    pesquisas = ler("pesquisas.parquet", data.frame(
+      data = ts, dia = character(), sessao = character(),
+      pergunta = character(), grau_fato = integer(), grau_pescador = integer(),
+      veredito = character(), fontes_qtd = integer(), segundos = numeric())),
     coleta = tryCatch(jsonlite::read_json(file.path(cache, "coleta.json")), error = function(e) list()),
     subagentes = tryCatch(suppressWarnings(jsonlite::read_json(file.path(cache, "subagentes.json"))), error = function(e) list())
   )

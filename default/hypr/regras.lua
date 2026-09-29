@@ -29,6 +29,15 @@ hl.window_rule({
   center = true,
 })
 
+-- Conversa de Pescador e Histórico (SUPER+P e SUPER+SHIFT+P): janela flutuante no centro.
+hl.window_rule({
+  name = "pescador",
+  match = { class = "^org\\.jangada\\.pescador.*$" },
+  float = true,
+  size = "1150 720",
+  center = true,
+})
+
 -- Monitor de sistema (btop/htop): janela flutuante no centro.
 hl.window_rule({
   name = "monitor-sistema",

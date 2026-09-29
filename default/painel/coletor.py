@@ -226,6 +226,11 @@ ESQ_EVENTOS = pa.schema([
     ("data", TS), ("dia", pa.string()), ("sessao", pa.string()), ("projeto", pa.string()),
     ("agente", pa.string()), ("estado", pa.string()),
 ])
+ESQ_PESQUISAS = pa.schema([
+    ("data", TS), ("dia", pa.string()), ("sessao", pa.string()),
+    ("pergunta", pa.string()), ("grau_fato", pa.int64()), ("grau_pescador", pa.int64()),
+    ("veredito", pa.string()), ("fontes_qtd", pa.int64()), ("segundos", pa.float64()),
+])
 
 
 def ids_existentes(pasta):
@@ -648,6 +653,50 @@ def sessoes():
     return linhas
 
 
+def pesquisas_pescador():
+    """Lê o histórico do Conversa de Pescador e monta a lista de pesquisas."""
+    caminhos = [
+        os.path.join(ESTADO, "pescador", "historico.jsonl"),
+        os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "jangada-pescador", "historico.jsonl")
+    ]
+    linhas = []
+    vistos = set()
+    for arq in caminhos:
+        if not os.path.exists(arq):
+            continue
+        try:
+            with open(arq, encoding="utf-8") as f:
+                for l in f:
+                    if not l.strip():
+                        continue
+                    try:
+                        d = json.loads(l)
+                        dt_obj = data_de(d.get("data"))
+                        if not dt_obj:
+                            continue
+                        chave = (d.get("data"), d.get("pergunta"))
+                        if chave in vistos:
+                            continue
+                        vistos.add(chave)
+                        aud = d.get("auditoria") or {}
+                        linhas.append({
+                            "data": dt_obj,
+                            "dia": dia_de(dt_obj),
+                            "sessao": str(d.get("sessao") or "avulsa"),
+                            "pergunta": str(d.get("pergunta") or "")[:200],
+                            "grau_fato": int(aud.get("grau_fato") or 100),
+                            "grau_pescador": int(aud.get("grau_pescador") or 0),
+                            "veredito": str(aud.get("veredito_resumo") or "")[:300],
+                            "fontes_qtd": len(aud.get("referencias") or []),
+                            "segundos": float(d.get("tempo_segundos") or 0.0),
+                        })
+                    except Exception:
+                        continue
+        except OSError:
+            pass
+    return linhas
+
+
 # Indicadores do dia
 
 def segundos_aguardando(evs, ini, fim, agora):
@@ -674,7 +723,7 @@ def segundos_aguardando(evs, ini, fim, agora):
     return total
 
 
-def indicadores_do_dia(cache, vals, evs, agora):
+def indicadores_do_dia(cache, vals, evs, agora, pesqs=None):
     hoje = dia_de(agora)
     ini = dt.datetime.combine(agora.astimezone(FUSO).date(), dt.time(), FUSO).astimezone(UTC)
     fim = ini + dt.timedelta(days=1)
@@ -691,7 +740,7 @@ def indicadores_do_dia(cache, vals, evs, agora):
         entrada, saida, criado, lido = soma("entrada"), soma("saida"), soma("cache_criado"), soma("cache_lido")
     evs_dia = [e for e in evs if e["data"] < fim]
     primeiro_evento = min((e["data"] for e in evs), default=None)
-    return {
+    indicadores = {
         "dia": hoje,
         "atualizado": agora.astimezone(FUSO).isoformat(timespec="seconds"),
         "entregas_aprovadas": len(aprov),
@@ -701,6 +750,12 @@ def indicadores_do_dia(cache, vals, evs, agora):
         "aguardando_segundos": round(segundos_aguardando(evs_dia, ini, fim, agora)),
         "eventos_desde": dia_de(primeiro_evento),
     }
+    if pesqs:
+        pesqs_dia = [p for p in pesqs if p["dia"] == hoje]
+        if pesqs_dia:
+            indicadores["pesquisas_hoje"] = len(pesqs_dia)
+            indicadores["grau_fato_medio"] = round(sum(p["grau_fato"] for p in pesqs_dia) / len(pesqs_dia))
+    return indicadores
 
 
 def main():
@@ -724,11 +779,13 @@ def main():
     agregados, tirados = podar(cache, agora, carimbo, retencao())
     vals = validacoes()
     evs = eventos()
+    pesqs = pesquisas_pescador()
     gravar_tabela(os.path.join(cache, "validacoes.parquet"), vals, ESQ_VALIDACOES)
     gravar_tabela(os.path.join(cache, "eventos.parquet"), evs, ESQ_EVENTOS)
     gravar_tabela(os.path.join(cache, "sessoes.parquet"), sessoes(), ESQ_SESSOES)
     gravar_tabela(os.path.join(cache, "apontamentos.parquet"), apontamentos(), ESQ_APONTAMENTOS)
-    gravar_json(os.path.join(cache, "hoje.json"), indicadores_do_dia(cache, vals, evs, agora))
+    gravar_tabela(os.path.join(cache, "pesquisas.parquet"), pesqs, ESQ_PESQUISAS)
+    gravar_json(os.path.join(cache, "hoje.json"), indicadores_do_dia(cache, vals, evs, agora, pesqs))
     # Os indicadores de subagentes não derrubam a coleta. O erro vai para o
     # subagentes.json, e o painel o mostra em vez dos números da coleta anterior.
     # O memo guarda um registro por subagente com a assinatura dos arquivos
