@@ -43,6 +43,7 @@ arquivo e função, falhas e os testes que o cobrem:
 | [docs/atualizacao-e-migracoes.md](docs/atualizacao-e-migracoes.md) | instalação, `jangada-update` e `jangada-migrar` |
 | [docs/painel.md](docs/painel.md) | coletor, cache, app e módulo da barra |
 | [docs/registros.md](docs/registros.md) | campos de cada registro usado pelo painel |
+| [docs/conversa-de-pescador.md](docs/conversa-de-pescador.md) | chat conversacional com bancada de auditores, CoVe e purificação iterativa |
 | [docs/boas-praticas.md](docs/boas-praticas.md) | regras de código, testes, textos e commits |
 
 ## Antes de instalar: mapear a máquina

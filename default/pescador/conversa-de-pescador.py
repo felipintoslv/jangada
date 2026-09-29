@@ -148,6 +148,43 @@ def falar(texto: str):
             wav_tmp.unlink(missing_ok=True)
 
 
+def buscar_web_ddg(termo: str, limite: int = 2) -> list:
+    """Realiza busca leve na web via DuckDuckGo HTML sem dependências externas."""
+    import urllib.request
+    import urllib.parse
+    resultados = []
+    headers = {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
+    }
+    url = "https://html.duckduckgo.com/html/?q=" + urllib.parse.quote(termo)
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            html = resp.read().decode("utf-8", errors="ignore")
+            blocos = re.findall(r'<div class="result__body">(.*?)</div>\s*</div>', html, re.DOTALL)
+            for b in blocos[:limite]:
+                m_snip = re.search(r'<a class="result__snippet"[^>]*>(.*?)</a>', b, re.DOTALL)
+                snippet = re.sub(r"<[^>]+>", "", m_snip.group(1)).strip() if m_snip else ""
+
+                m_link = re.search(r'<a class="result__url"[^>]*>(.*?)</a>', b, re.DOTALL)
+                fonte = re.sub(r"<[^>]+>", "", m_link.group(1)).strip() if m_link else ""
+
+                m_tit = re.search(r'<h2 class="result__title">.*?<a[^>]*>(.*?)</a>', b, re.DOTALL)
+                titulo = re.sub(r"<[^>]+>", "", m_tit.group(1)).strip() if m_tit else ""
+
+                if snippet:
+                    resultados.append({
+                        "termo": termo,
+                        "titulo": titulo,
+                        "snippet": snippet,
+                        "fonte": fonte
+                    })
+    except Exception:
+        pass
+    return resultados
+
+
 def ouvir_microfone() -> str:
     """Captura áudio do microfone e realiza transcrição para texto."""
     gravador = shutil.which("pw-record") or shutil.which("parecord") or shutil.which("arecord")
@@ -333,18 +370,63 @@ def agente_pescador(pergunta: str, contexto_anterior: str = "", contestacoes: li
     return invocar_modelo(prompt, sistema, motor=motor)
 
 
+def decompor_consultas_busca(pergunta: str, resposta_pescador: str, motor: str = "auto") -> list:
+    """Decompõe a consulta em termos atômicos para busca web focada (estilo MindSearch)."""
+    sistema = (
+        "Você é o Planejador de Busca da verificação factual. "
+        "Dada a pergunta do usuário e o rascunho de resposta, elabore entre 2 e 3 termos de busca curtos e atômicos "
+        "para consultar na internet e encontrar evidências concretas, regras, dados históricos ou referências técnicas. "
+        "Devolva EXCLUSIVAMENTE um array JSON com as strings de busca, por exemplo:\n"
+        '["termo de busca 1", "termo de busca 2"]\n'
+        "Responda SOMENTE o array JSON."
+    )
+    prompt = f"Pergunta: {pergunta}\n\nResposta preliminar:\n{resposta_pescador[:600]}"
+    sucesso, saida = invocar_modelo(prompt, sistema, motor=motor)
+    if sucesso and saida:
+        try:
+            match = re.search(r"\[.*?\]", saida, re.DOTALL)
+            if match:
+                termos = json.loads(match.group(0))
+                if isinstance(termos, list) and termos:
+                    return [str(t).strip() for t in termos[:3] if str(t).strip()]
+        except Exception:
+            pass
+    # Extração de palavras-chave como alternativa
+    palavras = re.findall(r"\b[A-Za-z0-9_-]{3,}\b", pergunta)
+    return [" ".join(palavras[:5])] if palavras else [pergunta[:40]]
+
+
 def agente_pesquisador(pergunta: str, resposta_pescador: str, contexto_anterior: str = "", motor: str = "auto") -> str:
-    """Agente 2: Pesquisa fatos e referências na internet para auditar a resposta."""
+    """Agente 2: Pesquisa fatos e referências na internet com decomposição atômica e busca web (MindSearch + CRAG)."""
+    termos = decompor_consultas_busca(pergunta, resposta_pescador, motor=motor)
+    evidencias_web = []
+    for t in termos:
+        res = buscar_web_ddg(t, limite=2)
+        for r in res:
+            evidencias_web.append(f"[{r.get('fonte', 'web')}] {r.get('titulo')}: {r.get('snippet')}")
+
+    bloco_evidencias = "\n".join(evidencias_web) if evidencias_web else "Nenhum resultado web imediato."
+
     sistema = (
         "Você é o Pesquisador de Fatos do 'Conversa de Pescador'. "
-        "Sua função é identificar as alegações centrais, números, datas, invenções, nomes, regras e status legal na resposta "
-        "e confrontar com documentação e conhecimento público, mantendo coerência com o contexto encadeado se houver. "
-        "Para cada alegação relevante, indique a evidência factual documentada e fontes de referência de alta autoridade. "
+        "Sua função é confrontar as afirmações da resposta com a documentação, fatos públicos e as evidências colhidas na web. "
+        "Para cada alegação relevante, indique a evidência factual documentada, fontes e referências de alta autoridade. "
         "Seja estritamente objetivo. Devolva até 400 palavras."
     )
-    prompt = f"{contexto_anterior}\n\nPergunta do usuário: {pergunta}\n\nResposta do Pescador para verificar:\n{resposta_pescador}" if contexto_anterior else f"Pergunta do usuário: {pergunta}\n\nResposta do Pescador para verificar:\n{resposta_pescador}"
+    prompt = (
+        f"{contexto_anterior}\n\n"
+        f"Pergunta do usuário: {pergunta}\n\n"
+        f"Evidências colhidas na web:\n{bloco_evidencias}\n\n"
+        f"Resposta do Pescador para verificar:\n{resposta_pescador}"
+    ) if contexto_anterior else (
+        f"Pergunta do usuário: {pergunta}\n\n"
+        f"Evidências colhidas na web:\n{bloco_evidencias}\n\n"
+        f"Resposta do Pescador para verificar:\n{resposta_pescador}"
+    )
     sucesso, texto = invocar_modelo(prompt, sistema, motor=motor)
-    return texto if sucesso else ""
+    if sucesso and texto:
+        return f"{texto}\n\n[Evidências Web Recuperadas]\n{bloco_evidencias}"
+    return bloco_evidencias
 
 
 def parse_json_auditoria(saida: str) -> dict:
