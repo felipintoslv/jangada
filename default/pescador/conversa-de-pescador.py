@@ -246,8 +246,10 @@ def resolver_par(par_arg: str = None) -> tuple:
     return "auto", "auto"
 
 
-def invocar_modelo(prompt: str, sistema: str = "", motor: str = "auto") -> str:
-    """Invoca o modelo especificado ('agy', 'claude' ou 'auto') com fallback seguro."""
+def invocar_modelo(prompt: str, sistema: str = "", motor: str = "auto") -> tuple:
+    """Invoca o modelo especificado ('agy', 'claude' ou 'auto') com fallback seguro.
+    Retorna tupla (sucesso: bool, conteudo_ou_erro: str).
+    """
     agy_bin = obter_binario("agy")
     claude_bin = obter_binario("claude")
     prompt_completo = f"{sistema}\n\n{prompt}" if sistema else prompt
@@ -272,7 +274,7 @@ def invocar_modelo(prompt: str, sistema: str = "", motor: str = "auto") -> str:
                 timeout=180
             )
             if res.returncode == 0 and res.stdout.strip():
-                return res.stdout.strip()
+                return True, res.stdout.strip()
             else:
                 msg_err = (res.stderr or "").strip()
                 if msg_err:
@@ -281,7 +283,7 @@ def invocar_modelo(prompt: str, sistema: str = "", motor: str = "auto") -> str:
             erros.append(f"{nome}: {e}")
 
     detalhes = f" ({'; '.join(erros)})" if erros else ""
-    return f"Não foi possível conectar a um modelo de linguagem (verifique se 'agy' ou 'claude' está acessível no PATH).{detalhes}"
+    return False, f"Não foi possível conectar a um modelo de linguagem (verifique se 'agy' ou 'claude' está acessível no PATH).{detalhes}"
 
 
 def formatar_contexto_conversa(turnos: list) -> str:
@@ -304,8 +306,8 @@ def formatar_contexto_conversa(turnos: list) -> str:
     return "\n".join(linhas)
 
 
-def agente_pescador(pergunta: str, contexto_anterior: str = "", contestacoes: list = None, motor: str = "auto") -> str:
-    """Agente 1: O Pescador gera ou purifica a resposta explicativa detalhada."""
+def agente_pescador(pergunta: str, contexto_anterior: str = "", contestacoes: list = None, motor: str = "auto") -> tuple:
+    """Agente 1: O Pescador gera ou purifica a resposta explicativa detalhada. Retorna (sucesso, texto)."""
     if contestacoes:
         sistema = (
             "Você é o Pescador no aplicativo 'Conversa de Pescador' em fase de RETIFICAÇÃO E PURIFICAÇÃO FACTUAL. "
@@ -341,20 +343,12 @@ def agente_pesquisador(pergunta: str, resposta_pescador: str, contexto_anterior:
         "Seja estritamente objetivo. Devolva até 400 palavras."
     )
     prompt = f"{contexto_anterior}\n\nPergunta do usuário: {pergunta}\n\nResposta do Pescador para verificar:\n{resposta_pescador}" if contexto_anterior else f"Pergunta do usuário: {pergunta}\n\nResposta do Pescador para verificar:\n{resposta_pescador}"
-    return invocar_modelo(prompt, sistema, motor=motor)
+    sucesso, texto = invocar_modelo(prompt, sistema, motor=motor)
+    return texto if sucesso else ""
 
 
 def parse_json_auditoria(saida: str) -> dict:
     """Extrai e valida bloco JSON de auditoria de forma tolerante."""
-    if not saida or "Não foi possível conectar a um modelo" in saida:
-        return {
-            "grau_fato": 0,
-            "grau_pescador": 0,
-            "erro": True,
-            "veredito_resumo": "Falha na comunicação com o modelo de auditoria.",
-            "analise_itens": [],
-            "referencias": []
-        }
     try:
         match = re.search(r"\{.*\}", saida, re.DOTALL)
         if match:
@@ -389,7 +383,16 @@ def agente_auditor_factual(pergunta: str, resposta_pescador: str, pesquisa_fatos
         "Responda SOMENTE o bloco JSON."
     )
     prompt = f"{contexto_anterior}\n\nPergunta: {pergunta}\n\nResposta avaliada:\n{resposta_pescador}\n\nEvidências:\n{pesquisa_fatos}" if contexto_anterior else f"Pergunta: {pergunta}\n\nResposta avaliada:\n{resposta_pescador}\n\nEvidências:\n{pesquisa_fatos}"
-    saida = invocar_modelo(prompt, sistema, motor=motor)
+    sucesso, saida = invocar_modelo(prompt, sistema, motor=motor)
+    if not sucesso:
+        return {
+            "grau_fato": 0,
+            "grau_pescador": 0,
+            "erro": True,
+            "veredito_resumo": saida,
+            "analise_itens": [],
+            "referencias": []
+        }
     return parse_json_auditoria(saida)
 
 
@@ -412,7 +415,16 @@ def agente_auditor_metodologico(pergunta: str, resposta_pescador: str, pesquisa_
         "Responda SOMENTE o bloco JSON."
     )
     prompt = f"{contexto_anterior}\n\nPergunta: {pergunta}\n\nResposta avaliada:\n{resposta_pescador}\n\nEvidências:\n{pesquisa_fatos}" if contexto_anterior else f"Pergunta: {pergunta}\n\nResposta avaliada:\n{resposta_pescador}\n\nEvidências:\n{pesquisa_fatos}"
-    saida = invocar_modelo(prompt, sistema, motor=motor)
+    sucesso, saida = invocar_modelo(prompt, sistema, motor=motor)
+    if not sucesso:
+        return {
+            "grau_fato": 0,
+            "grau_pescador": 0,
+            "erro": True,
+            "veredito_resumo": saida,
+            "analise_itens": [],
+            "referencias": []
+        }
     return parse_json_auditoria(saida)
 
 
@@ -650,7 +662,10 @@ def processar_consulta(
         print(f"{C_DIM}Configuração: Par {C_BOLD}{par_rotulo}{C_RESET}{C_DIM} (Autor: {motor_autor} | Revisores: {motor_revisor}) | Limite de rodadas: {rodadas}{C_RESET}\n")
 
     if rapido:
-        resposta = agente_pescador(pergunta, contexto_anterior=contexto_str, motor=motor_autor)
+        sucesso, resposta = agente_pescador(pergunta, contexto_anterior=contexto_str, motor=motor_autor)
+        if not sucesso:
+            print(f"\n{C_RED}{C_BOLD}[Erro de Conexão]{C_RESET} {resposta}\n", file=sys.stderr)
+            return {}
         tempo_total = round(time.time() - inicio, 1)
         registro = {
             "data": datetime.now().isoformat(),
@@ -689,14 +704,14 @@ def processar_consulta(
             else:
                 print(f"\n{C_YELLOW}[Rodada {r}/{rodadas} · Purificação ({motor_autor})]{C_RESET} Reescrevendo e expurgando as conversas de pescador...")
 
-        resposta_atual = agente_pescador(
+        sucesso, resposta_atual = agente_pescador(
             pergunta,
             contexto_anterior=contexto_str,
             contestacoes=contestacoes if r > 1 else None,
             motor=motor_autor
         )
 
-        if "Não foi possível conectar a um modelo" in resposta_atual:
+        if not sucesso:
             print(f"\n{C_RED}{C_BOLD}[Erro de Conexão]{C_RESET} {resposta_atual}\n", file=sys.stderr)
             print(f"{C_YELLOW}Dica:{C_RESET} Certifique-se de que os executáveis ('claude', 'agy') estejam em ~/.local/bin e autenticados.\n", file=sys.stderr)
             return {}
