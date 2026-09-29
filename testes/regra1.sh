@@ -31,6 +31,7 @@ cat >"$tmp/leituras" <<'FIM'
 /usr/share/xsessions
 /usr/lib/modules
 /usr/local/bin
+~/.local/bin
 ~/.Renviron
 ~/.Rprofile
 ~/.cache/hyprland

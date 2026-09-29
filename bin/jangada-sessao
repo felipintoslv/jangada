@@ -3,7 +3,7 @@
 # Usa uma configuração própria, separada de ~/.config/hypr.
 JANGADA_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export JANGADA_PATH
-export PATH="$JANGADA_PATH/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.gemini/antigravity-cli/bin:$JANGADA_PATH/bin:$PATH"
 
 # shellcheck source=bin/jangada-config
 source "$JANGADA_PATH/bin/jangada-config"

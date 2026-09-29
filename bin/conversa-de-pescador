@@ -18,6 +18,8 @@ set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
+export PATH="$HOME/.local/bin:$HOME/.gemini/antigravity-cli/bin:$JANGADA_PATH/bin:${PATH:-/usr/bin}"
+
 dir_raiz="$(dirname "$(realpath "${BASH_SOURCE[0]}")")/.."
 script="$dir_raiz/default/pescador/conversa-de-pescador.py"
 [[ -f "$script" ]] || script="$JANGADA_PATH/default/pescador/conversa-de-pescador.py"

@@ -4,6 +4,8 @@ set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
+export PATH="$HOME/.local/bin:$HOME/.gemini/antigravity-cli/bin:$JANGADA_PATH/bin:${PATH:-/usr/bin}"
+
 dir_raiz="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 cmd="$dir_raiz/conversa-de-pescador"
 [[ -x "$cmd" ]] || cmd="$JANGADA_PATH/bin/conversa-de-pescador"

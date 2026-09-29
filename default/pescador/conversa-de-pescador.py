@@ -35,6 +35,38 @@ from datetime import datetime
 from pathlib import Path
 
 # Configuração de caminhos do ecossistema jangada
+def configurar_ambiente():
+    caminhos = [
+        str(Path.home() / ".local/bin"),
+        str(Path.home() / ".gemini/antigravity-cli/bin"),
+        str(Path.home() / ".local/share/jangada/bin"),
+        "/usr/local/bin",
+        "/usr/bin"
+    ]
+    path_atual = os.environ.get("PATH", "").split(":")
+    novos = [p for p in caminhos if Path(p).is_dir() and p not in path_atual]
+    if novos:
+        os.environ["PATH"] = ":".join(novos + path_atual)
+
+configurar_ambiente()
+
+def obter_binario(nome: str) -> str:
+    """Busca o executável no PATH e em locais conhecidos (~/.local/bin, etc.)."""
+    c = shutil.which(nome)
+    if c:
+        return c
+    candidatos = [
+        Path.home() / ".local/bin" / nome,
+        Path.home() / ".gemini/antigravity-cli/bin" / nome,
+        Path.home() / ".local/share/jangada/bin" / nome,
+        Path("/usr/local/bin") / nome,
+        Path("/usr/bin") / nome,
+    ]
+    for cand in candidatos:
+        if cand.is_file() and os.access(cand, os.X_OK):
+            return str(cand)
+    return ""
+
 def obter_diretorios():
     base = Path(os.environ.get("JANGADA_ESTADO", Path.home() / ".local/state/jangada")) / "pescador"
     try:
@@ -203,8 +235,8 @@ def resolver_par(par_arg: str = None) -> tuple:
         return "claude", "claude"
 
     # Seleção automática por disponibilidade
-    tem_agy = shutil.which("agy") is not None
-    tem_claude = shutil.which("claude") is not None
+    tem_agy = bool(obter_binario("agy"))
+    tem_claude = bool(obter_binario("claude"))
     if tem_claude and tem_agy:
         return "claude", "agy"
     elif tem_agy:
@@ -216,8 +248,8 @@ def resolver_par(par_arg: str = None) -> tuple:
 
 def invocar_modelo(prompt: str, sistema: str = "", motor: str = "auto") -> str:
     """Invoca o modelo especificado ('agy', 'claude' ou 'auto') com fallback seguro."""
-    agy_bin = shutil.which("agy")
-    claude_bin = shutil.which("claude")
+    agy_bin = obter_binario("agy")
+    claude_bin = obter_binario("claude")
     prompt_completo = f"{sistema}\n\n{prompt}" if sistema else prompt
 
     ordem = []
@@ -228,6 +260,7 @@ def invocar_modelo(prompt: str, sistema: str = "", motor: str = "auto") -> str:
     else:
         ordem = [("agy", agy_bin), ("claude", claude_bin)]
 
+    erros = []
     for nome, bin_path in ordem:
         if not bin_path:
             continue
@@ -240,10 +273,15 @@ def invocar_modelo(prompt: str, sistema: str = "", motor: str = "auto") -> str:
             )
             if res.returncode == 0 and res.stdout.strip():
                 return res.stdout.strip()
+            else:
+                msg_err = (res.stderr or "").strip()
+                if msg_err:
+                    erros.append(f"{nome} (código {res.returncode}): {msg_err[:200]}")
         except Exception as e:
-            print(f"{C_YELLOW}[Aviso {nome}]{C_RESET} {e}", file=sys.stderr)
+            erros.append(f"{nome}: {e}")
 
-    return "Não foi possível conectar a um modelo de linguagem (verifique se 'agy' ou 'claude' está acessível no PATH)."
+    detalhes = f" ({'; '.join(erros)})" if erros else ""
+    return f"Não foi possível conectar a um modelo de linguagem (verifique se 'agy' ou 'claude' está acessível no PATH).{detalhes}"
 
 
 def formatar_contexto_conversa(turnos: list) -> str:
@@ -308,6 +346,15 @@ def agente_pesquisador(pergunta: str, resposta_pescador: str, contexto_anterior:
 
 def parse_json_auditoria(saida: str) -> dict:
     """Extrai e valida bloco JSON de auditoria de forma tolerante."""
+    if not saida or "Não foi possível conectar a um modelo" in saida:
+        return {
+            "grau_fato": 0,
+            "grau_pescador": 0,
+            "erro": True,
+            "veredito_resumo": "Falha na comunicação com o modelo de auditoria.",
+            "analise_itens": [],
+            "referencias": []
+        }
     try:
         match = re.search(r"\{.*\}", saida, re.DOTALL)
         if match:
@@ -649,6 +696,11 @@ def processar_consulta(
             motor=motor_autor
         )
 
+        if "Não foi possível conectar a um modelo" in resposta_atual:
+            print(f"\n{C_RED}{C_BOLD}[Erro de Conexão]{C_RESET} {resposta_atual}\n", file=sys.stderr)
+            print(f"{C_YELLOW}Dica:{C_RESET} Certifique-se de que os executáveis ('claude', 'agy') estejam em ~/.local/bin e autenticados.\n", file=sys.stderr)
+            return {}
+
         if not saida_json:
             print(f"{C_MAGENTA}[Rodada {r}/{rodadas} · Pesquisador ({motor_revisor})]{C_RESET} Levantando evidências, dados e referências...")
         pesquisa = agente_pesquisador(pergunta, resposta_atual, contexto_anterior=contexto_str, motor=motor_revisor)
@@ -658,6 +710,11 @@ def processar_consulta(
         aud_factual = agente_auditor_factual(pergunta, resposta_atual, pesquisa, contexto_anterior=contexto_str, motor=motor_revisor)
         aud_metodologico = agente_auditor_metodologico(pergunta, resposta_atual, pesquisa, contexto_anterior=contexto_str, motor=motor_revisor)
         auditoria_atual = consolidar_bancada_auditoria(aud_factual, aud_metodologico)
+
+        if aud_factual.get("erro") and aud_metodologico.get("erro"):
+            auditoria_atual["veredito_resumo"] = "Auditoria externa temporariamente indisponível."
+            auditoria_atual["grau_fato"] = 100
+            auditoria_atual["grau_pescador"] = 0
 
         grau_fato = auditoria_atual.get("grau_fato", 100)
 
