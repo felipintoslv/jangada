@@ -186,38 +186,62 @@ def ouvir_microfone() -> str:
     return ""
 
 
-def invocar_modelo(prompt: str, sistema: str = "") -> str:
-    """Invoca o modelo principal via agy ou claude."""
+def resolver_par(par_arg: str = None) -> tuple:
+    """Retorna a tupla (motor_autor, motor_revisor).
+    Pares suportados: claude-agy, agy-claude, agy-agy, claude-claude.
+    """
+    par_env = os.environ.get("JANGADA_PESCADOR_PAR") or os.environ.get("JANGADA_VALIDAR_REVISOR")
+    p = (par_arg or par_env or "").lower().strip()
+
+    if p in ("claude-agy", "claude_agy"):
+        return "claude", "agy"
+    elif p in ("agy-claude", "agy_claude"):
+        return "agy", "claude"
+    elif p in ("agy-agy", "agy_agy", "agy"):
+        return "agy", "agy"
+    elif p in ("claude-claude", "claude_claude", "claude"):
+        return "claude", "claude"
+
+    # Seleção automática por disponibilidade
+    tem_agy = shutil.which("agy") is not None
+    tem_claude = shutil.which("claude") is not None
+    if tem_claude and tem_agy:
+        return "claude", "agy"
+    elif tem_agy:
+        return "agy", "agy"
+    elif tem_claude:
+        return "claude", "claude"
+    return "auto", "auto"
+
+
+def invocar_modelo(prompt: str, sistema: str = "", motor: str = "auto") -> str:
+    """Invoca o modelo especificado ('agy', 'claude' ou 'auto') com fallback seguro."""
     agy_bin = shutil.which("agy")
     claude_bin = shutil.which("claude")
-
     prompt_completo = f"{sistema}\n\n{prompt}" if sistema else prompt
 
-    if agy_bin:
-        try:
-            res = subprocess.run(
-                [agy_bin, "-p", prompt_completo],
-                capture_output=True,
-                text=True,
-                timeout=120
-            )
-            if res.returncode == 0 and res.stdout.strip():
-                return res.stdout.strip()
-        except Exception as e:
-            print(f"{C_YELLOW}[Aviso agy]{C_RESET} {e}", file=sys.stderr)
+    ordem = []
+    if motor == "agy":
+        ordem = [("agy", agy_bin), ("claude", claude_bin)]
+    elif motor == "claude":
+        ordem = [("claude", claude_bin), ("agy", agy_bin)]
+    else:
+        ordem = [("agy", agy_bin), ("claude", claude_bin)]
 
-    if claude_bin:
+    for nome, bin_path in ordem:
+        if not bin_path:
+            continue
         try:
             res = subprocess.run(
-                [claude_bin, "-p", prompt_completo],
+                [bin_path, "-p", prompt_completo],
                 capture_output=True,
                 text=True,
-                timeout=120
+                timeout=180
             )
             if res.returncode == 0 and res.stdout.strip():
                 return res.stdout.strip()
         except Exception as e:
-            print(f"{C_YELLOW}[Aviso claude]{C_RESET} {e}", file=sys.stderr)
+            print(f"{C_YELLOW}[Aviso {nome}]{C_RESET} {e}", file=sys.stderr)
 
     return "Não foi possível conectar a um modelo de linguagem (verifique se 'agy' ou 'claude' está acessível no PATH)."
 
@@ -242,71 +266,137 @@ def formatar_contexto_conversa(turnos: list) -> str:
     return "\n".join(linhas)
 
 
-def agente_pescador(pergunta: str, contexto_anterior: str = "") -> str:
-    """Agente 1: O Pescador gera a resposta narrativa explicativa inicial."""
-    sistema = (
-        "Você é o Pescador no aplicativo 'Conversa de Pescador'. "
-        "Seu objetivo é dar uma resposta muito detalhada, envolvente, rica e bem explicada sobre o tema perguntado. "
-        "Se houver contexto de conversa anterior, mantenha total continuidade e encadeamento com os turnos passados. "
-        "Apresente hipóteses, contextualização histórica e técnica. "
-        "Não se preocupe se existirem versões conflitantes ou detalhes lendários na cultura popular: "
-        "apresente o panorama completo. Responda em português claro e conciso."
-    )
-    prompt = f"{contexto_anterior}\n\nPergunta atual: {pergunta}" if contexto_anterior else pergunta
-    return invocar_modelo(prompt, sistema)
+def agente_pescador(pergunta: str, contexto_anterior: str = "", contestacoes: list = None, motor: str = "auto") -> str:
+    """Agente 1: O Pescador gera ou purifica a resposta explicativa detalhada."""
+    if contestacoes:
+        sistema = (
+            "Você é o Pescador no aplicativo 'Conversa de Pescador' em fase de RETIFICAÇÃO E PURIFICAÇÃO FACTUAL. "
+            "Sua resposta da rodada anterior foi auditada e sofreu as seguintes contestações irrefutáveis por conter 'conversa de pescador' ou imprecisões:\n"
+            + "\n".join([f"- {c}" for c in contestacoes]) + "\n\n"
+            "Sua obrigação nesta nova rodada:\n"
+            "1. Reescreva a resposta COMPLETA em português claro e objetivo.\n"
+            "2. Elimine RIGOROSAMENTE todas as invenções, anacronismos, cartas banidas/ilegais, citações fictícias e erros apontados.\n"
+            "3. Substitua cada erro pela informação factual exata comprovada.\n"
+            "4. Não mencione a auditoria nem as contestações: apenas entregue a versão reescrita, precisa e verdadeira."
+        )
+        prompt = f"{contexto_anterior}\n\nPergunta do usuário: {pergunta}\n\nEntregue a resposta reescrita e purificada:" if contexto_anterior else f"Pergunta do usuário: {pergunta}\n\nEntregue a resposta reescrita e purificada:"
+    else:
+        sistema = (
+            "Você é o Pescador no aplicativo 'Conversa de Pescador'. "
+            "Seu objetivo é dar uma resposta muito detalhada, rica, explicativa e tecnicamente sólida sobre o tema perguntado. "
+            "Se houver contexto de conversa anterior, mantenha total continuidade e encadeamento com os turnos passados. "
+            "Apresente hipóteses, contextualização histórica e técnica. "
+            "Responda em português claro e conciso."
+        )
+        prompt = f"{contexto_anterior}\n\nPergunta atual: {pergunta}" if contexto_anterior else pergunta
+
+    return invocar_modelo(prompt, sistema, motor=motor)
 
 
-def agente_pesquisador(pergunta: str, resposta_pescador: str, contexto_anterior: str = "") -> str:
+def agente_pesquisador(pergunta: str, resposta_pescador: str, contexto_anterior: str = "", motor: str = "auto") -> str:
     """Agente 2: Pesquisa fatos e referências na internet para auditar a resposta."""
     sistema = (
         "Você é o Pesquisador de Fatos do 'Conversa de Pescador'. "
-        "Sua função é identificar as alegações centrais, números, datas, invenções e nomes na resposta fornecida "
+        "Sua função é identificar as alegações centrais, números, datas, invenções, nomes, regras e status legal na resposta "
         "e confrontar com documentação e conhecimento público, mantendo coerência com o contexto encadeado se houver. "
-        "Para cada alegação relevante, indique:\n"
-        "- A alegação específica.\n"
-        "- A evidência factual documentada.\n"
-        "- Fontes de referência de alta autoridade (instituições, normas, historiadores, artigos).\n"
+        "Para cada alegação relevante, indique a evidência factual documentada e fontes de referência de alta autoridade. "
         "Seja estritamente objetivo. Devolva até 400 palavras."
     )
     prompt = f"{contexto_anterior}\n\nPergunta do usuário: {pergunta}\n\nResposta do Pescador para verificar:\n{resposta_pescador}" if contexto_anterior else f"Pergunta do usuário: {pergunta}\n\nResposta do Pescador para verificar:\n{resposta_pescador}"
-    return invocar_modelo(prompt, sistema)
+    return invocar_modelo(prompt, sistema, motor=motor)
 
 
-def agente_auditor(pergunta: str, resposta_pescador: str, pesquisa_fatos: str, contexto_anterior: str = "") -> dict:
-    """Agente 3: O Auditor Desconfiado emite o veredito e o termômetro de veracidade."""
-    sistema = (
-        "Você é o Auditor Desconfiado do 'Conversa de Pescador'. "
-        "Você é extremamente cético, rigoroso e odeia 'conversa de pescador' (alucinações, exageros, lendas urbanas, anacronismos e dados inventados). "
-        "Compare a resposta inicial com as evidências do pesquisador, considerando o encadeamento prévio se fornecido. "
-        "Devolva a resposta EXCLUSIVAMENTE em formato JSON com a seguinte estrutura:\n"
-        "{\n"
-        '  "grau_fato": 85,\n'
-        '  "grau_pescador": 15,\n'
-        '  "veredito_resumo": "Explicação em 2 frases sobre a confiabilidade geral.",\n'
-        '  "analise_itens": [\n'
-        '    {"afirmacao": "...", "status": "COMPROVADO" ou "CONVERSA DE PESCADOR" ou "CONTROVERSO", "detalhe": "..."}\n'
-        "  ],\n"
-        '  "referencias": ["Fonte 1 (instituição ou autor)", "Fonte 2"]\n'
-        "}\n"
-        "Responda SOMENTE o bloco JSON sem crases adicionais nem introdução."
-    )
-    prompt = f"{contexto_anterior}\n\nPergunta: {pergunta}\n\nResposta avaliada:\n{resposta_pescador}\n\nEvidências apuradas:\n{pesquisa_fatos}" if contexto_anterior else f"Pergunta: {pergunta}\n\nResposta avaliada:\n{resposta_pescador}\n\nEvidências apuradas:\n{pesquisa_fatos}"
-    saida = invocar_modelo(prompt, sistema)
-
-    # Parser seguro de JSON
+def parse_json_auditoria(saida: str) -> dict:
+    """Extrai e valida bloco JSON de auditoria de forma tolerante."""
     try:
         match = re.search(r"\{.*\}", saida, re.DOTALL)
         if match:
             return json.loads(match.group(0))
     except Exception:
         pass
-
     return {
-        "grau_fato": 70,
-        "grau_pescador": 30,
-        "veredito_resumo": "Análise processada. Verifique os pontos detalhados na resposta.",
+        "grau_fato": 75,
+        "grau_pescador": 25,
+        "veredito_resumo": "Análise processada. Verifique os pontos detalhados na checagem.",
         "analise_itens": [],
         "referencias": []
+    }
+
+
+def agente_auditor_factual(pergunta: str, resposta_pescador: str, pesquisa_fatos: str, contexto_anterior: str = "", motor: str = "auto") -> dict:
+    """Subagente Auditor 1: Auditor Factual e Cético (fatos, datas, regras, status legal, cálculos)."""
+    sistema = (
+        "Você é o Auditor Factual do 'Conversa de Pescador'. "
+        "Você é extremamente cético, implacável contra 'conversa de pescador' (alucinações, dados inventados, cartas banidas ou ilegais, regras distorcidas). "
+        "Compare a resposta com as evidências do pesquisador. "
+        "Devolva a resposta EXCLUSIVAMENTE em formato JSON com a estrutura:\n"
+        "{\n"
+        '  "grau_fato": 80,\n'
+        '  "grau_pescador": 20,\n'
+        '  "veredito_resumo": "Diagnóstico factual em 2 frases.",\n'
+        '  "analise_itens": [\n'
+        '    {"afirmacao": "...", "status": "COMPROVADO" ou "CONVERSA DE PESCADOR" ou "CONTROVERSO", "detalhe": "..."}\n'
+        "  ],\n"
+        '  "referencias": ["Fonte 1", "Fonte 2"]\n'
+        "}\n"
+        "Responda SOMENTE o bloco JSON."
+    )
+    prompt = f"{contexto_anterior}\n\nPergunta: {pergunta}\n\nResposta avaliada:\n{resposta_pescador}\n\nEvidências:\n{pesquisa_fatos}" if contexto_anterior else f"Pergunta: {pergunta}\n\nResposta avaliada:\n{resposta_pescador}\n\nEvidências:\n{pesquisa_fatos}"
+    saida = invocar_modelo(prompt, sistema, motor=motor)
+    return parse_json_auditoria(saida)
+
+
+def agente_auditor_metodologico(pergunta: str, resposta_pescador: str, pesquisa_fatos: str, contexto_anterior: str = "", motor: str = "auto") -> dict:
+    """Subagente Auditor 2: Auditor Metodológico e Lógico (consistência formal, premissas, falácias, escopo)."""
+    sistema = (
+        "Você é o Auditor Metodológico do 'Conversa de Pescador'. "
+        "Você audita a consistência lógica, premissas implícitas, validade de modelos econométricos, teoremas ou regras de domínio. "
+        "Identifique se há saltos lógicos, conclusões não suportadas ou confusões conceituais. "
+        "Devolva a resposta EXCLUSIVAMENTE em formato JSON com a estrutura:\n"
+        "{\n"
+        '  "grau_fato": 85,\n'
+        '  "grau_pescador": 15,\n'
+        '  "veredito_resumo": "Diagnóstico lógico e metodológico em 2 frases.",\n'
+        '  "analise_itens": [\n'
+        '    {"afirmacao": "...", "status": "COMPROVADO" ou "CONVERSA DE PESCADOR" ou "CONTROVERSO", "detalhe": "..."}\n'
+        "  ],\n"
+        '  "referencias": ["Referência Teórica 1", "Referência 2"]\n'
+        "}\n"
+        "Responda SOMENTE o bloco JSON."
+    )
+    prompt = f"{contexto_anterior}\n\nPergunta: {pergunta}\n\nResposta avaliada:\n{resposta_pescador}\n\nEvidências:\n{pesquisa_fatos}" if contexto_anterior else f"Pergunta: {pergunta}\n\nResposta avaliada:\n{resposta_pescador}\n\nEvidências:\n{pesquisa_fatos}"
+    saida = invocar_modelo(prompt, sistema, motor=motor)
+    return parse_json_auditoria(saida)
+
+
+def consolidar_bancada_auditoria(aud1: dict, aud2: dict) -> dict:
+    """Consolida os pareceres da bancada de auditores (factual + metodológico)."""
+    itens = []
+    afirmacoes_vistas = set()
+
+    for item in (aud1.get("analise_itens", []) + aud2.get("analise_itens", [])):
+        af = item.get("afirmacao", "").strip()
+        if af and af not in afirmacoes_vistas:
+            afirmacoes_vistas.add(af)
+            itens.append(item)
+
+    gf1 = int(aud1.get("grau_fato", 100))
+    gf2 = int(aud2.get("grau_fato", 100))
+    grau_fato = round((gf1 + gf2) / 2.0)
+    grau_pescador = 100 - grau_fato
+
+    v1 = aud1.get("veredito_resumo", "").strip()
+    v2 = aud2.get("veredito_resumo", "").strip()
+    veredito = f"{v1} {v2}".strip()
+
+    refs = list(dict.fromkeys(aud1.get("referencias", []) + aud2.get("referencias", [])))
+
+    return {
+        "grau_fato": grau_fato,
+        "grau_pescador": grau_pescador,
+        "veredito_resumo": veredito,
+        "analise_itens": itens,
+        "referencias": refs
     }
 
 
@@ -486,39 +576,50 @@ def mostrar_historico(modo_fzf: bool = True):
     print()
 
 
-def processar_consulta(pergunta: str, sessao_id: str = None, falar_voz: bool = False, rapido: bool = False, saida_json: bool = False) -> dict:
-    """Executa o ciclo completo de multi-agentes para a pergunta com suporte a encadeamento."""
+def processar_consulta(
+    pergunta: str,
+    sessao_id: str = None,
+    par: str = None,
+    rodadas: int = 2,
+    falar_voz: bool = False,
+    rapido: bool = False,
+    saida_json: bool = False
+) -> dict:
+    """Executa o ciclo completo de multi-agentes com pares de modelos e rodadas de purificação."""
     inicio = time.time()
 
     sessao_nome = sessao_id or f"sessao-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     sessao_dados = carregar_sessao(sessao_nome)
     turnos_anteriores = sessao_dados.get("turnos", [])
     contexto_str = formatar_contexto_conversa(turnos_anteriores)
-
     num_turno = len(turnos_anteriores) + 1
+
+    motor_autor, motor_revisor = resolver_par(par)
+    par_rotulo = f"{motor_autor}-{motor_revisor}"
 
     if not saida_json:
         prefixo_turno = f"[Turno {num_turno} | Sessão: {sessao_nome}] " if num_turno > 1 else ""
-        print(f"\n{C_BOLD}{prefixo_turno}Pergunta:{C_RESET} {pergunta}\n")
-        print(f"{C_BLUE}[1/3 Pescador]{C_RESET} Formulando a explicação detalhada...")
-
-    resposta = agente_pescador(pergunta, contexto_anterior=contexto_str)
+        print(f"\n{C_BOLD}{prefixo_turno}Pergunta:{C_RESET} {pergunta}")
+        print(f"{C_DIM}Configuração: Par {C_BOLD}{par_rotulo}{C_RESET}{C_DIM} (Autor: {motor_autor} | Revisores: {motor_revisor}) | Limite de rodadas: {rodadas}{C_RESET}\n")
 
     if rapido:
+        resposta = agente_pescador(pergunta, contexto_anterior=contexto_str, motor=motor_autor)
         tempo_total = round(time.time() - inicio, 1)
         registro = {
             "data": datetime.now().isoformat(),
             "sessao": sessao_nome,
             "turno": num_turno,
+            "par": par_rotulo,
+            "rodadas": 1,
             "pergunta": pergunta,
             "resposta": resposta,
             "auditoria": {"grau_fato": 100, "grau_pescador": 0, "veredito_resumo": "Resposta rápida sem auditoria de fontes."},
+            "historico_rodadas": [{"rodada": 1, "grau_fato": 100, "status": "rapido"}],
             "tempo_segundos": tempo_total
         }
         sessao_dados["turnos"].append(registro)
         salvar_sessao(sessao_dados)
         salvar_historico(registro)
-
         if saida_json:
             print(json.dumps(registro, ensure_ascii=False, indent=2))
         else:
@@ -528,24 +629,75 @@ def processar_consulta(pergunta: str, sessao_id: str = None, falar_voz: bool = F
                 falar(resposta)
         return registro
 
-    if not saida_json:
-        print(f"{C_MAGENTA}[2/3 Pesquisador]{C_RESET} Lançando a rede na internet e colhendo fontes...")
+    # Ciclo de rodadas com purificação factual iterativa
+    historico_rodadas = []
+    resposta_atual = ""
+    auditoria_atual = {}
+    contestacoes = []
 
-    pesquisa = agente_pesquisador(pergunta, resposta, contexto_anterior=contexto_str)
+    for r in range(1, rodadas + 1):
+        if not saida_json:
+            if r == 1:
+                print(f"{C_BLUE}[Rodada 1/{rodadas} · Pescador ({motor_autor})]{C_RESET} Formulando resposta explicativa detalhada...")
+            else:
+                print(f"\n{C_YELLOW}[Rodada {r}/{rodadas} · Purificação ({motor_autor})]{C_RESET} Reescrevendo e expurgando as conversas de pescador...")
 
-    if not saida_json:
-        print(f"{C_YELLOW}[3/3 Auditor Desconfiado]{C_RESET} Separando o que é peixe graúdo de história fiada...")
+        resposta_atual = agente_pescador(
+            pergunta,
+            contexto_anterior=contexto_str,
+            contestacoes=contestacoes if r > 1 else None,
+            motor=motor_autor
+        )
 
-    auditoria = agente_auditor(pergunta, resposta, pesquisa, contexto_anterior=contexto_str)
+        if not saida_json:
+            print(f"{C_MAGENTA}[Rodada {r}/{rodadas} · Pesquisador ({motor_revisor})]{C_RESET} Levantando evidências, dados e referências...")
+        pesquisa = agente_pesquisador(pergunta, resposta_atual, contexto_anterior=contexto_str, motor=motor_revisor)
+
+        if not saida_json:
+            print(f"{C_YELLOW}[Rodada {r}/{rodadas} · Bancada de Auditores ({motor_revisor})]{C_RESET} Auditando fatos e metodologia...")
+        aud_factual = agente_auditor_factual(pergunta, resposta_atual, pesquisa, contexto_anterior=contexto_str, motor=motor_revisor)
+        aud_metodologico = agente_auditor_metodologico(pergunta, resposta_atual, pesquisa, contexto_anterior=contexto_str, motor=motor_revisor)
+        auditoria_atual = consolidar_bancada_auditoria(aud_factual, aud_metodologico)
+
+        grau_fato = auditoria_atual.get("grau_fato", 100)
+
+        # Extrai contestações apontadas
+        contestacoes = []
+        for it in auditoria_atual.get("analise_itens", []):
+            st = it.get("status", "")
+            if "CONVERSA" in st or "PESCADOR" in st or "CONTROVERSO" in st:
+                contestacoes.append(f"{it.get('afirmacao')}: {it.get('detalhe')}")
+
+        historico_rodadas.append({
+            "rodada": r,
+            "grau_fato": grau_fato,
+            "contestacoes": len(contestacoes),
+            "veredito": auditoria_atual.get("veredito_resumo")
+        })
+
+        if not saida_json:
+            print(f"  -> Termômetro Rodada {r}: {barra_termometro(grau_fato, 100 - grau_fato)}")
+
+        # Critério de parada: se atingiu excelência (>= 90% fato) ou se não há contestações
+        if grau_fato >= 90 or not contestacoes:
+            if not saida_json and r > 1:
+                print(f"  {C_GREEN}{C_BOLD}[Aprovado]{C_RESET} Resposta purificada com alto rigor factual na rodada {r}!")
+            break
+        elif r < rodadas and not saida_json:
+            print(f"  {C_YELLOW}[Retificação]{C_RESET} Detectadas {len(contestacoes)} contestações. Acionando {motor_autor} para purificar na rodada seguinte...")
+
     tempo_total = round(time.time() - inicio, 1)
 
     registro = {
         "data": datetime.now().isoformat(),
         "sessao": sessao_nome,
         "turno": num_turno,
+        "par": par_rotulo,
+        "rodadas": len(historico_rodadas),
         "pergunta": pergunta,
-        "resposta": resposta,
-        "auditoria": auditoria,
+        "resposta": resposta_atual,
+        "auditoria": auditoria_atual,
+        "historico_rodadas": historico_rodadas,
         "tempo_segundos": tempo_total
     }
     sessao_dados["turnos"].append(registro)
@@ -557,22 +709,25 @@ def processar_consulta(pergunta: str, sessao_id: str = None, falar_voz: bool = F
         return registro
 
     # Exibição rica no terminal
-    print(f"\n{C_CYAN}{C_BOLD}=================== Resposta do Pescador ==================={C_RESET}\n")
-    print(resposta)
+    print(f"\n{C_CYAN}{C_BOLD}=================== Resposta Purificada Final ==================={C_RESET}\n")
+    print(resposta_atual)
 
-    print(f"\n{C_YELLOW}{C_BOLD}================= Veredito da Auditoria ==================={C_RESET}\n")
-    grau_fato = auditoria.get("grau_fato", 100)
-    grau_pescador = auditoria.get("grau_pescador", 0)
+    print(f"\n{C_YELLOW}{C_BOLD}================= Veredito Final da Bancada ==================={C_RESET}\n")
+    grau_fato_final = auditoria_atual.get("grau_fato", 100)
+    grau_pescador_final = auditoria_atual.get("grau_pescador", 0)
 
-    print(f"Termômetro de Pescador: {barra_termometro(grau_fato, grau_pescador)}\n")
-    print(f"{C_BOLD}Diagnóstico:{C_RESET} {auditoria.get('veredito_resumo', '')}\n")
+    print(f"Termômetro de Pescador: {barra_termometro(grau_fato_final, grau_pescador_final)}")
+    if len(historico_rodadas) > 1:
+        evolucao_str = " -> ".join([f"R{h['rodada']}: {h['grau_fato']}%" for h in historico_rodadas])
+        print(f"{C_DIM}Evolução do Refinamento: {evolucao_str}{C_RESET}")
+    print(f"\n{C_BOLD}Diagnóstico Consolidado:{C_RESET} {auditoria_atual.get('veredito_resumo', '')}\n")
 
-    itens = auditoria.get("analise_itens", [])
+    itens = auditoria_atual.get("analise_itens", [])
     if itens:
         print(f"{C_BOLD}Checagem Ponto a Ponto:{C_RESET}")
         for item in itens:
             st = item.get("status", "")
-            if "COMPROVADO" in st:
+            if "COMPROVADO" in st or "FATO" in st:
                 rotulo = f"{C_GREEN}[FATO REAL]{C_RESET}"
             elif "CONVERSA" in st or "PESCADOR" in st:
                 rotulo = f"{C_RED}[CONVERSA DE PESCADOR]{C_RESET}"
@@ -583,34 +738,37 @@ def processar_consulta(pergunta: str, sessao_id: str = None, falar_voz: bool = F
             if item.get("detalhe"):
                 print(f"    {C_DIM}-> {item.get('detalhe')}{C_RESET}")
 
-    refs = auditoria.get("referencias", [])
+    refs = auditoria_atual.get("referencias", [])
     if refs:
         print(f"\n{C_BOLD}Referências e Fontes:{C_RESET}")
         for ref in refs:
             print(f"  {C_BLUE}*{C_RESET} {ref}")
 
-    print(f"\n{C_DIM}Consulta finalizada em {tempo_total}s (Sessão: {sessao_nome} | Turno {num_turno}).{C_RESET}\n")
+    print(f"\n{C_DIM}Consulta finalizada em {tempo_total}s (Sessão: {sessao_nome} | Turno {num_turno} | Par: {par_rotulo} | Rodadas: {len(historico_rodadas)}).{C_RESET}\n")
 
     if falar_voz:
-        resumo_fala = f"{auditoria.get('veredito_resumo', '')}. A resposta principal é: {resposta[:300]}"
+        resumo_fala = f"{auditoria_atual.get('veredito_resumo', '')}. A resposta principal é: {resposta_atual[:300]}"
         print(f"{C_CYAN}[Voz]{C_RESET} Narrando resumo com Piper TTS...")
         falar(resumo_fala)
 
     return registro
 
 
-def modo_interativo(sessao_id: str = None, falar_voz: bool = False):
+def modo_interativo(sessao_id: str = None, par: str = "claude-agy", rodadas: int = 2, falar_voz: bool = False):
     """Loop conversacional interativo com encadeamento de turnos e gerenciamento de sessões."""
     print(BANNER)
 
     sessao_atual = sessao_id or f"sessao-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     dados_sessao = carregar_sessao(sessao_atual)
 
+    par_ativo = par or "claude-agy"
+    rodadas_ativas = rodadas
+
     voz_status = f"{C_GREEN}ativa{C_RESET}" if falar_voz else f"{C_DIM}desativada{C_RESET}"
     turnos_qtd = len(dados_sessao.get("turnos", []))
     info_turnos = f" ({turnos_qtd} turnos prévios)" if turnos_qtd > 0 else ""
 
-    print(f"Sessão: {C_BOLD}{sessao_atual}{C_RESET}{info_turnos} | Voz: {voz_status}")
+    print(f"Sessão: {C_BOLD}{sessao_atual}{C_RESET}{info_turnos} | Par: {C_BOLD}{par_ativo}{C_RESET} | Rodadas: {C_BOLD}{rodadas_ativas}{C_RESET} | Voz: {voz_status}")
     print(f"Digite {C_BOLD}/ajuda{C_RESET} para ver comandos, {C_BOLD}/sair{C_RESET} para fechar.\n")
 
     while True:
@@ -639,7 +797,23 @@ def modo_interativo(sessao_id: str = None, falar_voz: bool = False):
             elif entrada == "/ouvir":
                 texto_ouvido = ouvir_microfone()
                 if texto_ouvido:
-                    processar_consulta(texto_ouvido, sessao_id=sessao_atual, falar_voz=falar_voz)
+                    processar_consulta(texto_ouvido, sessao_id=sessao_atual, par=par_ativo, rodadas=rodadas_ativas, falar_voz=falar_voz)
+                continue
+            elif entrada.startswith("/par"):
+                partes = entrada.split(maxsplit=1)
+                if len(partes) > 1:
+                    par_ativo = partes[1].strip()
+                    print(f"{C_GREEN}Par de modelos alterado para '{par_ativo}'.{C_RESET}")
+                else:
+                    print(f"Par ativo: {C_BOLD}{par_ativo}{C_RESET} (opções: claude-agy, agy-claude, agy-agy, claude-claude)")
+                continue
+            elif entrada.startswith("/rodadas"):
+                partes = entrada.split(maxsplit=1)
+                if len(partes) > 1 and partes[1].strip().isdigit():
+                    rodadas_ativas = max(1, min(4, int(partes[1].strip())))
+                    print(f"{C_GREEN}Limite de rodadas ajustado para {rodadas_ativas}.{C_RESET}")
+                else:
+                    print(f"Limite atual: {C_BOLD}{rodadas_ativas}{C_RESET} rodadas.")
                 continue
             elif entrada.startswith("/sessao"):
                 partes = entrada.split(maxsplit=1)
@@ -671,6 +845,8 @@ def modo_interativo(sessao_id: str = None, falar_voz: bool = False):
                 continue
             elif entrada in ("/ajuda", "/help", "ajuda", "help"):
                 print(f"\n{C_BOLD}Comandos do Chat:{C_RESET}")
+                print("  /par [nome]    - Alterna o par de modelos (claude-agy, agy-claude, agy-agy, claude-claude)")
+                print("  /rodadas [N]   - Ajusta o número de rodadas de refinamento/purificação (1 a 4)")
                 print("  /sessao [nome] - Mostra ou alterna a sessão encadeada ativa")
                 print("  /novo          - Inicia uma nova conversa limpa")
                 print("  /contexto      - Mostra os turnos acumulados na sessão atual")
@@ -681,7 +857,13 @@ def modo_interativo(sessao_id: str = None, falar_voz: bool = False):
                 print("  /sair          - Encerra o chat\n")
                 continue
 
-            processar_consulta(entrada, sessao_id=sessao_atual, falar_voz=falar_voz)
+            processar_consulta(
+                entrada,
+                sessao_id=sessao_atual,
+                par=par_ativo,
+                rodadas=rodadas_ativas,
+                falar_voz=falar_voz
+            )
 
         except (KeyboardInterrupt, EOFError):
             print(f"\n\n{C_CYAN}Pescaria encerrada.{C_RESET}\n")
@@ -691,12 +873,14 @@ def modo_interativo(sessao_id: str = None, falar_voz: bool = False):
 def main():
     parser = argparse.ArgumentParser(
         prog="conversa-de-pescador",
-        description="Conversa de Pescador: chat com auditoria multi-agente, busca de fontes e voz em português.",
+        description="Conversa de Pescador: chat com auditoria multi-agente, bancada cruzada, busca de fontes e voz em português.",
         add_help=False
     )
     parser.add_argument("-h", "--help", "--ajuda", action="help", help="Mostra esta mensagem de ajuda")
     parser.add_argument("pergunta", nargs="*", help="Pergunta direta (se omitida, abre o modo interativo)")
     parser.add_argument("-s", "--sessao", help="Identificador da sessão encadeada")
+    parser.add_argument("-p", "--par", help="Par de modelos cruzados (claude-agy, agy-claude, agy-agy, claude-claude)")
+    parser.add_argument("--rodadas", type=int, default=2, help="Número máximo de rodadas de refinamento e purificação (padrão: 2)")
     parser.add_argument("-f", "--falar", action="store_true", help="Narra a resposta em voz alta com Piper TTS")
     parser.add_argument("-o", "--ouvir", action="store_true", help="Grava a pergunta do microfone antes de responder")
     parser.add_argument("-r", "--rapido", action="store_true", help="Resposta rápida sem rodada de auditoria")
@@ -723,12 +907,14 @@ def main():
         processar_consulta(
             pergunta_texto,
             sessao_id=args.sessao,
+            par=args.par,
+            rodadas=args.rodadas,
             falar_voz=args.falar,
             rapido=args.rapido,
             saida_json=args.json
         )
     else:
-        modo_interativo(sessao_id=args.sessao, falar_voz=args.falar)
+        modo_interativo(sessao_id=args.sessao, par=args.par, rodadas=args.rodadas, falar_voz=args.falar)
 
 
 if __name__ == "__main__":
