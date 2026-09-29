@@ -290,6 +290,10 @@ ui <- page_navbar(
                 p("média de fatos comprovados")),
       value_box("Consultas hoje", textOutput("f_hoje"), showcase = bsicons::bs_icon("calendar-check"))
     ),
+    layout_column_wrap(width = 1 / 2, fill = FALSE,
+      cartao("Nuvem de tópicos e palavras-chave", uiOutput("f_nuvem")),
+      cartao("Termos mais frequentes", plotly::plotlyOutput("f_grafico_termos", height = "280px"))
+    ),
     cartao("Consultas realizadas e veredito do auditor", DT::DTOutput("f_tabela"))
   ),
   nav_spacer(),
@@ -667,6 +671,98 @@ server <- function(input, output, session) {
     p <- pesqs()
     if (nrow(p) == 0) "0" else as.character(sum(p$dia == as.character(Sys.Date()), na.rm = TRUE))
   })
+  # Frequência de termos e palavras das pesquisas
+  termos_pesquisas <- reactive({
+    p <- pesqs()
+    if (nrow(p) == 0) return(data.frame(termo = character(), n = integer()))
+
+    texto <- paste(p$pergunta, collapse = " ")
+    palavras <- unlist(strsplit(tolower(texto), "[^[:alnum:]áéíóúâêîôûãõàèìòùäëïöüçñ]+"))
+    palavras <- palavras[nchar(palavras) >= 3]
+
+    sw_extras <- c("qual", "quais", "como", "sobre", "pode", "dar", "uma", "uns", "mais",
+                   "menos", "você", "para", "com", "por", "que", "pra", "ter", "ser",
+                   "isso", "esse", "essa", "esta", "este", "dos", "das", "the", "and", "for", "with")
+    sw <- if (requireNamespace("stopwords", quietly = TRUE)) {
+      unique(c(stopwords::stopwords("pt"), stopwords::stopwords("en"), sw_extras))
+    } else {
+      sw_extras
+    }
+
+    palavras_limpas <- palavras[!palavras %in% sw]
+    if (length(palavras_limpas) == 0) return(data.frame(termo = character(), n = integer()))
+
+    tb <- sort(table(palavras_limpas), decreasing = TRUE)
+    data.frame(termo = names(tb), n = as.integer(tb), stringsAsFactors = FALSE)
+  })
+
+  # Nuvem de palavras responsiva e esteticamente harmonizada ao matugen
+  output$f_nuvem <- renderUI({
+    df <- termos_pesquisas()
+    if (nrow(df) == 0) {
+      return(div(class = "text-muted p-4 text-center", "Nenhum termo registrado para exibição na nuvem."))
+    }
+
+    df <- head(df, 35)
+    max_n <- max(df$n)
+    min_n <- min(df$n)
+
+    tags_list <- lapply(seq_len(nrow(df)), function(i) {
+      termo <- df$termo[i]
+      qtd <- df$n[i]
+
+      tam <- if (max_n == min_n) 1.15 else 0.85 + ((qtd - min_n) / max(1, (max_n - min_n))) * 1.35
+      opac <- 0.70 + (qtd / max_n) * 0.30
+
+      tags$span(
+        title = paste0(termo, " (", qtd, " ocorrência(s))"),
+        class = "badge rounded-pill me-1 mb-2",
+        style = sprintf(
+          "font-size: %.2frem; padding: 0.35em 0.65em; font-weight: 500; opacity: %.2f; background-color: var(--bs-secondary-bg); color: var(--bs-body-color); border: 1px solid var(--bs-border-color); display: inline-block;",
+          tam, opac
+        ),
+        termo,
+        tags$small(class = "ms-1 text-muted", paste0("(", qtd, ")"))
+      )
+    })
+
+    div(style = "line-height: 2.2; text-align: center; padding: 8px;", tags_list)
+  })
+
+  # Gráfico de barras horizontais com os termos mais recorrentes
+  output$f_grafico_termos <- plotly::renderPlotly({
+    df <- termos_pesquisas()
+    if (nrow(df) == 0) {
+      return(plotly::plotly_empty() |> plotly::layout(
+        title = list(text = "Sem dados de pesquisa", font = list(color = cores[["texto_suave"]])),
+        paper_bgcolor = "rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)"
+      ))
+    }
+    top_df <- head(df, 10)
+    top_df <- top_df[order(top_df$n), ]
+    top_df$termo <- factor(top_df$termo, levels = top_df$termo)
+
+    p <- plotly::plot_ly(
+      data = top_df,
+      x = ~n,
+      y = ~termo,
+      type = "bar",
+      orientation = "h",
+      marker = list(color = cores[["primaria"]]),
+      hoverinfo = "text",
+      text = ~paste0(termo, ": ", n, " consulta(s)")
+    )
+    plotly::layout(
+      p,
+      xaxis = list(title = "Consultas", dtick = 1, color = cores[["texto_suave"]]),
+      yaxis = list(title = "", color = cores[["texto"]]),
+      margin = list(l = 80, r = 20, t = 10, b = 35),
+      paper_bgcolor = "rgba(0,0,0,0)",
+      plot_bgcolor = "rgba(0,0,0,0)",
+      font = list(color = cores[["texto"]])
+    )
+  })
+
   output$f_tabela <- DT::renderDT({
     p <- pesqs()
     if (nrow(p) == 0) {
