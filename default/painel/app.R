@@ -145,7 +145,8 @@ ui <- page_navbar(
   title = "Indicadores do jangada", theme = tema, fillable = FALSE,
   window_title = "Indicadores do jangada",
   sidebar = filtros,
-  nav_panel("Revisão", icon = bsicons::bs_icon("check2-square"),
+  nav_panel("Revisão e síntese", icon = bsicons::bs_icon("check2-square"),
+    uiOutput("manchete_dia"),
     layout_column_wrap(width = 1 / 4, fill = FALSE,
       value_box("Aprovação na 1ª rodada", textOutput("vb_primeira"), showcase = bsicons::bs_icon("check2-circle"),
                 p(textOutput("vb_primeira_n", inline = TRUE))),
@@ -157,17 +158,18 @@ ui <- page_navbar(
                 p("revisão leva ", textOutput("vb_segundos", inline = TRUE)))
     ),
     layout_columns(col_widths = c(6, 6),
-      cartao("Por projeto", DT::DTOutput("a_projeto"), cob = uiOutput("a_cob")),
-      cartao("Por par autor → revisor", DT::DTOutput("a_par"),
+      cartao("Taxa de aprovação direta por projeto", DT::DTOutput("a_projeto"), cob = uiOutput("a_cob")),
+      cartao("Eficácia por par autor → revisor", DT::DTOutput("a_par"),
              cob = div(class = "cobertura", "* pouco dado: menos de 10 aprovadas. Sem registro: validações antigas, de antes do validar.jsonl. As taxas contam as rodadas registradas pela própria sessão, num arquivo que o agente isolado pode alterar."))
     ),
     layout_columns(col_widths = c(6, 6),
-      cartao("Entregas no limite de rodadas", DT::DTOutput("a_limite")),
+      cartao("Entregas no limite de rodadas (atrito elevado)", DT::DTOutput("a_limite")),
       cartao("Tamanho do diff: aprovadas de primeira e reprovadas", plotly::plotlyOutput("a_diff", height = 300),
              cob = uiOutput("a_diff_cob"))
     )
   ),
-  nav_panel("Consumo", icon = bsicons::bs_icon("cpu"),
+  nav_panel("Consumo de modelos", icon = bsicons::bs_icon("cpu"),
+    uiOutput("insight_consumo"),
     layout_column_wrap(width = 1 / 4, fill = FALSE,
       value_box("Tokens de saída", textOutput("vb_saida"), showcase = bsicons::bs_icon("box-arrow-right"),
                 p("raciocínio: ", textOutput("vb_raciocinio", inline = TRUE))),
@@ -191,6 +193,7 @@ ui <- page_navbar(
     p(class = "cobertura", "Só o Claude Code: o agy não grava contagem de tokens legível (docs/registros.md).")
   ),
   nav_panel("Tempo e atenção", icon = bsicons::bs_icon("clock-history"),
+    uiOutput("insight_tempo"),
     uiOutput("c_aviso"),
     layout_column_wrap(width = 1 / 3, fill = FALSE,
       value_box("Em aguardando, por dia", textOutput("vb_aguardando"), showcase = bsicons::bs_icon("hourglass")),
@@ -206,7 +209,8 @@ ui <- page_navbar(
       cartao("Sessões abertas sem entrega aprovada há mais de 3 dias", DT::DTOutput("c_paradas"))
     )
   ),
-  nav_panel("Redes", icon = bsicons::bs_icon("diagram-3"),
+  nav_panel("Gargalos e redes", icon = bsicons::bs_icon("diagram-3"),
+    uiOutput("insight_gargalos"),
     layout_column_wrap(width = 1 / 3, fill = FALSE,
       sliderInput("max_nos", "Nós por grafo (afrouxa a poda)", min = 10, max = 120, value = 40, step = 5),
       sliderInput("peso_min", "Transições: vezes mínimas por aresta", min = 1, max = 10, value = 2),
@@ -224,16 +228,16 @@ ui <- page_navbar(
       cartao("Transições entre chamadas de ferramenta", visNetwork::visNetworkOutput("d_transicoes", height = "480px"),
              cob = div(class = "cobertura", "Ciclo de retrabalho: editar um arquivo, os testes falharem e editar o mesmo arquivo de novo. ",
                        "Só conta edição pelas ferramentas Edit e Write: edição por comando (sed, python) não diz o arquivo.")),
-      navset_card_underline(title = "Retrabalho", full_screen = TRUE,
+      navset_card_underline(title = "Retrabalho edit-test-edit", full_screen = TRUE,
         nav_panel("Por projeto", DT::DTOutput("d_ciclos_projeto")),
         nav_panel("Por sessão", DT::DTOutput("d_ciclos_sessao")),
         nav_panel("Arquivos", DT::DTOutput("d_ciclos_arquivo")))
     ),
     layout_columns(col_widths = c(7, 5),
       cartao("Pontos quentes: sessão × arquivo editado", visNetwork::visNetworkOutput("d_quentes", height = "480px")),
-      navset_card_underline(title = "Arquivos", full_screen = TRUE,
-        nav_panel("Em mais sessões", DT::DTOutput("d_quentes_tab")),
-        nav_panel("Com mais REVISAR", DT::DTOutput("d_revisar"),
+      navset_card_underline(title = "Arquivos com atrito", full_screen = TRUE,
+        nav_panel("Disputados em mais sessões", DT::DTOutput("d_quentes_tab")),
+        nav_panel("Com mais pareceres REVISAR", DT::DTOutput("d_revisar"),
                   p(class = "cobertura", "O arquivo citado em cada item dos pareceres REVISAR.")))
     ),
     card(full_screen = TRUE,
@@ -249,10 +253,8 @@ ui <- page_navbar(
     ),
     p(class = "cobertura", "Só o Claude Code: o agy não grava as chamadas de ferramenta de forma legível (docs/registros.md).")
   ),
-  nav_panel("Subagentes", icon = bsicons::bs_icon("people"),
-    div(class = "alert alert-secondary",
-        "Subagentes do Claude e do agy e delegações do jangada-delegar, desde o primeiro registro (sem os filtros ao lado). ",
-        "Regras de decisão no README, seção Subagentes. * = pouco dado (15 entregas ou menos no grupo)."),
+  nav_panel("Autonomia de agentes", icon = bsicons::bs_icon("people"),
+    uiOutput("insight_subagentes"),
     layout_column_wrap(width = 1 / 4, fill = FALSE,
       value_box("Delegado ao agy", textOutput("e_fracao"), showcase = bsicons::bs_icon("share"),
                 p(textOutput("e_fracao_n", inline = TRUE))),
@@ -266,24 +268,23 @@ ui <- page_navbar(
     layout_columns(col_widths = c(6, 6),
       cartao("Tokens do Claude por entrega aprovada (mediana e n)", DT::DTOutput("e_tokens"),
              cob = div(class = "cobertura", "Conversa principal (sem o cache lido) mais os subagentes do Claude. Faixa: tercis de linhas mudadas.")),
-      navset_card_underline(title = "Aprovação na 1ª rodada (% e n)", full_screen = TRUE,
+      navset_card_underline(title = "Eficácia da aprovação na 1ª rodada (% e n)", full_screen = TRUE,
         nav_panel("Com e sem verificador", DT::DTOutput("e_verificador")),
         nav_panel("Com e sem agy", DT::DTOutput("e_agy")))
     ),
     layout_columns(col_widths = c(7, 5),
-      cartao("Árvore de delegação", visNetwork::visNetworkOutput("e_arvore", height = "480px"),
+      cartao("Árvore hierárquica de delegação", visNetwork::visNetworkOutput("e_arvore", height = "480px"),
              cob = div(class = "cobertura", "Pasta, conversa (ou sessão, nas delegações) e cada subagente ou delegação.")),
-      navset_card_underline(title = "Detalhes", full_screen = TRUE,
+      navset_card_underline(title = "Métricas de conformidade", full_screen = TRUE,
         nav_panel("Compressão", DT::DTOutput("e_compressao"),
                   p(class = "cobertura", "Claude: tokens do subagente por token devolvido. agy: passos por mil tokens devolvidos, série à parte.")),
         nav_panel("Retornos grandes", DT::DTOutput("e_grandes")),
-        nav_panel("Desvios", DT::DTOutput("e_desvios_tab")),
+        nav_panel("Desvios de escopo", DT::DTOutput("e_desvios_tab")),
         nav_panel("Sem fonte", DT::DTOutput("e_fonte")))
     )
   ),
-  nav_panel("Pesquisas", icon = bsicons::bs_icon("search"),
-    div(class = "alert alert-secondary",
-        "Histórico e verificação de fatos do Conversa de Pescador. Consultas rápidas com auditoria cética multi-agente, sem dependência de projeto."),
+  nav_panel("Veracidade e pesquisas", icon = bsicons::bs_icon("search"),
+    uiOutput("insight_pesquisas"),
     layout_column_wrap(width = 1 / 3, fill = FALSE,
       value_box("Total de pesquisas", textOutput("f_total"), showcase = bsicons::bs_icon("chat-dots")),
       value_box("Termômetro de veracidade", textOutput("f_fato"), showcase = bsicons::bs_icon("shield-check"),
@@ -294,7 +295,7 @@ ui <- page_navbar(
       cartao("Nuvem de tópicos e palavras-chave", uiOutput("f_nuvem")),
       cartao("Termos mais frequentes", plotly::plotlyOutput("f_grafico_termos", height = "280px"))
     ),
-    cartao("Consultas realizadas e veredito do auditor", DT::DTOutput("f_tabela"))
+    cartao("Consultas realizadas e veredito da bancada", DT::DTOutput("f_tabela"))
   ),
   nav_spacer(),
   nav_item(input_dark_mode(id = "modo", mode = "dark"))
@@ -309,6 +310,49 @@ server <- function(input, output, session) {
   dados <- reactivePoll(3000, session,
     checkFunc = function() file.mtime(file.path(cache, "coleta.json")),
     valueFunc = function() carregar_cache(cache))
+
+  pesqs <- reactive(dados()$pesquisas)
+  sub <- reactive(dados()$subagentes)
+  pc <- function(v, suf = "%") if (is.null(v)) "-" else paste0(format(v, decimal.mark = ","), suf)
+
+  output$manchete_dia <- renderUI({
+    v <- dados()$validacoes
+    hoje_str <- as.character(Sys.Date())
+    v_hoje <- v[as.character(v$dia) == hoje_str, , drop = FALSE]
+    e_hoje <- entregas(v_hoje)
+    e_ap <- e_hoje[e_hoje$aprovada, , drop = FALSE]
+    n_hoje <- nrow(e_hoje)
+    taxa_1a <- if (nrow(e_ap) > 0) round(100 * mean(e_ap$primeira)) else NA
+
+    p <- pesqs()
+    p_hoje <- p[p$dia == hoje_str, , drop = FALSE]
+    n_p_hoje <- nrow(p_hoje)
+    med_fato_hoje <- if (n_p_hoje > 0) round(mean(p_hoje$grau_fato, na.rm = TRUE)) else NA
+
+    t_ent <- if (n_hoje > 0) {
+      if (!is.na(taxa_1a)) sprintf("%d entrega(s) concluída(s) hoje com %d%% de aprovação na 1ª rodada.", n_hoje, taxa_1a)
+      else sprintf("%d entrega(s) em andamento hoje.", n_hoje)
+    } else {
+      "Sem entregas finalizadas hoje até o momento."
+    }
+
+    t_pesq <- if (n_p_hoje > 0) {
+      sprintf("O Conversa de Pescador auditou %d consulta(s) hoje (grau de veracidade: %d%%).", n_p_hoje, med_fato_hoje)
+    } else {
+      "Nenhuma consulta externa auditada hoje."
+    }
+
+    div(class = "alert alert-primary mb-3 shadow-sm border-0",
+        style = "background-color: var(--bs-secondary-bg); border-left: 4px solid var(--bs-primary) !important;",
+        div(class = "d-flex align-items-center",
+            bsicons::bs_icon("speedometer2", class = "fs-3 text-primary me-3 flex-shrink-0"),
+            div(
+              h6(class = "mb-1 fw-bold", "Diagnóstico Operacional do Dia"),
+              p(class = "mb-0 text-body", paste(t_ent, t_pesq))
+            )
+        )
+    )
+  })
 
   observe({
     d <- dados()
@@ -416,6 +460,21 @@ server <- function(input, output, session) {
     filtrar(no_periodo(d[!d$modelo %in% "<synthetic>", , drop = FALSE], "dia"))
   })
   soma <- function(col) sum(msg()[[col]], na.rm = TRUE)
+
+  output$insight_consumo <- renderUI({
+    m <- msg()
+    if (!nrow(m)) return(NULL)
+    total_saida <- soma("saida")
+    total_raciocinio <- soma("raciocinio")
+    pct_raciocinio <- if (total_saida > 0) round(100 * total_raciocinio / total_saida) else 0
+    total_cache <- soma("cache_lido")
+    total_in <- soma("entrada") + total_cache
+    pct_cache <- if (total_in > 0) round(100 * total_cache / total_in) else 0
+
+    div(class = "alert alert-secondary py-2 px-3 mb-3",
+        sprintf("Síntese de consumo: %s tokens de saída no período (%d%% dedicados a raciocínio deliberativo). O reaproveitamento de cache foi de %d%% dos tokens de entrada, reduzindo custo e latência.",
+                curto(total_saida), pct_raciocinio, pct_cache))
+  })
   output$vb_saida <- renderText(curto(soma("saida")))
   output$vb_raciocinio <- renderText(curto(soma("raciocinio")))
   output$vb_criado <- renderText(curto(soma("cache_criado")))
@@ -484,6 +543,18 @@ server <- function(input, output, session) {
   ev <- reactive(filtrar(no_periodo(dados()$eventos), agente = "agente"))
   iv <- reactive(intervalos_estado(ev()))
   aguard <- reactive(tempo_por_dia(iv(), "aguardando"))
+
+  output$insight_tempo <- renderUI({
+    s <- dados()$sessoes
+    if (!nrow(s)) return(NULL)
+    par <- paradas()
+    n_par <- nrow(par)
+    texto_par <- if (n_par > 0) sprintf("Atenção: %d sessão(ões) abertas sem entrega há mais de 3 dias.", n_par)
+                 else "Nenhuma sessão estagnada no momento."
+    div(class = "alert alert-secondary py-2 px-3 mb-3",
+        paste("Distribuição de tempo em aguardando e trocas de contexto.", texto_par))
+  })
+
   output$c_aviso <- renderUI({
     e <- dados()$eventos
     if (nrow(e) < 50) {
@@ -541,6 +612,21 @@ server <- function(input, output, session) {
   ed <- reactive(edicoes(ch()))
   apont <- reactive(filtrar(no_periodo(dados()$apontamentos)))
   quentes <- reactive(pontos_quentes(ed(), apont()))
+
+  output$insight_gargalos <- renderUI({
+    q <- quentes()
+    multi <- if (nrow(q)) sum(q$sessoes > 1) else 0
+    cicl <- ciclos()
+    n_cicl <- if (!is.null(cicl)) nrow(cicl) else 0
+
+    alerta_multi <- if (multi > 0) {
+      sprintf("Alerta de atrito: %d arquivo(s) foram editados concorrentemente por mais de uma sessão. Isole em worktrees individuais (jangada-agente).", multi)
+    } else {
+      "Nenhum conflito de edição concorrente entre sessões."
+    }
+    div(class = "alert alert-secondary py-2 px-3 mb-3",
+        sprintf("Registrados %d ciclos de retrabalho edit-test-edit no período. %s", n_cicl, alerta_multi))
+  })
   output$vb_ciclos <- renderText(nrow(ciclos()))
   output$vb_ciclos_n <- renderText({
     n <- length(unique(ch()$conversa))
@@ -600,8 +686,18 @@ server <- function(input, output, session) {
 
 
   # E. Subagentes
-  sub <- reactive(dados()$subagentes)
-  pc <- function(v, suf = "%") if (is.null(v)) "-" else paste0(format(v, decimal.mark = ","), suf)
+  output$insight_subagentes <- renderUI({
+    s <- sub()
+    if (is.null(s)) return(NULL)
+    f <- s$fracao_agy
+    fracao <- if (!is.null(f)) pc(f$fracao_agy_pct) else "-"
+    recusas <- if (!is.null(f)) pc(f$taxa_recusa_pct) else "-"
+    desvios <- sum(lengths(s$desvios))
+
+    div(class = "alert alert-secondary py-2 px-3 mb-3",
+        sprintf("Delegações autônomas: %s de taxa de encaminhamento ao agy e %s de recusas pelo jangada-delegar. Desvios de protocolo registrados: %s (meta: zero).",
+                fracao, recusas, desvios))
+  })
   output$e_fracao <- renderText(pc(sub()$fracao_agy$fracao_agy_pct))
   output$e_fracao_n <- renderText({
     f <- sub()$fracao_agy
@@ -658,7 +754,15 @@ server <- function(input, output, session) {
   })
 
   # F. Pesquisas (Conversa de Pescador)
-  pesqs <- reactive(dados()$pesquisas)
+  output$insight_pesquisas <- renderUI({
+    p <- pesqs()
+    if (!nrow(p)) return(NULL)
+    n_tot <- nrow(p)
+    med_fato <- round(mean(p$grau_fato, na.rm = TRUE))
+    div(class = "alert alert-secondary py-2 px-3 mb-3",
+        sprintf("Auditoria de Fatos: %d consultas realizadas com termômetro médio de %d%% de assertividade. Verificação multi-agente ativa com bancada de auditores.",
+                n_tot, med_fato))
+  })
   output$f_total <- renderText({
     p <- pesqs()
     if (nrow(p) == 0) "0" else as.character(nrow(p))
