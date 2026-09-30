@@ -61,7 +61,7 @@ sed "s|@JANGADA_PATH@|$repo_jangada|g" default/agy/hooks.json >"$tmp/home/.gemin
 
 delegar() {
   rm -f "$tmp/falso/agy.args"
-  (cd "$tmp/projeto" && env -u JANGADA_DELEGAR -u XDG_CACHE_HOME -u XDG_STATE_HOME -u XDG_CONFIG_HOME \
+  (cd "$tmp/projeto" && env -u JANGADA_DELEGAR -u JANGADA_ISOLADO -u XDG_CACHE_HOME -u XDG_STATE_HOME -u XDG_CONFIG_HOME \
     HOME="$tmp/home" PATH="$tmp/bin:$PATH" JANGADA_PATH="$repo_jangada" FALSO_DIR="$tmp/falso" \
     FALSO_COTA="${COTA:-0.9}" FALSO_RESPOSTA="${RESPOSTA-relatorio em a.sh:1}" \
     FALSO_CODIGO="${CODIGO:-0}" FALSO_NEGADO="${NEGADO:-}" FALSO_LOG="${LOG:-}" FALSO_USAGE_FALHA="${USAGE_FALHA:-0}" \
@@ -490,16 +490,33 @@ conferir "caso 42b: papel e pedido apos -- com agy" [ "$(codigo)" = 0 ]
 
 # 25. Marca de jogo ativo no estado
 mkdir -p "$tmp/home/.local/state/jangada"
-touch "$tmp/home/.local/state/jangada/jogo-ativo"
+# 25a. Fora do isolamento a marca é ignorada
+printf '%s\n' "$(date +%s)" >"$tmp/home/.local/state/jangada/jogo-ativo"
 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
-conferir "caso 43: marca jogo-ativo no estado recusa com código 4" [ "$(codigo)" = 4 ]
-conferir "caso 43: erro indica jogo aberto" grep -q "jogo aberto detectado" "$tmp/erro"
+conferir "caso 43a: marca jogo-ativo fora do isolamento é ignorada" [ "$(codigo)" = 0 ]
+
+# 25b. Na sessão isolada com marca recente recusa com código 4
+ISOLADO=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 43b: marca jogo-ativo recente no isolamento recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 43b: erro indica jogo aberto" grep -q "jogo aberto detectado" "$tmp/erro"
+
+# 25c. Na sessão isolada com marca expirada (>120s) a marca é ignorada
+printf '%s\n' "$(( $(date +%s) - 300 ))" >"$tmp/home/.local/state/jangada/jogo-ativo"
+ISOLADO=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 43c: marca jogo-ativo expirada no isolamento é ignorada" [ "$(codigo)" = 0 ]
 rm -f "$tmp/home/.local/state/jangada/jogo-ativo"
 
 # 26. Marca de VRAM livre gravada pelo host no estado
-printf '6000\n' >"$tmp/home/.local/state/jangada/vram-livre"
-SEM_VRAM=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
-conferir "caso 44: marca vram-livre permite medicao sem nvidia-smi" [ "$(codigo)" = 0 ]
+# 26a. Na sessão isolada com marca recente permite chamada sem nvidia-smi
+printf '6000 %s\n' "$(date +%s)" >"$tmp/home/.local/state/jangada/vram-livre"
+SEM_VRAM=1 ISOLADO=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 44a: marca vram-livre recente permite medicao no isolamento" [ "$(codigo)" = 0 ]
+
+# 26b. Na sessão isolada com marca expirada (>120s) recusa
+printf '6000 %s\n' "$(( $(date +%s) - 300 ))" >"$tmp/home/.local/state/jangada/vram-livre"
+SEM_VRAM=1 ISOLADO=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 44b: marca vram-livre expirada no isolamento recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 44b: erro indica vram nao verificada" grep -q "não pôde ser verificada na sessão isolada" "$tmp/erro"
 rm -f "$tmp/home/.local/state/jangada/vram-livre"
 
 # 27. Sessão isolada sem medição de VRAM e sem modelo residente recusa

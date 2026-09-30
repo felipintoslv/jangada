@@ -184,8 +184,16 @@ if [[ "$destino" == local ]]; then
     recusar "vaga ocupada no modelo local (espera de ${espera}s esgotada)"
   fi
 
-  if pgrep -f 'reaper SteamLaunch' >/dev/null 2>&1 || [[ -f "$JANGADA_ESTADO/jogo-ativo" ]]; then
+  if pgrep -f 'reaper SteamLaunch' >/dev/null 2>&1; then
     recusar "jogo aberto detectado (reaper SteamLaunch)"
+  fi
+  if [[ -n "${JANGADA_ISOLADO:-}" && -f "$JANGADA_ESTADO/jogo-ativo" ]]; then
+    ts_jogo="$(head -n1 "$JANGADA_ESTADO/jogo-ativo" 2>/dev/null | tr -d ' ' || echo 0)"
+    [[ "$ts_jogo" =~ ^[0-9]+$ ]] || ts_jogo=0
+    agora=$(date +%s)
+    if (( ts_jogo == 0 || agora - ts_jogo <= 120 )); then
+      recusar "jogo aberto detectado (reaper SteamLaunch)"
+    fi
   fi
 
   ps_json="$(curl -s -S --max-time 5 "$ollama_url/api/ps" 2>/dev/null || true)"
@@ -202,8 +210,13 @@ if [[ "$destino" == local ]]; then
   if command -v nvidia-smi >/dev/null 2>&1; then
     vram_livre="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d ' ' || true)"
   fi
-  if [[ -z "$vram_livre" && -f "$JANGADA_ESTADO/vram-livre" ]]; then
-    vram_livre="$(head -n1 "$JANGADA_ESTADO/vram-livre" 2>/dev/null | tr -d ' ' || true)"
+  if [[ -z "$vram_livre" && -n "${JANGADA_ISOLADO:-}" && -f "$JANGADA_ESTADO/vram-livre" ]]; then
+    read -r vl_val vl_ts <"$JANGADA_ESTADO/vram-livre" 2>/dev/null || true
+    agora=$(date +%s)
+    [[ "${vl_ts:-0}" =~ ^[0-9]+$ ]] || vl_ts=0
+    if (( vl_ts == 0 || agora - vl_ts <= 120 )) && [[ -n "${vl_val:-}" && "$vl_val" =~ ^[0-9]+$ ]]; then
+      vram_livre="$vl_val"
+    fi
   fi
   if [[ -n "$vram_livre" && "$vram_livre" =~ ^[0-9]+$ ]]; then
     vram_efetiva=$(( vram_livre + vram_residente_mib ))
@@ -337,8 +350,9 @@ if [[ "$destino" == local ]]; then
       resumos_parciais+=$'\n\n---\n'"$res_chamada"
     done
     ped_final="Consolide os resumos parciais a seguir em um relatório único, conciso e objetivo, atendendo ao pedido: $pedido. Mantenha todas as citações (caminho:linha ou arquivo, p. N)."$'\n'"$resumos_parciais"
-    if (( (${#ped_final} + 3) / 4 >= ctx )); then
-      recusar "resumos consolidados excedem a janela de contexto do modelo local (${ctx} tokens)"
+    tokens_estimados=$(( (${#prompt_sistema} + ${#ped_final} + 2) / 3 ))
+    if (( tokens_estimados >= ctx )); then
+      recusar "resumos consolidados excedem a janela de contexto do modelo local (${tokens_estimados} tokens >= ${ctx})"
     fi
     chamar_ollama "$prompt_sistema" "$ped_final"
     texto="$res_chamada"

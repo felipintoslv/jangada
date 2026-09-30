@@ -379,23 +379,28 @@ Testes de 27/09/2026, agy 1.2.12:
 - `--dangerously-skip-permissions` não serve para delegar: libera escrita.
   O `jangada-delegar` usa `--sandbox` e depende do `permissions.allow`.
 
-Delegação local (Ollama):
+Pegadinhas da delegação local:
+
+Testes de 29/09/2026, Ollama 0.34.4:
 
 - **Isolamento e checagens do sistema**: dentro do `jangada-isolar` (`bwrap` com
   `--unshare-pid` e sem nós `/dev/nvidia*`), `pgrep` não enxerga processos do
   host (como Steam) e `nvidia-smi` não consegue comunicar com o driver. O host
   grava marcas em `$JANGADA_ESTADO/vram-livre` e `$JANGADA_ESTADO/jogo-ativo`
-  antes de isolar, e o script consulta `/api/ps` no Ollama.
+  antes de isolar e as renova a cada 30 segundos, e o script consulta `/api/ps`
+  no Ollama.
 - **Memória de vídeo com modelo residente**: com `keep_alive` ativo, o modelo
   permanece na memória de vídeo após a primeira chamada. A memória livre cai
   e pode barrar chamadas seguintes; é preciso consultar `/api/ps` e somar a
   memória do modelo já residente à memória livre.
-- **Truncamento silencioso de contexto**: se a entrada ultrapassar `num_ctx`, o
-  Ollama trunca o texto sem emitir erro na resposta. O script detecta comparando
-  o `prompt_eval_count` retornado com o `num_ctx` configurado (`tent >= ctx`).
 - **Opção num_ctx obrigatória**: sem definir explicitamente `options.num_ctx`
   no `/api/chat`, o Ollama assume o padrão de 2048 tokens mesmo para modelos que
   suportam janelas muito maiores.
+- **Truncamento de contexto**: se a entrada ultrapassar `num_ctx`, o Ollama
+  trunca o texto sem emitir erro na resposta. Como `prompt_eval_count` pode
+  reportar apenas o valor truncado (`tent >= ctx` não é garantia se o servidor
+  já truncou a entrada), a proteção efetiva depende da checagem prévia do
+  tamanho estimado do texto antes do envio.
 
 ## Perfis e ganchos
 

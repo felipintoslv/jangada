@@ -140,8 +140,7 @@ puro ao modelo. O modelo não possui ferramentas de terminal.
 
 ### Medições e escolha do modelo
 
-Medições realizadas em 29/09/2026 numa NVIDIA RTX 4060 (8 GB de memória de vídeo, desktop
-ocupando ~2,4 GB, cerca de 5,6 GB disponíveis para o Ollama):
+Observação pontual realizada em 29/09/2026 via chamadas diretas ao endpoint `/api/chat` do Ollama 0.34.4 (medição de velocidade pelos campos `eval_count`, `eval_duration`, `prompt_eval_count` e `prompt_eval_duration` do JSON retornado e inspeção de memória via `/api/ps` e `nvidia-smi`) numa NVIDIA GeForce RTX 4060 8 GB Laptop GPU sob driver proprietário 580.126.09 (área de trabalho Hyprland ocupando ~2,4 GB, cerca de 5,6 GB disponíveis para o Ollama):
 
 | Modelo | Contexto (`num_ctx`) | Memória total | Memória de vídeo | Transbordo CPU | Geração (t/s) | Avaliação de prompt (t/s) |
 |---|---|---|---|---|---|---|
@@ -170,13 +169,17 @@ cerca de 2,0 GB de folga, atendendo a margem mínima de 1,5 GB.
 - `JANGADA_LOCAL_ESPERA`: `30` (segundos de espera pela trava de concorrência).
 - `JANGADA_LOCAL_FATIAS_MAX`: `5` (limite de fatias para documentos que excedem o contexto).
 - `JANGADA_OLLAMA_URL`: `http://localhost:11434` (endereço da API do Ollama).
-- Concorrência: uma vaga exclusiva por chamada controlada por trava exclusiva
-  (`flock`) em `$JANGADA_ESTADO/local.lock`, obtida antes das checagens de
-  memória e de processos.
-- Proteção de jogos e isolamento: recusa com código 4 se `pgrep -f 'reaper SteamLaunch'`
-  ou `$JANGADA_ESTADO/jogo-ativo` detectar jogo ativo, ou se a memória de vídeo livre
-  (no `nvidia-smi` ou em `$JANGADA_ESTADO/vram-livre` gravado pelo host) for
-  inferior ao mínimo. Na sessão isolada (`jangada-isolar`), se a memória não puder ser
+- Concorrência e modelo de ameaça: uma vaga exclusiva por chamada controlada por trava
+  exclusiva (`flock`) em `$JANGADA_ESTADO/local.lock`, obtida antes das checagens de
+  memória e de processos. Como o arquivo de trava é gravável pelo agente dentro do isolamento,
+  um agente hostil pode segurar o `flock` indefinidamente; o pior efeito é negação de serviço
+  local para as próximas delegações, sem vazamento ou execução de código fora do isolamento.
+- Proteção de jogos e isolamento: fora do isolamento, verifica `pgrep -f 'reaper SteamLaunch'`
+  e `nvidia-smi`. Na sessão isolada (`jangada-isolar`), como `pgrep` e `nvidia-smi` não conseguem
+  inspecionar o host diretamente pelo namespace de PID e pela falta de nós de GPU, o host grava
+  marcas com carimbo de data/hora em `$JANGADA_ESTADO/vram-livre` e `$JANGADA_ESTADO/jogo-ativo`
+  na inicialização e as renova a cada 30 segundos. O script lê essas marcas apenas sob
+  `JANGADA_ISOLADO=1` e descarta marcas com mais de 120 segundos. Se a memória não puder ser
   verificada e o modelo não estiver residente, a chamada é recusada por segurança.
 - Falhas e privacidade: em qualquer falha (Ollama inacessível, modelo ausente,
   jogo aberto, memória insuficiente ou contexto estourado), o comando recusa com código 4

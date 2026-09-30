@@ -159,6 +159,7 @@ gravavel "$JANGADA_ESTADO/agentes"
 gravavel "$JANGADA_ESTADO/validar.jsonl"
 gravavel "$JANGADA_ESTADO/eventos-agentes.jsonl"
 gravavel "$JANGADA_ESTADO/delegacoes.jsonl"
+# Trava das delegações locais. O agente pode segurar a trava e causar negação de serviço local.
 gravavel "$JANGADA_ESTADO/local.lock"
 IFS=: read -ra extras <<<"${JANGADA_ISOLAR_ESCRITA:-}"
 for p in "${extras[@]}"; do
@@ -287,20 +288,43 @@ args+=(--unsetenv TMUX --unsetenv TMUX_PANE --unsetenv SSH_AUTH_SOCK
        --unsetenv WAYLAND_DISPLAY --unsetenv DISPLAY --unsetenv GPG_AGENT_INFO
        --setenv JANGADA_ISOLADO 1 --chdir "$pasta" -- "$@")
 
-if command -v nvidia-smi >/dev/null 2>&1; then
-  vl="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d ' ' || true)"
-  if [[ -n "$vl" && "$vl" =~ ^[0-9]+$ ]]; then
-    printf '%s\n' "$vl" >"$JANGADA_ESTADO/vram-livre" 2>/dev/null || true
-  fi
-fi
-if pgrep -f 'reaper SteamLaunch' >/dev/null 2>&1; then
-  touch "$JANGADA_ESTADO/jogo-ativo" 2>/dev/null || true
-else
-  rm -f "$JANGADA_ESTADO/jogo-ativo" 2>/dev/null || true
-fi
-
 if ((mostrar)); then
   printf '%s\n' bwrap "${args[@]}"
   exit 0
 fi
-exec bwrap "${args[@]}"
+
+atualizar_marcas_host() {
+  mkdir -p "$JANGADA_ESTADO" 2>/dev/null || true
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    local vl
+    vl="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d ' ' || true)"
+    if [[ -n "$vl" && "$vl" =~ ^[0-9]+$ ]]; then
+      printf '%s %s\n' "$vl" "$(date +%s)" >"$JANGADA_ESTADO/vram-livre" 2>/dev/null || true
+    fi
+  fi
+  if pgrep -f 'reaper SteamLaunch' >/dev/null 2>&1; then
+    printf '%s\n' "$(date +%s)" >"$JANGADA_ESTADO/jogo-ativo" 2>/dev/null || true
+  else
+    rm -f "$JANGADA_ESTADO/jogo-ativo" 2>/dev/null || true
+  fi
+}
+
+limpar_marcas_host() {
+  rm -f "$JANGADA_ESTADO/jogo-ativo" "$JANGADA_ESTADO/vram-livre" 2>/dev/null || true
+}
+
+atualizar_marcas_host
+
+(
+  while true; do
+    sleep 30
+    atualizar_marcas_host
+  done
+) &
+monitor_pid=$!
+
+trap 'kill "$monitor_pid" 2>/dev/null || true; limpar_marcas_host' EXIT INT TERM
+
+codigo=0
+bwrap "${args[@]}" || codigo=$?
+exit "$codigo"
