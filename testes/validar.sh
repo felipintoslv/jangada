@@ -866,7 +866,7 @@ conferir "caso 13g: a chave do perfil vence a global" [ "$(delegar_de)" = claude
 env PATH="$tmp/semagy:/usr/bin:/bin" bash -c 'source "$1/bin/jangada-config"; jangada_delegacao claude agy' _ "$repo_jangada" >"$tmp/delegar.txt"
 conferir "caso 13g: sem o agy instalado, agy vira claude" [ "$(cat "$tmp/delegar.txt")" = claude ]
 conferir "caso 13g: todo destino tem o texto comum de não editar e não revisar" \
-  bash -c 'for m in agy claude nativo; do test -r "$1/default/agentes/protocolo-delegar-$m.md" || exit 1; done
+  bash -c 'for m in agy claude nativo local; do test -r "$1/default/agentes/protocolo-delegar-$m.md" || exit 1; done
            grep -q "não editam arquivos" "$1/default/agentes/protocolo-delegar.md"' _ "$repo_jangada"
 
 rm -f "$estado/"protocolo-*.md

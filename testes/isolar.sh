@@ -47,6 +47,7 @@ conferir "caso 1: commondir do worktree somente leitura" \
 conferir "caso 1: gitdir do worktree somente leitura" \
   seguidos --ro-bind "$tmp/repo/.git/worktrees/wt/gitdir" "$tmp/repo/.git/worktrees/wt/gitdir"
 conferir "caso 1: namespace de PID próprio" grep -qxF -- --unshare-pid "$tmp/args"
+conferir "caso 1: morre com o processo pai" grep -qxF -- --die-with-parent "$tmp/args"
 conferir "caso 1: sem Hyprland, Wayland nem X no ambiente" \
   bash -c 'grep -qxF HYPRLAND_INSTANCE_SIGNATURE "$1" && grep -qxF WAYLAND_DISPLAY "$1" && grep -qxF DISPLAY "$1"' _ "$tmp/args"
 conferir "caso 1: settings.json do Claude somente leitura" \
@@ -236,6 +237,19 @@ if bwrap --ro-bind / / --dev /dev --proc /proc true 2>/dev/null; then
     "$repo_jangada/bin/jangada-isolar" --mostrar -- true 2>/dev/null)"
   conferir "caso 3: já isolado, roda direto sem aninhar" [ -z "$saida" ]
   conferir "caso 3: a marca não é removível de dentro" roda "! rm -f '$marca_teste'"
+
+  # Propagação de código de saída e sinais
+  rc_prop=0
+  isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- sh -c 'exit 42' 2>/dev/null || rc_prop=$?
+  conferir "caso 3: propaga código de saída" [ "$rc_prop" -eq 42 ]
+
+  rc_sig=0
+  ( isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- sleep 10 ) &
+  pid_sig=$!
+  sleep 0.1
+  kill -TERM "$pid_sig" 2>/dev/null || true
+  wait "$pid_sig" 2>/dev/null || rc_sig=$?
+  conferir "caso 3: propaga sinal SIGTERM" [ "$rc_sig" -gt 128 ]
 else
   echo "pulado caso 3: bwrap não cria namespace aqui"
 fi

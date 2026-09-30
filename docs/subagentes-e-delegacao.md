@@ -140,7 +140,11 @@ puro ao modelo. O modelo não possui ferramentas de terminal.
 
 ### Medições e escolha do modelo
 
-Observação pontual realizada em 29/09/2026 via chamadas diretas ao endpoint `/api/chat` do Ollama 0.34.4 (medição de velocidade pelos campos `eval_count`, `eval_duration`, `prompt_eval_count` e `prompt_eval_duration` do JSON retornado e inspeção de memória via `/api/ps` e `nvidia-smi`) numa NVIDIA GeForce RTX 4060 8 GB Laptop GPU sob driver proprietário 580.126.09 (área de trabalho Hyprland ocupando ~2,4 GB, cerca de 5,6 GB disponíveis para o Ollama):
+Observação pontual realizada em 29/09/2026 numa NVIDIA GeForce RTX 4060 (8 GB de memória de vídeo, driver proprietário 580.126.09, área de trabalho Hyprland ocupando ~2,4 GB e ~5,6 GB disponíveis para o Ollama):
+
+- Método: chamadas diretas ao endpoint `/api/chat` do Ollama 0.34.4.
+- Medição de tempo: campos `eval_count`, `eval_duration`, `prompt_eval_count` e `prompt_eval_duration` do JSON retornado.
+- Memória: inspeção por `/api/ps` e `nvidia-smi`.
 
 | Modelo | Contexto (`num_ctx`) | Memória total | Memória de vídeo | Transbordo CPU | Geração (t/s) | Avaliação de prompt (t/s) |
 |---|---|---|---|---|---|---|
@@ -154,9 +158,8 @@ Num teste com documento real de 10 páginas (4.098 tokens de prompt), o
 44,27s (67,6 t/s).
 
 A `qwen3:8b` não coube inteiramente na memória de vídeo com a área de trabalho ativa,
-resultando em transferência parcial para a CPU e queda substancial de
-desempenho. A `qwen3:4b` com contexto 8192 coube 100% na GPU e preservou
-cerca de 2,0 GB de folga, atendendo a margem mínima de 1,5 GB.
+com queda substancial de desempenho. A `qwen3:4b` com contexto 8192 coube 100% na GPU
+e preservou cerca de 2,0 GB de folga, atendendo a margem mínima de 1,5 GB.
 
 ### Configuração e proteção
 

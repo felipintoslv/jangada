@@ -309,22 +309,30 @@ atualizar_marcas_host() {
   fi
 }
 
-limpar_marcas_host() {
-  rm -f "$JANGADA_ESTADO/jogo-ativo" "$JANGADA_ESTADO/vram-livre" 2>/dev/null || true
-}
-
 atualizar_marcas_host
 
 (
-  while true; do
-    sleep 30
+  while kill -0 $$ 2>/dev/null; do
+    sleep 30 &
+    wait $! 2>/dev/null || true
     atualizar_marcas_host
   done
 ) &
 monitor_pid=$!
 
-trap 'kill "$monitor_pid" 2>/dev/null || true; limpar_marcas_host' EXIT INT TERM
+bwrap_pid=""
+repasse_sinal() {
+  local s="$1"
+  [[ -n "$bwrap_pid" ]] && kill "-$s" "$bwrap_pid" 2>/dev/null || true
+}
+
+trap 'kill "$monitor_pid" 2>/dev/null || true' EXIT
+trap 'repasse_sinal TERM; kill "$monitor_pid" 2>/dev/null || true; exit 143' TERM
+trap 'repasse_sinal HUP; kill "$monitor_pid" 2>/dev/null || true; exit 129' HUP
+trap 'repasse_sinal INT; kill "$monitor_pid" 2>/dev/null || true; exit 130' INT
 
 codigo=0
-bwrap "${args[@]}" || codigo=$?
+bwrap "${args[@]}" &
+bwrap_pid=$!
+wait "$bwrap_pid" || codigo=$?
 exit "$codigo"

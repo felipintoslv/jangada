@@ -17,8 +17,8 @@
 # No destino agy: roda na raiz do repositório atual, que o agy precisa
 # confiar, com --sandbox e ferramentas de leitura do papel. Recusa se a cota
 # de 5 horas do Gemini estiver abaixo de JANGADA_DELEGAR_COTA_MIN (padrão 20%).
-# As chamadas a /usage são cacheadas por JANGADA_DELEGAR_COTA_CACHE segundos
-# (padrão 120) para economizar tempo.
+# As chamadas a /usage são cacheadas por JANGADA_DELEGAR_CACHE minutos
+# (padrão 5) para economizar tempo.
 #
 # No destino local: o script lê os arquivos e envia texto puro ao Ollama, sem
 # ferramentas. Atende apenas leitor e redator, com trava exclusiva e
@@ -191,7 +191,7 @@ if [[ "$destino" == local ]]; then
     ts_jogo="$(head -n1 "$JANGADA_ESTADO/jogo-ativo" 2>/dev/null | tr -d ' ' || echo 0)"
     [[ "$ts_jogo" =~ ^[0-9]+$ ]] || ts_jogo=0
     agora=$(date +%s)
-    if (( ts_jogo == 0 || agora - ts_jogo <= 120 )); then
+    if (( ts_jogo > 0 && agora - ts_jogo <= 120 )); then
       recusar "jogo aberto detectado (reaper SteamLaunch)"
     fi
   fi
@@ -214,7 +214,7 @@ if [[ "$destino" == local ]]; then
     read -r vl_val vl_ts <"$JANGADA_ESTADO/vram-livre" 2>/dev/null || true
     agora=$(date +%s)
     [[ "${vl_ts:-0}" =~ ^[0-9]+$ ]] || vl_ts=0
-    if (( vl_ts == 0 || agora - vl_ts <= 120 )) && [[ -n "${vl_val:-}" && "$vl_val" =~ ^[0-9]+$ ]]; then
+    if (( vl_ts > 0 && agora - vl_ts <= 120 )) && [[ -n "${vl_val:-}" && "$vl_val" =~ ^[0-9]+$ ]]; then
       vram_livre="$vl_val"
     fi
   fi

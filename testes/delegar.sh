@@ -504,6 +504,11 @@ conferir "caso 43b: erro indica jogo aberto" grep -q "jogo aberto detectado" "$t
 printf '%s\n' "$(( $(date +%s) - 300 ))" >"$tmp/home/.local/state/jangada/jogo-ativo"
 ISOLADO=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
 conferir "caso 43c: marca jogo-ativo expirada no isolamento é ignorada" [ "$(codigo)" = 0 ]
+
+# 25d. Na sessão isolada com marca malformada a marca é ignorada
+printf 'invalido\n' >"$tmp/home/.local/state/jangada/jogo-ativo"
+ISOLADO=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 43d: marca jogo-ativo malformada no isolamento é ignorada" [ "$(codigo)" = 0 ]
 rm -f "$tmp/home/.local/state/jangada/jogo-ativo"
 
 # 26. Marca de VRAM livre gravada pelo host no estado
@@ -517,6 +522,11 @@ printf '6000 %s\n' "$(( $(date +%s) - 300 ))" >"$tmp/home/.local/state/jangada/v
 SEM_VRAM=1 ISOLADO=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
 conferir "caso 44b: marca vram-livre expirada no isolamento recusa com código 4" [ "$(codigo)" = 4 ]
 conferir "caso 44b: erro indica vram nao verificada" grep -q "não pôde ser verificada na sessão isolada" "$tmp/erro"
+
+# 26c. Na sessão isolada com marca malformada recusa com código 4
+printf '6000 invalido\n' >"$tmp/home/.local/state/jangada/vram-livre"
+SEM_VRAM=1 ISOLADO=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 44c: marca vram-livre com timestamp invalido recusa" [ "$(codigo)" = 4 ]
 rm -f "$tmp/home/.local/state/jangada/vram-livre"
 
 # 27. Sessão isolada sem medição de VRAM e sem modelo residente recusa
@@ -527,6 +537,10 @@ conferir "caso 45: erro indica vram nao verificada" grep -q "não pôde ser veri
 # 28. JANGADA_LOCAL_IGNORAR_VRAM=1 ignora checagem na sessão isolada
 SEM_VRAM=1 ISOLADO=1 LOCAL_IGNORAR_VRAM=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
 conferir "caso 46: JANGADA_LOCAL_IGNORAR_VRAM=1 libera chamada" [ "$(codigo)" = 0 ]
+
+# 29. Protocolo de delegação local presente e referenciado
+conferir "caso 47: arquivo protocolo-delegar-local.md existe e legivel" test -r "$repo_jangada/default/agentes/protocolo-delegar-local.md"
+conferir "caso 47: protocolo contém instrução de delegação local" grep -q "delegação local" "$repo_jangada/default/agentes/protocolo-delegar-local.md"
 
 echo
 if ((falhas)); then
