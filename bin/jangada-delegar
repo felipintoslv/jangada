@@ -187,8 +187,14 @@ if [[ "$destino" == local ]]; then
   if pgrep -f 'reaper SteamLaunch' >/dev/null 2>&1; then
     recusar "jogo aberto detectado (reaper SteamLaunch)"
   fi
-  if [[ -n "${JANGADA_ISOLADO:-}" && -f "$JANGADA_ESTADO/jogo-ativo" ]]; then
-    ts_jogo="$(head -n1 "$JANGADA_ESTADO/jogo-ativo" 2>/dev/null | tr -d ' ' || echo 0)"
+  arq_jogo=""
+  if [[ -f "$JANGADA_ESTADO/marcas/jogo-ativo" ]]; then
+    arq_jogo="$JANGADA_ESTADO/marcas/jogo-ativo"
+  elif [[ -f "$JANGADA_ESTADO/jogo-ativo" ]]; then
+    arq_jogo="$JANGADA_ESTADO/jogo-ativo"
+  fi
+  if [[ -n "${JANGADA_ISOLADO:-}" && -n "$arq_jogo" ]]; then
+    ts_jogo="$(head -n1 "$arq_jogo" 2>/dev/null | tr -d ' ' || echo 0)"
     [[ "$ts_jogo" =~ ^[0-9]+$ ]] || ts_jogo=0
     agora=$(date +%s)
     if (( ts_jogo == 0 || agora - ts_jogo <= 120 )); then
@@ -210,8 +216,14 @@ if [[ "$destino" == local ]]; then
   if command -v nvidia-smi >/dev/null 2>&1; then
     vram_livre="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d ' ' || true)"
   fi
-  if [[ -z "$vram_livre" && -n "${JANGADA_ISOLADO:-}" && -f "$JANGADA_ESTADO/vram-livre" ]]; then
-    read -r vl_val vl_ts <"$JANGADA_ESTADO/vram-livre" 2>/dev/null || true
+  arq_vram=""
+  if [[ -f "$JANGADA_ESTADO/marcas/vram-livre" ]]; then
+    arq_vram="$JANGADA_ESTADO/marcas/vram-livre"
+  elif [[ -f "$JANGADA_ESTADO/vram-livre" ]]; then
+    arq_vram="$JANGADA_ESTADO/vram-livre"
+  fi
+  if [[ -z "$vram_livre" && -n "${JANGADA_ISOLADO:-}" && -n "$arq_vram" ]]; then
+    read -r vl_val vl_ts <"$arq_vram" 2>/dev/null || true
     agora=$(date +%s)
     [[ "${vl_ts:-0}" =~ ^[0-9]+$ ]] || vl_ts=0
     if (( vl_ts > 0 && agora - vl_ts <= 120 )) && [[ -n "${vl_val:-}" && "$vl_val" =~ ^[0-9]+$ ]]; then

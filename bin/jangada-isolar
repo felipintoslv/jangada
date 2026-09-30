@@ -151,28 +151,29 @@ temporario "$HOME/.cache"
 # Do estado do jangada, só o dos agentes, as métricas e o histórico de
 # estados: o resto (a barra, as marcas das migrações) alimenta código que roda
 # fora.
+pasta_marcas="$JANGADA_ESTADO/marcas"
 atualizar_marcas_host() {
-  mkdir -p "$JANGADA_ESTADO" 2>/dev/null || true
+  mkdir -p "$pasta_marcas" 2>/dev/null || true
   if command -v nvidia-smi >/dev/null 2>&1; then
     local vl tmp_vl
     vl="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d ' ' || true)"
     if [[ -n "$vl" && "$vl" =~ ^[0-9]+$ ]]; then
-      tmp_vl="$(mktemp "$JANGADA_ESTADO/.vram-livre.XXXXXX" 2>/dev/null || true)"
+      tmp_vl="$(mktemp "$pasta_marcas/.vram-livre.XXXXXX" 2>/dev/null || true)"
       if [[ -n "$tmp_vl" ]]; then
         printf '%s %s\n' "$vl" "$(date +%s)" >"$tmp_vl"
-        mv -f "$tmp_vl" "$JANGADA_ESTADO/vram-livre" 2>/dev/null || rm -f "$tmp_vl"
+        mv -f "$tmp_vl" "$pasta_marcas/vram-livre" 2>/dev/null || rm -f "$tmp_vl"
       fi
     fi
   fi
   if pgrep -f 'reaper SteamLaunch' >/dev/null 2>&1; then
     local tmp_ja
-    tmp_ja="$(mktemp "$JANGADA_ESTADO/.jogo-ativo.XXXXXX" 2>/dev/null || true)"
+    tmp_ja="$(mktemp "$pasta_marcas/.jogo-ativo.XXXXXX" 2>/dev/null || true)"
     if [[ -n "$tmp_ja" ]]; then
       printf '%s\n' "$(date +%s)" >"$tmp_ja"
-      mv -f "$tmp_ja" "$JANGADA_ESTADO/jogo-ativo" 2>/dev/null || rm -f "$tmp_ja"
+      mv -f "$tmp_ja" "$pasta_marcas/jogo-ativo" 2>/dev/null || rm -f "$tmp_ja"
     fi
   else
-    rm -f "$JANGADA_ESTADO/jogo-ativo" 2>/dev/null || true
+    rm -f "$pasta_marcas/jogo-ativo" 2>/dev/null || true
   fi
 }
 
@@ -187,8 +188,8 @@ gravavel "$JANGADA_ESTADO/delegacoes.jsonl"
 # Trava das delegações locais. O agente pode segurar a trava e causar negação de serviço local.
 gravavel "$JANGADA_ESTADO/local.lock"
 ((!mostrar)) && atualizar_marcas_host
-[[ -f "$JANGADA_ESTADO/vram-livre" ]] && somente_leitura "$JANGADA_ESTADO/vram-livre"
-[[ -f "$JANGADA_ESTADO/jogo-ativo" ]] && somente_leitura "$JANGADA_ESTADO/jogo-ativo"
+mkdir -p "$pasta_marcas" 2>/dev/null || true
+somente_leitura "$pasta_marcas"
 IFS=: read -ra extras <<<"${JANGADA_ISOLAR_ESCRITA:-}"
 for p in "${extras[@]}"; do
   [[ -n "$p" ]] && gravavel "$(realpath -m "${p/#\~/$HOME}")"
@@ -326,7 +327,7 @@ fi
   sleep_pid=""
   trap '[[ -n "$sleep_pid" ]] && kill "$sleep_pid" 2>/dev/null || true; wait 2>/dev/null || true; exit 0' TERM INT EXIT
   while kill -0 $$ 2>/dev/null; do
-    sleep 30 &
+    sleep 30.789 &
     sleep_pid=$!
     wait "$sleep_pid" 2>/dev/null || true
     kill -0 $$ 2>/dev/null || exit 0

@@ -386,7 +386,7 @@ Testes de 29/09/2026, Ollama 0.34.4:
 - **Isolamento e checagens do sistema**: dentro do `jangada-isolar` (`bwrap` com
   `--unshare-pid` e sem nós `/dev/nvidia*`), `pgrep` não enxerga processos do
   host (como Steam) e `nvidia-smi` não consegue comunicar com o driver. O host
-  grava marcas em `$JANGADA_ESTADO/vram-livre` e `$JANGADA_ESTADO/jogo-ativo`
+  grava marcas em `$JANGADA_ESTADO/marcas/vram-livre` e `$JANGADA_ESTADO/marcas/jogo-ativo`
   antes de isolar e as renova a cada 30 segundos, e o script consulta `/api/ps`
   no Ollama.
 - **Memória de vídeo com modelo residente**: com `keep_alive` ativo, o modelo

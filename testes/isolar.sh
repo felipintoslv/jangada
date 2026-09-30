@@ -312,7 +312,7 @@ sys.exit(0)
   conferir "caso 3: propaga sinal SIGTERM" testar_sinal TERM 143
   conferir "caso 3: propaga sinal SIGHUP" testar_sinal HUP 129
   conferir "caso 3: propaga sinal SIGINT" testar_sinal INT 130
-  conferir "caso 3: processo filho sleep não sobra" [ -z "$(pgrep -x sleep 2>/dev/null || true)" ]
+  conferir "caso 3: processo filho sleep não sobra" [ -z "$(pgrep -f '[s]leep 25\.123' 2>/dev/null || true)" ]
 
   # Entrada padrão interativa / por pipe
   saida_pipe="$(printf 'dados-stdin-123\n' | isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- cat 2>/dev/null)"
@@ -341,27 +341,77 @@ EOF
 
   touch "$tmp/jogo_ativo_flag"
   saida_marcas="$(PATH="$bin_falso:$PATH" isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- bash -c \
-    'cat "$JANGADA_ESTADO/vram-livre" 2>/dev/null; echo "---"; cat "$JANGADA_ESTADO/jogo-ativo" 2>/dev/null')"
+    'cat "$JANGADA_ESTADO/marcas/vram-livre" 2>/dev/null; echo "---"; cat "$JANGADA_ESTADO/marcas/jogo-ativo" 2>/dev/null')"
 
   conferir "caso 3b: vram-livre criada e legível dentro do isolamento" \
     bash -c 'echo "$1" | head -n1 | grep -qE "^6144 [0-9]+$"' _ "$saida_marcas"
   conferir "caso 3b: jogo-ativo criado e legível dentro do isolamento" \
     bash -c 'echo "$1" | tail -n1 | grep -qE "^[0-9]+$"' _ "$saida_marcas"
-  conferir "caso 3b: vram-livre gravada no host" [ -f "$casa/.local/state/jangada/vram-livre" ]
-  conferir "caso 3b: jogo-ativo gravado no host" [ -f "$casa/.local/state/jangada/jogo-ativo" ]
+  conferir "caso 3b: vram-livre gravada no host" [ -f "$casa/.local/state/jangada/marcas/vram-livre" ]
+  conferir "caso 3b: jogo-ativo gravado no host" [ -f "$casa/.local/state/jangada/marcas/jogo-ativo" ]
 
   # Jogo fecha: próxima chamada deve remover jogo-ativo
   rm -f "$tmp/jogo_ativo_flag"
   PATH="$bin_falso:$PATH" isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- true
-  conferir "caso 3b: jogo-ativo removido quando o jogo fecha" [ ! -e "$casa/.local/state/jangada/jogo-ativo" ]
+  conferir "caso 3b: jogo-ativo removido quando o jogo fecha" [ ! -e "$casa/.local/state/jangada/marcas/jogo-ativo" ]
 
   # Encerramento limpo do monitor
   conferir "caso 3b: monitor não deixa sleep em segundo plano" \
-    [ -z "$(pgrep -x sleep 2>/dev/null || true)" ]
+    [ -z "$(pgrep -f '[s]leep 30\.789' 2>/dev/null || true)" ]
   conferir "caso 3b: nenhum temporário .vram-livre deixado para trás" \
-    [ -z "$(find "$casa/.local/state/jangada" -name '.vram-livre.*' 2>/dev/null)" ]
+    [ -z "$(find "$casa/.local/state/jangada/marcas" -name '.vram-livre.*' 2>/dev/null)" ]
   conferir "caso 3b: nenhum temporário .jogo-ativo deixado para trás" \
-    [ -z "$(find "$casa/.local/state/jangada" -name '.jogo-ativo.*' 2>/dev/null)" ]
+    [ -z "$(find "$casa/.local/state/jangada/marcas" -name '.jogo-ativo.*' 2>/dev/null)" ]
+
+  # Caso 3c: renovação dinâmica das marcas e surgimento de jogo em sessão já aberta
+  rm -f "$tmp/wt/.sinal_leitura1" "$tmp/wt/.sinal_atualizado" "$tmp/wt/.resultado_3c"
+  rm -f "$casa/.local/state/jangada/marcas/jogo-ativo"
+
+  (
+    PATH="$bin_falso:$PATH" isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- bash -c '
+      vl1="$(cat "$JANGADA_ESTADO/marcas/vram-livre" 2>/dev/null | awk "{print \$1}")"
+      ja1="nao"
+      [[ -f "$JANGADA_ESTADO/marcas/jogo-ativo" ]] && ja1="sim"
+
+      touch .sinal_leitura1
+
+      for i in {1..100}; do
+        [[ -f .sinal_atualizado ]] && break
+        sleep 0.05
+      done
+
+      vl2="$(cat "$JANGADA_ESTADO/marcas/vram-livre" 2>/dev/null | awk "{print \$1}")"
+      ja2="nao"
+      [[ -f "$JANGADA_ESTADO/marcas/jogo-ativo" ]] && ja2="sim"
+
+      printf "%s %s %s %s\n" "$vl1" "$ja1" "$vl2" "$ja2" >.resultado_3c
+    '
+  ) &
+  pid_sessao=$!
+
+  for ((t = 0; t < 100; t++)); do
+    [[ -f "$tmp/wt/.sinal_leitura1" ]] && break
+    sleep 0.05
+  done
+
+  # Host atualiza marcas atomicamente com novos inodes e cria jogo-ativo
+  tmp_vl="$(mktemp "$casa/.local/state/jangada/marcas/.vram-livre.XXXXXX")"
+  printf "7168 %s\n" "$(date +%s)" >"$tmp_vl"
+  mv -f "$tmp_vl" "$casa/.local/state/jangada/marcas/vram-livre"
+
+  tmp_ja="$(mktemp "$casa/.local/state/jangada/marcas/.jogo-ativo.XXXXXX")"
+  date +%s >"$tmp_ja"
+  mv -f "$tmp_ja" "$casa/.local/state/jangada/marcas/jogo-ativo"
+
+  touch "$tmp/wt/.sinal_atualizado"
+
+  wait "$pid_sessao" || true
+
+  res_3c="$(cat "$tmp/wt/.resultado_3c" 2>/dev/null || true)"
+  conferir "caso 3c: sandbox enxerga atualização dinâmica de vram e novo jogo-ativo" \
+    [ "$res_3c" = "6144 nao 7168 sim" ]
+
+  rm -f "$casa/.local/state/jangada/marcas/jogo-ativo"
 else
   echo "pulado caso 3: bwrap não cria namespace aqui"
 fi
