@@ -404,6 +404,13 @@ OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia
 conferir "caso 29: conta afirmações sem fonte no destino local" \
   jqok -se 'last | .destino == "local" and .sem_fonte == 1' "$reg"
 
+# 11b. Filtragem de tags think na mesma linha
+printf '%s\n' "<think>raciocinio interno</think>doc1.txt:1: trecho util extraido." >"$ollama_resp"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 29b: tags think na mesma linha sao filtradas" [ "$(codigo)" = 0 ]
+conferir "caso 29b: mantem o texto util da linha" grep -q "doc1.txt:1: trecho util extraido." "$tmp/saida"
+conferir "caso 29b: remove a tag think" [ "$(grep -c "<think>" "$tmp/saida" || true)" -eq 0 ]
+
 # 12. Fatiamento de documento maior que o contexto
 doc_grande="$tmp/projeto/doc_grande.txt"
 : >"$doc_grande"

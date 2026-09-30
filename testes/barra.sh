@@ -118,6 +118,7 @@ conferir "caso 8: nenhum clique que abre janela sem setsid -f ($presos)" [ -z "$
 
 # Caso 9: migração que solta os cliques na cópia própria.
 migracao=migrations/202609281200-barra-cliques-soltos.sh
+rm -f "$alvo.jangada-"*.bak
 sed -E 's#setsid -f (\$JANGADA_PATH/bin/jangada-(calendario|rede|monitor))#\1#' default/waybar/config.jsonc >"$alvo"
 conferir "caso 9: a barra de antes tem clique preso" grep -q '"on-click": "$JANGADA_PATH/bin/jangada-calendario"' "$alvo"
 cp "$alvo" "$tmp/antes.jsonc"

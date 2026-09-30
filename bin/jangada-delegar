@@ -352,7 +352,7 @@ if [[ "$destino" == local ]]; then
       recusar "contexto do modelo local estourado (${tent} tokens >= janela de ${ctx})"
     fi
     res_chamada="$(jq -r '.message.content // ""' <<<"$resp")"
-    res_chamada="$(sed -e '/<think>/,/<\/think>/d' <<<"$res_chamada" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    res_chamada="$(sed -E 's/<think>.*<\/think>//g' <<<"$res_chamada" | sed -e '/<think>/,/<\/think>/d' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
     if [[ -z "$res_chamada" ]]; then
       recusar "o Ollama devolveu resposta vazia"
     fi

@@ -318,7 +318,76 @@ sys.exit(0)
 
   conferir "caso 3: propaga sinal SIGTERM" testar_sinal TERM 143
   conferir "caso 3: propaga sinal SIGHUP" testar_sinal HUP 129
-  conferir "caso 3: propaga sinal SIGINT" testar_sinal INT 130
+
+  testar_sigint_sleep_grupo() {
+    python3 -c '
+import subprocess, time, signal, sys, os
+
+wt = sys.argv[1]
+casa = sys.argv[2]
+config = sys.argv[3]
+repo = sys.argv[4]
+marca = sys.argv[5]
+
+env = os.environ.copy()
+env.pop("XDG_CACHE_HOME", None)
+env.pop("JANGADA_ISOLADO", None)
+env["HOME"] = casa
+env["XDG_STATE_HOME"] = f"{casa}/.local/state"
+env["XDG_CONFIG_HOME"] = config
+env["JANGADA_PATH"] = repo
+env["JANGADA_MARCA_ISOLADO"] = marca
+
+def achar_sleep():
+    pids = subprocess.run(["pgrep", "-f", "sleep 25.123"], capture_output=True, text=True).stdout.split()
+    for pid in pids:
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as f:
+                if "25.123" not in f.read().decode("utf-8", errors="ignore"):
+                    continue
+            with open(f"/proc/{pid}/environ", "rb") as f:
+                if f"HOME={casa}" in f.read().decode("utf-8", errors="ignore").split("\0"):
+                    return pid
+        except OSError:
+            pass
+    return None
+
+p = subprocess.Popen([f"{repo}/bin/jangada-isolar", "--", "sleep", "25.123"],
+                     cwd=wt, env=env, start_new_session=True)
+for _ in range(50):
+    if achar_sleep():
+        break
+    time.sleep(0.05)
+else:
+    p.kill()
+    sys.exit(1)
+
+os.killpg(p.pid, signal.SIGINT)
+
+try:
+    rc = p.wait(timeout=5)
+except subprocess.TimeoutExpired:
+    p.kill()
+    sys.exit(2)
+
+if rc < 0:
+    rc = 128 + (-rc)
+
+if rc != 130:
+    sys.exit(3)
+
+time.sleep(0.1)
+for _ in range(30):
+    if not achar_sleep():
+        break
+    time.sleep(0.05)
+else:
+    sys.exit(4)
+
+sys.exit(0)
+' "$tmp/wt" "$casa" "$tmp/config" "$repo_jangada" "$marca_teste"
+  }
+  conferir "caso 3: propaga sinal SIGINT ao grupo" testar_sigint_sleep_grupo
   conferir "caso 3: processo filho sleep não sobra" \
     bash -c '
       for ((i=0; i<30; i++)); do
@@ -361,10 +430,15 @@ if os.path.exists(rdy_file): os.remove(rdy_file)
 
 py_cmd = f"""
 import signal, time, sys, os
+entregas = 0
 def handler(s, f):
+    global entregas
+    entregas += 1
     with open("{sig_file}", "w") as out:
-        out.write("recebido\\n")
-    sys.exit(42)
+        out.write(f"{{entregas}}\\n")
+    if entregas == 1:
+        time.sleep(0.2)
+        sys.exit(42)
 signal.signal(signal.SIGINT, handler)
 with open("{rdy_file}", "w") as out:
     out.write("ok\\n")
@@ -391,16 +465,19 @@ except subprocess.TimeoutExpired:
     p.kill()
     sys.exit(2)
 
+if rc < 0:
+    rc = 128 + (-rc)
+
 if rc != 42:
     sys.exit(3)
 
-if not os.path.exists(sig_file) or open(sig_file).read().strip() != "recebido":
+if not os.path.exists(sig_file) or open(sig_file).read().strip() != "1":
     sys.exit(4)
 
 sys.exit(0)
 ' "$tmp/wt" "$casa" "$tmp/config" "$repo_jangada" "$marca_teste"
   }
-  conferir "caso 3: SIGINT ao grupo de processos chega ao filho isolado" testar_sigint_grupo
+  conferir "caso 3: SIGINT ao grupo de processos chega ao filho isolado uma única vez" testar_sigint_grupo
 
   testar_sigint_capturado_sucesso() {
     python3 -c '
@@ -443,7 +520,7 @@ sys.exit(0)
 """
 
 p = subprocess.Popen([f"{repo}/bin/jangada-isolar", "--", "python3", "-c", py_cmd],
-                     cwd=wt, env=env)
+                     cwd=wt, env=env, start_new_session=True)
 
 for _ in range(100):
     if os.path.exists(rdy_file):
@@ -453,13 +530,16 @@ else:
     p.kill()
     sys.exit(1)
 
-p.send_signal(signal.SIGINT)
+os.killpg(p.pid, signal.SIGINT)
 
 try:
     rc = p.wait(timeout=5)
 except subprocess.TimeoutExpired:
     p.kill()
     sys.exit(2)
+
+if rc < 0:
+    rc = 128 + (-rc)
 
 if rc != 0:
     sys.exit(3)
