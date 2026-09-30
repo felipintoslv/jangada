@@ -449,6 +449,7 @@ doc_linha_gigante="$tmp/projeto/doc_linha_gigante.txt"
 python3 -c 'print("a" * 1500)' >"$doc_linha_gigante"
 LOCAL_CTX=2100 LOCAL_FATIAS_MAX=10 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia gigante" --arquivos "$doc_linha_gigante"
 conferir "caso 37: linha única gigante é fatiada com sucesso" [ "$(codigo)" = 0 ]
+conferir "caso 37: pedaços seguintes da linha gigante mantêm prefixo" grep -q "doc_linha_gigante.txt:1: a" "$ollama_reqs"
 
 # 20. Truncamento de contexto detectado
 touch "$ollama_estouro"
@@ -505,10 +506,11 @@ printf '%s\n' "$(( $(date +%s) - 300 ))" >"$tmp/home/.local/state/jangada/jogo-a
 ISOLADO=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
 conferir "caso 43c: marca jogo-ativo expirada no isolamento é ignorada" [ "$(codigo)" = 0 ]
 
-# 25d. Na sessão isolada com marca malformada a marca é ignorada
+# 25d. Na sessão isolada com marca malformada recusa por segurança (código 4)
 printf 'invalido\n' >"$tmp/home/.local/state/jangada/jogo-ativo"
 ISOLADO=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
-conferir "caso 43d: marca jogo-ativo malformada no isolamento é ignorada" [ "$(codigo)" = 0 ]
+conferir "caso 43d: marca jogo-ativo malformada no isolamento recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 43d: erro indica jogo aberto" grep -q "jogo aberto detectado" "$tmp/erro"
 rm -f "$tmp/home/.local/state/jangada/jogo-ativo"
 
 # 26. Marca de VRAM livre gravada pelo host no estado

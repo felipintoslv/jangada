@@ -80,7 +80,7 @@ flowchart TD
 | `agy` | `default/agentes/protocolo-delegar-agy.md` | usar primeiro `jangada-delegar PAPEL "pedido"`; só na recusa, o subagente do Claude do mesmo papel |
 | `claude` | `default/agentes/protocolo-delegar-claude.md` | usar os subagentes do Claude |
 | `nativo` | `default/agentes/protocolo-delegar-nativo.md` | usar os subagentes do próprio agy |
-| `local` | `default/agentes/protocolo-delegar-local.md` | usar `jangada-delegar` no destino local com `--arquivos` para leitor e redator; os outros papéis seguem no agy ou Claude |
+| `local` | `default/agentes/protocolo-delegar-local.md` | usar `jangada-delegar` no destino local com `--arquivos` para leitor e redator; os outros papéis seguem nos subagentes do Claude |
 
 Os quatro são seguidos de `default/agentes/protocolo-delegar.md`, com as regras
 comuns: citar a fonte, conferir no arquivo o que decide a mudança, não editar

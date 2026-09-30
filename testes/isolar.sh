@@ -243,13 +243,63 @@ if bwrap --ro-bind / / --dev /dev --proc /proc true 2>/dev/null; then
   isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- sh -c 'exit 42' 2>/dev/null || rc_prop=$?
   conferir "caso 3: propaga código de saída" [ "$rc_prop" -eq 42 ]
 
-  rc_sig=0
-  ( isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- sleep 10 ) &
-  pid_sig=$!
-  sleep 0.1
-  kill -TERM "$pid_sig" 2>/dev/null || true
-  wait "$pid_sig" 2>/dev/null || rc_sig=$?
-  conferir "caso 3: propaga sinal SIGTERM" [ "$rc_sig" -gt 128 ]
+  testar_sinal() {
+    local sig="$1" rc_esperado="$2"
+    python3 -c '
+import subprocess, time, signal, sys, os
+
+sig_name = sys.argv[1]
+expected_rc = int(sys.argv[2])
+sig = getattr(signal, "SIG" + sig_name)
+
+wt = sys.argv[3]
+casa = sys.argv[4]
+config = sys.argv[5]
+repo = sys.argv[6]
+marca = sys.argv[7]
+
+env = os.environ.copy()
+env.pop("XDG_CACHE_HOME", None)
+env.pop("JANGADA_ISOLADO", None)
+env["HOME"] = casa
+env["XDG_STATE_HOME"] = f"{casa}/.local/state"
+env["XDG_CONFIG_HOME"] = config
+env["JANGADA_PATH"] = repo
+env["JANGADA_MARCA_ISOLADO"] = marca
+
+p = subprocess.Popen([f"{repo}/bin/jangada-isolar", "--", "sleep", "25"], cwd=wt, env=env)
+for _ in range(50):
+    res = subprocess.run(["pgrep", "-x", "sleep"], capture_output=True, text=True)
+    if res.stdout.strip():
+        break
+    time.sleep(0.05)
+else:
+    p.kill()
+    sys.exit(1)
+
+p.send_signal(sig)
+try:
+    rc = p.wait(timeout=5)
+except subprocess.TimeoutExpired:
+    p.kill()
+    sys.exit(2)
+
+if rc != expected_rc:
+    sys.exit(3)
+
+time.sleep(0.1)
+res = subprocess.run(["pgrep", "-x", "sleep"], capture_output=True, text=True)
+if res.stdout.strip():
+    sys.exit(4)
+
+sys.exit(0)
+' "$sig" "$rc_esperado" "$tmp/wt" "$casa" "$tmp/config" "$repo_jangada" "$marca_teste"
+  }
+
+  conferir "caso 3: propaga sinal SIGTERM" testar_sinal TERM 143
+  conferir "caso 3: propaga sinal SIGHUP" testar_sinal HUP 129
+  conferir "caso 3: propaga sinal SIGINT" testar_sinal INT 130
+  conferir "caso 3: processo filho sleep não sobra" [ -z "$(pgrep -x sleep 2>/dev/null || true)" ]
 else
   echo "pulado caso 3: bwrap não cria namespace aqui"
 fi

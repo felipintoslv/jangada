@@ -191,7 +191,7 @@ if [[ "$destino" == local ]]; then
     ts_jogo="$(head -n1 "$JANGADA_ESTADO/jogo-ativo" 2>/dev/null | tr -d ' ' || echo 0)"
     [[ "$ts_jogo" =~ ^[0-9]+$ ]] || ts_jogo=0
     agora=$(date +%s)
-    if (( ts_jogo > 0 && agora - ts_jogo <= 120 )); then
+    if (( ts_jogo == 0 || agora - ts_jogo <= 120 )); then
       recusar "jogo aberto detectado (reaper SteamLaunch)"
     fi
   fi
@@ -275,7 +275,11 @@ if [[ "$destino" == local ]]; then
   while IFS= read -r linha || [[ -n "$linha" ]]; do
     while (( ${#linha} > limite_chars )); do
       pedaco="${linha:0:limite_chars}"
-      linha="${linha:limite_chars}"
+      prefixo=""
+      if [[ "$pedaco" =~ ^([^:]+:[0-9]+:|[^\:]+,[[:space:]]*p\.[[:space:]]*[0-9]+:[0-9]+:)[[:space:]]* ]]; then
+        prefixo="${BASH_REMATCH[0]}"
+      fi
+      linha="${prefixo}${linha:limite_chars}"
       if [[ -n "$fat_atual" ]]; then
         fatias+=("$fat_atual")
         fat_atual=""
