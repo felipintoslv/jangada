@@ -131,6 +131,7 @@ testes/codex.sh || falha "testes/codex.sh"
 
 passo "barra (módulos e migração)"
 testes/barra.sh || falha "testes/barra.sh"
+testes/interface.sh || falha "testes/interface.sh"
 
 passo "painel de indicadores"
 testes/painel.sh || falha "testes/painel.sh"

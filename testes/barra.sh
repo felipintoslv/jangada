@@ -133,6 +133,44 @@ conferir "caso 9: segunda passada não muda nada" iguais "$alvo" default/waybar/
 conferir "caso 9: segunda passada não faz outra cópia" \
   [ "$(compgen -G "$alvo.jangada-*.bak" | wc -l)" = 1 ]
 
+# Caso 10: fonte e saída têm volumes independentes; preserve controles pessoais.
+conferir "caso 10: microfone controla a fonte e mostra seu volume" \
+  jq_ok '.["pulseaudio#microfone"] | .["tooltip-format"] == "{source_desc} · {source_volume}%"
+    and (.["on-scroll-up"] | contains("@DEFAULT_AUDIO_SOURCE@"))
+    and (.["on-scroll-down"] | contains("@DEFAULT_AUDIO_SOURCE@"))' "$tmp/config.json"
+migracao=migrations/202609301900-barra-microfone.sh
+python3 - "$tmp/config.json" "$alvo" <<'PY'
+import json, sys
+p = json.load(open(sys.argv[1]))
+m = p['pulseaudio#microfone']
+m.pop('on-scroll-up'); m.pop('on-scroll-down')
+m['scroll-step'] = 5
+m['tooltip-format'] = '{source_desc} · {volume}%'
+json.dump(p, open(sys.argv[2], 'w'), ensure_ascii=False, indent=2)
+PY
+cp "$alvo" "$tmp/microfone-antes"
+JANGADA_SIMULAR=1 migrar
+conferir "caso 10: simulação preserva a barra" iguais "$alvo" "$tmp/microfone-antes"
+conferir "caso 10: migra a configuração anterior" migrar
+conferir "caso 10: configurações novas iguais ao padrão" \
+  jq_ok --slurpfile p "$tmp/config.json" '.["pulseaudio#microfone"] | del(.["scroll-step"]) == $p[0]["pulseaudio#microfone"]' "$alvo"
+cp "$alvo" "$tmp/microfone-depois"
+conferir "caso 10: migração repetível" migrar
+conferir "caso 10: segunda passada não muda nada" iguais "$alvo" "$tmp/microfone-depois"
+printf '{"pulseaudio#microfone":{"on-scroll-up":"controle pessoal","tooltip-format":"pessoal"}}\n' >"$alvo"
+cp "$alvo" "$tmp/microfone-pessoal"
+conferir "caso 10: migração aceita configuração personalizada" migrar
+conferir "caso 10: controles pessoais preservados" iguais "$alvo" "$tmp/microfone-pessoal"
+printf '{"pulseaudio#microfone":{\n // comentário pessoal\n "tooltip-format":"{source_desc} · {volume}%%", /* volume */\n "scroll-step":5,\n}}\n' >"$alvo"
+conferir "caso 10: migra JSONC com comentários e vírgula final" migrar
+conferir "caso 10: preserva comentário de linha" grep -q '// comentário pessoal' "$alvo"
+conferir "caso 10: preserva comentário de bloco" grep -q '/\* volume \*/' "$alvo"
+conferir "caso 10: comentário não impede corrigir a dica" grep -q '{source_volume}' "$alvo"
+conferir "caso 10: comentário não impede corrigir a rolagem" grep -q 'on-scroll-up' "$alvo"
+cp "$alvo" "$tmp/microfone-comentado"
+conferir "caso 10: JSONC comentado também é repetível" migrar
+conferir "caso 10: comentários mantidos na segunda passada" iguais "$alvo" "$tmp/microfone-comentado"
+
 if ((falhas)); then
   echo "$falhas teste(s) da barra falharam"
   exit 1

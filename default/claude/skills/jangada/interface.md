@@ -2,6 +2,13 @@
 
 ## Waybar
 
+- O `pulseaudio#microfone` precisa de comandos próprios de rolagem com
+  `@DEFAULT_AUDIO_SOURCE@`: a rolagem padrão do módulo muda a saída.
+  Na dica, `{source_volume}` é o volume da entrada; `{volume}` é o da saída.
+- `jangada-interface-processos` confere sessão, configuração e argumentos
+  antes de sinalizar Waybar ou Mako. O swaybg iniciado pelo tema recebe
+  `JANGADA_INTERFACE_PROCESSO=papel`; processos antigos sem essa marca não
+  são encerrados. Reinicie a sessão uma vez ao receber esta atualização.
 - **Todo on-click que abre janela usa `setsid -f`.** A waybar espera o fim do
   on-click antes de rodar o `exec` do módulo de novo; um terminal em primeiro
   plano congela o contador da barra onde houve o clique. Só `--parar` e

@@ -249,8 +249,9 @@
     "format-source-muted": "",
     "on-click": "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle",
     "on-click-right": "setsid -f $JANGADA_PATH/bin/jangada-audio entrada",
-    "scroll-step": 5,
-    "tooltip-format": "{source_desc} · {volume}%"
+    "on-scroll-up": "wpctl set-volume -l 1 @DEFAULT_AUDIO_SOURCE@ 5%+",
+    "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SOURCE@ 5%-",
+    "tooltip-format": "{source_desc} · {source_volume}%"
   },
 
   "battery": {

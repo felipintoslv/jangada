@@ -9,6 +9,8 @@
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+# shellcheck source=bin/jangada-interface-processos
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-interface-processos"
 
 matugen_cfg="$JANGADA_PATH/default/matugen/config.toml"
 conf_usuario="$JANGADA_CONFIG/jangada.conf"
@@ -139,8 +141,8 @@ aplicar_papel() {
     # bloqueio mostrar o papel de parede anterior.
     : >"$papeis_hyprlock" 2>/dev/null || true
   fi
-  pkill -x swaybg 2>/dev/null || true
-  setsid -f swaybg "${args[@]}" >/dev/null 2>&1
+  jangada_interface_sinalizar swaybg TERM
+  JANGADA_INTERFACE_PROCESSO=papel setsid -f swaybg "${args[@]}" >/dev/null 2>&1
 }
 
 salvar_papel() {
@@ -156,8 +158,8 @@ salvar_papel() {
 }
 
 recarregar() {
-  pgrep -x waybar >/dev/null && pkill -SIGUSR2 -x waybar || true
-  pgrep -x mako >/dev/null && makoctl reload || true
+  jangada_interface_sinalizar waybar USR2
+  jangada_interface_recarregar_mako
   [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] && hyprctl reload >/dev/null || true
 }
 

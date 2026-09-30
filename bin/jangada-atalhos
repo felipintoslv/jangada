@@ -20,18 +20,20 @@ montar() {
       if (int(m /  1) % 2) s = s "SHIFT + "
       return s
     }
-    /^[a-z]+$/            { mod = 0; key = ""; desc = ""; sub_ = ""; next }
-    /^\tmodmask:/         { mod = $2; next }
-    /^\tsubmap:/          { sub_ = substr($0, 10); next }
-    /^\tkey:/             { key = $2; next }
-    /^\tdescription:/     { desc = substr($0, 15); next }
-    /^$/ {
-      if (key == "") next
+    function emitir() {
+      if (key == "") return
       if (sub_ != "") key = key "  [modo " sub_ "]"
       if (desc == "") desc = "-"
       printf "%s%s\t%s\n", teclas(mod), key, desc
       key = ""
     }
+    /^[a-z]+$/            { emitir(); mod = 0; key = ""; desc = ""; sub_ = ""; next }
+    /^\tmodmask:/         { mod = $2; next }
+    /^\tsubmap:/          { sub_ = substr($0, 10); next }
+    /^\tkey:/             { key = $2; next }
+    /^\tdescription:/     { desc = substr($0, 15); next }
+    /^$/ { emitir() }
+    END { emitir() }
   ' | sort -u | awk -F'\t' '{ printf "%-28s %s\n", $1, $2 }'
 }
 

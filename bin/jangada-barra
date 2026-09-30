@@ -12,6 +12,8 @@
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+# shellcheck source=bin/jangada-interface-processos
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-interface-processos"
 
 cfg="$JANGADA_CONFIG/waybar/config.jsonc"
 [[ -f "$cfg" ]] || cfg="$JANGADA_PATH/default/waybar/config.jsonc"
@@ -151,11 +153,9 @@ if ! posicao_waybar "$JANGADA_BARRA_POSICAO" >/dev/null; then
 fi
 gerar_config "$JANGADA_BARRA_POSICAO"
 
-# A barra antiga sai antes de a nova subir. Sem waybar no ar, o pkill sai com
-# 1 e não há o que esperar.
-if pkill -x waybar 2>/dev/null; then
-  sleep 0.3
-fi
+# Sinaliza apenas a barra desta sessão e configuração antes de abrir a nova.
+jangada_interface_sinalizar waybar TERM
+sleep 0.3
 if [[ -f "$estilo" ]]; then
   exec waybar -c "$gerado" -s "$estilo"
 else

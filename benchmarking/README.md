@@ -191,53 +191,59 @@ Observações sobre outros módulos:
 
 ## 4. As 10 melhores recomendações para o jangada
 
-Abaixo estão 10 propostas de módulos e aprimoramentos para a barra do jangada,
-ordenadas por relevância técnica, alinhamento com as regras do projeto e
-eficiência de recursos.
+A lista preserva a ordem do estudo original. As recomendações 1 a 4 já
+estão implementadas; as propostas pendentes começam no item 5.
 
 ### 1. Módulo nativo `systemd-failed-units`
+
+- Estado: implementado, conferido no código em 30/09/2026.
 - Motivo: Monitoramento preventivo de integridade. Com a opção `"hide-on-ok":
   true`, o módulo permanece oculto durante a operação normal e não ocupa espaço
   na barra. Quando qualquer serviço de sistema ou de usuário falha, o ícone surge
   em destaque. O módulo opera em C++ escutando sinais do systemd via DBus, sem
   processos em segundo plano.
 - Esforço estimado: Baixo.
-- Como encaixaria: Módulo nativo da Waybar inserido no array `modules-right` de
+- Implementação atual: Módulo nativo da Waybar inserido no array `modules-right` de
   `default/waybar/config.jsonc`, com estilo em `default/waybar/base.css` usando a
   classe `#systemd-failed-units.degraded` com a cor `@atencao`.
 
 ### 2. Módulo nativo `privacy` (Aviso de microfone ativo e captura de tela)
+
+- Estado: implementado, conferido no código em 30/09/2026.
 - Motivo: Segurança visual. Avisa quando um aplicativo em segundo plano está
   capturando áudio do microfone ou gravando a tela. Reativo por eventos do
   PipeWire, sem necessidade de consultas periódicas. Atende à necessidade de
   aviso visual de microfone em uso por aplicativo terceiro.
 - Esforço estimado: Baixo.
-- Como encaixaria: Módulo nativo da Waybar (`privacy`) em `config.jsonc` com
+- Implementação atual: Módulo nativo da Waybar (`privacy`) em `config.jsonc` com
   configuração para `screenshare` e `audio-in`. Estilização em `base.css` sob a
   classe `#privacy-item` com cor `@atencao`.
 
 ### 3. Módulo nativo `disk` (Espaço em disco com limiares de alerta)
+
+- Estado: implementado, conferido no código em 30/09/2026.
 - Motivo: Prevenção contra partição cheia decorrente de worktrees de Git,
   imagens de contêineres e modelos de IA. A leitura usa `statvfs()` a cada 60
   segundos sem custo de subprocessos. Permite configurar limiares de aviso
   (`states`: aviso em 80% e crítico em 90%). O clique pode abrir um terminal
   executando `df -h` ou o monitor geral `bin/jangada-monitor` (btop).
 - Esforço estimado: Baixo.
-- Como encaixaria: Módulo nativo `disk` em `default/waybar/config.jsonc` com
+- Implementação atual: Módulo nativo `disk` em `default/waybar/config.jsonc` com
   formato compacto (ex: `󰋊 {percentage_used}%`), tooltip completo com espaço
   livre e total, e regra em `default/waybar/base.css`.
 
 ### 4. Enriquecimento da janela de 5 horas no `custom/agentes`
+
+- Estado: implementado, conferido no código em 30/09/2026.
 - Motivo: Evitar a criação de módulos concorrentes na barra (como `claudebar` e
   `ai-usagebar`). O jangada já calcula o consumo de tokens em 5 horas no
-  `bin/jangada-consumo`. Calcular e exibir o tempo restante para a renovação da
-  janela de 5 horas diretamente na dica de `bin/jangada-agentes` atende à
+  `bin/jangada-consumo`. O horário de renovação do
+  bloco aparece diretamente na dica de `bin/jangada-agentes` e atende à
   demanda sem abrir consultas a APIs externas e sem ocupar espaço horizontal na
   barra.
 - Esforço estimado: Médio.
-- Como encaixaria: Ajuste no script `bin/jangada-consumo` e no campo `tooltip` de
-  `bin/jangada-agentes --waybar`, mantendo inalterada a lista de módulos da
-  Waybar.
+- Implementação atual: `bin/jangada-consumo --curto` informa a renovação, e o `tooltip` de
+  `bin/jangada-agentes --waybar` inclui essa informação sem criar outro módulo.
 
 ### 5. Indicador de gravação de tela acionado por sinal (`custom/gravacao`)
 - Motivo: Confirmação visual durante gravações de tela. Inspirado em
