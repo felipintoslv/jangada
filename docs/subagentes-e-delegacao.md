@@ -126,6 +126,55 @@ flowchart TD
 - Na recusa, a última linha diz qual subagente do Claude usar. O
   `jangada-delegar` nunca chama o Claude.
 
+## Destino local
+
+O destino `local` do `jangada-delegar` despacha tarefas de leitura a um modelo
+executado no Ollama na máquina local. Esse destino não gasta cotas externas
+e mantém os dados locais.
+
+Para evitar alucinações e desperdício de contexto, o destino local atende
+exclusivamente os papéis `leitor` e `redator`. O script lê e extrai os
+arquivos indicados (`--arquivos`), numerando linhas ou páginas, e envia texto
+puro ao modelo. O modelo não possui ferramentas de terminal.
+
+### Medições e escolha do modelo
+
+Medições realizadas em 29/09/2026 numa NVIDIA RTX 4060 (8 GB de VRAM, desktop
+ocupando ~2,4 GB, cerca de 5,6 GB disponíveis para o Ollama):
+
+| Modelo | Contexto (`num_ctx`) | Memória total | Memória na VRAM | Transbordo CPU | Geração (t/s) | Avaliação de prompt (t/s) |
+|---|---|---|---|---|---|---|
+| `qwen3:8b` | 8192 | 6,12 GiB | 5,03 GiB | 1,09 GiB | 33,2 | ~212 |
+| `qwen3:8b` | 4096 | 5,56 GiB | 5,08 GiB | 0,48 GiB | 44,9 | ~238 |
+| `qwen3:4b` | 16384 | 4,75 GiB | 4,75 GiB (100%) | 0 | 86,2 | ~3.600 |
+| `qwen3:4b` | 8192 | 3,61 GiB | 3,61 GiB (100%) | 0 | 85,6 | ~3.691 |
+
+Num teste com documento real de 10 páginas (4.098 tokens de prompt), o
+`qwen3:4b` avaliou o prompt em 1,11s (3.691 t/s) e gerou 2.992 tokens em
+44,27s (67,6 t/s).
+
+A `qwen3:8b` não coube inteiramente na VRAM com a área de trabalho ativa,
+resultando em transferência parcial para a CPU e queda substancial de
+desempenho. A `qwen3:4b` com contexto 8192 coube 100% na GPU e preservou
+cerca de 2,0 GB de folga, atendendo a margem mínima de 1,5 GB.
+
+### Configuração e proteção
+
+- `JANGADA_LOCAL_MODELO`: `qwen3:4b`.
+- `JANGADA_LOCAL_CTX`: `8192`.
+- `JANGADA_LOCAL_VRAM_MIN`: `4000` (MiB livres exigidos no `nvidia-smi` antes
+  do carregamento).
+- `JANGADA_LOCAL_KEEP_ALIVE`: `2m` (descarrega o modelo rapidamente para
+  liberar VRAM aos jogos).
+- `JANGADA_LOCAL_ESPERA`: `30` (segundos de espera pela trava de concorrência).
+- Concorrência: uma vaga exclusiva por chamada controlada por `flock` em
+  `$JANGADA_ESTADO/local.lock`.
+- Proteção de jogos: recusa com código 4 se `pgrep -f 'reaper SteamLaunch'`
+  detectar jogo ativo ou se a memória livre for inferior ao mínimo.
+- Falhas e privacidade: em qualquer falha (Ollama inacessível, modelo ausente,
+  memória insuficiente ou erro de contexto), o comando recusa com código 4
+  apontando o subagente do Claude, sem redirecionar dados para a nuvem.
+
 ## Registro e medição
 
 - Cada chamada do `jangada-delegar`, atendida ou recusada, vira uma linha em
