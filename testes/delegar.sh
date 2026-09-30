@@ -40,6 +40,11 @@ jq -n --arg r "$FALSO_RESPOSTA" --arg n "${FALSO_NEGADO:-}" \
     denied_actions: (if $n == "" then [] else [{action: "read_url", display_name: $n}] end)}'
 EOF
 chmod +x "$tmp/bin/agy"
+cat >"$tmp/bin/nvidia-smi" <<'EOF'
+#!/bin/sh
+echo "${FALSO_VRAM:-8000}"
+EOF
+chmod +x "$tmp/bin/nvidia-smi"
 conf_agy="$tmp/home/.gemini/antigravity-cli/settings.json"
 jq -n --arg w "$(realpath "$tmp/projeto")" '{trustedWorkspaces: [$w]}' >"$conf_agy"
 mkdir -p "$tmp/home/.gemini/config"
@@ -53,6 +58,13 @@ delegar() {
     FALSO_CODIGO="${CODIGO:-0}" FALSO_NEGADO="${NEGADO:-}" FALSO_LOG="${LOG:-}" FALSO_USAGE_FALHA="${USAGE_FALHA:-0}" \
     ${AGENTES:+FALSO_AGENTES="$AGENTES"} \
     ${DELEGAR:+JANGADA_DELEGAR=$DELEGAR} \
+    ${FALSO_VRAM:+FALSO_VRAM="$FALSO_VRAM"} \
+    ${OLLAMA_URL:+JANGADA_OLLAMA_URL="$OLLAMA_URL"} \
+    ${LOCAL_MODELO:+JANGADA_LOCAL_MODELO="$LOCAL_MODELO"} \
+    ${LOCAL_CTX:+JANGADA_LOCAL_CTX="$LOCAL_CTX"} \
+    ${LOCAL_VRAM_MIN:+JANGADA_LOCAL_VRAM_MIN="$LOCAL_VRAM_MIN"} \
+    ${LOCAL_ESPERA:+JANGADA_LOCAL_ESPERA="$LOCAL_ESPERA"} \
+    ${LOCAL_FATIAS_MAX:+JANGADA_LOCAL_FATIAS_MAX="$LOCAL_FATIAS_MAX"} \
     "$repo_jangada/bin/jangada-delegar" "$@" >"$tmp/saida" 2>"$tmp/erro")
   echo $? >"$tmp/codigo"
 }
@@ -200,6 +212,178 @@ sed "s|@JANGADA_PATH@|$repo_jangada|g" default/agy/hooks.json >"$tmp/home/.gemin
 
 delegar revisor "revise"
 conferir "caso 11: papel desconhecido dá código 2" [ "$(codigo)" = 2 ]
+
+# ==============================================================================
+# Destino local (Ollama)
+# ==============================================================================
+echo "teste de conteudo" >"$tmp/projeto/doc1.txt"
+
+# 1. Papel não permitido (explorador)
+delegar --destino local explorador "mapeie" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 19: destino local recusa papel não permitido (código 4)" [ "$(codigo)" = 4 ]
+conferir "caso 19: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
+conferir "caso 19: erro indica papéis leitor e redator" grep -q "só aceita os papéis leitor e redator" "$tmp/erro"
+conferir "caso 19: recusa registrada com destino local" \
+  jqok -se 'last | .destino == "local" and .papel == "explorador" and .codigo_saida == 4 and .recusa == true' "$reg"
+
+# 2. Sem --arquivos
+delegar --destino local leitor "leia"
+conferir "caso 20: destino local sem --arquivos dá código 2" [ "$(codigo)" = 2 ]
+
+# 3. Arquivo inexistente
+delegar --destino local leitor "leia" --arquivos "$tmp/projeto/inexistente.txt"
+conferir "caso 21: arquivo inexistente recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 21: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
+
+# 4. Ollama fora do ar
+OLLAMA_URL="http://127.0.0.1:1" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 22: Ollama fora do ar recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 22: erro indica Ollama fora do ar" grep -q "Ollama fora do ar" "$tmp/erro"
+conferir "caso 22: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
+
+# Servidor Ollama falso
+cat >"$tmp/servidor_ollama.py" <<'EOF'
+import http.server, socketserver, json, sys
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+
+    def do_GET(self):
+        if self.path == '/api/tags':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            modelos = sys.argv[1].split()
+            data = {"models": [{"name": m, "model": m} for m in modelos]}
+            self.wfile.write(json.dumps(data).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_POST(self):
+        if self.path == '/api/chat':
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length)
+            with open(sys.argv[2], 'a') as f:
+                f.write(body.decode('utf-8') + '\n')
+            with open(sys.argv[3], 'r') as f:
+                conteudo = f.read()
+            resp = {
+                "model": "qwen3:4b",
+                "message": {"role": "assistant", "content": conteudo},
+                "prompt_eval_count": 120,
+                "eval_count": 45,
+                "done": True
+            }
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(resp).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+httpd = socketserver.TCPServer(('127.0.0.1', int(sys.argv[4])), Handler)
+httpd.serve_forever()
+EOF
+
+porta_ollama="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
+ollama_reqs="$tmp/ollama.reqs"
+ollama_resp="$tmp/ollama.resp"
+printf '%s\n' "doc1.txt:1: trecho relevante extraido do arquivo." >"$ollama_resp"
+: >"$ollama_reqs"
+
+python3 "$tmp/servidor_ollama.py" "qwen3:4b" "$ollama_reqs" "$ollama_resp" "$porta_ollama" &
+pid_ollama=$!
+trap 'kill "$pid_ollama" 2>/dev/null || true; rm -rf "$tmp" /tmp/isolar-teste' EXIT
+
+# Aguarda subir
+for _ in {1..20}; do
+  if curl -s "http://127.0.0.1:$porta_ollama/api/tags" >/dev/null 2>&1; then break; fi
+  sleep 0.1
+done
+
+# 5. Modelo ausente
+LOCAL_MODELO="modelo_inexistente" OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 23: modelo ausente recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 23: indica modelo não encontrado" grep -q "modelo_inexistente não encontrado" "$tmp/erro"
+conferir "caso 23: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
+
+# 6. Jogo aberto (simulado com processo)
+bash -c 'exec -a "reaper SteamLaunch" sleep 5' &
+pid_jogo=$!
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+kill "$pid_jogo" 2>/dev/null || true
+wait "$pid_jogo" 2>/dev/null || true
+conferir "caso 24: jogo aberto recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 24: indica jogo aberto" grep -q "jogo aberto" "$tmp/erro"
+conferir "caso 24: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
+
+# 7. Memória livre insuficiente (nvidia-smi falso retorna 1000 MiB)
+FALSO_VRAM=1000 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 25: memória livre insuficiente recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 25: indica memória livre insuficiente" grep -q "memória de vídeo livre insuficiente" "$tmp/erro"
+conferir "caso 25: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
+
+# 8. Vaga ocupada (flock)
+trava_local="$tmp/home/.local/state/jangada/local.lock"
+mkdir -p "${trava_local%/*}"
+(
+  exec {tfd}>"$trava_local"
+  flock -x "$tfd"
+  sleep 4
+) &
+pid_trava=$!
+sleep 0.2
+LOCAL_ESPERA=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+kill "$pid_trava" 2>/dev/null || true
+wait "$pid_trava" 2>/dev/null || true
+conferir "caso 26: vaga ocupada recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 26: indica vaga ocupada" grep -q "vaga ocupada" "$tmp/erro"
+conferir "caso 26: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
+
+# 9. Sucesso: papel leitor e --arquivos
+: >"$ollama_reqs"
+printf '%s\n' "doc1.txt:1: informacao encontrada com sucesso." >"$ollama_resp"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia este trecho" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 27: código 0 no destino local" [ "$(codigo)" = 0 ]
+conferir "caso 27: imprime o relatório retornado" grep -q "doc1.txt:1:" "$tmp/saida"
+conferir "caso 27: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
+conferir "caso 27: registro com destino local e tokens Ollama" \
+  jqok -se 'last | .destino == "local" and .codigo_saida == 0 and .tokens_local_entrada == 120 and .tokens_local_saida == 45 and .sem_fonte == 0 and .modelo == "qwen3:4b"' "$reg"
+
+# 10. Sucesso: papel redator
+printf '%s\n' "doc1.txt:1: remover termo de enchimento." >"$ollama_resp"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local redator "revise este trecho" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 28: redator no destino local código 0" [ "$(codigo)" = 0 ]
+conferir "caso 28: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
+
+# 11. Afirmações sem fonte
+printf '%s\n' "Esta frase possui mais de vinte e cinco caracteres mas nao tem fonte." >"$ollama_resp"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 29: conta afirmações sem fonte no destino local" \
+  jqok -se 'last | .destino == "local" and .sem_fonte == 1' "$reg"
+
+# 12. Fatiamento de documento maior que o contexto
+doc_grande="$tmp/projeto/doc_grande.txt"
+: >"$doc_grande"
+for i in {1..8}; do
+  printf 'Linha %02d com texto suficiente para ocupar caracteres e testar o fatiamento de blocos.\n' "$i" >>"$doc_grande"
+done
+: >"$ollama_reqs"
+printf '%s\n' "doc_grande.txt:1: resumo da fatia." >"$ollama_resp"
+LOCAL_CTX=2100 LOCAL_FATIAS_MAX=5 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "resuma tudo" --arquivos "$doc_grande"
+conferir "caso 30: documento fatiado termina com código 0" [ "$(codigo)" = 0 ]
+conferir "caso 30: executou fatias mais passada de consolidação" [ "$(wc -l <"$ollama_reqs")" -ge 3 ]
+conferir "caso 30: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
+
+# 13. Documento excede limite de fatias (JANGADA_LOCAL_FATIAS_MAX)
+LOCAL_FATIAS_MAX=2 LOCAL_CTX=2100 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "resuma tudo" --arquivos "$doc_grande"
+conferir "caso 31: documento excedendo fatias máximas recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 31: erro indica fatias máximas" grep -q "documento muito grande para o modelo local" "$tmp/erro"
+conferir "caso 31: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
+
+kill "$pid_ollama" 2>/dev/null || true
 
 echo
 if ((falhas)); then
