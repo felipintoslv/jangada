@@ -453,6 +453,14 @@ LOCAL_CTX=2100 LOCAL_FATIAS_MAX=10 OLLAMA_URL="http://127.0.0.1:$porta_ollama" d
 conferir "caso 37: linha única gigante é fatiada com sucesso" [ "$(codigo)" = 0 ]
 conferir "caso 37: pedaços seguintes da linha gigante mantêm prefixo" grep -q "doc_linha_gigante.txt:1: a" "$ollama_reqs"
 
+# 19b. Caminho longo com prefixo grande e contexto pequeno
+pasta_longa="$tmp/projeto/caminho_$(printf 'longo_%.0s' {1..12})"
+mkdir -p "$pasta_longa"
+doc_longo="$pasta_longa/doc.txt"
+python3 -c 'print("b" * 600)' >"$doc_longo"
+LOCAL_CTX=2060 LOCAL_FATIAS_MAX=10 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia caminho longo" --arquivos "$doc_longo"
+conferir "caso 37b: caminho longo com prefixo grande não entra em laço infinito" [ "$(codigo)" = 0 ]
+
 # 20. Truncamento de contexto detectado
 touch "$ollama_estouro"
 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia estouro" --arquivos "$tmp/projeto/doc1.txt"

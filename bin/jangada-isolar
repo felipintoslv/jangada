@@ -151,6 +151,31 @@ temporario "$HOME/.cache"
 # Do estado do jangada, só o dos agentes, as métricas e o histórico de
 # estados: o resto (a barra, as marcas das migrações) alimenta código que roda
 # fora.
+atualizar_marcas_host() {
+  mkdir -p "$JANGADA_ESTADO" 2>/dev/null || true
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    local vl tmp_vl
+    vl="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d ' ' || true)"
+    if [[ -n "$vl" && "$vl" =~ ^[0-9]+$ ]]; then
+      tmp_vl="$(mktemp "$JANGADA_ESTADO/.vram-livre.XXXXXX" 2>/dev/null || true)"
+      if [[ -n "$tmp_vl" ]]; then
+        printf '%s %s\n' "$vl" "$(date +%s)" >"$tmp_vl"
+        mv -f "$tmp_vl" "$JANGADA_ESTADO/vram-livre" 2>/dev/null || rm -f "$tmp_vl"
+      fi
+    fi
+  fi
+  if pgrep -f 'reaper SteamLaunch' >/dev/null 2>&1; then
+    local tmp_ja
+    tmp_ja="$(mktemp "$JANGADA_ESTADO/.jogo-ativo.XXXXXX" 2>/dev/null || true)"
+    if [[ -n "$tmp_ja" ]]; then
+      printf '%s\n' "$(date +%s)" >"$tmp_ja"
+      mv -f "$tmp_ja" "$JANGADA_ESTADO/jogo-ativo" 2>/dev/null || rm -f "$tmp_ja"
+    fi
+  else
+    rm -f "$JANGADA_ESTADO/jogo-ativo" 2>/dev/null || true
+  fi
+}
+
 mkdir -p "$JANGADA_ESTADO/agentes" 2>/dev/null || true
 for p in validar.jsonl eventos-agentes.jsonl delegacoes.jsonl local.lock; do
   [[ -e "$JANGADA_ESTADO/$p" ]] || : 2>/dev/null >>"$JANGADA_ESTADO/$p" || true
@@ -161,6 +186,9 @@ gravavel "$JANGADA_ESTADO/eventos-agentes.jsonl"
 gravavel "$JANGADA_ESTADO/delegacoes.jsonl"
 # Trava das delegações locais. O agente pode segurar a trava e causar negação de serviço local.
 gravavel "$JANGADA_ESTADO/local.lock"
+((!mostrar)) && atualizar_marcas_host
+[[ -f "$JANGADA_ESTADO/vram-livre" ]] && somente_leitura "$JANGADA_ESTADO/vram-livre"
+[[ -f "$JANGADA_ESTADO/jogo-ativo" ]] && somente_leitura "$JANGADA_ESTADO/jogo-ativo"
 IFS=: read -ra extras <<<"${JANGADA_ISOLAR_ESCRITA:-}"
 for p in "${extras[@]}"; do
   [[ -n "$p" ]] && gravavel "$(realpath -m "${p/#\~/$HOME}")"
@@ -293,46 +321,42 @@ if ((mostrar)); then
   exit 0
 fi
 
-atualizar_marcas_host() {
-  mkdir -p "$JANGADA_ESTADO" 2>/dev/null || true
-  if command -v nvidia-smi >/dev/null 2>&1; then
-    local vl tmp_vl
-    vl="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d ' ' || true)"
-    if [[ -n "$vl" && "$vl" =~ ^[0-9]+$ ]]; then
-      tmp_vl="$(mktemp "$JANGADA_ESTADO/.vram-livre.XXXXXX" 2>/dev/null || true)"
-      if [[ -n "$tmp_vl" ]]; then
-        printf '%s %s\n' "$vl" "$(date +%s)" >"$tmp_vl"
-        mv -f "$tmp_vl" "$JANGADA_ESTADO/vram-livre" 2>/dev/null || rm -f "$tmp_vl"
-      fi
-    fi
-  fi
-  if pgrep -f 'reaper SteamLaunch' >/dev/null 2>&1; then
-    local tmp_ja
-    tmp_ja="$(mktemp "$JANGADA_ESTADO/.jogo-ativo.XXXXXX" 2>/dev/null || true)"
-    if [[ -n "$tmp_ja" ]]; then
-      printf '%s\n' "$(date +%s)" >"$tmp_ja"
-      mv -f "$tmp_ja" "$JANGADA_ESTADO/jogo-ativo" 2>/dev/null || rm -f "$tmp_ja"
-    fi
-  else
-    rm -f "$JANGADA_ESTADO/jogo-ativo" 2>/dev/null || true
-  fi
-}
-
-atualizar_marcas_host
 
 (
-  trap 'kill $(jobs -p) 2>/dev/null || true; exit 0' TERM INT EXIT
+  sleep_pid=""
+  trap '[[ -n "$sleep_pid" ]] && kill "$sleep_pid" 2>/dev/null || true; wait 2>/dev/null || true; exit 0' TERM INT EXIT
   while kill -0 $$ 2>/dev/null; do
     sleep 30 &
-    wait $! 2>/dev/null || true
+    sleep_pid=$!
+    wait "$sleep_pid" 2>/dev/null || true
     kill -0 $$ 2>/dev/null || exit 0
     atualizar_marcas_host
   done
 ) &
 monitor_pid=$!
 
-trap 'kill "$monitor_pid" 2>/dev/null || true' EXIT TERM INT HUP
+bwrap_pid=""
+repasse_sinal() {
+  local s="$1"
+  if [[ -n "$bwrap_pid" ]]; then
+    if [[ "$s" == INT ]]; then
+      kill -TERM "$bwrap_pid" 2>/dev/null || true
+    else
+      kill "-$s" "$bwrap_pid" 2>/dev/null || true
+    fi
+    wait "$bwrap_pid" 2>/dev/null || true
+  fi
+}
+
+trap 'kill "$monitor_pid" 2>/dev/null || true; wait "$monitor_pid" 2>/dev/null || true' EXIT
+trap 'repasse_sinal TERM; kill "$monitor_pid" 2>/dev/null || true; wait "$monitor_pid" 2>/dev/null || true; exit 143' TERM
+trap 'repasse_sinal HUP; kill "$monitor_pid" 2>/dev/null || true; wait "$monitor_pid" 2>/dev/null || true; exit 129' HUP
+trap 'repasse_sinal INT; kill "$monitor_pid" 2>/dev/null || true; wait "$monitor_pid" 2>/dev/null || true; exit 130' INT
+
+set +m
+bwrap "${args[@]}" <&0 &
+bwrap_pid=$!
 
 codigo=0
-bwrap "${args[@]}" || codigo=$?
+wait "$bwrap_pid" || codigo=$?
 exit "$codigo"

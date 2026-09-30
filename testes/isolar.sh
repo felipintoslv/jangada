@@ -267,18 +267,28 @@ env["XDG_CONFIG_HOME"] = config
 env["JANGADA_PATH"] = repo
 env["JANGADA_MARCA_ISOLADO"] = marca
 
+def achar_sleep():
+    pids = subprocess.run(["pgrep", "-x", "sleep"], capture_output=True, text=True).stdout.split()
+    for pid in pids:
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as f:
+                if "25.123" in f.read().decode("utf-8", errors="ignore"):
+                    return pid
+        except OSError:
+            pass
+    return None
+
 p = subprocess.Popen([f"{repo}/bin/jangada-isolar", "--", "sleep", "25.123"],
-                     cwd=wt, env=env, start_new_session=True)
+                     cwd=wt, env=env)
 for _ in range(50):
-    res = subprocess.run(["pgrep", "-f", r"[s]leep 25\.123"], capture_output=True, text=True)
-    if res.stdout.strip():
+    if achar_sleep():
         break
     time.sleep(0.05)
 else:
     p.kill()
     sys.exit(1)
 
-os.killpg(p.pid, sig)
+p.send_signal(sig)
 try:
     rc = p.wait(timeout=5)
 except subprocess.TimeoutExpired:
@@ -292,8 +302,7 @@ if rc != expected_rc:
     sys.exit(3)
 
 time.sleep(0.1)
-res = subprocess.run(["pgrep", "-f", r"[s]leep 25\.123"], capture_output=True, text=True)
-if res.stdout.strip():
+if achar_sleep():
     sys.exit(4)
 
 sys.exit(0)
@@ -303,13 +312,56 @@ sys.exit(0)
   conferir "caso 3: propaga sinal SIGTERM" testar_sinal TERM 143
   conferir "caso 3: propaga sinal SIGHUP" testar_sinal HUP 129
   conferir "caso 3: propaga sinal SIGINT" testar_sinal INT 130
-  conferir "caso 3: processo filho sleep não sobra" [ -z "$(pgrep -f '[s]leep 25\.123' 2>/dev/null || true)" ]
+  conferir "caso 3: processo filho sleep não sobra" [ -z "$(pgrep -x sleep 2>/dev/null || true)" ]
 
   # Entrada padrão interativa / por pipe
   saida_pipe="$(printf 'dados-stdin-123\n' | isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- cat 2>/dev/null)"
   conferir "caso 3: entrada padrão via pipe chega ao comando isolado" [ "$saida_pipe" = "dados-stdin-123" ]
   saida_read="$(printf 'linha-lida\n' | isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- sh -c 'read -r x && printf "%s" "$x"' 2>/dev/null)"
   conferir "caso 3: leitura interativa de linha via pipe funciona" [ "$saida_read" = "linha-lida" ]
+
+  # Caso 3b: marcas do host (vram-livre e jogo-ativo) e monitor
+  bin_falso="$tmp/bin_falso"
+  mkdir -p "$bin_falso"
+  cat >"$bin_falso/nvidia-smi" <<'EOF'
+#!/bin/sh
+echo 6144
+EOF
+  chmod +x "$bin_falso/nvidia-smi"
+
+  cat >"$bin_falso/pgrep" <<EOF
+#!/bin/sh
+if [ -f "$tmp/jogo_ativo_flag" ]; then
+  echo 9999
+  exit 0
+fi
+exit 1
+EOF
+  chmod +x "$bin_falso/pgrep"
+
+  touch "$tmp/jogo_ativo_flag"
+  saida_marcas="$(PATH="$bin_falso:$PATH" isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- bash -c \
+    'cat "$JANGADA_ESTADO/vram-livre" 2>/dev/null; echo "---"; cat "$JANGADA_ESTADO/jogo-ativo" 2>/dev/null')"
+
+  conferir "caso 3b: vram-livre criada e legível dentro do isolamento" \
+    bash -c 'echo "$1" | head -n1 | grep -qE "^6144 [0-9]+$"' _ "$saida_marcas"
+  conferir "caso 3b: jogo-ativo criado e legível dentro do isolamento" \
+    bash -c 'echo "$1" | tail -n1 | grep -qE "^[0-9]+$"' _ "$saida_marcas"
+  conferir "caso 3b: vram-livre gravada no host" [ -f "$casa/.local/state/jangada/vram-livre" ]
+  conferir "caso 3b: jogo-ativo gravado no host" [ -f "$casa/.local/state/jangada/jogo-ativo" ]
+
+  # Jogo fecha: próxima chamada deve remover jogo-ativo
+  rm -f "$tmp/jogo_ativo_flag"
+  PATH="$bin_falso:$PATH" isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- true
+  conferir "caso 3b: jogo-ativo removido quando o jogo fecha" [ ! -e "$casa/.local/state/jangada/jogo-ativo" ]
+
+  # Encerramento limpo do monitor
+  conferir "caso 3b: monitor não deixa sleep em segundo plano" \
+    [ -z "$(pgrep -x sleep 2>/dev/null || true)" ]
+  conferir "caso 3b: nenhum temporário .vram-livre deixado para trás" \
+    [ -z "$(find "$casa/.local/state/jangada" -name '.vram-livre.*' 2>/dev/null)" ]
+  conferir "caso 3b: nenhum temporário .jogo-ativo deixado para trás" \
+    [ -z "$(find "$casa/.local/state/jangada" -name '.jogo-ativo.*' 2>/dev/null)" ]
 else
   echo "pulado caso 3: bwrap não cria namespace aqui"
 fi
