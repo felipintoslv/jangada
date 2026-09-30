@@ -19,6 +19,11 @@ done
 (($#)) || { echo "jangada-codex: informe o comando codex" >&2; exit 1; }
 exe="$1"; shift
 [[ "$(basename -- "$exe")" == codex ]] || { echo "jangada-codex: comando inválido" >&2; exit 1; }
+if ! { [[ -n "${JANGADA_ISOLADO:-}" ]] && awk -v m="${JANGADA_MARCA_ISOLADO:-/tmp/.jangada-isolado}" \
+  '$5 == m { a = 1 } END { exit !a }' /proc/self/mountinfo; }; then
+  echo "jangada-codex: o Codex precisa do jangada-isolar, inclusive com --sem-isolar" >&2
+  exit 1
+fi
 if [[ -n "$conversa" && ! "$conversa" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
   echo "jangada-codex: id de conversa inválido" >&2
   exit 1
@@ -31,10 +36,6 @@ grep -q -- '--no-daemon' <<<"$ajuda" || {
 }
 
 if ((revisar)); then
-  [[ -n "${JANGADA_ISOLADO:-}" ]] && awk -v m="${JANGADA_MARCA_ISOLADO:-/tmp/.jangada-isolado}" \
-    '$5 == m { a = 1 } END { exit !a }' /proc/self/mountinfo || {
-    echo "jangada-codex: o revisor precisa do jangada-isolar" >&2; exit 1
-  }
   # Chamado pelo jangada-validar no isolamento, com o pedido completo.
   exec env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 "$exe" \
     --no-daemon --ask-for-approval never exec --ignore-user-config --ignore-rules \

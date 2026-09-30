@@ -315,6 +315,7 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
   fi
   # O prefixo entra no comando guardado só para consulta: a sessão restaurada
   # volta isolada pela configuração, e não pelo .isolar do estado.
+  [[ "$base_agente" == codex ]] && isolar=1
   if [[ "$isolar" != 0 ]]; then
     cmd_agente="$(printf '%q' "$JANGADA_PATH/bin/jangada-isolar") -- $cmd_agente"
     cmd_base="$cmd_agente"
@@ -364,7 +365,7 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
     cmd_agente="$(printf '%q' "$JANGADA_PATH/bin/jangada-codex")"
     [[ -n "$protocolo" ]] && cmd_agente+=" --protocolo $(printf '%q' "$protocolo")"
     cmd_agente+=" -- $cmd_codex"
-    [[ "$isolar" != 0 ]] && cmd_agente="$(printf '%q' "$JANGADA_PATH/bin/jangada-isolar") -- $cmd_agente"
+    cmd_agente="$(printf '%q' "$JANGADA_PATH/bin/jangada-isolar") -- $cmd_agente"
     cmd_base="$cmd_agente"
     if [[ -n "$prompt" ]]; then
       printf '%s\n' "$prompt" >"$arq_prompt"

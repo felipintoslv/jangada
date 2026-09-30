@@ -70,7 +70,7 @@ done
 cat >"$jp/bin/jangada-isolar" <<'EOF'
 #!/usr/bin/env bash
 [[ "$1" == -- ]] && shift
-FALSO_ISOLADO=isolado exec "$@"
+FALSO_ISOLADO=isolado JANGADA_ISOLADO=1 JANGADA_MARCA_ISOLADO=/ exec "$@"
 EOF
 chmod +x "$tmp/bin/"* "$jp/bin/jangada-isolar"
 

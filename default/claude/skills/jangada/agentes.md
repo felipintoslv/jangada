@@ -8,6 +8,9 @@ Os perfis `codex` e `codex-codex` usam o mesmo ciclo de sessões. O adaptador
 Os hooks precisam de conferência pelo `/hooks` do CLI; não dispense a
 confiança dos hooks para fazer a barra funcionar.
 
+O Codex sempre exige isolamento, inclusive com `--sem-isolar` e
+`JANGADA_AGENTE_ISOLAR=0`. A chamada direta ao adaptador é recusada.
+
 Dentro do bubblewrap, dados próprios em `$JANGADA_ESTADO/codex/SESSAO`
 ocupam a pasta do Codex. O login e as configurações do host ficam somente
 leitura. A pasta original não pode ficar gravável: seus hooks, regras e

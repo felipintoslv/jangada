@@ -330,7 +330,7 @@ restaurar() {
       echo "$s: sem o id da conversa e sem worktree próprio; abrindo conversa nova" >&2
     fi
     cmd+=" -- $exe${args:+ $args}"
-    [[ "$JANGADA_AGENTE_ISOLAR" != 0 ]] && cmd="$(printf '%q' "$JANGADA_PATH/bin/jangada-isolar") -- $cmd"
+    cmd="$(printf '%q' "$JANGADA_PATH/bin/jangada-isolar") -- $cmd"
   else
     # O id vem do hook do agy (conversationId). Sem ele, o --continue retoma a
     # conversa mais recente do agy, que pode ser de outra pasta: só no worktree.

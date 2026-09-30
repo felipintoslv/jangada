@@ -51,9 +51,13 @@ conferir "lançamento isolado pelo adaptador" grep -q 'jangada-isolar -- .*janga
 conferir "metadados externos para revisão" jq -e '.revisor == "codex" and .agente == "codex"' \
   "$tmp/state/jangada/revisoes/projeto--tarefa.json"
 
+rodar "$repo_jangada/bin/jangada-codex" -- codex >"$tmp/saida" 2>&1
+conferir "adaptador sem isolamento recusa antes de chamar CLI" [ "$?" != 0 ]
+conferir "recusa não executa Codex" test ! -e "$tmp/codex.args"
+
 protocolo="$tmp/protocolo com espaço.md"
 printf 'Regra com aspas: "texto"\nSegunda linha\n' >"$protocolo"
-rodar "$repo_jangada/bin/jangada-codex" --protocolo "$protocolo" -- codex --model modelo 'pedido com espaço'
+rodar JANGADA_ISOLADO=1 JANGADA_MARCA_ISOLADO=/ "$repo_jangada/bin/jangada-codex" --protocolo "$protocolo" -- codex --model modelo 'pedido com espaço'
 conferir "adaptador executa Codex" [ "$?" = 0 ]
 # Confere o TOML que o CLI realmente receberá, incluindo comandos dos hooks.
 python3 - "$tmp/codex.args" "$protocolo" "$repo_jangada" <<'PY'
@@ -79,15 +83,15 @@ assert all(h[0]["hooks"][0]["command"].startswith("'" + sys.argv[3] + "/bin/jang
 PY
 conferir "TOML, protocolo, permissões e hooks válidos" [ "$?" = 0 ]
 uuid=0123abcd-4567-89ab-cdef-0123456789ab
-rodar "$repo_jangada/bin/jangada-codex" --conversa "$uuid" -- codex
+rodar JANGADA_ISOLADO=1 JANGADA_MARCA_ISOLADO=/ "$repo_jangada/bin/jangada-codex" --conversa "$uuid" -- codex
 conferir "retoma pelo UUID" python3 -c 'import pathlib,sys; a=pathlib.Path(sys.argv[1]).read_bytes().split(b"\0"); assert a[-3:-1]==[b"resume",sys.argv[2].encode()]' "$tmp/codex.args" "$uuid"
-rodar "$repo_jangada/bin/jangada-codex" --retomar -- codex
+rodar JANGADA_ISOLADO=1 JANGADA_MARCA_ISOLADO=/ "$repo_jangada/bin/jangada-codex" --retomar -- codex
 conferir "retomada sem UUID usa filtro da pasta" python3 -c 'import pathlib,sys; a=pathlib.Path(sys.argv[1]).read_bytes().split(b"\0"); assert a[-3:-1]==[b"resume",b"--last"]' "$tmp/codex.args"
 rm -f "$tmp/codex.args"
-rodar FALSO_ANTIGO=1 "$repo_jangada/bin/jangada-codex" -- codex >"$tmp/saida" 2>&1
+rodar JANGADA_ISOLADO=1 JANGADA_MARCA_ISOLADO=/ FALSO_ANTIGO=1 "$repo_jangada/bin/jangada-codex" -- codex >"$tmp/saida" 2>&1
 conferir "versão sem execução própria é recusada" [ "$?" != 0 ]
 conferir "versão recusada não abre sessão" test ! -e "$tmp/codex.args"
-rodar "$repo_jangada/bin/jangada-codex" --conversa 'id; touch /tmp/invadido' -- codex >"$tmp/saida" 2>&1
+rodar JANGADA_ISOLADO=1 JANGADA_MARCA_ISOLADO=/ "$repo_jangada/bin/jangada-codex" --conversa 'id; touch /tmp/invadido' -- codex >"$tmp/saida" 2>&1
 conferir "UUID inválido é recusado" [ "$?" != 0 ]
 conferir "UUID inválido não executa" test ! -e "$tmp/codex.args"
 

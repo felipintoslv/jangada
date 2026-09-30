@@ -186,7 +186,7 @@ grep -q 'FALSO-LOGIN' "$HOME/.codex/auth.json" || exit 1
 [[ "$(cat "$HOME/.codex/historico-teste")" == conversa ]]
 EOF
   chmod +x "$tmp/wt/codex-bin/codex"
-  isolar "$tmp/wt" JANGADA_SESSAO=teste-codex "$repo_jangada/bin/jangada-isolar" -- \
+  isolar "$tmp/wt" JANGADA_AGENTE_ISOLAR=0 JANGADA_SESSAO=teste-codex "$repo_jangada/bin/jangada-isolar" -- \
     "$repo_jangada/bin/jangada-codex" -- "$tmp/wt/codex-bin/codex" >"$tmp/codex.log" 2>&1
   conferir "caso Codex real: dados graváveis e configuração protegida" [ "$?" = 0 ]
   conferir "caso Codex real: histórico persiste no estado" test -f "$casa/.local/state/jangada/codex/teste-codex/historico-teste"

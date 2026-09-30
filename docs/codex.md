@@ -35,6 +35,10 @@ usuário e usa `--no-daemon`. A pasta de estado é permitida ao isolamento
 interno do Codex; as montagens do bubblewrap continuam limitando a escrita
 aos arquivos de estado liberados pela Jangada.
 
+O Codex exige isolamento, inclusive com `--sem-isolar` ou
+`JANGADA_AGENTE_ISOLAR=0`. A chamada direta ao adaptador sem isolamento é
+recusada antes de executar o CLI.
+
 Dentro do bubblewrap, a pasta do Codex (`CODEX_HOME`, ou `~/.codex`) é
 montada a partir de `~/.local/state/jangada/codex/SESSAO`. Conversas, bancos e
 confiança dos hooks persistem ali. O `CODEX_HOME` não é trocado.

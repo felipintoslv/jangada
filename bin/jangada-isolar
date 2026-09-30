@@ -50,9 +50,9 @@ ja_isolado() {
   awk -v m="$marca" '$5 == m { achou = 1 } END { exit !achou }' /proc/self/mountinfo 2>/dev/null
 }
 
-codex_revisor=0
-[[ "$(basename -- "$1")" == jangada-codex && "${2:-}" == --revisar ]] && codex_revisor=1
-if { [[ "$JANGADA_AGENTE_ISOLAR" == 0 ]] && ((!codex_revisor)); } || ja_isolado; then
+codex_comando=0
+[[ "$(basename -- "$1")" == jangada-codex ]] && codex_comando=1
+if { [[ "$JANGADA_AGENTE_ISOLAR" == 0 ]] && ((!codex_comando)); } || ja_isolado; then
   exec "$@"
 fi
 if ((!mostrar)) && ! command -v bwrap >/dev/null 2>&1; then
