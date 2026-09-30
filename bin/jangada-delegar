@@ -12,12 +12,16 @@
 #   --arquivos ARQS   arquivos para leitura (obrigatório no destino local)
 #   --arquivo SAIDA   grava o relatório completo em SAIDA
 #
+# PAPEL e "pedido" devem vir antes das opções quando --arquivos for utilizado.
+#
 # No destino agy: roda na raiz do repositório atual, que o agy precisa
 # confiar, com --sandbox e ferramentas de leitura do papel. Recusa se a cota
 # de 5 horas do Gemini estiver abaixo de JANGADA_DELEGAR_COTA_MIN (padrão 20%).
+# As chamadas a /usage são cacheadas por JANGADA_DELEGAR_COTA_CACHE segundos
+# (padrão 120) para economizar tempo.
 #
 # No destino local: o script lê os arquivos e envia texto puro ao Ollama, sem
-# ferramentas. Atende apenas leitor e redator, com trava exclusiva (flock) e
+# ferramentas. Atende apenas leitor e redator, com trava exclusiva e
 # proteção de jogos e memória de vídeo. Em caso de falha, nunca desvia para a
 # nuvem: recusa indicando o Claude.
 #
@@ -35,7 +39,7 @@ set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
-uso() { sed -n '7,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+uso() { sed -n '7,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 papel=""; pedido=""; arquivo=""; destino_opt=""
 declare -a arquivos=()
@@ -69,7 +73,6 @@ if [[ -z "${esforco[$papel]:-}" ]]; then
   exit 2
 fi
 
-# Determina o destino efetivo
 if [[ -n "$destino_opt" ]]; then
   case "$destino_opt" in
     local|agy) destino="$destino_opt" ;;
@@ -131,20 +134,15 @@ if [[ "${JANGADA_DELEGAR:-}" == nativo && -z "$destino_opt" ]]; then
   echo "jangada-delegar: numa sessão do agy, use invoke_subagent com o papel $papel" >&2
   exit 4
 fi
-if [[ "$destino" == claude ]]; then
+if [[ "${JANGADA_DELEGAR:-}" == claude || "$destino" == claude ]]; then
   recusar "o perfil da sessão não delega ao agy nem ao destino local (JANGADA_DELEGAR=claude)"
 fi
 
-# ==============================================================================
-# DESTINO LOCAL (Ollama)
-# ==============================================================================
 if [[ "$destino" == local ]]; then
-  # 1. Papel permitido: leitor e redator
   if [[ "$papel" != leitor && "$papel" != redator ]]; then
     recusar "o destino local só aceita os papéis leitor e redator"
   fi
 
-  # 2. Arquivos obrigatórios
   if ((${#arquivos[@]} == 0)); then
     echo "jangada-delegar: o destino local exige --arquivos ARQUIVO ..." >&2
     exit 2
@@ -155,35 +153,35 @@ if [[ "$destino" == local ]]; then
     fi
   done
 
-  # 3. Ollama respondendo (/api/tags)
   ollama_url="${JANGADA_OLLAMA_URL:-http://localhost:11434}"
   tags="$(curl -s -S --max-time 5 "$ollama_url/api/tags" 2>/dev/null || true)"
   if [[ -z "$tags" ]] || ! jq -e '.models' <<<"$tags" >/dev/null 2>&1; then
     recusar "Ollama fora do ar ou inacessível ($ollama_url)"
   fi
 
-  # 4. Modelo presente
   if ! jq -e --arg m "$modelo" '.models[]? | select(.name == $m or .name == ($m + ":latest") or .model == $m)' <<<"$tags" >/dev/null 2>&1; then
     recusar "modelo $modelo não encontrado no Ollama (rode ollama pull $modelo)"
   fi
 
-  # 5. Jogo aberto
   if pgrep -f 'reaper SteamLaunch' >/dev/null 2>&1; then
     recusar "jogo aberto detectado (reaper SteamLaunch)"
   fi
 
-  # 6. Memória de vídeo livre
   vram_min="${JANGADA_LOCAL_VRAM_MIN:-4000}"
   if command -v nvidia-smi >/dev/null 2>&1; then
     vram_livre="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d ' ')"
     if [[ -n "$vram_livre" && "$vram_livre" =~ ^[0-9]+$ ]]; then
-      if ((vram_livre < vram_min)); then
-        recusar "memória de vídeo livre insuficiente: ${vram_livre} MiB (mínimo ${vram_min} MiB)"
+      vram_residente="$(curl -s -S --max-time 5 "$ollama_url/api/ps" 2>/dev/null \
+        | jq -r --arg m "$modelo" '[.models[]? | select(.name == $m or .model == $m) | .size_vram // 0] | max // 0' 2>/dev/null || echo 0)"
+      [[ "$vram_residente" =~ ^[0-9]+$ ]] || vram_residente=0
+      vram_residente_mib=$(( vram_residente / 1048576 ))
+      vram_efetiva=$(( vram_livre + vram_residente_mib ))
+      if ((vram_efetiva < vram_min)); then
+        recusar "memória de vídeo livre insuficiente: ${vram_livre} MiB livre, ${vram_residente_mib} MiB residente (mínimo ${vram_min} MiB)"
       fi
     fi
   fi
 
-  # 7. Vaga exclusiva (flock)
   espera="${JANGADA_LOCAL_ESPERA:-30}"
   lock_file="$JANGADA_ESTADO/local.lock"
   mkdir -p "${lock_file%/*}" 2>/dev/null || true
@@ -192,14 +190,12 @@ if [[ "$destino" == local ]]; then
     recusar "vaga ocupada no modelo local (espera de ${espera}s esgotada)"
   fi
 
-  # Prompt de sistema do papel (fonte única, sem frontmatter)
   prompt_sistema="$(awk 'BEGIN { fm = 0 } /^---$/ { fm++; next } fm >= 2 { print }' \
     "$JANGADA_PATH/default/claude/agents/$papel.md" 2>/dev/null || true)"
   if [[ -z "$prompt_sistema" ]]; then
     prompt_sistema="Você é o subagente $papel do jangada. Devolva relatório conciso com citação caminho:linha."
   fi
 
-  # Extração de texto dos arquivos
   texto_completo=""
   for a in "${arquivos[@]}"; do
     conteudo=""
@@ -240,12 +236,23 @@ if [[ "$destino" == local ]]; then
   fatias=()
   fat_atual=""
   while IFS= read -r linha || [[ -n "$linha" ]]; do
+    while (( ${#linha} > limite_chars )); do
+      pedaco="${linha:0:limite_chars}"
+      linha="${linha:limite_chars}"
+      if [[ -n "$fat_atual" ]]; then
+        fatias+=("$fat_atual")
+        fat_atual=""
+      fi
+      fatias+=("$pedaco")
+    done
     if (( ${#fat_atual} + ${#linha} + 1 > limite_chars )) && [[ -n "$fat_atual" ]]; then
       fatias+=("$fat_atual")
       fat_atual="$linha"
     else
-      if [[ -z "$fat_atual" ]]; then fat_atual="$linha"
-      else fat_atual+=$'\n'"$linha"
+      if [[ -z "$fat_atual" ]]; then
+        fat_atual="$linha"
+      else
+        fat_atual+=$'\n'"$linha"
       fi
     fi
   done <<<"$texto_completo"
@@ -262,7 +269,7 @@ if [[ "$destino" == local ]]; then
 
   chamar_ollama() {
     local sys="$1" usr="$2"
-    local payload resp cod=0
+    local payload resp cod=0 erro tent tsai
     payload="$(jq -nc \
       --arg m "$modelo" \
       --arg sys "$sys" \
@@ -277,16 +284,17 @@ if [[ "$destino" == local ]]; then
       "$ollama_url/api/chat" 2>"$saida_ollama")" || cod=$?
     if ((cod == 28)); then recusar "tempo esgotado no Ollama (${tempo}s)"; fi
     if ((cod)); then recusar "chamada ao Ollama falhou com código $cod: $(head -c 300 "$saida_ollama")"; fi
-    local erro
     erro="$(jq -r '.error // empty' <<<"$resp" 2>/dev/null || true)"
     if [[ -n "$erro" ]]; then
       recusar "erro do Ollama: $erro"
     fi
-    local tent tsai
     tent="$(jq -r '.prompt_eval_count // 0' <<<"$resp" 2>/dev/null || echo 0)"
     tsai="$(jq -r '.eval_count // 0' <<<"$resp" 2>/dev/null || echo 0)"
     tokens_local_entrada=$(( ${tokens_local_entrada:-0} + tent ))
     tokens_local_saida=$(( ${tokens_local_saida:-0} + tsai ))
+    if (( tent >= ctx )); then
+      recusar "contexto do modelo local estourado (${tent} tokens >= janela de ${ctx})"
+    fi
     res_chamada="$(jq -r '.message.content // ""' <<<"$resp")"
     res_chamada="$(sed -e '/<think>/,/<\/think>/d' <<<"$res_chamada" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
     if [[ -z "$res_chamada" ]]; then
@@ -300,16 +308,22 @@ if [[ "$destino" == local ]]; then
   else
     resumos_parciais=""
     for i in "${!fatias[@]}"; do
-      ped_fat="Parte $((i+1)) de ${#fatias[@]} dos documentos. Atenda ao pedido extraindo trechos relevantes com suas citações caminho:linha ou arquivo, p. N:\n$pedido\n\nTrecho:\n${fatias[$i]}"
+      ped_fat="Parte $((i+1)) de ${#fatias[@]} dos documentos. Atenda ao pedido extraindo trechos relevantes com suas citações caminho:linha ou arquivo, p. N:"$'\n'"$pedido"$'\n\nTrecho:\n'"${fatias[$i]}"
       chamar_ollama "$prompt_sistema" "$ped_fat"
       resumos_parciais+=$'\n\n---\n'"$res_chamada"
     done
-    ped_final="Consolide os resumos parciais a seguir em um relatório único, conciso e objetivo, atendendo ao pedido: $pedido. Mantenha todas as citações (caminho:linha ou arquivo, p. N).\n$resumos_parciais"
+    ped_final="Consolide os resumos parciais a seguir em um relatório único, conciso e objetivo, atendendo ao pedido: $pedido. Mantenha todas as citações (caminho:linha ou arquivo, p. N)."$'\n'"$resumos_parciais"
+    if (( (${#ped_final} + 3) / 4 >= ctx )); then
+      recusar "resumos consolidados excedem a janela de contexto do modelo local (${ctx} tokens)"
+    fi
     chamar_ollama "$prompt_sistema" "$ped_final"
     texto="$res_chamada"
   fi
 
   palavras="$(wc -w <<<"$texto")"
+  # Afirmações sem fonte: linhas de 25 caracteres ou mais, fora de título,
+  # tabela, citação e código, sem caminho:linha, URL, página, célula ou linha.
+  # Mesma regra do sem_fonte de default/painel/subagentes.py.
   sem_fonte="$(sed 's/^[[:space:]]*//' <<<"$texto" | awk 'length($0) >= 25 && !/^(#|```|[|]|>)/' \
     | grep -Eicv '[[:alnum:]_.-]*[/.][[:alnum:]_./-]*:[0-9]+|https?://|(^|[^[:alnum:]])p\. ?[0-9]+|p[áa]gina [0-9]+|c[ée]lula [a-z]+[0-9]+|(^|[^[:alnum:]])linha [0-9]+' || true)"
   limite="${JANGADA_DELEGAR_PALAVRAS:-600}"
@@ -327,6 +341,7 @@ if [[ "$destino" == local ]]; then
     impresso="$texto"
   fi
   printf '%s\n' "$impresso"
+  # Estimativa do que entra no contexto do Claude: 4 caracteres por token.
   retorno=$(( (${#impresso} + 3) / 4 ))
   registrar 0
   exit 0
@@ -356,8 +371,7 @@ fi
 # O leitor lê documentos de fora; o que o limita no terminal é o
 # jangada-hook-leitor, que o reconhece pelo JANGADA_AGY_PAPEL. Sem o hook, o
 # permissions.allow do usuário (que pode ter cp, curl) valeria para ele.
-if [[ "$papel" == leitor ]] && ! jq -e --arg bin "${JANGADA_PATH%/}/bin/jangada-hook-leitor" \
-      '[.[]?.PreToolUse[]? | select(.matcher == "run_command") | .hooks[]?.command]
+if [[ "$papel" == leitor ]] && ! jq -e --arg bin "${JANGADA_PATH%/}/bin/jangada-hook-leitor"      '[.[]?.PreToolUse[]? | select(.matcher == "run_command") | .hooks[]?.command]
       | any(. == ($bin + " --agy"))' "$HOME/.gemini/config/hooks.json" >/dev/null 2>&1; then
   recusar "o hook do leitor não está em ~/.gemini/config/hooks.json (rode jangada-migrar ou ./install.sh 50)"
 fi
@@ -424,6 +438,9 @@ fi
 [[ -n "$negados" ]] && echo "jangada-delegar: o agy negou: ${negados:0:300}" >&2
 
 palavras="$(wc -w <<<"$texto")"
+# Afirmações sem fonte: linhas de 25 caracteres ou mais, fora de título,
+# tabela, citação e código, sem caminho:linha, URL, página, célula ou linha.
+# Mesma regra do sem_fonte de default/painel/subagentes.py.
 sem_fonte="$(sed 's/^[[:space:]]*//' <<<"$texto" | awk 'length($0) >= 25 && !/^(#|```|[|]|>)/' \
   | grep -Eicv '[[:alnum:]_.-]*[/.][[:alnum:]_./-]*:[0-9]+|https?://|(^|[^[:alnum:]])p\. ?[0-9]+|p[áa]gina [0-9]+|c[ée]lula [a-z]+[0-9]+|(^|[^[:alnum:]])linha [0-9]+' || true)"
 limite="${JANGADA_DELEGAR_PALAVRAS:-600}"
@@ -442,5 +459,6 @@ else
   impresso="$texto"
 fi
 printf '%s\n' "$impresso"
+# Estimativa do que entra no contexto do Claude: 4 caracteres por token.
 retorno=$(( (${#impresso} + 3) / 4 ))
 registrar 0

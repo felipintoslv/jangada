@@ -79,6 +79,8 @@ conferir "caso 1: registro de delegações gravável" \
   seguidos --bind "$casa/.local/state/jangada/delegacoes.jsonl" "$casa/.local/state/jangada/delegacoes.jsonl"
 conferir "caso 1: trava local gravável" \
   seguidos --bind "$casa/.local/state/jangada/local.lock" "$casa/.local/state/jangada/local.lock"
+conferir "caso 1: dispositivos de GPU não expostos" \
+  bash -c '! grep -E -q "/dev/nvidia|/dev/dri" "$1"' _ "$tmp/args"
 conferir "caso 1: o resto do estado não é gravável" \
   bash -c '! grep -qxF "$1" "$2"' _ "$casa/.local/state/jangada" "$tmp/args"
 conferir "caso 1: fora do tmux e do agente SSH" \

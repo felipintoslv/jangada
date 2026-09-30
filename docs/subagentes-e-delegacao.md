@@ -80,8 +80,9 @@ flowchart TD
 | `agy` | `default/agentes/protocolo-delegar-agy.md` | usar primeiro `jangada-delegar PAPEL "pedido"`; só na recusa, o subagente do Claude do mesmo papel |
 | `claude` | `default/agentes/protocolo-delegar-claude.md` | usar os subagentes do Claude |
 | `nativo` | `default/agentes/protocolo-delegar-nativo.md` | usar os subagentes do próprio agy |
+| `local` | `default/agentes/protocolo-delegar-local.md` | usar `jangada-delegar` no destino local com `--arquivos` para leitor e redator; os outros papéis seguem no agy ou Claude |
 
-Os três são seguidos de `default/agentes/protocolo-delegar.md`, com as regras
+Os quatro são seguidos de `default/agentes/protocolo-delegar.md`, com as regras
 comuns: citar a fonte, conferir no arquivo o que decide a mudança, não editar
 e não substituir o `jangada-validar`. Em nenhum caso vale o
 `general-purpose` para esses papéis.
@@ -139,10 +140,10 @@ puro ao modelo. O modelo não possui ferramentas de terminal.
 
 ### Medições e escolha do modelo
 
-Medições realizadas em 29/09/2026 numa NVIDIA RTX 4060 (8 GB de VRAM, desktop
+Medições realizadas em 29/09/2026 numa NVIDIA RTX 4060 (8 GB de memória de vídeo, desktop
 ocupando ~2,4 GB, cerca de 5,6 GB disponíveis para o Ollama):
 
-| Modelo | Contexto (`num_ctx`) | Memória total | Memória na VRAM | Transbordo CPU | Geração (t/s) | Avaliação de prompt (t/s) |
+| Modelo | Contexto (`num_ctx`) | Memória total | Memória de vídeo | Transbordo CPU | Geração (t/s) | Avaliação de prompt (t/s) |
 |---|---|---|---|---|---|---|
 | `qwen3:8b` | 8192 | 6,12 GiB | 5,03 GiB | 1,09 GiB | 33,2 | ~212 |
 | `qwen3:8b` | 4096 | 5,56 GiB | 5,08 GiB | 0,48 GiB | 44,9 | ~238 |
@@ -153,7 +154,7 @@ Num teste com documento real de 10 páginas (4.098 tokens de prompt), o
 `qwen3:4b` avaliou o prompt em 1,11s (3.691 t/s) e gerou 2.992 tokens em
 44,27s (67,6 t/s).
 
-A `qwen3:8b` não coube inteiramente na VRAM com a área de trabalho ativa,
+A `qwen3:8b` não coube inteiramente na memória de vídeo com a área de trabalho ativa,
 resultando em transferência parcial para a CPU e queda substancial de
 desempenho. A `qwen3:4b` com contexto 8192 coube 100% na GPU e preservou
 cerca de 2,0 GB de folga, atendendo a margem mínima de 1,5 GB.
@@ -162,17 +163,19 @@ cerca de 2,0 GB de folga, atendendo a margem mínima de 1,5 GB.
 
 - `JANGADA_LOCAL_MODELO`: `qwen3:4b`.
 - `JANGADA_LOCAL_CTX`: `8192`.
-- `JANGADA_LOCAL_VRAM_MIN`: `4000` (MiB livres exigidos no `nvidia-smi` antes
-  do carregamento).
+- `JANGADA_LOCAL_VRAM_MIN`: `4000` (MiB livres exigidos no `nvidia-smi` quando
+  presente; a memória do modelo já residente no Ollama é somada à livre).
 - `JANGADA_LOCAL_KEEP_ALIVE`: `2m` (descarrega o modelo rapidamente para
-  liberar VRAM aos jogos).
+  liberar memória de vídeo aos jogos).
 - `JANGADA_LOCAL_ESPERA`: `30` (segundos de espera pela trava de concorrência).
-- Concorrência: uma vaga exclusiva por chamada controlada por `flock` em
-  `$JANGADA_ESTADO/local.lock`.
+- `JANGADA_LOCAL_FATIAS_MAX`: `5` (limite de fatias para documentos que excedem o contexto).
+- `JANGADA_OLLAMA_URL`: `http://localhost:11434` (endereço da API do Ollama).
+- Concorrência: uma vaga exclusiva por chamada controlada por trava exclusiva
+  (`flock`) em `$JANGADA_ESTADO/local.lock`.
 - Proteção de jogos: recusa com código 4 se `pgrep -f 'reaper SteamLaunch'`
-  detectar jogo ativo ou se a memória livre for inferior ao mínimo.
+  detectar jogo ativo ou se a memória de vídeo livre for inferior ao mínimo.
 - Falhas e privacidade: em qualquer falha (Ollama inacessível, modelo ausente,
-  memória insuficiente ou erro de contexto), o comando recusa com código 4
+  memória insuficiente ou contexto estourado), o comando recusa com código 4
   apontando o subagente do Claude, sem redirecionar dados para a nuvem.
 
 ## Registro e medição

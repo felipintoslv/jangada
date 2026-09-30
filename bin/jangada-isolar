@@ -66,9 +66,6 @@ pasta="$(pwd -P)"
 # dentro no estado; se um dia gravar, o número não vale fora.
 args=(--ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --ro-bind /dev/null "$marca"
       --unshare-pid --die-with-parent)
-for d in /dev/nvidia* /dev/dri; do
-  [[ -e "$d" ]] && args+=(--dev-bind-try "$d" "$d")
-done
 
 gravavel() { [[ -e "$1" ]] && args+=(--bind "$1" "$1"); return 0; }
 somente_leitura() { [[ -e "$1" ]] && args+=(--ro-bind "$1" "$1"); return 0; }

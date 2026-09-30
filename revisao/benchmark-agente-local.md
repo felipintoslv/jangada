@@ -122,6 +122,3 @@ como divergentes foram conferidos no texto dos READMEs e estão corretos:
    local e 25 para nuvem.
 3. claude-ollama-agents: a tabela de agentes lista `qwen3.5:35b-a3b` e
    `qwen2.5-coder:32b` como modelos padrão.
-
-A tentativa anterior pelo `jangada-delegar` (agy Flash, papel pesquisador)
-foi recusada porque o agy não tem `ReadUrlContent` em `permissions.allow`.

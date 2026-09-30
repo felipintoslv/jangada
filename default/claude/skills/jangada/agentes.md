@@ -379,6 +379,22 @@ Testes de 27/09/2026, agy 1.2.12:
 - `--dangerously-skip-permissions` não serve para delegar: libera escrita.
   O `jangada-delegar` usa `--sandbox` e depende do `permissions.allow`.
 
+Delegação local (Ollama):
+
+Testes de 29/09/2026:
+
+- **Memória de vídeo com modelo residente**: com `keep_alive` ativo (padrão `2m`),
+  o modelo permanece na memória de vídeo após a primeira chamada. A memória livre
+  no `nvidia-smi` cai e pode ficar abaixo de `JANGADA_LOCAL_VRAM_MIN` (4000 MiB)
+  na segunda chamada. É preciso consultar `/api/ps` e somar o `size_vram` do
+  modelo já carregado à memória livre disponível.
+- **Truncamento silencioso de contexto**: se a entrada ultrapassar `num_ctx`, o
+  Ollama trunca o texto sem emitir erro na resposta. O script detecta comparando
+  o `prompt_eval_count` retornado com o `num_ctx` configurado (`tent >= ctx`).
+- **Opção num_ctx obrigatória**: sem definir explicitamente `options.num_ctx`
+  no `/api/chat`, o Ollama assume o padrão de 2048 tokens mesmo para modelos que
+  suportam janelas muito maiores.
+
 ## Perfis e ganchos
 
 - Perfil: `~/.config/jangada/agentes/NOME.conf` com `COMANDO=`, `ARGS=`,

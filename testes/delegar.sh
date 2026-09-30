@@ -5,6 +5,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 repo_jangada="$PWD"
+source "$repo_jangada/bin/jangada-config"
 falhas=0
 ok()    { printf 'ok    %s\n' "$*"; }
 falha() { printf 'FALHA %s\n' "$*"; falhas=$((falhas + 1)); }
@@ -13,7 +14,12 @@ conferir() { local d="$1"; shift; if "$@"; then ok "$d"; else falha "$d"; fi; }
 jqok() { jq "$@" >/dev/null; }
 
 tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
+pid_ollama=""
+limpar() {
+  [[ -n "$pid_ollama" ]] && kill "$pid_ollama" 2>/dev/null || true
+  rm -rf "$tmp"
+}
+trap limpar EXIT
 mkdir -p "$tmp/bin" "$tmp/home/.gemini/antigravity-cli/log" "$tmp/falso" "$tmp/projeto"
 
 # O agy falso responde ao /usage com a cota de $FALSO_COTA (fração) e ao
@@ -243,7 +249,7 @@ conferir "caso 22: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
 
 # Servidor Ollama falso
 cat >"$tmp/servidor_ollama.py" <<'EOF'
-import http.server, socketserver, json, sys
+import http.server, socketserver, json, sys, os
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
@@ -255,6 +261,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             modelos = sys.argv[1].split()
             data = {"models": [{"name": m, "model": m} for m in modelos]}
+            self.wfile.write(json.dumps(data).encode())
+        elif self.path == '/api/ps':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            try:
+                with open(sys.argv[5], 'r') as pf:
+                    data = json.load(pf)
+            except Exception:
+                data = {"models": []}
             self.wfile.write(json.dumps(data).encode())
         else:
             self.send_response(404)
@@ -268,10 +284,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 f.write(body.decode('utf-8') + '\n')
             with open(sys.argv[3], 'r') as f:
                 conteudo = f.read()
+            eval_in = 120
+            if os.path.exists(sys.argv[6]):
+                try:
+                    payload = json.loads(body.decode('utf-8'))
+                    eval_in = payload.get('options', {}).get('num_ctx', 8192)
+                except Exception:
+                    eval_in = 8192
             resp = {
                 "model": "qwen3:4b",
                 "message": {"role": "assistant", "content": conteudo},
-                "prompt_eval_count": 120,
+                "prompt_eval_count": eval_in,
                 "eval_count": 45,
                 "done": True
             }
@@ -290,14 +313,15 @@ EOF
 porta_ollama="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
 ollama_reqs="$tmp/ollama.reqs"
 ollama_resp="$tmp/ollama.resp"
+ollama_ps="$tmp/ollama.ps"
+ollama_estouro="$tmp/ollama.estouro"
 printf '%s\n' "doc1.txt:1: trecho relevante extraido do arquivo." >"$ollama_resp"
 : >"$ollama_reqs"
+printf '{"models": []}\n' >"$ollama_ps"
 
-python3 "$tmp/servidor_ollama.py" "qwen3:4b" "$ollama_reqs" "$ollama_resp" "$porta_ollama" &
+python3 "$tmp/servidor_ollama.py" "qwen3:4b" "$ollama_reqs" "$ollama_resp" "$porta_ollama" "$ollama_ps" "$ollama_estouro" &
 pid_ollama=$!
-trap 'kill "$pid_ollama" 2>/dev/null || true; rm -rf "$tmp" /tmp/isolar-teste' EXIT
 
-# Aguarda subir
 for _ in {1..20}; do
   if curl -s "http://127.0.0.1:$porta_ollama/api/tags" >/dev/null 2>&1; then break; fi
   sleep 0.1
@@ -375,6 +399,7 @@ printf '%s\n' "doc_grande.txt:1: resumo da fatia." >"$ollama_resp"
 LOCAL_CTX=2100 LOCAL_FATIAS_MAX=5 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "resuma tudo" --arquivos "$doc_grande"
 conferir "caso 30: documento fatiado termina com código 0" [ "$(codigo)" = 0 ]
 conferir "caso 30: executou fatias mais passada de consolidação" [ "$(wc -l <"$ollama_reqs")" -ge 3 ]
+conferir "caso 30: passada final de consolidação executada" grep -q "Consolide os resumos" <(tail -n1 "$ollama_reqs")
 conferir "caso 30: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
 
 # 13. Documento excede limite de fatias (JANGADA_LOCAL_FATIAS_MAX)
@@ -383,7 +408,61 @@ conferir "caso 31: documento excedendo fatias máximas recusa com código 4" [ "
 conferir "caso 31: erro indica fatias máximas" grep -q "documento muito grande para o modelo local" "$tmp/erro"
 conferir "caso 31: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
 
-kill "$pid_ollama" 2>/dev/null || true
+# 14. Modelo residente no Ollama (/api/ps) permite chamada mesmo com VRAM livre baixa
+printf '{"models": [{"name": "qwen3:4b", "size_vram": 3774873600}]}\n' >"$ollama_ps"
+FALSO_VRAM=1000 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia com modelo residente" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 32: modelo residente permite chamada com pouca memória livre" [ "$(codigo)" = 0 ]
+conferir "caso 32: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
+printf '{"models": []}\n' >"$ollama_ps"
+
+# 15. Perfil DELEGAR=claude recusa qualquer delegação
+DELEGAR=claude OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 33: JANGADA_DELEGAR=claude recusa --destino local" [ "$(codigo)" = 4 ]
+conferir "caso 33: erro indica recusa do perfil" grep -q "não delega ao agy nem ao destino local" "$tmp/erro"
+conferir "caso 33: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
+DELEGAR=claude delegar --destino agy explorador "explore"
+conferir "caso 33b: JANGADA_DELEGAR=claude recusa --destino agy" [ "$(codigo)" = 4 ]
+conferir "caso 33b: erro indica recusa do perfil" grep -q "não delega ao agy nem ao destino local" "$tmp/erro"
+
+# 16. DELEGAR=local sem flag --destino resolve para local
+DELEGAR=local OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "leia sem destino explicito" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 34: JANGADA_DELEGAR=local sem --destino chama local" [ "$(codigo)" = 0 ]
+conferir "caso 34: gravou destino local no registro" jqok -se 'last | .destino == "local"' "$reg"
+
+# 17. jangada_delegacao aceita local
+conferir "caso 35: jangada_delegacao aceita local para claude" [ "$(jangada_delegacao claude local)" = "local" ]
+conferir "caso 35: jangada_delegacao mantém nativo para agy" [ "$(jangada_delegacao agy local)" = "nativo" ]
+
+# 18. Destino inválido
+delegar --destino inexistente leitor "leia"
+conferir "caso 36: --destino inválido dá código 2" [ "$(codigo)" = 2 ]
+conferir "caso 36: erro indica destino inválido" grep -q "destino inválido" "$tmp/erro"
+
+# 19. Linha única gigante é fatiada
+doc_linha_gigante="$tmp/projeto/doc_linha_gigante.txt"
+python3 -c 'print("a" * 1500)' >"$doc_linha_gigante"
+LOCAL_CTX=2100 LOCAL_FATIAS_MAX=10 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia gigante" --arquivos "$doc_linha_gigante"
+conferir "caso 37: linha única gigante é fatiada com sucesso" [ "$(codigo)" = 0 ]
+
+# 20. Truncamento de contexto detectado
+touch "$ollama_estouro"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia estouro" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 38: truncamento de contexto recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 38: erro indica contexto estourado" grep -q "contexto do modelo local estourado" "$tmp/erro"
+conferir "caso 38: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
+rm -f "$ollama_estouro"
+
+# 21. PDF extraído com pdftotext e numeração de páginas
+cat >"$tmp/bin/pdftotext" <<'EOF'
+#!/bin/sh
+printf 'Texto de pagina um\n\fTexto de pagina dois\n'
+EOF
+chmod +x "$tmp/bin/pdftotext"
+touch "$tmp/projeto/documento.pdf"
+: >"$ollama_reqs"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia o pdf" --arquivos "$tmp/projeto/documento.pdf"
+conferir "caso 39: PDF extraído com pdftotext tem código 0" [ "$(codigo)" = 0 ]
+conferir "caso 39: texto enviado traz numeracao de paginas" grep -q "p\. 1:" "$ollama_reqs"
 
 echo
 if ((falhas)); then
