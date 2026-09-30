@@ -181,11 +181,13 @@ e preservou cerca de 2,0 GB de folga, atendendo a margem mínima de 1,5 GB.
   e `nvidia-smi`. Na sessão isolada (`jangada-isolar`), como `pgrep` e `nvidia-smi` não conseguem
   inspecionar o host diretamente pelo namespace de PID e pela falta de nós de GPU, o host grava
   marcas com carimbo de data/hora em `$JANGADA_ESTADO/marcas/vram-livre` e `$JANGADA_ESTADO/marcas/jogo-ativo`
-  na inicialização e as renova a cada 30 segundos. O script lê essas marcas apenas sob
-  `JANGADA_ISOLADO=1` e descarta marcas com mais de 120 segundos. A ausência de `jogo-ativo`
-  depende do host estar vivo para criá-la quando um jogo abre; caso o host morra, a expiração
-  da marca de VRAM livre garante a recusa se o modelo não estiver residente. Se a memória não puder
-  ser verificada e o modelo não estiver residente, a chamada é recusada por segurança.
+  na inicialização e as renova conforme `JANGADA_MONITOR_INTERVALO` (padrão de 30 segundos). Um
+  intervalo configurado perto ou acima de 120 segundos faz o `jangada-delegar` recusar por marca
+  expirada. O script lê essas marcas apenas sob `JANGADA_ISOLADO=1` e descarta marcas com mais de
+  120 segundos. A ausência de `jogo-ativo` depende do host estar vivo para criá-la quando um jogo
+  abre; caso o host morra, a expiração da marca de VRAM livre garante a recusa se o modelo não
+  estiver residente. Se a memória não puder ser verificada e o modelo não estiver residente, a
+  chamada é recusada por segurança.
 - Falhas e privacidade: em qualquer falha (Ollama inacessível, modelo ausente,
   jogo aberto, memória insuficiente ou contexto estourado), o comando recusa com código 4
   apontando o subagente do Claude, sem redirecionar dados para a nuvem. O protocolo

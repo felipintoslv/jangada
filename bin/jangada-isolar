@@ -355,23 +355,20 @@ bwrap_pid=""
 repasse_sinal() {
   local s="$1"
   if [[ -n "$bwrap_pid" ]]; then
-    if [[ "$s" == INT ]]; then
-      kill -TERM "$bwrap_pid" 2>/dev/null || true
-    else
-      kill "-$s" "$bwrap_pid" 2>/dev/null || true
-    fi
-    wait "$bwrap_pid" 2>/dev/null || true
+    kill "-$s" "$bwrap_pid" 2>/dev/null || true
   fi
 }
 
 trap 'limpar_monitor' EXIT
-trap 'repasse_sinal TERM; limpar_monitor; exit 143' TERM
-trap 'repasse_sinal HUP; limpar_monitor; exit 129' HUP
-trap 'repasse_sinal INT; limpar_monitor; exit 130' INT
+trap 'repasse_sinal TERM; wait "$bwrap_pid" 2>/dev/null || true; limpar_monitor; exit 143' TERM
+trap 'repasse_sinal HUP; wait "$bwrap_pid" 2>/dev/null || true; limpar_monitor; exit 129' HUP
+trap 'repasse_sinal INT' INT
 
-bwrap "${args[@]}" <&0 &
+env --default-signal=INT,QUIT bwrap "${args[@]}" <&0 &
 bwrap_pid=$!
 
 codigo=0
-wait "$bwrap_pid" || codigo=$?
+while kill -0 "$bwrap_pid" 2>/dev/null; do
+  wait "$bwrap_pid" || codigo=$?
+done
 exit "$codigo"

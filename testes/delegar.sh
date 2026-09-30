@@ -54,6 +54,19 @@ fi
 echo "${FALSO_VRAM:-8000}"
 EOF
 chmod +x "$tmp/bin/nvidia-smi"
+cat >"$tmp/bin/pgrep" <<'EOF'
+#!/bin/sh
+if [ -n "${FALSO_JOGO_ATIVO:-}" ] || [ -f "${FALSO_DIR:-}/jogo-ativo" ]; then
+  for arg in "$@"; do
+    if [ "$arg" = "reaper SteamLaunch" ]; then
+      echo 9999
+      exit 0
+    fi
+  done
+fi
+exit 1
+EOF
+chmod +x "$tmp/bin/pgrep"
 conf_agy="$tmp/home/.gemini/antigravity-cli/settings.json"
 jq -n --arg w "$(realpath "$tmp/projeto")" '{trustedWorkspaces: [$w]}' >"$conf_agy"
 mkdir -p "$tmp/home/.gemini/config"
@@ -67,6 +80,7 @@ delegar() {
     FALSO_CODIGO="${CODIGO:-0}" FALSO_NEGADO="${NEGADO:-}" FALSO_LOG="${LOG:-}" FALSO_USAGE_FALHA="${USAGE_FALHA:-0}" \
     ${AGENTES:+FALSO_AGENTES="$AGENTES"} \
     ${DELEGAR:+JANGADA_DELEGAR=$DELEGAR} \
+    ${FALSO_JOGO_ATIVO:+FALSO_JOGO_ATIVO="$FALSO_JOGO_ATIVO"} \
     ${FALSO_VRAM:+FALSO_VRAM="$FALSO_VRAM"} \
     ${SEM_VRAM:+FALSO_SEM_VRAM="$SEM_VRAM"} \
     ${ISOLADO:+JANGADA_ISOLADO="$ISOLADO"} \
@@ -339,12 +353,8 @@ conferir "caso 23: modelo ausente recusa com código 4" [ "$(codigo)" = 4 ]
 conferir "caso 23: indica modelo não encontrado" grep -q "modelo_inexistente não encontrado" "$tmp/erro"
 conferir "caso 23: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
 
-# 6. Jogo aberto (simulado com processo)
-bash -c 'exec -a "reaper SteamLaunch" sleep 5' &
-pid_jogo=$!
-OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
-kill "$pid_jogo" 2>/dev/null || true
-wait "$pid_jogo" 2>/dev/null || true
+# 6. Jogo aberto (simulado com marcador no pgrep falso)
+FALSO_JOGO_ATIVO=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
 conferir "caso 24: jogo aberto recusa com código 4" [ "$(codigo)" = 4 ]
 conferir "caso 24: indica jogo aberto" grep -q "jogo aberto" "$tmp/erro"
 conferir "caso 24: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]

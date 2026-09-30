@@ -314,6 +314,73 @@ sys.exit(0)
   conferir "caso 3: propaga sinal SIGINT" testar_sinal INT 130
   conferir "caso 3: processo filho sleep não sobra" [ -z "$(pgrep -f '[s]leep 25\.123' 2>/dev/null || true)" ]
 
+  testar_sigint_grupo() {
+    python3 -c '
+import subprocess, time, signal, sys, os
+
+wt = sys.argv[1]
+casa = sys.argv[2]
+config = sys.argv[3]
+repo = sys.argv[4]
+marca = sys.argv[5]
+
+env = os.environ.copy()
+env.pop("XDG_CACHE_HOME", None)
+env.pop("JANGADA_ISOLADO", None)
+env["HOME"] = casa
+env["XDG_STATE_HOME"] = f"{casa}/.local/state"
+env["XDG_CONFIG_HOME"] = config
+env["JANGADA_PATH"] = repo
+env["JANGADA_MARCA_ISOLADO"] = marca
+
+sig_file = os.path.join(wt, ".sigint_recebido")
+rdy_file = os.path.join(wt, ".rdy_sigint")
+if os.path.exists(sig_file): os.remove(sig_file)
+if os.path.exists(rdy_file): os.remove(rdy_file)
+
+py_cmd = f"""
+import signal, time, sys
+def handler(s, f):
+    with open("{sig_file}", "w") as out:
+        out.write("recebido\\n")
+    sys.exit(42)
+signal.signal(signal.SIGINT, handler)
+with open("{rdy_file}", "w") as out:
+    out.write("ok\\n")
+while True:
+    time.sleep(0.05)
+"""
+
+p = subprocess.Popen([f"{repo}/bin/jangada-isolar", "--", "python3", "-c", py_cmd],
+                     cwd=wt, env=env, start_new_session=True)
+
+for _ in range(100):
+    if os.path.exists(rdy_file):
+        break
+    time.sleep(0.05)
+else:
+    p.kill()
+    sys.exit(1)
+
+os.killpg(p.pid, signal.SIGINT)
+
+try:
+    rc = p.wait(timeout=5)
+except subprocess.TimeoutExpired:
+    p.kill()
+    sys.exit(2)
+
+if rc not in (42, 130):
+    sys.exit(3)
+
+if not os.path.exists(sig_file) or open(sig_file).read().strip() != "recebido":
+    sys.exit(4)
+
+sys.exit(0)
+' "$tmp/wt" "$casa" "$tmp/config" "$repo_jangada" "$marca_teste"
+  }
+  conferir "caso 3: SIGINT ao grupo de processos chega ao filho isolado" testar_sigint_grupo
+
   # Entrada padrão interativa / por pipe
   saida_pipe="$(printf 'dados-stdin-123\n' | isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- cat 2>/dev/null)"
   conferir "caso 3: entrada padrão via pipe chega ao comando isolado" [ "$saida_pipe" = "dados-stdin-123" ]

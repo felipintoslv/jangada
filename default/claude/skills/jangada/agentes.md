@@ -387,8 +387,9 @@ Testes de 29/09/2026, Ollama 0.34.4:
   `--unshare-pid` e sem nós `/dev/nvidia*`), `pgrep` não enxerga processos do
   host (como Steam) e `nvidia-smi` não consegue comunicar com o driver. O host
   grava marcas em `$JANGADA_ESTADO/marcas/vram-livre` e `$JANGADA_ESTADO/marcas/jogo-ativo`
-  antes de isolar e as renova a cada 30 segundos, e o script consulta `/api/ps`
-  no Ollama.
+  antes de isolar e as renova conforme `JANGADA_MONITOR_INTERVALO` (padrão de
+  30 segundos; valores perto ou acima de 120 s causam recusa por expiração no
+  delegar), e o script consulta `/api/ps` no Ollama.
 - **Memória de vídeo com modelo residente**: com `keep_alive` ativo, o modelo
   permanece na memória de vídeo após a primeira chamada. A memória livre cai
   e pode barrar chamadas seguintes; é preciso consultar `/api/ps` e somar a
