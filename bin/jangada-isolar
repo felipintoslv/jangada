@@ -286,6 +286,19 @@ args+=(--unsetenv TMUX --unsetenv TMUX_PANE --unsetenv SSH_AUTH_SOCK
        --unsetenv HYPRLAND_INSTANCE_SIGNATURE --unsetenv HYPRLAND_CMD
        --unsetenv WAYLAND_DISPLAY --unsetenv DISPLAY --unsetenv GPG_AGENT_INFO
        --setenv JANGADA_ISOLADO 1 --chdir "$pasta" -- "$@")
+
+if command -v nvidia-smi >/dev/null 2>&1; then
+  vl="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d ' ' || true)"
+  if [[ -n "$vl" && "$vl" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "$vl" >"$JANGADA_ESTADO/vram-livre" 2>/dev/null || true
+  fi
+fi
+if pgrep -f 'reaper SteamLaunch' >/dev/null 2>&1; then
+  touch "$JANGADA_ESTADO/jogo-ativo" 2>/dev/null || true
+else
+  rm -f "$JANGADA_ESTADO/jogo-ativo" 2>/dev/null || true
+fi
+
 if ((mostrar)); then
   printf '%s\n' bwrap "${args[@]}"
   exit 0

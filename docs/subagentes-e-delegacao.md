@@ -171,12 +171,18 @@ cerca de 2,0 GB de folga, atendendo a margem mínima de 1,5 GB.
 - `JANGADA_LOCAL_FATIAS_MAX`: `5` (limite de fatias para documentos que excedem o contexto).
 - `JANGADA_OLLAMA_URL`: `http://localhost:11434` (endereço da API do Ollama).
 - Concorrência: uma vaga exclusiva por chamada controlada por trava exclusiva
-  (`flock`) em `$JANGADA_ESTADO/local.lock`.
-- Proteção de jogos: recusa com código 4 se `pgrep -f 'reaper SteamLaunch'`
-  detectar jogo ativo ou se a memória de vídeo livre for inferior ao mínimo.
+  (`flock`) em `$JANGADA_ESTADO/local.lock`, obtida antes das checagens de
+  memória e de processos.
+- Proteção de jogos e isolamento: recusa com código 4 se `pgrep -f 'reaper SteamLaunch'`
+  ou `$JANGADA_ESTADO/jogo-ativo` detectar jogo ativo, ou se a memória de vídeo livre
+  (no `nvidia-smi` ou em `$JANGADA_ESTADO/vram-livre` gravado pelo host) for
+  inferior ao mínimo. Na sessão isolada (`jangada-isolar`), se a memória não puder ser
+  verificada e o modelo não estiver residente, a chamada é recusada por segurança.
 - Falhas e privacidade: em qualquer falha (Ollama inacessível, modelo ausente,
-  memória insuficiente ou contexto estourado), o comando recusa com código 4
-  apontando o subagente do Claude, sem redirecionar dados para a nuvem.
+  jogo aberto, memória insuficiente ou contexto estourado), o comando recusa com código 4
+  apontando o subagente do Claude, sem redirecionar dados para a nuvem. O protocolo
+  da sessão orienta o agente a consultar o usuário antes de recorrer ao Claude em
+  documentos confidenciais.
 
 ## Registro e medição
 

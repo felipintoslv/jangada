@@ -48,6 +48,9 @@ EOF
 chmod +x "$tmp/bin/agy"
 cat >"$tmp/bin/nvidia-smi" <<'EOF'
 #!/bin/sh
+if [ "${FALSO_SEM_VRAM:-0}" = "1" ]; then
+  exit 1
+fi
 echo "${FALSO_VRAM:-8000}"
 EOF
 chmod +x "$tmp/bin/nvidia-smi"
@@ -65,6 +68,9 @@ delegar() {
     ${AGENTES:+FALSO_AGENTES="$AGENTES"} \
     ${DELEGAR:+JANGADA_DELEGAR=$DELEGAR} \
     ${FALSO_VRAM:+FALSO_VRAM="$FALSO_VRAM"} \
+    ${SEM_VRAM:+FALSO_SEM_VRAM="$SEM_VRAM"} \
+    ${ISOLADO:+JANGADA_ISOLADO="$ISOLADO"} \
+    ${LOCAL_IGNORAR_VRAM:+JANGADA_LOCAL_IGNORAR_VRAM="$LOCAL_IGNORAR_VRAM"} \
     ${OLLAMA_URL:+JANGADA_OLLAMA_URL="$OLLAMA_URL"} \
     ${LOCAL_MODELO:+JANGADA_LOCAL_MODELO="$LOCAL_MODELO"} \
     ${LOCAL_CTX:+JANGADA_LOCAL_CTX="$LOCAL_CTX"} \
@@ -463,6 +469,47 @@ touch "$tmp/projeto/documento.pdf"
 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia o pdf" --arquivos "$tmp/projeto/documento.pdf"
 conferir "caso 39: PDF extraído com pdftotext tem código 0" [ "$(codigo)" = 0 ]
 conferir "caso 39: texto enviado traz numeracao de paginas" grep -q "p\. 1:" "$ollama_reqs"
+
+# 22. Perfil nativo recusa mesmo com --destino explícito
+DELEGAR=nativo delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 40: DELEGAR=nativo recusa --destino local" [ "$(codigo)" = 4 ]
+conferir "caso 40: erro indica invoke_subagent" grep -q "use invoke_subagent" "$tmp/erro"
+
+# 23. Perfil local recusa --destino agy
+DELEGAR=local delegar --destino agy leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 41: DELEGAR=local recusa --destino agy" [ "$(codigo)" = 4 ]
+conferir "caso 41: erro indica restricao ao destino local" grep -q "restringe a delegação ao destino local" "$tmp/erro"
+
+# 24. Argumentos posicionais após --
+: >"$ollama_reqs"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor --arquivos "$tmp/projeto/doc1.txt" -- "pedido posicional apos tracos"
+conferir "caso 42: argumentos posicionais apos -- tratados corretamente" [ "$(codigo)" = 0 ]
+conferir "caso 42: pedido apos -- enviado ao modelo" grep -q "pedido posicional apos tracos" "$ollama_reqs"
+delegar -- explorador "pedido apos tracos agy"
+conferir "caso 42b: papel e pedido apos -- com agy" [ "$(codigo)" = 0 ]
+
+# 25. Marca de jogo ativo no estado
+mkdir -p "$tmp/home/.local/state/jangada"
+touch "$tmp/home/.local/state/jangada/jogo-ativo"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 43: marca jogo-ativo no estado recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 43: erro indica jogo aberto" grep -q "jogo aberto detectado" "$tmp/erro"
+rm -f "$tmp/home/.local/state/jangada/jogo-ativo"
+
+# 26. Marca de VRAM livre gravada pelo host no estado
+printf '6000\n' >"$tmp/home/.local/state/jangada/vram-livre"
+SEM_VRAM=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 44: marca vram-livre permite medicao sem nvidia-smi" [ "$(codigo)" = 0 ]
+rm -f "$tmp/home/.local/state/jangada/vram-livre"
+
+# 27. Sessão isolada sem medição de VRAM e sem modelo residente recusa
+SEM_VRAM=1 ISOLADO=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 45: sessao isolada sem medicao de vram recusa" [ "$(codigo)" = 4 ]
+conferir "caso 45: erro indica vram nao verificada" grep -q "não pôde ser verificada na sessão isolada" "$tmp/erro"
+
+# 28. JANGADA_LOCAL_IGNORAR_VRAM=1 ignora checagem na sessão isolada
+SEM_VRAM=1 ISOLADO=1 LOCAL_IGNORAR_VRAM=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 46: JANGADA_LOCAL_IGNORAR_VRAM=1 libera chamada" [ "$(codigo)" = 0 ]
 
 echo
 if ((falhas)); then

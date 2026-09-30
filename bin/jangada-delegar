@@ -55,7 +55,17 @@ while (($#)); do
       done
       ;;
     -h|--help) uso ;;
-    --) shift; break ;;
+    --)
+      shift
+      while (($#)); do
+        if [[ -z "$papel" ]]; then papel="$1"
+        elif [[ -z "$pedido" ]]; then pedido="$1"
+        else echo "jangada-delegar: argumento a mais: $1" >&2; uso
+        fi
+        shift
+      done
+      break
+      ;;
     -*) echo "jangada-delegar: opção desconhecida: $1" >&2; uso ;;
     *)
       if [[ -z "$papel" ]]; then papel="$1"
@@ -73,13 +83,15 @@ if [[ -z "${esforco[$papel]:-}" ]]; then
   exit 2
 fi
 
+perfil_delegar="${JANGADA_DELEGAR:-agy}"
+
 if [[ -n "$destino_opt" ]]; then
   case "$destino_opt" in
     local|agy) destino="$destino_opt" ;;
     *) echo "jangada-delegar: destino inválido: $destino_opt (local ou agy)" >&2; uso ;;
   esac
 else
-  destino="$(jangada_delegacao claude "${JANGADA_DELEGAR:-}")"
+  destino="$(jangada_delegacao claude "$perfil_delegar")"
 fi
 
 # Uma linha por chamada em delegacoes.jsonl (docs/registros.md). Linha única
@@ -128,14 +140,15 @@ recusar() {
   exit 4
 }
 
-# JANGADA_DELEGAR vem do perfil da sessão (jangada-agente). Fora de sessão
-# vale agy. O jangada-delegar é chamado pelo Claude: nativo não se aplica.
-if [[ "${JANGADA_DELEGAR:-}" == nativo && -z "$destino_opt" ]]; then
+if [[ "$perfil_delegar" == nativo ]]; then
   echo "jangada-delegar: numa sessão do agy, use invoke_subagent com o papel $papel" >&2
   exit 4
 fi
-if [[ "${JANGADA_DELEGAR:-}" == claude || "$destino" == claude ]]; then
+if [[ "$perfil_delegar" == claude || "$destino" == claude ]]; then
   recusar "o perfil da sessão não delega ao agy nem ao destino local (JANGADA_DELEGAR=claude)"
+fi
+if [[ "$perfil_delegar" == local && "$destino" == agy ]]; then
+  recusar "o perfil da sessão restringe a delegação ao destino local (JANGADA_DELEGAR=local)"
 fi
 
 if [[ "$destino" == local ]]; then
@@ -163,31 +176,42 @@ if [[ "$destino" == local ]]; then
     recusar "modelo $modelo não encontrado no Ollama (rode ollama pull $modelo)"
   fi
 
-  if pgrep -f 'reaper SteamLaunch' >/dev/null 2>&1; then
-    recusar "jogo aberto detectado (reaper SteamLaunch)"
-  fi
-
-  vram_min="${JANGADA_LOCAL_VRAM_MIN:-4000}"
-  if command -v nvidia-smi >/dev/null 2>&1; then
-    vram_livre="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d ' ')"
-    if [[ -n "$vram_livre" && "$vram_livre" =~ ^[0-9]+$ ]]; then
-      vram_residente="$(curl -s -S --max-time 5 "$ollama_url/api/ps" 2>/dev/null \
-        | jq -r --arg m "$modelo" '[.models[]? | select(.name == $m or .model == $m) | .size_vram // 0] | max // 0' 2>/dev/null || echo 0)"
-      [[ "$vram_residente" =~ ^[0-9]+$ ]] || vram_residente=0
-      vram_residente_mib=$(( vram_residente / 1048576 ))
-      vram_efetiva=$(( vram_livre + vram_residente_mib ))
-      if ((vram_efetiva < vram_min)); then
-        recusar "memória de vídeo livre insuficiente: ${vram_livre} MiB livre, ${vram_residente_mib} MiB residente (mínimo ${vram_min} MiB)"
-      fi
-    fi
-  fi
-
   espera="${JANGADA_LOCAL_ESPERA:-30}"
   lock_file="$JANGADA_ESTADO/local.lock"
   mkdir -p "${lock_file%/*}" 2>/dev/null || true
   exec {lock_fd}>"$lock_file"
   if ! flock -w "$espera" "$lock_fd" 2>/dev/null; then
     recusar "vaga ocupada no modelo local (espera de ${espera}s esgotada)"
+  fi
+
+  if pgrep -f 'reaper SteamLaunch' >/dev/null 2>&1 || [[ -f "$JANGADA_ESTADO/jogo-ativo" ]]; then
+    recusar "jogo aberto detectado (reaper SteamLaunch)"
+  fi
+
+  ps_json="$(curl -s -S --max-time 5 "$ollama_url/api/ps" 2>/dev/null || true)"
+  outro_modelo="$(jq -r --arg m "$modelo" '.models[]? | select(.name != $m and .model != $m and .name != ($m + ":latest")) | .name' <<<"$ps_json" 2>/dev/null | head -n1 || true)"
+  if [[ -n "$outro_modelo" ]]; then
+    recusar "outro modelo em execução no Ollama: $outro_modelo"
+  fi
+  vram_residente="$(jq -r --arg m "$modelo" '[.models[]? | select(.name == $m or .model == $m or .name == ($m + ":latest")) | .size_vram // 0] | max // 0' <<<"$ps_json" 2>/dev/null || echo 0)"
+  [[ "$vram_residente" =~ ^[0-9]+$ ]] || vram_residente=0
+  vram_residente_mib=$(( vram_residente / 1048576 ))
+
+  vram_min="${JANGADA_LOCAL_VRAM_MIN:-4000}"
+  vram_livre=""
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    vram_livre="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d ' ' || true)"
+  fi
+  if [[ -z "$vram_livre" && -f "$JANGADA_ESTADO/vram-livre" ]]; then
+    vram_livre="$(head -n1 "$JANGADA_ESTADO/vram-livre" 2>/dev/null | tr -d ' ' || true)"
+  fi
+  if [[ -n "$vram_livre" && "$vram_livre" =~ ^[0-9]+$ ]]; then
+    vram_efetiva=$(( vram_livre + vram_residente_mib ))
+    if ((vram_efetiva < vram_min)); then
+      recusar "memória de vídeo livre insuficiente: ${vram_livre} MiB livre, ${vram_residente_mib} MiB residente (mínimo ${vram_min} MiB)"
+    fi
+  elif (( vram_residente_mib == 0 )) && [[ -n "${JANGADA_ISOLADO:-}" && "${JANGADA_LOCAL_IGNORAR_VRAM:-0}" != 1 ]]; then
+    recusar "memória de vídeo livre não pôde ser verificada na sessão isolada"
   fi
 
   prompt_sistema="$(awk 'BEGIN { fm = 0 } /^---$/ { fm++; next } fm >= 2 { print }' \
@@ -231,7 +255,7 @@ if [[ "$destino" == local ]]; then
   keep_alive="${JANGADA_LOCAL_KEEP_ALIVE:-2m}"
   limite_tokens=$(( ctx - 2000 ))
   (( limite_tokens > 50 )) || limite_tokens=50
-  limite_chars=$(( limite_tokens * 7 / 2 ))
+  limite_chars=$(( limite_tokens * 3 ))
 
   fatias=()
   fat_atual=""

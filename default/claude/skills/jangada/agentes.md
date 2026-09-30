@@ -381,13 +381,15 @@ Testes de 27/09/2026, agy 1.2.12:
 
 Delegação local (Ollama):
 
-Testes de 29/09/2026:
-
-- **Memória de vídeo com modelo residente**: com `keep_alive` ativo (padrão `2m`),
-  o modelo permanece na memória de vídeo após a primeira chamada. A memória livre
-  no `nvidia-smi` cai e pode ficar abaixo de `JANGADA_LOCAL_VRAM_MIN` (4000 MiB)
-  na segunda chamada. É preciso consultar `/api/ps` e somar o `size_vram` do
-  modelo já carregado à memória livre disponível.
+- **Isolamento e checagens do sistema**: dentro do `jangada-isolar` (`bwrap` com
+  `--unshare-pid` e sem nós `/dev/nvidia*`), `pgrep` não enxerga processos do
+  host (como Steam) e `nvidia-smi` não consegue comunicar com o driver. O host
+  grava marcas em `$JANGADA_ESTADO/vram-livre` e `$JANGADA_ESTADO/jogo-ativo`
+  antes de isolar, e o script consulta `/api/ps` no Ollama.
+- **Memória de vídeo com modelo residente**: com `keep_alive` ativo, o modelo
+  permanece na memória de vídeo após a primeira chamada. A memória livre cai
+  e pode barrar chamadas seguintes; é preciso consultar `/api/ps` e somar a
+  memória do modelo já residente à memória livre.
 - **Truncamento silencioso de contexto**: se a entrada ultrapassar `num_ctx`, o
   Ollama trunca o texto sem emitir erro na resposta. O script detecta comparando
   o `prompt_eval_count` retornado com o `num_ctx` configurado (`tent >= ctx`).
