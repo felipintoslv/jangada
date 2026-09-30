@@ -405,6 +405,8 @@ printf '%s\n' "doc_grande.txt:1: resumo da fatia." >"$ollama_resp"
 LOCAL_CTX=2100 LOCAL_FATIAS_MAX=5 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "resuma tudo" --arquivos "$doc_grande"
 conferir "caso 30: documento fatiado termina com código 0" [ "$(codigo)" = 0 ]
 conferir "caso 30: executou fatias mais passada de consolidação" [ "$(wc -l <"$ollama_reqs")" -ge 3 ]
+conferir "caso 30: todas as 8 linhas numeradas aparecem nas fatias" \
+  bash -c 'for i in {1..8}; do grep -q "doc_grande\.txt:$i: Linha 0$i" "$1" || exit 1; done' _ "$ollama_reqs"
 conferir "caso 30: passada final de consolidação executada" grep -q "Consolide os resumos" <(tail -n1 "$ollama_reqs")
 conferir "caso 30: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
 

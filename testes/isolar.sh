@@ -267,9 +267,10 @@ env["XDG_CONFIG_HOME"] = config
 env["JANGADA_PATH"] = repo
 env["JANGADA_MARCA_ISOLADO"] = marca
 
-p = subprocess.Popen([f"{repo}/bin/jangada-isolar", "--", "sleep", "25"], cwd=wt, env=env)
+p = subprocess.Popen([f"{repo}/bin/jangada-isolar", "--", "sleep", "25.123"],
+                     cwd=wt, env=env, start_new_session=True)
 for _ in range(50):
-    res = subprocess.run(["pgrep", "-x", "sleep"], capture_output=True, text=True)
+    res = subprocess.run(["pgrep", "-f", r"[s]leep 25\.123"], capture_output=True, text=True)
     if res.stdout.strip():
         break
     time.sleep(0.05)
@@ -277,18 +278,21 @@ else:
     p.kill()
     sys.exit(1)
 
-p.send_signal(sig)
+os.killpg(p.pid, sig)
 try:
     rc = p.wait(timeout=5)
 except subprocess.TimeoutExpired:
     p.kill()
     sys.exit(2)
 
+if rc < 0:
+    rc = 128 + (-rc)
+
 if rc != expected_rc:
     sys.exit(3)
 
 time.sleep(0.1)
-res = subprocess.run(["pgrep", "-x", "sleep"], capture_output=True, text=True)
+res = subprocess.run(["pgrep", "-f", r"[s]leep 25\.123"], capture_output=True, text=True)
 if res.stdout.strip():
     sys.exit(4)
 
@@ -299,7 +303,13 @@ sys.exit(0)
   conferir "caso 3: propaga sinal SIGTERM" testar_sinal TERM 143
   conferir "caso 3: propaga sinal SIGHUP" testar_sinal HUP 129
   conferir "caso 3: propaga sinal SIGINT" testar_sinal INT 130
-  conferir "caso 3: processo filho sleep não sobra" [ -z "$(pgrep -x sleep 2>/dev/null || true)" ]
+  conferir "caso 3: processo filho sleep não sobra" [ -z "$(pgrep -f '[s]leep 25\.123' 2>/dev/null || true)" ]
+
+  # Entrada padrão interativa / por pipe
+  saida_pipe="$(printf 'dados-stdin-123\n' | isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- cat 2>/dev/null)"
+  conferir "caso 3: entrada padrão via pipe chega ao comando isolado" [ "$saida_pipe" = "dados-stdin-123" ]
+  saida_read="$(printf 'linha-lida\n' | isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- sh -c 'read -r x && printf "%s" "$x"' 2>/dev/null)"
+  conferir "caso 3: leitura interativa de linha via pipe funciona" [ "$saida_read" = "linha-lida" ]
 else
   echo "pulado caso 3: bwrap não cria namespace aqui"
 fi

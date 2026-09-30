@@ -325,29 +325,14 @@ atualizar_marcas_host
   while kill -0 $$ 2>/dev/null; do
     sleep 30 &
     wait $! 2>/dev/null || true
+    kill -0 $$ 2>/dev/null || exit 0
     atualizar_marcas_host
   done
 ) &
 monitor_pid=$!
 
-bwrap_pid=""
-repasse_sinal() {
-  local s="$1"
-  if [[ -n "$bwrap_pid" ]]; then
-    kill "-$s" "$bwrap_pid" 2>/dev/null || true
-    wait "$bwrap_pid" 2>/dev/null || true
-  fi
-}
-
-trap 'kill "$monitor_pid" 2>/dev/null || true' EXIT
-trap 'repasse_sinal TERM; kill "$monitor_pid" 2>/dev/null || true; exit 143' TERM
-trap 'repasse_sinal HUP; kill "$monitor_pid" 2>/dev/null || true; exit 129' HUP
-trap 'repasse_sinal INT; kill "$monitor_pid" 2>/dev/null || true; exit 130' INT
+trap 'kill "$monitor_pid" 2>/dev/null || true' EXIT TERM INT HUP
 
 codigo=0
-set -m
-bwrap "${args[@]}" &
-bwrap_pid=$!
-set +m
-wait "$bwrap_pid" || codigo=$?
+bwrap "${args[@]}" || codigo=$?
 exit "$codigo"
