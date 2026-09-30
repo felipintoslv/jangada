@@ -54,6 +54,7 @@ entrar aqui do mesmo jeito.
 | `~/.bashrc`, `~/.zshrc` | `install/30-shell.sh` | bloco entre marcas que carrega o ambiente do jangada |
 | `~/.claude/settings.json`, `~/.claude/skills`, `~/.claude/agents` | `install/50-agentes.sh`, migrações | hooks das sessões e links para as skills e os subagentes de `default/` |
 | `~/.claude` (`settings.local.json`, `CLAUDE.md`, `commands`, `hooks`, `plugins`, `output-styles`, `shell-snapshots`, `session-env`, `ide`) | `jangada-isolar` | criados vazios quando faltam, para o bind do isolamento |
+| `~/.codex` (dados de execução do CLI) | Codex aberto explicitamente sem isolamento | dados do CLI quando o usuário escolhe `--sem-isolar`; executores isolados e revisores usam `~/.local/state/jangada/codex/SESSAO`, com configuração e autenticação somente leitura |
 | `~/.gemini/config` (`hooks.json`, `agents.json`, `skills`) | `install/50-agentes.sh`, migrações | hooks, subagentes e skills do agy |
 | `~/.gemini/antigravity-cli` (`settings.json`, `bin`) | `jangada-worktree-preparar`, `jangada-agente-fim`, `jangada-isolar` | confiança do agy no worktree e pasta bin para montar isolada; o original fica em `settings.json.jangada-orig` |
 | `~/.local/share/jangada-worktrees` | `jangada-agente` | worktrees das sessões de agente |

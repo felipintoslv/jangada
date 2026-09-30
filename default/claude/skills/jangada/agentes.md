@@ -1,5 +1,24 @@
 # Camada de agentes
 
+## Codex
+
+Os perfis `codex` e `codex-codex` usam o mesmo ciclo de sessões. O adaptador
+`jangada-codex` exige `--no-daemon`, injeta o protocolo por
+`developer_instructions` e passa hooks sem alterar a configuração global.
+Os hooks precisam de conferência pelo `/hooks` do CLI; não dispense a
+confiança dos hooks para fazer a barra funcionar.
+
+Dentro do bubblewrap, dados próprios em `$JANGADA_ESTADO/codex/SESSAO`
+ocupam a pasta do Codex. O login e as configurações do host ficam somente
+leitura. A pasta original não pode ficar gravável: seus hooks, regras e
+plugins seriam executados fora do isolamento. `CODEX_SQLITE_HOME` aponta
+para a pasta montada, sem mudar `CODEX_HOME`.
+
+Na restauração, UUID vai por `resume UUID`. Sem UUID, `resume --last` só
+vale no worktree próprio; direto no projeto abre conversa nova.
+O revisor Codex recebe só o pedido completo numa pasta vazia, sem terminal,
+hooks ou ferramentas externas. Mais detalhes em `docs/codex.md`.
+
 ## Peças
 
 | Peça | Papel |

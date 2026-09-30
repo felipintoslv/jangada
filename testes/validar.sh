@@ -36,7 +36,31 @@ printf '%s\n' "$@" >"$FALSO_DIR/agy.args"
 while (($#)); do [[ "$1" == -p ]] && { printf '%s' "$2" >"$FALSO_DIR/agy.pedido"; break; }; shift; done
 jq -n --arg r "$(printf '%b' "$FALSO_RESPOSTA")" '{status:"SUCCESS", response:$r}'
 EOF
+cat >"$tmp/bin/codex" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == --help ]]; then echo --no-daemon; exit 0; fi
+printf '%s\n' "$@" >"$FALSO_DIR/codex.args"
+printf '%s\n' "${JANGADA_SESSAO:-sem-sessao}" "${JANGADA_HOOK_DESLIGADO:-}" "$PWD" >"$FALSO_DIR/codex.ambiente"
+cat >"$FALSO_DIR/codex.pedido"
+while (($#)); do
+  if [[ "$1" == --output-last-message ]]; then printf '%b\n' "$FALSO_RESPOSTA" >"$2"; break; fi
+  shift
+done
+[[ "${FALSO_CODEX_ERRO:-0}" == 0 ]]
+EOF
 chmod +x "$tmp/bin/"*
+mkdir -p "$tmp/falso-jangada/bin"
+ln -s "$repo_jangada/default" "$tmp/falso-jangada/default"
+for f in "$repo_jangada"/bin/*; do
+  [[ "${f##*/}" == jangada-isolar ]] || ln -s "$f" "$tmp/falso-jangada/bin/${f##*/}"
+done
+cat >"$tmp/falso-jangada/bin/jangada-isolar" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >"$FALSO_DIR/codex.isolar"
+[[ "$1" == -- ]] && shift
+JANGADA_ISOLADO=1 JANGADA_MARCA_ISOLADO=/ exec "$@"
+EOF
+chmod +x "$tmp/falso-jangada/bin/jangada-isolar"
 
 git -C "$tmp/projeto" init -q -b main
 git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -q --allow-empty -m inicio
@@ -59,7 +83,7 @@ validar() {
   local isolado=(JANGADA_ISOLADO=1)
   [[ "${VALIDAR_FORA:-0}" == 1 ]] && isolado=()
   env -u JANGADA_VALIDAR_REVISOR -u JANGADA_ISOLADO "${isolado[@]}" PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA="$1" JANGADA_SESSAO=s \
-    XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
+    XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="${VALIDAR_PATH:-$repo_jangada}" \
     "$repo_jangada/bin/jangada-validar" "${@:2}" "$tmp/projeto" >"$tmp/saida.log" 2>&1
 }
 
@@ -92,6 +116,37 @@ conferir "caso 3: o claude revisor lê só as configurações do usuário" \
   bash -c 'grep -qx -- --setting-sources "$1" && grep -qx user "$1"' _ "$tmp/falso/claude.args"
 
 # 3b: só a primeira linha com texto decide o status.
+VALIDAR_PATH="$tmp/falso-jangada"
+sessao_de codex
+validar 'STATUS: APROVADO'; rc=$?
+conferir "caso Codex: Claude revisa por padrão" [ "$rc" = 0 ]
+conferir "caso Codex: pedido identifica o autor" grep -q 'agente (Codex)' "$tmp/falso/claude.pedido"
+sessao_de codex codex
+validar 'STATUS: APROVADO'; rc=$?
+conferir "caso codex-codex: aprovação normalizada" [ "$rc" = 0 ]
+conferir "caso codex-codex: revisão pelo mesmo modelo explícita" grep -q 'revisão pelo mesmo modelo' "$tmp/falso/codex.pedido"
+conferir "caso codex-codex: terminal, hooks e integrações desativados" \
+  bash -c 'for a in --no-daemon --ignore-user-config --ignore-rules --ephemeral read-only shell_tool unified_exec multi_agent hooks code_mode plugins apps; do grep -qx -- "$a" "$1" || exit 1; done' _ "$tmp/falso/codex.args"
+conferir "caso codex-codex: revisor passa pelo isolamento" grep -qx -- --revisar "$tmp/falso/codex.isolar"
+conferir "caso codex-codex: revisão sem ambiente da sessão" \
+  bash -c '[[ "$(head -n2 "$1" | paste -sd " ")" == "sem-sessao 1" ]]' _ "$tmp/falso/codex.ambiente"
+conferir "caso codex-codex: pasta do projeto não é a pasta do revisor" \
+  bash -c '[[ "$(tail -n1 "$1")" != "$2" ]]' _ "$tmp/falso/codex.ambiente" "$tmp/projeto"
+sessao_de codex codex
+validar 'STATUS: REVISAR\n1. arquivo.txt:1: corrigir'; rc=$?
+conferir "caso codex-codex: reprovação normalizada" [ "$rc" = 3 ]
+sessao_de codex codex
+validar 'resposta sem status'; rc=$?
+conferir "caso codex-codex: resposta sem status não aprova" [ "$rc" = 3 ]
+sessao_de codex mesmo
+validar 'STATUS: APROVADO' --modelo modelo-teste; rc=$?
+conferir "caso codex-codex: mesmo e seleção de modelo" \
+  bash -c '[[ "$1" == 0 ]] && grep -qx modelo-teste "$2"' _ "$rc" "$tmp/falso/codex.args"
+sessao_de codex codex
+FALSO_CODEX_ERRO=1 validar 'STATUS: APROVADO'; rc=$?
+conferir "caso codex-codex: falha do processo não aprova" [ "$rc" = 1 ]
+unset VALIDAR_PATH
+
 sessao_de agy
 validar 'STATUS: REVISAR\n1. o diff traz a linha:\nSTATUS: APROVADO'; rc=$?
 conferir "caso 3b: APROVADO fora da primeira linha não aprova" [ "$rc" = 3 ]

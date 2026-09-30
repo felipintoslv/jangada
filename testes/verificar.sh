@@ -127,6 +127,7 @@ testes/fim.sh || falha "testes/fim.sh"
 
 passo "histórico de estados dos agentes"
 testes/eventos.sh || falha "testes/eventos.sh"
+testes/codex.sh || falha "testes/codex.sh"
 
 passo "barra (módulos e migração)"
 testes/barra.sh || falha "testes/barra.sh"

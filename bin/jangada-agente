@@ -10,7 +10,7 @@
 #   --agente CMD      usa outro agente (padrão: JANGADA_AGENTE, hoje "claude")
 #   --perfil NOME     usa o perfil NOME (~/.config/jangada/agentes/NOME.conf ou,
 #                     sem ele, default/agentes/NOME.conf; o agy vem pronto)
-#   --revisor NOME    revisor para jangada-validar (claude, agy, mesmo ou oposto)
+#   --revisor NOME    revisor para jangada-validar (claude, agy, codex, mesmo ou oposto)
 #   --prompt TEXTO    tarefa inicial, entregue ao agente ao abrir
 #   --prompt-arquivo ARQ  o mesmo, lida de um arquivo
 #   --sem-isolar      abre o agente fora do bubblewrap (JANGADA_AGENTE_ISOLAR=0)
@@ -89,6 +89,7 @@ if ((!agente_dado)) && [[ -z "$perfil" && -t 0 && "${JANGADA_AGENTE_ESCOLHER:-1}
                   || echo "Claude implementa, sem revisão: agy não instalado" ;;
         agy) command -v claude >/dev/null 2>&1 && echo "agy implementa, o Claude só revisa o diff; economiza mais tokens do Claude" \
                   || echo "agy implementa, sem revisão: Claude não instalado" ;;
+        codex) echo "Codex implementa, o Claude revisa" ;;
         *) echo "$base" ;;
       esac
     }
@@ -289,6 +290,7 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
   # numa sessão restaurada. O agy não tem essa opção nem aceita a tarefa como
   # argumento solto: os dois vão por -i, que abre a conversa já com o pedido.
   base_agente="$(basename "${agente%% *}")"
+  cmd_codex="$cmd_agente"
   # Precedência do revisor:
   # 1. Opção --revisor dada na linha de comando
   # 2. JANGADA_VALIDAR_REVISOR definido no perfil
@@ -321,7 +323,7 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
   case "$revisor_efetivo" in
     mesmo) revisor_efetivo="$base_agente" ;;
     oposto|"")
-      [[ "$base_agente" == agy ]] && revisor_efetivo="claude" || revisor_efetivo="agy"
+      [[ "$base_agente" == agy || "$base_agente" == codex ]] && revisor_efetivo="claude" || revisor_efetivo="agy"
       ;;
   esac
 
@@ -333,7 +335,9 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
   # (o --restaurar o refaz das mesmas fontes). Leva o item de subagentes do
   # destino da delegação e, em projeto com arquivos R, as regras de código R.
   if [[ -n "$protocolo" ]]; then
-    partes=("$protocolo" "$JANGADA_PATH/default/agentes/protocolo-delegar-$delegar.md"
+    protocolo_delegar="$delegar"
+    [[ "$base_agente" == codex ]] && protocolo_delegar=codex
+    partes=("$protocolo" "$JANGADA_PATH/default/agentes/protocolo-delegar-$protocolo_delegar.md"
             "$JANGADA_PATH/default/agentes/protocolo-delegar.md")
     if [[ -n "$(find "$dir" -maxdepth 2 -not -path '*/.git/*' \
           \( -iname '*.R' -o -name '*.Rmd' -o -name '*.qmd' -o -name '*.Rproj' -o -name DESCRIPTION \) \
@@ -356,6 +360,16 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
       fi
     } >"$arq_prompt"
     [[ -s "$arq_prompt" ]] && cmd_agente+=" -i \"\$(cat $(printf '%q' "$arq_prompt"))\""
+  elif [[ "$base_agente" == codex ]]; then
+    cmd_agente="$(printf '%q' "$JANGADA_PATH/bin/jangada-codex")"
+    [[ -n "$protocolo" ]] && cmd_agente+=" --protocolo $(printf '%q' "$protocolo")"
+    cmd_agente+=" -- $cmd_codex"
+    [[ "$isolar" != 0 ]] && cmd_agente="$(printf '%q' "$JANGADA_PATH/bin/jangada-isolar") -- $cmd_agente"
+    cmd_base="$cmd_agente"
+    if [[ -n "$prompt" ]]; then
+      printf '%s\n' "$prompt" >"$arq_prompt"
+      cmd_agente+=" \"\$(cat $(printf '%q' "$arq_prompt"))\""
+    fi
   else
     if [[ "$base_agente" == claude && -n "$protocolo" ]]; then
       cmd_agente+=" --append-system-prompt \"\$(cat $(printf '%q' "$protocolo"))\""

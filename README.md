@@ -40,6 +40,7 @@ arquivo e função, falhas e os testes que o cobrem:
 | [docs/ciclo-da-tarefa.md](docs/ciclo-da-tarefa.md) | abertura da sessão, `jangada-validar` e `jangada-agente-fim` |
 | [docs/isolamento.md](docs/isolamento.md) | o que o `jangada-isolar` deixa gravável, somente leitura e oculto, e a restauração |
 | [docs/subagentes-e-delegacao.md](docs/subagentes-e-delegacao.md) | papéis, destino da delegação e `jangada-delegar` |
+| [docs/codex.md](docs/codex.md) | Codex como executor e revisor, isolamento e retomada |
 | [docs/atualizacao-e-migracoes.md](docs/atualizacao-e-migracoes.md) | instalação, `jangada-update` e `jangada-migrar` |
 | [docs/painel.md](docs/painel.md) | coletor, cache, app e módulo da barra |
 | [docs/registros.md](docs/registros.md) | campos de cada registro usado pelo painel |
@@ -226,6 +227,14 @@ O fluxo completo, com fluxogramas, está em
 | `agy` | agy | Claude, só o diff | economiza mais: o Claude só lê o diff |
 | `claude-claude` | Claude | Claude | usa apenas o Claude |
 | `agy-agy` | agy | agy | não gasta tokens do Claude |
+| `codex` | Codex | Claude | Claude recebe só a revisão |
+| `codex-codex` | Codex | outra instância do Codex | não gasta tokens do Claude |
+
+O Codex usa os worktrees e o tmux da Jangada, sem criar worktree próprio
+nem conectar ao servidor compartilhado do CLI. Os perfis `codex` e
+`codex-codex` usam Ollama para leitor e redator. O revisor Codex recebe o
+pedido completo, sem terminal ou ferramentas externas. Veja
+[a preparação, os hooks e as limitações](docs/codex.md).
 
 1. O agente abre interativo, no worktree, com o protocolo de
    `default/agentes/protocolo.md` (trabalhar só no worktree, commits sem
@@ -650,6 +659,7 @@ e não mexe na instalada. Para testar a cópia de trabalho sem instalar, rode
 | `testes/validar.sh` | `jangada-validar` com claude e agy falsos: veredito, rodadas, pareceres e métricas |
 | `testes/isolar.sh` | `jangada-isolar`: o que fica gravável, somente leitura e oculto, no worktree e direto no repositório |
 | `testes/restaurar.sh` | `jangada-agentes --restaurar` com tmux falso: o comando sai de campos conferidos, nunca do estado |
+| `testes/codex.sh` | lançamento do Codex, protocolo, argumentos TOML, hooks e recusas sem rede |
 | `testes/update.sh` | `jangada-update` só aplica com confirmação e, com `allowed_signers`, só commits assinados; `jangada-assinar`; `jangada-agente-fim --integrar` não mexe na cópia instalada nem roda ganchos do repositório do agente |
 | `testes/eventos.sh` | histórico de estados dos agentes gravado pelos hooks e pela troca de foco |
 | `testes/barra.sh` | módulo `custom/indicadores`, barra em pé do `jangada-barra` e a migração que o acrescenta |

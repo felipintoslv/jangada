@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# Adaptador do Codex: protocolo, hooks da sessão e execução sem servidor compartilhado.
+# Uso: jangada-codex [--revisar | --protocolo ARQ] [--conversa UUID | --retomar] -- COMANDO [ARGS...]
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+
+protocolo=""; conversa=""; retomar=0; revisar=0
+while (($#)); do
+  case "$1" in
+    --protocolo) protocolo="$2"; shift 2 ;;
+    --conversa) conversa="$2"; shift 2 ;;
+    --retomar) retomar=1; shift ;;
+    --revisar) revisar=1; shift ;;
+    --) shift; break ;;
+    *) echo "jangada-codex: opção desconhecida: $1" >&2; exit 1 ;;
+  esac
+done
+(($#)) || { echo "jangada-codex: informe o comando codex" >&2; exit 1; }
+exe="$1"; shift
+[[ "$(basename -- "$exe")" == codex ]] || { echo "jangada-codex: comando inválido" >&2; exit 1; }
+if [[ -n "$conversa" && ! "$conversa" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+  echo "jangada-codex: id de conversa inválido" >&2
+  exit 1
+fi
+# Versões sem --no-daemon poderiam conectar a um processo fora do isolamento.
+ajuda="$("$exe" --help 2>/dev/null)" || exit 1
+grep -q -- '--no-daemon' <<<"$ajuda" || {
+  echo "jangada-codex: esta versão precisa oferecer --no-daemon; atualize o Codex" >&2
+  exit 1
+}
+
+if ((revisar)); then
+  [[ -n "${JANGADA_ISOLADO:-}" ]] && awk -v m="${JANGADA_MARCA_ISOLADO:-/tmp/.jangada-isolado}" \
+    '$5 == m { a = 1 } END { exit !a }' /proc/self/mountinfo || {
+    echo "jangada-codex: o revisor precisa do jangada-isolar" >&2; exit 1
+  }
+  # Chamado pelo jangada-validar no isolamento, com o pedido completo.
+  exec env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 "$exe" \
+    --no-daemon --ask-for-approval never exec --ignore-user-config --ignore-rules \
+    --ephemeral --skip-git-repo-check --sandbox read-only \
+    --disable shell_tool --disable unified_exec --disable multi_agent \
+    --disable code_mode --disable code_mode_host --disable plugins --disable apps \
+    --disable hooks --disable browser_use --disable computer_use --disable in_app_browser \
+    --disable image_generation --disable view_image --disable skill_mcp_dependency_install \
+    -c 'hooks={}' -c 'mcp_servers={}' -c 'plugins={}' -c 'web_search="disabled"' \
+    -c "log_dir=$(jq -Rn --arg p "${CODEX_HOME:-$HOME/.codex}/log" '$p')" "$@" -
+fi
+
+args=("$@" --no-daemon --sandbox workspace-write --ask-for-approval on-request
+      --add-dir "$JANGADA_ESTADO" -c 'approvals_reviewer="user"'
+      -c "log_dir=$(jq -Rn --arg p "${CODEX_HOME:-$HOME/.codex}/log" '$p')")
+if [[ -n "$protocolo" ]]; then
+  [[ -r "$protocolo" ]] || { echo "jangada-codex: protocolo ausente" >&2; exit 1; }
+  args+=(-c "developer_instructions=$(jq -Rs . <"$protocolo")")
+fi
+# TOML usa '=' nas tabelas em linha. A string JSON também é uma string TOML
+# válida; a citação de shell fica dentro dela, sem avaliar o caminho.
+hook="$(dirname "${BASH_SOURCE[0]}")/jangada-hook-codex"
+hook="$(realpath "$hook")"
+hook="'${hook//\'/\'\\\'\'}'"
+for par in SessionStart:inicio UserPromptSubmit:trabalhando PreToolUse:trabalhando \
+           PostToolUse:trabalhando PermissionRequest:aguardando Stop:concluido \
+           SessionEnd:fim Interrupt:concluido; do
+  evento="${par%%:*}"; estado="${par#*:}"
+  comando="$(jq -Rn --arg c "$hook $estado" '$c')"
+  args+=(-c "hooks.$evento=[{hooks=[{type=\"command\",command=$comando}]}]")
+done
+if [[ -n "$conversa" ]]; then
+  args+=(resume "$conversa")
+elif ((retomar)); then
+  args+=(resume --last)
+fi
+exec "$exe" "${args[@]}"

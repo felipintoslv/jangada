@@ -28,7 +28,7 @@ git -C "$tmp/repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m i
 git -C "$tmp/repo" worktree add -q -b agente/t "$tmp/wt"
 
 isolar() {
-  (cd "$1" && env -u XDG_CACHE_HOME -u JANGADA_ISOLADO HOME="$casa" XDG_STATE_HOME="$casa/.local/state" XDG_CONFIG_HOME="$tmp/config" \
+  (cd "$1" && env -u JANGADA_SESSAO -u CODEX_HOME -u XDG_CACHE_HOME -u JANGADA_ISOLADO HOME="$casa" XDG_STATE_HOME="$casa/.local/state" XDG_CONFIG_HOME="$tmp/config" \
     JANGADA_PATH="$repo_jangada" JANGADA_MARCA_ISOLADO="$marca_teste" "${@:2}")
 }
 mostrar() { isolar "$tmp/wt" "$@" "$repo_jangada/bin/jangada-isolar" --mostrar -- true >"$tmp/args"; }
@@ -145,7 +145,57 @@ saida="$(isolar "$tmp/wt" PATH="$sem_bwrap" JANGADA_AGENTE_ISOLAR=0 "$repo_janga
 conferir "caso 2b: sem bwrap e desligado, roda direto" [ "$saida" = rodou ]
 
 # Caso 3: o isolamento de verdade.
+mkdir -p "$casa/.codex/skills"
+printf 'model = "modelo-teste"\n' >"$casa/.codex/config.toml"
+printf '{"token":"FALSO-LOGIN"}\n' >"$casa/.codex/auth.json"
+isolar "$tmp/wt" JANGADA_SESSAO=teste-codex "$repo_jangada/bin/jangada-isolar" --mostrar -- \
+  "$repo_jangada/bin/jangada-codex" -- codex >"$tmp/args"
+conferir "caso Codex: execução em dados próprios da sessão" \
+  seguidos --bind "$casa/.local/state/jangada/codex/teste-codex" "$casa/.codex"
+conferir "caso Codex: configuração global somente leitura" \
+  seguidos --ro-bind "$casa/.codex/config.toml" "$casa/.codex/config.toml"
+conferir "caso Codex: login somente leitura" seguidos --ro-bind "$casa/.codex/auth.json" "$casa/.codex/auth.json"
+conferir "caso Codex: skills somente leitura" seguidos --ro-bind "$casa/.codex/skills" "$casa/.codex/skills"
+conferir "caso Codex: configuração ausente não vem do estado" \
+  seguidos --ro-bind /dev/null "$casa/.codex/requirements.toml"
+conferir "caso Codex: SQLite usa dados da sessão" seguidos --setenv CODEX_SQLITE_HOME "$casa/.codex"
+conferir "caso Codex: pasta de dados não exposta por fora" \
+  bash -c '! grep -A2 -xF -- --bind "$1" | grep -qFx "$2"' _ "$tmp/args" "$casa/.local/state/jangada/codex"
+ln -s "$casa/.ssh" "$casa/.local/state/jangada/codex/link"
+isolar "$tmp/wt" JANGADA_SESSAO=link "$repo_jangada/bin/jangada-isolar" --mostrar -- \
+  "$repo_jangada/bin/jangada-codex" -- codex >"$tmp/saida" 2>"$tmp/erro"
+conferir "caso Codex: link no lugar dos dados é recusado" [ "$?" != 0 ]
+for nome_invalido in . ..; do
+  isolar "$tmp/wt" JANGADA_SESSAO="$nome_invalido" "$repo_jangada/bin/jangada-isolar" --mostrar -- \
+    "$repo_jangada/bin/jangada-codex" -- codex >"$tmp/saida" 2>"$tmp/erro"
+  conferir "caso Codex: sessão $nome_invalido é recusada" [ "$?" != 0 ]
+done
+
 if bwrap --ro-bind / / --dev /dev --proc /proc true 2>/dev/null; then
+  # O programa falso grava dados e testa as montagens no mesmo processo do CLI.
+  mkdir -p "$tmp/wt/codex-bin"
+  cat >"$tmp/wt/codex-bin/codex" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == --help ]]; then echo --no-daemon; exit 0; fi
+printf 'conversa\n' >"$HOME/.codex/historico-teste"
+grep -q 'modelo-teste' "$HOME/.codex/config.toml" || exit 1
+grep -q 'FALSO-LOGIN' "$HOME/.codex/auth.json" || exit 1
+! echo 'configuração adulterada' >"$HOME/.codex/config.toml" || exit 1
+! echo 'login adulterado' >"$HOME/.codex/auth.json" || exit 1
+! touch "$HOME/.codex/skills/invadido" || exit 1
+[[ "$(cat "$HOME/.codex/historico-teste")" == conversa ]]
+EOF
+  chmod +x "$tmp/wt/codex-bin/codex"
+  isolar "$tmp/wt" JANGADA_SESSAO=teste-codex "$repo_jangada/bin/jangada-isolar" -- \
+    "$repo_jangada/bin/jangada-codex" -- "$tmp/wt/codex-bin/codex" >"$tmp/codex.log" 2>&1
+  conferir "caso Codex real: dados graváveis e configuração protegida" [ "$?" = 0 ]
+  conferir "caso Codex real: histórico persiste no estado" test -f "$casa/.local/state/jangada/codex/teste-codex/historico-teste"
+  conferir "caso Codex real: histórico não contamina pasta global" test ! -e "$casa/.codex/historico-teste"
+  isolar "$tmp/wt" JANGADA_AGENTE_ISOLAR=0 JANGADA_SESSAO=teste-revisor "$repo_jangada/bin/jangada-isolar" -- \
+    "$repo_jangada/bin/jangada-codex" --revisar -- "$tmp/wt/codex-bin/codex" >"$tmp/codex-revisor.log" 2>&1
+  conferir "caso Codex real: revisor isolado mesmo com isolamento global desligado" [ "$?" = 0 ]
+  conferir "caso Codex real: revisor grava apenas no próprio estado" test -f "$casa/.local/state/jangada/codex/teste-revisor/historico-teste"
+  conferir "caso Codex real: revisor não grava na pasta global" test ! -e "$casa/.codex/historico-teste"
   roda() { isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- bash -c "$1" >/dev/null 2>&1; }
   conferir "caso 3: grava na pasta" roda 'echo a >dentro.txt'
   conferir "caso 3: o arquivo chega ao disco" test -f "$tmp/wt/dentro.txt"

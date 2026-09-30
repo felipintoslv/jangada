@@ -1,10 +1,14 @@
 # Isolamento dos agentes
 
-O agente (Claude ou agy) roda dentro do bubblewrap pelo `bin/jangada-isolar`.
+O agente (Claude, agy ou Codex) roda dentro do bubblewrap pelo `bin/jangada-isolar`.
 Ele grava só na pasta da tarefa e no que o jangada libera; o resto da casa
 fica somente leitura, e os segredos ficam ocultos. O objetivo é que nada do
 que o agente fizer rode depois fora do isolamento: um hook do git, um
 `settings.json` do Claude, um clone do AUR compilado com sudo.
+
+No Codex, dados de execução próprios da sessão são montados sobre a pasta
+global do CLI, com configuração e login somente leitura. O servidor
+compartilhado fica desligado. Veja [Codex](codex.md).
 
 ## Modelo de ameaça
 

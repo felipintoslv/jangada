@@ -1,0 +1,132 @@
+# Codex na Jangada
+
+O Codex implementa no mesmo ciclo de worktree, tmux, validação e integração
+usado pelos outros agentes. Há dois perfis:
+
+| Perfil | Implementa | Revisa |
+|---|---|---|
+| `codex` | Codex | Claude |
+| `codex-codex` | Codex | outra instância do Codex |
+
+```sh
+jangada-agente --perfil codex --nome tarefa --prompt "Implemente a tarefa"
+jangada-agente --perfil codex-codex --nome tarefa --prompt "Implemente a tarefa"
+```
+
+## Preparação
+
+Instale o Codex CLI e faça `codex login` num terminal comum. A Jangada não
+instala o CLI nem altera a configuração global dele. O adaptador exige uma
+versão que ofereça `--no-daemon`, para não conectar a sessão a um processo
+compartilhado fora do isolamento. A implementação foi conferida com a ajuda
+do Codex CLI 0.159.2 e com executáveis simulados nos testes.
+
+Os perfis são lidos diretamente de `default/agentes/`, com precedência da
+cópia em `~/.config/jangada/agentes/`. Não exigem migração de configuração
+ou instalação de hooks globais. A cópia instalada precisa receber a
+atualização pelo fluxo habitual do `jangada-update`.
+
+## Execução e isolamento
+
+`bin/jangada-agente` chama `bin/jangada-codex` dentro do
+`bin/jangada-isolar`. O adaptador acrescenta o protocolo por
+`developer_instructions`, mantém `workspace-write`, pede permissões ao
+usuário e usa `--no-daemon`. A pasta de estado é permitida ao isolamento
+interno do Codex; as montagens do bubblewrap continuam limitando a escrita
+aos arquivos de estado liberados pela Jangada.
+
+Dentro do bubblewrap, a pasta do Codex (`CODEX_HOME`, ou `~/.codex`) é
+montada a partir de `~/.local/state/jangada/codex/SESSAO`. Conversas, bancos e
+confiança dos hooks persistem ali. O `CODEX_HOME` não é trocado.
+Configuração, autenticação, instruções globais, perfis, regras, skills,
+plugins e hooks existentes são montados somente para leitura.
+Arquivos de configuração ausentes ficam vazios; pastas de instruções
+ausentes ficam vazias e somente leitura. A sessão não altera a configuração
+do Codex aberto fora da Jangada.
+
+Um endereço próprio em `CODEX_HOME` precisa ser absoluto e já existir.
+`CODEX_SQLITE_HOME` é fixado na pasta montada para os bancos não escaparem
+para um endereço global. O login não pode ser regravado dentro da sessão:
+se exigir renovação, faça o login novamente no terminal comum.
+
+O encerramento mantém os dados do Codex para preservar a conversa. Eles
+ficam fora dos arquivos `agentes/SESSAO.json` removidos pela limpeza. Não há
+limpeza automática desses dados nesta primeira integração.
+
+## Hooks e estados
+
+Os hooks são passados na configuração da chamada, sem editar
+`~/.codex/config.toml`. Na primeira abertura, confira e confie nos hooks da
+Jangada pelo comando `/hooks` do Codex. O CLI exige confiança na definição
+exata; uma alteração no comando pode exigir nova conferência. A Jangada não
+desliga essa verificação. Até essa conferência, o acompanhamento pode ficar
+em `iniciado` e o identificador da conversa pode não ser registrado.
+
+| Evento | Estado |
+|---|---|
+| `SessionStart` | `iniciado`, com UUID da conversa |
+| `UserPromptSubmit`, `PreToolUse`, `PostToolUse` | `trabalhando` |
+| `PermissionRequest` | `aguardando` |
+| `Stop`, `Interrupt` | `concluido` |
+| `SessionEnd` | `concluido`, com mensagem de encerramento |
+
+`bin/jangada-hook-codex` não decide permissões: sua saída é vazia. Ele
+atualiza apenas uma sessão existente, sob a trava comum, e grava mudanças
+em `eventos-agentes.jsonl`. Eventos identificados como de subagente não
+alteram o estado principal. A barra e o painel leem esses registros pelo
+mecanismo existente. Perguntas ao usuário fora de `PermissionRequest` ainda
+não têm estado de espera próprio.
+
+## Restauração e delegação
+
+`jangada-agentes --restaurar SESSAO` recompõe o comando da configuração
+atual. Valida o UUID, a pasta, o agente e o revisor, ignora `.comando` e
+`.isolar`, e refaz o protocolo antes de abrir a sessão.
+
+Com UUID, usa `codex resume UUID`. Sem UUID, num worktree próprio, usa
+`codex resume --last`, com o filtro de pasta do CLI. Sem UUID no modo direto,
+abre uma conversa nova para não retomar a conversa de outro agente.
+
+Os perfis usam `JANGADA_DELEGAR=local`: somente leitor e redator vão ao
+Ollama, com arquivos explícitos. Os demais papéis ficam na sessão. Um perfil
+com `JANGADA_DELEGAR=agy` permite delegar pelo `jangada-delegar` ao agy.
+O protocolo do Codex não manda chamar subagentes do Claude. Recusa local
+nunca autoriza enviar documentos confidenciais a um provedor externo.
+
+## Revisão com Codex
+
+`jangada-validar --revisor codex` também aceita `--modelo`. Sem modelo
+explícito, usa o padrão do CLI com a configuração do usuário ignorada.
+A revisão roda numa pasta temporária vazia, em `read-only`, sem retomada,
+com `--ephemeral` e sem os hooks da sessão. Terminal, execução por código,
+subagentes, plugins, aplicativos, navegador e busca externa são desativados.
+
+Fora de uma sessão isolada, o revisor também passa pelo `jangada-isolar`,
+mesmo com `JANGADA_AGENTE_ISOLAR=0`. Seus dados ficam em
+`$JANGADA_ESTADO/codex/revisao-codex-ROTULO`, com login e configuração
+somente leitura. A resposta sai por um arquivo da pasta temporária e o
+processo pai grava o parecer em `revisoes/`. Dentro de uma sessão isolada,
+usa a montagem do Codex já preparada nela. Por isso sessões de outros
+agentes também recebem essa montagem quando há uma pasta do Codex existente.
+
+O revisor recebe as regras da base, commits, diff e parecer anterior pela
+entrada padrão. Nesta etapa ele avalia somente esse pedido, sem ler outros
+arquivos do projeto. Isso preserva a proibição de comandos do protocolo.
+Ausência de contexto pode resultar em `STATUS: REVISAR`.
+
+A última mensagem é normalizada pelo mesmo mecanismo de Claude e agy.
+Erro do processo não aprova a entrega, mesmo que tenha produzido um arquivo
+com `STATUS: APROVADO`. A aprovação para integração continua sendo a revisão
+externa para o commit exato e limpo, em `revisoes/`.
+
+## Verificação
+
+`testes/codex.sh` confere lançamento, protocolo, TOML, hooks e recusas.
+`testes/restaurar.sh` cobre UUID, retomada por pasta e isolamento obrigatório.
+`testes/isolar.sh` confere a separação dos dados e as montagens protegidas;
+quando o ambiente permite bubblewrap, executa também esses controles.
+`testes/validar.sh` verifica os pareceres e as falhas com Codex simulado.
+
+Referências: [CLI](https://learn.chatgpt.com/docs/developer-commands?surface=cli),
+[configuração](https://learn.chatgpt.com/docs/config-file/config-reference) e
+[hooks](https://learn.chatgpt.com/docs/hooks) da documentação oficial.

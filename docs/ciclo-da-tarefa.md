@@ -6,6 +6,9 @@ Uma tarefa passa por três comandos: `jangada-agente` abre a sessão,
 `~/.local/state/jangada/agentes/SESSAO.json`, com o contrato descrito em
 `default/claude/skills/jangada/agentes.md`.
 
+O Codex participa desse ciclo pelos perfis `codex` e `codex-codex`.
+As diferenças de protocolo, hooks e revisão estão em [Codex](codex.md).
+
 ```mermaid
 flowchart LR
     A[jangada-agente] --> B[agente trabalha<br>no worktree]

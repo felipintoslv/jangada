@@ -198,7 +198,7 @@ pasta_restauravel() {
   done
   [[ "$real" != / && "$real" != "$HOME" ]] || return 1
   for p in "$JANGADA_PATH" "$JANGADA_CONFIG" "$JANGADA_ESTADO" "$HOME/.config" "$HOME/.local" \
-           "$HOME/.cache" "$HOME/.ssh" "$HOME/.gnupg" "$HOME/.claude" "$HOME/.gemini"; do
+           "$HOME/.cache" "$HOME/.ssh" "$HOME/.gnupg" "$HOME/.claude" "$HOME/.gemini" "$HOME/.codex"; do
     p="$(realpath -m -- "$p")"
     [[ "$real" == "$p" || "$real" == "$p"/* ]] && return 1
   done
@@ -214,6 +214,7 @@ pasta_restauravel() {
 # caminho, ou nada quando o protocolo está desligado.
 refazer_protocolo() {
   local s="$1" dir="$2" delegar="$3" revisor="$4" base tmp
+  [[ "${5:-}" == codex ]] && delegar=codex
   base="$JANGADA_PATH/default/agentes/protocolo.md"
   [[ "${JANGADA_AGENTE_PROTOCOLO:-1}" != 0 && -r "$base" ]] || return 0
   command -v "$revisor" >/dev/null 2>&1 || return 0
@@ -236,7 +237,7 @@ refazer_protocolo() {
 #
 # O estado fica ao alcance do agente isolado, e o comando digitado aqui roda
 # num shell fora do isolamento. Por isso nada do que é executado sai do JSON
-# como texto: o agente só pode ser claude ou agy, o id da conversa é um uuid,
+# como texto: o agente só pode ser claude, agy ou codex, o id da conversa é um uuid,
 # a pasta passa pela pasta_restauravel, e os argumentos, o perfil e o
 # isolamento vêm da configuração do usuário. O .comando e o .isolar do estado
 # são ignorados; só JANGADA_AGENTE_ISOLAR=0 da configuração abre sem o
@@ -262,9 +263,9 @@ restaurar() {
   rev="$(jq -r '.revisor // "" | tostring' "$arq")"
 
   # O agente vem do perfil ou da configuração; do estado sai só o nome, que
-  # tem de ser um dos dois conhecidos.
+  # tem de ser um dos conhecidos.
   base="$(basename -- "${agente%% *}" 2>/dev/null || true)"
-  [[ "$base" =~ ^(claude|agy)$ ]] || { recusa "agente inválido no estado"; return 1; }
+  [[ "$base" =~ ^(claude|agy|codex)$ ]] || { recusa "agente inválido no estado"; return 1; }
   PERFIL_AMBIENTE=()
   if [[ -n "$perfil" ]]; then
     jangada_perfil "$perfil" || { recusa "perfil $perfil não existe mais na configuração"; return 1; }
@@ -284,7 +285,7 @@ restaurar() {
   fi
   dir="$(pasta_restauravel "$dir")" \
     || { recusa "pasta fora de JANGADA_WORKTREES e de JANGADA_PROJETOS, ou que não é repositório git"; return 1; }
-  if [[ -n "$rev" && ! "$rev" =~ ^(claude|agy)$ ]]; then
+  if [[ -n "$rev" && ! "$rev" =~ ^(claude|agy|codex)$ ]]; then
     recusa "revisor inválido no estado"
     return 1
   fi
@@ -316,6 +317,20 @@ restaurar() {
     else
       echo "$s: sem o id da conversa e sem worktree próprio; abrindo conversa nova" >&2
     fi
+  elif [[ "$base" == codex ]]; then
+    local protocolo_codex=""
+    protocolo_codex="$(refazer_protocolo "$s" "$dir" "$delegar" "${rev:-claude}" codex)" || protocolo_codex=""
+    cmd="$(printf '%q' "$JANGADA_PATH/bin/jangada-codex")"
+    [[ -n "$protocolo_codex" ]] && cmd+=" --protocolo $(printf '%q' "$protocolo_codex")"
+    if [[ -n "$conversa" ]]; then
+      cmd+=" --conversa $(printf '%q' "$conversa")"
+    elif [[ -n "$worktree" ]]; then
+      cmd+=" --retomar"
+    else
+      echo "$s: sem o id da conversa e sem worktree próprio; abrindo conversa nova" >&2
+    fi
+    cmd+=" -- $exe${args:+ $args}"
+    [[ "$JANGADA_AGENTE_ISOLAR" != 0 ]] && cmd="$(printf '%q' "$JANGADA_PATH/bin/jangada-isolar") -- $cmd"
   else
     # O id vem do hook do agy (conversationId). Sem ele, o --continue retoma a
     # conversa mais recente do agy, que pode ser de outra pasta: só no worktree.

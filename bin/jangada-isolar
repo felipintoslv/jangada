@@ -50,7 +50,9 @@ ja_isolado() {
   awk -v m="$marca" '$5 == m { achou = 1 } END { exit !achou }' /proc/self/mountinfo 2>/dev/null
 }
 
-if [[ "$JANGADA_AGENTE_ISOLAR" == 0 ]] || ja_isolado; then
+codex_revisor=0
+[[ "$(basename -- "$1")" == jangada-codex && "${2:-}" == --revisar ]] && codex_revisor=1
+if { [[ "$JANGADA_AGENTE_ISOLAR" == 0 ]] && ((!codex_revisor)); } || ja_isolado; then
   exec "$@"
 fi
 if ((!mostrar)) && ! command -v bwrap >/dev/null 2>&1; then
@@ -196,6 +198,55 @@ for p in "${extras[@]}"; do
 done
 
 # Daqui em diante, somente leitura por cima dos graváveis.
+
+# O Codex precisa gravar bancos, conversas e confiança dos hooks. Dentro do
+# bwrap a pasta global aponta para dados próprios da sessão, sem mudar o
+# CODEX_HOME nem deixar o agente gravar configurações usadas fora dele.
+codex_casa="${CODEX_HOME:-$HOME/.codex}"
+codex_sessao="${JANGADA_SESSAO:-}"
+# Outras sessões também recebem a montagem quando há login do Codex: assim
+# podem chamá-lo como revisor sem precisar criar um isolamento aninhado.
+if [[ "$(basename -- "$1")" == jangada-codex ]] \
+   || [[ -n "$codex_sessao" && "$codex_casa" == /* && -d "$codex_casa" ]]; then
+  [[ "$codex_sessao" =~ ^[A-Za-z0-9_.-]+$ && "$codex_sessao" != . && "$codex_sessao" != .. \
+     && -d "$codex_casa" && "$codex_casa" == /* ]] || {
+    echo "jangada-isolar: Codex exige uma sessão válida e a pasta de login existente (rode codex login fora do isolamento)" >&2
+    exit 1
+  }
+  codex_estado="$JANGADA_ESTADO/codex"
+  [[ ! -L "$codex_estado" && ! -L "$codex_estado/$codex_sessao" ]] || {
+    echo "jangada-isolar: link inválido nos dados do Codex" >&2; exit 1
+  }
+  codex_raiz="$(realpath -m "$codex_estado")"
+  codex_alvo="$(realpath -m "$codex_estado/$codex_sessao")"
+  [[ "$(dirname "$codex_alvo")" == "$codex_raiz" && "${codex_alvo##*/}" == "$codex_sessao" ]] || {
+    echo "jangada-isolar: dados do Codex fora da pasta da sessão" >&2; exit 1
+  }
+  (umask 077; mkdir -p "$codex_alvo")
+  somente_leitura "$codex_estado"
+  args+=(--bind "$codex_alvo" "$codex_casa")
+  # Somente entradas conhecidas vêm da pasta global. Dados de execução
+  # antigos da sessão ficam dentro do isolamento em toda restauração.
+  for f in config.toml auth.json AGENTS.md AGENTS.override.md requirements.toml; do
+    if [[ -f "$codex_casa/$f" ]]; then
+      args+=(--ro-bind "$codex_casa/$f" "$codex_casa/$f")
+    else
+      args+=(--ro-bind /dev/null "$codex_casa/$f")
+    fi
+  done
+  for f in "$codex_casa"/*.config.toml; do
+    [[ -f "$f" ]] && args+=(--ro-bind "$f" "$f")
+  done
+  for f in skills agents rules hooks plugins; do
+    if [[ -d "$codex_casa/$f" ]]; then
+      args+=(--ro-bind "$codex_casa/$f" "$codex_casa/$f")
+    else
+      args+=(--tmpfs "$codex_casa/$f" --remount-ro "$codex_casa/$f")
+    fi
+  done
+  # Um banco redirecionado na configuração não pode misturar sessões.
+  args+=(--setenv CODEX_SQLITE_HOME "$codex_casa")
+fi
 
 # Claude: o que define comandos que ele roda ou instruções que ele segue, e
 # que valeria na próxima sessão aberta fora do isolamento. O que falta é

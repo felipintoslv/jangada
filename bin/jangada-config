@@ -196,6 +196,11 @@ jangada_delegacao() {
     echo nativo
     return 0
   fi
+  if [[ "$_base" == codex ]]; then
+    [[ "$_valor" == agy ]] && { echo agy; return 0; }
+    echo local
+    return 0
+  fi
   case "$_valor" in
     agy|claude|local) ;;
     nativo) _valor=claude ;;

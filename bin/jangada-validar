@@ -5,7 +5,7 @@
 # (default/agentes/protocolo.md).
 #
 # Uso: jangada-validar [opções] [PASTA]
-#   --revisor NOME    claude ou agy, ou mesmo para o modelo da sessão (padrão:
+#   --revisor NOME    claude, agy ou codex, ou mesmo para o modelo da sessão (padrão:
 #                     o revisor da sessão; sem ele, JANGADA_VALIDAR_REVISOR;
 #                     sem ele, o oposto do agente da sessão, e claude fora de sessão)
 #   --base REF        compara a partir de REF (padrão: base gravada no estado
@@ -224,7 +224,7 @@ if [[ "$revisor" == "mesmo" ]]; then
   revisor="${autor:-claude}"
 elif [[ "$revisor" == "oposto" ]]; then
   case "$autor" in
-    agy|"") revisor=claude ;;
+    agy|codex|"") revisor=claude ;;
     *) revisor=agy ;;
   esac
 fi
@@ -233,14 +233,15 @@ fi
 # trabalho tende a concordar com ele.
 if [[ -z "$revisor" ]]; then
   case "$autor" in
-    agy|"") revisor=claude ;;
+    agy|codex|"") revisor=claude ;;
     *) revisor=agy ;;
   esac
 fi
 case "$revisor" in
   claude) nome_revisor="Claude"; modelo="${modelo:-sonnet}" ;;
   agy) nome_revisor="Antigravity" ;;
-  *) echo "jangada-validar: revisor desconhecido: $revisor (use claude, agy ou mesmo)" >&2; exit 1 ;;
+  codex) nome_revisor="Codex" ;;
+  *) echo "jangada-validar: revisor desconhecido: $revisor (use claude, agy, codex ou mesmo)" >&2; exit 1 ;;
 esac
 
 if [[ -n "$autor" && "$revisor" == "$autor" ]]; then
@@ -250,6 +251,7 @@ fi
 case "$autor" in
   claude) nome_autor="Claude" ;;
   agy) nome_autor="Antigravity (agy)" ;;
+  codex) nome_autor="Codex" ;;
   *)
     if ((auto_revisao)); then
       [[ "$revisor" == claude ]] && nome_autor="Claude" || nome_autor="Antigravity (agy)"
@@ -257,6 +259,7 @@ case "$autor" in
       case "$revisor" in
         claude) nome_autor="Antigravity (agy)" ;;
         agy) nome_autor="Claude" ;;
+        codex) nome_autor="${autor:-não identificado}" ;;
       esac
     fi
     ;;
@@ -777,6 +780,27 @@ revisar_claude() {
     --allowedTools "Read,Grep,Glob" \
     --disallowedTools "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch" \
     <<<"$pedido") >"$saida.tmp"
+}
+
+# Só o pedido completo (regras da base, commits e diff), sem ferramentas.
+# A pasta vazia impede carregar configuração ou instruções da entrega.
+revisar_codex() {
+  local pasta_revisor codex_cmd rc=0
+  codex_cmd="$(command -v codex)" || return 1
+  pasta_revisor="$(mktemp -d)" || return 1
+  local -a args=(--output-last-message "$pasta_revisor/resposta")
+  [[ -n "$modelo" ]] && args+=(--model "$modelo")
+  (cd "$pasta_revisor" && env JANGADA_SESSAO="revisao-codex-$rotulo" JANGADA_HOOK_DESLIGADO=1 \
+    "$JANGADA_PATH/bin/jangada-isolar" -- "$JANGADA_PATH/bin/jangada-codex" --revisar -- \
+    "$codex_cmd" "${args[@]}" <<<"$pedido") >"$saida.log" 2>&1 || rc=$?
+  if ((rc == 0)) && [[ -s "$pasta_revisor/resposta" ]]; then
+    cat "$pasta_revisor/resposta" >"$saida.tmp" || rc=1
+  else
+    rc=1
+  fi
+  rm -f "$pasta_revisor/resposta"
+  rmdir "$pasta_revisor" 2>/dev/null || true
+  ((rc == 0)) && [[ -s "$saida.tmp" ]]
 }
 
 # O agy recebe o pedido como argumento, e o Linux limita cada argumento a

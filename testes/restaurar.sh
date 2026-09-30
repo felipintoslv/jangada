@@ -25,6 +25,9 @@ invadido="$tmp/invadido"
 mkdir -p "$estado" "$tmp/bin" "$tmp/config/jangada/agentes" "$jp/bin" \
   "$tmp/projetos/proj" "$tmp/wt/proj/tarefa" "$tmp/fora" "$tmp/outro"
 ln -s "$repo_jangada/default" "$jp/default"
+ln -s "$repo_jangada/bin/jangada-codex" "$jp/bin/jangada-codex"
+ln -s "$repo_jangada/bin/jangada-hook-codex" "$jp/bin/jangada-hook-codex"
+ln -s "$repo_jangada/bin/jangada-config" "$jp/bin/jangada-config"
 cat >"$tmp/config/jangada/jangada.conf" <<EOF
 JANGADA_PROJETOS=$tmp/projetos
 JANGADA_WORKTREES=$tmp/wt
@@ -57,9 +60,10 @@ case " $* " in
 esac
 exit 0
 EOF
-for a in claude agy; do
+for a in claude agy codex; do
   cat >"$tmp/bin/$a" <<EOF
 #!/usr/bin/env bash
+if [[ "\${1:-}" == --help ]]; then echo --no-daemon; exit 0; fi
 printf '%s|%s|%s%s\n' "\${FALSO_ISOLADO:-fora}" "\$PWD" "$a" "\$(printf ' %q' "\$@")" >>"\$FALSO_LOG"
 EOF
 done
@@ -152,6 +156,16 @@ ln -sf "$tmp/segredo" "$estado/protocolo-s.md"
 restaurar '{}'
 conferir "caso 10: o protocolo é refeito das fontes" \
   bash -c '[[ ! -L "$1" ]] && ! grep -q SEGREDO-PLANTADO "$2" && grep -q SEGREDO-PLANTADO "$3"' _ "$estado/protocolo-s.md" "$log" "$tmp/segredo"
+
+restaurar "{\"agente\":\"codex\", \"perfil\":\"codex-codex\", \"revisor\":\"codex\", \"conversa\":\"$uuid\", \"isolar\":false}"
+conferir "caso 11: Codex retoma isolado com UUID e revisor Codex" \
+  bash -c 'grep -q "^isolado|.*codex .*--no-daemon.*resume $2" "$1" && grep -qx JANGADA_VALIDAR_REVISOR=codex "$3"' _ "$log" "$uuid" "$tmp/ambiente"
+conferir "caso 11: protocolo de delegação do Codex refeito" grep -q 'Não tente chamar subagentes do Claude' "$estado/protocolo-s.md"
+restaurar "{\"agente\":\"codex\", \"dir\":\"$tmp/wt/proj/tarefa\", \"worktree\":\"$tmp/wt/proj/tarefa\"}"
+conferir "caso 12: Codex sem UUID no worktree retoma por pasta" grep -q 'resume --last' "$log"
+restaurar '{"agente":"codex"}'
+conferir "caso 13: Codex direto sem UUID abre conversa nova" \
+  bash -c 'test -s "$1" && ! grep -q "resume" "$1"' _ "$log"
 
 if ((falhas)); then
   echo "$falhas falha(s); saídas em $tmp (mantido)"
