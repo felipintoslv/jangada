@@ -268,11 +268,14 @@ env["JANGADA_PATH"] = repo
 env["JANGADA_MARCA_ISOLADO"] = marca
 
 def achar_sleep():
-    pids = subprocess.run(["pgrep", "-x", "sleep"], capture_output=True, text=True).stdout.split()
+    pids = subprocess.run(["pgrep", "-f", "sleep 25.123"], capture_output=True, text=True).stdout.split()
     for pid in pids:
         try:
             with open(f"/proc/{pid}/cmdline", "rb") as f:
-                if "25.123" in f.read().decode("utf-8", errors="ignore"):
+                if "25.123" not in f.read().decode("utf-8", errors="ignore"):
+                    continue
+            with open(f"/proc/{pid}/environ", "rb") as f:
+                if f"HOME={casa}" in f.read().decode("utf-8", errors="ignore").split("\0"):
                     return pid
         except OSError:
             pass
@@ -302,7 +305,11 @@ if rc != expected_rc:
     sys.exit(3)
 
 time.sleep(0.1)
-if achar_sleep():
+for _ in range(30):
+    if not achar_sleep():
+        break
+    time.sleep(0.05)
+else:
     sys.exit(4)
 
 sys.exit(0)
@@ -312,7 +319,21 @@ sys.exit(0)
   conferir "caso 3: propaga sinal SIGTERM" testar_sinal TERM 143
   conferir "caso 3: propaga sinal SIGHUP" testar_sinal HUP 129
   conferir "caso 3: propaga sinal SIGINT" testar_sinal INT 130
-  conferir "caso 3: processo filho sleep não sobra" [ -z "$(pgrep -f '[s]leep 25\.123' 2>/dev/null || true)" ]
+  conferir "caso 3: processo filho sleep não sobra" \
+    bash -c '
+      for ((i=0; i<30; i++)); do
+        sobrou=0
+        for pid in $(pgrep -f "sleep 25\.123" 2>/dev/null || true); do
+          if tr "\0" "\n" <"/proc/$pid/environ" 2>/dev/null | grep -q "^HOME=$1$"; then
+            sobrou=1
+            break
+          fi
+        done
+        ((!sobrou)) && exit 0
+        sleep 0.05
+      done
+      exit 1
+    ' _ "$casa"
 
   testar_sigint_grupo() {
     python3 -c '
@@ -339,7 +360,7 @@ if os.path.exists(sig_file): os.remove(sig_file)
 if os.path.exists(rdy_file): os.remove(rdy_file)
 
 py_cmd = f"""
-import signal, time, sys
+import signal, time, sys, os
 def handler(s, f):
     with open("{sig_file}", "w") as out:
         out.write("recebido\\n")
@@ -370,7 +391,7 @@ except subprocess.TimeoutExpired:
     p.kill()
     sys.exit(2)
 
-if rc not in (42, 130):
+if rc != 42:
     sys.exit(3)
 
 if not os.path.exists(sig_file) or open(sig_file).read().strip() != "recebido":
@@ -380,6 +401,76 @@ sys.exit(0)
 ' "$tmp/wt" "$casa" "$tmp/config" "$repo_jangada" "$marca_teste"
   }
   conferir "caso 3: SIGINT ao grupo de processos chega ao filho isolado" testar_sigint_grupo
+
+  testar_sigint_capturado_sucesso() {
+    python3 -c '
+import subprocess, time, signal, sys, os
+
+wt = sys.argv[1]
+casa = sys.argv[2]
+config = sys.argv[3]
+repo = sys.argv[4]
+marca = sys.argv[5]
+
+env = os.environ.copy()
+env.pop("XDG_CACHE_HOME", None)
+env.pop("JANGADA_ISOLADO", None)
+env["HOME"] = casa
+env["XDG_STATE_HOME"] = f"{casa}/.local/state"
+env["XDG_CONFIG_HOME"] = config
+env["JANGADA_PATH"] = repo
+env["JANGADA_MARCA_ISOLADO"] = marca
+
+sig_file = os.path.join(wt, ".sigint_zero_recebido")
+rdy_file = os.path.join(wt, ".rdy_zero")
+if os.path.exists(sig_file): os.remove(sig_file)
+if os.path.exists(rdy_file): os.remove(rdy_file)
+
+py_cmd = f"""
+import signal, time, sys, os
+def handler(s, f):
+    with open("{sig_file}", "w") as out:
+        out.write("recebido\\n")
+signal.signal(signal.SIGINT, handler)
+with open("{rdy_file}", "w") as out:
+    out.write("ok\\n")
+for _ in range(50):
+    if os.path.exists("{sig_file}"):
+        break
+    time.sleep(0.05)
+time.sleep(0.1)
+sys.exit(0)
+"""
+
+p = subprocess.Popen([f"{repo}/bin/jangada-isolar", "--", "python3", "-c", py_cmd],
+                     cwd=wt, env=env)
+
+for _ in range(100):
+    if os.path.exists(rdy_file):
+        break
+    time.sleep(0.05)
+else:
+    p.kill()
+    sys.exit(1)
+
+p.send_signal(signal.SIGINT)
+
+try:
+    rc = p.wait(timeout=5)
+except subprocess.TimeoutExpired:
+    p.kill()
+    sys.exit(2)
+
+if rc != 0:
+    sys.exit(3)
+
+if not os.path.exists(sig_file) or open(sig_file).read().strip() != "recebido":
+    sys.exit(4)
+
+sys.exit(0)
+' "$tmp/wt" "$casa" "$tmp/config" "$repo_jangada" "$marca_teste"
+  }
+  conferir "caso 3: filho isolado captura SIGINT e encerra com código 0" testar_sigint_capturado_sucesso
 
   # Entrada padrão interativa / por pipe
   saida_pipe="$(printf 'dados-stdin-123\n' | isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- cat 2>/dev/null)"
