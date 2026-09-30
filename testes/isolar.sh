@@ -340,7 +340,7 @@ EOF
   chmod +x "$bin_falso/pgrep"
 
   touch "$tmp/jogo_ativo_flag"
-  saida_marcas="$(PATH="$bin_falso:$PATH" isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- bash -c \
+  saida_marcas="$(JANGADA_MONITOR_INTERVALO=30.789123 PATH="$bin_falso:$PATH" isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- bash -c \
     'cat "$JANGADA_ESTADO/marcas/vram-livre" 2>/dev/null; echo "---"; cat "$JANGADA_ESTADO/marcas/jogo-ativo" 2>/dev/null')"
 
   conferir "caso 3b: vram-livre criada e legível dentro do isolamento" \
@@ -352,12 +352,20 @@ EOF
 
   # Jogo fecha: próxima chamada deve remover jogo-ativo
   rm -f "$tmp/jogo_ativo_flag"
-  PATH="$bin_falso:$PATH" isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- true
+  JANGADA_MONITOR_INTERVALO=30.789123 PATH="$bin_falso:$PATH" isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- true
   conferir "caso 3b: jogo-ativo removido quando o jogo fecha" [ ! -e "$casa/.local/state/jangada/marcas/jogo-ativo" ]
 
   # Encerramento limpo do monitor
   conferir "caso 3b: monitor não deixa sleep em segundo plano" \
-    [ -z "$(pgrep -f '[s]leep 30\.789' 2>/dev/null || true)" ]
+    bash -c '
+      sleep 0.2
+      for pid in $(pgrep -f "sleep 30\.789123" 2>/dev/null || true); do
+        if tr "\0" "\n" <"/proc/$pid/environ" 2>/dev/null | grep -q "^HOME=$1$"; then
+          exit 1
+        fi
+      done
+      exit 0
+    ' _ "$casa"
   conferir "caso 3b: nenhum temporário .vram-livre deixado para trás" \
     [ -z "$(find "$casa/.local/state/jangada/marcas" -name '.vram-livre.*' 2>/dev/null)" ]
   conferir "caso 3b: nenhum temporário .jogo-ativo deixado para trás" \
@@ -368,14 +376,14 @@ EOF
   rm -f "$casa/.local/state/jangada/marcas/jogo-ativo"
 
   (
-    PATH="$bin_falso:$PATH" isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- bash -c '
+    JANGADA_MONITOR_INTERVALO=30.789123 PATH="$bin_falso:$PATH" isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- bash -c '
       vl1="$(cat "$JANGADA_ESTADO/marcas/vram-livre" 2>/dev/null | awk "{print \$1}")"
       ja1="nao"
       [[ -f "$JANGADA_ESTADO/marcas/jogo-ativo" ]] && ja1="sim"
 
       touch .sinal_leitura1
 
-      for i in {1..100}; do
+      for ((k = 0; k < 100; k++)); do
         [[ -f .sinal_atualizado ]] && break
         sleep 0.05
       done

@@ -323,18 +323,33 @@ if ((mostrar)); then
 fi
 
 
+set +m
+intervalo_monitor="${JANGADA_MONITOR_INTERVALO:-30}"
 (
+  sub_pid="$BASHPID"
   sleep_pid=""
-  trap '[[ -n "$sleep_pid" ]] && kill "$sleep_pid" 2>/dev/null || true; wait 2>/dev/null || true; exit 0' TERM INT EXIT
+  matar_filhos() {
+    [[ -n "$sleep_pid" ]] && kill "$sleep_pid" 2>/dev/null || true
+    pkill -P "$sub_pid" 2>/dev/null || true
+  }
+  trap 'matar_filhos; wait 2>/dev/null || true; exit 0' TERM INT EXIT
   while kill -0 $$ 2>/dev/null; do
-    sleep 30.789 &
+    sleep "$intervalo_monitor" &
     sleep_pid=$!
     wait "$sleep_pid" 2>/dev/null || true
     kill -0 $$ 2>/dev/null || exit 0
     atualizar_marcas_host
   done
-) &
+) 2>/dev/null &
 monitor_pid=$!
+
+limpar_monitor() {
+  if [[ -n "$monitor_pid" ]]; then
+    kill "$monitor_pid" 2>/dev/null || true
+    pkill -P "$monitor_pid" 2>/dev/null || true
+    wait "$monitor_pid" 2>/dev/null || true
+  fi
+}
 
 bwrap_pid=""
 repasse_sinal() {
@@ -349,12 +364,11 @@ repasse_sinal() {
   fi
 }
 
-trap 'kill "$monitor_pid" 2>/dev/null || true; wait "$monitor_pid" 2>/dev/null || true' EXIT
-trap 'repasse_sinal TERM; kill "$monitor_pid" 2>/dev/null || true; wait "$monitor_pid" 2>/dev/null || true; exit 143' TERM
-trap 'repasse_sinal HUP; kill "$monitor_pid" 2>/dev/null || true; wait "$monitor_pid" 2>/dev/null || true; exit 129' HUP
-trap 'repasse_sinal INT; kill "$monitor_pid" 2>/dev/null || true; wait "$monitor_pid" 2>/dev/null || true; exit 130' INT
+trap 'limpar_monitor' EXIT
+trap 'repasse_sinal TERM; limpar_monitor; exit 143' TERM
+trap 'repasse_sinal HUP; limpar_monitor; exit 129' HUP
+trap 'repasse_sinal INT; limpar_monitor; exit 130' INT
 
-set +m
 bwrap "${args[@]}" <&0 &
 bwrap_pid=$!
 
