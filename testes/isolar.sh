@@ -177,6 +177,11 @@ if bwrap --ro-bind / / --dev /dev --proc /proc true 2>/dev/null; then
   mkdir -p "$tmp/wt/codex-bin"
   cat >"$tmp/wt/codex-bin/codex" <<'EOF'
 #!/usr/bin/env bash
+for arg in "$@"; do
+  if [[ "$arg" == app-server ]]; then
+    exec python3 "$JANGADA_PATH/testes/falso-codex-hooks.py" "$@"
+  fi
+done
 if [[ "${1:-}" == --help ]]; then echo --no-daemon; exit 0; fi
 printf 'conversa\n' >"$HOME/.codex/historico-teste"
 grep -q 'modelo-teste' "$HOME/.codex/config.toml" || exit 1
@@ -709,6 +714,39 @@ EOF
     [ "$res_3c" = "6144 nao 7168 sim" ]
 
   rm -f "$casa/.local/state/jangada/marcas/jogo-ativo"
+  # O hook muda o JSON dentro do PID isolado; o observador no host avisa
+  # a barra. O arquivo de sinais fica fora dos caminhos graváveis do agente.
+  if command -v inotifywait >/dev/null 2>&1; then
+    bin_status="$tmp/bin_status"
+    estado_status="$casa/.local/state/jangada/agentes/status-codex.json"
+    sinais_status="$tmp/sinais-waybar"
+    mkdir -p "$bin_status" "$(dirname "$estado_status")"
+    printf '{"estado":"iniciado", "raiz":"projeto"}\n' >"$estado_status"
+    cat >"$bin_status/pkill" <<EOF
+#!/usr/bin/env bash
+if [[ "\${1:-}" == -RTMIN+10 ]]; then
+  jq -r .estado "$estado_status" >>"$sinais_status"
+  exit 0
+fi
+exec /usr/bin/pkill "\$@"
+EOF
+    printf '#!/bin/sh\nexit 0\n' >"$bin_status/notify-send"
+    chmod +x "$bin_status/"*
+    isolar "$tmp/wt" PATH="$bin_status:$PATH" JANGADA_SESSAO=status-codex \
+      "$repo_jangada/bin/jangada-isolar" -- bash -c '
+        sleep 0.2
+        printf "{}\n" >"$JANGADA_ESTADO/agentes/outra-sessao.json"
+        for estado in trabalhando aguardando concluido; do
+          printf "{}\n" | "$JANGADA_PATH/bin/jangada-hook-codex" "$estado"
+          sleep 0.3
+        done
+      ' >"$tmp/status.log" 2>&1
+    conferir "caso 3d: hooks executam dentro do isolamento" [ "$?" = 0 ]
+    conferir "caso 3d: Waybar recebe os três estados pelo observador no host" \
+      bash -c '[[ "$(uniq "$1")" == $'"'"'trabalhando\naguardando\nconcluido'"'"' ]]' _ "$sinais_status"
+    conferir "caso 3d: observador do estado não deixa inotifywait após encerrar" \
+      bash -c '! pgrep -f "^inotifywait .*${1}/agentes" >/dev/null' _ "$casa/.local/state/jangada"
+  fi
 else
   echo "pulado caso 3: bwrap não cria namespace aqui"
 fi

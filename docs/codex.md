@@ -77,11 +77,23 @@ limpeza automática desses dados nesta primeira integração.
 ## Hooks e estados
 
 Os hooks são passados na configuração da chamada, sem editar
-`~/.codex/config.toml`. Na primeira abertura, confira e confie nos hooks da
-Jangada pelo comando `/hooks` do Codex. O CLI exige confiança na definição
-exata; uma alteração no comando pode exigir nova conferência. A Jangada não
-desliga essa verificação. Até essa conferência, o acompanhamento pode ficar
-em `iniciado` e o identificador da conversa pode não ser registrado.
+`~/.codex/config.toml`. O adaptador consulta `hooks/list` no Codex para
+obter as chaves e hashes das oito definições da Jangada. Na primeira
+abertura, mostra os comandos e pede autorização antes de abrir a conversa.
+Uma recusa encerra a abertura; uma alteração na definição exige nova
+autorização. A escolha fica em `jangada-hooks-confianca.json` nos dados da
+sessão e entra pela tabela `hooks.state` na chamada. Outros hooks continuam
+sujeitos à aprovação do próprio Codex. O revisor não passa por essa etapa.
+
+Isso evita o `/hooks` tentando gravar a aprovação no `config.toml` montado
+somente leitura. A consulta e a aprovação usam o CLI real, sem pedidos ao
+modelo, e não desligam a verificação de confiança dos hooks.
+
+O processo externo de `jangada-isolar` observa as gravações do arquivo de
+estado da sessão com `inotifywait` e envia o sinal 10 à Waybar. O hook
+isolado não enxerga o processo da barra no namespace de PID do host.
+Sem o observador, a barra só perceberia o novo estado na consulta periódica
+de 30 segundos. O observador é encerrado junto com o isolamento.
 
 | Evento | Estado |
 |---|---|

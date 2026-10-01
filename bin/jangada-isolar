@@ -396,7 +396,30 @@ intervalo_monitor="${JANGADA_MONITOR_INTERVALO:-30}"
 ) 2>/dev/null &
 monitor_pid=$!
 
+# O hook isolado não enxerga a Waybar no namespace de PID do host.
+# Observe somente o nome conferido da sessão; nenhum conteúdo dela é executado.
+monitor_estado_pid=""
+if [[ "$codex_sessao" =~ ^[A-Za-z0-9_.-]+$ && "$codex_sessao" != . && "$codex_sessao" != .. ]] \
+   && command -v inotifywait >/dev/null 2>&1; then
+  (
+    exec {eventos_fd}< <(exec inotifywait -m -q -e moved_to,close_write,create,delete \
+      --format '%f' "$JANGADA_ESTADO/agentes")
+    vigia_pid=$!
+    trap 'kill "$vigia_pid" 2>/dev/null || true; wait "$vigia_pid" 2>/dev/null || true' EXIT
+    trap 'exit 0' TERM INT
+    while IFS= read -r arquivo <&"$eventos_fd"; do
+      [[ "$arquivo" == "$codex_sessao.json" ]] || continue
+      pkill -RTMIN+10 -x waybar 2>/dev/null || true
+    done
+  ) 2>/dev/null &
+  monitor_estado_pid=$!
+fi
+
 limpar_monitor() {
+  if [[ -n "$monitor_estado_pid" ]]; then
+    kill "$monitor_estado_pid" 2>/dev/null || true
+    wait "$monitor_estado_pid" 2>/dev/null || true
+  fi
   if [[ -n "$monitor_pid" ]]; then
     kill "$monitor_pid" 2>/dev/null || true
     pkill -P "$monitor_pid" 2>/dev/null || true

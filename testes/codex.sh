@@ -18,6 +18,11 @@ pathlib.Path(sys.argv[1]).write_text('[projects.' + json.dumps(sys.argv[2]) + ']
 PY
 cat >"$tmp/bin/codex" <<'EOF'
 #!/usr/bin/env bash
+for arg in "$@"; do
+  if [[ "$arg" == app-server ]]; then
+    exec python3 "$JANGADA_PATH/testes/falso-codex-hooks.py" "$@"
+  fi
+done
 if [[ "${1:-}" == --help ]]; then
   [[ "${FALSO_ANTIGO:-0}" == 1 ]] || echo --no-daemon
   exit 0
@@ -80,12 +85,13 @@ assert not any("bypass" in arg for arg in args)
 assert args.count("pedido com espaço") == 1
 hooks = {}
 for i, arg in enumerate(args):
-    if arg == "-c" and args[i + 1].startswith("hooks."):
+    if arg == "-c" and args[i + 1].startswith("hooks.") and not args[i + 1].startswith("hooks.state="):
         hooks.update(tomllib.loads(args[i + 1])["hooks"])
 assert set(hooks) == {"SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse",
                       "PostToolUse", "PermissionRequest", "Stop", "Interrupt"}
 assert all(h[0]["hooks"][0]["command"].startswith("'" + sys.argv[3] + "/bin/jangada-hook-codex'")
            for h in hooks.values())
+assert len(cfg["hooks"]["state"]) == 8
 PY
 conferir "TOML, protocolo, permissões e hooks válidos" [ "$?" = 0 ]
 uuid=0123abcd-4567-89ab-cdef-0123456789ab
@@ -170,11 +176,136 @@ assert (home / "config.toml").read_bytes() == config_before
 PY
 conferir "confiança exige confirmação, persiste por pasta e preserva configuração global" [ "$?" = 0 ]
 
+rodar FALSO_HOOKS_NAO_CONFIADOS=1 FALSO_HOOKS_EXTERNOS=1 python3 - "$repo_jangada" "$tmp" "$codex_real" <<'PY'
+import json, os, pathlib, pty, select, signal, subprocess, sys, time, tomllib
+repo, tmp = map(pathlib.Path, sys.argv[1:3])
+args = (tmp / "codex-confianca.args").read_bytes().decode().split("\0")[:-1]
+hook_args = []
+for i, arg in enumerate(args):
+    if arg == "-c" and args[i + 1].startswith("hooks.") and not args[i + 1].startswith("hooks.state="):
+        hook_args += ["-c", args[i + 1]]
+saved = tmp / "hooks-aprovados.json"
+helper = ["bash", str(repo / "bin/jangada-codex-hooks")]
+command = helper + [str(tmp / "bin/codex"), str(saved)] + hook_args
+proc = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True)
+assert proc.returncode != 0 and not saved.exists()
+def terminal(cmd, answer):
+    master, slave = pty.openpty()
+    proc = subprocess.Popen(cmd, stdin=slave, stdout=slave, stderr=slave)
+    os.close(slave)
+    output = b""
+    sent = False
+    deadline = time.monotonic() + 15
+    try:
+        while time.monotonic() < deadline:
+            if select.select([master], [], [], 0.1)[0]:
+                try:
+                    chunk = os.read(master, 65536)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                output += chunk
+                if b"[s/N]" in output and not sent:
+                    os.write(master, answer.encode() + b"\n")
+                    sent = True
+            if proc.poll() is not None:
+                break
+        return proc.wait(timeout=2), output
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+        os.close(master)
+rc, output = terminal(command, "n")
+assert rc != 0 and not saved.exists()
+rc, output = terminal(command, "s")
+assert rc == 0, output
+states = json.loads(saved.read_text())
+assert len(states) == 8 and "externo:nao-aprovado" not in states
+assert saved.stat().st_mode & 0o777 == 0o600
+rc, output = terminal(command, "n")
+assert rc == 0 and b"[s/N]" not in output
+cfg = tomllib.loads(output.decode().strip())
+assert "externo:nao-aprovado" not in cfg["hooks"]["state"]
+changed = command.copy()
+changed[-1] = changed[-1].replace("concluido", "trabalhando")
+rc, output = terminal(changed, "n")
+assert rc != 0 and b"[s/N]" in output
+assert json.loads(saved.read_text()) == states
+
+os.environ["FALSO_HOOK_DESABILITADO"] = "1"
+rc, output = terminal(command, "s")
+assert rc == 0, output
+cfg = tomllib.loads(next(line for line in output.decode().splitlines() if line.startswith("hooks.state=")))
+assert cfg["hooks"]["state"]["teste:SessionStart"]["enabled"] is False
+assert json.loads(saved.read_text())["teste:SessionStart"]["enabled"] is False
+os.environ.pop("FALSO_HOOK_DESABILITADO")
+
+if sys.argv[3]:
+    # As mesmas definições aprovadas pelo helper precisam ser reconhecidas
+    # como confiáveis pelo motor de hooks real, sem modificar config.toml.
+    before = (tmp / "codex/config.toml").read_bytes()
+    real_saved = tmp / "hooks-reais.json"
+    real_command = helper + [sys.argv[3], str(real_saved)] + hook_args
+    rc, output = terminal(real_command, "s")
+    assert rc == 0, output
+    state_arg = next(line for line in output.decode().splitlines() if line.startswith("hooks.state="))
+    assert len(tomllib.loads(state_arg)["hooks"]["state"]) == 8
+    session = "projeto--hook-real"
+    live_state = tmp / "state/jangada/agentes" / (session + ".json")
+    live_state.write_text(json.dumps({"estado": "iniciado", "raiz": str(repo)}))
+    proc = subprocess.Popen([sys.argv[3], *hook_args, "-c", state_arg,
+                             "-c", 'model_provider="teste"',
+                             "-c", 'model_providers.teste={name="teste",base_url="http://127.0.0.1:9/v1",wire_api="responses",requires_openai_auth=false}',
+                             "app-server", "--stdio"],
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                            env={**os.environ, "JANGADA_SESSAO": session},
+                            start_new_session=True)
+    buffer = b""
+    def request(ident, method, params):
+        global buffer
+        proc.stdin.write(json.dumps({"id": ident, "method": method, "params": params}).encode() + b"\n")
+        proc.stdin.flush()
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            if b"\n" in buffer:
+                line, buffer = buffer.split(b"\n", 1)
+                result = json.loads(line)
+                if result.get("id") == ident:
+                    assert "error" not in result, result
+                    return result["result"]
+            elif select.select([proc.stdout], [], [], 0.1)[0]:
+                buffer += os.read(proc.stdout.fileno(), 65536)
+        raise AssertionError("Codex não respondeu")
+    try:
+        request(1, "initialize", {"clientInfo": {"name": "jangada-test", "version": "1"},
+                                  "capabilities": {"experimentalApi": True}})
+        result = request(2, "hooks/list", {"cwds": [str(repo)]})
+        hooks = [h for e in result["data"] for h in e["hooks"] if h["source"] == "sessionFlags"]
+        assert len(hooks) == 8 and all(h["trustStatus"] == "trusted" for h in hooks)
+        started = request(3, "thread/start", {"cwd": str(repo), "ephemeral": True,
+                                            "sessionStartSource": "startup",
+                                            "approvalPolicy": "never", "sandbox": "read-only"})
+        # SessionStart roda no primeiro turno; o provedor local recusa sem consumir tokens.
+        request(4, "turn/start", {"threadId": started["thread"]["id"],
+                                  "input": [{"type": "text", "text": "teste"}]})
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and not json.loads(live_state.read_text()).get("conversa"):
+            time.sleep(0.05)
+        assert json.loads(live_state.read_text()).get("conversa") == started["thread"]["id"], json.loads(live_state.read_text())
+        assert (tmp / "codex/config.toml").read_bytes() == before
+    finally:
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait(timeout=5)
+PY
+conferir "aprovação de hooks: recusa, persistência, mudança, externos e hashes no Codex real" [ "$?" = 0 ]
+
 # O parser de -c do CLI divide a chave por pontos sem interpretar aspas
 # TOML. Só verificar o argumento com tomllib não detecta esse comportamento.
 if [[ -n "$codex_real" ]]; then
   python3 - "$codex_real" "$tmp" <<'PY'
-import json, os, pathlib, select, subprocess, sys, time
+import json, os, pathlib, select, signal, subprocess, sys, time
 exe, tmp = sys.argv[1], pathlib.Path(sys.argv[2])
 home = tmp / "codex-real"
 home.mkdir()
@@ -189,7 +320,8 @@ override = next(args[i + 1] for i, arg in enumerate(args)
 override = override.replace(json.dumps(str((tmp / "projeto").resolve())), json.dumps(str(project)))
 proc = subprocess.Popen([exe, "-c", override, "app-server", "--stdio"],
                         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                        stderr=subprocess.DEVNULL, env={**os.environ, "CODEX_HOME": str(home)})
+                        stderr=subprocess.DEVNULL, env={**os.environ, "CODEX_HOME": str(home)},
+                        start_new_session=True)
 buffer = b""
 def request(ident, method, params):
     global buffer
@@ -214,7 +346,7 @@ try:
     assert result["config"]["projects"][str(project)]["trust_level"] == "trusted"
     assert config.read_bytes() == before
 finally:
-    proc.kill()
+    os.killpg(proc.pid, signal.SIGKILL)
     proc.wait(timeout=5)
 PY
   conferir "Codex real reconhece confiança com pontos, espaços e aspas sem gravar configuração" [ "$?" = 0 ]
@@ -239,7 +371,7 @@ hook trabalhando '{}'
 hook concluido '{"last_assistant_message":"feito"}'
 hook fim '{}'
 conferir "conversa registrada" jq -e --arg c "$uuid" '.conversa == $c and .estado == "concluido"' "$tmp/state/jangada/agentes/projeto--tarefa.json"
-conferir "eventos sem repetição" jq -se '[.[] | select(.agente == "codex") | .estado] == ["inicio", "trabalhando", "aguardando", "trabalhando", "concluido", "fim"]' "$tmp/state/jangada/eventos-agentes.jsonl"
+conferir "eventos sem repetição" jq -se '[.[] | select(.agente == "codex" and .sessao == "projeto--tarefa") | .estado] == ["inicio", "trabalhando", "aguardando", "trabalhando", "concluido", "fim"]' "$tmp/state/jangada/eventos-agentes.jsonl"
 antes="$(sha256sum "$tmp/state/jangada/agentes/projeto--tarefa.json")"
 hook trabalhando 'não é JSON'
 conferir "JSON inválido não altera o estado" [ "$(sha256sum "$tmp/state/jangada/agentes/projeto--tarefa.json")" = "$antes" ]

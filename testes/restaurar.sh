@@ -31,6 +31,8 @@ done
 ln -s "$repo_jangada/default" "$jp/default"
 ln -s "$repo_jangada/bin/jangada-codex" "$jp/bin/jangada-codex"
 ln -s "$repo_jangada/bin/jangada-hook-codex" "$jp/bin/jangada-hook-codex"
+ln -s "$repo_jangada/bin/jangada-codex-hooks" "$jp/bin/jangada-codex-hooks"
+ln -s "$repo_jangada/testes" "$jp/testes"
 ln -s "$repo_jangada/bin/jangada-config" "$jp/bin/jangada-config"
 cat >"$tmp/config/jangada/jangada.conf" <<EOF
 JANGADA_PROJETOS=$tmp/projetos
@@ -67,6 +69,11 @@ EOF
 for a in claude agy codex; do
   cat >"$tmp/bin/$a" <<EOF
 #!/usr/bin/env bash
+for arg in "\$@"; do
+  if [[ "\$arg" == app-server ]]; then
+    exec python3 "\$JANGADA_PATH/testes/falso-codex-hooks.py" "\$@"
+  fi
+done
 if [[ "\${1:-}" == --help ]]; then echo --no-daemon; exit 0; fi
 printf '%s|%s|%s%s\n' "\${FALSO_ISOLADO:-fora}" "\$PWD" "$a" "\$(printf ' %q' "\$@")" >>"\$FALSO_LOG"
 EOF

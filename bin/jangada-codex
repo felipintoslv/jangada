@@ -101,13 +101,17 @@ fi
 hook="$(dirname "${BASH_SOURCE[0]}")/jangada-hook-codex"
 hook="$(realpath "$hook")"
 hook="'${hook//\'/\'\\\'\'}'"
+args_hooks=()
 for par in SessionStart:inicio UserPromptSubmit:trabalhando PreToolUse:trabalhando \
            PostToolUse:trabalhando PermissionRequest:aguardando Stop:concluido \
            SessionEnd:fim Interrupt:concluido; do
   evento="${par%%:*}"; estado="${par#*:}"
   comando="$(jq -Rn --arg c "$hook $estado" '$c')"
-  args+=(-c "hooks.$evento=[{hooks=[{type=\"command\",command=$comando}]}]")
+  args_hooks+=(-c "hooks.$evento=[{hooks=[{type=\"command\",command=$comando}]}]")
 done
+estado_hooks="$(bash "$(dirname "${BASH_SOURCE[0]}")/jangada-codex-hooks" "$exe" \
+  "$casa_codex/jangada-hooks-confianca.json" "${args_hooks[@]}")"
+args+=("${args_hooks[@]}" -c "$estado_hooks")
 if [[ -n "$conversa" ]]; then
   args+=(resume "$conversa")
 elif ((retomar)); then

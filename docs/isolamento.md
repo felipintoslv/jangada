@@ -119,6 +119,13 @@ refeito numa gravação por `mv -fT`, que não segue um link plantado.
 
 ## Testes
 
+O processo externo também observa as gravações do arquivo de estado da
+sessão com `inotifywait`. Apenas o nome de sessão conferido é observado;
+o conteúdo do arquivo não é executado. Cada mudança avisa a Waybar com
+o sinal 10. Isso permite atualização imediata, pois o hook isolado não
+enxerga o processo da barra no namespace de PID do host. O observador
+e o processo de `inotifywait` são encerrados junto com o isolamento.
+
 | Arquivo | O que cobre |
 |---|---|
 | `testes/isolar.sh` | argumentos do bwrap (gravável, somente leitura, oculto, `/tmp`, marca), repositório direto, `JANGADA_AGENTE_ISOLAR=0`, variável sem marca não dispensa, recusa sem bwrap e um isolamento de verdade: gravação, commit, chave oculta, D-Bus restrito e PID próprio |

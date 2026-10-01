@@ -2,6 +2,20 @@
 
 ## Codex
 
+O Codex CLI 0.159.3 dispara `SessionStart` no primeiro turno, não apenas em
+`thread/start`. Os testes com o CLI real usam um provedor restrito a
+localhost para iniciar o turno sem consumir tokens externos. A confiança
+dos hooks preserva `enabled=false`: aprovar um hook não deve reativá-lo.
+
+A aprovação dos hooks no `/hooks` tenta gravar `config.toml`, que está
+somente leitura. O adaptador consulta os hashes das definições em
+`hooks/list`, pede autorização dos oito hooks da Jangada no início e
+guarda a escolha em `jangada-hooks-confianca.json`. A tabela `hooks.state`
+vai na chamada; outros hooks mantêm a própria verificação de confiança.
+O sinal à Waybar precisa vir de fora do namespace de PID: o
+`jangada-isolar` observa o arquivo da sessão com `inotifywait` e sinaliza
+a barra no host. O `pkill` executado dentro do isolamento não a enxerga.
+
 A confiança da pasta precisa ser resolvida antes de abrir o CLI: ele tenta
 salvá-la em `config.toml`, que o isolamento monta somente leitura.
 O adaptador pergunta no início e salva a escolha em
