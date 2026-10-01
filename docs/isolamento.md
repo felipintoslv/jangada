@@ -25,7 +25,9 @@ contra falha do próprio bubblewrap nem do kernel.
 
 ```mermaid
 flowchart TD
-    A[jangada-agente] --> B{--sem-isolar?}
+    A[jangada-agente] --> O{agente Codex?}
+    O -- sim --> G[comando = jangada-isolar -- agente]
+    O -- não --> B{--sem-isolar?}
     B -- sim --> N[isolar = 0]
     B -- não --> C{JANGADA_AGENTE_ISOLAR<br>no perfil?}
     C -- sim --> D[valor do perfil]
@@ -33,24 +35,29 @@ flowchart TD
     D --> F{isolar != 0?}
     E --> F
     N --> F
-    F -- sim --> G[comando = jangada-isolar -- agente]
+    F -- sim --> G
     F -- não --> H[comando = agente]
     G --> I[sessão tmux]
     H --> I
 ```
 
-No `bin/jangada-agente`, `--sem-isolar` tem precedência; sem ela, vale o
-`JANGADA_AGENTE_ISOLAR` do perfil e, depois, o da configuração. O prefixo
-`jangada-isolar --` entra no comando da sessão. O campo `.isolar` do estado
+Para Claude e agy, `--sem-isolar` tem precedência; sem ela, vale o
+`JANGADA_AGENTE_ISOLAR` do perfil e, depois, o da configuração.
+O Codex sempre passa pelo isolamento, inclusive com essas opções desligadas.
+O prefixo `jangada-isolar --` entra no comando da sessão. O campo `.isolar` do estado
 da sessão é só para consulta.
 
 ## O que o jangada-isolar monta
 
 ```mermaid
 flowchart TD
-    A[jangada-isolar -- COMANDO] --> B{JANGADA_AGENTE_ISOLAR = 0<br>ou ja_isolado?}
+    A[jangada-isolar -- COMANDO] --> B{ja_isolado?}
     B -- sim --> X[exec COMANDO direto]
-    B -- não --> C{bwrap instalado?}
+    B -- não --> O{adaptador Codex ou<br>executor do Pescador?}
+    O -- sim --> C{bwrap instalado?}
+    O -- não --> P{JANGADA_AGENTE_ISOLAR = 0?}
+    P -- sim --> X
+    P -- não --> C
     C -- não --> F[recusa, código 1]
     C -- sim --> D[base: / somente leitura,<br>/tmp e PID próprios]
     D --> E[sockets de /run ocultos,<br>XDG_RUNTIME_DIR vazio,<br>D-Bus pelo proxy filtrado]
@@ -88,8 +95,9 @@ variável herdada não basta para pular o isolamento.
 
 ## Falhas
 
-- Sem `bwrap`: o `jangada-isolar` recusa com código 1 e diz como abrir mesmo
-  assim (`jangada-agente --sem-isolar` ou `JANGADA_AGENTE_ISOLAR=0`).
+- Sem `bwrap`: o `jangada-isolar` recusa com código 1. Claude e agy podem
+  abrir com `--sem-isolar` ou `JANGADA_AGENTE_ISOLAR=0`; Codex e o executor
+  do Conversa de Pescador continuam exigindo isolamento.
 - Sem proxy do D-Bus (programa ausente ou sem resposta em 5 segundos): o
   agente abre sem D-Bus, e o agy não acha o login.
 - Apagar ramo ou tag e o `git gc` falham dentro de um worktree, porque
@@ -103,8 +111,10 @@ flowchart TD
     B --> C{campos conferidos?<br>agente, pasta, conversa,<br>perfil, revisor}
     C -- não --> R[recusa: nada foi executado]
     C -- sim --> D[monta o comando<br>dos campos conferidos]
-    D --> E{JANGADA_AGENTE_ISOLAR<br>da configuração != 0?}
-    E -- sim --> F[prefixo jangada-isolar]
+    D --> O{agente Codex?}
+    O -- sim --> F[prefixo jangada-isolar]
+    O -- não --> E{JANGADA_AGENTE_ISOLAR<br>da configuração != 0?}
+    E -- sim --> F
     E -- não --> G[sem prefixo]
     F --> H[refazer_protocolo]
     G --> H
@@ -114,8 +124,9 @@ flowchart TD
 `restaurar` em `bin/jangada-agentes` nunca executa o `.comando` nem lê o
 `.isolar` do estado: o arquivo fica numa pasta que o agente grava, e um
 agente poderia trocar o comando ou desligar o isolamento da próxima abertura.
-O perfil também não desliga o isolamento na restauração. O protocolo é
-refeito numa gravação por `mv -fT`, que não segue um link plantado.
+O perfil também não desliga o isolamento na restauração. O Codex sempre
+recebe o prefixo de isolamento, mesmo com a configuração global desligada.
+O protocolo é refeito numa gravação por `mv -fT`, que não segue um link plantado.
 
 ## Testes
 

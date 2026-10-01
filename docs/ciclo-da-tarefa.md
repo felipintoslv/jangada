@@ -1,21 +1,21 @@
 # Ciclo de uma tarefa com agentes
 
 Uma tarefa passa por três comandos: `jangada-agente` abre a sessão,
-`jangada-validar` manda a entrega para o outro modelo revisar e
+`jangada-validar` manda a entrega ao revisor configurado e
 `jangada-agente-fim` integra e limpa. O estado de cada sessão fica em
 `~/.local/state/jangada/agentes/SESSAO.json`, com o contrato descrito em
 `default/claude/skills/jangada/agentes.md`.
 
-O Codex participa desse ciclo pelos perfis `codex` e `codex-codex`.
+O Codex participa pelos perfis `codex`, `codex-codex` e `codex-agy`.
 As diferenças de protocolo, hooks e revisão estão em [Codex](codex.md).
 
 ```mermaid
 flowchart LR
     A[jangada-agente] --> B[agente trabalha<br>no worktree]
-    B --> C[jangada-validar]
+    B --> D[commit]
+    D --> C[jangada-validar]
     C -- REVISAR --> B
-    C -- APROVADO --> D[commit]
-    D --> E{mais uma entrega?}
+    C -- APROVADO --> E{mais uma entrega?}
     E -- sim --> B
     E -- não --> F[jangada-agente-fim<br>--integrar]
     C -- limite --> G[usuário decide:<br>--forcar ou reverter]
@@ -49,12 +49,14 @@ flowchart TD
   `.jangada/links` vira link e `.jangada/preparar.sh` roda por último.
 - Revisor: `--revisor`, depois o `JANGADA_VALIDAR_REVISOR` do perfil, depois o
   da configuração; sem nenhum, o modelo oposto ao do agente.
-- O protocolo vai ao Claude por `--append-system-prompt` e ao agy por `-i`,
-  junto com a tarefa. O item de subagentes depende do destino; veja
+- O protocolo vai ao Claude por `--append-system-prompt`, ao agy por `-i`
+  junto com a tarefa e ao Codex por `developer_instructions`. O item de
+  subagentes depende do destino; veja
   [subagentes e delegação](subagentes-e-delegacao.md).
 - Com isolamento, o comando começa por `jangada-isolar --`; veja
   [isolamento](isolamento.md).
-- Os hooks do Claude e do agy mudam o estado da sessão: `iniciado`,
+- Os hooks do Claude, agy e Codex atualizam o estado da sessão. A lista
+  inclui `iniciado`,
   `trabalhando`, `aguardando`, `concluido`, e `interrompido` quando o tmux
   some com o worktree presente. Cada mudança vira uma linha em
   `eventos-agentes.jsonl` ([registros](registros.md)).
@@ -81,8 +83,10 @@ flowchart TD
     H --> I{revisor}
     I -- claude --> J[revisar_claude:<br>só ferramentas de leitura]
     I -- agy --> K[revisar_agy: agente revisor,<br>--sandbox]
+    I -- codex --> O[revisar_codex:<br>pedido completo, sem ferramentas]
     J --> L[lê STATUS da primeira linha]
     K --> L
+    O --> L
     L -- APROVADO --> M[grava .aprovado<br>registra, código 0]
     L -- REVISAR --> N[registra, código 3]
 ```

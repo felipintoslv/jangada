@@ -16,10 +16,11 @@ flowchart TD
     D --> E
     E --> F[testes/verificar.sh]
     F -- falhou --> D
-    F -- passou --> G[Subagente verificador]
-    G --> H[jangada-validar]
+    F -- passou --> G[Conferir regras e testes<br>conforme o protocolo de delegação]
+    G --> I[Commit feat ou fix por área]
+    I --> H[jangada-validar]
     H -- REVISAR --> D
-    H -- APROVADO --> I[Commit feat ou fix por área]
+    H -- APROVADO --> J[Entregar]
 ```
 
 ## Onde cada coisa grava

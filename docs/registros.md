@@ -41,10 +41,11 @@ Caminhos usados abaixo:
   - `resultado`: `aprovado`, `revisar`, `erro` ou `limite`.
   - `etapa`: `revisor`, `local` (barrado pela verificação determinística)
     ou vazio (no `limite`).
-  - `revisor`: `claude` ou `agy`.
+  - `revisor`: `claude`, `agy` ou `codex`.
   - `modelo`: modelo pedido ao revisor. Fica vazio quando o revisor é o agy
     sem `--modelo`: o agy usa o padrão dele e o nome não é gravado. Com o
-    Claude, o padrão é `sonnet`.
+    Claude, o padrão é `sonnet`. Com Codex sem `--modelo`, o campo fica
+    vazio e vale o padrão do CLI, sem a configuração do usuário.
   - `autor`: primeira palavra de `.agente` do `SESSAO.json`. Vazio fora de
     sessão.
   - `arquivos`, `mais`, `menos`: tamanho do diff (arquivo novo conta as

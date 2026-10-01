@@ -63,7 +63,16 @@ Compare com `diff -u` e copie o que quiser para os arquivos sem a extensão.
 
 ## Interface
 
-Em `~/.config/jangada/jangada.conf`, `JANGADA_INTERFACE=componentes` usa waybar, fuzzel e mako com cores do matugen; `JANGADA_INTERFACE=noctalia` usa o Noctalia já instalado dentro da sessão jangada, preservando as personalizações dele.
+| Interface | Componentes | Condição |
+|---|---|---|
+| `JANGADA_INTERFACE=componentes` | waybar, fuzzel e mako, com cores do matugen | configuração padrão |
+| `JANGADA_INTERFACE=noctalia` | Noctalia já instalado, preservando suas personalizações | exige a interface antiga `qs -c noctalia-shell` |
+
+A escolha fica em `~/.config/jangada/jangada.conf`. A integração ainda usa
+Quickshell; a incompatibilidade registrada com o Noctalia 5.x permanece
+pendente em [revisao/PENDENCIAS.md](revisao/PENDENCIAS.md#o-que-só-pode-ser-confirmado-no-desktop).
+Até essa adaptação, use `componentes` se a instalação não oferecer a
+interface antiga.
 
 ## Instalação
 
@@ -110,14 +119,14 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-migrar` | aplica as migrações pendentes (o `jangada-update` já chama) |
 | `jangada-snapshot "descrição"` | cria um snapshot manual do sistema; com `--agente`, o do `jangada-agente --snapshot`, fora da limpeza do snapper e limitado aos `JANGADA_SNAPSHOTS_AGENTE` mais recentes |
 | `jangada-tema [imagem]` | gera as cores a partir de um papel de parede e recarrega a interface |
-| `jangada-agente` | escolhe o agente (Claude ou agy), o projeto e cria um worktree, e abre o agente numa sessão tmux, isolado pelo `jangada-isolar` (`--prompt`, `--prompt-arquivo`, `--perfil`, `--sem-isolar`) |
+| `jangada-agente` | escolhe o agente (Claude, agy ou Codex), o projeto e cria um worktree, e abre o agente numa sessão tmux, isolado pelo `jangada-isolar` (`--prompt`, `--prompt-arquivo`, `--perfil`, `--sem-isolar`) |
 | `jangada-isolar` | roda um comando no bubblewrap, com o sistema somente leitura e a pasta atual gravável; `--mostrar` imprime a chamada ao `bwrap` |
-| `jangada-delegar PAPEL "pedido"` | manda leitura, pesquisa ou verificação a um agente Flash do agy e devolve um relatório curto; recusa com código 4 quando a cota está baixa (ver [Subagentes](#subagentes)) |
+| `jangada-delegar PAPEL "pedido"` | delega ao Ollama (`--destino local --arquivos ARQUIVOS`, só leitor e redator) ou ao agy Flash (`--destino agy`); devolve um relatório curto ou recusa com código 4 (ver [Subagentes](#subagentes)) |
 | `jangada-subagentes` | indicadores de subagentes e delegações (`--json`), o resumo de uma entrega (`--entrega PASTA`) e os registros por subagente (`--registros`) |
 | `jangada-filtrar` | roda um comando e condensa a saída para o agente (`-m`, `-e`, `-p`); prefira `jangada-filtrar -- COMANDO` ao modo cano, que não vê o código de saída |
 | `jangada-mapa [PASTA]` | mapa compacto do repositório (arquivos e assinaturas de funções) para dar contexto a um agente |
 | `jangada-worktree-preparar` | leva para um worktree novo os arquivos ignorados que o projeto precisa (chamado pelo `jangada-agente`) |
-| `jangada-validar` | manda o diff do worktree para o outro modelo revisar (o agy revisa o Claude, o Claude revisa o agy) e devolve `STATUS: APROVADO` ou `REVISAR`; o agente chama antes de entregar |
+| `jangada-validar` | confere a entrega localmente e manda o diff ao revisor configurado (Claude, agy ou Codex) e devolve `STATUS: APROVADO` ou `REVISAR`; o agente chama antes de entregar |
 | `jangada-shell` | inicia subshell enriquecida com comandos diretos de agentes e projetos |
 | `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir, integrar ou encerrar (`--proximo`, `--anterior`, `--restaurar`) |
 | `jangada-agente-fim` | encerra uma sessão e remove o worktree, com conferência de alterações pendentes; `--integrar` revisa fora do isolamento, faz o merge na base e apaga o ramo; no repositório do jangada, avisa para rodar `jangada-update`, que atualiza a cópia instalada |
@@ -205,7 +214,7 @@ O fluxo completo, com fluxogramas, está em
 2. O estado aparece na barra e no painel (`SUPER + CTRL + A`) pelos hooks do
    Claude Code: trabalhando, aguardando (notificação com botão que foca a
    janela) ou concluído. `SUPER + N` pula para quem espera.
-3. Antes de entregar, o agente roda `jangada-validar` e o outro modelo revisa
+3. Antes de entregar, o agente roda `jangada-validar` e o revisor configurado avalia
    o diff (veja abaixo). O último parecer aparece na prévia do seletor.
 4. Para fechar: `jangada-agente-fim --integrar SESSAO` (ou `Alt+I` no seletor)
    faz o merge na base, remove o worktree e apaga o ramo. `Ctrl+X` encerra sem
@@ -229,11 +238,25 @@ O fluxo completo, com fluxogramas, está em
 | `agy-agy` | agy | agy | não gasta tokens do Claude |
 | `codex` | Codex | Claude | Claude recebe só a revisão |
 | `codex-codex` | Codex | outra instância do Codex | não gasta tokens do Claude |
+| `codex-agy` | Codex | agy Flash, esforço alto | não gasta tokens do Claude |
 
 O Codex usa os worktrees e o tmux da Jangada, sem criar worktree próprio
-nem conectar ao servidor compartilhado do CLI. Os perfis `codex` e
-`codex-codex` usam Ollama para leitor e redator. O revisor Codex recebe o
-pedido completo, sem terminal ou ferramentas externas. Veja
+nem conectar ao servidor compartilhado do CLI. Todos os perfis Codex usam
+primeiro Ollama para leitor e redator. Os demais papéis ficam na sessão nos
+perfis `codex` e `codex-codex`; no `codex-agy`, são delegados ao agy Flash.
+
+```mermaid
+flowchart LR
+    A{Perfil Codex} -- codex --> C[Revisão: Claude]
+    A -- codex-codex --> X[Revisão: outra instância Codex]
+    A -- codex-agy --> G[Revisão: agy Flash<br>esforço alto]
+    C --> L[Leitor e redator: Ollama<br>Outros papéis: na sessão]
+    X --> L
+    G --> D[Leitor e redator: Ollama<br>Outros papéis: agy Flash]
+```
+
+O revisor Codex recebe o pedido completo, sem terminal ou ferramentas
+externas. Veja
 [a preparação, os hooks e as limitações](docs/codex.md).
 
 1. O agente abre interativo, no worktree, com o protocolo de
@@ -395,7 +418,7 @@ em `subagentes_erro` e avisa. Os registros estão em `docs/registros.md`.
 entrega aprovada com e sem agy (por tamanho do diff), fração ao agy e
 recusas, compressão, cota gasta, aprovação na primeira rodada com e sem
 verificador, afirmações sem fonte, desvios do protocolo e a árvore de
-subagentes. A aba Subagentes do painel mostra os mesmos números; um `*`
+subagentes. A aba Autonomia de agentes do painel mostra os mesmos números; um `*`
 marca grupo com menos de 15 entregas.
 
 Regras de decisão:
@@ -487,15 +510,18 @@ git sobre pastas de agentes com `jangada_git_seguro`.
 separadas por `:` (`~/dados:~/R`). `JANGADA_ISOLAR_OCULTAR` substitui a lista
 de ocultos, com caminhos relativos à pasta pessoal ou absolutos; definida
 vazia, não oculta nada. A pasta do token do `jangada-painel` fica oculta
-sempre. Para desligar: `jangada-agente --sem-isolar` numa
-sessão, `JANGADA_AGENTE_ISOLAR=0` num perfil ou no `jangada.conf` para todas.
+sempre. Para Claude e agy, `jangada-agente --sem-isolar` desliga o isolamento
+numa sessão; `JANGADA_AGENTE_ISOLAR=0` desliga num perfil ou no `jangada.conf`.
+O Codex e o executor do Conversa de Pescador exigem isolamento mesmo com
+essas opções.
 O estado guarda o comando e o campo `isolar` só para consulta: a restauração
 ignora os dois e volta sempre isolada, a menos que `JANGADA_AGENTE_ISOLAR=0`
-esteja no `jangada.conf` ou no ambiente. Uma sessão aberta com `--sem-isolar`
-ou com um perfil que desliga o isolamento volta, portanto, isolada. Sem o
-pacote `bubblewrap`, o `jangada-isolar` recusa e o agente não abre; a
-mensagem fica no terminal da sessão e indica o `--sem-isolar` ou o
-`JANGADA_AGENTE_ISOLAR=0`.
+esteja no `jangada.conf` ou no ambiente, para Claude e agy. O Codex sempre
+volta isolado. Uma sessão aberta com `--sem-isolar` ou com um perfil que
+desliga o isolamento volta isolada se a configuração global o mantiver ligado.
+Sem o pacote `bubblewrap`, o `jangada-isolar` recusa e o agente não abre; a
+mensagem fica no terminal da sessão. As opções para desligar não liberam o
+Codex nem o executor do Conversa de Pescador.
 
 ## Painel de indicadores
 

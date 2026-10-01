@@ -62,40 +62,76 @@ existente por migração, como `migrations/202609272200-subagentes-novos.sh`.
 
 ```mermaid
 flowchart TD
-    A[agente da sessão] --> B{agente}
-    B -- agy --> N[nativo:<br>invoke_subagent do agy]
-    B -- claude --> C{JANGADA_DELEGAR<br>do perfil ou global}
-    C -- claude ou nativo --> CL[subagente do Claude]
-    C -- vazio ou agy --> D{agy instalado?}
-    D -- não --> CL
-    D -- sim --> AG[jangada-delegar]
-    AG -- recusa, código 4 --> CL
+    A{Agente da sessão} -- agy --> N[Subagentes nativos do agy]
+    A -- Claude --> C{JANGADA_DELEGAR}
+    C -- claude ou nativo --> CL[Subagente do Claude]
+    C -- local --> L{Leitor ou redator?}
+    L -- sim --> OL[Ollama com arquivos explícitos]
+    L -- não --> CL
+    OL -- recusa --> CL
+    C -- vazio ou agy --> G{agy instalado?}
+    G -- não --> CL
+    G -- sim --> AG[jangada-delegar ao agy]
+    AG -- recusa --> CL
+    A -- Codex --> X{Leitor ou redator?}
+    X -- sim --> XL[Ollama com arquivos explícitos]
+    XL -- recusa --> S[Investigar na sessão]
+    X -- não --> D{JANGADA_DELEGAR = agy?}
+    D -- não --> S
+    D -- sim --> XA[jangada-delegar ao agy]
+    XA -- recusa --> S
 ```
 
-`jangada_delegacao` em `bin/jangada-config` decide o destino, e o
-`jangada-agente` monta o protocolo da sessão com o arquivo do destino:
+`jangada_delegacao` em `bin/jangada-config` decide o destino. No Claude,
+o perfil prevalece sobre a configuração global; no agy, vale sempre
+`nativo`. No Codex, vale `agy` quando configurado; nos demais casos, `local`.
 
-| Destino | Arquivo | O que manda |
+| Agente e destino | Protocolo em `default/agentes/` | Regra |
 |---|---|---|
-| `agy` | `default/agentes/protocolo-delegar-agy.md` | usar primeiro `jangada-delegar PAPEL "pedido"`; só na recusa, o subagente do Claude do mesmo papel |
-| `claude` | `default/agentes/protocolo-delegar-claude.md` | usar os subagentes do Claude |
-| `nativo` | `default/agentes/protocolo-delegar-nativo.md` | usar os subagentes do próprio agy |
-| `local` | `default/agentes/protocolo-delegar-local.md` | usar `jangada-delegar` no destino local com `--arquivos` para leitor e redator; os outros papéis seguem nos subagentes do Claude |
+| Claude, `agy` | `protocolo-delegar-agy.md` | primeiro agy; na recusa, subagente do Claude |
+| Claude, `claude` | `protocolo-delegar-claude.md` | subagentes do Claude |
+| agy, `nativo` | `protocolo-delegar-nativo.md` | subagentes do próprio agy |
+| Claude, `local` | `protocolo-delegar-local.md` | leitor e redator primeiro no Ollama; demais papéis no Claude |
+| Codex, `local` ou `agy` | `protocolo-delegar-codex.md` | leitor e redator primeiro no Ollama; outros papéis no agy se permitido, ou na sessão |
 
-Os quatro são seguidos de `default/agentes/protocolo-delegar.md`, com as regras
-comuns: citar a fonte, conferir no arquivo o que decide a mudança, não editar
-e não substituir o `jangada-validar`. Em nenhum caso vale o
-`general-purpose` para esses papéis.
+O Codex não chama subagentes do Claude. Mesmo no perfil `codex-agy`, leitor
+e redator passam primeiro pelo destino local. Os perfis e seus revisores
+estão em [Codex](codex.md).
+
+Todos recebem também `default/agentes/protocolo-delegar.md`: citar fontes,
+conferir o que decide a mudança, não editar e não substituir o
+`jangada-validar`. Uma recusa local não autoriza enviar documentos
+confidenciais a outro provedor. As setas de recusa para o Claude exigem
+aviso ao usuário antes desse envio, conforme o protocolo local.
 
 ## jangada-delegar
+
+O destino pode ser explícito: `--destino local` ou `--destino agy`.
+Sem essa opção, o comando usa o destino definido pela configuração.
+`JANGADA_DELEGAR=claude` recusa ambos; `JANGADA_DELEGAR=local` recusa o agy.
+
+```mermaid
+flowchart LR
+    A[jangada-delegar] --> D{Destino permitido?}
+    D -- não --> R[Recusa, código 4]
+    D -- local --> L[Leitor ou redator<br>--arquivos obrigatório]
+    L --> O[Ollama, sem ferramentas]
+    D -- agy --> G[Papéis instalados no agy<br>confiança, hook do leitor e cota]
+    G --> F[agy Flash, com ferramentas do papel]
+    O --> J[Relatório e delegacoes.jsonl]
+    F --> J
+```
+
+O fluxo abaixo detalha apenas o destino `agy`. O destino local não consulta
+cota nem depende do agy instalado.
 
 ```mermaid
 flowchart TD
     A[jangada-delegar PAPEL pedido] --> B{papel conhecido<br>e pedido presente?}
     B -- não --> X2[uso errado, código 2]
-    B -- sim --> C{perfil com<br>JANGADA_DELEGAR=claude?}
-    C -- sim --> R[recusa, código 4]
-    C -- não --> D{agy instalado e<br>pasta em trustedWorkspaces?}
+    B -- sim --> C{perfil permite agy?}
+    C -- não --> R[recusa, código 4]
+    C -- sim --> D{agy instalado e<br>pasta em trustedWorkspaces?}
     D -- não --> R
     D -- sim --> E{papel instalado no agy?}
     E -- não --> R
@@ -124,8 +160,9 @@ flowchart TD
   `permissions.allow` do `settings.json` do agy.
 - O relatório conta as frases sem fonte (`caminho:linha`, URL, página ou
   célula), que entram no registro.
-- Na recusa, a última linha diz qual subagente do Claude usar. O
-  `jangada-delegar` nunca chama o Claude.
+- Na recusa, o comando sugere um subagente do Claude, mas o protocolo da
+  sessão decide a alternativa: no Codex, a investigação permanece na sessão.
+  O `jangada-delegar` nunca chama o Claude.
 
 ## Destino local
 
