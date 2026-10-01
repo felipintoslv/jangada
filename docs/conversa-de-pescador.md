@@ -1,75 +1,71 @@
 # Conversa de Pescador
 
-O Conversa de Pescador é o assistente conversacional do jangada voltado a consultas técnicas de alta precisão, checagem factual rigorosa e depuração de hipóteses. Ele opera sem tocar na árvore de trabalho de projetos e sem exigir pasta de código, guardando seu histórico de sessões em `~/.local/state/jangada/pescador` e integrando suas métricas ao painel do jangada.
+O assistente abre uma janela de conversa com resposta progressiva, histórico de sessões e cancelamento. Execute `jangada-pescador --janela` ou use o menu central. A janela utiliza PyQt6, já incluído nos pacotes da interface.
 
-## Fundamentação Teórica
+## Uso
 
-A arquitetura do Conversa de Pescador foi desenhada a partir das melhores práticas identificadas no estado da arte da literatura de inteligência artificial e em projetos de código aberto:
+- **Conversar**, modo inicial: uma chamada ao autor. A resposta aparece durante a geração e fica marcada como **Não verificado**.
+- **Pesquisar com fontes**: mostra a resposta antes da checagem, pesquisa na web e executa dois auditores em paralelo.
+- **Verificar resposta**: pesquisa e audita a última resposta da conversa, sem gerar novamente o texto.
+- **Parar**: cancela a consulta e encerra os processos dos modelos. O texto parcial permanece visível, mas não entra no contexto de uma próxima pergunta.
+- **Opções**: permite escolher o par de modelos e entre uma e quatro rodadas. O padrão é uma rodada.
 
-1. **Chain-of-Verification (CoVe, Meta AI):** a validação factual de afirmações é executada de forma desacoplada da redação do autor, confrontando os pontos contra evidências externas sem sofrer viés de confirmação (*sycophancy*).
-2. **Decomposição em Grafos de Busca (MindSearch / STORM):** perguntas compostas são decompostas pelo planejador em duas ou três consultas de busca atômicas direcionadas na internet, cobrindo aspectos complementares (regras oficiais, cronologia e literatura técnica).
-3. **Corrective RAG (CRAG):** as evidências coletadas na web passam por filtragem de ruído, remoção de duplicatas e priorização de fontes com autoridade antes de alimentarem o contexto dos auditores.
-4. **Debate Multi-Agente Heterogêneo (Du et al., 2023):** o par de modelos cruza famílias distintas (Claude e Gemini via `claude` e `agy`), eliminando pontos cegos compartilhados por modelos de uma mesma linhagem.
-5. **Purificação Iterativa (Self-Refine):** se o termômetro de veracidade apontar contestações ou grau de fato inferior a 90%, o autor recebe as contestações exatas e reescreve a resposta expurgando as falhas até a aprovação da bancada.
+As fontes e os detalhes dos auditores ficam recolhidos abaixo da conversa. Copiar leva o texto da resposta para a área de transferência. Repetir devolve a pergunta ao campo de entrada para uma nova tentativa explícita.
 
-## Fluxo da Arquitetura
+## Fluxo implementado
 
 ```mermaid
 flowchart TD
-    A[Pergunta do Usuario e Contexto da Sessao] --> B[Fase 1: Redacao pelo Autor<br>Claude ou agy]
-    B --> C[Fase 2: Decomposicao e Busca Web<br>MindSearch e CRAG via DuckDuckGo]
-    C --> D[Fase 3: Bancada de Auditores<br>Auditor Factual e Auditor Metodologico]
-    D --> E{Termometro >= 90%<br>e sem contestacoes?}
-    E -- Sim --> F[Resposta Final Aprovada<br>Gravacao em historico.jsonl]
-    E -- Nao e rodada menor que limite --> G[Fase 4: Purificacao Factual<br>Autor retifica com base nas contestacoes]
-    G --> C
-    E -- Nao e limite atingido --> F
+    A[Pergunta] --> B[Autor com resposta progressiva]
+    B --> C{Modo}
+    C -->|Conversar| D[Não verificado]
+    C -->|Pesquisar| E[Busca de trechos no DuckDuckGo]
+    E --> F[Auditores factual e metodológico em paralelo]
+    F --> G{Duas avaliações válidas, itens avaliados,
+    nota pelo menos 90 e sem contestação?}
+    G -->|Sim| H[Verificado]
+    G -->|Não| I[Com ressalvas ou indisponível]
+    I --> J{Contestação e rodada disponível?}
+    J -->|Sim| B
 ```
 
-## Papéis dos Agentes
+A busca usa a pergunta, recolhe até quatro resultados com título, URL e trecho e remove URLs repetidas. Não lê páginas completas nem faz decomposição ou síntese com outro modelo. Uma rodada de pesquisa usa três chamadas aos modelos: autor e dois auditores. Conversar usa uma chamada; verificar um texto existente usa duas.
 
-| Agente | Motor | Função Principal |
-|---|---|---|
-| **Pescador (Autor)** | Modelo configurado como autor (`claude` ou `agy`) | Elabora a resposta detalhada e explicativa; nas rodadas de purificação, reescreve o texto expurgando cada contestação apontada. |
-| **Pesquisador de Fatos** | Modelo configurado como revisor (`agy` ou `claude`) | Decompõe a dúvida em consultas atômicas de busca, executa varredura web e sintetiza o dossiê de evidências e fontes. |
-| **Auditor Factual** | Modelo configurado como revisor | Avalia afirmações específicas contra as evidências colhidas, classificando ponto a ponto em FATO REAL, CONVERSA DE PESCADOR ou CONTROVERSO. |
-| **Auditor Metodológico** | Modelo configurado como revisor | Audita a consistência lógica, premissas implícitas, identificação causal, validade matemática e limites de escopo. |
+A avaliação dos auditores não representa uma probabilidade de verdade. Falta de fontes, erro de um auditor, JSON inválido e consulta sem auditoria não recebem nota 100. Uma contestação continua registrada mesmo quando outro auditor aprova a mesma afirmação. O painel exclui notas indisponíveis das médias e preserva uma nota zero válida.
 
-## Pares de Modelos Suportados
+## Componentes
 
-A ferramenta suporta alternância livre entre pares de modelos pela flag `-p, --par` ou pelo comando `/par` no chat:
+| Arquivo | Responsabilidade |
+|---|---|
+| `bin/jangada-pescador` | acesso à janela, terminal e histórico |
+| `default/pescador/janela.py` | interface Qt e comunicação por eventos com processo separado |
+| `default/pescador/conversa-de-pescador.py` | conversa, pesquisa, auditoria e persistência |
+| `default/pescador/execucao.py` | leitura progressiva, limite de execução, métricas e cancelamento dos modelos |
+| `bin/jangada-pescador-modelo` | modelos sem ferramentas dentro de `jangada-isolar` |
+| `default/agy/agents/pescador/agent.md` | agente agy sem ferramentas nem herança de MCP |
+| `default/painel/coletor.py` | consultas do histórico para o painel |
 
-- `claude-agy` (padrão recomendado): Claude redige a resposta; o Gemini (`agy`) comanda a pesquisa e a bancada de auditores.
-- `agy-claude`: Gemini redige a resposta; o Claude comanda a checagem crítica e a metodologia.
-- `agy-agy`: Gemini atua como autor e revisor.
-- `claude-claude`: Claude atua como autor e revisor.
+Cada chamada recebe uma pasta temporária vazia no estado da Jangada. O executor exige isolamento mesmo quando a preferência geral o desliga. Claude recebe ferramentas vazias, MCP vazio e configurações de projeto desligadas. O agy usa o agente `pescador`; se ele não estiver registrado, a chamada falha com orientação para atualizar e executar a etapa 50. Não há troca silenciosa de provider após falha.
 
-## Ciclo de Purificação Iterativa
+A janela bloqueia HTML e carregamento automático de imagens ou recursos externos nas respostas. Links HTTP/HTTPS abrem no navegador apenas após um clique.
 
-O parâmetro `--rodadas N` (padrão: 2; ajustável entre 1 e 4) controla o teto de refinamento:
+## Modelos e terminal
 
-1. **Rodada 1:** o Pescador formula a resposta explicativa. O Pesquisador colhe dados na internet e a bancada emite o diagnóstico inicial.
-2. **Critério de Parada:** se o grau de fato atingir 90% ou mais sem nenhuma contestação de alucinação ou regra distorcida, o ciclo termina imediatamente com economia de tempo e tokens.
-3. **Retificação (Rodadas seguintes):** se houver contestação, o autor recebe apenas as contestações formais levantadas pela bancada. O autor reescreve a resposta corrigindo cada falha. A bancada reavalia e o progresso (`R1: 75% -> R2: 95%`) é apresentado ao usuário.
+São suportados `claude-claude`, `claude-agy`, `agy-claude` e `agy-agy`. A janela inicia com `claude-claude`; o terminal mantém `claude-agy`. Nesta aplicação, Codex e Ollama ainda não são motores disponíveis.
 
-## Integração ao Ecossistema Jangada
+```bash
+jangada-pescador --janela
+conversa-de-pescador --rapido 'Explique esta ideia'
+conversa-de-pescador --par claude-claude --rodadas 1 'Pesquise esta dúvida'
+conversa-de-pescador --sessao minha-conversa --verificar-ultima
+```
 
-- **Isolamento e Segurança (Regra 1):** nenhum dado é lido ou gravado na árvore de código dos projetos. O histórico e as sessões ficam isolados em `~/.local/state/jangada/pescador` (com fallback automático para `$XDG_RUNTIME_DIR/jangada-pescador` em ambientes com restrição de permissão).
-- **Painel Shiny de Indicadores:** o coletor do painel (`jangada-painel`) lê as consultas do Pescador e as consolida em `pesquisas.parquet`, exibindo volume de perguntas, evolução do termômetro de fato e distribuição por par de modelos.
-- **Acesso pelo Menu Central:**
-  - O chat e o histórico são acessíveis pelo menu central (`jangada-menu`).
-- **Voz Neural em Português:** com `-f, --falar`, narra a resposta e o diagnóstico via Piper TTS local; com `-o, --ouvir`, grava a dúvida via microfone pelo PipeWire e transcreve localmente via whisper-cpp.
+O terminal mantém `/par`, `/rodadas`, `/sessao`, `/contexto`, `/novo`, `/historico`, `/falar`, `/ouvir` e `/sair`. Voz via Piper e transcrição via whisper-cpp continuam disponíveis no terminal. A transcrição exige o programa local e não envia o áudio a outro modelo quando ele falta ou falha. `--eventos` fornece eventos JSON por linha para a interface.
 
-## Comandos do Chat Interativo
+## Estado e testes
 
-Durante a sessão interativa, os seguintes comandos estão disponíveis:
+Histórico e sessões ficam em `$XDG_STATE_HOME/jangada/pescador`, ou `~/.local/state/jangada/pescador`. Sessões têm gravação atômica e trava contra consultas concorrentes. A verificação posterior mantém o identificador da consulta; histórico e painel mostram sua versão mais recente.
 
-- `/par [nome]`: mostra ou altera o par de modelos ativo (`claude-agy`, `agy-claude`, etc.).
-- `/rodadas [N]`: ajusta o número máximo de rodadas de refinamento (1 a 4).
-- `/sessao [nome]`: exibe ou alterna para outra sessão encadeada.
-- `/contexto`: exibe os turnos acumulados e mantidos no contexto da conversa.
-- `/novo`: inicia uma nova sessão limpa sem contexto prévio.
-- `/historico`: abre o navegador de pesquisas salvas no fzf.
-- `/falar`: alterna a leitura em voz alta.
-- `/ouvir`: grava uma pergunta pelo microfone.
-- `/sair`: encerra a aplicação.
+Os registros guardam estado, duração, fontes e tempo das chamadas. Cancelamentos e erros ficam no histórico, mas não são acrescentados ao contexto da conversa. A busca tem limite de espera próprio; o cancelamento pode aguardar uma requisição de busca terminar.
+
+`testes/pescador.py` cobre notas, falhas, concorrência dos auditores, sessões, transmissão progressiva, cancelamento e a janela com um executor falso. `testes/pescador-modelo.sh` verifica o isolamento real e as opções do Claude sem usar um provider pago. Ambos fazem parte de `testes/verificar.sh`.

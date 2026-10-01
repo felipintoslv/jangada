@@ -13,8 +13,7 @@ cmd="$dir_raiz/conversa-de-pescador"
 case "${1:-}" in
   --janela)
     jangada_focar_classe org.jangada.pescador && exit 0
-    exec setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.pescador \
-      --titulo "Conversa de Pescador" -e "$cmd" >/dev/null 2>&1
+    exec setsid -f "$cmd" --grafico
     ;;
   --historico-janela)
     jangada_focar_classe org.jangada.pescador.historico && exit 0

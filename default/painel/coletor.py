@@ -653,6 +653,16 @@ def sessoes():
     return linhas
 
 
+def nota_pesquisa(registro, aud):
+    if registro.get("estado") in ("nao_verificado", "cancelado", "erro", "indisponivel"):
+        return None
+    texto = str(aud.get("veredito_resumo", "")).lower()
+    if "sem auditoria" in texto or "indisponível" in texto:
+        return None
+    nota = aud.get("grau_fato")
+    return int(nota) if type(nota) in (int, float) and 0 <= nota <= 100 else None
+
+
 def pesquisas_pescador():
     """Lê o histórico do Conversa de Pescador e monta a lista de pesquisas."""
     caminhos = [
@@ -660,7 +670,7 @@ def pesquisas_pescador():
         os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "jangada-pescador", "historico.jsonl")
     ]
     linhas = []
-    vistos = set()
+    vistos = {}
     for arq in caminhos:
         if not os.path.exists(arq):
             continue
@@ -674,18 +684,18 @@ def pesquisas_pescador():
                         dt_obj = data_de(d.get("data"))
                         if not dt_obj:
                             continue
-                        chave = (d.get("data"), d.get("pergunta"))
+                        chave = d.get("id") or (d.get("data"), d.get("pergunta"))
                         if chave in vistos:
-                            continue
-                        vistos.add(chave)
+                            linhas[vistos[chave]] = None
+                        vistos[chave] = len(linhas)
                         aud = d.get("auditoria") or {}
                         linhas.append({
                             "data": dt_obj,
                             "dia": dia_de(dt_obj),
                             "sessao": str(d.get("sessao") or "avulsa"),
                             "pergunta": str(d.get("pergunta") or "")[:200],
-                            "grau_fato": int(aud.get("grau_fato") or 100),
-                            "grau_pescador": int(aud.get("grau_pescador") or 0),
+                            "grau_fato": nota_pesquisa(d, aud),
+                            "grau_pescador": (100 - nota_pesquisa(d, aud)) if nota_pesquisa(d, aud) is not None else None,
                             "veredito": str(aud.get("veredito_resumo") or "")[:300],
                             "fontes_qtd": len(aud.get("referencias") or []),
                             "segundos": float(d.get("tempo_segundos") or 0.0),
@@ -694,7 +704,7 @@ def pesquisas_pescador():
                         continue
         except OSError:
             pass
-    return linhas
+    return [linha for linha in linhas if linha is not None]
 
 
 # Indicadores do dia

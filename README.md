@@ -44,7 +44,7 @@ arquivo e função, falhas e os testes que o cobrem:
 | [docs/atualizacao-e-migracoes.md](docs/atualizacao-e-migracoes.md) | instalação, `jangada-update` e `jangada-migrar` |
 | [docs/painel.md](docs/painel.md) | coletor, cache, app e módulo da barra |
 | [docs/registros.md](docs/registros.md) | campos de cada registro usado pelo painel |
-| [docs/conversa-de-pescador.md](docs/conversa-de-pescador.md) | chat conversacional com bancada de auditores, CoVe e purificação iterativa |
+| [docs/conversa-de-pescador.md](docs/conversa-de-pescador.md) | janela de conversa progressiva, pesquisa com fontes e auditoria paralela |
 | [docs/boas-praticas.md](docs/boas-praticas.md) | regras de código, testes, textos e commits |
 
 ## Antes de instalar: mapear a máquina
@@ -664,6 +664,8 @@ e não mexe na instalada. Para testar a cópia de trabalho sem instalar, rode
 | `testes/eventos.sh` | histórico de estados dos agentes gravado pelos hooks e pela troca de foco |
 | `testes/barra.sh` | módulo `custom/indicadores`, barra em pé do `jangada-barra` e a migração que o acrescenta |
 | `testes/painel.sh` | coletor do painel sobre registros de exemplo e, com os pacotes R, o app no ar |
+| `testes/pescador.py` | pareceres, auditorias paralelas, sessões, resposta progressiva, cancelamento e janela Qt com executor falso |
+| `testes/pescador-modelo.sh` | modelos sem ferramentas e isolamento obrigatório do Pescador, mesmo com a preferência geral desligada |
 | `testes/subagentes.sh`, `testes/delegar.sh` | papéis de subagente e a instalação deles; `jangada-delegar` com agy falso |
 | `testes/versao.sh` | `jangada-versao` num repositório temporário: grupos e prefixos das novidades, o `CHANGELOG.md` e a tag do `--lancar` e as recusas (árvore suja, versão menor, tag existente, nada novo) |
 | `testes/importar.sh` | `jangada-importar` com um config.kdl de exemplo |

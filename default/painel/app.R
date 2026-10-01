@@ -758,10 +758,11 @@ server <- function(input, output, session) {
     p <- pesqs()
     if (!nrow(p)) return(NULL)
     n_tot <- nrow(p)
-    med_fato <- round(mean(p$grau_fato, na.rm = TRUE))
+    avaliadas <- sum(!is.na(p$grau_fato))
+    med_fato <- if (avaliadas) paste0(round(mean(p$grau_fato, na.rm = TRUE)), "%") else "indisponível"
     div(class = "alert alert-secondary py-2 px-3 mb-3",
-        sprintf("Auditoria de Fatos: %d consultas realizadas com termômetro médio de %d%% de assertividade. Verificação multi-agente ativa com bancada de auditores.",
-                n_tot, med_fato))
+        sprintf("Pesquisas: %d consultas, %d com avaliação numérica registrada. Média dos pareceres: %s. Essa avaliação não é uma probabilidade de acerto.",
+                n_tot, avaliadas, med_fato))
   })
   output$f_total <- renderText({
     p <- pesqs()
@@ -769,7 +770,7 @@ server <- function(input, output, session) {
   })
   output$f_fato <- renderText({
     p <- pesqs()
-    if (nrow(p) == 0) "-" else paste0(round(mean(p$grau_fato, na.rm = TRUE)), "% Fato")
+    if (!nrow(p) || all(is.na(p$grau_fato))) "Sem avaliação" else paste0(round(mean(p$grau_fato, na.rm = TRUE)), "% nos pareceres")
   })
   output$f_hoje <- renderText({
     p <- pesqs()

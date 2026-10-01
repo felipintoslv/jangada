@@ -436,3 +436,7 @@ Testes de 29/09/2026, Ollama 0.34.4:
 - Ganchos: executável `~/.config/jangada/ganchos/EVENTO` ou arquivos em
   `EVENTO.d/`. Eventos: `pos-tema`, `pos-agente-fim` (sessão, raiz, integrado),
   `pos-validar`, `pos-update`. Falha de gancho gera só aviso.
+
+## Executor do Conversa de Pescador
+
+O agy aceita nomes desconhecidos em `--agent` e pode usar o agente padrão, com ferramentas. O executor confere `agy agents` antes de usar `pescador`, definido sem ferramentas e sem MCP. Claude fornece eventos parciais com `--output-format stream-json --verbose --include-partial-messages`; eventos `assistant` e `result` repetem o texto e não devem ser concatenados aos trechos recebidos. O pedido entra por stdin. `jangada-pescador-modelo` exige a marca real do bubblewrap, mesmo quando o isolamento geral está desligado.

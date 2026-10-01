@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Executa os modelos do Pescador sem ferramentas e sempre no isolamento.
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+if ! { [[ -n "${JANGADA_ISOLADO:-}" ]] && awk -v m="${JANGADA_MARCA_ISOLADO:-/tmp/.jangada-isolado}" \
+  '$5 == m { a = 1 } END { exit !a }' /proc/self/mountinfo; }; then
+  exec "$(dirname "${BASH_SOURCE[0]}")/jangada-isolar" -- "$0" "$@"
+fi
+motor="${1:-}"; exe="${2:-}"
+[[ "$motor" =~ ^(claude|agy)$ && "$(basename -- "$exe")" == "$motor" ]] || exit 2
+unset JANGADA_SESSAO
+export JANGADA_HOOK_DESLIGADO=1
+case "$motor" in
+  claude)
+    exec "$exe" -p --safe-mode --tools '' --strict-mcp-config --mcp-config '{"mcpServers":{}}' \
+      --setting-sources '' --no-session-persistence --output-format stream-json \
+      --verbose --include-partial-messages
+    ;;
+  agy)
+    # Nome desconhecido cai no agente padrão do agy, com todas as ferramentas.
+    "$exe" agents | grep -qx pescador || {
+      echo 'O agente pescador do agy não está instalado; atualize a Jangada e execute a etapa 50.' >&2
+      exit 1
+    }
+    exec "$exe" -p --agent pescador --sandbox --disable-slash-commands --output-format stream-json
+    ;;
+esac

@@ -132,6 +132,8 @@ testes/codex.sh || falha "testes/codex.sh"
 passo "barra (módulos e migração)"
 testes/barra.sh || falha "testes/barra.sh"
 testes/interface.sh || falha "testes/interface.sh"
+python3 testes/pescador.py || falha "testes/pescador.py"
+testes/pescador-modelo.sh || falha "testes/pescador-modelo.sh"
 
 passo "painel de indicadores"
 testes/painel.sh || falha "testes/painel.sh"
