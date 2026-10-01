@@ -118,6 +118,8 @@ def codex_arquivo(caminho, origem, anterior, limite):
             inicio = arq.tell()
             linha = arq.readline(MAX_LINHA + 1)
             bytes_lidos += len(linha)
+            if arq.tell() > MAX_ARQUIVO:
+                raise OSError('fonte fora dos limites')
             if not linha:
                 break
             if len(linha) > MAX_LINHA:
@@ -181,7 +183,8 @@ def codex_arquivo(caminho, origem, anterior, limite):
         if limite:
             for campo in ('consumo', 'cumulativo', 'ferramentas'):
                 memo[campo] = {k: r for k, r in memo[campo].items() if data(r['data']) >= limite}
-        memo.update(pos=pos, ino=st.st_ino, dev=st.st_dev, tamanho=st.st_size,
+        st = os.fstat(arq.fileno())
+        memo.update(pos=pos, ino=st.st_ino, dev=st.st_dev, tamanho=max(st.st_size, pos),
                     mtime=st.st_mtime_ns, resultados=sorted(resultados.intersection(memo['ferramentas'])))
         return memo, bytes_lidos, linhas_lidas
 

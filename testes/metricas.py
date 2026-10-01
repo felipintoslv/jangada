@@ -177,6 +177,33 @@ class Metricas(unittest.TestCase):
             self.assertEqual(self.coletar()[0][0]['entrada_total'], 3)
             self.assertEqual(self.coletar()[0][0]['entrada_total'], 3)
 
+    def test_acrescimo_durante_leitura_nao_invalida_memo(self):
+        caminho = self.codex / 'sessions/rollout-a.jsonl'
+        r1 = evento('token_usage_record', {'response_id': 'r1', 'usage': {'input_tokens': 10}})
+        r2 = evento('token_usage_record', {'response_id': 'r2', 'usage': {'input_tokens': 20}})
+        self.gravar(caminho, [r1])
+        fstat = os.fstat
+        acrescentado = False
+
+        def durante_leitura(fd):
+            nonlocal acrescentado
+            st = fstat(fd)
+            if not acrescentado and os.readlink(f'/proc/self/fd/{fd}') == str(caminho):
+                acrescentado = True
+                with caminho.open('a') as arq:
+                    arq.write(json.dumps(r2) + '\n')
+            return st
+
+        with patch.object(m.os, 'fstat', side_effect=durante_leitura):
+            cs, _, _ = self.coletar()
+        self.assertTrue(acrescentado)
+        self.assertEqual(sum(c['entrada_total'] for c in cs), 30)
+        memo = json.loads((self.cache / 'codex-interface_externa.json').read_text())['arquivos'][str(caminho)]
+        self.assertLessEqual(memo['pos'], memo['tamanho'])
+        self.assertEqual(self.coletar()[0], cs)
+        fonte = next(c for c in self.coletar()[2] if c['fonte'] == 'codex_externo')
+        self.assertEqual(fonte['bytes_lidos'], 0)
+
     def test_data_futura_reaparece_sem_reler_historico(self):
         depois = AGORA + dt.timedelta(hours=1)
         caminho = self.codex / 'sessions/rollout-a.jsonl'
