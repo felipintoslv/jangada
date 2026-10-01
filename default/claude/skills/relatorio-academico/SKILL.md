@@ -31,12 +31,28 @@ Levante e registre, sem começar o texto:
 
 Se faltar algum desses quatro itens, pergunte antes de redigir.
 
+### Plano do argumento
+
+Para documento extenso, acrescente um plano breve ao registro de evidências.
+Registre por seção a pergunta, a afirmação central e a evidência que a
+sustenta, com localização. Indique a lacuna que a próxima seção resolve.
+Aproveite o plano existente; em revisão localizada, planeje só o trecho
+alterado.
+
+Use esse plano para conferir se cada seção contribui para a pergunta de
+pesquisa e se uma conclusão ficou sem apoio. Fonte ausente permanece
+`[FALTA: descrição]`. O plano cabe no registro ou na conversa; não exige
+arquivo separado, aprovação por parágrafo ou quantidade fixa de frases.
+
 ## 2. Regras invioláveis
 
 - **Não invente.** Citação, DOI, dado, tamanho de amostra, teste estatístico,
   versão de software, aprovação ética, financiamento: se não está no
   registro, escreva `[FALTA: descrição]` no lugar. Não preencha com texto
   plausível (K-Dense: "Do not substitute plausible boilerplate").
+- **Expectativa não é observação.** Se a análise ainda não foi executada,
+  descreva método e resultados esperados como plano ou hipótese. Não atribua
+  sinal ou magnitude observados a uma estimativa que ainda não existe.
 - **Resultado não é interpretação.** A seção de resultados diz o que foi
   observado; a discussão diz o que isso significa.
 - **Associação não é causalidade**, e ausência de significância não é
@@ -111,7 +127,13 @@ curta, adjetivo trocado por número). As específicas de texto acadêmico:
 - Cada figura e tabela é citada no texto, na ordem em que aparece.
 - A legenda diz o que mostrar e a conclusão, e explica as siglas; a figura
   deve ser entendível sem o texto (hzwer).
-- A frase que analisa a tabela fica perto dela e cita o número dela.
+- A análise fica perto da figura ou tabela e liga a referência ao achado que
+  ela sustenta. Diga o que a comparação mostra e seu limite; "a tabela
+  apresenta os resultados" não substitui essa análise.
+- Em Quarto, use identificadores `fig-` e `tbl-` e referências `@fig-...` e
+  `@tbl-...`, conforme o [guia de referências](https://quarto.org/docs/authoring/cross-references).
+  Assim a numeração acompanha a ordem do documento. Em outros formatos,
+  preserve o mecanismo de referência adotado pelo projeto.
 - Coloque lado a lado o que o leitor deve comparar, mesmo que repita uma
   linha de base (hzwer).
 - Só figura que existe e resultado que foi rodado (AI-Scientist).
@@ -124,12 +146,14 @@ Faça em passes separados, um objetivo por vez:
    marcação `[FALTA]` está listada para o usuário.
 2. **Consistência:** o mesmo número é igual no resumo, no texto e na tabela;
    termos e siglas com grafia única; métodos e resultados na mesma ordem.
-3. **Redundância:** o que se repete entre seções é cortado de onde menos
+3. **Argumento:** cada seção sustenta sua afirmação central e contribui
+   para responder à pergunta de pesquisa? Figuras e tabelas têm análise?
+4. **Redundância:** o que se repete entre seções é cortado de onde menos
    serve (AI-Scientist: "Identify where we can save space… without weakening
    the message").
-4. **Frase:** enchimento, ressalvas empilhadas, conectivos falsos, adjetivos
+5. **Frase:** enchimento, ressalvas empilhadas, conectivos falsos, adjetivos
    sem número.
-5. **Norma:** elementos obrigatórios da norma ou do template, formato das
+6. **Norma:** elementos obrigatórios da norma ou do template, formato das
    referências, limite de páginas.
 
 ## 7. Checklist final

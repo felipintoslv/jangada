@@ -25,6 +25,17 @@ O tipo decide a estrutura. Não misture dois tipos num documento só.
 | Decisão | Registrar uma escolha já feita e o porquê | ADR (Nygard, MADR) |
 | Relatório formal | Entrega contratual ou institucional | ABNT NBR 10719 (modelo do abnTeX2) |
 
+### Plano para relatórios extensos
+
+Antes de redigir um relatório extenso, planeje a função de cada seção.
+Registre a pergunta que responde, a conclusão ou decisão pretendida e a
+evidência necessária, com localização. A conclusão pretendida é hipótese
+de trabalho; ajuste-a se a evidência a contrariar.
+
+Aproveite o roteiro existente ou faça esse plano na conversa. Em texto
+curto ou revisão localizada, basta conferir a ligação entre afirmação e
+fonte no trecho; não crie arquivo nem rodada de aprovação adicional.
+
 ## 2. Regras que valem para todos
 
 - **Comece pelo resumo.** Duas a quatro frases: o que aconteceu ou o que se
@@ -122,6 +133,12 @@ curta, adjetivo trocado por número). As específicas de relatório técnico:
 - **Nome de sistema, comando e arquivo em código:** `api-pagamentos`,
   `kubectl rollout undo`.
 - **Tabela para comparação** de opções e medições; parágrafo para a análise.
+  Ligue cada figura ou tabela à conclusão que ela sustenta e explicite os
+  limites da comparação. Apontar que uma tabela "apresenta os dados" não
+  explica o que eles mostram.
+- **Resultado medido e resultado esperado separados.** Projeção, simulação
+  ou benefício de uma mudança ainda não executada não é efeito observado
+  em produção. Declare as premissas que sustentam a expectativa.
 - **Sem narrar o processo de escrita** ("neste relatório vamos abordar").
 
 > Antes: Durante o período analisado, observou-se uma degradação
@@ -147,8 +164,10 @@ curta, adjetivo trocado por número). As específicas de relatório técnico:
 3. **Fato e análise:** a linha do tempo ou a seção de evidências tem juízo?
 4. **Hipóteses:** toda especulação está marcada?
 5. **Ações:** todas têm dono, escopo e prazo?
-6. **Redundância:** o mesmo achado aparece em mais de uma seção?
-7. **Frase:** enchimento, adjetivo sem número, "erro humano", "indisponibilidade"
+6. **Argumento:** cada conclusão ou recomendação é sustentada pelas
+   evidências? Seções e tabelas têm função na resposta à pergunta técnica?
+7. **Redundância:** o mesmo achado aparece em mais de uma seção?
+8. **Frase:** enchimento, adjetivo sem número, "erro humano", "indisponibilidade"
    que não foi.
 
 ## 6. Checklist final
