@@ -555,6 +555,31 @@ subagente tem `.db` próprio.
     fora do ar, modelo ausente, memória insuficiente ou jogo aberto).
   - Campos numéricos sem valor ficam `null`.
 
+## 10. Cache incremental e cobertura do Codex
+
+Arquivos derivados em `$JANGADA_ESTADO/painel/`, criados pelo adaptador
+`default/painel/metricas.py`, a partir de 01/10/2026:
+
+| Arquivo | Conteúdo | Atualização |
+|---|---|---|
+| `codex-jangada.json` | posições e metadados das conversas geridas pela Jangada | troca de nome depois de ler a fonte sem erro |
+| `codex-interface_externa.json` | posições e metadados do histórico externo | mesma regra, com origem separada |
+| `cobertura.json` | situação e data da coleta de cada fonte | publicado pelo coletor junto às métricas |
+
+Os caches Codex têm `versao`, `raiz` e `arquivos`. Cada arquivo guarda
+posição em bytes, inode, dispositivo, tamanho, data de alteração, contexto,
+contadores e registros normalizados. Não guarda mensagens, argumentos,
+resultados textuais de ferramentas ou credenciais. Cache ausente ou com JSON
+inválido é reconstruído; arquivos truncados ou substituídos são relidos.
+
+Na cobertura, `atualizado` é a última coleta válida e `ultima_tentativa` é
+a chamada mais recente, mesmo com falha. `ultimo_dado` informa a data do
+registro mais recente dentro da retenção. `dados_preservados` identifica
+registros conservados após erro; nesse caso, as contagens continuam sendo
+as do cache preservado. `erro` registra somente a classe da exceção, sem
+conteúdo externo. Nas fontes Codex, `arquivos_lidos`, `bytes_lidos` e
+`linhas_lidas` medem a leitura da chamada, não consumo de tokens.
+
 ## Indicadores e registros
 
 | Grupo | Indicador | Registros | Observação |

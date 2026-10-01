@@ -2,7 +2,7 @@
 
 - Data: 30/09/2026.
 - Base analisada: `85b273f`.
-- Estado: proposta para implementação.
+- Estado: implementação parcial, atualizado em 01/10/2026.
 - Método: três agentes de análise somente leitura, com consolidação pelo agente principal. Frentes: benchmarking, registros do Ollama e auditoria do painel/Codex.
 
 ## 1. Resultado pretendido
@@ -150,4 +150,33 @@ Preservar leitura limitada de arquivos, isolamento, proteção da chave do paine
 
 ## 9. Escopo desta proposta
 
-Este documento consolida a análise. O código, a instalação e os contratos de registros ainda precisam das entregas descritas acima. Datas, estrelas e percentuais históricos dos benchmarks não foram atualizados; não fundamentam estimativas de ganho para esta máquina.
+A análise das seções 2 e 3 registra a base de 30/09, antes da implementação.
+O commit `1b884db` incorporou consumo de Claude, Codex e Ollama, cobertura,
+registro por requisição local e correções das pesquisas. A atualização de
+01/10 acrescenta coleta incremental Codex, evolução diária, gráfico de
+velocidade local, filtros por provedor e papel e idade da última coleta válida.
+
+```mermaid
+flowchart LR
+    A[Registros normalizados] --> B[Coleta incremental Codex]
+    B --> C[Consumo diário e velocidade local]
+    C --> D[Cobertura, falhas e idade dos dados]
+    D --> E[Próxima etapa:<br>experimento controlado de delegação]
+```
+
+| Entrega | Situação verificada |
+|---|---|
+| 1 | Notas ausentes e filtros de pesquisas corrigidos; destinos locais separados |
+| 2 | Falhas preservam dados e idade; publicação conjunta de todas as tabelas ainda pendente |
+| 3 | Consumo Ollama incorporado, com deduplicação por chamada |
+| 4 | Tokens, durações internas, média, mediana e percentil 95 por modelo disponíveis |
+| 5 | Consumo e ferramentas Codex incorporados; coleta incremental e contexto entre coletas testados |
+| 6 | Visão consolidada com filtros de consumo; experimento direto versus delegado ainda pendente |
+
+Também permanecem pendentes o inventário do Ollama, a medição de consumo
+própria do executor do Pescador e a associação completa entre ferramentas,
+turnos e delegações. Não há resultado de economia causal a apresentar.
+Os novos caches incrementais são derivados e reconstruídos automaticamente;
+a atualização mantém os esquemas das tabelas e não exige alterar configuração
+do usuário. Datas, estrelas e percentuais dos benchmarks não foram
+atualizados e não fundamentam estimativas de ganho para esta máquina.

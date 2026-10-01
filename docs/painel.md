@@ -20,7 +20,8 @@ indicadores", e os campos de cada registro em [registros](registros.md).
 O período inicial é o dia atual. A aba de consumo reúne Claude, Codex e
 Ollama em `consumo.parquet`; `chamadas.parquet` guarda apenas metadados das
 ferramentas e `cobertura.json` informa quais fontes foram lidas. Os filtros
-de executor, origem e modelo afetam essas tabelas. O detalhamento antigo
+de executor, origem, modelo, provedor e papel afetam as tabelas e os novos
+gráficos de consumo e desempenho local. O detalhamento antigo
 do Claude mantém seus filtros de período e projeto.
 
 Sessões Codex em `JANGADA_ESTADO/codex` ficam separadas do histórico em
@@ -47,8 +48,32 @@ das chamadas medidas. O fluxo local não oferece ferramentas.
 O comparativo de modelos continua dependendo de tarefas equivalentes,
 qualidade dos retornos e amostra suficiente. A chamada local encontrada na
 análise de 30/09/2026 não sustenta conclusão sobre economia ou desempenho.
-O adaptador Codex relê arquivos com limites de tamanho e quantidade; ainda
-não mantém uma posição incremental própria.
+O adaptador Codex mantém um cache por origem, em `codex-jangada.json` e
+`codex-interface_externa.json`. Guarda posição em bytes, dispositivo, inode,
+tamanho, data de alteração, contexto e metadados normalizados. A segunda
+coleta lê apenas linhas acrescentadas. Uma linha incompleta fica para a
+próxima coleta; truncamento, troca de inode ou reescrita de mesmo tamanho
+reconstroem o arquivo. Os históricos são tratados como registros acrescentados
+no fim; uma reescrita que aumenta o tamanho mantendo o inode exige apagar o
+cache dessa origem para reler tudo.
+
+Os caches não contêm argumentos de ferramentas, mensagens ou credenciais.
+São publicados por troca de nome só após ler toda a fonte sem erro. Como
+contêm os metadados junto das posições, uma interrupção posterior na publicação
+das tabelas não perde os registros já lidos. Cache ausente, com JSON inválido ou de
+outra versão é reconstruído. Os limites de arquivos, linhas e tamanho
+continuam valendo.
+
+A tabela de cobertura mostra a última coleta válida, a última tentativa,
+o último registro e a idade em minutos. Quando uma fonte falha, conserva
+os dados, as contagens e a data da coleta anterior. O aviso na aba Revisão
+e síntese distingue fontes com dados, sem dados e com erro. A cobertura é
+da fonte inteira, independente dos filtros de período e projeto.
+
+A evolução diária separa executor, origem e modelo, sem transformar ausência
+em zero. O gráfico do Ollama mostra tokens por segundo de geração e o número
+de chamadas com medida. A tabela mantém média ponderada, mediana e percentil
+95. Esses gráficos não demonstram economia causal.
 
 Pesquisas do Conversa de Pescador respeitam o período e o par selecionados.
 Notas ausentes não interrompem a coleta. A média exibida é a dos pareceres
@@ -193,3 +218,5 @@ botão direito, `--parar`. O script avisa a barra pelo sinal 9
 |---|---|
 | `testes/painel.sh` | coletor sobre registros de exemplo: coleta incremental, resposta repetida, rodadas e pareceres antigos, `--waybar` em cada estado, `--conferir`, coleta interrompida, erro nos subagentes; com R, os indicadores, as redes, as abas, o escape do HTML e a checagem de Host, Origin e token |
 | `testes/barra.sh` | módulo `custom/indicadores` e a migração que o acrescenta |
+| `testes/metricas.py` | coleta incremental Codex, contexto entre coletas, respostas e cumulativos, linhas parciais, rotação, truncamento, cache inválido e preservação de uma fonte com erro |
+| `testes/painel-motores.R` | agregação diária sem inventar zero, gráficos, filtros por provedor e papel e aviso de fonte com erro |

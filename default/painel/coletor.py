@@ -834,10 +834,12 @@ def metricas_unificadas(cache, agora):
         for c in cobertura:
             if c.get("fonte") in falhas:
                 anterior = next((a for a in cobertura_ant if a.get("fonte") == c.get("fonte")), {})
-                c["ultimo_dado"] = anterior.get("ultimo_dado")
-                c["dados_preservados"] = True
+                for campo in ("atualizado", "ultimo_dado", "registros", "ferramentas"):
+                    c[campo] = anterior.get(campo)
+                c["dados_preservados"] = any(l.get("fonte") == c.get("fonte")
+                    for linhas in anteriores.values() for l in linhas)
         for c in cobertura:
-            for campo in ("atualizado", "ultimo_dado"):
+            for campo in ("atualizado", "ultima_tentativa", "ultimo_dado"):
                 if isinstance(c.get(campo), dt.datetime):
                     c[campo] = c[campo].isoformat()
         gravar_tabela(os.path.join(cache, "consumo.parquet"), consumo, ESQ_CONSUMO)
@@ -846,7 +848,8 @@ def metricas_unificadas(cache, agora):
         return consumo, cobertura
     except Exception as e:  # Métricas extras não impedem a coleta principal.
         print(f"metricas: {type(e).__name__}", file=sys.stderr)
-        cobertura = [dict(c, estado="erro", dados_preservados=True) for c in cobertura_ant]
+        cobertura = [dict(c, estado="erro", dados_preservados=True,
+                          ultima_tentativa=agora.isoformat(), erro=type(e).__name__) for c in cobertura_ant]
         if not cobertura:
             cobertura = [{"fonte": "metricas", "estado": "erro", "dados_preservados": True}]
         gravar_json(os.path.join(cache, "cobertura.json"), cobertura)

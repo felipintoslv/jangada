@@ -5,7 +5,10 @@ stopifnot(is.na(soma_medida(c(NA, Inf, -1))), soma_medida(c(NA, 0)) == 0,
 cache <- tempfile("painel-motores-")
 dir.create(cache)
 jsonlite::write_json(list(), file.path(cache, "coleta.json"))
-jsonlite::write_json(list(), file.path(cache, "cobertura.json"))
+jsonlite::write_json(list(list(fonte = "codex_externo", origem = "interface_externa",
+  estado = "erro", atualizado = "2026-09-30T23:00:00-03:00",
+  ultima_tentativa = "2026-10-01T02:30:00Z", dados_preservados = TRUE)),
+  file.path(cache, "cobertura.json"))
 d <- carregar_cache(cache)$consumo
 r <- as.data.frame(lapply(d, function(x) rep(x[NA_integer_], 3)))
 r$id <- c("local1", "local2", "externo")
@@ -15,6 +18,7 @@ r$executor <- c("ollama", "ollama", "codex")
 r$provedor <- c("ollama", "ollama", "openai")
 r$origem <- c("jangada", "jangada", "interface_externa")
 r$modelo <- c("qwen", "qwen", "codex")
+r$papel <- c("leitor", "redator", "")
 r$projeto <- "teste"
 r$saida <- c(10, 90, NA)
 r$entrada_total <- c(0, 100, NA)
@@ -22,6 +26,10 @@ r$tempo_geracao_ms <- c(1000, 3000, NA)
 local <- desempenho_local(r)
 stopifnot(local$tokens_s == 25, local$com_tempo_geracao == 2,
           resumo_motores(r)$registros[resumo_motores(r)$executor == "codex"] == 1)
+diario <- consumo_motores_diario(r)
+stopifnot(sum(diario$saida, na.rm = TRUE) == 100,
+          is.na(diario$saida[diario$executor == "codex"]),
+          diario$com_saida[diario$executor == "codex"] == 0)
 r$tempo_geracao_ms <- NA_real_
 stopifnot(is.na(desempenho_local(r)$tokens_s))
 arrow::write_parquet(r, file.path(cache, "consumo.parquet"))
@@ -46,6 +54,11 @@ shiny::testServer(shiny::shinyAppDir("default/painel"), {
   stopifnot(nrow(motores()) == 2, nrow(pesqs()) == 2)
   invisible(output$b_motores); invisible(output$b_local)
   invisible(output$b_fontes); invisible(output$b_ferramentas)
+  stopifnot(grepl("com erro", output$situacao_fontes$html))
+  session$setInputs(modelo_consumo = NULL, provedor_consumo = "ollama", papel_consumo = "redator")
+  stopifnot(nrow(motores()) == 1, motores()$papel == "redator")
+  invisible(output$b_motores_dia); invisible(output$b_motores_cob)
+  invisible(output$b_local_grafico)
 })
 unlink(cache, recursive = TRUE)
-cat("Indicadores e filtros de motores: testes passaram\n")
+message("Indicadores e filtros de motores: testes passaram")

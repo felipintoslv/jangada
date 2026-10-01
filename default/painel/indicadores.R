@@ -122,6 +122,12 @@ resumo_motores <- function(d) {
     stringsAsFactors = FALSE)))
 }
 
+consumo_motores_diario <- function(d) {
+  if (!nrow(d)) return(data.frame())
+  do.call(rbind, lapply(split(d, d$dia), function(g)
+    cbind(dia = g$dia[1], resumo_motores(g))))
+}
+
 desempenho_local <- function(d) {
   d <- d[d$executor == "ollama", , drop = FALSE]
   if (!nrow(d)) return(data.frame())

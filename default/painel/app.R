@@ -141,6 +141,8 @@ filtros <- sidebar(
   selectizeInput("executor", "Executor do consumo", choices = NULL, multiple = TRUE),
   selectizeInput("origem_consumo", "Origem do consumo", choices = NULL, multiple = TRUE),
   selectizeInput("modelo_consumo", "Modelo do consumo", choices = NULL, multiple = TRUE),
+  selectizeInput("provedor_consumo", "Provedor do consumo", choices = NULL, multiple = TRUE),
+  selectizeInput("papel_consumo", "Papel da delegação", choices = NULL, multiple = TRUE),
   uiOutput("coleta")
 )
 
@@ -150,6 +152,7 @@ ui <- page_navbar(
   sidebar = filtros,
   nav_panel("Revisão e síntese", icon = bsicons::bs_icon("check2-square"),
     uiOutput("manchete_dia"),
+    uiOutput("situacao_fontes"),
     layout_column_wrap(width = 1 / 4, fill = FALSE,
       value_box("Aprovação na 1ª rodada", textOutput("vb_primeira"), showcase = bsicons::bs_icon("check2-circle"),
                 p(textOutput("vb_primeira_n", inline = TRUE))),
@@ -173,10 +176,13 @@ ui <- page_navbar(
   ),
   nav_panel("Consumo de modelos", icon = bsicons::bs_icon("cpu"),
     uiOutput("insight_consumo"),
+    cartao("Evolução diária do consumo", plotly::plotlyOutput("b_motores_dia", height = 320),
+           cob = uiOutput("b_motores_cob")),
     cartao("Consumo por executor, origem e modelo", DT::DTOutput("b_motores"),
            p(class = "cobertura", "Entrada inclui cache lido. Saída e raciocínio são mostrados separadamente e não são somados. Campos sem medida aparecem como ausentes; totais parciais têm contagem de cobertura.")),
     layout_columns(col_widths = c(6, 6),
-      cartao("Desempenho do Ollama", DT::DTOutput("b_local"),
+      cartao("Desempenho do Ollama", plotly::plotlyOutput("b_local_grafico", height = 260),
+             DT::DTOutput("b_local"),
              p(class = "cobertura", "Tokens/s usa apenas o tempo de geração medido. Registros antigos sem duração interna não permitem calcular velocidade. Poucas chamadas não estabelecem um comparativo de modelos.")),
       cartao("Ferramentas por executor", DT::DTOutput("b_ferramentas"),
              p(class = "cobertura", "O executor é quem chamou a ferramenta. O fluxo local do Ollama não dispõe de ferramentas."))
@@ -357,7 +363,7 @@ server <- function(input, output, session) {
       paste0(sprintf("O Conversa de Pescador registrou %d consulta(s) hoje. ", n_p_hoje),
               if (is.na(med_fato_hoje)) "Sem avaliação numérica disponível." else sprintf("Média dos pareceres disponíveis: %d%%.", med_fato_hoje))
     } else {
-      "Nenhuma consulta externa auditada hoje."
+      "Nenhuma consulta registrada no Pescador hoje."
     }
 
     div(class = "alert alert-primary mb-3 shadow-sm border-0",
@@ -377,9 +383,9 @@ server <- function(input, output, session) {
     projetos <- sort(unique(c(d$validacoes$projeto, d$mensagens$projeto, d$eventos$projeto, d$consumo$projeto)))
     agentes <- sort(unique(c(d$validacoes$autor, d$eventos$agente, d$sessoes$agente)))
     ent <- entregas(d$validacoes)
-    for (campo in c("executor", "origem", "modelo")) {
-      id <- switch(campo, origem = "origem_consumo", modelo = "modelo_consumo", campo)
-      escolhas <- sort(unique(d$consumo[[campo]]))
+    for (campo in c("executor", "origem", "modelo", "provedor", "papel")) {
+      id <- if (campo == "executor") campo else paste0(campo, "_consumo")
+      escolhas <- sort(unique(c(d$consumo[[campo]], d$chamadas[[campo]])))
       updateSelectizeInput(session, id, choices = escolhas[!is.na(escolhas) & nzchar(escolhas)], selected = isolate(input[[id]]))
     }
     updateSelectizeInput(session, "projeto", choices = projetos[nzchar(projetos)], selected = isolate(input$projeto))
@@ -479,20 +485,63 @@ server <- function(input, output, session) {
   # B. Consumo
   motores <- reactive({
     d <- filtrar(no_periodo(dados()$consumo), agente = "executor")
-    for (campo in c("executor", "origem", "modelo")) {
-      id <- switch(campo, origem = "origem_consumo", modelo = "modelo_consumo", campo)
+    for (campo in c("executor", "origem", "modelo", "provedor", "papel")) {
+      id <- if (campo == "executor") campo else paste0(campo, "_consumo")
       if (length(input[[id]])) d <- d[d[[campo]] %in% input[[id]], , drop = FALSE]
     }
     d
   })
   output$b_motores <- DT::renderDT(tabela(resumo_motores(motores())))
+  output$b_motores_dia <- plotly::renderPlotly({
+    d <- consumo_motores_diario(motores())
+    if (!nrow(d) || !any(is.finite(d$saida))) return(vazio())
+    d$serie <- paste(d$executor, d$origem, d$modelo, sep = " · ")
+    d$dica <- paste(esc(d$serie), "<br>", d$dia, "<br>Saída:", milhar(d$saida),
+                    "<br>Com medida:", d$com_saida, "de", d$registros)
+    pl(plotly::plot_ly(d, x = ~as.Date(dia), y = ~saida, color = ~serie, type = "bar",
+                      text = ~dica, hoverinfo = "text") |>
+         plotly::layout(barmode = "group", xaxis = list(tickformat = "%d/%m")), "", "tokens de saída")
+  })
+  output$b_motores_cob <- renderUI({
+    d <- motores()
+    div(cobertura_ui(cobertura(d$data)),
+        p(class = "cobertura", "Barras ausentes indicam falta de medida. Tokenização varia entre provedores; o gráfico não mede custo nem economia de delegação."))
+  })
   output$b_local <- DT::renderDT(tabela(desempenho_local(motores())))
-  output$b_fontes <- DT::renderDT(tabela(tabela_lista(dados()$fontes,
-    c("fonte", "origem", "estado", "registros", "ferramentas", "ultimo_dado", "dados_preservados"))))
+  output$b_local_grafico <- plotly::renderPlotly({
+    d <- desempenho_local(motores())
+    if (!nrow(d) || !any(is.finite(d$tokens_s))) return(vazio())
+    d$dica <- paste(esc(d$modelo), "<br>Tokens/s:", round(d$tokens_s, 1),
+                    "<br>Chamadas com medida:", d$com_tempo_geracao, "de", d$registros)
+    pl(plotly::plot_ly(d, x = ~modelo, y = ~tokens_s, type = "bar", text = ~dica,
+                      hoverinfo = "text", marker = list(color = cores[["primaria"]])),
+       "", "tokens por segundo de geração")
+  })
+  output$b_fontes <- DT::renderDT({
+    d <- tabela_lista(dados()$fontes,
+      c("fonte", "origem", "estado", "atualizado", "ultima_tentativa", "ultimo_dado",
+        "registros", "ferramentas", "dados_preservados"))
+    carimbos <- base::sub("Z$", "+0000", d$atualizado)
+    carimbos <- gsub("([+-][0-9]{2}):([0-9]{2})$", "\\1\\2", carimbos)
+    instantes <- as.POSIXct(carimbos, format = "%Y-%m-%dT%H:%M:%OS%z", tz = "UTC")
+    d$idade <- round(pmax(0, as.numeric(difftime(Sys.time(), instantes, units = "mins"))))
+    names(d) <- c("fonte", "origem", "estado", "última coleta válida", "última tentativa",
+                  "último registro", "consumo", "ferramentas", "dados preservados", "idade (min)")
+    tabela(d)
+  })
+  output$situacao_fontes <- renderUI({
+    d <- tabela_lista(dados()$fontes, c("fonte", "estado", "atualizado", "ultima_tentativa"))
+    falhas <- sum(d$estado == "erro", na.rm = TRUE)
+    classe <- if (falhas) "alert alert-warning" else "alert alert-secondary"
+    div(class = classe,
+        sprintf("%d fonte(s) com dados; %d sem dados; %d com erro.",
+                sum(d$estado == "ok", na.rm = TRUE), sum(d$estado == "sem_dados", na.rm = TRUE), falhas),
+        if (falhas) p("Os dados anteriores dessas fontes podem estar preservados. Confira a última coleta válida em Consumo de modelos."))
+  })
   output$b_ferramentas <- DT::renderDT({
     d <- filtrar(no_periodo(dados()$chamadas), agente = "executor")
-    for (campo in c("executor", "origem", "modelo")) {
-      id <- switch(campo, origem = "origem_consumo", modelo = "modelo_consumo", campo)
+    for (campo in c("executor", "origem", "modelo", "provedor", "papel")) {
+      id <- if (campo == "executor") campo else paste0(campo, "_consumo")
       if (length(input[[id]])) d <- d[d[[campo]] %in% input[[id]], , drop = FALSE]
     }
     if (!nrow(d)) return(tabela(data.frame()))
