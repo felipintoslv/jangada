@@ -7,8 +7,9 @@ dir.create(cache)
 jsonlite::write_json(list(), file.path(cache, "coleta.json"))
 jsonlite::write_json(list(list(fonte = "codex_externo", origem = "interface_externa",
   estado = "erro", atualizado = "2026-09-30T23:00:00-03:00",
-  ultima_tentativa = "2026-10-01T02:30:00Z", dados_preservados = TRUE)),
-  file.path(cache, "cobertura.json"))
+  ultima_tentativa = "2026-10-01T02:30:00Z", dados_preservados = TRUE),
+  list(fonte = "legada", estado = "sem_dados", atualizado = "2026-09-30T23:00:00"),
+  list(fonte = "ausente", estado = "sem_dados")), file.path(cache, "cobertura.json"))
 d <- carregar_cache(cache)$consumo
 r <- as.data.frame(lapply(d, function(x) rep(x[NA_integer_], 3)))
 r$id <- c("local1", "local2", "externo")
@@ -54,7 +55,8 @@ shiny::testServer(shiny::shinyAppDir("default/painel"), {
   stopifnot(nrow(motores()) == 2, nrow(pesqs()) == 2)
   invisible(output$b_motores); invisible(output$b_local)
   invisible(output$b_fontes); invisible(output$b_ferramentas)
-  stopifnot(grepl("com erro", output$situacao_fontes$html))
+  stopifnot(grepl("com erro", output$situacao_fontes$html),
+            sum(fontes()[["idade (min)"]] == "sem data válida") == 2)
   session$setInputs(modelo_consumo = NULL, provedor_consumo = "ollama", papel_consumo = "redator")
   stopifnot(nrow(motores()) == 1, motores()$papel == "redator")
   invisible(output$b_motores_dia); invisible(output$b_motores_cob)

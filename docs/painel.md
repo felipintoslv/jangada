@@ -50,12 +50,21 @@ qualidade dos retornos e amostra suficiente. A chamada local encontrada na
 análise de 30/09/2026 não sustenta conclusão sobre economia ou desempenho.
 O adaptador Codex mantém um cache por origem, em `codex-jangada.json` e
 `codex-interface_externa.json`. Guarda posição em bytes, dispositivo, inode,
-tamanho, data de alteração, contexto e metadados normalizados. A segunda
+tamanho, data de alteração, assinaturas de trechos, contexto e metadados
+normalizados dentro da retenção. A segunda
 coleta lê apenas linhas acrescentadas. Uma linha incompleta fica para a
 próxima coleta; truncamento, troca de inode ou reescrita de mesmo tamanho
-reconstroem o arquivo. Os históricos são tratados como registros acrescentados
-no fim; uma reescrita que aumenta o tamanho mantendo o inode exige apagar o
-cache dessa origem para reler tudo.
+reconstroem o arquivo. Se o arquivo mudou, compara hashes dos primeiros e
+últimos 4 KiB já consumidos, detectando também reescritas crescentes nessas
+bordas. Uma alteração apenas no meio que preserve ambas as bordas e aumente
+o tamanho exige apagar o cache da origem para reler tudo.
+
+Metadados antigos são podados, preservando o último contador cumulativo.
+Ampliar a retenção reconstrói o cache a partir dos históricos ainda disponíveis.
+Um cache acima do limite de tamanho não é reutilizado nem substituído por
+outro acima do limite; a coleta continua relendo os históricos.
+Registros futuros permanecem no cache e entram nas tabelas quando o relógio
+os alcançar.
 
 Os caches não contêm argumentos de ferramentas, mensagens ou credenciais.
 São publicados por troca de nome só após ler toda a fonte sem erro. Como
@@ -68,7 +77,8 @@ A tabela de cobertura mostra a última coleta válida, a última tentativa,
 o último registro e a idade em minutos. Quando uma fonte falha, conserva
 os dados, as contagens e a data da coleta anterior. O aviso na aba Revisão
 e síntese distingue fontes com dados, sem dados e com erro. A cobertura é
-da fonte inteira, independente dos filtros de período e projeto.
+da fonte inteira, independente dos filtros de período e projeto. Carimbos
+legados ausentes ou sem fuso mostram “sem data válida” na idade.
 
 A evolução diária separa executor, origem e modelo, sem transformar ausência
 em zero. O gráfico do Ollama mostra tokens por segundo de geração e o número

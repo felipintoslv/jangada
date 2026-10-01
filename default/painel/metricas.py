@@ -86,7 +86,17 @@ def uso(b, u):
                 raciocinio=numero(u.get('reasoning_output_tokens')), **dict.fromkeys(TEMPOS))
 
 
-def codex_arquivo(caminho, origem, anterior):
+def assinatura_codex(arq, pos):
+    atual = arq.tell()
+    arq.seek(0)
+    inicio = arq.read(min(pos, 4096))
+    arq.seek(max(0, pos - 4096))
+    fim = arq.read(min(pos, 4096))
+    arq.seek(atual)
+    return hashlib.sha256(inicio + fim).hexdigest()
+
+
+def codex_arquivo(caminho, origem, anterior, limite):
     fd = os.open(caminho, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, 'rb') as arq:
         st = os.fstat(arq.fileno())
@@ -96,8 +106,10 @@ def codex_arquivo(caminho, origem, anterior):
         mesmo = (memo.get('ino') == st.st_ino and memo.get('dev') == st.st_dev
                  and st.st_size >= memo.get('tamanho', 0)
                  and not (st.st_size == memo.get('tamanho') and st.st_mtime_ns != memo.get('mtime')))
+        if mesmo and (st.st_mtime_ns != memo['mtime'] or st.st_size != memo['tamanho']):
+            mesmo = memo.get('assinatura') == assinatura_codex(arq, memo['pos'])
         if not mesmo:
-            memo = dict(pos=0, sessao=caminho.stem, projeto='', modelo='', anterior={},
+            memo = dict(pos=0, sessao=caminho.stem, projeto='', modelo='', completos=False, anterior={},
                         consumo={}, cumulativo={}, ferramentas={}, resultados=[])
         arq.seek(memo['pos'])
         bytes_lidos = linhas_lidas = 0
@@ -131,6 +143,7 @@ def codex_arquivo(caminho, origem, anterior):
             if d.get('type') == 'token_usage_record' and isinstance(p.get('usage'), dict):
                 rid = texto(p.get('response_id'))
                 if rid and t:
+                    memo['completos'] = True
                     ident = 'codex:' + rid
                     memo['consumo'][ident] = uso(base(ident, t.isoformat(), origem, 'codex', 'openai',
                                                      memo['modelo'], sessao, memo['projeto']), p['usage'])
@@ -162,12 +175,18 @@ def codex_arquivo(caminho, origem, anterior):
         for ident in resultados:
             if ident in memo['ferramentas']:
                 memo['ferramentas'][ident]['resultado'] = 'registrado'
-        memo.update(pos=arq.tell(), ino=st.st_ino, dev=st.st_dev, tamanho=st.st_size,
-                    mtime=st.st_mtime_ns, resultados=sorted(resultados))
+        pos = arq.tell()
+        if pos != memo['pos'] or 'assinatura' not in memo:
+            memo['assinatura'] = assinatura_codex(arq, pos)
+        if limite:
+            for campo in ('consumo', 'cumulativo', 'ferramentas'):
+                memo[campo] = {k: r for k, r in memo[campo].items() if data(r['data']) >= limite}
+        memo.update(pos=pos, ino=st.st_ino, dev=st.st_dev, tamanho=st.st_size,
+                    mtime=st.st_mtime_ns, resultados=sorted(resultados.intersection(memo['ferramentas'])))
         return memo, bytes_lidos, linhas_lidas
 
 
-def codex(raiz, origem, cache=None, leitura=None):
+def codex(raiz, origem, cache=None, leitura=None, limite=None):
     consumo, ferramentas, novos = {}, {}, {}
     caminho_memo = Path(cache, 'codex-' + origem + '.json') if cache is not None else None
     memo = {}
@@ -179,27 +198,58 @@ def codex(raiz, origem, cache=None, leitura=None):
                 if not stat.S_ISREG(st.st_mode) or st.st_size > MAX_ARQUIVO:
                     raise OSError('cache fora dos limites')
                 guardado = json.load(arq)
-            if isinstance(guardado, dict) and guardado.get('versao') == 1 and guardado.get('raiz') == str(raiz):
+            if (isinstance(guardado, dict) and guardado.get('versao') == 2
+                    and guardado.get('raiz') == str(raiz) and 'limite' in guardado
+                    and (guardado['limite'] is None or (limite is not None
+                         and data(guardado['limite']) is not None and limite >= data(guardado['limite'])))):
                 memo = guardado.get('arquivos', {})
-        except (FileNotFoundError, ValueError, UnicodeDecodeError):
+                if not isinstance(memo, dict):
+                    raise ValueError('cache inválido')
+                for item in memo.values():
+                    if not isinstance(item, dict) or not all(type(item.get(k)) is int and item[k] >= 0
+                            for k in ('pos', 'ino', 'dev', 'tamanho', 'mtime')):
+                        raise ValueError('cache inválido')
+                    if type(item.get('completos')) is not bool:
+                        raise ValueError('cache inválido')
+                    if item['pos'] > item['tamanho'] or not all(isinstance(item.get(k), str)
+                            for k in ('sessao', 'projeto', 'modelo', 'assinatura')):
+                        raise ValueError('cache inválido')
+                    if not isinstance(item.get('resultados'), list) or not all(isinstance(r, str)
+                            for r in item['resultados']) or not isinstance(item.get('anterior'), dict):
+                        raise ValueError('cache inválido')
+                    if any(v is not None and numero(v) is None for v in item['anterior'].values()):
+                        raise ValueError('cache inválido')
+                    for campo in ('consumo', 'cumulativo', 'ferramentas'):
+                        campos = set(base('', '', '', '', '')) | (set(('ferramenta', 'resultado'))
+                            if campo == 'ferramentas' else set(TOKENS + TEMPOS))
+                        if not isinstance(item.get(campo), dict) or not all(isinstance(r, dict)
+                                and campos <= r.keys() and data(r.get('data')) is not None
+                                and all(isinstance(r[k], str) for k in campos - set(TOKENS + TEMPOS))
+                                and (campo == 'ferramentas' or all(r[k] is None or numero(r[k]) is not None
+                                     for k in TOKENS + TEMPOS)) for r in item[campo].values()):
+                            raise ValueError('cache inválido')
+        except (OSError, ValueError, UnicodeDecodeError):
             memo = {}
     for caminho in arquivos(raiz):
-        item, nbytes, nlinhas = codex_arquivo(caminho, origem, memo.get(str(caminho)))
+        item, nbytes, nlinhas = codex_arquivo(caminho, origem, memo.get(str(caminho)), limite)
         novos[str(caminho)] = item
         if leitura is not None:
             leitura['arquivos_lidos'] += int(nbytes > 0)
             leitura['bytes_lidos'] += nbytes
             leitura['linhas_lidas'] += nlinhas
         # O formato por resposta substitui os cumulativos também quando chega depois.
-        consumo.update(item['consumo'] or item['cumulativo'])
+        consumo.update(item['consumo'] if item['completos'] else item['cumulativo'])
         ferramentas.update(item['ferramentas'])
     if caminho_memo is not None:
         temporario = None
         try:
             with tempfile.NamedTemporaryFile(mode='w', dir=cache, prefix='.codex-', delete=False) as arq:
                 temporario = arq.name
-                json.dump(dict(versao=1, raiz=str(raiz), arquivos=novos), arq, ensure_ascii=False, allow_nan=False)
-            os.replace(temporario, caminho_memo)
+                json.dump(dict(versao=2, raiz=str(raiz), limite=limite.isoformat() if limite else None,
+                               arquivos=novos), arq, ensure_ascii=False, allow_nan=False)
+                tamanho = arq.tell()
+            if tamanho <= MAX_ARQUIVO:
+                os.replace(temporario, caminho_memo)
         finally:
             if temporario and os.path.exists(temporario):
                 os.unlink(temporario)
@@ -293,9 +343,9 @@ def coletar(cache, agora, retencao_dias=180):
     gerenciado = estado / 'codex'
     fontes = [('claude', 'misto', lambda: claude(cache)),
               ('ollama', 'jangada', lambda: ollama(estado / 'delegacoes.jsonl')),
-              ('codex_jangada', 'jangada', lambda: codex(gerenciado, 'jangada', cache, leituras['codex_jangada']))]
+              ('codex_jangada', 'jangada', lambda: codex(gerenciado, 'jangada', cache, leituras['codex_jangada'], limite))]
     if not home_codex.resolve().is_relative_to(gerenciado.resolve()):
-        fontes.append(('codex_externo', 'interface_externa', lambda: codex(home_codex / 'sessions', 'interface_externa', cache, leituras['codex_externo'])))
+        fontes.append(('codex_externo', 'interface_externa', lambda: codex(home_codex / 'sessions', 'interface_externa', cache, leituras['codex_externo'], limite)))
     leituras = {fonte: dict(arquivos_lidos=0, bytes_lidos=0, linhas_lidas=0) for fonte, _, _ in fontes}
     consumo, ferramentas, cobertura = [], [], []
     limite = agora - dt.timedelta(days=retencao_dias) if retencao_dias else None

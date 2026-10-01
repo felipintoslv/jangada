@@ -517,18 +517,20 @@ server <- function(input, output, session) {
                       hoverinfo = "text", marker = list(color = cores[["primaria"]])),
        "", "tokens por segundo de geração")
   })
-  output$b_fontes <- DT::renderDT({
+  fontes <- reactive({
     d <- tabela_lista(dados()$fontes,
       c("fonte", "origem", "estado", "atualizado", "ultima_tentativa", "ultimo_dado",
         "registros", "ferramentas", "dados_preservados"))
     carimbos <- base::sub("Z$", "+0000", d$atualizado)
     carimbos <- gsub("([+-][0-9]{2}):([0-9]{2})$", "\\1\\2", carimbos)
     instantes <- as.POSIXct(carimbos, format = "%Y-%m-%dT%H:%M:%OS%z", tz = "UTC")
-    d$idade <- round(pmax(0, as.numeric(difftime(Sys.time(), instantes, units = "mins"))))
+    minutos <- round(pmax(0, as.numeric(difftime(Sys.time(), instantes, units = "mins"))))
+    d$idade <- ifelse(is.na(minutos), "sem data válida", as.character(minutos))
     names(d) <- c("fonte", "origem", "estado", "última coleta válida", "última tentativa",
                   "último registro", "consumo", "ferramentas", "dados preservados", "idade (min)")
-    tabela(d)
+    d
   })
+  output$b_fontes <- DT::renderDT(tabela(fontes()))
   output$situacao_fontes <- renderUI({
     d <- tabela_lista(dados()$fontes, c("fonte", "estado", "atualizado", "ultima_tentativa"))
     falhas <- sum(d$estado == "erro", na.rm = TRUE)

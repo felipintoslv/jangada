@@ -105,6 +105,9 @@ class Metricas(unittest.TestCase):
         registro = json.dumps(evento('token_usage_record', {'response_id': 'r1', 'usage': {'output_tokens': 2}}))
         self.gravar(caminho, [], registro[:20])
         self.assertFalse(self.coletar()[0])
+        cobertura = next(c for c in self.coletar()[2] if c['fonte'] == 'codex_externo')
+        self.assertEqual(cobertura['bytes_lidos'], 20)
+        self.assertEqual(cobertura['linhas_lidas'], 0)
         with caminho.open('a') as arq:
             arq.write(registro[20:] + '\n')
         self.assertEqual(self.coletar()[0][0]['saida'], 2)
@@ -154,6 +157,68 @@ class Metricas(unittest.TestCase):
         self.gravar(caminho, [evento('token_usage_record', {'response_id': 'r2', 'usage': {'input_tokens': 7}})])
         memo.write_text('{invalido')
         self.assertEqual(self.coletar()[0][0]['entrada_total'], 7)
+
+    def test_cache_estrutura_invalida_link_e_limite_reconstroi(self):
+        caminho = self.codex / 'sessions/rollout-a.jsonl'
+        self.gravar(caminho, [evento('token_usage_record', {'response_id': 'r1', 'usage': {'input_tokens': 3}})])
+        self.coletar()
+        memo = self.cache / 'codex-interface_externa.json'
+        original = json.loads(memo.read_text())
+        for arquivos in [[], {str(caminho): []}, {str(caminho): {'pos': -1}}]:
+            memo.write_text(json.dumps(dict(original, arquivos=arquivos)))
+            self.assertEqual(self.coletar()[0][0]['entrada_total'], 3)
+        memo.unlink()
+        alvo = self.raiz / 'memo-alheio'
+        alvo.write_text('preservar')
+        memo.symlink_to(alvo)
+        self.assertEqual(self.coletar()[0][0]['entrada_total'], 3)
+        self.assertEqual(alvo.read_text(), 'preservar')
+        with patch.object(m, 'MAX_ARQUIVO', caminho.stat().st_size + 1):
+            self.assertEqual(self.coletar()[0][0]['entrada_total'], 3)
+            self.assertEqual(self.coletar()[0][0]['entrada_total'], 3)
+
+    def test_data_futura_reaparece_sem_reler_historico(self):
+        depois = AGORA + dt.timedelta(hours=1)
+        caminho = self.codex / 'sessions/rollout-a.jsonl'
+        self.gravar(caminho, [evento('token_usage_record', {'response_id': 'futuro',
+            'usage': {'input_tokens': 11}}, depois.isoformat())])
+        self.assertFalse(self.coletar()[0])
+        cs, _, cobertura = m.coletar(self.cache, depois)
+        self.assertEqual(cs[0]['entrada_total'], 11)
+        self.assertEqual(next(c for c in cobertura if c['fonte'] == 'codex_externo')['bytes_lidos'], 0)
+
+    def test_retencao_poda_memo_sem_perder_contador_cumulativo(self):
+        caminho = self.codex / 'sessions/rollout-a.jsonl'
+        velho = AGORA - dt.timedelta(days=181)
+        self.gravar(caminho, [evento('event_msg', {'type': 'token_count',
+            'info': {'total_token_usage': {'input_tokens': 10}}}, velho.isoformat())])
+        self.assertFalse(self.coletar()[0])
+        memo = json.loads((self.cache / 'codex-interface_externa.json').read_text())
+        self.assertFalse(memo['arquivos'][str(caminho)]['cumulativo'])
+        with caminho.open('a') as arq:
+            arq.write(json.dumps(evento('event_msg', {'type': 'token_count',
+                'info': {'total_token_usage': {'input_tokens': 25}}})) + '\n')
+        self.assertEqual(self.coletar()[0][0]['entrada_total'], 15)
+        cs, _, _ = m.coletar(self.cache, AGORA, retencao_dias=0)
+        self.assertEqual(sum(c['entrada_total'] for c in cs), 25)
+
+    def test_retencao_preserva_preferencia_por_resposta(self):
+        caminho = self.codex / 'sessions/rollout-a.jsonl'
+        velho = AGORA - dt.timedelta(days=181)
+        self.gravar(caminho, [evento('token_usage_record', {'response_id': 'velho',
+            'usage': {'input_tokens': 10}}, velho.isoformat()), evento('event_msg', {'type': 'token_count',
+            'info': {'total_token_usage': {'input_tokens': 25}}})])
+        self.assertFalse(self.coletar()[0])
+        self.assertFalse(self.coletar()[0])
+
+    def test_reescrita_crescente_detectada_pela_assinatura(self):
+        caminho = self.codex / 'sessions/rollout-a.jsonl'
+        r1 = evento('token_usage_record', {'response_id': 'r1', 'usage': {'input_tokens': 10}})
+        r2 = evento('token_usage_record', {'response_id': 'r2', 'usage': {'input_tokens': 20}})
+        self.gravar(caminho, [r1])
+        self.coletar()
+        self.gravar(caminho, [r2, r2])
+        self.assertEqual(self.coletar()[0][0]['entrada_total'], 20)
 
     def test_chamadas_local_substituem_agregado_inclusive_parciais(self):
         d = dict(data='2026-09-30T22:00:00-03:00', destino='local', delegacao_id='d1', recusa=True,

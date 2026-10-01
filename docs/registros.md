@@ -566,9 +566,10 @@ Arquivos derivados em `$JANGADA_ESTADO/painel/`, criados pelo adaptador
 | `codex-interface_externa.json` | posições e metadados do histórico externo | mesma regra, com origem separada |
 | `cobertura.json` | situação e data da coleta de cada fonte | publicado pelo coletor junto às métricas |
 
-Os caches Codex têm `versao`, `raiz` e `arquivos`. Cada arquivo guarda
-posição em bytes, inode, dispositivo, tamanho, data de alteração, contexto,
-contadores e registros normalizados. Não guarda mensagens, argumentos,
+Os caches Codex têm `versao`, `raiz`, `limite` de retenção e `arquivos`. Cada arquivo guarda
+posição em bytes, inode, dispositivo, tamanho, data de alteração, assinatura
+das bordas consumidas, contexto, contadores e registros normalizados dentro
+da retenção. Não guarda mensagens, argumentos,
 resultados textuais de ferramentas ou credenciais. Cache ausente ou com JSON
 inválido é reconstruído; arquivos truncados ou substituídos são relidos.
 
@@ -578,7 +579,10 @@ registro mais recente dentro da retenção. `dados_preservados` identifica
 registros conservados após erro; nesse caso, as contagens continuam sendo
 as do cache preservado. `erro` registra somente a classe da exceção, sem
 conteúdo externo. Nas fontes Codex, `arquivos_lidos`, `bytes_lidos` e
-`linhas_lidas` medem a leitura da chamada, não consumo de tokens.
+`linhas_lidas` medem a leitura dos registros na chamada, não consumo de tokens.
+Os bytes incluem o trecho final incompleto, relido até receber a quebra de
+linha. A contagem de linhas inclui apenas registros completos. A leitura das
+bordas para conferir assinaturas não entra nessas contagens.
 
 ## Indicadores e registros
 
