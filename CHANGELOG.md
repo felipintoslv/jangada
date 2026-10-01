@@ -3,6 +3,111 @@
 Gerado das mensagens de commit por `jangada-versao --lancar`; não edite
 à mão. A versão instalada aparece em `jangada-versao`.
 
+## 0.2.0 (2026-10-01)
+
+### Novidades
+
+- agentes: oferecer Codex com revisão e delegação ao agy Flash
+- painel: reunir consumo de Claude, Codex e Ollama com cobertura
+- pescador: adicionar janela de conversa e auditoria com isolamento
+- agentes: integrar Codex com isolamento e revisão
+- delegar: suporte a destino local com ollama e fatiamento
+- delegar: parametros e isolamento para delegacao local
+- pescador: adicionar suporte a colagem de textos e listas multilinhas
+- painel: reestruturar painel com data storytelling e diagnosticos dinamicos
+- painel: adicionar nuvem de palavras e grafico de termos na aba pesquisas
+- pescador: adicionar decomposicao atomica de busca e documentacao arquitetural
+- pescador: adicionar bancada de auditores, pares cruzados e rodadas de purificacao
+- pescador: adicionar conversas encadeadas, atalhos e integracao ao painel
+- pescador: adiciona aplicacao conversa-de-pescador com auditoria e voz
+- update: com allowed_signers, só entram commits assinados
+- painel: o cache guarda só os últimos JANGADA_PAINEL_RETENCAO dias
+- docs: registra o modelo de ameaça e as respostas às perguntas da auditoria
+- docs: documenta cada processo com fluxogramas e reúne as boas práticas
+- agentes: adiciona subagentes auditor, arquiteto, otimizador e redator
+- agentes: indicadores de subagentes no terminal e no painel
+- agentes: registro de delegações e dos subagentes por entrega
+- agentes: jangada-delegar manda leitura, pesquisa e verificação ao agy Flash
+- agentes: papéis de subagente no Claude e no agy e item de delegação no protocolo
+- painel: redes de retrabalho, pontos quentes e espaço de ferramentas; módulo na waybar
+- painel: coletor em Parquet e app Shiny com revisão, consumo e tempo
+- agentes: histórico de estados em eventos-agentes.jsonl
+- validar: lintr aponta a variável sem uso em R
+- agentes: skills do jangada também no agy
+
+### Correções
+
+- codex: preservar confiança dos hooks e atualizar estado na barra
+- delegacao: usar medição do host quando nvidia-smi devolve erro
+- codex: passar confiança como tabela no argumento de configuração
+- codex: confirmar confiança da pasta ao iniciar a sessão
+- interface: corrigir microfone e limitar sinais à sessão
+- agentes: exigir isolamento em todas as sessões Codex
+- isolar: entrega unica de SIGINT no grupo e filtragem de tags think
+- isolar: colheita de codigo definitivo apos sinais e isolamento de sleep
+- isolar: restauracao de sinais padrao para bwrap, mock de pgrep e documentacao de intervalo
+- isolar: encerramento atomico de filhos do monitor e intervalo configuravel
+- isolar: pasta de marcas com montagem de diretorio e renovacao dinamica
+- isolar: repasse de sinais com stdin interativo e fatiamento seguro
+- isolar: bwrap em primeiro plano, teste de stdin e refinamento de sinais
+- delegar: correcoes no repasse de sinais, isolamento e fatiamento
+- delegar: ajustes no isolamento, sinais e tratamento de marcas temporais
+- delegar: renovacao de marcas, validacao previa de contexto e modelo de ameacas
+- delegar: ajustes no isolamento, protecoes e argumentos posicionais
+- delegar: correcoes na delegacao local apos revisao tecnica
+- pescador: remover atalhos padrao para evitar conflito com o menu jangada
+- pescador: tipar retorno do autor como tupla eliminando falso positivo de conexao
+- pescador: resolver executaveis agy e claude no PATH e tratar falha de conexao
+- instalador: remove install-macos e ajusta isolamento e testes
+- hooks: configuração vazia não passa mais por hooks instalados
+- revisao: a aprovação que o --integrar aceita é a feita fora do isolamento
+- update: checkupdates sem atualização não é dado como falha
+- isolamento: o agy regrava o agentapi numa camada temporária
+- painel: os indicadores de subagentes só releem o que mudou
+- agentes: o Bash do leitor só roda comandos de leitura
+- painel: o app cobra um token que o isolamento oculta
+- validar: o .jangada/validar.sh roda pelo jangada-isolar
+- verificar: o diagnóstico trata o log como dado
+- snapshot: os snapshots do agente têm limpeza própria
+- bluetooth: parear não implica confiar
+- agy: o worktree só herda a confiança do repositório principal
+- instalacao: o install.sh recusa a cópia de trabalho e os worktrees
+- hypr: o bootstrap tira a pasta atual do caminho de módulos
+- barra: todo clique que abre janela roda com setsid -f
+- validar: o R não lê o .Rprofile, o .Renviron nem o .lintr do worktree
+- validar: registra por que o resumo de subagentes ficou de fora
+- agentes: documenta os indicadores do jangada-subagentes e lista os papéis novos no teste
+- filtrar: avisa que a saída condensada esconde o código de saída
+- consumo: ignora mensagens com data inválida
+- validar: confere a pasta dentro do TMPDIR pelo caminho inteiro
+- shell: descobre o JANGADA_PATH pelo caminho do jangada-shell.sh
+- importar: decodifica os textos do niri sem unicode_escape
+- barra: atualiza o indicador de agentes por sinal e protege os caminhos
+- hypr: põe aspas nos caminhos e lê o jangada.conf como o bash
+- painel: confere a subida do app sem perder a página no cano
+- rede: alinha o teste ao formato do nmcli e cobre SSID com dois pontos
+- agentes: liga os subagentes auditor, arquiteto, otimizador e redator
+- painel: confere o htmltools junto dos outros pacotes R
+- shell: adiciona diretiva shellcheck e valida destino no mapear
+- painel: otimiza leitura incremental, healthcheck do app e limpeza de testes
+- agentes: sincroniza leitura de estado sob trava, evita recriacao e trata zsh
+- interface: corrige escape de argumentos, parsing de config, rede e seguranca
+- instalacao: corrige idempotencia, travas, pacote fakeroot e update
+- agy: fecha os itens médios da auditoria sobre o agy e a delegação
+- painel: fecha os itens médios da auditoria sobre o painel
+- validar: fecha os itens médios da auditoria sobre o jangada-validar
+- seguranca: corrige os itens altos da auditoria de 27/09
+- docs: alinha a documentação ao isolamento e à atualização novos
+- isolamento: fecha as fugas do jangada-isolar apontadas pela auditoria
+- painel: CI sem cmp e instalação simulada sem escrita no HOME
+- versao: --ajuda responde sem repositório git válido
+
+### Outras mudanças
+
+- docs(revisao): adicionar benchmark de agente local com verificacao
+- docs(regras): lista as exceções à regra 1 e testa que estão completas
+- docs(auditoria): registra as perguntas 6, 10 e 13 como resolvidas
+
 ## 0.1.0 (2026-09-26)
 
 ### Novidades
