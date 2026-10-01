@@ -66,7 +66,7 @@ Proponha o menor conjunto de mudanças para:
 - receber uma capacidade declarada na delegação;
 - selecionar entre candidatos configurados e autorizados;
 - reconhecer indisponibilidade e recusa com motivos estruturados;
-- tentar alternativas elegíveis sem saltar automaticamente para premium;
+- tentar alternativas elegíveis sem saltar automaticamente para modelos de maior custo;
 - verificar minimamente a saída;
 - registrar executor escolhido e motivo da decisão;
 - manter compatibilidade com chamadas atuais.
@@ -78,7 +78,7 @@ A seleção deve seguir esta ordem:
 4. disponibilidade e orçamento;
 5. preferências entre os candidatos restantes.
 
-Disponibilidade de quota desconhecida não equivale a quota disponível.
+Disponibilidade de cota desconhecida não equivale a cota disponível.
 Defina uma política explícita para esse caso.
 
 FORA DA FASE 1
@@ -126,7 +126,7 @@ A implementação deve:
 - selecionar candidatos configurados e autorizados;
 - tratar indisponibilidade com motivos estruturados;
 - tentar alternativas adequadas;
-- impedir escalada automática para premium;
+- impedir escalada automática para modelos de maior custo;
 - verificar a saída antes de aceitá-la;
 - registrar a escolha e sua justificativa.
 
@@ -145,8 +145,8 @@ Depois aplique as preferências configuradas.
 Quando agy estiver indisponível:
 - considere Ollama se a tarefa e os dados permitirem;
 - considere alternativas econômicas realmente executáveis;
-- não use premium apenas porque os anteriores falharam;
-- use premium somente quando a política autorizar e os
+- não use modelos de maior custo apenas porque os anteriores falharam;
+- use modelos de maior custo somente quando a política autorizar e os
   requisitos da tarefa justificarem;
 - sem candidato elegível, recuse ou aguarde explicitamente.
 
@@ -168,11 +168,11 @@ SEGURANÇA E COMPATIBILIDADE
 EXECUÇÃO E VALIDAÇÃO
 
 Implemente apenas o estado necessário para explicar a decisão.
-Não crie uma fila ou um sistema geral de checkpoints nesta fase.
+Não crie uma fila ou um sistema geral de pontos de controle nesta fase.
 
 Defina:
 - motivos distintos para recusa e falha;
-- comportamento para quota desconhecida;
+- comportamento para cota desconhecida;
 - limite total de chamadas e tempo;
 - verificação mínima de formato, completude e fontes,
   conforme o tipo de tarefa;
@@ -186,10 +186,10 @@ TESTES
 
 Use executores simulados para cobrir:
 - agy disponível e elegível;
-- agy sem quota com alternativa econômica elegível;
+- agy sem cota com alternativa econômica elegível;
 - ausência de alternativa elegível;
-- premium disponível, mas não autorizado para a tarefa;
-- quota desconhecida;
+- modelos de maior custo disponíveis, mas não autorizados para a tarefa;
+- cota desconhecida;
 - destino proibido por privacidade ou perfil;
 - falha na verificação da saída;
 - esgotamento do limite de tentativas;
