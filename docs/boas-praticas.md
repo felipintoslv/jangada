@@ -23,6 +23,11 @@ flowchart TD
     H -- APROVADO --> J[Entregar]
 ```
 
+Prefira commit antes da revisão para que a aprovação corresponda ao commit
+limpo. `jangada-validar` também aceita alterações sem commit.
+A conferência pode usar o subagente `verificador` quando o protocolo permitir;
+no Codex com destino `local`, ela fica na própria sessão.
+
 ## Onde cada coisa grava
 
 - Nada do jangada escreve em `~/.config/hypr`, na configuração do Noctalia ou

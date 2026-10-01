@@ -268,8 +268,10 @@ externas. Veja
    `--append-system-prompt`; no agy, por `-i` junto com a tarefa.
    `JANGADA_AGENTE_PROTOCOLO=0` desliga. Sem o revisor instalado, o agente abre
    sem o protocolo, porque não haveria quem revisasse.
-2. Antes de entregar, o agente roda `jangada-validar`. O revisor recebe o diff
-   desde a base, lê o que precisar, sem alterar nada, e responde. Com
+2. Prefira fazer o commit antes de `jangada-validar`, para revisar uma
+   entrega limpa. O comando também aceita alterações sem commit e arquivos
+   novos; nesse caso, a aprovação recebe a marca `sujo`.
+   O revisor recebe o diff desde a base, sem alterar nada, e responde. Com
    `REVISAR`, o agente confere cada apontamento, corrige o que proceder e roda
    de novo com `--resposta`, até 3 rodadas (`JANGADA_VALIDAR_RODADAS`) por
    entrega. Depois de um `APROVADO`, a próxima chamada revisa só o que veio

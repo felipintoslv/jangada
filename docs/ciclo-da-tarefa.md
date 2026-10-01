@@ -21,6 +21,10 @@ flowchart LR
     C -- limite --> G[usuário decide:<br>--forcar ou reverter]
 ```
 
+O fluxograma recomenda commit antes da revisão, para que a aprovação
+identifique uma entrega limpa. O comando também revisa alterações sem commit,
+mas registra a aprovação como `sujo`, sem avançar o ponto da próxima entrega.
+
 ## Abertura da sessão
 
 ```mermaid
@@ -55,11 +59,18 @@ flowchart TD
   [subagentes e delegação](subagentes-e-delegacao.md).
 - Com isolamento, o comando começa por `jangada-isolar --`; veja
   [isolamento](isolamento.md).
-- Os hooks do Claude, agy e Codex atualizam o estado da sessão. A lista
-  inclui `iniciado`,
-  `trabalhando`, `aguardando`, `concluido`, e `interrompido` quando o tmux
-  some com o worktree presente. Cada mudança vira uma linha em
-  `eventos-agentes.jsonl` ([registros](registros.md)).
+Os estados do ciclo são:
+
+| Estado | Quando aparece |
+|---|---|
+| `iniciado` | abertura ou restauração da sessão |
+| `trabalhando` | execução acompanhada pelos hooks |
+| `aguardando` | pedido de resposta ou permissão; o agy não informa esse estado |
+| `concluido` | fim de uma resposta ou encerramento informado pelo agente |
+| `interrompido` | tmux desapareceu, mas a pasta permite restaurar a sessão |
+
+Cada mudança registrada vira uma linha em `eventos-agentes.jsonl`
+([registros](registros.md)).
 
 ## Validação da entrega
 

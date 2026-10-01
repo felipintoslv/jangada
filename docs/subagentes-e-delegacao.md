@@ -122,8 +122,10 @@ flowchart LR
     F --> J
 ```
 
-O fluxo abaixo detalha apenas o destino `agy`. O destino local não consulta
-cota nem depende do agy instalado.
+### Destino agy
+
+O destino `agy` segue o fluxo abaixo. O destino local não consulta cota
+nem depende do agy instalado; seu funcionamento está na próxima seção.
 
 ```mermaid
 flowchart TD

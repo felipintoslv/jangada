@@ -298,6 +298,9 @@ porta de entrada. O que se aprendeu com ele vale para o revisor agy:
   `jangada-validar` grava em `revisoes/`, oculta pelo `jangada-isolar`, e lê
   base, tarefa e revisor da cópia `revisoes/SESSAO.json`. Os testes que
   chamam o `jangada-validar` sem querer esse modo passam `JANGADA_ISOLADO=1`.
+- Prefira fazer o commit antes de `jangada-validar`, para revisar uma entrega
+  limpa. O comando também aceita alterações sem commit; nesse caso, registra
+  a aprovação como `sujo`. Veja o [ciclo da tarefa](../../../../docs/ciclo-da-tarefa.md).
 - `.aprovado` com `sujo` (worktree com alteração sem commit) não move o ponto
   de comparação: com o commit igual ao `HEAD`, a próxima rodada daria "nada a
   revisar" sem ninguém ter visto o commit sozinho.
