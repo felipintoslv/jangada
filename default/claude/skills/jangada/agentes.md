@@ -423,6 +423,9 @@ Testes de 29/09/2026, Ollama 0.34.4:
   antes de isolar e as renova conforme `JANGADA_MONITOR_INTERVALO` (padrão de
   30 segundos; valores perto ou acima de 120 s causam recusa por expiração no
   delegar), e o script consulta `/api/ps` no Ollama.
+  O `nvidia-smi` pode escrever uma falha na saída padrão dentro do isolamento.
+  Descarte qualquer saída que não seja numérica antes de consultar a marca
+  de memória livre gravada pelo host; texto de erro não é medição.
 - **Memória de vídeo com modelo residente**: com `keep_alive` ativo, o modelo
   permanece na memória de vídeo após a primeira chamada. A memória livre cai
   e pode barrar chamadas seguintes; é preciso consultar `/api/ps` e somar a

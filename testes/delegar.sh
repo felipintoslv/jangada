@@ -51,6 +51,10 @@ cat >"$tmp/bin/nvidia-smi" <<'EOF'
 if [ "${FALSO_SEM_VRAM:-0}" = "1" ]; then
   exit 1
 fi
+if [ "${FALSO_SEM_VRAM:-0}" = "2" ]; then
+  echo "NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver."
+  exit 1
+fi
 echo "${FALSO_VRAM:-8000}"
 EOF
 chmod +x "$tmp/bin/nvidia-smi"
@@ -546,9 +550,16 @@ printf '6000 %s\n' "$(date +%s)" >"$tmp/home/.local/state/jangada/marcas/vram-li
 SEM_VRAM=1 ISOLADO=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
 conferir "caso 44a: marca vram-livre recente permite medicao no isolamento" [ "$(codigo)" = 0 ]
 
+SEM_VRAM=2 ISOLADO=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 44a2: erro do nvidia-smi na saída padrão usa marca recente" [ "$(codigo)" = 0 ]
+printf '1000 %s\n' "$(date +%s)" >"$tmp/home/.local/state/jangada/marcas/vram-livre"
+SEM_VRAM=2 ISOLADO=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+conferir "caso 44a3: erro do nvidia-smi não ignora limite de memória" [ "$(codigo)" = 4 ]
+conferir "caso 44a3: informa memória insuficiente medida pelo host" grep -q 'memória de vídeo livre insuficiente: 1000 MiB' "$tmp/erro"
+
 # 26b. Na sessão isolada com marca expirada (>120s) recusa
 printf '6000 %s\n' "$(( $(date +%s) - 300 ))" >"$tmp/home/.local/state/jangada/marcas/vram-livre"
-SEM_VRAM=1 ISOLADO=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
+SEM_VRAM=2 ISOLADO=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
 conferir "caso 44b: marca vram-livre expirada no isolamento recusa com código 4" [ "$(codigo)" = 4 ]
 conferir "caso 44b: erro indica vram nao verificada" grep -q "não pôde ser verificada na sessão isolada" "$tmp/erro"
 

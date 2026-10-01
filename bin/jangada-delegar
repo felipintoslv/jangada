@@ -226,6 +226,9 @@ if [[ "$destino" == local ]]; then
   if command -v nvidia-smi >/dev/null 2>&1; then
     vram_livre="$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d ' ' || true)"
   fi
+  # O nvidia-smi pode escrever a falha na saída padrão dentro do isolamento.
+  # Texto de erro não é uma medição e não deve impedir a leitura da marca.
+  [[ "$vram_livre" =~ ^[0-9]+$ ]] || vram_livre=""
   arq_vram=""
   if [[ -f "$JANGADA_ESTADO/marcas/vram-livre" ]]; then
     arq_vram="$JANGADA_ESTADO/marcas/vram-livre"

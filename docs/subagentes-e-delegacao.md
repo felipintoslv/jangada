@@ -188,6 +188,9 @@ e preservou cerca de 2,0 GB de folga, atendendo a margem mínima de 1,5 GB.
   abre; caso o host morra, a expiração da marca de VRAM livre garante a recusa se o modelo não
   estiver residente. Se a memória não puder ser verificada e o modelo não estiver residente, a
   chamada é recusada por segurança.
+  Se o `nvidia-smi` devolver texto de erro na saída padrão, esse texto é
+  descartado antes de ler a marca do host. A marca recente continua sujeita
+  ao limite de memória; uma marca expirada não libera a delegação.
 - Falhas e privacidade: em qualquer falha (Ollama inacessível, modelo ausente,
   jogo aberto, memória insuficiente ou contexto estourado), o comando recusa com código 4
   apontando o subagente do Claude, sem redirecionar dados para a nuvem. O protocolo
