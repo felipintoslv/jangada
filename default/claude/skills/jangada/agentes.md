@@ -8,6 +8,10 @@ O adaptador pergunta no início e salva a escolha em
 `jangada-confianca.json` nos dados da sessão. A entrada de confiança vai
 como argumento TOML, sem alterar a configuração global. Retomar a mesma
 pasta reaproveita a escolha; trocar de pasta exige nova confirmação.
+O parser de `-c` do Codex separa a chave por pontos sem interpretar aspas:
+`projects."CAMINHO".trust_level` não funciona. Passe a tabela inteira no
+valor de `projects`, com o caminho como chave TOML entre aspas. Confira
+o resultado por `config/read` no CLI real; tomllib sozinho não detecta isso.
 
 Os perfis `codex` e `codex-codex` usam o mesmo ciclo de sessões. O adaptador
 `jangada-codex` exige `--no-daemon`, injeta o protocolo por

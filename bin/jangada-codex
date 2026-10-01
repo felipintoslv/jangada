@@ -89,7 +89,7 @@ fi
 chave_pasta="$(jq -Rn --arg p "$pasta_codex" '$p')"
 
 args=("$@" --no-daemon --sandbox workspace-write --ask-for-approval on-request
-      -c "projects.$chave_pasta.trust_level=\"trusted\""
+      -c "projects={$chave_pasta={trust_level=\"trusted\"}}"
       --add-dir "$JANGADA_ESTADO" -c 'approvals_reviewer="user"'
       -c "log_dir=$(jq -Rn --arg p "${CODEX_HOME:-$HOME/.codex}/log" '$p')")
 if [[ -n "$protocolo" ]]; then

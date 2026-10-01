@@ -50,13 +50,20 @@ do Codex aberto fora da Jangada.
 
 No início da sessão, o adaptador pergunta se o usuário confia na pasta,
 antes de executar o CLI. A confirmação fica em `jangada-confianca.json`
-nos dados próprios da sessão, e a entrada `projects.CAMINHO.trust_level`
+nos dados próprios da sessão, e a tabela `projects` com a entrada da pasta
 é passada pela configuração da chamada. Assim o CLI não precisa gravar
 no `config.toml` somente leitura. A pergunta não se repete na retomada da
 mesma pasta; outra pasta exige nova confirmação. Uma entrada exata já
 confiável na configuração global também dispensa a pergunta. Sem terminal
 nem confiança registrada, o adaptador recusa abrir a sessão. O revisor
 não passa por essa etapa, pois ignora a configuração do usuário e da pasta.
+
+O parser de `-c` divide o nome da chave nos pontos, sem interpretar aspas
+TOML nessa chave. Por isso a confiança vai como uma tabela TOML no valor
+de `projects`, com o caminho entre aspas dentro da tabela. Usar
+`projects."CAMINHO".trust_level` cria uma chave incorreta e deixa o CLI
+pedir confiança novamente. O teste consulta `config/read` no Codex real,
+quando instalado, para conferir o resultado sem fazer pedidos ao modelo.
 
 Um endereço próprio em `CODEX_HOME` precisa ser absoluto e já existir.
 `CODEX_SQLITE_HOME` é fixado na pasta montada para os bancos não escaparem

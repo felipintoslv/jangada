@@ -3,6 +3,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 repo_jangada="$PWD"
+codex_real="$(command -v codex || true)"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 falhas=0
@@ -154,6 +155,7 @@ for i, arg in enumerate(args):
     if arg == "-c":
         cfg.update(tomllib.loads(args[i + 1]))
 assert cfg["projects"][folder]["trust_level"] == "trusted"
+(tmp / "codex-confianca.args").write_bytes(args_file.read_bytes())
 rc, output = terminal("n")
 assert rc == 0 and b"[s/N]" not in output
 args_file.unlink()
@@ -167,6 +169,58 @@ assert proc.returncode != 0 and not args_file.exists()
 assert (home / "config.toml").read_bytes() == config_before
 PY
 conferir "confiança exige confirmação, persiste por pasta e preserva configuração global" [ "$?" = 0 ]
+
+# O parser de -c do CLI divide a chave por pontos sem interpretar aspas
+# TOML. Só verificar o argumento com tomllib não detecta esse comportamento.
+if [[ -n "$codex_real" ]]; then
+  python3 - "$codex_real" "$tmp" <<'PY'
+import json, os, pathlib, select, subprocess, sys, time
+exe, tmp = sys.argv[1], pathlib.Path(sys.argv[2])
+home = tmp / "codex-real"
+home.mkdir()
+config = home / "config.toml"
+config.write_text("check_for_update_on_startup = false\n")
+before = config.read_bytes()
+project = tmp / 'projeto.com pontos "e aspas"'
+project.mkdir()
+args = (tmp / "codex-confianca.args").read_bytes().decode().split("\0")[:-1]
+override = next(args[i + 1] for i, arg in enumerate(args)
+                if arg == "-c" and args[i + 1].startswith("projects"))
+override = override.replace(json.dumps(str((tmp / "projeto").resolve())), json.dumps(str(project)))
+proc = subprocess.Popen([exe, "-c", override, "app-server", "--stdio"],
+                        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                        stderr=subprocess.DEVNULL, env={**os.environ, "CODEX_HOME": str(home)})
+buffer = b""
+def request(ident, method, params):
+    global buffer
+    proc.stdin.write(json.dumps({"id": ident, "method": method, "params": params}).encode() + b"\n")
+    proc.stdin.flush()
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if b"\n" in buffer:
+            line, buffer = buffer.split(b"\n", 1)
+            result = json.loads(line)
+            if result.get("id") == ident:
+                assert "error" not in result, result
+                return result["result"]
+        elif select.select([proc.stdout], [], [], 0.1)[0]:
+            chunk = os.read(proc.stdout.fileno(), 65536)
+            assert chunk, "Codex encerrou sem responder"
+            buffer += chunk
+    raise AssertionError("Codex não respondeu em 10 segundos")
+try:
+    request(1, "initialize", {"clientInfo": {"name": "jangada-test", "version": "1"}})
+    result = request(2, "config/read", {"includeLayers": False, "cwd": str(project)})
+    assert result["config"]["projects"][str(project)]["trust_level"] == "trusted"
+    assert config.read_bytes() == before
+finally:
+    proc.kill()
+    proc.wait(timeout=5)
+PY
+  conferir "Codex real reconhece confiança com pontos, espaços e aspas sem gravar configuração" [ "$?" = 0 ]
+else
+  echo "Codex CLI ausente; conferência do parser real ignorada"
+fi
 
 # Hooks não aprovam permissões, repetição não duplica eventos e subagentes
 # não marcam o principal como concluído.
