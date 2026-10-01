@@ -147,6 +147,7 @@ conferir "caso 2b: sem bwrap e desligado, roda direto" [ "$saida" = rodou ]
 # Caso 3: o isolamento de verdade.
 mkdir -p "$casa/.codex/skills"
 printf 'model = "modelo-teste"\n' >"$casa/.codex/config.toml"
+printf '\n[projects."%s"]\ntrust_level = "trusted"\n' "$tmp/wt" >>"$casa/.codex/config.toml"
 printf '{"token":"FALSO-LOGIN"}\n' >"$casa/.codex/auth.json"
 isolar "$tmp/wt" JANGADA_SESSAO=teste-codex "$repo_jangada/bin/jangada-isolar" --mostrar -- \
   "$repo_jangada/bin/jangada-codex" -- codex >"$tmp/args"

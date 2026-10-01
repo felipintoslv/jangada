@@ -48,7 +48,48 @@ if ((revisar)); then
     -c "log_dir=$(jq -Rn --arg p "${CODEX_HOME:-$HOME/.codex}/log" '$p')" "$@" -
 fi
 
+# O config.toml fica somente leitura. A escolha de confiança pertence à
+# sessão e entra na configuração da chamada, sem liberar o arquivo global.
+casa_codex="${CODEX_HOME:-$HOME/.codex}"
+pasta_codex="$(jangada_git_seguro rev-parse --show-toplevel 2>/dev/null || pwd -P)"
+pasta_codex="$(realpath "$pasta_codex")"
+confianca="$casa_codex/jangada-confianca.json"
+confia=0
+if python3 - "$casa_codex/config.toml" "$pasta_codex" <<'PY'
+import sys, tomllib
+try:
+    with open(sys.argv[1], "rb") as f:
+        cfg = tomllib.load(f)
+    trusted = cfg.get("projects", {}).get(sys.argv[2], {}).get("trust_level") == "trusted"
+except (OSError, ValueError):
+    trusted = False
+sys.exit(0 if trusted else 1)
+PY
+then
+  confia=1
+elif jq -e --arg p "$pasta_codex" '.pasta == $p and .confiavel == true' "$confianca" >/dev/null 2>&1; then
+  confia=1
+fi
+if ((!confia)); then
+  [[ -t 0 && -t 1 ]] || {
+    echo "jangada-codex: abra a sessão num terminal para confirmar a confiança da pasta" >&2
+    exit 1
+  }
+  printf 'Pasta do Codex: %q\n' "$pasta_codex"
+  echo 'A configuração da pasta pode executar código automaticamente dentro do isolamento.'
+  read -r -p 'Confia nesta pasta e deseja continuar? [s/N] ' resposta || exit 1
+  [[ "${resposta,,}" == s ]] || exit 1
+  (umask 077
+    tmp_confianca="$(mktemp "$casa_codex/.jangada-confianca.XXXXXX")"
+    trap 'rm -f "$tmp_confianca"' EXIT
+    jq -n --arg p "$pasta_codex" '{pasta: $p, confiavel: true}' >"$tmp_confianca"
+    mv -f "$tmp_confianca" "$confianca"
+  )
+fi
+chave_pasta="$(jq -Rn --arg p "$pasta_codex" '$p')"
+
 args=("$@" --no-daemon --sandbox workspace-write --ask-for-approval on-request
+      -c "projects.$chave_pasta.trust_level=\"trusted\""
       --add-dir "$JANGADA_ESTADO" -c 'approvals_reviewer="user"'
       -c "log_dir=$(jq -Rn --arg p "${CODEX_HOME:-$HOME/.codex}/log" '$p')")
 if [[ -n "$protocolo" ]]; then

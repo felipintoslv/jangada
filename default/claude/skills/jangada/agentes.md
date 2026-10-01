@@ -2,6 +2,13 @@
 
 ## Codex
 
+A confiança da pasta precisa ser resolvida antes de abrir o CLI: ele tenta
+salvá-la em `config.toml`, que o isolamento monta somente leitura.
+O adaptador pergunta no início e salva a escolha em
+`jangada-confianca.json` nos dados da sessão. A entrada de confiança vai
+como argumento TOML, sem alterar a configuração global. Retomar a mesma
+pasta reaproveita a escolha; trocar de pasta exige nova confirmação.
+
 Os perfis `codex` e `codex-codex` usam o mesmo ciclo de sessões. O adaptador
 `jangada-codex` exige `--no-daemon`, injeta o protocolo por
 `developer_instructions` e passa hooks sem alterar a configuração global.

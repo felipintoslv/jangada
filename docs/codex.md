@@ -48,6 +48,16 @@ Arquivos de configuração ausentes ficam vazios; pastas de instruções
 ausentes ficam vazias e somente leitura. A sessão não altera a configuração
 do Codex aberto fora da Jangada.
 
+No início da sessão, o adaptador pergunta se o usuário confia na pasta,
+antes de executar o CLI. A confirmação fica em `jangada-confianca.json`
+nos dados próprios da sessão, e a entrada `projects.CAMINHO.trust_level`
+é passada pela configuração da chamada. Assim o CLI não precisa gravar
+no `config.toml` somente leitura. A pergunta não se repete na retomada da
+mesma pasta; outra pasta exige nova confirmação. Uma entrada exata já
+confiável na configuração global também dispensa a pergunta. Sem terminal
+nem confiança registrada, o adaptador recusa abrir a sessão. O revisor
+não passa por essa etapa, pois ignora a configuração do usuário e da pasta.
+
 Um endereço próprio em `CODEX_HOME` precisa ser absoluto e já existir.
 `CODEX_SQLITE_HOME` é fixado na pasta montada para os bancos não escaparem
 para um endereço global. O login não pode ser regravado dentro da sessão:

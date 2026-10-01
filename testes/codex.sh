@@ -10,7 +10,11 @@ conferir() {
   local nome="$1"; shift
   if "$@"; then printf 'ok    %s\n' "$nome"; else printf 'FALHA %s\n' "$nome"; falhas=$((falhas + 1)); fi
 }
-mkdir -p "$tmp/bin" "$tmp/config/jangada" "$tmp/state/jangada/agentes" "$tmp/projeto"
+mkdir -p "$tmp/bin" "$tmp/config/jangada" "$tmp/state/jangada/agentes" "$tmp/projeto" "$tmp/codex"
+python3 - "$tmp/codex/config.toml" "$repo_jangada" <<'PY'
+import json, pathlib, sys
+pathlib.Path(sys.argv[1]).write_text('[projects.' + json.dumps(sys.argv[2]) + ']\ntrust_level = "trusted"\n')
+PY
 cat >"$tmp/bin/codex" <<'EOF'
 #!/usr/bin/env bash
 if [[ "${1:-}" == --help ]]; then
@@ -34,7 +38,7 @@ chmod +x "$tmp/bin/"*
 rodar() {
   env -u JANGADA_SESSAO -u JANGADA_ISOLADO -u JANGADA_DELEGAR -u JANGADA_VALIDAR_REVISOR \
     PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp" JANGADA_PATH="$repo_jangada" \
-    XDG_CONFIG_HOME="$tmp/config" XDG_STATE_HOME="$tmp/state" "$@"
+    CODEX_HOME="$tmp/codex" XDG_CONFIG_HOME="$tmp/config" XDG_STATE_HOME="$tmp/state" "$@"
 }
 git init -q -b main "$tmp/projeto"
 git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -q --allow-empty -m inicio
@@ -69,6 +73,7 @@ for i, arg in enumerate(args):
         cfg.update(tomllib.loads(args[i + 1]))
 assert cfg["developer_instructions"] == pathlib.Path(sys.argv[2]).read_text()
 assert cfg["approvals_reviewer"] == "user"
+assert cfg["projects"][sys.argv[3]]["trust_level"] == "trusted"
 assert "--no-daemon" in args and "workspace-write" in args and "on-request" in args
 assert not any("bypass" in arg for arg in args)
 assert args.count("pedido com espaço") == 1
@@ -94,6 +99,74 @@ conferir "versão recusada não abre sessão" test ! -e "$tmp/codex.args"
 rodar JANGADA_ISOLADO=1 JANGADA_MARCA_ISOLADO=/ "$repo_jangada/bin/jangada-codex" --conversa 'id; touch /tmp/invadido' -- codex >"$tmp/saida" 2>&1
 conferir "UUID inválido é recusado" [ "$?" != 0 ]
 conferir "UUID inválido não executa" test ! -e "$tmp/codex.args"
+
+# Terminal real simulado: recusa, confirmação, retomada e troca de pasta.
+rodar JANGADA_ISOLADO=1 JANGADA_MARCA_ISOLADO=/ python3 - "$repo_jangada" "$tmp" <<'PY'
+import json, os, pathlib, pty, select, subprocess, sys, time, tomllib
+repo, tmp = map(pathlib.Path, sys.argv[1:])
+home = tmp / "codex"
+config_before = (home / "config.toml").read_bytes()
+saved = home / "jangada-confianca.json"
+args_file = tmp / "codex.args"
+args_file.unlink(missing_ok=True)
+cmd = [str(repo / "bin/jangada-codex"), "--", "codex"]
+
+def terminal(answer):
+    master, slave = pty.openpty()
+    proc = subprocess.Popen(cmd, cwd=tmp / "projeto", stdin=slave, stdout=slave, stderr=slave)
+    os.close(slave)
+    output = b""
+    sent = False
+    deadline = time.monotonic() + 10
+    try:
+        while time.monotonic() < deadline:
+            if select.select([master], [], [], 0.1)[0]:
+                try:
+                    chunk = os.read(master, 8192)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                output += chunk
+                if b"[s/N]" in output and not sent:
+                    os.write(master, answer.encode() + b"\n")
+                    sent = True
+            if proc.poll() is not None:
+                break
+        return proc.wait(timeout=2), output
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+        os.close(master)
+
+rc, output = terminal("n")
+assert rc != 0 and b"[s/N]" in output
+assert not saved.exists() and not args_file.exists()
+rc, output = terminal("s")
+assert rc == 0, output
+folder = str((tmp / "projeto").resolve())
+assert json.loads(saved.read_text()) == {"pasta": folder, "confiavel": True}
+assert saved.stat().st_mode & 0o777 == 0o600
+args = args_file.read_bytes().decode().split("\0")[:-1]
+cfg = {}
+for i, arg in enumerate(args):
+    if arg == "-c":
+        cfg.update(tomllib.loads(args[i + 1]))
+assert cfg["projects"][folder]["trust_level"] == "trusted"
+rc, output = terminal("n")
+assert rc == 0 and b"[s/N]" not in output
+args_file.unlink()
+other = tmp / 'outra pasta "com aspas"'
+other.mkdir()
+proc = subprocess.run(cmd, cwd=other, stdin=subprocess.DEVNULL, capture_output=True)
+assert proc.returncode != 0 and not args_file.exists()
+saved.write_text('{"pasta": "outra", "confiavel": true}')
+proc = subprocess.run(cmd, cwd=tmp / "projeto", stdin=subprocess.DEVNULL, capture_output=True)
+assert proc.returncode != 0 and not args_file.exists()
+assert (home / "config.toml").read_bytes() == config_before
+PY
+conferir "confiança exige confirmação, persiste por pasta e preserva configuração global" [ "$?" = 0 ]
 
 # Hooks não aprovam permissões, repetição não duplica eventos e subagentes
 # não marcam o principal como concluído.

@@ -24,6 +24,10 @@ log="$tmp/agente.log"
 invadido="$tmp/invadido"
 mkdir -p "$estado" "$tmp/bin" "$tmp/config/jangada/agentes" "$jp/bin" \
   "$tmp/projetos/proj" "$tmp/wt/proj/tarefa" "$tmp/fora" "$tmp/outro"
+mkdir -p "$tmp/codex"
+for pasta in "$tmp/projetos/proj" "$tmp/wt/proj/tarefa"; do
+  printf '[projects."%s"]\ntrust_level = "trusted"\n' "$pasta" >>"$tmp/codex/config.toml"
+done
 ln -s "$repo_jangada/default" "$jp/default"
 ln -s "$repo_jangada/bin/jangada-codex" "$jp/bin/jangada-codex"
 ln -s "$repo_jangada/bin/jangada-hook-codex" "$jp/bin/jangada-hook-codex"
@@ -82,7 +86,7 @@ restaurar() {
     '{sessao:"s", dir:$dir, agente:"claude", estado:"interrompido",
       atualizado:(now | todate)} + $extra' >"$estado/s.json"
   env -u TMUX -u JANGADA_ISOLADO -u JANGADA_AGENTE_ISOLAR -u JANGADA_DELEGAR -u JANGADA_VALIDAR_REVISOR \
-    PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp" FALSO_LOG="$log" \
+    PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp" FALSO_LOG="$log" CODEX_HOME="$tmp/codex" \
     XDG_STATE_HOME="$tmp/state" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$jp" \
     "${@:2}" "$repo_jangada/bin/jangada-agentes" --restaurar s >"$tmp/saida" 2>&1
 }
