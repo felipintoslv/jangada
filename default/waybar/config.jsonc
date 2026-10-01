@@ -7,7 +7,6 @@
   "modules-left": ["custom/menu", "hyprland/workspaces", "custom/agentes", "custom/indicadores", "hyprland/window"],
   "modules-center": ["clock"],
   "modules-right": [
-    "mpris",
     "tray",
     "custom/atualizacoes",
     "systemd-failed-units",
@@ -136,6 +135,7 @@
     "tooltip-format-deactivated": "repouso automático"
   },
 
+  // Ativação manual: o módulo nativo pode derrubar a Waybar ao encerrar mídia.
   "mpris": {
     "format": "{player_icon} {title}",
     "format-paused": "{status_icon} {title}",

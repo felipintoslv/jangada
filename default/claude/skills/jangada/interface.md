@@ -2,6 +2,13 @@
 
 ## Waybar
 
+- O módulo nativo `mpris` fica fora das listas de módulos por padrão.
+  Na Waybar 0.15.0, quedas locais em 22/09 e 01/10/2026 passaram por
+  `Gtk::Widget::set_visible` e `libplayerctl`, semelhantes ao relato
+  https://github.com/Alexays/Waybar/issues/2747. A configuração permanece
+  disponível para ativação manual; reativar exige conferir a estabilidade
+  ao iniciar e encerrar reprodução, inclusive no navegador.
+
 - O `pulseaudio#microfone` precisa de comandos próprios de rolagem com
   `@DEFAULT_AUDIO_SOURCE@`: a rolagem padrão do módulo muda a saída.
   Na dica, `{source_volume}` é o volume da entrada; `{volume}` é o da saída.
