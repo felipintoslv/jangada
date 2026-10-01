@@ -1,16 +1,18 @@
 # Codex na Jangada
 
 O Codex implementa no mesmo ciclo de worktree, tmux, validação e integração
-usado pelos outros agentes. Há dois perfis:
+usado pelos outros agentes. Há três perfis:
 
 | Perfil | Implementa | Revisa |
 |---|---|---|
 | `codex` | Codex | Claude |
 | `codex-codex` | Codex | outra instância do Codex |
+| `codex-agy` | Codex | agy Flash, esforço alto |
 
 ```sh
 jangada-agente --perfil codex --nome tarefa --prompt "Implemente a tarefa"
 jangada-agente --perfil codex-codex --nome tarefa --prompt "Implemente a tarefa"
+jangada-agente --perfil codex-agy --nome tarefa --prompt "Implemente a tarefa"
 ```
 
 ## Preparação
@@ -120,10 +122,14 @@ Com UUID, usa `codex resume UUID`. Sem UUID, num worktree próprio, usa
 `codex resume --last`, com o filtro de pasta do CLI. Sem UUID no modo direto,
 abre uma conversa nova para não retomar a conversa de outro agente.
 
-Os perfis usam `JANGADA_DELEGAR=local`: somente leitor e redator vão ao
+Os perfis `codex` e `codex-codex` usam `JANGADA_DELEGAR=local`: somente leitor e redator vão ao
 Ollama, com arquivos explícitos. Os demais papéis ficam na sessão. Um perfil
 com `JANGADA_DELEGAR=agy` permite delegar pelo `jangada-delegar` ao agy.
-O protocolo do Codex não manda chamar subagentes do Claude. Recusa local
+O perfil `codex-agy` já configura esse destino e fixa o revisor em
+`gemini-3.8-flash-high`, evitando herdar o modelo principal do agy. Leitor
+e redator continuam indo primeiro ao Ollama; os outros papéis usam Flash
+com o esforço definido pelo papel. O protocolo do Codex não manda chamar
+subagentes do Claude. Recusa local
 nunca autoriza enviar documentos confidenciais a um provedor externo.
 
 ## Revisão com Codex

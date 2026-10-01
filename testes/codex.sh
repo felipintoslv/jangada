@@ -61,6 +61,13 @@ conferir "lançamento isolado pelo adaptador" grep -q 'jangada-isolar -- .*janga
 conferir "metadados externos para revisão" jq -e '.revisor == "codex" and .agente == "codex"' \
   "$tmp/state/jangada/revisoes/projeto--tarefa.json"
 
+rodar "$repo_jangada/bin/jangada-agente" --perfil codex-agy --projeto "$tmp/projeto" \
+  --nome tarefa-agy --prompt "Implemente a tarefa" >"$tmp/saida" 2>&1
+conferir "perfil codex-agy cria a sessão" [ "$?" = 0 ]
+conferir "Codex com revisor e delegação agy" jq -e '.agente == "codex" and .revisor == "agy" and .delegar == "agy" and .isolar' \
+  "$tmp/state/jangada/agentes/projeto--tarefa-agy.json"
+conferir "revisor Flash explícito no ambiente" grep -q 'JANGADA_VALIDAR_MODELO=gemini-3.8-flash-high' "$tmp/tmux.ambiente"
+
 rodar "$repo_jangada/bin/jangada-codex" -- codex >"$tmp/saida" 2>&1
 conferir "adaptador sem isolamento recusa antes de chamar CLI" [ "$?" != 0 ]
 conferir "recusa não executa Codex" test ! -e "$tmp/codex.args"
