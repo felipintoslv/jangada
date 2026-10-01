@@ -99,6 +99,8 @@ fi
 inicio=$SECONDS
 cota=""; cota_depois=""; passos=""; tokens_agy=""; conversa=""; palavras=0; retorno=0; sem_fonte=""
 tokens_local_entrada=""; tokens_local_saida=""
+delegacao_id="$(cat /proc/sys/kernel/random/uuid)"
+chamadas_local='[]'; documento_chars=""; retorno_chars=""; ctx=""
 pasta="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 projeto="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
 projeto="$(basename "$(dirname "${projeto:-$pasta/.}")")"
@@ -118,6 +120,8 @@ registrar() {
     --arg tokens_agy "$tokens_agy" --arg antes "$cota" --arg depois "$cota_depois" \
     --arg conversa "$conversa" --arg sem_fonte "$sem_fonte" \
     --arg tokens_local_entrada "$tokens_local_entrada" --arg tokens_local_saida "$tokens_local_saida" \
+    --arg id "$delegacao_id" --argjson chamadas "$chamadas_local" \
+    --arg documento_chars "$documento_chars" --arg retorno_chars "$retorno_chars" --arg contexto "$ctx" \
     'def num: if . == "" then null else tonumber end;
      {data: $data, sessao: $sessao, projeto: $projeto, pasta: $pasta, papel: $papel,
       destino: $destino, modelo: $modelo, segundos: $segundos, codigo_saida: $codigo,
@@ -125,6 +129,11 @@ registrar() {
       tokens_agy: ($tokens_agy | num),
       tokens_local_entrada: ($tokens_local_entrada | num),
       tokens_local_saida: ($tokens_local_saida | num),
+      versao_registro: 2, delegacao_id: $id,
+      chamadas_local: (if $destino == "local" then $chamadas else null end),
+      documento_chars: ($documento_chars | num), retorno_chars: ($retorno_chars | num),
+      contexto: ($contexto | num),
+      ferramentas_disponiveis: (if $destino == "local" then false else null end),
       cota_antes: ($antes | num), cota_depois: ($depois | num),
       recusa: ($motivo != ""), motivo: $motivo, conversa: $conversa,
       sem_fonte: ($sem_fonte | num)}' \
@@ -136,6 +145,7 @@ recusar() {
   echo "jangada-delegar: recusado: $1" >&2
   echo "$linha"
   retorno=$(( (${#linha} + 3) / 4 ))
+  retorno_chars=${#linha}
   registrar 4 "$1"
   exit 4
 }
@@ -275,6 +285,7 @@ if [[ "$destino" == local ]]; then
     fi
   done
 
+  documento_chars=${#texto_completo}
   ctx="${JANGADA_LOCAL_CTX:-8192}"
   fatias_max="${JANGADA_LOCAL_FATIAS_MAX:-5}"
   keep_alive="${JANGADA_LOCAL_KEEP_ALIVE:-2m}"
@@ -325,7 +336,8 @@ if [[ "$destino" == local ]]; then
 
   chamar_ollama() {
     local sys="$1" usr="$2"
-    local payload resp cod=0 erro tent tsai
+    local fase="$3" indice="${4:-1}"
+    local payload resp cod=0 erro tent medida
     payload="$(jq -nc \
       --arg m "$modelo" \
       --arg sys "$sys" \
@@ -338,16 +350,35 @@ if [[ "$destino" == local ]]; then
       -H "Content-Type: application/json" \
       -d "$payload" \
       "$ollama_url/api/chat" 2>"$saida_ollama")" || cod=$?
+    # Registra também tentativas sem resposta e o consumo conhecido de falhas.
+    # A API informa nanossegundos; o registro declara milissegundos.
+    medida="$(jq -nc --argjson r "${resp:-null}" --arg id "$delegacao_id:$(( $(jq 'length' <<<"$chamadas_local") + 1 ))" \
+      --arg modelo "$modelo" --arg fase "$fase" --argjson indice "$indice" --argjson codigo "$cod" '
+      def medida: if type == "number" and . >= 0 and isfinite then . else null end;
+      def ms: medida | if . == null then null else . / 1000000 end;
+      {id: $id, modelo: $modelo, fase: $fase, indice: $indice, codigo_transporte: $codigo,
+       tokens_entrada: ($r.prompt_eval_count | medida), tokens_saida: ($r.eval_count | medida),
+       cache_lido: ($r.prompt_eval_cached_count | medida),
+       tempos_ms: {total: ($r.total_duration | ms), carregamento: ($r.load_duration | ms),
+                  entrada: ($r.prompt_eval_duration | ms), geracao: ($r.eval_duration | ms)}}' 2>/dev/null)" || \
+      medida="$(jq -nc --arg id "$delegacao_id:$(( $(jq 'length' <<<"$chamadas_local") + 1 ))" \
+        --arg modelo "$modelo" --arg fase "$fase" --argjson indice "$indice" --argjson codigo "$cod" \
+        '{id:$id, modelo:$modelo, fase:$fase, indice:$indice, codigo_transporte:$codigo,
+          tokens_entrada:null, tokens_saida:null, cache_lido:null,
+          tempos_ms:{total:null, carregamento:null, entrada:null, geracao:null}}')"
+    chamadas_local="$(jq -c --argjson m "$medida" '. + [$m]' <<<"$chamadas_local")"
+    tokens_local_entrada="$(jq -r '[.[].tokens_entrada | select(. != null)] | if length == 0 then "" else add end' <<<"$chamadas_local")"
+    tokens_local_saida="$(jq -r '[.[].tokens_saida | select(. != null)] | if length == 0 then "" else add end' <<<"$chamadas_local")"
     if ((cod == 28)); then recusar "tempo esgotado no Ollama (${tempo}s)"; fi
     if ((cod)); then recusar "chamada ao Ollama falhou com código $cod: $(head -c 300 "$saida_ollama")"; fi
+    if ! jq -e 'type == "object"' <<<"$resp" >/dev/null 2>&1; then
+      recusar "resposta inválida do Ollama"
+    fi
     erro="$(jq -r '.error // empty' <<<"$resp" 2>/dev/null || true)"
     if [[ -n "$erro" ]]; then
       recusar "erro do Ollama: $erro"
     fi
-    tent="$(jq -r '.prompt_eval_count // 0' <<<"$resp" 2>/dev/null || echo 0)"
-    tsai="$(jq -r '.eval_count // 0' <<<"$resp" 2>/dev/null || echo 0)"
-    tokens_local_entrada=$(( ${tokens_local_entrada:-0} + tent ))
-    tokens_local_saida=$(( ${tokens_local_saida:-0} + tsai ))
+    tent="$(jq -r '.tokens_entrada // 0 | floor' <<<"$medida")"
     if (( tent >= ctx )); then
       recusar "contexto do modelo local estourado (${tent} tokens >= janela de ${ctx})"
     fi
@@ -359,13 +390,13 @@ if [[ "$destino" == local ]]; then
   }
 
   if ((${#fatias[@]} <= 1)); then
-    chamar_ollama "$prompt_sistema" "$pedido"$'\n\nDocumentos:\n'"${fatias[0]:-}"
+    chamar_ollama "$prompt_sistema" "$pedido"$'\n\nDocumentos:\n'"${fatias[0]:-}" documento
     texto="$res_chamada"
   else
     resumos_parciais=""
     for i in "${!fatias[@]}"; do
       ped_fat="Parte $((i+1)) de ${#fatias[@]} dos documentos. Atenda ao pedido extraindo trechos relevantes com suas citações caminho:linha ou arquivo, p. N:"$'\n'"$pedido"$'\n\nTrecho:\n'"${fatias[$i]}"
-      chamar_ollama "$prompt_sistema" "$ped_fat"
+      chamar_ollama "$prompt_sistema" "$ped_fat" fatia "$((i+1))"
       resumos_parciais+=$'\n\n---\n'"$res_chamada"
     done
     ped_final="Consolide os resumos parciais a seguir em um relatório único, conciso e objetivo, atendendo ao pedido: $pedido. Mantenha todas as citações (caminho:linha ou arquivo, p. N)."$'\n'"$resumos_parciais"
@@ -373,7 +404,7 @@ if [[ "$destino" == local ]]; then
     if (( tokens_estimados >= ctx )); then
       recusar "resumos consolidados excedem a janela de contexto do modelo local (${tokens_estimados} tokens >= ${ctx})"
     fi
-    chamar_ollama "$prompt_sistema" "$ped_final"
+    chamar_ollama "$prompt_sistema" "$ped_final" consolidacao
     texto="$res_chamada"
   fi
 
@@ -400,6 +431,7 @@ if [[ "$destino" == local ]]; then
   printf '%s\n' "$impresso"
   # Estimativa do que entra no contexto do Claude: 4 caracteres por token.
   retorno=$(( (${#impresso} + 3) / 4 ))
+  retorno_chars=${#impresso}
   registrar 0
   exit 0
 fi
@@ -518,4 +550,5 @@ fi
 printf '%s\n' "$impresso"
 # Estimativa do que entra no contexto do Claude: 4 caracteres por token.
 retorno=$(( (${#impresso} + 3) / 4 ))
+retorno_chars=${#impresso}
 registrar 0

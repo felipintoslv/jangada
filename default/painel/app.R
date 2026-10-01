@@ -130,7 +130,7 @@ cartao <- function(titulo, ..., cob = NULL) {
 
 filtros <- sidebar(
   width = 260,
-  dateRangeInput("periodo", "Período", start = Sys.Date() - 30, end = Sys.Date(),
+  dateRangeInput("periodo", "Período", start = Sys.Date(), end = Sys.Date(),
                  language = "pt-BR", separator = "a", format = "dd/mm/yyyy"),
   selectizeInput("projeto", "Projeto", choices = NULL, multiple = TRUE,
                  options = list(placeholder = "todos")),
@@ -138,6 +138,9 @@ filtros <- sidebar(
                  options = list(placeholder = "todos")),
   selectizeInput("par", "Par autor → revisor", choices = NULL, multiple = TRUE,
                  options = list(placeholder = "todos")),
+  selectizeInput("executor", "Executor do consumo", choices = NULL, multiple = TRUE),
+  selectizeInput("origem_consumo", "Origem do consumo", choices = NULL, multiple = TRUE),
+  selectizeInput("modelo_consumo", "Modelo do consumo", choices = NULL, multiple = TRUE),
   uiOutput("coleta")
 )
 
@@ -170,6 +173,16 @@ ui <- page_navbar(
   ),
   nav_panel("Consumo de modelos", icon = bsicons::bs_icon("cpu"),
     uiOutput("insight_consumo"),
+    cartao("Consumo por executor, origem e modelo", DT::DTOutput("b_motores"),
+           p(class = "cobertura", "Entrada inclui cache lido. Saída e raciocínio são mostrados separadamente e não são somados. Campos sem medida aparecem como ausentes; totais parciais têm contagem de cobertura.")),
+    layout_columns(col_widths = c(6, 6),
+      cartao("Desempenho do Ollama", DT::DTOutput("b_local"),
+             p(class = "cobertura", "Tokens/s usa apenas o tempo de geração medido. Registros antigos sem duração interna não permitem calcular velocidade. Poucas chamadas não estabelecem um comparativo de modelos.")),
+      cartao("Ferramentas por executor", DT::DTOutput("b_ferramentas"),
+             p(class = "cobertura", "O executor é quem chamou a ferramenta. O fluxo local do Ollama não dispõe de ferramentas."))
+    ),
+    cartao("Cobertura das fontes", DT::DTOutput("b_fontes")),
+    h5("Detalhamento do histórico Claude"),
     layout_column_wrap(width = 1 / 4, fill = FALSE,
       value_box("Tokens de saída", textOutput("vb_saida"), showcase = bsicons::bs_icon("box-arrow-right"),
                 p("raciocínio: ", textOutput("vb_raciocinio", inline = TRUE))),
@@ -190,7 +203,7 @@ ui <- page_navbar(
       cartao("Por modelo", DT::DTOutput("b_modelo"))
     ),
     cartao("Tokens por entrega aprovada", DT::DTOutput("b_entrega"), cob = uiOutput("b_entrega_cob")),
-    p(class = "cobertura", "Só o Claude Code: o agy não grava contagem de tokens legível (docs/registros.md).")
+    p(class = "cobertura", "Os gráficos e cartões desta seção detalham o Claude e usam período e projeto. Os filtros de executor, origem e modelo se aplicam às tabelas acima. O resumo acima separa históricos externos das sessões geridas pelo jangada; o agy não fornece contagem legível de tokens.")
   ),
   nav_panel("Tempo e atenção", icon = bsicons::bs_icon("clock-history"),
     uiOutput("insight_tempo"),
@@ -287,7 +300,7 @@ ui <- page_navbar(
     uiOutput("insight_pesquisas"),
     layout_column_wrap(width = 1 / 3, fill = FALSE,
       value_box("Total de pesquisas", textOutput("f_total"), showcase = bsicons::bs_icon("chat-dots")),
-      value_box("Termômetro de veracidade", textOutput("f_fato"), showcase = bsicons::bs_icon("shield-check"),
+      value_box("Avaliação dos auditores", textOutput("f_fato"), showcase = bsicons::bs_icon("shield-check"),
                 p("média de fatos comprovados")),
       value_box("Consultas hoje", textOutput("f_hoje"), showcase = bsicons::bs_icon("calendar-check"))
     ),
@@ -311,23 +324,27 @@ server <- function(input, output, session) {
     checkFunc = function() file.mtime(file.path(cache, "coleta.json")),
     valueFunc = function() carregar_cache(cache))
 
-  pesqs <- reactive(dados()$pesquisas)
+  pesqs <- reactive({
+    p <- filtrar(no_periodo(dados()$pesquisas), agente = "autor")
+    if (length(input$par)) p <- p[p$par %in% input$par, , drop = FALSE]
+    p
+  })
   sub <- reactive(dados()$subagentes)
   pc <- function(v, suf = "%") if (is.null(v)) "-" else paste0(format(v, decimal.mark = ","), suf)
 
   output$manchete_dia <- renderUI({
     v <- dados()$validacoes
     hoje_str <- as.character(Sys.Date())
-    v_hoje <- v[as.character(v$dia) == hoje_str, , drop = FALSE]
-    e_hoje <- entregas(v_hoje)
+    e <- entregas(v[v$origem != "revisoes", , drop = FALSE])
+    e_hoje <- e[as.character(as.Date(e$fim)) == hoje_str, , drop = FALSE]
     e_ap <- e_hoje[e_hoje$aprovada, , drop = FALSE]
     n_hoje <- nrow(e_hoje)
     taxa_1a <- if (nrow(e_ap) > 0) round(100 * mean(e_ap$primeira)) else NA
 
-    p <- pesqs()
+    p <- dados()$pesquisas
     p_hoje <- p[p$dia == hoje_str, , drop = FALSE]
     n_p_hoje <- nrow(p_hoje)
-    med_fato_hoje <- if (n_p_hoje > 0) round(mean(p_hoje$grau_fato, na.rm = TRUE)) else NA
+    med_fato_hoje <- media_avaliacoes(p_hoje$grau_fato)
 
     t_ent <- if (n_hoje > 0) {
       if (!is.na(taxa_1a)) sprintf("%d entrega(s) concluída(s) hoje com %d%% de aprovação na 1ª rodada.", n_hoje, taxa_1a)
@@ -337,7 +354,8 @@ server <- function(input, output, session) {
     }
 
     t_pesq <- if (n_p_hoje > 0) {
-      sprintf("O Conversa de Pescador auditou %d consulta(s) hoje (grau de veracidade: %d%%).", n_p_hoje, med_fato_hoje)
+      paste0(sprintf("O Conversa de Pescador registrou %d consulta(s) hoje. ", n_p_hoje),
+              if (is.na(med_fato_hoje)) "Sem avaliação numérica disponível." else sprintf("Média dos pareceres disponíveis: %d%%.", med_fato_hoje))
     } else {
       "Nenhuma consulta externa auditada hoje."
     }
@@ -356,9 +374,14 @@ server <- function(input, output, session) {
 
   observe({
     d <- dados()
-    projetos <- sort(unique(c(d$validacoes$projeto, d$mensagens$projeto, d$eventos$projeto)))
+    projetos <- sort(unique(c(d$validacoes$projeto, d$mensagens$projeto, d$eventos$projeto, d$consumo$projeto)))
     agentes <- sort(unique(c(d$validacoes$autor, d$eventos$agente, d$sessoes$agente)))
     ent <- entregas(d$validacoes)
+    for (campo in c("executor", "origem", "modelo")) {
+      id <- switch(campo, origem = "origem_consumo", modelo = "modelo_consumo", campo)
+      escolhas <- sort(unique(d$consumo[[campo]]))
+      updateSelectizeInput(session, id, choices = escolhas[!is.na(escolhas) & nzchar(escolhas)], selected = isolate(input[[id]]))
+    }
     updateSelectizeInput(session, "projeto", choices = projetos[nzchar(projetos)], selected = isolate(input$projeto))
     updateSelectizeInput(session, "agente", choices = agentes[nzchar(agentes)], selected = isolate(input$agente))
     updateSelectizeInput(session, "par", choices = sort(unique(ent$par)), selected = isolate(input$par))
@@ -454,6 +477,28 @@ server <- function(input, output, session) {
   output$a_diff_cob <- renderUI(cobertura_ui(cobertura(ent()$fim[ent()$aprovada & !is.na(ent()$diff)])))
 
   # B. Consumo
+  motores <- reactive({
+    d <- filtrar(no_periodo(dados()$consumo), agente = "executor")
+    for (campo in c("executor", "origem", "modelo")) {
+      id <- switch(campo, origem = "origem_consumo", modelo = "modelo_consumo", campo)
+      if (length(input[[id]])) d <- d[d[[campo]] %in% input[[id]], , drop = FALSE]
+    }
+    d
+  })
+  output$b_motores <- DT::renderDT(tabela(resumo_motores(motores())))
+  output$b_local <- DT::renderDT(tabela(desempenho_local(motores())))
+  output$b_fontes <- DT::renderDT(tabela(tabela_lista(dados()$fontes,
+    c("fonte", "origem", "estado", "registros", "ferramentas", "ultimo_dado", "dados_preservados"))))
+  output$b_ferramentas <- DT::renderDT({
+    d <- filtrar(no_periodo(dados()$chamadas), agente = "executor")
+    for (campo in c("executor", "origem", "modelo")) {
+      id <- switch(campo, origem = "origem_consumo", modelo = "modelo_consumo", campo)
+      if (length(input[[id]])) d <- d[d[[campo]] %in% input[[id]], , drop = FALSE]
+    }
+    if (!nrow(d)) return(tabela(data.frame()))
+    tabela(aggregate(list(chamadas = rep(1L, nrow(d))),
+       d[c("executor", "origem", "ferramenta", "resultado")], sum))
+  })
   # Por dia: os dias antigos só existem somados (JANGADA_PAINEL_RETENCAO).
   msg <- reactive({
     d <- consumo_diario(dados()$mensagens, dados()$mensagens_dias)
@@ -462,18 +507,10 @@ server <- function(input, output, session) {
   soma <- function(col) sum(msg()[[col]], na.rm = TRUE)
 
   output$insight_consumo <- renderUI({
-    m <- msg()
-    if (!nrow(m)) return(NULL)
-    total_saida <- soma("saida")
-    total_raciocinio <- soma("raciocinio")
-    pct_raciocinio <- if (total_saida > 0) round(100 * total_raciocinio / total_saida) else 0
-    total_cache <- soma("cache_lido")
-    total_in <- soma("entrada") + total_cache
-    pct_cache <- if (total_in > 0) round(100 * total_cache / total_in) else 0
-
+    m <- motores()
     div(class = "alert alert-secondary py-2 px-3 mb-3",
-        sprintf("Síntese de consumo: %s tokens de saída no período (%d%% dedicados a raciocínio deliberativo). O reaproveitamento de cache foi de %d%% dos tokens de entrada, reduzindo custo e latência.",
-                curto(total_saida), pct_raciocinio, pct_cache))
+        sprintf("%d registros no período; %d com saída medida. Fontes e modelos aparecem separados para preservar a cobertura e a origem do consumo.",
+                nrow(m), sum(is.finite(m$saida))))
   })
   output$vb_saida <- renderText(curto(soma("saida")))
   output$vb_raciocinio <- renderText(curto(soma("raciocinio")))
@@ -704,7 +741,7 @@ server <- function(input, output, session) {
     # Com erro, o coletor grava só o erro, e os outros quadros ficam em "-".
     if (!is.null(sub()$erro)) paste0("indicadores não calculados na coleta de ", sub()$data, ": ", sub()$erro) else
     if (is.null(f)) "sem registro" else
-      paste0(f$delegadas_agy, " delegação(ões); ", f$subagentes_claude, " subagente(s) do Claude, ", f$subagentes_agy, " do agy")
+      paste0(f$delegadas_agy, " delegação(ões); ", f$subagentes_claude, " subagente(s) do Claude, ", f$subagentes_agy, " do agy; ", if (is.null(f$delegadas_local)) 0 else f$delegadas_local, " delegação(ões) local(is)")
   })
   output$e_recusas <- renderText(pc(sub()$fracao_agy$taxa_recusa_pct))
   output$e_recusas_n <- renderText({
@@ -748,9 +785,12 @@ server <- function(input, output, session) {
   output$e_fonte <- DT::renderDT({
     q <- sub()$qualidade
     if (is.null(q)) return(tabela(data.frame()))
-    tabela(data.frame(origem = c("subagentes do Claude", "delegações ao agy"),
-                      relatorios = c(q$claude$n, q$delegacoes$n), sem_fonte = c(q$claude$total, q$delegacoes$total),
-                      mediana = c(num_ou_na(q$claude$mediana), num_ou_na(q$delegacoes$mediana))))
+    fontes <- if (is.null(q$por_destino)) list("subagentes do Claude" = q$claude, "delegações registradas" = q$delegacoes) else
+      list("subagentes do Claude" = q$claude, "delegações ao agy" = q$por_destino$agy, "delegações locais" = q$por_destino$local)
+    tabela(do.call(rbind, lapply(names(fontes), function(nome) {
+      x <- fontes[[nome]]
+      data.frame(origem = nome, relatorios = num_ou_na(x$n), sem_fonte = num_ou_na(x$total), mediana = num_ou_na(x$mediana))
+    })))
   })
 
   # F. Pesquisas (Conversa de Pescador)
@@ -758,8 +798,8 @@ server <- function(input, output, session) {
     p <- pesqs()
     if (!nrow(p)) return(NULL)
     n_tot <- nrow(p)
-    avaliadas <- sum(!is.na(p$grau_fato))
-    med_fato <- if (avaliadas) paste0(round(mean(p$grau_fato, na.rm = TRUE)), "%") else "indisponível"
+    avaliadas <- sum(is.finite(p$grau_fato) & p$grau_fato >= 0 & p$grau_fato <= 100)
+    med_fato <- if (avaliadas) paste0(media_avaliacoes(p$grau_fato), "%") else "indisponível"
     div(class = "alert alert-secondary py-2 px-3 mb-3",
         sprintf("Pesquisas: %d consultas, %d com avaliação numérica registrada. Média dos pareceres: %s. Essa avaliação não é uma probabilidade de acerto.",
                 n_tot, avaliadas, med_fato))
@@ -770,7 +810,7 @@ server <- function(input, output, session) {
   })
   output$f_fato <- renderText({
     p <- pesqs()
-    if (!nrow(p) || all(is.na(p$grau_fato))) "Sem avaliação" else paste0(round(mean(p$grau_fato, na.rm = TRUE)), "% nos pareceres")
+    if (is.na(media_avaliacoes(p$grau_fato))) "Sem avaliação" else paste0(media_avaliacoes(p$grau_fato), "% nos pareceres")
   })
   output$f_hoje <- renderText({
     p <- pesqs()
@@ -877,14 +917,16 @@ server <- function(input, output, session) {
     df <- data.frame(
       data = format(p$data[ord], "%d/%m %H:%M"),
       sessao = p$sessao[ord],
+      estado = p$estado[ord],
+      par = p$par[ord],
       pergunta = p$pergunta[ord],
-      termo = paste0(p$grau_fato[ord], "%"),
+      termo = ifelse(is.finite(p$grau_fato[ord]), paste0(p$grau_fato[ord], "%"), "Sem avaliação"),
       veredito = p$veredito[ord],
       fontes = p$fontes_qtd[ord],
       segundos = sprintf("%.1fs", p$segundos[ord]),
       stringsAsFactors = FALSE
     )
-    tabela(setNames(df, c("data", "sessão", "pergunta", "fato (%)", "diagnóstico do auditor", "fontes", "tempo")))
+    tabela(setNames(df, c("data", "sessão", "estado", "par", "pergunta", "avaliação (%)", "diagnóstico do auditor", "fontes", "tempo")))
   })
 }
 

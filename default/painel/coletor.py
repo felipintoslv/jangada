@@ -35,7 +35,9 @@ JANGADA_PAINEL_RETENCAO.
 
 import datetime as dt
 import glob
+import hashlib
 import json
+import math
 import os
 import re
 import sys
@@ -227,10 +229,20 @@ ESQ_EVENTOS = pa.schema([
     ("agente", pa.string()), ("estado", pa.string()),
 ])
 ESQ_PESQUISAS = pa.schema([
+    ("id", pa.string()), ("estado", pa.string()), ("modo", pa.string()),
+    ("par", pa.string()), ("autor", pa.string()), ("revisor", pa.string()),
+    ("origem", pa.string()),
     ("data", TS), ("dia", pa.string()), ("sessao", pa.string()),
     ("pergunta", pa.string()), ("grau_fato", pa.int64()), ("grau_pescador", pa.int64()),
     ("veredito", pa.string()), ("fontes_qtd", pa.int64()), ("segundos", pa.float64()),
 ])
+BASE_METRICAS = [("id", pa.string()), ("data", TS)] + [
+    (c, pa.string()) for c in ("dia", "fonte", "origem", "executor", "provedor", "modelo",
+                               "sessao", "projeto", "papel", "delegacao_id", "chamada_id", "estado")]
+ESQ_CONSUMO = pa.schema(BASE_METRICAS + [
+    (c, pa.float64()) for c in ("entrada_total", "cache_lido", "cache_criado", "saida", "raciocinio",
+                               "tempo_total_ms", "tempo_carregamento_ms", "tempo_entrada_ms", "tempo_geracao_ms")])
+ESQ_CHAMADAS = pa.schema(BASE_METRICAS + [("ferramenta", pa.string()), ("resultado", pa.string())])
 
 
 def ids_existentes(pasta):
@@ -660,7 +672,7 @@ def nota_pesquisa(registro, aud):
     if "sem auditoria" in texto or "indisponível" in texto:
         return None
     nota = aud.get("grau_fato")
-    return int(nota) if type(nota) in (int, float) and 0 <= nota <= 100 else None
+    return int(nota) if type(nota) in (int, float) and math.isfinite(nota) and 0 <= nota <= 100 else None
 
 
 def pesquisas_pescador():
@@ -684,21 +696,39 @@ def pesquisas_pescador():
                         dt_obj = data_de(d.get("data"))
                         if not dt_obj:
                             continue
-                        chave = d.get("id") or (d.get("data"), d.get("pergunta"))
+                        if not isinstance(d, dict):
+                            continue
+                        chave = d.get("id")
+                        if not isinstance(chave, str) or not chave:
+                            legado = json.dumps([d.get("data"), d.get("pergunta")], ensure_ascii=False)
+                            chave = "legado-" + hashlib.sha256(legado.encode()).hexdigest()
                         if chave in vistos:
                             linhas[vistos[chave]] = None
                         vistos[chave] = len(linhas)
-                        aud = d.get("auditoria") or {}
+                        aud = d.get("auditoria")
+                        aud = aud if isinstance(aud, dict) else {}
+                        nota = nota_pesquisa(d, aud)
+                        par = str(d.get("par") or "")
+                        membros = par.split("-")
+                        autor, revisor = membros if len(membros) == 2 else ("", "")
+                        segundos = d.get("tempo_segundos")
+                        segundos = segundos if type(segundos) in (int, float) and math.isfinite(segundos) and segundos >= 0 else None
+                        referencias = aud.get("referencias")
                         linhas.append({
+                            "id": chave, "estado": str(d.get("estado") or "legado"),
+                            "modo": str(d.get("modo") or ""), "par": par,
+                            "autor": str(d.get("autor") or autor),
+                            "revisor": str(d.get("revisor") or revisor),
+                            "origem": "pescador",
                             "data": dt_obj,
                             "dia": dia_de(dt_obj),
                             "sessao": str(d.get("sessao") or "avulsa"),
                             "pergunta": str(d.get("pergunta") or "")[:200],
-                            "grau_fato": nota_pesquisa(d, aud),
-                            "grau_pescador": (100 - nota_pesquisa(d, aud)) if nota_pesquisa(d, aud) is not None else None,
+                            "grau_fato": nota,
+                            "grau_pescador": 100 - nota if nota is not None else None,
                             "veredito": str(aud.get("veredito_resumo") or "")[:300],
-                            "fontes_qtd": len(aud.get("referencias") or []),
-                            "segundos": float(d.get("tempo_segundos") or 0.0),
+                            "fontes_qtd": len(referencias) if isinstance(referencias, list) else 0,
+                            "segundos": segundos,
                         })
                     except Exception:
                         continue
@@ -738,8 +768,20 @@ def indicadores_do_dia(cache, vals, evs, agora, pesqs=None):
     ini = dt.datetime.combine(agora.astimezone(FUSO).date(), dt.time(), FUSO).astimezone(UTC)
     fim = ini + dt.timedelta(days=1)
     # A revisão de fora repete, na integração, uma entrega já revisada dentro.
-    aprov = [v for v in vals if v["dia"] == hoje and v["resultado"] == "aprovado"
-             and v["origem"] != "revisoes"]
+    entregas_dia = {}
+    for v in sorted(vals, key=lambda v: v["data"]):
+        if v.get("origem") == "revisoes":
+            continue
+        chave = v.get("entrega") or v.get("rotulo")
+        entregas_dia.setdefault(chave, []).append(v)
+    aprov = []
+    no_limite = 0
+    for rodada in entregas_dia.values():
+        aprovado = next((v for v in rodada if v["resultado"] == "aprovado"), None)
+        if aprovado and aprovado["dia"] == hoje:
+            aprov.append(aprovado)
+        if any(v["dia"] == hoje and v["resultado"] == "limite" for v in rodada):
+            no_limite += 1
     primeira = [v for v in aprov if v["rodada"] == 1]
     saida = entrada = criado = lido = 0
     pasta = os.path.join(cache, "mensagens")
@@ -755,17 +797,78 @@ def indicadores_do_dia(cache, vals, evs, agora, pesqs=None):
         "atualizado": agora.astimezone(FUSO).isoformat(timespec="seconds"),
         "entregas_aprovadas": len(aprov),
         "aprovacao_1a_rodada": round(100 * len(primeira) / len(aprov)) if aprov else None,
-        "no_limite": sum(1 for v in vals if v["dia"] == hoje and v["resultado"] == "limite"),
+        "no_limite": no_limite,
         "tokens": {"entrada": entrada, "saida": saida, "cache_criado": criado, "cache_lido": lido},
         "aguardando_segundos": round(segundos_aguardando(evs_dia, ini, fim, agora)),
         "eventos_desde": dia_de(primeiro_evento),
     }
-    if pesqs:
-        pesqs_dia = [p for p in pesqs if p["dia"] == hoje]
-        if pesqs_dia:
-            indicadores["pesquisas_hoje"] = len(pesqs_dia)
-            indicadores["grau_fato_medio"] = round(sum(p["grau_fato"] for p in pesqs_dia) / len(pesqs_dia))
+    pesqs_dia = [p for p in (pesqs or []) if p["dia"] == hoje]
+    notas = [p["grau_fato"] for p in pesqs_dia
+             if type(p.get("grau_fato")) in (int, float)
+             and math.isfinite(p["grau_fato"]) and 0 <= p["grau_fato"] <= 100]
+    indicadores["pesquisas_hoje"] = len(pesqs_dia)
+    indicadores["pesquisas_avaliadas_hoje"] = len(notas)
+    indicadores["grau_fato_medio"] = round(sum(notas) / len(notas)) if notas else None
     return indicadores
+
+
+def metricas_unificadas(cache, agora):
+    """Publica métricas extras; fonte com erro conserva o cache anterior."""
+    anteriores = {}
+    for nome in ("consumo", "chamadas"):
+        caminho = os.path.join(cache, nome + ".parquet")
+        try:
+            anteriores[nome] = pq.read_table(caminho).to_pylist() if os.path.exists(caminho) else []
+        except (OSError, pa.ArrowException):
+            anteriores[nome] = []
+    cobertura_ant = ler_json(os.path.join(cache, "cobertura.json"), [])
+    if not isinstance(cobertura_ant, list):
+        cobertura_ant = []
+    try:
+        import metricas
+        consumo, chamadas, cobertura = metricas.coletar(cache, agora.astimezone(FUSO), retencao())
+        falhas = {c["fonte"] for c in cobertura if c.get("estado") == "erro"}
+        for nome, linhas in (("consumo", consumo), ("chamadas", chamadas)):
+            linhas[:] = [l for l in linhas if l.get("fonte") not in falhas]
+            linhas.extend(l for l in anteriores[nome] if l.get("fonte") in falhas)
+        for c in cobertura:
+            if c.get("fonte") in falhas:
+                anterior = next((a for a in cobertura_ant if a.get("fonte") == c.get("fonte")), {})
+                c["ultimo_dado"] = anterior.get("ultimo_dado")
+                c["dados_preservados"] = True
+        for c in cobertura:
+            for campo in ("atualizado", "ultimo_dado"):
+                if isinstance(c.get(campo), dt.datetime):
+                    c[campo] = c[campo].isoformat()
+        gravar_tabela(os.path.join(cache, "consumo.parquet"), consumo, ESQ_CONSUMO)
+        gravar_tabela(os.path.join(cache, "chamadas.parquet"), chamadas, ESQ_CHAMADAS)
+        gravar_json(os.path.join(cache, "cobertura.json"), cobertura)
+        return consumo, cobertura
+    except Exception as e:  # Métricas extras não impedem a coleta principal.
+        print(f"metricas: {type(e).__name__}", file=sys.stderr)
+        cobertura = [dict(c, estado="erro", dados_preservados=True) for c in cobertura_ant]
+        if not cobertura:
+            cobertura = [{"fonte": "metricas", "estado": "erro", "dados_preservados": True}]
+        gravar_json(os.path.join(cache, "cobertura.json"), cobertura)
+        return anteriores["consumo"], cobertura
+
+
+def resumo_motores(consumo, hoje):
+    """Somente contadores observados; null preserva ausência por motor."""
+    grupos = {}
+    campos = ("entrada_total", "cache_lido", "cache_criado", "saida", "raciocinio")
+    for l in consumo:
+        if l.get("dia") != hoje:
+            continue
+        chave = (l.get("executor") or "desconhecido", l.get("origem") or "desconhecida")
+        g = grupos.setdefault(chave, dict(executor=chave[0], origem=chave[1], registros=0,
+                                         **{c: None for c in campos}))
+        g["registros"] += 1
+        for c in campos:
+            v = l.get(c)
+            if type(v) in (int, float) and math.isfinite(v) and v >= 0:
+                g[c] = (g[c] or 0) + v
+    return list(grupos.values())
 
 
 def main():
@@ -795,7 +898,11 @@ def main():
     gravar_tabela(os.path.join(cache, "sessoes.parquet"), sessoes(), ESQ_SESSOES)
     gravar_tabela(os.path.join(cache, "apontamentos.parquet"), apontamentos(), ESQ_APONTAMENTOS)
     gravar_tabela(os.path.join(cache, "pesquisas.parquet"), pesqs, ESQ_PESQUISAS)
-    gravar_json(os.path.join(cache, "hoje.json"), indicadores_do_dia(cache, vals, evs, agora, pesqs))
+    consumo, cobertura = metricas_unificadas(cache, agora)
+    indicadores = indicadores_do_dia(cache, vals, evs, agora, pesqs)
+    indicadores["motores"] = resumo_motores(consumo, indicadores["dia"])
+    indicadores["cobertura"] = cobertura
+    gravar_json(os.path.join(cache, "hoje.json"), indicadores)
     # Os indicadores de subagentes não derrubam a coleta. O erro vai para o
     # subagentes.json, e o painel o mostra em vez dos números da coleta anterior.
     # O memo guarda um registro por subagente com a assinatura dos arquivos

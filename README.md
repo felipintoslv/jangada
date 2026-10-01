@@ -532,9 +532,12 @@ Definições:
   sobre as entregas aprovadas.
 - **No limite**: entregas que chegaram a `JANGADA_VALIDAR_RODADAS` sem
   aprovação. Indica tarefa ambígua ou modelos em desacordo.
-- **Tokens**: só do Claude Code; o agy não grava contagem legível. Saída,
-  raciocínio (parte da saída) e cache criado aparecem separados; o cache lido
-  é barato e fica num gráfico à parte. Cada resposta conta uma vez.
+- **Tokens**: resumo de Claude, Codex e Ollama por executor, origem e modelo.
+  Entrada inclui cache lido; saída e raciocínio aparecem separados e não são
+  somados. Ausência de medida permanece ausente. O histórico externo do Codex
+  fica separado das sessões Jangada. O agy não grava contagem legível.
+  Os gráficos detalhados e blocos de 5 horas continuam exclusivos do Claude.
+  Veja cobertura, filtros e durações locais em [docs/painel.md](docs/painel.md).
 - **Bloco de 5 horas**: a regra do `jangada-consumo`. Os registros não trazem
   o limite do plano; "perto do limite" é um bloco com 80% ou mais da saída do
   maior bloco observado.

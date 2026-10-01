@@ -22,6 +22,7 @@ import argparse
 import datetime as dt
 import glob
 import json
+import math
 import os
 import re
 import sqlite3
@@ -344,22 +345,76 @@ def agy(raiz=None, pasta=None, memo=None):
 # agente isolado; um campo de outro tipo vira None, em vez de derrubar os
 # indicadores no meio de uma soma.
 CAMPOS_NUM = ("segundos", "codigo_saida", "palavras", "tokens_retorno", "passos",
-              "tokens_agy", "cota_antes", "cota_depois", "sem_fonte")
+              "tokens_agy", "cota_antes", "cota_depois", "sem_fonte",
+              "tokens_local_entrada", "tokens_local_saida", "documento_chars", "retorno_chars", "contexto")
 CAMPOS_TEXTO = ("data", "sessao", "projeto", "pasta", "papel", "destino", "modelo",
-                "motivo", "conversa")
+                "motivo", "conversa", "delegacao_id")
+
+
+def numero_valido(v):
+    try:
+        return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v >= 0
+    except OverflowError:
+        return False
 
 
 def delegacao_limpa(d):
     for c in CAMPOS_NUM:
         v = d.get(c)
-        if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float))):
+        if v is not None and not numero_valido(v):
             d[c] = None
     for c in CAMPOS_TEXTO:
         if d.get(c) is not None and not isinstance(d[c], str):
             d[c] = None
     if not isinstance(d.get("recusa"), bool):
         d["recusa"] = bool(d.get("motivo"))
+    if "chamadas_local" in d and d["chamadas_local"] is not None:
+        if not isinstance(d["chamadas_local"], list):
+            d["chamadas_local"] = None
+        else:
+            chamadas = []
+            for c in d["chamadas_local"]:
+                if not isinstance(c, dict):
+                    continue
+                c = dict(c)
+                for k in ("tokens_entrada", "tokens_saida", "cache_lido", "indice", "codigo_transporte"):
+                    if not numero_valido(c.get(k)):
+                        c[k] = None
+                for k in ("id", "modelo", "fase"):
+                    if not isinstance(c.get(k), str):
+                        c[k] = None
+                tempos = c.get("tempos_ms")
+                c["tempos_ms"] = {k: v if numero_valido(v) else None
+                                   for k, v in (tempos.items() if isinstance(tempos, dict) else [])}
+                chamadas.append(c)
+            d["chamadas_local"] = chamadas
     return d
+
+
+def uso_local(d, campo):
+    """Chamadas individuais prevalecem sobre agregado legado, sem duplicar."""
+    chamadas = d.get("chamadas_local")
+    if isinstance(chamadas, list):
+        chave = "tokens_entrada" if campo == "tokens_local_entrada" else "tokens_saida"
+        valores = [c[chave] for c in chamadas if numero_valido(c.get(chave))]
+        return sum(valores) if valores else None
+    v = d.get(campo)
+    return v if numero_valido(v) else None
+
+
+def resumo_local(dels):
+    locais = [d for d in dels if d.get("destino") == "local"]
+    def medida(campo):
+        valores = [uso_local(d, campo) for d in locais]
+        conhecidos = [v for v in valores if v is not None]
+        return sum(conhecidos) if conhecidos else None, len(conhecidos)
+    entrada, n_entrada = medida("tokens_local_entrada")
+    saida, n_saida = medida("tokens_local_saida")
+    return {"n": len(locais), "atendidas": sum(not d.get("recusa") for d in locais),
+            "recusas": sum(bool(d.get("recusa")) for d in locais),
+            "tokens_entrada": entrada, "tokens_saida": saida,
+            "medidas_entrada": n_entrada, "medidas_saida": n_saida,
+            "ferramentas_disponiveis": False}
 
 
 def delegacoes(caminho=None):
@@ -449,6 +504,7 @@ def entrega(pasta, desde=None, ate=None):
                    "principal_cache_lido": cache_lido},
         "delegadas_agy": delegadas_agy,
         "agy": {"n": agy_n, "passos": soma(a, "passos") + soma(atendidas, "passos")},
+        "local": resumo_local(dels),
         "papeis": papeis,
         "retorno_tokens": soma(c, "retorno_tokens") + soma(atendidas, "tokens_retorno"),
         "edicoes": soma(subs, "edicoes"),
@@ -546,10 +602,11 @@ def indicadores(agora=None, memo=None):
     for x in subs:
         if x["origem"] == "claude" or x["papel"]:
             chave = x["papel"] or x["tipo"] or "?"
-            por_papel.setdefault(chave, {"claude": 0, "agy": 0})[x["origem"]] += 1
+            por_papel.setdefault(chave, {"claude": 0, "agy": 0, "local": 0})[x["origem"]] += 1
     for d in atendidas:
-        por_papel.setdefault(d.get("papel") or "?", {"claude": 0, "agy": 0})[
-            "agy" if d.get("destino") == "agy" else "claude"] += 1
+        destino = d.get("destino")
+        if destino in ("agy", "local", "claude"):
+            por_papel.setdefault(d.get("papel") or "?", {"claude": 0, "agy": 0, "local": 0})[destino] += 1
     motivos = {}
     for d in recusas:
         m = re.sub(r"\d+([.,]\d+)?%?", "N", d.get("motivo") or "")
@@ -558,6 +615,8 @@ def indicadores(agora=None, memo=None):
     agy_atendidas = sum(d.get("destino") == "agy" for d in atendidas)
     fracao = {
         "delegadas_agy": agy_atendidas, "subagentes_claude": sum(x["origem"] == "claude" for x in subs),
+        "delegadas_local": sum(d.get("destino") == "local" for d in atendidas),
+        "fracao_local_pct": pct(sum(d.get("destino") == "local" for d in atendidas), len(atendidas) + len(subs)),
         "subagentes_agy": sum(x["origem"] == "agy" for x in subs),
         "fracao_agy_pct": pct(agy_atendidas, len(atendidas) + len(subs)),
         "por_papel": por_papel,
@@ -611,6 +670,10 @@ def indicadores(agora=None, memo=None):
     qualidade = {"claude": {"n": len(sf), "mediana": mediana(sf), "total": sum(sf)},
                  "delegacoes": {"n": len(sf_d), "mediana": mediana(sf_d), "total": sum(sf_d)},
                  "desmentidos": None}
+    qualidade["por_destino"] = {}
+    for destino in ("agy", "local"):
+        valores = [d["sem_fonte"] for d in atendidas if d.get("destino") == destino and numero_valido(d.get("sem_fonte"))]
+        qualidade["por_destino"][destino] = {"n": len(valores), "mediana": mediana(valores), "total": sum(valores)}
 
     # 7. Desvios do protocolo. Meta: zero em todos.
     recusas_t = [(instante(d.get("data")), d.get("papel"), d.get("pasta")) for d in recusas]
@@ -642,6 +705,15 @@ def indicadores(agora=None, memo=None):
         ramo.append({"origem": "delegacao", "id": d.get("conversa") or "", "papel": d.get("papel"),
                      "profundidade": 1, "tokens": d.get("tokens_agy"), "passos": d.get("passos"),
                      "retorno_tokens": d.get("tokens_retorno"), "razao": None, "recusa": d.get("recusa")})
+        filho = ramo[-1]
+        filho.update(destino=d.get("destino"), modelo=d.get("modelo"))
+        filho["id"] = d.get("delegacao_id") or filho["id"]
+        if d.get("destino") == "local":
+            entrada = uso_local(d, "tokens_local_entrada")
+            saida = uso_local(d, "tokens_local_saida")
+            filho.update(tokens_entrada=entrada, tokens_saida=saida,
+                         tokens=entrada + saida if entrada is not None and saida is not None else None,
+                         ferramentas_disponiveis=False)
     ramos = []
     for pasta, convs in sorted(arvore.items()):
         for conv, filhos in sorted(convs.items()):
@@ -656,6 +728,7 @@ def indicadores(agora=None, memo=None):
         "entregas_com_resumo": len(ents),
         "tokens_por_entrega": tokens, "fracao_agy": fracao, "compressao": compressao, "cota_agy": cota,
         "validacao": validacao, "qualidade": qualidade, "desvios": desvios, "arvore": ramos,
+        "local": resumo_local(dels),
     }
 
 
@@ -681,7 +754,7 @@ def texto(ind):
     li.append(f"2. Fração delegada ao agy: {n(f['fracao_agy_pct'], '%')} ({f['delegadas_agy']} delegações;"
               f" {f['subagentes_claude']} subagentes do Claude, {f['subagentes_agy']} do agy)")
     for p, v in sorted(f["por_papel"].items()):
-        li.append(f"  {p}: Claude {v['claude']}, agy {v['agy']}")
+        li.append(f"  {p}: Claude {v['claude']}, agy {v['agy']}, local {v.get('local', 0)}")
     li.append(f"  recusas do jangada-delegar: {f['recusas']} de {f['chamadas']} ({n(f['taxa_recusa_pct'], '%')})")
     for m, q in sorted(f["motivos"].items(), key=lambda x: -x[1]):
         li.append(f"    {q}x {m}")

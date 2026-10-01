@@ -15,6 +15,45 @@ flowchart LR
 As definições de cada indicador estão no README, seção "Painel de
 indicadores", e os campos de cada registro em [registros](registros.md).
 
+## Consumo por executor e origem
+
+O período inicial é o dia atual. A aba de consumo reúne Claude, Codex e
+Ollama em `consumo.parquet`; `chamadas.parquet` guarda apenas metadados das
+ferramentas e `cobertura.json` informa quais fontes foram lidas. Os filtros
+de executor, origem e modelo afetam essas tabelas. O detalhamento antigo
+do Claude mantém seus filtros de período e projeto.
+
+Sessões Codex em `JANGADA_ESTADO/codex` ficam separadas do histórico em
+`CODEX_HOME/sessions`, identificado como `interface_externa`. O histórico
+externo não entra nas taxas de aprovação das entregas do Jangada. Contadores
+por resposta prevalecem sobre o formato cumulativo; respostas e chamadas
+repetidas são descartadas pela identificação. Não são guardados argumentos
+de ferramentas nem conteúdo das mensagens nas novas tabelas.
+
+Entrada inclui cache lido. Raciocínio aparece separadamente e não é somado
+à saída. Cada resumo mostra quantos registros possuem entrada e saída
+medidas. Ausência de medida permanece ausente, inclusive quando todos os
+registros estão sem informação. Fonte com erro conserva o cache anterior,
+com aviso na tabela de cobertura.
+
+Novas delegações locais recebem uma identificação e registram cada chamada
+Ollama, incluindo fatias e consolidação, tokens e durações internas em
+milissegundos. Chamadas individuais prevalecem sobre os agregados antigos.
+Falhas preservam o consumo conhecido. Tokens por segundo usa somente a
+duração de geração; registros antigos sem esse campo não permitem calcular
+velocidade. A média usa a soma dos tokens dividida pela soma das durações
+das chamadas medidas. O fluxo local não oferece ferramentas.
+
+O comparativo de modelos continua dependendo de tarefas equivalentes,
+qualidade dos retornos e amostra suficiente. A chamada local encontrada na
+análise de 30/09/2026 não sustenta conclusão sobre economia ou desempenho.
+O adaptador Codex relê arquivos com limites de tamanho e quantidade; ainda
+não mantém uma posição incremental própria.
+
+Pesquisas do Conversa de Pescador respeitam o período e o par selecionados.
+Notas ausentes não interrompem a coleta. A média exibida é a dos pareceres
+numéricos disponíveis, sem tratá-la como probabilidade de acerto.
+
 ## bin/jangada-painel
 
 ```mermaid

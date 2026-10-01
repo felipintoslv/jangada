@@ -39,6 +39,7 @@ carregar_cache <- function(cache) {
     ok <- if (dir.exists(caminho)) length(list.files(caminho, "\\.parquet$")) > 0 else file.exists(caminho)
     if (!ok) return(vazia)
     d <- if (dir.exists(caminho)) as.data.frame(arrow::open_dataset(caminho)) else as.data.frame(arrow::read_parquet(caminho))
+    for (col in setdiff(names(vazia), names(d))) d[[col]] <- rep(vazia[[col]][NA_integer_], nrow(d))
     for (col in names(d)) if (inherits(d[[col]], "POSIXct")) attr(d[[col]], "tzone") <- ""
     # Uma compactação interrompida deixa a mesma linha em duas partes da pasta;
     # a próxima compactação do coletor desfaz, e até lá a leitura descarta.
@@ -77,12 +78,63 @@ carregar_cache <- function(cache) {
       sessao = character(), projeto = character(), agente = character(), estado = character(),
       desde = ts, atualizado = ts)),
     pesquisas = ler("pesquisas.parquet", data.frame(
-      data = ts, dia = character(), sessao = character(),
+      id = character(), data = ts, dia = character(), sessao = character(), estado = character(),
+      par = character(), modo = character(), autor = character(), revisor = character(),
       pergunta = character(), grau_fato = integer(), grau_pescador = integer(),
       veredito = character(), fontes_qtd = integer(), segundos = numeric())),
+    consumo = ler("consumo.parquet", data.frame(
+      id = character(), data = ts, dia = character(), origem = character(), executor = character(),
+      provedor = character(), modelo = character(), sessao = character(), projeto = character(),
+      papel = character(), estado = character(), delegacao_id = character(), chamada_id = character(),
+      entrada_total = numeric(), cache_lido = numeric(), cache_criado = numeric(),
+      saida = numeric(), raciocinio = numeric(), tempo_total_ms = numeric(),
+      tempo_carregamento_ms = numeric(), tempo_entrada_ms = numeric(), tempo_geracao_ms = numeric())),
+    chamadas = ler("chamadas.parquet", data.frame(
+      id = character(), data = ts, dia = character(), origem = character(), executor = character(),
+      provedor = character(), modelo = character(), sessao = character(), projeto = character(),
+      papel = character(), ferramenta = character(), resultado = character())),
+    fontes = tryCatch(jsonlite::read_json(file.path(cache, "cobertura.json")), error = function(e) list()),
     coleta = tryCatch(jsonlite::read_json(file.path(cache, "coleta.json")), error = function(e) list()),
     subagentes = tryCatch(suppressWarnings(jsonlite::read_json(file.path(cache, "subagentes.json"))), error = function(e) list())
   )
+}
+
+# Ausência de medida continua ausente, inclusive em um conjunto inteiro sem notas.
+soma_medida <- function(x) {
+  x <- x[is.finite(x) & x >= 0]
+  if (length(x)) sum(x) else NA_real_
+}
+
+media_avaliacoes <- function(x) {
+  x <- x[is.finite(x) & x >= 0 & x <= 100]
+  if (length(x)) round(mean(x)) else NA_real_
+}
+
+resumo_motores <- function(d) {
+  if (!nrow(d)) return(data.frame())
+  grupos <- interaction(d$executor, d$provedor, d$origem, d$modelo, drop = TRUE, lex.order = TRUE)
+  partes <- split(d, grupos)
+  do.call(rbind, lapply(partes, function(g) data.frame(
+    executor = g$executor[1], provedor = g$provedor[1], origem = g$origem[1], modelo = g$modelo[1],
+    registros = nrow(g), entrada = soma_medida(g$entrada_total), saida = soma_medida(g$saida),
+    cache_lido = soma_medida(g$cache_lido), raciocinio = soma_medida(g$raciocinio),
+    com_entrada = sum(is.finite(g$entrada_total)), com_saida = sum(is.finite(g$saida)),
+    stringsAsFactors = FALSE)))
+}
+
+desempenho_local <- function(d) {
+  d <- d[d$executor == "ollama", , drop = FALSE]
+  if (!nrow(d)) return(data.frame())
+  do.call(rbind, lapply(split(d, d$modelo), function(g) {
+    conhecidos <- is.finite(g$tempo_geracao_ms) & g$tempo_geracao_ms > 0 & is.finite(g$saida) & g$saida >= 0
+    velocidades <- 1000 * g$saida[conhecidos] / g$tempo_geracao_ms[conhecidos]
+    data.frame(modelo = g$modelo[1], registros = nrow(g), com_tempo_geracao = sum(conhecidos),
+               geracao_s = soma_medida(g$tempo_geracao_ms) / 1000,
+               carregamento_s = soma_medida(g$tempo_carregamento_ms) / 1000,
+               tokens_s = if (any(conhecidos)) 1000 * sum(g$saida[conhecidos]) / sum(g$tempo_geracao_ms[conhecidos]) else NA_real_,
+               mediana_tokens_s = if (length(velocidades)) median(velocidades) else NA_real_,
+               p95_tokens_s = if (length(velocidades)) unname(quantile(velocidades, .95)) else NA_real_)
+  }))
 }
 
 # Período coberto e número de observações de um indicador, com o aviso de
@@ -557,7 +609,10 @@ arvore_rede <- function(ramos) {
       grupo <- if (isTRUE(f$recusa)) "recusa" else f$origem
       nos[[id]] <- data.frame(id = id, label = if (is.null(f$papel)) "?" else f$papel, group = grupo,
         value = 1 + log10(1 + num_ou_na(if (is.null(f$tokens)) 0 else f$tokens)) / 2,
-        title = paste0(esc(f$origem), " ", esc(f$id), "<br>profundidade ", if (is.null(f$profundidade)) "-" else esc(f$profundidade),
+        title = paste0(esc(f$origem), " ", esc(f$id),
+                       if (is.null(f$destino)) "" else paste0("<br>destino ", esc(f$destino)),
+                       if (is.null(f$modelo)) "" else paste0(", modelo ", esc(f$modelo)),
+                       "<br>profundidade ", if (is.null(f$profundidade)) "-" else esc(f$profundidade),
                        ", tokens ", if (is.null(f$tokens)) "-" else esc(f$tokens),
                        ", retorno ", if (is.null(f$retorno_tokens)) "-" else esc(f$retorno_tokens)))
       arestas[[length(arestas) + 1]] <- data.frame(from = ramo, to = id)

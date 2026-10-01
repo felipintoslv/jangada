@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 """Testes offline do chat, dos pareceres e da execução cancelável."""
 import ast
+import datetime as dt
+import glob
 import contextlib
 import importlib.util
 import io
 import json
+import hashlib
+import math
 import os
 from pathlib import Path
 import sys
 import tempfile
 import threading
 import time
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -143,11 +148,100 @@ class MotorTest(unittest.TestCase):
     def test_nota_painel_preserva_zero_e_ausencia(self):
         arvore = ast.parse((RAIZ/'default/painel/coletor.py').read_text())
         func = next(n for n in arvore.body if isinstance(n, ast.FunctionDef) and n.name == 'nota_pesquisa')
-        env = {}; exec(compile(ast.Module(body=[func], type_ignores=[]), 'nota', 'exec'), env)
+        env = {'math': math}; exec(compile(ast.Module(body=[func], type_ignores=[]), 'nota', 'exec'), env)
         nota = env['nota_pesquisa']
         self.assertEqual(nota({}, {'grau_fato':0}), 0)
         self.assertIsNone(nota({'estado':'nao_verificado'}, {'grau_fato':100}))
         self.assertIsNone(nota({}, {'grau_fato':100,'veredito_resumo':'sem auditoria'}))
+        for valor in (True, float('nan'), float('inf'), -1, 101, '95'):
+            self.assertIsNone(nota({}, {'grau_fato': valor}))
+
+    def funcoes_coletor(self, nomes, **env):
+        arvore = ast.parse((RAIZ/'default/painel/coletor.py').read_text())
+        funcs = [n for n in arvore.body if isinstance(n, ast.FunctionDef) and n.name in nomes]
+        env.update(math=math, dt=dt, glob=glob, os=os, json=json, hashlib=hashlib,
+                   UTC=dt.timezone.utc, FUSO=dt.timezone(dt.timedelta(hours=-3)))
+        exec(compile(ast.Module(body=funcs, type_ignores=[]), 'coletor', 'exec'), env)
+        return env
+
+    def test_painel_media_e_entregas_unicas(self):
+        env = self.funcoes_coletor({'indicadores_do_dia', 'segundos_aguardando', 'dia_de'})
+        agora = dt.datetime(2026, 9, 30, 12, tzinfo=dt.timezone.utc)
+        with tempfile.TemporaryDirectory() as cache:
+            linhas = [dict(data=agora, dia='2026-09-30', entrega=e, origem=o,
+                           resultado=r, rodada=n) for e, o, r, n in [
+                               ('a', 'validar.jsonl', 'aprovado', 1),
+                               ('a', 'validar.jsonl', 'aprovado', 2),
+                               ('b', 'validar.jsonl', 'limite', 3),
+                               ('b', 'validar.jsonl', 'limite', 4),
+                               ('c', 'revisoes', 'aprovado', 1),
+                               ('d', 'revisoes', 'limite', 3)]]
+            notas = [dict(dia='2026-09-30', grau_fato=n) for n in (None, 0, 100, float('nan'))]
+            resumo = env['indicadores_do_dia'](cache, linhas, [], agora, notas)
+            self.assertEqual(resumo['entregas_aprovadas'], 1)
+            self.assertEqual(resumo['aprovacao_1a_rodada'], 100)
+            self.assertEqual(resumo['no_limite'], 1)
+            self.assertEqual(resumo['pesquisas_hoje'], 4)
+            self.assertEqual(resumo['pesquisas_avaliadas_hoje'], 2)
+            self.assertEqual(resumo['grau_fato_medio'], 50)
+            for notas in ([], [dict(dia='2026-09-30', grau_fato=None)]):
+                r = env['indicadores_do_dia'](cache, [], [], agora, notas)
+                self.assertIsNone(r['grau_fato_medio'])
+            r = env['indicadores_do_dia'](cache, [], [], agora, [dict(dia='2026-09-30', grau_fato=0)])
+            self.assertEqual(r['grau_fato_medio'], 0)
+
+    def test_painel_historico_ultima_versao_id(self):
+        with tempfile.TemporaryDirectory() as estado, tempfile.TemporaryDirectory() as runtime:
+            pasta = Path(estado)/'pescador'; pasta.mkdir()
+            linhas = [dict(id='mesma', data='2026-09-30T10:00:00-03:00', estado='verificado',
+                           par='claude-agy', auditoria={'grau_fato': 100}),
+                      dict(id='mesma', data='2026-09-30T10:01:00-03:00', estado='cancelado',
+                           par='claude-agy', auditoria={'grau_fato': 100}),
+                      dict(data='2026-09-30T10:02:00-03:00', pergunta='Legado',
+                           auditoria={'grau_fato': 0}, tempo_segundos=float('nan'))]
+            (pasta/'historico.jsonl').write_text('\n'.join(json.dumps(l) for l in linhas)+'\n')
+            env = self.funcoes_coletor({'pesquisas_pescador', 'nota_pesquisa', 'data_de', 'dia_de'}, ESTADO=estado)
+            with patch.dict(os.environ, XDG_RUNTIME_DIR=runtime):
+                lidas = env['pesquisas_pescador']()
+                repetidas = env['pesquisas_pescador']()
+            self.assertEqual(len(lidas), 2)
+            self.assertEqual(lidas[0]['id'], 'mesma')
+            self.assertEqual(lidas[0]['estado'], 'cancelado')
+            self.assertIsNone(lidas[0]['grau_fato'])
+            self.assertEqual((lidas[0]['autor'], lidas[0]['revisor']), ('claude', 'agy'))
+            self.assertEqual(lidas[1]['grau_fato'], 0)
+            self.assertIsNone(lidas[1]['segundos'])
+            self.assertEqual(lidas[1]['id'], repetidas[1]['id'])
+
+    def test_metricas_fonte_com_erro_preserva_dados(self):
+        with tempfile.TemporaryDirectory() as cache:
+            antigo = dict(id='antigo', fonte='codex', dia='2026-09-30', executor='codex',
+                          origem='jangada', saida=10, entrada_total=None)
+            for nome in ('consumo', 'chamadas'):
+                (Path(cache)/(nome+'.parquet')).touch()
+            publicados = {}
+            env = self.funcoes_coletor({'metricas_unificadas', 'resumo_motores'},
+                pq=SimpleNamespace(read_table=lambda _: SimpleNamespace(to_pylist=lambda: [antigo])),
+                pa=SimpleNamespace(ArrowException=RuntimeError), ESQ_CONSUMO=None, ESQ_CHAMADAS=None,
+                ler_json=lambda *args: [dict(fonte='codex', ultimo_dado='2026-09-30T10:00:00-03:00')],
+                retencao=lambda: 180, sys=sys,
+                gravar_tabela=lambda caminho, linhas, _: publicados.update({Path(caminho).name: linhas}),
+                gravar_json=lambda caminho, dado: publicados.update({Path(caminho).name: dado}))
+            extra = dict(id='novo', fonte='local', dia='2026-09-30', executor='ollama',
+                         origem='jangada', entrada_total=0, saida=0)
+            def coletar_fake(cache, agora, retencao):
+                self.assertEqual(agora.utcoffset(), dt.timedelta(hours=-3))
+                return [extra], [], [dict(fonte='codex', estado='erro'), dict(fonte='local', estado='ok')]
+            adapter = SimpleNamespace(coletar=coletar_fake)
+            with patch.dict(sys.modules, metricas=adapter):
+                consumo, cobertura = env['metricas_unificadas'](cache, dt.datetime.now(dt.timezone.utc))
+            self.assertEqual({c['id'] for c in consumo}, {'antigo', 'novo'})
+            self.assertTrue(cobertura[0]['dados_preservados'])
+            self.assertEqual(cobertura[0]['ultimo_dado'], '2026-09-30T10:00:00-03:00')
+            motores = env['resumo_motores'](consumo, '2026-09-30')
+            por_executor = {m['executor']: m for m in motores}
+            self.assertIsNone(por_executor['codex']['entrada_total'])
+            self.assertEqual(por_executor['ollama']['entrada_total'], 0)
 
     def test_execucao_streaming_e_cancelamento(self):
         with tempfile.TemporaryDirectory() as d:

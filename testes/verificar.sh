@@ -136,6 +136,11 @@ python3 testes/pescador.py || falha "testes/pescador.py"
 testes/pescador-modelo.sh || falha "testes/pescador-modelo.sh"
 
 passo "painel de indicadores"
+python3 testes/metricas.py || falha "testes/metricas.py"
+python3 testes/painel-local.py || falha "testes/painel-local.py"
+if command -v Rscript >/dev/null && Rscript -e 'quit(status = if (requireNamespace("arrow", quietly = TRUE) && requireNamespace("shiny", quietly = TRUE)) 0 else 1)' 2>/dev/null; then
+  Rscript testes/painel-motores.R || falha "testes/painel-motores.R"
+fi
 testes/painel.sh || falha "testes/painel.sh"
 
 passo "subagentes"

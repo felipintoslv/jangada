@@ -35,7 +35,7 @@ rodar() {
   env -u HYPRLAND_INSTANCE_SIGNATURE PATH="$tmp/bin:$PATH" XDG_STATE_HOME="$tmp/state" \
     XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" JANGADA_CLAUDE_PROJETOS="$conversas" \
     JANGADA_PROJETOS="$tmp/Projetos" JANGADA_WORKTREES="$tmp/wt" JANGADA_PAINEL_PORTA="$porta" \
-    JANGADA_AGY_DIR="$tmp/sub/agy" "$@"
+    JANGADA_AGY_DIR="$tmp/sub/agy" CODEX_HOME="$tmp/codex" "$@"
 }
 painel() { rodar "$repo_jangada/bin/jangada-painel" "$@"; }
 trap 'painel --parar >/dev/null 2>&1 || true; [[ -n "${PAINEL_MANTER:-}" ]] || rm -rf "$tmp"' EXIT
