@@ -139,11 +139,14 @@ metadados pelo método `account/rateLimits/read` do Codex. Não inicia conversa,
 gera texto, envia fontes ou ativa execução de ferramentas.
 
 A consulta usa uma pasta temporária privada dentro do estado da orquestração,
-com cópia temporária da autenticação existente e sem configuração do usuário.
+com token de acesso existente e sem configuração do usuário. O token de
+renovação não é transmitido nem copiado. Tokens vencidos ou com menos de
+60 segundos de validade impedem a consulta e deixam o estado em `UNKNOWN`.
 Encerra o grupo do processo e remove a pasta ao concluir, falhar ou receber
-interrupção. Não faz login, não altera a autenticação original e não usa
+Ctrl-C, SIGTERM ou SIGHUP. Não faz login, não renova a credencial original e não usa
 chaves de API do ambiente. Autenticação ausente ou incompatível deixa
-o estado em `UNKNOWN`.
+o estado em `UNKNOWN`. O ambiente do filho contém somente caminhos
+temporários, idioma, busca de executáveis, certificados e configuração de proxy.
 
 O saldo registrado é o menor das janelas presentes no grupo de consumo
 `codex`. Grupos diferentes não substituem esse saldo. Uma janela vencida

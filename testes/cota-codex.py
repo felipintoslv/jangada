@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Confere cotas e a consulta isolada sem autenticação ou serviços reais."""
 
+import base64
 import json
 import os
 import pathlib
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -22,6 +25,13 @@ def cotas(usado=20, semanal=70):
     return {'rateLimits': {'limitId': 'codex',
                           'primary': {'usedPercent': usado, 'resetsAt': 2000},
                           'secondary': {'usedPercent': semanal, 'resetsAt': 3000}}}
+
+
+def autenticacao(fim):
+    conteudo = base64.urlsafe_b64encode(json.dumps({'exp': fim}).encode()).decode().rstrip('=')
+    return {'tokens': {'access_token': 'cabecalho.' + conteudo + '.assinatura',
+                       'id_token': 'identidade-falsa', 'refresh_token': 'renovacao-original',
+                       'account_id': 'conta-falsa'}}
 
 
 class Cotas(unittest.TestCase):
@@ -76,7 +86,7 @@ class Consulta(unittest.TestCase):
         self.casa = self.pasta / 'codex'
         self.casa.mkdir()
         self.auth = self.casa / 'auth.json'
-        self.auth.write_text('{"credencial_falsa": "somente-teste"}')
+        self.auth.write_text(json.dumps(autenticacao(time.time() + 3600)))
         self.bin = self.pasta / 'bin'
         self.bin.mkdir()
         self.fake = self.bin / 'codex'
@@ -101,8 +111,12 @@ assert casa == pathlib.Path.cwd()
 assert casa.name.startswith('.cota-codex-')
 assert (casa / 'auth.json').stat().st_mode & 0o777 == 0o600
 assert casa.stat().st_mode & 0o777 == 0o700
+assert json.loads((casa / 'auth.json').read_text())['tokens']['refresh_token'] == ''
+assert 'renovacao-original' not in (casa / 'auth.json').read_text()
 assert not (casa / 'config.toml').exists()
 assert 'JANGADA_SESSAO' not in os.environ
+assert 'SEGREDO_TESTE' not in os.environ
+assert os.environ['HOME'] == str(casa)
 inicio = json.loads(sys.stdin.readline())
 assert inicio['method'] == 'initialize'
 print(json.dumps({'id': 1, 'result': {}}), flush=True)
@@ -110,6 +124,7 @@ assert json.loads(sys.stdin.readline())['method'] == 'initialized'
 pedido = json.loads(sys.stdin.readline())
 assert pedido == {'id': 2, 'method': 'account/rateLimits/read', 'params': {}}
 print(json.dumps({'method': 'notificacao', 'params': {}}), flush=True)
+print(json.dumps({'id': 2, 'method': 'pedido-servidor', 'params': {}}), flush=True)
 print(json.dumps({'id': 2, 'result': ''' + repr(dados) + '''}), flush=True)
 sys.stdin.read()
 ''')
@@ -117,9 +132,49 @@ sys.stdin.read()
     def test_consulta_somente_metadados_e_remove_credenciais_temporarias(self):
         antes = self.auth.read_bytes()
         self.resposta(cotas())
-        self.assertEqual(consultar(self.estado.pasta), cotas())
+        with patch.dict(os.environ, SEGREDO_TESTE='nao-transmitir'):
+            self.assertEqual(consultar(self.estado.pasta), cotas())
         self.assertEqual(self.auth.read_bytes(), antes)
         self.assertEqual(list(self.estado.pasta.glob('.cota-codex-*')), [])
+
+    def test_token_vencido_ou_invalido_nao_inicia_consulta(self):
+        for dados in ({}, autenticacao(time.time() - 1), autenticacao(time.time() + 20),
+                      {'tokens': {'access_token': 'invalido', 'id_token': 'identidade'}}):
+            with self.subTest(dados=dados):
+                self.auth.write_text(json.dumps(dados))
+                with patch('cota_codex.subprocess.Popen') as iniciar, self.assertRaises(ValueError):
+                    consultar(self.estado.pasta)
+                iniciar.assert_not_called()
+
+    def test_sigterm_e_sighup_encerram_filho_e_removem_pasta(self):
+        prontidao = self.pasta / 'pronto.json'
+        self.programa('import json, os, pathlib, time\npathlib.Path(' + repr(str(prontidao))
+                      + ').write_text(json.dumps({"pid": os.getpid(), "casa": os.environ["CODEX_HOME"]}))\n'
+                      + 'time.sleep(60)\n')
+        pedido = 'import sys; sys.dont_write_bytecode = True; sys.path.insert(0, ' \
+                 + repr(str(RAIZ / 'default/orquestracao')) \
+                 + '); from cota_codex import consultar; consultar(' + repr(str(self.estado.pasta)) + ')'
+        for numero in (signal.SIGTERM, signal.SIGHUP):
+            with self.subTest(sinal=numero):
+                prontidao.unlink(missing_ok=True)
+                pai = subprocess.Popen([sys.executable, '-c', pedido], stdout=subprocess.DEVNULL,
+                                       stderr=subprocess.PIPE)
+                try:
+                    limite = time.monotonic() + 5
+                    while not prontidao.exists() and time.monotonic() < limite:
+                        time.sleep(0.01)
+                    self.assertTrue(prontidao.exists())
+                    dados = json.loads(prontidao.read_text())
+                    pai.send_signal(numero)
+                    _, erros = pai.communicate(timeout=5)
+                    self.assertEqual(pai.returncode, 128 + numero, erros.decode())
+                    self.assertFalse(pathlib.Path(dados['casa']).exists())
+                    with self.assertRaises(ProcessLookupError):
+                        os.kill(dados['pid'], 0)
+                finally:
+                    if pai.poll() is None:
+                        pai.kill()
+                    pai.communicate(timeout=5)
 
     def test_consulta_exige_permissao_e_respeita_pausa(self):
         with patch('saude.consultar') as consultar_cota:
@@ -204,7 +259,7 @@ sys.stdin.read()
         self.assertEqual(resultado.returncode, 0, resultado.stderr)
         item = next(p for p in json.loads(resultado.stdout)['provedores'] if p['id'] == 'codex')
         self.assertEqual(item['status'], 'UNKNOWN')
-        self.assertNotIn('somente-teste', resultado.stdout + resultado.stderr)
+        self.assertNotIn('renovacao-original', resultado.stdout + resultado.stderr)
 
 
 if __name__ == '__main__':

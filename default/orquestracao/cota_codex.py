@@ -1,5 +1,7 @@
 """Consulta somente metadados de cota, sem iniciar conversas ou executar ferramentas."""
 
+import base64
+import datetime
 import json
 import math
 import os
@@ -45,8 +47,22 @@ def percentual(dados, agora):
 
 
 def consultar(pasta):
+    anteriores = {}
+
+    def interromper(numero, _quadro):
+        raise SystemExit(128 + numero)
+
+    try:
+        for numero in (signal.SIGTERM, signal.SIGHUP):
+            anteriores[numero] = signal.signal(numero, interromper)
+        return _consultar(pasta)
+    finally:
+        for numero, tratador in anteriores.items():
+            signal.signal(numero, tratador)
+
+
+def _consultar(pasta):
     casa = pathlib.Path(os.environ.get('CODEX_HOME', str(pathlib.Path.home() / '.codex')))
-    # Uma cópia temporária impede que renovação de credenciais altere a sessão existente.
     fd = os.open(casa / 'auth.json', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, 'rb') as origem:
         if not stat.S_ISREG(os.fstat(origem.fileno()).st_mode):
@@ -54,14 +70,34 @@ def consultar(pasta):
         autenticacao = origem.read(1024 * 1024 + 1)
     if len(autenticacao) > 1024 * 1024:
         raise ValueError('autenticação do Codex excede o limite')
+    dados = json.loads(autenticacao)
+    tokens = dados.get('tokens') if isinstance(dados, dict) else None
+    if not isinstance(tokens, dict) or any(not isinstance(tokens.get(chave), str) or not tokens[chave]
+                                           for chave in ('access_token', 'id_token')):
+        raise ValueError('consulta exige autenticação ChatGPT existente')
+    partes = tokens['access_token'].split('.')
+    if len(partes) != 3:
+        raise ValueError('token de acesso inválido')
+    prazo = json.loads(base64.urlsafe_b64decode(partes[1] + '=' * (-len(partes[1]) % 4)))
+    fim = prazo.get('exp') if isinstance(prazo, dict) else None
+    if type(fim) not in (int, float) or not math.isfinite(fim) or fim - time.time() < 60:
+        raise ValueError('token de acesso vencido ou próximo do vencimento')
+    # Sem o token de renovação, o servidor não pode rotacionar a credencial da sessão.
+    autenticacao = json.dumps({'auth_mode': 'chatgpt', 'tokens': {
+        'id_token': tokens['id_token'], 'access_token': tokens['access_token'],
+        'refresh_token': '', 'account_id': tokens.get('account_id')},
+        'last_refresh': datetime.datetime.now(datetime.timezone.utc).isoformat()}).encode()
     with tempfile.TemporaryDirectory(prefix='.cota-codex-', dir=pasta) as temporario:
         destino = pathlib.Path(temporario) / 'auth.json'
         with os.fdopen(os.open(destino, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'wb') as arquivo:
             arquivo.write(autenticacao)
-        ambiente = os.environ.copy()
-        ambiente.update(CODEX_HOME=temporario, JANGADA_HOOK_DESLIGADO='1')
-        for chave in ('JANGADA_SESSAO', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'CODEX_API_KEY'):
-            ambiente.pop(chave, None)
+        permitidas = {'PATH', 'LANG', 'LC_ALL', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
+                      'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy', 'SSL_CERT_FILE', 'SSL_CERT_DIR'}
+        ambiente = {chave: valor for chave, valor in os.environ.items() if chave in permitidas}
+        ambiente.update(CODEX_HOME=temporario, HOME=temporario, TMPDIR=temporario,
+                        XDG_STATE_HOME=temporario, XDG_CONFIG_HOME=temporario,
+                        XDG_CACHE_HOME=temporario, XDG_DATA_HOME=temporario,
+                        JANGADA_HOOK_DESLIGADO='1')
         processo = subprocess.Popen(['codex', '--no-daemon', '-c',
                                      'log_dir=' + json.dumps(str(pathlib.Path(temporario) / 'log')),
                                      'app-server', '--stdio'], cwd=temporario, env=ambiente,
@@ -83,6 +119,8 @@ def consultar(pasta):
                     resposta = json.loads(linha)
                     if not isinstance(resposta, dict):
                         raise ValueError('resposta de metadados inválida')
+                    if 'method' in resposta:
+                        continue
                     if type(resposta.get('id')) is int and resposta['id'] == identificador:
                         if 'error' in resposta or 'result' not in resposta:
                             raise ValueError('Codex recusou a consulta de metadados')
