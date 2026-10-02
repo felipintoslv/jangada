@@ -533,8 +533,22 @@ subagente tem `.db` próprio.
   - `pasta`: raiz git da pasta atual; é por ela que o validar liga a
     delegação à entrega.
   - `destino`: `agy`, `claude` (perfil sem agy; recusa) ou `local` (Ollama local).
+    Vazio quando a seleção por capacidade termina sem executor.
   - `modelo`: Flash com o esforço do papel (no agy) ou modelo local (ex.: `qwen3:4b`).
   - `codigo_saida`: 0 atendida, 4 recusada.
+  - `versao_registro`: 3 nos registros com seleção por capacidade e recusas
+    estruturadas; campos anteriores continuam disponíveis.
+  - `roteamento_id`: identifica as tentativas da mesma seleção.
+  - `capacidade`: capacidade documental solicitada, ou vazio na chamada antiga.
+  - `decisao`: ordem por capacidade, destino explícito ou configuração anterior.
+  - `motivo_codigo`: motivo estável da recusa; vazio no sucesso.
+  - `verificacao`: `nao_exigida`, `reprovada` ou `referencias_validas`.
+    Referências válidas não comprovam a interpretação do conteúdo.
+  - `chamadas_executor`: chamadas ao modelo neste executor, incluindo partes
+    locais; `null` se a interrupção impedir conhecer o total.
+  - `tentativas`: destinos descartados ou executados até esse registro, com
+    motivos, códigos de saída e contagem de chamadas. O registro seguinte
+    pode repetir o histórico; não some novamente essas contagens.
   - `palavras`, `tokens_retorno`: tamanho do que voltou ao Claude
     (caracteres impressos divididos por 4, relatório cortado em 600
     palavras).

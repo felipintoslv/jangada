@@ -49,6 +49,15 @@ hooks ou ferramentas externas. Mais detalhes em `docs/codex.md`.
 
 ## Peças
 
+O `jangada-delegar --capacidade` seleciona destinos para leitura documental.
+O envio ao agy exige autorização da tarefa (`--permitir-remoto`) e do perfil.
+Uma falha do Ollama não autoriza esse envio. Veja os limites e capacidades
+em `docs/subagentes-e-delegacao.md`.
+
+Uma consulta de cota que falha não pode reutilizar o valor expirado.
+O delegador valida a fração de `gemini-5h` e recusa quando não consegue
+atualizá-la. Consumo de tokens do Claude não comprova cota restante.
+
 | Peça | Papel |
 |---|---|
 | `jangada-agente` | escolhe projeto, cria worktree `agente/<nome>` e abre o agente numa sessão `tmux -L jangada`; `--prompt`/`--prompt-arquivo` já entregam a tarefa, `--perfil` escolhe o agente, `--sem-isolar` abre fora do bubblewrap |

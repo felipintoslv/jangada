@@ -110,6 +110,53 @@ O destino pode ser explícito: `--destino local` ou `--destino agy`.
 Sem essa opção, o comando usa o destino definido pela configuração.
 `JANGADA_DELEGAR=claude` recusa ambos; `JANGADA_DELEGAR=local` recusa o agy.
 
+### Seleção por capacidade
+
+`--capacidade` ativa seleção para o papel `leitor`, com fontes em
+`--arquivos`. As capacidades disponíveis são `leitura_documental`,
+`resumo_curto` e `analise_documental`. Sem essa opção, as chamadas mantêm
+a seleção anterior.
+
+```sh
+jangada-delegar leitor "Compare os documentos" \
+  --capacidade analise_documental --permitir-remoto \
+  --arquivos fontes/a.txt fontes/b.txt
+```
+
+A ordem vem de `default/delegacao/roteamento.json`. Um arquivo opcional
+`~/.config/jangada/delegacao.json` substitui essa política: contém um objeto
+com capacidades e listas de destinos, sem comandos. Aceita apenas `local`
+e `agy`, sem repetições. Capacidade ausente ou configuração inválida recusa
+a execução. Claude e Codex não são alternativas automáticas.
+
+O agy exige `--permitir-remoto` nesta tarefa e um perfil que permita o
+destino. A autorização não vence `JANGADA_DELEGAR=local`. Sem autorização,
+a seleção descarta o agy; uma falha local nunca autoriza envio remoto.
+`--destino` explícito restringe a seleção a esse destino.
+
+Cada candidato é tentado uma vez. Indisponibilidade, cota desconhecida ou
+insuficiente, contexto insuficiente e saída inválida permitem tentar o
+próximo destino autorizado. Negação de ferramentas, ausência de confiança
+ou de proteção do leitor interrompem a seleção.
+
+`JANGADA_DELEGAR_TEMPO_TOTAL` limita a seleção e seus executores a 600
+segundos. `JANGADA_DELEGAR_CHAMADAS_MAX` limita as chamadas aos modelos a
+8, incluindo partes e consolidação local. Ambos aceitam inteiros positivos
+de até seis dígitos. Consultas de disponibilidade e cota entram no tempo
+total, mas não na contagem de chamadas ao modelo.
+Se o executor ignorar a interrupção, recebe encerramento forçado após
+mais 2 segundos.
+
+Antes de gravar ou entregar o relatório, a verificação exige uma referência
+a cada fonte fornecida, em linha ou página existente. Nomes de arquivo
+ambíguos exigem o caminho. Essa conferência não comprova fidelidade nem
+aprova conclusões. Sem saída válida, recusa com código 4.
+
+`--json` devolve o relatório, capacidade, decisão, motivos e tentativas em
+JSON. O `roteamento_id` reúne os registros dos executores da mesma seleção.
+As tentativas anteriores aparecem no resultado do executor seguinte. Se o
+tempo interromper um executor, seu número de chamadas fica desconhecido.
+
 ```mermaid
 flowchart LR
     A[jangada-delegar] --> D{Destino permitido?}
@@ -156,14 +203,16 @@ flowchart TD
   `jangada-worktree-preparar`, só se a raiz já estiver lá, e sai no
   `jangada-agente-fim`.
 - A cota vem de `agy -p "/usage"`, guardada por `JANGADA_DELEGAR_CACHE`
-  minutos (5). Abaixo de `JANGADA_DELEGAR_COTA_MIN` (20%), recusa.
+  minutos (5). Exige uma única fração numérica entre 0 e 1 para `gemini-5h`.
+  Se a atualização falhar, não usa o valor expirado. Cota desconhecida ou
+  abaixo de `JANGADA_DELEGAR_COTA_MIN` (20%) recusa.
 - O tempo limite é `JANGADA_DELEGAR_TEMPO` segundos (300).
 - Comando de terminal que o agy nega aparece listado; libera-se em
   `permissions.allow` do `settings.json` do agy.
 - O relatório conta as frases sem fonte (`caminho:linha`, URL, página ou
   célula), que entram no registro.
-- Na recusa, o comando sugere um subagente do Claude, mas o protocolo da
-  sessão decide a alternativa: no Codex, a investigação permanece na sessão.
+- Na recusa, o comando orienta conforme o agente da sessão: subagente do
+  Claude, investigação na sessão do Codex ou `invoke_subagent` no agy.
   O `jangada-delegar` nunca chama o Claude.
 
 ## Destino local

@@ -8,3 +8,7 @@
    - Com JANGADA_DELEGAR=local, os demais papéis ficam nesta sessão.
    - Não envie documentos confidenciais a outro provedor sem autorização.
      Uma recusa local nunca autoriza o envio à nuvem.
+   - A seleção por `--capacidade` é opcional e documental, com o papel leitor
+     e `--arquivos`. Use `--permitir-remoto` somente quando houver autorização
+     para enviar as fontes ao agy e o perfil permitir. A verificação de
+     referências não aprova o conteúdo nem substitui a revisão da entrega.
