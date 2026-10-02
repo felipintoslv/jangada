@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Confere referências às fontes fornecidas, sem aprovar o conteúdo."""
 
-import pathlib
 import argparse
+import pathlib
 import re
 import subprocess
 import sys

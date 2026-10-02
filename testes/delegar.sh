@@ -367,7 +367,7 @@ printf '%s\n' "doc1.txt:1: trecho relevante extraido do arquivo." >"$ollama_resp
 : >"$ollama_reqs"
 printf '{"models": []}\n' >"$ollama_ps"
 
-python3 "$tmp/servidor_ollama.py" "qwen3:4b" "$ollama_reqs" "$ollama_resp" "$porta_ollama" "$ollama_ps" "$ollama_estouro" &
+python3 "$tmp/servidor_ollama.py" "qwen3:4b modelo-simples" "$ollama_reqs" "$ollama_resp" "$porta_ollama" "$ollama_ps" "$ollama_estouro" &
 pid_ollama=$!
 
 for _ in {1..20}; do
@@ -752,13 +752,36 @@ OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia a regra" \
   --capacidade leitura_documental --json --arquivos "$tmp/projeto/doc1.txt"
 conferir "geração: relatório cortado pelo limite reprova" jqok -e \
   '.tentativas[0].motivo_codigo == "saida_invalida"' "$tmp/saida"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar redator "revise" --destino local \
+  --arquivos "$tmp/projeto/doc1.txt"
+conferir "compatibilidade: saída longa sem capacidade mantém contrato" [ "$(codigo)" = 0 ]
+conferir "compatibilidade: não altera opções antigas de geração" jqok -se \
+  'last | (has("think") | not) and (.options | has("num_predict") | not)
+    and (.messages[1].content | endswith("/no_think") | not)' "$ollama_reqs"
 rm "$ollama_resp.limite"
+printf 'Regra explicada com referência válida em doc1.txt:1\n' >"$ollama_resp"
+LOCAL_MODELO=modelo-simples OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "leia" \
+  --capacidade leitura_documental --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "geração: outros modelos não recebem controle Qwen3" jqok -se \
+  'last | .model == "modelo-simples" and (.messages[1].content | endswith("/no_think") | not)' "$ollama_reqs"
+delegar leitor "leia" --requisito Destino --arquivos "$tmp/projeto/doc1.txt"
+conferir "uso: requisito exige capacidade" [ "$(codigo)" = 2 ]
+delegar leitor "leia" --capacidade leitura_documental --requisito -Foo --arquivos "$tmp/projeto/doc1.txt"
+conferir "uso: requisito começando com hífen é recusado" [ "$(codigo)" = 2 ]
+conferir "uso: ajuda apresenta requisito" grep -q -- --requisito "$tmp/erro"
 printf 'doc_grande.txt:1: resumo completo com fonte.\n' >"$ollama_resp"
 : >"$ollama_reqs"
 CHAMADAS_MAX="$chamadas_fatiadas" LOCAL_CTX=2100 LOCAL_FATIAS_MAX=5 OLLAMA_URL="http://127.0.0.1:$porta_ollama" \
   delegar leitor "resuma" --capacidade resumo_curto --json --arquivos "$doc_grande"
 conferir "limite: orçamento exato inclui consolidação" jqok -e --argjson total "$chamadas_fatiadas" \
   '.codigo_saida == 0 and .chamadas_executor == $total and .chamadas_local[-1].fase == "consolidacao"' "$tmp/saida"
+RESPOSTA='Resposta sem referências' CHAMADAS_MAX="$chamadas_fatiadas" LOCAL_CTX=2100 \
+  OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "resuma" --capacidade analise_documental \
+  --permitir-remoto --json --arquivos "$doc_grande"
+conferir "limite: desconta chamada anterior antes das partes locais" jqok -e \
+  '.tentativas[0].destino == "agy" and .tentativas[0].chamadas == 1
+    and .tentativas[1].destino == "local" and .tentativas[1].chamadas == 0
+    and .tentativas[1].motivo_codigo == "limite_chamadas"' "$tmp/saida"
 
 # A prévia cortada declara que a verificação vale para o arquivo completo.
 python3 -c 'print("palavra " * 610 + "doc1.txt:1")' >"$ollama_resp"

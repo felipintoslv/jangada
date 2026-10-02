@@ -48,7 +48,7 @@ if [[ "${JANGADA_SESSAO:-}" =~ ^[A-Za-z0-9_.-]+$ && -f "$JANGADA_ESTADO/agentes/
 fi
 agente_sessao="${agente_sessao:-$JANGADA_AGENTE}"
 
-uso() { sed -n '7,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+uso() { sed -n '7,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 papel=""; pedido=""; arquivo=""; destino_opt=""
 capacidade=""; permitir_remoto=0; modo_json=0
@@ -61,7 +61,7 @@ while (($#)); do
     --capacidade) [[ $# -ge 2 && -n "$2" ]] || uso; capacidade="$2"; shift 2 ;;
     --permitir-remoto) permitir_remoto=1; shift ;;
     --json) modo_json=1; shift ;;
-    --requisito) [[ $# -ge 2 && "$2" =~ [^[:space:]] && "$2" != *$'\n'* ]] || uso; requisitos+=("$2"); shift 2 ;;
+    --requisito) [[ $# -ge 2 && "$2" =~ [^[:space:]] && "$2" != -* && "$2" != *$'\n'* ]] || uso; requisitos+=("$2"); shift 2 ;;
     --arquivos)
       shift
       while (($#)) && [[ "$1" != --* ]]; do
@@ -533,15 +533,19 @@ if [[ "$destino" == local ]]; then
     local payload resp cod=0 erro tent medida
     contar_chamada
     # Templates antigos do Qwen3 abrem <think> mesmo com think:false.
-    [[ "$modelo" != qwen3:* && "$modelo" != qwen3 ]] || usr+=$'\n/no_think'
+    if [[ -n "$capacidade" && ( "$modelo" == qwen3:* || "$modelo" == qwen3 ) ]]; then
+      usr+=$'\n/no_think'
+    fi
     payload="$(jq -nc \
       --arg m "$modelo" \
       --arg sys "$sys" \
       --arg usr "$usr" \
       --arg ka "$keep_alive" \
+      --arg capacidade "$capacidade" \
       --argjson ctx "$ctx" \
       '{model: $m, messages: [{role: "system", content: $sys}, {role: "user", content: $usr}],
-        stream: false, think: false, keep_alive: $ka, options: {num_ctx: $ctx, num_predict: 1024}}')"
+        stream: false, keep_alive: $ka, options: {num_ctx: $ctx}}
+        | if $capacidade != "" then .think = false | .options.num_predict = 1024 else . end')"
     resp="$(curl -s -S --max-time "$tempo" \
       -H "Content-Type: application/json" \
       -d "$payload" \
@@ -574,7 +578,7 @@ if [[ "$destino" == local ]]; then
     if [[ -n "$erro" ]]; then
       recusar "erro do Ollama: $erro"
     fi
-    if [[ "$(jq -r '.done_reason // ""' <<<"$resp")" == length ]]; then
+    if [[ -n "$capacidade" && "$(jq -r '.done_reason // ""' <<<"$resp")" == length ]]; then
       recusar "o Ollama atingiu o limite de geração; relatório incompleto" saida_invalida
     fi
     if [[ -n "$capacidade" ]] && ! jq -e '.message.content | type == "string"' <<<"$resp" >/dev/null; then

@@ -84,6 +84,14 @@ class Referencias(unittest.TestCase):
                 [str(self.fonte)], ["Destino", "Permissão"],
             )
 
+    def test_requisito_com_varias_fontes(self):
+        outra = pathlib.Path(self.pasta.name) / "outra.txt"
+        outra.write_text("conteúdo\n")
+        texto = "## Destino\nUse o modelo local para ler as duas fontes. fonte.txt:1; outra.txt:1"
+        VALIDAR.verificar(texto, [str(self.fonte), str(outra)], ["Destino"])
+        with self.assertRaises(ValueError):
+            VALIDAR.verificar(texto.replace("outra.txt:1", ""), [str(self.fonte), str(outra)], ["Destino"])
+
 
 if __name__ == "__main__":
     unittest.main()

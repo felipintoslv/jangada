@@ -149,9 +149,10 @@ total, mas não na contagem de chamadas ao modelo.
 Antes de processar um documento dividido, o executor local verifica se há
 chamadas suficientes para todas as partes e uma consolidação. Se faltar
 orçamento, recusa antes de consumir tokens.
-Cada chamada ao Ollama solicita raciocínio desligado e limita a geração
+Cada chamada documental com capacidade solicita raciocínio desligado e limita a geração
 a 1.024 tokens. Alguns modelos continuam raciocinando; saída interrompida
-pelo limite de geração é recusada, sem aprovação parcial.
+pelo limite de geração é recusada, sem aprovação parcial. Chamadas sem
+capacidade preservam as opções anteriores de geração.
 Ao atingir o limite global, o GNU `timeout` envia SIGKILL ao grupo de
 processos do executor e encerra os filhos que permanecem nesse grupo. Processos que
 criem outra sessão ou pedidos já aceitos pelo provedor exigem cancelamento

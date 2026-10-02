@@ -544,8 +544,8 @@ subagente tem `.db` próprio.
   - `motivo_codigo`: motivo estável da recusa; vazio no sucesso.
   - `verificacao`: `nao_exigida`, `reprovada`, `referencias_validas` ou
     `referencias_e_requisitos_validos`, com explicações e referências por requisito.
-  - `requisitos`: lista dos itens exigidos por `--requisito`; vazia sem essa opção.
     Referências válidas não comprovam a interpretação do conteúdo.
+  - `requisitos`: lista dos itens exigidos por `--requisito`; vazia sem essa opção.
   - `verificacao_escopo`: `relatorio_completo` na seleção documental;
     `nenhum` nas chamadas anteriores. A prévia cortada pode omitir referências.
   - `artefato`: arquivo completo gravado, ou vazio quando não foi gravado.
