@@ -6,6 +6,7 @@ import json
 import os
 import pathlib
 import sqlite3
+import subprocess
 import sys
 
 sys.dont_write_bytecode = True
@@ -13,7 +14,7 @@ from estado import Estado
 
 
 def especificacoes(caminho, projeto):
-    tarefas = json.loads(pathlib.Path(caminho).read_text())
+    tarefas = json.loads(pathlib.Path(caminho).read_text(encoding='utf-8'))
     if not isinstance(tarefas, list):
         raise ValueError('plano deve ser uma lista de tarefas')
     resultado = []
@@ -40,9 +41,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     comandos = parser.add_subparsers(dest='comando', required=True)
     fila = comandos.add_parser('fila', help='inspeciona ou importa tarefas')
+    fila.add_argument('--projeto', type=pathlib.Path)
     fila.add_argument('--importar', type=pathlib.Path)
     fila.add_argument('--json', action='store_true')
     tarefa = comandos.add_parser('task', help='altera somente o estado da tarefa')
+    tarefa.add_argument('--projeto', type=pathlib.Path)
     tarefa.add_argument('id')
     tarefa.add_argument('acao', choices=['pausar', 'retomar', 'cancelar', 'repetir', 'revisar'])
     tarefa.add_argument('--parecer')
@@ -50,12 +53,17 @@ def main():
     decisao.add_argument('--aprovar', action='store_true')
     decisao.add_argument('--reprovar', action='store_true')
     args = parser.parse_args()
-    projeto = pathlib.Path.cwd().resolve()
+    if args.projeto:
+        projeto = args.projeto.resolve()
+    else:
+        git = subprocess.run(['git', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null',
+                              'rev-parse', '--show-toplevel'], capture_output=True, text=True, check=False)
+        projeto = pathlib.Path(git.stdout.strip()).resolve() if git.returncode == 0 else pathlib.Path.cwd().resolve()
     if not projeto.is_dir():
         raise ValueError('projeto não existe')
     chave = hashlib.sha256(str(projeto).encode()).hexdigest()
     pasta = pathlib.Path(os.environ['JANGADA_ESTADO']) / 'agentes/projetos' / chave
-    estado = Estado(pasta)
+    estado = Estado(pasta, raiz=os.environ['JANGADA_ESTADO'])
     try:
         if args.comando == 'fila':
             if args.importar:

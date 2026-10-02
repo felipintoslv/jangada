@@ -315,14 +315,14 @@ e preservou cerca de 2,0 GB de folga, atendendo a margem mínima de 1,5 GB.
   da sessão orienta o agente a consultar o usuário antes de recorrer ao Claude em
   documentos confidenciais.
 
-## Registro e medição
-
-### Fila persistente de projetos
+## Fila persistente de projetos
 
 `jangada-fila --importar plano.json` importa tarefas sem executar os dados
 do plano. `jangada-fila --json` permite consultar o estado. Cada projeto,
-identificado pelo caminho absoluto, tem um banco separado em
+identificado pela raiz do Git ou por `--projeto PASTA`, tem um banco separado em
 `$JANGADA_ESTADO/agentes/projetos/HASH/tarefas.sqlite`.
+Fora do Git, a pasta atual identifica o projeto. Subpastas do mesmo
+repositório consultam a mesma fila.
 
 ```json
 [
@@ -341,23 +341,30 @@ identificado pelo caminho absoluto, tem um banco separado em
 ]
 ```
 
-Uma importação repetida preserva resultados. Alterar tarefa existente exige
-outro identificador. Ciclos e dependências inexistentes são recusados antes
+Uma importação repetida com fontes inalteradas preserva resultados. Alterar
+a tarefa ou o conteúdo de uma fonte exige outro identificador. Ciclos e dependências inexistentes são recusados antes
 de gravar o plano. As fontes precisam estar dentro do projeto; caminhos
-resolvidos e hashes são preservados na especificação.
+resolvidos e resumos SHA-256 são preservados na especificação.
 
 `jangada-task T1 pausar`, `retomar`, `cancelar` e `repetir` controlam tarefas
 fora de execução. A repetição mantém o limite total de tentativas. Uma
 reserva expirada exige conferência antes de repetir; outro executor não
-pode concluir a reserva anterior. Os artefatos usam hash de conteúdo.
+pode concluir a reserva anterior. Os artefatos usam resumo SHA-256 do conteúdo
+e são gravados em UTF-8, com substituição atômica. Dependências que falharam
+ou foram canceladas deixam suas tarefas dependentes em `BLOCKED`, com motivo.
 
 Uma saída de execução fica em `REVIEW_REQUIRED`, sem liberar dependências.
 Após conferir o artefato e as fontes, o responsável registra
 `jangada-task T1 revisar --aprovar --parecer "Conferido nas fontes"` ou
 `--reprovar`. A revisão aceita somente o mesmo artefato preservado. Esse
-registro é dado do projeto; não substitui `jangada-validar` nem autoriza
-integração, envio externo ou operação irreversível. Nesta etapa a fila
-registra tarefas; o executor será integrado separadamente.
+registro é uma anotação editável do projeto. O comando não autentica o
+revisor nem impede que o autor registre sua própria aprovação. Portanto,
+`COMPLETED` não comprova revisão independente e não autoriza integração,
+envio externo ou operação irreversível. A fila registra tarefas e artefatos;
+não executa modelos nem substitui `jangada-validar`.
+Tarefas em revisão não podem ser pausadas para contornar a conferência.
+
+## Registro e medição
 
 - Cada chamada do `jangada-delegar`, atendida ou recusada, vira uma linha em
   `delegacoes.jsonl`, com papel, modelo, segundos, código, palavras, cota

@@ -155,7 +155,66 @@ class Persistencia(unittest.TestCase):
         with self.assertRaises(ValueError):
             MODULO.Estado(link)
         with self.assertRaises(ValueError):
-            MODULO.Estado(link / 'subpasta')
+            MODULO.Estado(link / 'subpasta', raiz=self.tmp.name)
+
+    def test_raiz_configurada_por_link_e_permissoes(self):
+        link = pathlib.Path(self.tmp.name) / 'raiz'
+        link.symlink_to(self.pasta, target_is_directory=True)
+        outro = MODULO.Estado(link / 'projeto', raiz=link)
+        self.addCleanup(outro.fechar)
+        self.assertEqual(outro.pasta, self.pasta / 'projeto')
+        self.assertEqual(outro.pasta.stat().st_mode & 0o777, 0o700)
+        self.assertEqual((outro.pasta / 'tarefas.sqlite').stat().st_mode & 0o777, 0o600)
+
+    def test_revisao_exige_artefato_e_nao_permite_pausa(self):
+        self.estado.importar([tarefa()])
+        _, dono = self.estado.reservar()
+        for artefato in (None, '', '   '):
+            with self.subTest(artefato=artefato), self.assertRaises(ValueError):
+                self.estado.finalizar('T1', dono, 'REVIEW_REQUIRED', {}, artefato)
+        for status in ('PAUSED', 'CANCELLED'):
+            with self.subTest(status=status), self.assertRaises(ValueError):
+                self.estado.finalizar('T1', dono, status, {})
+        self.estado.finalizar('T1', dono, 'REVIEW_REQUIRED', {}, 'ação com acentuação')
+        with self.assertRaises(ValueError):
+            self.estado.alterar('T1', 'pausar')
+        self.estado.revisar('T1', 'referência incompleta', False)
+        with self.assertRaises(ValueError):
+            self.estado.alterar('T1', 'pausar')
+        self.estado.alterar('T1', 'repetir')
+        item = self.estado.listar()[0]
+        self.assertIsNone(item['artefato'])
+        self.assertIsNone(item['resultado'])
+        self.assertEqual(self.estado.reservar()[0]['id'], 'T1')
+
+    def test_escrita_interrompida_nao_deixa_artefato_final(self):
+        self.estado.importar([tarefa()])
+        _, dono = self.estado.reservar()
+        with patch.object(MODULO.os, 'replace', side_effect=OSError('interrompido')):
+            with self.assertRaises(OSError):
+                self.estado.finalizar('T1', dono, 'REVIEW_REQUIRED', {}, 'relatório')
+        self.assertEqual(list((self.pasta / 'artefatos').iterdir()), [])
+        self.assertEqual(self.estado.listar()[0]['status'], 'RUNNING')
+        self.estado.finalizar('T1', dono, 'REVIEW_REQUIRED', {}, 'relatório')
+        self.assertEqual(self.estado.ler_artefato(self.estado.listar()[0]['artefato']), 'relatório')
+
+    def test_dependencia_impedida_propaga_motivo(self):
+        for status in ('FAILED', 'CANCELLED'):
+            with self.subTest(status=status):
+                estado = MODULO.Estado(pathlib.Path(self.tmp.name) / status)
+                self.addCleanup(estado.fechar)
+                estado.importar([tarefa(), tarefa('T2', dependencias=['T1']),
+                                 tarefa('T3', dependencias=['T2'])])
+                if status == 'FAILED':
+                    _, dono = estado.reservar()
+                    estado.finalizar('T1', dono, 'FAILED', {'motivo': 'erro'})
+                else:
+                    estado.alterar('T1', 'cancelar')
+                self.assertIsNone(estado.reservar())
+                itens = estado.listar()
+                self.assertEqual([t['status'] for t in itens], [status, 'BLOCKED', 'BLOCKED'])
+                self.assertIn('T1', itens[1]['motivo'])
+                self.assertIn('T2', itens[2]['motivo'])
 
     def test_identificador_de_artefato_nao_e_caminho(self):
         with self.assertRaises(ValueError):
@@ -202,6 +261,33 @@ class Persistencia(unittest.TestCase):
                                    cwd=projeto, env=ambiente, capture_output=True, text=True, timeout=30)
         self.assertEqual(resultado.returncode, 2)
         self.assertIn('fora do projeto', resultado.stderr)
+
+    def test_cli_raiz_git_e_fonte_alterada(self):
+        projeto = pathlib.Path(self.tmp.name) / 'repositorio'
+        projeto.mkdir()
+        subpasta = projeto / 'subpasta'
+        subpasta.mkdir()
+        subprocess.run(['git', 'init', '-q', str(projeto)], check=True, capture_output=True)
+        fonte = projeto / 'fonte.md'
+        fonte.write_text('conteúdo inicial', encoding='utf-8')
+        plano = projeto / 'plano.json'
+        plano.write_text(json.dumps([tarefa()]), encoding='utf-8')
+        ambiente = os.environ.copy()
+        ambiente.update(JANGADA_PATH=str(RAIZ), XDG_STATE_HOME=str(pathlib.Path(self.tmp.name) / 'state'),
+                        XDG_CONFIG_HOME=str(pathlib.Path(self.tmp.name) / 'config'))
+
+        def consultar(pasta, *args):
+            return subprocess.run([str(RAIZ / 'bin/jangada-fila'), '--json', *args], cwd=pasta,
+                                  env=ambiente, capture_output=True, text=True, timeout=30)
+
+        resultado = consultar(projeto, '--importar', str(plano))
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+        self.assertEqual(json.loads(resultado.stdout), json.loads(consultar(subpasta).stdout))
+        fonte.write_text('conteúdo alterado', encoding='utf-8')
+        resultado = consultar(subpasta, '--importar', str(plano))
+        self.assertEqual(resultado.returncode, 2)
+        self.assertIn('use outro identificador', resultado.stderr)
+        self.assertEqual(json.loads(consultar(projeto).stdout)['tarefas'][0]['tentativas'], 0)
 
 
 if __name__ == '__main__':

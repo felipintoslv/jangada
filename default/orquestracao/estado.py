@@ -8,12 +8,13 @@ import os
 import pathlib
 import re
 import sqlite3
+import tempfile
 import time
 import uuid
 
 ESTADOS = {
     'QUEUED', 'RUNNING', 'COMPLETED', 'REVIEW_REQUIRED', 'REVISION_REQUIRED',
-    'WAITING_PROVIDER', 'WAITING_QUOTA', 'WAITING_REVIEWER', 'FAILED', 'CANCELLED', 'PAUSED',
+    'WAITING_PROVIDER', 'WAITING_QUOTA', 'WAITING_REVIEWER', 'FAILED', 'CANCELLED', 'PAUSED', 'BLOCKED',
 }
 FINAIS = {'COMPLETED', 'FAILED', 'CANCELLED'}
 IDENTIFICADOR = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$')
@@ -66,15 +67,28 @@ def tarefa_valida(tarefa):
 
 
 class Estado:
-    def __init__(self, pasta):
-        self.pasta = pathlib.Path(pasta)
-        if any(parte.is_symlink() for parte in (self.pasta.absolute(), *self.pasta.absolute().parents)):
-            raise ValueError('pasta de estado não pode conter links simbólicos')
-        self.pasta.mkdir(parents=True, exist_ok=True)
+    def __init__(self, pasta, raiz=None):
+        original = pathlib.Path(pasta).absolute()
+        base = pathlib.Path(raiz).absolute() if raiz is not None else original.parent
+        relativo = original.relative_to(base)
+        if '..' in relativo.parts:
+            raise ValueError('pasta de estado fora da raiz configurada')
+        base.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.pasta = base.resolve()
+        for componente in relativo.parts:
+            self.pasta /= componente
+            if self.pasta.is_symlink():
+                raise ValueError('pasta de estado não pode conter links simbólicos')
+            self.pasta.mkdir(mode=0o700, exist_ok=True)
         if self.pasta.is_symlink() or any((self.pasta / nome).is_symlink() for nome in (
             'tarefas.sqlite', 'tarefas.sqlite-wal', 'tarefas.sqlite-shm',
         )):
             raise ValueError('estado não pode usar links simbólicos')
+        try:
+            fd = os.open(self.pasta / 'tarefas.sqlite', os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            os.close(fd)
+        except FileExistsError:
+            pass
         self.db = sqlite3.connect(self.pasta / 'tarefas.sqlite', timeout=30, isolation_level=None)
         self.db.row_factory = sqlite3.Row
         self.db.execute('PRAGMA journal_mode=WAL')
@@ -169,13 +183,26 @@ class Estado:
             tarefas = self.listar()
             estados = {t['id']: t['status'] for t in tarefas}
             for tarefa in tarefas:
-                spec = tarefa['especificacao']
-                if tarefa['status'] != 'QUEUED' or any(estados[dep] != 'COMPLETED' for dep in spec.get('dependencias', [])):
-                    continue
-                if tarefa['tentativas'] >= spec.get('max_tentativas', 2):
+                if tarefa['status'] == 'QUEUED' and tarefa['tentativas'] >= tarefa['especificacao'].get('max_tentativas', 2):
                     self.db.execute('UPDATE tarefas SET status=?,motivo=?,atualizado=? WHERE id=?',
                                     ('FAILED', 'limite de tentativas atingido', agora, tarefa['id']))
+                    estados[tarefa['id']] = 'FAILED'
                     self.evento(tarefa['id'], 'limite_tentativas', {})
+            alterou = True
+            while alterou:
+                alterou = False
+                for tarefa in tarefas:
+                    bloqueadas = [dep for dep in tarefa['especificacao'].get('dependencias', [])
+                                  if estados[dep] in {'FAILED', 'CANCELLED', 'BLOCKED'}]
+                    if estados[tarefa['id']] == 'QUEUED' and bloqueadas:
+                        self.db.execute('UPDATE tarefas SET status=?,motivo=?,atualizado=? WHERE id=?',
+                                        ('BLOCKED', 'dependências impedidas: ' + ', '.join(bloqueadas), agora, tarefa['id']))
+                        estados[tarefa['id']] = 'BLOCKED'
+                        self.evento(tarefa['id'], 'dependencia_impedida', {'dependencias': bloqueadas})
+                        alterou = True
+            for tarefa in tarefas:
+                spec = tarefa['especificacao']
+                if estados[tarefa['id']] != 'QUEUED' or any(estados[dep] != 'COMPLETED' for dep in spec.get('dependencias', [])):
                     continue
                 dono = str(uuid.uuid4())
                 self.db.execute('UPDATE tarefas SET status=?,tentativas=tentativas+1,dono=?,prazo=?,atualizado=? WHERE id=?',
@@ -185,8 +212,13 @@ class Estado:
         return None
 
     def finalizar(self, identificador, dono, status, resultado, artefato=None):
-        if status not in ESTADOS - {'RUNNING', 'QUEUED', 'COMPLETED'}:
+        if status not in {'REVIEW_REQUIRED', 'REVISION_REQUIRED', 'FAILED',
+                          'WAITING_PROVIDER', 'WAITING_QUOTA', 'WAITING_REVIEWER'}:
             raise ValueError('resultado de execução deve aguardar revisão ou informar falha')
+        if artefato is not None and not isinstance(artefato, str):
+            raise ValueError('artefato deve ser texto')
+        if status == 'REVIEW_REQUIRED' and (artefato is None or not artefato.strip()):
+            raise ValueError('revisão exige artefato não vazio')
         serializar(resultado)
         with self.transacao():
             tarefa = self.db.execute('SELECT * FROM tarefas WHERE id=?', (identificador,)).fetchone()
@@ -200,12 +232,18 @@ class Estado:
                 if objetos.is_symlink():
                     raise ValueError('pasta de artefatos não pode ser link simbólico')
                 destino = objetos / f'{hash_artefato}.txt'
-                fd = os.open(destino, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600) if not destino.exists() else None
-                if fd is not None:
-                    with os.fdopen(fd, 'w') as arquivo:
-                        arquivo.write(artefato)
-                if destino.is_symlink() or hashlib.sha256(destino.read_bytes()).hexdigest() != hash_artefato:
-                    raise ValueError('artefato existente adulterado')
+                if destino.exists() or destino.is_symlink():
+                    self.ler_artefato(hash_artefato)
+                else:
+                    fd, temporario = tempfile.mkstemp(prefix='.artefato-', dir=objetos)
+                    try:
+                        with os.fdopen(fd, 'w', encoding='utf-8') as arquivo:
+                            arquivo.write(artefato)
+                            arquivo.flush()
+                            os.fsync(arquivo.fileno())
+                        os.replace(temporario, destino)
+                    finally:
+                        pathlib.Path(temporario).unlink(missing_ok=True)
             self.db.execute('UPDATE tarefas SET status=?,resultado=?,artefato=?,hash_artefato=?,dono=NULL,prazo=NULL,atualizado=? WHERE id=?',
                             (status, serializar(resultado), hash_artefato, hash_artefato, time.time(), identificador))
             self.evento(identificador, 'execucao_encerrada', {'status': status, 'resultado': resultado, 'artefato': hash_artefato})
@@ -243,10 +281,14 @@ class Estado:
             tarefa = self.db.execute('SELECT * FROM tarefas WHERE id=?', (identificador,)).fetchone()
             if not tarefa or tarefa['status'] in FINAIS or tarefa['status'] == 'RUNNING':
                 raise ValueError('tarefa inexistente, finalizada ou em execução')
+            if acao == 'pausar' and tarefa['status'] in {'REVIEW_REQUIRED', 'REVISION_REQUIRED'}:
+                raise ValueError('tarefa aguardando conferência não pode contornar a revisão por pausa')
             permitidos = {'retomar': {'PAUSED', 'WAITING_PROVIDER', 'WAITING_QUOTA', 'WAITING_REVIEWER'},
                           'repetir': {'REVISION_REQUIRED'}}
             if acao in permitidos and tarefa['status'] not in permitidos[acao]:
                 raise ValueError('transição de tarefa inválida')
             self.db.execute('UPDATE tarefas SET status=?,motivo=NULL,atualizado=? WHERE id=?',
                             (destinos[acao], time.time(), identificador))
+            if destinos[acao] == 'QUEUED':
+                self.db.execute('UPDATE tarefas SET artefato=NULL,hash_artefato=NULL,resultado=NULL WHERE id=?', (identificador,))
             self.evento(identificador, acao, {})
