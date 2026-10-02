@@ -401,9 +401,15 @@ de cada tentativa ficam no resultado da tarefa e no histórico persistente.
 em `$JANGADA_ESTADO/agentes/runtime/`. Estados expirados aparecem como
 `UNKNOWN`; o término de uma espera não declara o provedor disponível.
 Pausas e observações ficam persistidas, com data, motivo e histórico.
+São dados operacionais graváveis pela sessão. A pausa não resiste a um
+agente hostil: ele pode alterar o banco ou chamar os controles diretamente.
+Esses registros não comprovam autorização externa nem substituem as
+restrições de isolamento e de envio remoto. Os controles da fila não
+impedem uma chamada direta ao `jangada-delegar` fora dela.
 
 `jangada-provedor pausar agy` impede novas delegações pelo executor da fila.
 `jangada-provedor ativar agy` remove a pausa e exige nova verificação.
+Uma espera `COOLDOWN` ainda vigente é preservada ao pausar ou ativar.
 Três falhas de serviço registradas desde a última observação `AVAILABLE`
 geram `COOLDOWN` por 900 segundos. Saídas com erro de conteúdo não são
 tratadas como falhas de rede.
@@ -424,7 +430,8 @@ qualidade nem amplia permissões.
 
 `jangada-retomar` recoloca na fila tarefas em `WAITING_QUOTA` ou
 `WAITING_PROVIDER` que tenham executor disponível, orçamento e tentativas
-restantes. Respeita fontes locais, permissão remota, perfil e capacidade.
+restantes. Confere permissão remota, perfil e capacidade. As fontes são
+conferidas pelo executor antes e depois da execução.
 Não retoma tarefas pausadas, em revisão ou com consumo desconhecido.
 Para atualizar os provedores e executar a fila após a retomada:
 

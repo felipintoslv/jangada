@@ -1,12 +1,12 @@
 """Disponibilidade compartilhada entre projetos, sem autorizar execução."""
 
 import json
+import http.client
 import math
 import os
 import pathlib
 import subprocess
 import time
-import urllib.error
 import urllib.request
 
 from estado import IDENTIFICADOR, serializar
@@ -92,7 +92,10 @@ class Saude:
             agora = time.time()
             self.db.execute('''INSERT INTO provedores(id,status,pausado,motivo,atualizado,valido_ate)
                 VALUES(?,?,?,?,?,0) ON CONFLICT(id) DO UPDATE SET pausado=excluded.pausado,
-                status='UNKNOWN',valido_ate=0,atualizado=excluded.atualizado''',
+                status=CASE WHEN provedores.status='COOLDOWN' AND provedores.valido_ate>excluded.atualizado
+                    THEN provedores.status ELSE 'UNKNOWN' END,
+                valido_ate=CASE WHEN provedores.status='COOLDOWN' AND provedores.valido_ate>excluded.atualizado
+                    THEN provedores.valido_ate ELSE 0 END,atualizado=excluded.atualizado''',
                             (provedor, 'UNKNOWN', int(pausado), 'aguarda verificação', agora))
             self.db.execute('INSERT INTO eventos_provedores(provedor,data,evento,dados) VALUES(?,?,?,?)',
                             (provedor, agora, 'pausado' if pausado else 'ativado', '{}'))
@@ -122,6 +125,8 @@ class Saude:
             return
         if codigo == 0:
             cota = registro.get('cota_depois') if provedor == 'agy' else None
+            if cota is not None and (type(cota) not in (int, float) or not math.isfinite(cota) or not 0 <= cota <= 100):
+                cota = None
             status = 'AVAILABLE'
             if provedor == 'agy':
                 if cota is None:
@@ -131,6 +136,8 @@ class Saude:
             self.observar(provedor, status, 'executor concluiu chamada', cota=cota, modelo=registro.get('modelo'))
         elif motivo == 'cota_insuficiente':
             cota = registro.get('cota_antes')
+            if cota is not None and (type(cota) not in (int, float) or not math.isfinite(cota) or not 0 <= cota <= 100):
+                cota = None
             self.observar(provedor, 'QUOTA_EXHAUSTED' if cota == 0 else 'QUOTA_LOW',
                           'cota insuficiente', validade=300, cota=cota)
         elif motivo == 'cota_desconhecida':
@@ -154,7 +161,7 @@ class Saude:
                     self.observar('local', 'UNAVAILABLE', 'modelo local ausente')
                 else:
                     self.observar('local', 'AVAILABLE', 'serviço e modelo presentes', modelo=modelo)
-            except (OSError, ValueError, KeyError, TypeError, urllib.error.URLError):
+            except (OSError, ValueError, KeyError, TypeError, http.client.HTTPException):
                 self.observar('local', 'NETWORK_ERROR', 'serviço local não respondeu')
         if mapa['agy']['pausado'] or mapa['agy']['status'] == 'COOLDOWN':
             return

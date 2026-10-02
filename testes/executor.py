@@ -17,13 +17,15 @@ RAIZ = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / 'default/orquestracao'))
 from estado import Estado
 from executor import executar
+from saude import Saude
 
 SIMULADO = '''#!/usr/bin/env python3
 import json, os, pathlib, subprocess, sys, time
 args = sys.argv[1:]
 pathlib.Path(os.environ['REGISTRO_TESTE']).write_text(json.dumps({'args': args, 'env': {
     nome: os.environ.get(nome) for nome in ['JANGADA_DELEGAR_TEMPO_TOTAL',
-    'JANGADA_DELEGAR_CHAMADAS_MAX', 'JANGADA_DELEGAR', 'JANGADA_DELEGAR_ROTEAMENTO_ID']}}))
+    'JANGADA_DELEGAR_CHAMADAS_MAX', 'JANGADA_DELEGAR', 'JANGADA_DELEGAR_ROTEAMENTO_ID',
+    'JANGADA_DELEGAR_IMPEDIMENTOS']}}))
 modo = os.environ.get('MODO_TESTE', 'ok')
 if modo == 'demorado':
     filho = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(10)'])
@@ -36,6 +38,11 @@ if modo == 'recusa':
     print(json.dumps({'tentativas': [], 'recusa': True, 'chamadas_executor': 0,
                       'motivo_codigo': 'destino_proibido'}))
     sys.exit(4)
+if modo == 'saude':
+    impedimentos = json.loads(os.environ['JANGADA_DELEGAR_IMPEDIMENTOS'])
+    print(json.dumps({'tentativas': [dict(i, codigo_saida=4, chamadas=0) for i in impedimentos],
+                      'destino': '', 'recusa': True, 'chamadas_executor': 0, 'motivo_codigo': 'sem_executor'}))
+    sys.exit(4)
 fontes = args[args.index('--arquivos') + 1:args.index('--')]
 saida = pathlib.Path(args[args.index('--arquivo') + 1])
 texto = '\\n'.join(f'Regra conferida na fonte indicada: {fonte}:1.' for fonte in fontes)
@@ -46,7 +53,8 @@ if modo == 'mudou':
 if modo in ('ok', 'invalido', 'mudou'):
     saida.write_text(texto, encoding='utf-8')
 codigo = 'cota_insuficiente' if modo == 'cota' else ''
-print(json.dumps({'tentativas': [{'destino': 'local', 'chamadas': 0 if modo == 'cota' else 1,
+print(json.dumps({'destino': 'agy' if modo == 'cota' else 'local', 'modelo': 'qwen3:4b',
+    'tentativas': [{'destino': 'local', 'chamadas': 0 if modo == 'cota' else 1,
     'motivo_codigo': codigo}], 'motivo_codigo': codigo, 'relatorio': 'prévia incompleta',
     'artefato': '/arquivo/que/nao/deve/ser/lido'}))
 sys.exit(4 if modo == 'cota' else 0)
@@ -189,6 +197,25 @@ class Execucao(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.rodar('economico')
 
+    def test_saude_injetada_vira_espera_sem_consumo(self):
+        self.estado.importar([self.tarefa()])
+        global_estado = Estado(self.pasta / 'global')
+        self.addCleanup(global_estado.fechar)
+        saude = Saude(global_estado)
+        saude.pausar('local', True)
+        saude.observar('agy', 'QUOTA_LOW', 'cota insuficiente', cota=10)
+        with patch.dict(os.environ, MODO_TESTE='saude'):
+            resultados = executar(self.estado, self.projeto, self.raiz, saude=saude)
+        self.assertEqual(resultados[0]['status'], 'WAITING_QUOTA')
+        self.assertEqual(self.estado.consumo('T1')['chamadas'], 0)
+        impedimentos = json.loads(json.loads(self.registro.read_text())['env']['JANGADA_DELEGAR_IMPEDIMENTOS'])
+        self.assertEqual({i['motivo_codigo'] for i in impedimentos}, {'cota_indisponivel', 'provedor_pausado'})
+        self.estado.alterar('T1', 'retomar')
+        saude.pausar('agy', True)
+        with patch.dict(os.environ, MODO_TESTE='saude'):
+            resultados = executar(self.estado, self.projeto, self.raiz, saude=saude)
+        self.assertEqual(resultados[0]['status'], 'WAITING_PROVIDER')
+
     def test_timeout_preserva_consumo_desconhecido(self):
         self.estado.importar([self.tarefa(tempo_total=1)])
         with patch.dict(os.environ, MODO_TESTE='demorado'):
@@ -249,6 +276,33 @@ class Execucao(unittest.TestCase):
         self.assertEqual(execucao.returncode, 0, execucao.stderr)
         self.assertEqual(json.loads(execucao.stdout)['resultados'][0]['status'], 'REVIEW_REQUIRED')
         self.assertFalse((self.projeto / 'invasao').exists())
+
+    def test_cli_retomada_executa_com_provedor_verificado(self):
+        shutil.copytree(RAIZ / 'default/orquestracao', self.raiz / 'default/orquestracao')
+        shutil.copyfile(RAIZ / 'default/delegacao/roteamento.json', self.raiz / 'default/delegacao/roteamento.json')
+        plano = self.projeto / 'plano.json'
+        plano.write_text(json.dumps([self.tarefa()]), encoding='utf-8')
+        ambiente = os.environ.copy()
+        ambiente.update(JANGADA_PATH=str(self.raiz), XDG_STATE_HOME=str(self.pasta / 'state-cli'),
+                        XDG_CONFIG_HOME=str(self.pasta / 'config-cli'), MODO_TESTE='cota')
+
+        def comando(nome, *argumentos):
+            return subprocess.run([str(RAIZ / 'bin' / nome), *argumentos], cwd=self.projeto,
+                                  env=ambiente, text=True, capture_output=True, timeout=30)
+
+        self.assertEqual(comando('jangada-fila', '--importar', str(plano)).returncode, 0)
+        espera = comando('jangada-executar')
+        self.assertEqual(espera.returncode, 0, espera.stderr)
+        self.assertEqual(json.loads(espera.stdout)['resultados'][0]['status'], 'WAITING_QUOTA')
+        global_estado = Estado(self.pasta / 'state-cli/jangada/agentes/runtime', raiz=self.pasta / 'state-cli/jangada')
+        Saude(global_estado).observar('local', 'AVAILABLE', 'serviço simulado presente')
+        global_estado.fechar()
+        ambiente['MODO_TESTE'] = 'ok'
+        resultado = comando('jangada-retomar', '--executar', '--perfil', 'offline')
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+        retomada = json.loads(resultado.stdout)
+        self.assertEqual(retomada['retomadas'], ['T1'])
+        self.assertEqual(retomada['resultados'][0]['status'], 'REVIEW_REQUIRED')
 
 
 if __name__ == '__main__':

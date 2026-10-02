@@ -2,6 +2,7 @@
 """Confere disponibilidade, pausa, validade, cota e retomada sem serviços reais."""
 
 import json
+import http.client
 import os
 import pathlib
 import subprocess
@@ -73,6 +74,29 @@ class Disponibilidade(unittest.TestCase):
             self.assertEqual(item['espera_segundos'], 900)
         with patch('saude.time.time', return_value=1001):
             self.assertEqual(self.saude.listar()[0]['status'], 'UNKNOWN')
+
+    def test_ativacao_preserva_espera_vigente(self):
+        with patch('saude.time.time', return_value=100):
+            for _ in range(3):
+                self.saude.observar('agy', 'UNAVAILABLE', 'falhou')
+            self.saude.pausar('agy', True)
+            self.saude.pausar('agy', False)
+            self.assertEqual(self.saude.listar()[0]['status'], 'COOLDOWN')
+            self.assertEqual(self.saude.listar()[0]['espera_segundos'], 900)
+
+    def test_http_truncado_vira_falha_de_rede(self):
+        with patch('saude.urllib.request.urlopen', side_effect=http.client.IncompleteRead(b'')):
+            self.saude.atualizar()
+        self.assertEqual(self.saude.listar()[1]['status'], 'NETWORK_ERROR')
+
+    def test_cota_malformada_do_executor_nao_libera_provedor(self):
+        for valor in ('50', True, [], float('nan')):
+            with self.subTest(valor=valor):
+                self.saude.registrar_delegacao({'destino': 'agy', 'cota_depois': valor}, 0)
+                self.assertEqual(self.saude.listar()[0]['status'], 'UNKNOWN')
+                self.saude.registrar_delegacao({'destino': 'agy', 'motivo_codigo': 'cota_insuficiente',
+                                               'cota_antes': valor}, 4)
+                self.assertEqual(self.saude.listar()[0]['status'], 'QUOTA_LOW')
 
     def test_cota_desconhecida_nao_declara_disponivel(self):
         self.saude.observar('agy', 'AVAILABLE', 'serviço respondeu')
