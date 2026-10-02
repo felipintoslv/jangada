@@ -387,7 +387,6 @@ Perfis disponíveis:
 | Perfil | Seleção |
 |---|---|
 | `balanced` | política existente por capacidade |
-| `economico` | mesma política existente, limitada aos trabalhadores local e agy |
 | `quality` | agy explícito, com revisão do conteúdo pendente |
 | `offline` | somente local, sem permissão remota |
 

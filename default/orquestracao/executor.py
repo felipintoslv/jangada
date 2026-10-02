@@ -13,11 +13,16 @@ import tempfile
 import time
 
 CAPACIDADES = {'leitura_documental', 'resumo_curto', 'analise_documental'}
-PERFIS = {'economico', 'balanced', 'quality', 'offline'}
+PERFIS = {'balanced', 'quality', 'offline'}
 
 
-def chamadas(registro):
+def chamadas(registro, codigo_saida):
     tentativas = registro.get('tentativas')
+    if (tentativas == [] and codigo_saida == 4 and registro.get('recusa') is True
+            and type(registro.get('chamadas_executor')) is int and registro['chamadas_executor'] == 0
+            and registro.get('motivo_codigo') in {'destino_proibido', 'capacidade_incompativel',
+                                                'fonte_ausente', 'politica_invalida', 'sem_executor'}):
+        return 0
     if not isinstance(tentativas, list) or not tentativas:
         return None
     valores = [item.get('chamadas') for item in tentativas if isinstance(item, dict)]
@@ -102,12 +107,15 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto):
             resultado['metricas']['chamadas'] = None
             try:
                 bruto, erro = processo.communicate(timeout=tempo)
-            except (subprocess.TimeoutExpired, KeyboardInterrupt):
+            except (subprocess.TimeoutExpired, KeyboardInterrupt) as interrupcao:
                 resultado['metricas'] = {'chamadas': None, 'segundos': math.ceil(time.monotonic() - inicio)}
                 with contextlib.suppress(ProcessLookupError):
                     os.killpg(processo.pid, signal.SIGKILL)
                 processo.communicate()
-                return encerrar('REVISION_REQUIRED', 'executor interrompido; consumo de chamadas desconhecido')
+                encerramento = encerrar('REVISION_REQUIRED', 'executor interrompido; consumo de chamadas desconhecido')
+                if isinstance(interrupcao, KeyboardInterrupt):
+                    raise
+                return encerramento
             except (OSError, UnicodeError):
                 resultado['metricas'] = {'chamadas': None, 'segundos': math.ceil(time.monotonic() - inicio)}
                 with contextlib.suppress(ProcessLookupError):
@@ -115,14 +123,14 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto):
                 processo.wait()
                 raise
             resultado['metricas'] = {'chamadas': None, 'segundos': math.ceil(time.monotonic() - inicio)}
+            resultado['erro'] = erro[-4000:]
             registro = json.loads(bruto)
             if not isinstance(registro, dict):
                 raise ValueError('executor não devolveu objeto estruturado')
-            quantidade = chamadas(registro)
+            quantidade = chamadas(registro, processo.returncode)
             resultado['metricas']['chamadas'] = quantidade
             resultado['execucao_iniciada'] = quantidade != 0
             resultado['delegacao'] = registro
-            resultado['erro'] = erro[-4000:]
             if quantidade is None or quantidade > saldo:
                 return encerrar('REVISION_REQUIRED', 'executor não comprovou respeito ao orçamento')
             if processo.returncode != 0:
@@ -147,7 +155,7 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto):
             verificador.verificar(texto, fontes, tarefa.get('requisitos', []))
             resultado['verificacao'] = 'referencias_e_requisitos_validos'
             return encerrar('REVIEW_REQUIRED', 'formato conferido; conteúdo aguarda revisão', texto)
-    except (OSError, UnicodeError, ValueError, subprocess.SubprocessError) as erro:
+    except (OSError, UnicodeError, ValueError, KeyError, subprocess.SubprocessError) as erro:
         return encerrar('REVISION_REQUIRED', str(erro), texto)
 
 

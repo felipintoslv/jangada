@@ -173,15 +173,26 @@ class Estado:
 
     def consumo(self, identificador):
         chamadas, segundos = 0, 0
-        for linha in self.db.execute('SELECT dados FROM eventos WHERE tarefa=? AND evento=?',
-                                     (identificador, 'execucao_encerrada')):
-            metrica = json.loads(linha['dados'])['resultado'].get('metricas', {})
-            quantidade = metrica.get('chamadas', 0)
-            if quantidade is None:
+        for linha in self.db.execute('SELECT evento,dados FROM eventos WHERE tarefa=? AND evento IN (?,?)',
+                                     (identificador, 'execucao_encerrada', 'reserva_expirada')):
+            if linha['evento'] == 'reserva_expirada':
+                chamadas = None
+                continue
+            resultado = json.loads(linha['dados']).get('resultado')
+            metrica = resultado.get('metricas') if isinstance(resultado, dict) else None
+            if not isinstance(metrica, dict):
+                chamadas = None
+                continue
+            quantidade = metrica.get('chamadas')
+            duracao = metrica.get('segundos')
+            if type(quantidade) is not int or quantidade < 0:
                 chamadas = None
             elif chamadas is not None:
                 chamadas += quantidade
-            segundos += metrica.get('segundos', 0)
+            if type(duracao) is int and duracao >= 0:
+                segundos += duracao
+            else:
+                chamadas = None
         return {'chamadas': chamadas, 'segundos': segundos}
 
     def reservar(self, duracao=660):

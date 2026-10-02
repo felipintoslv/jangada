@@ -47,7 +47,7 @@ def main():
     fila.add_argument('--json', action='store_true')
     execucao = comandos.add_parser('executar', help='executa tarefas elegíveis sem aprová-las')
     execucao.add_argument('--projeto', type=pathlib.Path)
-    execucao.add_argument('--perfil', choices=['economico', 'balanced', 'quality', 'offline'], default='balanced')
+    execucao.add_argument('--perfil', choices=['balanced', 'quality', 'offline'], default='balanced')
     execucao.add_argument('--limite', type=int, default=1)
     execucao.add_argument('--permitir-remoto', action='store_true')
     tarefa = comandos.add_parser('task', help='altera somente o estado da tarefa')
@@ -102,6 +102,9 @@ def main():
 if __name__ == '__main__':
     try:
         main()
+    except KeyboardInterrupt:
+        print('jangada-executar: execução interrompida; nenhuma outra tarefa iniciada', file=sys.stderr)
+        sys.exit(130)
     except (OSError, ValueError, KeyError, sqlite3.Error) as erro:
         print(f'jangada-fila: {erro}', file=sys.stderr)
         sys.exit(2)

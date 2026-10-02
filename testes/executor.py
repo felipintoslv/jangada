@@ -32,6 +32,10 @@ if modo == 'demorado':
 if modo == 'quebrado':
     print('saída não estruturada')
     sys.exit(0)
+if modo == 'recusa':
+    print(json.dumps({'tentativas': [], 'recusa': True, 'chamadas_executor': 0,
+                      'motivo_codigo': 'destino_proibido'}))
+    sys.exit(4)
 fontes = args[args.index('--arquivos') + 1:args.index('--')]
 saida = pathlib.Path(args[args.index('--arquivo') + 1])
 texto = '\\n'.join(f'Regra conferida na fonte indicada: {fonte}:1.' for fonte in fontes)
@@ -122,6 +126,68 @@ class Execucao(unittest.TestCase):
         self.registro.unlink()
         self.assertEqual(self.rodar()[0]['status'], 'REVISION_REQUIRED')
         self.assertFalse(self.registro.exists())
+
+    def test_recusa_sem_tentativas_nao_bloqueia_consumo(self):
+        self.estado.importar([self.tarefa()])
+        with patch.dict(os.environ, MODO_TESTE='recusa'):
+            self.assertEqual(self.rodar()[0]['status'], 'WAITING_PROVIDER')
+        self.assertEqual(self.estado.consumo('T1')['chamadas'], 0)
+        self.assertEqual(self.estado.listar()[0]['tentativas'], 0)
+        self.estado.alterar('T1', 'retomar')
+        self.assertEqual(self.rodar()[0]['status'], 'REVIEW_REQUIRED')
+
+    def test_interrupcao_nao_inicia_proxima_tarefa(self):
+        self.estado.importar([self.tarefa(), self.tarefa('T2')])
+        with patch('executor.subprocess.Popen') as fabrica, patch('executor.os.killpg') as matar:
+            processo = fabrica.return_value
+            processo.pid = 42
+            processo.communicate.side_effect = [KeyboardInterrupt(), ('', '')]
+            with self.assertRaises(KeyboardInterrupt):
+                self.rodar(limite=2)
+            matar.assert_called_once()
+            fabrica.assert_called_once()
+        self.assertEqual([t['status'] for t in self.estado.listar()], ['REVISION_REQUIRED', 'QUEUED'])
+        self.assertIsNone(self.estado.consumo('T1')['chamadas'])
+
+    def test_queda_sem_resultado_nao_reinicia_orcamento(self):
+        self.estado.importar([self.tarefa()])
+        self.estado.reservar()
+        self.estado.db.execute('UPDATE tarefas SET prazo=0 WHERE id=?', ('T1',))
+        self.assertIsNone(self.estado.reservar())
+        self.estado.alterar('T1', 'repetir')
+        self.assertEqual(self.rodar()[0]['status'], 'REVISION_REQUIRED')
+        self.assertFalse(self.registro.exists())
+        self.assertIsNone(self.estado.consumo('T1')['chamadas'])
+
+    def test_evento_antigo_sem_objeto_resultado_exige_conferencia(self):
+        self.estado.importar([self.tarefa()])
+        self.estado.evento('T1', 'execucao_encerrada', {'resultado': ['formato antigo']})
+        self.assertEqual(self.rodar()[0]['status'], 'REVISION_REQUIRED')
+        self.assertFalse(self.registro.exists())
+
+    def test_dependencia_adulterada_nao_e_enviada(self):
+        self.estado.importar([self.tarefa(), self.tarefa('T2', dependencias=['T1'])])
+        self.rodar()
+        self.estado.revisar('T1', 'conferido na fonte', True)
+        resumo = self.estado.listar()[0]['artefato']
+        (self.estado.pasta / 'artefatos' / f'{resumo}.txt').write_text('alterado')
+        self.registro.unlink()
+        self.assertEqual(self.rodar()[0]['status'], 'REVISION_REQUIRED')
+        self.assertFalse(self.registro.exists())
+
+    def test_dependencia_ausente_no_mapa_preserva_estado(self):
+        self.estado.importar([self.tarefa(), self.tarefa('T2', dependencias=['T1'])])
+        self.rodar()
+        self.estado.revisar('T1', 'conferido na fonte', True)
+        itens = self.estado.listar()
+        self.registro.unlink()
+        with patch.object(self.estado, 'listar', side_effect=[itens, []]):
+            self.assertEqual(self.rodar()[0]['status'], 'REVISION_REQUIRED')
+        self.assertFalse(self.registro.exists())
+
+    def test_perfil_ainda_sem_politica_e_recusado(self):
+        with self.assertRaises(ValueError):
+            self.rodar('economico')
 
     def test_timeout_preserva_consumo_desconhecido(self):
         self.estado.importar([self.tarefa(tempo_total=1)])
