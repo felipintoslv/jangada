@@ -148,6 +148,7 @@ passo "subagentes"
 testes/subagentes.sh || falha "testes/subagentes.sh"
 testes/delegar.sh || falha "testes/delegar.sh"
 python3 testes/delegacao.py || falha "testes/delegacao.py"
+python3 testes/orquestracao.py || falha "testes/orquestracao.py"
 
 passo "versões"
 testes/versao.sh || falha "testes/versao.sh"

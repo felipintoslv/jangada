@@ -317,6 +317,48 @@ e preservou cerca de 2,0 GB de folga, atendendo a margem mínima de 1,5 GB.
 
 ## Registro e medição
 
+### Fila persistente de projetos
+
+`jangada-fila --importar plano.json` importa tarefas sem executar os dados
+do plano. `jangada-fila --json` permite consultar o estado. Cada projeto,
+identificado pelo caminho absoluto, tem um banco separado em
+`$JANGADA_ESTADO/agentes/projetos/HASH/tarefas.sqlite`.
+
+```json
+[
+  {
+    "id": "T1", "papel": "leitor", "capacidade": "leitura_documental",
+    "pedido": "Extraia as regras de roteamento", "risco": 1,
+    "qualidade": "medium", "fontes": ["fontes/documento.md"],
+    "requisitos": ["Autorizações", "Limites"], "max_tentativas": 2
+  },
+  {
+    "id": "T2", "papel": "leitor", "capacidade": "resumo_curto",
+    "pedido": "Prepare o resumo final", "risco": 2,
+    "qualidade": "high", "fontes": ["fontes/documento.md"],
+    "dependencias": ["T1"]
+  }
+]
+```
+
+Uma importação repetida preserva resultados. Alterar tarefa existente exige
+outro identificador. Ciclos e dependências inexistentes são recusados antes
+de gravar o plano. As fontes precisam estar dentro do projeto; caminhos
+resolvidos e hashes são preservados na especificação.
+
+`jangada-task T1 pausar`, `retomar`, `cancelar` e `repetir` controlam tarefas
+fora de execução. A repetição mantém o limite total de tentativas. Uma
+reserva expirada exige conferência antes de repetir; outro executor não
+pode concluir a reserva anterior. Os artefatos usam hash de conteúdo.
+
+Uma saída de execução fica em `REVIEW_REQUIRED`, sem liberar dependências.
+Após conferir o artefato e as fontes, o responsável registra
+`jangada-task T1 revisar --aprovar --parecer "Conferido nas fontes"` ou
+`--reprovar`. A revisão aceita somente o mesmo artefato preservado. Esse
+registro é dado do projeto; não substitui `jangada-validar` nem autoriza
+integração, envio externo ou operação irreversível. Nesta etapa a fila
+registra tarefas; o executor será integrado separadamente.
+
 - Cada chamada do `jangada-delegar`, atendida ou recusada, vira uma linha em
   `delegacoes.jsonl`, com papel, modelo, segundos, código, palavras, cota
   antes e depois e motivo da recusa.
