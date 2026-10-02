@@ -61,6 +61,29 @@ class Referencias(unittest.TestCase):
             with self.assertRaises(ValueError):
                 VALIDAR.verificar("fonte.pdf, p. 3", [str(fonte)])
 
+    def test_requisito_exige_explicacao_com_referencia(self):
+        VALIDAR.verificar(
+            "## Destino\nUse o modelo local para ler os documentos. fonte.txt:1",
+            [str(self.fonte)], ["Destino"],
+        )
+        for texto in (
+            "Destino: fonte.txt:1",
+            "## Destino\nfonte.txt:1",
+            "## Destino\nDestino: fonte.txt:1",
+            "fonte.txt:1\n## Destino\nUse o modelo local para ler os documentos.",
+            "## Destino\nUse o modelo local para ler os documentos. fonte.txt:1\n"
+            "## Destino\nUse o modelo local para ler os documentos. fonte.txt:1",
+        ):
+            with self.subTest(texto=texto), self.assertRaises(ValueError):
+                VALIDAR.verificar(texto, [str(self.fonte)], ["Destino"])
+
+    def test_requisito_omitido_reprova(self):
+        with self.assertRaises(ValueError):
+            VALIDAR.verificar(
+                "## Destino\nUse o modelo local para ler os documentos. fonte.txt:1",
+                [str(self.fonte)], ["Destino", "Permissão"],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

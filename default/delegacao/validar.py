@@ -2,13 +2,15 @@
 """Confere referências às fontes fornecidas, sem aprovar o conteúdo."""
 
 import pathlib
+import argparse
 import re
 import subprocess
 import sys
 
 
-def verificar(texto, arquivos):
+def verificar(texto, arquivos, requisitos=()):
     nomes = [pathlib.Path(arquivo).name for arquivo in arquivos]
+    referencias_encontradas = []
     for arquivo in arquivos:
         caminho = pathlib.Path(arquivo)
         mime = subprocess.run(
@@ -33,16 +35,37 @@ def verificar(texto, arquivos):
         nome = "(?:" + "|".join(re.escape(a) for a in alternativas) + ")"
         localizador = r",\s*p\.\s*" if pdf else ":"
         localizador += r"(\d+)(?:[-–](\d+))?(?![\w-])"
-        referencias = re.findall(r"(?<![\w/])" + nome + localizador, texto)
+        padrao = r"(?<![\w/])" + nome + localizador
+        referencias = re.findall(padrao, texto)
+        referencias_encontradas.append(padrao)
         if not referencias or any(
             not 1 <= int(inicio) <= int(fim or inicio) <= len(partes)
             for inicio, fim in referencias
         ):
             raise ValueError(f"fonte sem referência válida ou posição inexistente: {arquivo}")
+    for requisito in requisitos:
+        secoes = re.findall(
+            r"^## " + re.escape(requisito) + r"[ \t]*\n(.*?)(?=^## |\Z)",
+            texto, flags=re.MULTILINE | re.DOTALL,
+        )
+        if len(secoes) != 1:
+            raise ValueError(f"requisito ausente ou repetido: {requisito}")
+        explicacao = secoes[0]
+        tem_referencia = False
+        for padrao in referencias_encontradas:
+            tem_referencia |= re.search(padrao, explicacao) is not None
+            explicacao = re.sub(padrao, "", explicacao)
+        explicacao = explicacao.replace(requisito, "")
+        if not tem_referencia or len(re.findall(r"\b[^\W\d_]+\b", explicacao)) < 5:
+            raise ValueError(f"requisito sem explicação ou referência: {requisito}")
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--requisito", action="append", default=[])
+    parser.add_argument("arquivos", nargs="+")
+    args = parser.parse_args()
     try:
-        verificar(sys.stdin.read(), sys.argv[1:])
+        verificar(sys.stdin.read(), args.arquivos, args.requisito)
     except (OSError, UnicodeError, ValueError, subprocess.SubprocessError) as erro:
         sys.exit(str(erro))

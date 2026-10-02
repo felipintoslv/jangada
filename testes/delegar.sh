@@ -344,6 +344,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "eval_count": 45,
                 "done": True
             }
+            if os.path.exists(sys.argv[3] + '.limite'):
+                resp['done_reason'] = 'length'
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
@@ -448,6 +450,7 @@ printf '%s\n' "doc_grande.txt:1: resumo da fatia." >"$ollama_resp"
 LOCAL_CTX=2100 LOCAL_FATIAS_MAX=5 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "resuma tudo" --arquivos "$doc_grande"
 conferir "caso 30: documento fatiado termina com código 0" [ "$(codigo)" = 0 ]
 conferir "caso 30: executou fatias mais passada de consolidação" [ "$(wc -l <"$ollama_reqs")" -ge 3 ]
+chamadas_fatiadas="$(wc -l <"$ollama_reqs")"
 conferir "caso 30: todas as 8 linhas numeradas aparecem nas fatias" \
   bash -c 'for i in {1..8}; do grep -q "doc_grande\.txt:$i: Linha 0$i" "$1" || exit 1; done' _ "$ollama_reqs"
 conferir "caso 30: passada final de consolidação executada" grep -q "Consolide os resumos" <(tail -n1 "$ollama_reqs")
@@ -725,8 +728,37 @@ conferir "sem executor: indisponibilidade registrada" jqok -e \
 
 CHAMADAS_MAX=1 LOCAL_CTX=2100 LOCAL_FATIAS_MAX=5 OLLAMA_URL="http://127.0.0.1:$porta_ollama" \
   delegar leitor "resuma" --destino local --capacidade resumo_curto --json --arquivos "$doc_grande"
-conferir "limite: partes do documento contam como chamadas" jqok -e \
-  '.tentativas[0].motivo_codigo == "limite_chamadas" and .tentativas[0].chamadas == 1' "$tmp/saida"
+conferir "limite: reserva consolidação antes de consumir chamadas" jqok -e \
+  '.tentativas[0].motivo_codigo == "limite_chamadas" and .tentativas[0].chamadas == 0' "$tmp/saida"
+
+printf '## Destino\nUse o modelo local para ler os documentos. doc1.txt:1\n' >"$ollama_resp"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia a regra" \
+  --capacidade leitura_documental --requisito Destino --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "completude: explica requisito com referência" jqok -e \
+  '.verificacao == "referencias_e_requisitos_validos" and .codigo_saida == 0
+    and .requisitos == ["Destino"]' "$tmp/saida"
+conferir "geração: desativa raciocínio e limita saída" jqok -se \
+  'last | .think == false and .options.num_predict == 1024
+    and (.messages[1].content | endswith("/no_think"))' "$ollama_reqs"
+printf '## Destino\ndoc1.txt:1\n' >"$ollama_resp"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia a regra" \
+  --capacidade leitura_documental --requisito Destino --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "completude: localizador sozinho reprova" jqok -e \
+  '.tentativas[0].motivo_codigo == "saida_invalida"' "$tmp/saida"
+artefato_reprovado="$(jq -rs 'map(select(.destino == "local")) | last | .artefato' "$reg")"
+conferir "completude: preserva relatório reprovado para diagnóstico" grep -q doc1.txt:1 "$artefato_reprovado"
+touch "$ollama_resp.limite"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia a regra" \
+  --capacidade leitura_documental --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "geração: relatório cortado pelo limite reprova" jqok -e \
+  '.tentativas[0].motivo_codigo == "saida_invalida"' "$tmp/saida"
+rm "$ollama_resp.limite"
+printf 'doc_grande.txt:1: resumo completo com fonte.\n' >"$ollama_resp"
+: >"$ollama_reqs"
+CHAMADAS_MAX="$chamadas_fatiadas" LOCAL_CTX=2100 LOCAL_FATIAS_MAX=5 OLLAMA_URL="http://127.0.0.1:$porta_ollama" \
+  delegar leitor "resuma" --capacidade resumo_curto --json --arquivos "$doc_grande"
+conferir "limite: orçamento exato inclui consolidação" jqok -e --argjson total "$chamadas_fatiadas" \
+  '.codigo_saida == 0 and .chamadas_executor == $total and .chamadas_local[-1].fase == "consolidacao"' "$tmp/saida"
 
 # A prévia cortada declara que a verificação vale para o arquivo completo.
 python3 -c 'print("palavra " * 610 + "doc1.txt:1")' >"$ollama_resp"

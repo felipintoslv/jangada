@@ -54,6 +54,19 @@ O envio ao agy exige autorização da tarefa (`--permitir-remoto`) e do perfil.
 Uma falha do Ollama não autoriza esse envio. Veja os limites e capacidades
 em `docs/subagentes-e-delegacao.md`.
 
+No teste real, o qwen3:4b consumiu milhares de tokens de raciocínio para
+devolver apenas localizadores. O delegador usa `think: false` e
+`num_predict: 1024`; recusa saída cortada pelo limite. O template local
+antigo abre `<think>` mesmo com a opção desligada. Para Qwen3, a mensagem
+termina também em `/no_think`, conforme o [controle do Qwen3](https://qwen.readthedocs.io/en/stable/getting_started/quickstart.html).
+O modelo de 4 bilhões disponível continuou raciocinando mesmo com ambos
+os controles. Não presuma suporte: saída limitada deve ser recusada.
+Use requisitos explícitos (`--requisito`) para exigir explicações em cada seção, além
+das referências. Essa conferência estrutural não aprova o sentido.
+Documentos divididos exigem orçamento para todas as partes e consolidação
+antes da primeira chamada. Limites internos do agy usam `--foreground`
+nessas seleções para manter os filhos no grupo do limite global.
+
 Uma consulta de cota que falha não pode reutilizar o valor expirado.
 O delegador valida a fração de `gemini-5h` e recusa quando não consegue
 atualizá-la. Consumo de tokens do Claude não comprova cota restante.

@@ -146,6 +146,12 @@ segundos. `JANGADA_DELEGAR_CHAMADAS_MAX` limita as chamadas aos modelos a
 8, incluindo partes e consolidação local. Ambos aceitam inteiros positivos
 de até seis dígitos. Consultas de disponibilidade e cota entram no tempo
 total, mas não na contagem de chamadas ao modelo.
+Antes de processar um documento dividido, o executor local verifica se há
+chamadas suficientes para todas as partes e uma consolidação. Se faltar
+orçamento, recusa antes de consumir tokens.
+Cada chamada ao Ollama solicita raciocínio desligado e limita a geração
+a 1.024 tokens. Alguns modelos continuam raciocinando; saída interrompida
+pelo limite de geração é recusada, sem aprovação parcial.
 Ao atingir o limite global, o GNU `timeout` envia SIGKILL ao grupo de
 processos do executor e encerra os filhos que permanecem nesse grupo. Processos que
 criem outra sessão ou pedidos já aceitos pelo provedor exigem cancelamento
@@ -155,6 +161,17 @@ Antes de gravar ou entregar o relatório completo, a verificação exige uma ref
 a cada fonte fornecida, em linha ou página existente. Nomes de arquivo
 ambíguos exigem o caminho. Essa conferência não comprova fidelidade nem
 aprova conclusões. Sem saída válida, recusa com código 4.
+Para exigir completude estrutural, repita `--requisito "Nome do item"`.
+Cada requisito exige uma seção `## Nome do item`, uma referência e pelo
+menos cinco palavras de explicação além do título e do localizador.
+Isso rejeita listas de referências sem explicações, mas não comprova que
+a explicação responde corretamente ao pedido. Confira o conteúdo na fonte.
+Essa opção exige `--capacidade`; pedidos sem requisitos mantêm a conferência
+de referências. Quando os requisitos passam, `verificacao` contém
+`referencias_e_requisitos_validos`.
+Relatórios reprovados pela conferência ficam em
+`$JANGADA_ESTADO/agentes/delegacao-reprovada-ID.md`, com o caminho registrado
+no executor e `verificacao=reprovada`. Não substituem o arquivo da entrega.
 O corte por palavras pode omitir referências na prévia. Nesse caso, leia
 o arquivo completo indicado; a verificação vale para esse arquivo.
 

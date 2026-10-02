@@ -542,7 +542,9 @@ subagente tem `.db` próprio.
   - `capacidade`: capacidade documental solicitada, ou vazio na chamada antiga.
   - `decisao`: ordem por capacidade, destino explícito ou configuração anterior.
   - `motivo_codigo`: motivo estável da recusa; vazio no sucesso.
-  - `verificacao`: `nao_exigida`, `reprovada` ou `referencias_validas`.
+  - `verificacao`: `nao_exigida`, `reprovada`, `referencias_validas` ou
+    `referencias_e_requisitos_validos`, com explicações e referências por requisito.
+  - `requisitos`: lista dos itens exigidos por `--requisito`; vazia sem essa opção.
     Referências válidas não comprovam a interpretação do conteúdo.
   - `verificacao_escopo`: `relatorio_completo` na seleção documental;
     `nenhum` nas chamadas anteriores. A prévia cortada pode omitir referências.
