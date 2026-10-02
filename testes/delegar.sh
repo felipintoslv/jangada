@@ -32,6 +32,10 @@ if [[ "$1" == agents ]]; then
 fi
 if [[ "$2" == /usage ]]; then
   echo usage >>"$FALSO_DIR/usage.chamadas"
+  if [[ -n "${FALSO_ESPERA_USAGE:-}" ]]; then
+    trap '' TERM
+    sleep "$FALSO_ESPERA_USAGE"
+  fi
   [[ "${FALSO_USAGE_FALHA:-0}" == 1 ]] && exit 1
   printf '{"status":"SUCCESS","response":"","command":{"name":"usage","data":{"groups":[{"name":"Gemini Models","buckets":[{"id":"gemini-weekly","remaining_fraction":0.9},{"id":"gemini-5h","remaining_fraction":%s}]}]}}}\n' "$FALSO_COTA"
   exit 0
@@ -95,6 +99,7 @@ delegar() {
     ${TEMPO_TOTAL:+JANGADA_DELEGAR_TEMPO_TOTAL=$TEMPO_TOTAL} \
     ${ESPERA_AGY:+FALSO_ESPERA=$ESPERA_AGY} \
     ${IGNORAR_TERM:+FALSO_IGNORAR_TERM=$IGNORAR_TERM} \
+    ${ESPERA_USAGE:+FALSO_ESPERA_USAGE=$ESPERA_USAGE} \
     ${FALSO_JOGO_ATIVO:+FALSO_JOGO_ATIVO="$FALSO_JOGO_ATIVO"} \
     ${FALSO_VRAM:+FALSO_VRAM="$FALSO_VRAM"} \
     ${SEM_VRAM:+FALSO_SEM_VRAM="$SEM_VRAM"} \
@@ -732,6 +737,12 @@ TEMPO_TOTAL=1 ESPERA_AGY=5 IGNORAR_TERM=1 RESPOSTA='Relatório em doc1.txt:1' de
 conferir "encerramento forçado: recusa estruturada" jqok -e '.motivo_codigo == "limite_tempo"' "$tmp/saida"
 conferir "encerramento forçado: diretório dos temporários removido" \
   test ! -d "$(cat "$tmp/falso/temporario")"
+rm -f "$cache_cota"
+TEMPO_TOTAL=1 ESPERA_USAGE=5 delegar leitor "compare" --capacidade analise_documental \
+  --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "consulta interrompida: recusa estruturada" jqok -e '.motivo_codigo == "limite_tempo"' "$tmp/saida"
+conferir "consulta interrompida: temporário ao lado do cache removido" \
+  bash -c '! compgen -G "$1.*" >/dev/null' _ "$cache_cota"
 
 # Um executor sem resultado JSON não pode produzir uma entrega aceita.
 cat >"$tmp/bin/bash" <<'EOF'

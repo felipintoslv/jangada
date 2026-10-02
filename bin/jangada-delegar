@@ -236,7 +236,8 @@ if [[ -n "$capacidade" ]]; then
       decisao="ordem_configurada_por_capacidade"
     fi
     temporario="$(mktemp -d)"
-    trap 'rm -rf "$temporario"' EXIT
+    cache_prefixo=""
+    trap '[[ -z "$cache_prefixo" ]] || rm -f -- "$cache_prefixo".??????; rm -rf "$temporario"' EXIT
     usadas=0
     while IFS= read -r candidato; do
       motivo=""
@@ -254,6 +255,9 @@ if [[ -n "$capacidade" ]]; then
       restante=$((tempo_total - SECONDS + inicio))
       ((restante > 0)) || recusar "tempo total da delegação esgotado" limite_tempo
       ((usadas < limite_chamadas)) || recusar "limite total de chamadas atingido" limite_chamadas
+      if [[ "$candidato" == agy ]]; then
+        cache_prefixo="${XDG_CACHE_HOME:-$HOME/.cache}/jangada/agy-usage.json.$roteamento_id"
+      fi
       args=("$papel" "$pedido" --destino "$candidato" --capacidade "$capacidade" --json)
       ((permitir_remoto)) && args+=(--permitir-remoto)
       [[ -n "$arquivo" ]] && args+=(--arquivo "$arquivo")
@@ -263,6 +267,7 @@ if [[ -n "$capacidade" ]]; then
         TMPDIR="$temporario" \
         JANGADA_AGENTE="$agente_sessao" \
         JANGADA_DELEGAR_DECISAO="$decisao" \
+        JANGADA_DELEGAR_CACHE_PREFIXO="$cache_prefixo" \
         JANGADA_DELEGAR_CHAMADAS_RESTANTES="$((limite_chamadas - usadas))" \
         timeout --kill-after=2 "$restante" bash "${BASH_SOURCE[0]}" "${args[@]}" \
         >"$temporario/resultado" 2>"$temporario/erro" || codigo=$?
@@ -642,7 +647,7 @@ ler_cota() {
   agora="$(date +%s)"
   if [[ "${1:-}" == nova || ! -s "$cache" ]] \
      || ((atualizado > agora || agora - atualizado >= ${JANGADA_DELEGAR_CACHE:-5} * 60)); then
-    tmp="$(mktemp)"
+    tmp="$(mktemp "${JANGADA_DELEGAR_CACHE_PREFIXO:-$cache}.XXXXXX")"
     if agy_limpo -p "/usage" --output-format json --print-timeout 60s 2>/dev/null >"$tmp" \
        && jq -e '[.command.data.groups[]?.buckets[]? | select(.id == "gemini-5h") | .remaining_fraction]
          | length == 1 and (.[0] | type == "number" and isfinite and . >= 0 and . <= 1)' "$tmp" >/dev/null 2>&1; then
