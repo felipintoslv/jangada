@@ -42,10 +42,16 @@ if [[ "$2" == /usage ]]; then
 fi
 printf '%s\n' "$@" >"$FALSO_DIR/agy.args"
 printf '%s\n' "${TMPDIR:-/tmp}" >"$FALSO_DIR/temporario"
+printf '%s\n' "$$" >"$FALSO_DIR/agy.pid"
 if [[ "${FALSO_IGNORAR_TERM:-0}" == 1 ]]; then
   trap '' TERM
 fi
-[[ -n "${FALSO_ESPERA:-}" ]] && sleep "$FALSO_ESPERA"
+if [[ -n "${FALSO_ESPERA:-}" ]]; then
+  sleep "$FALSO_ESPERA" &
+  espera_pid=$!
+  printf '%s\n' "$espera_pid" >"$FALSO_DIR/filho.pid"
+  wait "$espera_pid"
+fi
 printf '%s\n' "${JANGADA_AGY_PAPEL:-}" >"$FALSO_DIR/agy.papel"
 pwd >"$FALSO_DIR/agy.pasta"
 [[ -n "${FALSO_LOG:-}" ]] && echo "$FALSO_LOG" >"$HOME/.gemini/antigravity-cli/log/cli-1.log"
@@ -737,6 +743,14 @@ TEMPO_TOTAL=1 ESPERA_AGY=5 IGNORAR_TERM=1 RESPOSTA='Relatório em doc1.txt:1' de
 conferir "encerramento forçado: recusa estruturada" jqok -e '.motivo_codigo == "limite_tempo"' "$tmp/saida"
 conferir "encerramento forçado: diretório dos temporários removido" \
   test ! -d "$(cat "$tmp/falso/temporario")"
+processo_encerrado() {
+  local estado
+  estado="$(ps -o stat= -p "$1" 2>/dev/null || true)"
+  estado="${estado//[[:space:]]/}"
+  [[ -z "$estado" || "$estado" == Z* ]]
+}
+conferir "encerramento forçado: agy não continua executando" processo_encerrado "$(cat "$tmp/falso/agy.pid")"
+conferir "encerramento forçado: filho do agy não continua executando" processo_encerrado "$(cat "$tmp/falso/filho.pid")"
 rm -f "$cache_cota"
 TEMPO_TOTAL=1 ESPERA_USAGE=5 delegar leitor "compare" --capacidade analise_documental \
   --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"

@@ -146,8 +146,10 @@ segundos. `JANGADA_DELEGAR_CHAMADAS_MAX` limita as chamadas aos modelos a
 8, incluindo partes e consolidação local. Ambos aceitam inteiros positivos
 de até seis dígitos. Consultas de disponibilidade e cota entram no tempo
 total, mas não na contagem de chamadas ao modelo.
-Se o executor ignorar a interrupção, recebe encerramento forçado após
-mais 2 segundos.
+Ao atingir o limite global, o GNU `timeout` envia SIGKILL ao grupo de
+processos do executor e encerra os filhos que permanecem nesse grupo. Processos que
+criem outra sessão ou pedidos já aceitos pelo provedor exigem cancelamento
+próprio; o limite da execução local não garante esse cancelamento.
 
 Antes de gravar ou entregar o relatório completo, a verificação exige uma referência
 a cada fonte fornecida, em linha ou página existente. Nomes de arquivo
