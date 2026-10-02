@@ -100,6 +100,14 @@ if [[ -z "${esforco[$papel]:-}" ]]; then
 fi
 
 perfil_delegar="${JANGADA_DELEGAR:-agy}"
+impedimentos="${JANGADA_DELEGAR_IMPEDIMENTOS:-[]}"
+if ! jq -e 'type == "array" and all(.[]; type == "object"
+  and (.destino == "local" or .destino == "agy")
+  and (.motivo | type == "string")
+  and (.motivo_codigo == "provedor_pausado" or .motivo_codigo == "provedor_em_espera"
+    or .motivo_codigo == "cota_indisponivel"))' <<<"$impedimentos" >/dev/null; then
+  echo "jangada-delegar: impedimentos de provedores inválidos" >&2; exit 2
+fi
 if [[ -n "$capacidade" ]]; then
   case "$capacidade" in
     leitura_documental|resumo_curto|analise_documental) ;;
@@ -253,6 +261,11 @@ if [[ -n "$capacidade" ]]; then
     usadas=0
     while IFS= read -r candidato; do
       motivo=""
+      impedido="$(jq -c --arg destino "$candidato" '[.[] | select(.destino == $destino)][0] // null' <<<"$impedimentos")"
+      if [[ "$impedido" != null ]]; then
+        tentativas="$(jq -c --argjson impedido "$impedido" '. + [$impedido + {codigo_saida:4,chamadas:0}]' <<<"$tentativas")"
+        continue
+      fi
       if [[ "$perfil_delegar" == claude || "$perfil_delegar" == nativo ]]; then
         motivo="o perfil exige execução na sessão"
       elif [[ "$candidato" == agy ]] && { [[ "$perfil_delegar" == local ]] || ((!permitir_remoto)); }; then

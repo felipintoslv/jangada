@@ -150,6 +150,7 @@ testes/delegar.sh || falha "testes/delegar.sh"
 python3 testes/delegacao.py || falha "testes/delegacao.py"
 python3 testes/orquestracao.py || falha "testes/orquestracao.py"
 python3 testes/executor.py || falha "testes/executor.py"
+python3 testes/saude.py || falha "testes/saude.py"
 
 passo "versões"
 testes/versao.sh || falha "testes/versao.sh"

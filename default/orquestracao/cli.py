@@ -12,6 +12,7 @@ import sys
 sys.dont_write_bytecode = True
 from estado import Estado
 from executor import executar
+from saude import Saude, retomar
 
 
 def especificacoes(caminho, projeto):
@@ -50,6 +51,20 @@ def main():
     execucao.add_argument('--perfil', choices=['balanced', 'quality', 'offline'], default='balanced')
     execucao.add_argument('--limite', type=int, default=1)
     execucao.add_argument('--permitir-remoto', action='store_true')
+    retomada = comandos.add_parser('retomar', help='retoma esperas com provedor disponível')
+    retomada.add_argument('--projeto', type=pathlib.Path)
+    retomada.add_argument('--perfil', choices=['balanced', 'quality', 'offline'], default='balanced')
+    retomada.add_argument('--permitir-remoto', action='store_true')
+    retomada.add_argument('--atualizar', action='store_true')
+    retomada.add_argument('--executar', action='store_true')
+    retomada.add_argument('--limite', type=int, default=1)
+    router = comandos.add_parser('router', help='consulta provedores de todos os projetos')
+    router.add_argument('acao', choices=['status'])
+    router.add_argument('--atualizar', action='store_true')
+    router.add_argument('--permitir-remoto', action='store_true')
+    provedor = comandos.add_parser('provedor', help='pausa ou ativa um provedor')
+    provedor.add_argument('acao', choices=['pausar', 'ativar'])
+    provedor.add_argument('id')
     tarefa = comandos.add_parser('task', help='altera somente o estado da tarefa')
     tarefa.add_argument('--projeto', type=pathlib.Path)
     tarefa.add_argument('id')
@@ -59,6 +74,19 @@ def main():
     decisao.add_argument('--aprovar', action='store_true')
     decisao.add_argument('--reprovar', action='store_true')
     args = parser.parse_args()
+    raiz_estado = pathlib.Path(os.environ['JANGADA_ESTADO'])
+    if args.comando in {'router', 'provedor'}:
+        global_estado = Estado(raiz_estado / 'agentes/runtime', raiz=raiz_estado)
+        try:
+            saude = Saude(global_estado)
+            if args.comando == 'provedor':
+                saude.pausar(args.id, args.acao == 'pausar')
+            elif args.atualizar:
+                saude.atualizar(args.permitir_remoto)
+            print(json.dumps({'provedores': saude.listar()}, ensure_ascii=False))
+        finally:
+            global_estado.fechar()
+        return
     if args.projeto:
         projeto = args.projeto.resolve()
     else:
@@ -81,10 +109,24 @@ def main():
                 for item in tarefas:
                     spec = item['especificacao']
                     print(f'{item["id"]}\t{item["status"]}\t{spec["capacidade"]}\t{item["tentativas"]} tentativa(s)')
-        elif args.comando == 'executar':
-            resultados = executar(estado, projeto, pathlib.Path(os.environ['JANGADA_PATH']),
-                                  args.perfil, args.limite, args.permitir_remoto)
-            print(json.dumps({'projeto': str(projeto), 'resultados': resultados}, ensure_ascii=False))
+        elif args.comando in {'executar', 'retomar'}:
+            global_estado = Estado(raiz_estado / 'agentes/runtime', raiz=raiz_estado)
+            try:
+                saude = Saude(global_estado)
+                raiz = pathlib.Path(os.environ['JANGADA_PATH'])
+                retomadas, resultados = [], []
+                if args.comando == 'retomar':
+                    if args.atualizar:
+                        saude.atualizar(args.permitir_remoto)
+                    retomadas = retomar(estado, saude, raiz, os.environ['JANGADA_CONFIG'],
+                                       args.perfil, args.permitir_remoto)
+                if args.comando == 'executar' or args.executar:
+                    resultados = executar(estado, projeto, raiz, args.perfil,
+                                          args.limite, args.permitir_remoto, saude)
+                print(json.dumps({'projeto': str(projeto), 'retomadas': retomadas,
+                                  'resultados': resultados}, ensure_ascii=False))
+            finally:
+                global_estado.fechar()
         else:
             if args.acao == 'revisar':
                 if not args.parecer or not (args.aprovar or args.reprovar):

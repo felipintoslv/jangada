@@ -395,6 +395,45 @@ perfil de sessão compatível. Os perfis não ampliam as permissões da sessão.
 Nenhum deles chama Claude ou Codex como trabalhador externo. Os registros
 de cada tentativa ficam no resultado da tarefa e no histórico persistente.
 
+### Disponibilidade dos provedores e retomada
+
+`jangada-router status` consulta as observações compartilhadas entre projetos,
+em `$JANGADA_ESTADO/agentes/runtime/`. Estados expirados aparecem como
+`UNKNOWN`; o término de uma espera não declara o provedor disponível.
+Pausas e observações ficam persistidas, com data, motivo e histórico.
+
+`jangada-provedor pausar agy` impede novas delegações pelo executor da fila.
+`jangada-provedor ativar agy` remove a pausa e exige nova verificação.
+Três falhas de serviço registradas desde a última observação `AVAILABLE`
+geram `COOLDOWN` por 900 segundos. Saídas com erro de conteúdo não são
+tratadas como falhas de rede.
+
+`jangada-router status --atualizar` consulta os modelos instalados no Ollama
+e lê a cota recente do agy. Com `--permitir-remoto` e sessão que permita
+agy, pode consultar `/usage` quando o registro estiver ausente ou expirado.
+Essa consulta envia somente o comando de metadados, sem as fontes da tarefa.
+Roda com isolamento do agy, entrada fechada e fora da pasta do projeto.
+Cota ausente, inválida ou expirada permanece desconhecida. A reserva segue
+`JANGADA_DELEGAR_COTA_MIN`, como na delegação existente.
+
+O estado `UNKNOWN` permite as verificações do adaptador, sem comprovar
+disponibilidade. Antes de gerar um relatório remoto, o `jangada-delegar`
+precisa confirmar a cota. Provedores pausados ou em espera são descartados
+com motivo estruturado e zero chamadas. A disponibilidade não comprova
+qualidade nem amplia permissões.
+
+`jangada-retomar` recoloca na fila tarefas em `WAITING_QUOTA` ou
+`WAITING_PROVIDER` que tenham executor disponível, orçamento e tentativas
+restantes. Respeita fontes locais, permissão remota, perfil e capacidade.
+Não retoma tarefas pausadas, em revisão ou com consumo desconhecido.
+Para atualizar os provedores e executar a fila após a retomada:
+
+```sh
+jangada-retomar --atualizar --executar --limite 10 --permitir-remoto
+```
+
+O comando faz uma passagem; não instala um serviço permanente.
+
 ## Registro e medição
 
 - Cada chamada do `jangada-delegar`, atendida ou recusada, vira uma linha em

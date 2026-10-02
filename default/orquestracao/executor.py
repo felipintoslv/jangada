@@ -40,7 +40,7 @@ def conferir_fontes(tarefa, projeto):
             raise ValueError(f'fonte alterada após importação: {nome}')
 
 
-def executar_uma(estado, projeto, raiz, perfil, permitir_remoto):
+def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude):
     reserva = estado.reservar()
     if reserva is None:
         return None
@@ -96,6 +96,8 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto):
             ambiente.pop(chave, None)
         ambiente.update(JANGADA_PATH=str(raiz), JANGADA_DELEGAR_TEMPO_TOTAL=str(tempo),
                         JANGADA_DELEGAR_CHAMADAS_MAX=str(saldo))
+        if saude is not None:
+            ambiente['JANGADA_DELEGAR_IMPEDIMENTOS'] = json.dumps(saude.impedimentos())
         with tempfile.TemporaryDirectory(prefix='execucao-', dir=estado.pasta) as pasta:
             saida = pathlib.Path(pasta) / 'relatorio.md'
             argumentos[1:1] = ['--arquivo', str(saida)]
@@ -131,12 +133,14 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto):
             resultado['metricas']['chamadas'] = quantidade
             resultado['execucao_iniciada'] = quantidade != 0
             resultado['delegacao'] = registro
+            if saude is not None:
+                saude.registrar_delegacao(registro, processo.returncode)
             if quantidade is None or quantidade > saldo:
                 return encerrar('REVISION_REQUIRED', 'executor não comprovou respeito ao orçamento')
             if processo.returncode != 0:
                 motivos = {registro.get('motivo_codigo')}
                 motivos.update(t.get('motivo_codigo') for t in registro.get('tentativas', []) if isinstance(t, dict))
-                if motivos & {'cota_insuficiente', 'cota_desconhecida'}:
+                if motivos & {'cota_insuficiente', 'cota_desconhecida', 'cota_indisponivel'}:
                     return encerrar('WAITING_QUOTA', 'cota insuficiente ou desconhecida')
                 if 'saida_invalida' in motivos:
                     return encerrar('REVISION_REQUIRED', 'saída reprovada na conferência')
@@ -159,12 +163,12 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto):
         return encerrar('REVISION_REQUIRED', str(erro), texto)
 
 
-def executar(estado, projeto, raiz, perfil='balanced', limite=1, permitir_remoto=False):
+def executar(estado, projeto, raiz, perfil='balanced', limite=1, permitir_remoto=False, saude=None):
     if perfil not in PERFIS or type(limite) is not int or not 1 <= limite <= 1000:
         raise ValueError('perfil ou limite de tarefas inválido')
     resultados = []
     for _ in range(limite):
-        resultado = executar_uma(estado, projeto, raiz, perfil, permitir_remoto)
+        resultado = executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude)
         if resultado is None:
             break
         resultados.append(resultado)
