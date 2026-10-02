@@ -56,6 +56,7 @@ fi
 passo "JSON"
 jq empty default/claude/hooks.json || falha "hooks.json"
 jq empty default/agy/hooks.json || falha "agy/hooks.json"
+jq empty default/delegacao/roteamento.json || falha "delegacao/roteamento.json"
 # config.jsonc tem comentários; remove as linhas de comentário antes de validar.
 sed 's#^[[:space:]]*//.*##' default/waybar/config.jsonc | jq empty || falha "waybar/config.jsonc"
 sed 's#^[[:space:]]*//.*##' default/fastfetch/config.jsonc | jq empty || falha "fastfetch/config.jsonc"
@@ -146,6 +147,7 @@ testes/painel.sh || falha "testes/painel.sh"
 passo "subagentes"
 testes/subagentes.sh || falha "testes/subagentes.sh"
 testes/delegar.sh || falha "testes/delegar.sh"
+python3 testes/delegacao.py || falha "testes/delegacao.py"
 
 passo "versões"
 testes/versao.sh || falha "testes/versao.sh"

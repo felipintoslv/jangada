@@ -37,6 +37,7 @@ if [[ "$2" == /usage ]]; then
   exit 0
 fi
 printf '%s\n' "$@" >"$FALSO_DIR/agy.args"
+[[ -n "${FALSO_ESPERA:-}" ]] && sleep "$FALSO_ESPERA"
 printf '%s\n' "${JANGADA_AGY_PAPEL:-}" >"$FALSO_DIR/agy.papel"
 pwd >"$FALSO_DIR/agy.pasta"
 [[ -n "${FALSO_LOG:-}" ]] && echo "$FALSO_LOG" >"$HOME/.gemini/antigravity-cli/log/cli-1.log"
@@ -79,11 +80,16 @@ sed "s|@JANGADA_PATH@|$repo_jangada|g" default/agy/hooks.json >"$tmp/home/.gemin
 delegar() {
   rm -f "$tmp/falso/agy.args"
   (cd "$tmp/projeto" && env -u JANGADA_DELEGAR -u JANGADA_ISOLADO -u XDG_CACHE_HOME -u XDG_STATE_HOME -u XDG_CONFIG_HOME \
+    -u JANGADA_DELEGAR_ROTEAMENTO_ID -u JANGADA_DELEGAR_TENTATIVAS -u JANGADA_DELEGAR_CHAMADAS_RESTANTES \
     HOME="$tmp/home" PATH="$tmp/bin:$PATH" JANGADA_PATH="$repo_jangada" FALSO_DIR="$tmp/falso" \
     FALSO_COTA="${COTA:-0.9}" FALSO_RESPOSTA="${RESPOSTA-relatorio em a.sh:1}" \
     FALSO_CODIGO="${CODIGO:-0}" FALSO_NEGADO="${NEGADO:-}" FALSO_LOG="${LOG:-}" FALSO_USAGE_FALHA="${USAGE_FALHA:-0}" \
     ${AGENTES:+FALSO_AGENTES="$AGENTES"} \
     ${DELEGAR:+JANGADA_DELEGAR=$DELEGAR} \
+    ${AGENTE:+JANGADA_AGENTE=$AGENTE} \
+    ${CHAMADAS_MAX:+JANGADA_DELEGAR_CHAMADAS_MAX=$CHAMADAS_MAX} \
+    ${TEMPO_TOTAL:+JANGADA_DELEGAR_TEMPO_TOTAL=$TEMPO_TOTAL} \
+    ${ESPERA_AGY:+FALSO_ESPERA=$ESPERA_AGY} \
     ${FALSO_JOGO_ATIVO:+FALSO_JOGO_ATIVO="$FALSO_JOGO_ATIVO"} \
     ${FALSO_VRAM:+FALSO_VRAM="$FALSO_VRAM"} \
     ${SEM_VRAM:+FALSO_SEM_VRAM="$SEM_VRAM"} \
@@ -581,6 +587,130 @@ conferir "caso 46: JANGADA_LOCAL_IGNORAR_VRAM=1 libera chamada" [ "$(codigo)" = 
 # 29. Protocolo de delegação local presente e referenciado
 conferir "caso 47: arquivo protocolo-delegar-local.md existe e legivel" test -r "$repo_jangada/default/agentes/protocolo-delegar-local.md"
 conferir "caso 47: protocolo contém instrução de delegação local" grep -q "delegação local" "$repo_jangada/default/agentes/protocolo-delegar-local.md"
+
+# Cotas antigas ou inválidas nunca autorizam uma chamada.
+cache_cota="$tmp/home/.cache/jangada/agy-usage.json"
+delegar leitor "leia"
+touch -d '10 minutes ago' "$cache_cota"
+USAGE_FALHA=1 delegar leitor "leia" --json
+conferir "cota expirada: falha de atualização recusa antes do pedido" test ! -e "$tmp/falso/agy.args"
+conferir "cota expirada: motivo estruturado" jqok -e '.motivo_codigo == "cota_desconhecida"' "$tmp/saida"
+rm -f "$cache_cota"
+COTA='"invalida"' delegar leitor "leia" --json
+conferir "cota textual: recusa estruturada" jqok -e '.motivo_codigo == "cota_desconhecida"' "$tmp/saida"
+COTA=1.5 delegar leitor "leia" --json
+conferir "cota fora da faixa: recusa" [ "$(codigo)" = 4 ]
+COTA=0 delegar leitor "leia" --json
+conferir "cota zero: insuficiente" jqok -e '.motivo_codigo == "cota_insuficiente"' "$tmp/saida"
+rm -f "$cache_cota"
+AGENTE=codex DELEGAR=local delegar --destino agy leitor "leia"
+conferir "recusa no Codex: orienta continuar na sessão" grep -q "nesta sessão do Codex" "$tmp/saida"
+conferir "recusa no Codex: não recomenda Claude" bash -c '! grep -q Claude "$1"' _ "$tmp/saida"
+
+# Roteamento documental usa os mesmos executores falsos dos casos anteriores.
+printf 'Relatório em doc1.txt:1\n' >"$ollama_resp"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "resuma" \
+  --capacidade resumo_curto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "capacidade: seleciona local e valida referência" jqok -e \
+  '.destino == "local" and .capacidade == "resumo_curto" and .verificacao == "referencias_validas"
+    and .decisao == "ordem_configurada_por_capacidade" and .chamadas_executor == 1' "$tmp/saida"
+conferir "capacidade: mantém medidas por chamada local" jqok -e '.chamadas_local | length == 1' "$tmp/saida"
+RESPOSTA='Relatório em doc1.txt:1' delegar leitor "compare" --capacidade analise_documental \
+  --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "capacidade: agy normal" jqok -e '.destino == "agy" and .verificacao == "referencias_validas"' "$tmp/saida"
+conferir "capacidade: agy recebe fonte explícita" grep -qx "$tmp/projeto/doc1.txt" "$tmp/falso/agy.args"
+
+rm -f "$cache_cota"
+COTA=0.1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "compare" \
+  --capacidade analise_documental --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "capacidade: cota baixa troca agy por local" jqok -e \
+  '.destino == "local" and (.tentativas | length) == 2
+    and .tentativas[0].motivo_codigo == "cota_insuficiente"' "$tmp/saida"
+conferir "capacidade: tentativas compartilham identificação" jqok -se \
+  '.[-1].roteamento_id == .[-2].roteamento_id' "$reg"
+rm -f "$cache_cota"
+USAGE_FALHA=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "compare" \
+  --capacidade analise_documental --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "capacidade: cota desconhecida tenta local" jqok -e \
+  '.destino == "local" and .tentativas[0].motivo_codigo == "cota_desconhecida"' "$tmp/saida"
+
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "compare" \
+  --capacidade analise_documental --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "privacidade: sem autorização remota descarta agy" jqok -e \
+  '.destino == "local" and .tentativas[0].motivo_codigo == "destino_proibido"' "$tmp/saida"
+conferir "privacidade: agy não recebe pedido" test ! -e "$tmp/falso/agy.args"
+DELEGAR=local OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "compare" \
+  --capacidade analise_documental --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "perfil local: autorização da tarefa não amplia perfil" test ! -e "$tmp/falso/agy.args"
+
+printf 'Relatório sem referência\n' >"$ollama_resp"
+RESPOSTA='Relatório em doc1.txt:1' OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "resuma" \
+  --capacidade resumo_curto --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "qualidade: saída inválida tenta outro executor" jqok -e \
+  '.destino == "agy" and .tentativas[0].motivo_codigo == "saida_invalida"' "$tmp/saida"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "resuma" \
+  --capacidade resumo_curto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "privacidade: falha local não autoriza nuvem" test ! -e "$tmp/falso/agy.args"
+conferir "sem executor: recusa explicável" jqok -e \
+  '.motivo_codigo == "sem_executor" and .tentativas[0].motivo_codigo == "saida_invalida"' "$tmp/saida"
+printf 'Relatório em doc1.txt:99\n' >"$ollama_resp"
+printf 'original\n' >"$tmp/preservar.md"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "resuma" --destino local \
+  --capacidade resumo_curto --json --arquivo "$tmp/preservar.md" --arquivos "$tmp/projeto/doc1.txt"
+conferir "qualidade: linha inexistente reprova" [ "$(codigo)" = 4 ]
+conferir "qualidade: saída reprovada preserva arquivo" grep -qx original "$tmp/preservar.md"
+conferir "destino explícito: não troca executor" jqok -e \
+  '.tentativas | map(select(.destino == "agy")) | length == 0' "$tmp/saida"
+
+RESPOSTA='Relatório em doc1.txt:1' CHAMADAS_MAX=1 OLLAMA_URL="http://127.0.0.1:$porta_ollama" \
+  delegar leitor "resuma" --capacidade resumo_curto --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "limite: não chama segundo executor" test ! -e "$tmp/falso/agy.args"
+conferir "limite: registra esgotamento" jqok -e '.motivo_codigo == "limite_chamadas"' "$tmp/saida"
+TEMPO_TOTAL=1 ESPERA_AGY=3 RESPOSTA='Relatório em doc1.txt:1' delegar leitor "compare" \
+  --capacidade analise_documental --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "tempo total: interrompe executor" jqok -e \
+  '.motivo_codigo == "limite_tempo" and .chamadas_executor == null' "$tmp/saida"
+
+mkdir -p "$tmp/home/.config/jangada"
+printf '{"resumo_curto":["agy","local"]}\n' >"$tmp/home/.config/jangada/delegacao.json"
+RESPOSTA='Relatório em doc1.txt:1' delegar leitor "resuma" --capacidade resumo_curto \
+  --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "política: ordem do usuário prevalece" jqok -e '.destino == "agy"' "$tmp/saida"
+printf '{"resumo_curto":["claude"]}\n' >"$tmp/home/.config/jangada/delegacao.json"
+delegar leitor "resuma" --capacidade resumo_curto --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "política: rejeita executor não integrado" jqok -e '.motivo_codigo == "politica_invalida"' "$tmp/saida"
+conferir "política: não executa agy" test ! -e "$tmp/falso/agy.args"
+rm -f "$tmp/home/.config/jangada/delegacao.json"
+
+# Negação de ferramenta e restrição de perfil não são falhas recuperáveis.
+NEGADO=ReadUrlContent RESPOSTA='Relatório em doc1.txt:1' OLLAMA_URL="http://127.0.0.1:$porta_ollama" \
+  delegar leitor "compare" --capacidade analise_documental --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "permissão: negação não dispara troca" jqok -e \
+  '.tentativas[0].motivo_codigo == "destino_proibido"
+    and (.tentativas | map(select(.destino == "local")) | length == 0)' "$tmp/saida"
+DELEGAR=claude delegar leitor "resuma" --capacidade resumo_curto --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "perfil Claude: não delega a outro executor" test ! -e "$tmp/falso/agy.args"
+delegar explorador "resuma" --capacidade resumo_curto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "capacidade: papel incompatível recusa" jqok -e '.motivo_codigo == "capacidade_incompativel"' "$tmp/saida"
+delegar redator "resuma" --capacidade resumo_curto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "capacidade: redator não substitui leitor" jqok -e '.motivo_codigo == "capacidade_incompativel"' "$tmp/saida"
+delegar leitor "resuma" --capacidade inexistente --arquivos "$tmp/projeto/doc1.txt"
+conferir "capacidade: desconhecida é erro de uso" [ "$(codigo)" = 2 ]
+
+printf 'Relatório em doc1.txt:1\n' >"$ollama_resp"
+printf 'outra fonte\n' >"$tmp/projeto/doc2.txt"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "resuma" --destino local --capacidade resumo_curto \
+  --json --arquivos "$tmp/projeto/doc1.txt" "$tmp/projeto/doc2.txt"
+conferir "qualidade: fonte omitida reprova" [ "$(codigo)" = 4 ]
+OLLAMA_URL="http://127.0.0.1:1" delegar leitor "resuma" --capacidade resumo_curto \
+  --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "sem executor: indisponibilidade registrada" jqok -e \
+  '.motivo_codigo == "sem_executor" and .tentativas[0].motivo_codigo == "indisponivel"' "$tmp/saida"
+
+CHAMADAS_MAX=1 LOCAL_CTX=2100 LOCAL_FATIAS_MAX=5 OLLAMA_URL="http://127.0.0.1:$porta_ollama" \
+  delegar leitor "resuma" --destino local --capacidade resumo_curto --json --arquivos "$doc_grande"
+conferir "limite: partes do documento contam como chamadas" jqok -e \
+  '.tentativas[0].motivo_codigo == "limite_chamadas" and .tentativas[0].chamadas == 1' "$tmp/saida"
 
 echo
 if ((falhas)); then

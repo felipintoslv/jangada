@@ -210,6 +210,20 @@ jangada_delegacao() {
   echo "$_valor"
 }
 
+jangada_candidatos() {
+  local politica="$JANGADA_CONFIG/delegacao.json"
+  [[ -f "$politica" ]] || politica="$JANGADA_PATH/default/delegacao/roteamento.json"
+  jq -er --arg capacidade "$1" '
+    if type == "object"
+      and (keys - ["leitura_documental", "resumo_curto", "analise_documental"] | length == 0)
+      and all(.[]; type == "array" and length > 0
+        and length == (unique | length) and all(.[]; . == "local" or . == "agy"))
+      and has($capacidade)
+    then .[$capacidade][]
+    else error("política de delegação inválida ou capacidade ausente") end
+  ' "$politica"
+}
+
 jangada_perfis() {
   local _a
   for _a in "$JANGADA_CONFIG"/agentes/*.conf "$JANGADA_PATH"/default/agentes/*.conf; do

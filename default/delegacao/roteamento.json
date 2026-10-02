@@ -1,0 +1,5 @@
+{
+  "leitura_documental": ["local", "agy"],
+  "resumo_curto": ["local", "agy"],
+  "analise_documental": ["agy", "local"]
+}
