@@ -11,6 +11,7 @@ import urllib.request
 
 from estado import IDENTIFICADOR, serializar
 from executor import CAPACIDADES
+from cota_codex import consultar, percentual
 
 ESTADOS = {'AVAILABLE', 'DEGRADED', 'UNKNOWN', 'UNAVAILABLE', 'COOLDOWN',
            'QUOTA_LOW', 'QUOTA_EXHAUSTED', 'AUTH_ERROR', 'RATE_LIMITED', 'NETWORK_ERROR'}
@@ -42,13 +43,14 @@ class Saude:
             raise ValueError('cota deve ser percentual entre 0 e 100')
         if not isinstance(motivo, str) or not motivo.strip() or (modelo is not None and not isinstance(modelo, str)):
             raise ValueError('motivo ou modelo inválido')
-        if provedor == 'agy' and status == 'AVAILABLE':
-            minimo = float(os.environ.get('JANGADA_DELEGAR_COTA_MIN', '20'))
+        if provedor in {'agy', 'codex'} and status == 'AVAILABLE':
+            chave, padrao = ('JANGADA_DELEGAR_COTA_MIN', '20') if provedor == 'agy' else ('JANGADA_CODEX_COTA_MIN', '25')
+            minimo = float(os.environ.get(chave, padrao))
             if not math.isfinite(minimo) or not 0 <= minimo <= 100:
                 raise ValueError('reserva de cota inválida')
             if cota is None:
                 status = 'UNKNOWN'
-            elif cota < minimo:
+            elif cota == 0 or cota < minimo:
                 status = 'QUOTA_EXHAUSTED' if cota == 0 else 'QUOTA_LOW'
         agora = time.time()
         with self.estado.transacao():
@@ -80,7 +82,7 @@ class Saude:
                 item.update(status='UNAVAILABLE', motivo='provedor pausado')
             elif item['valido_ate'] <= agora:
                 item.update(status='UNKNOWN', motivo='observação ausente ou expirada', cota=None)
-            elif item['id'] == 'agy' and item['status'] == 'AVAILABLE' and item['cota'] is None:
+            elif item['id'] in {'agy', 'codex'} and item['status'] == 'AVAILABLE' and item['cota'] is None:
                 item.update(status='UNKNOWN', motivo='cota não confirmada')
             item['espera_segundos'] = max(0, math.ceil(item['valido_ate'] - agora)) if item['status'] == 'COOLDOWN' else 0
         return [mapa[nome] for nome in sorted(mapa)]
@@ -199,6 +201,20 @@ class Saude:
                           validade=max(1, min(60, int(validade - idade))) if dados is not None and math.isfinite(idade) else 60)
         except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
             self.observar('agy', 'UNKNOWN', 'cota desconhecida ou expirada')
+
+    def atualizar_codex(self, permitir_remoto=False):
+        if not permitir_remoto:
+            raise ValueError('consulta de cota do Codex exige --permitir-remoto')
+        atual = next((item for item in self.listar() if item['id'] == 'codex'), None)
+        if atual and (atual['pausado'] or atual['status'] == 'COOLDOWN'):
+            return
+        try:
+            cota, validade = percentual(consultar(self.estado.pasta), time.time())
+        except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+            self.observar('codex', 'UNKNOWN', 'cota do Codex desconhecida ou expirada')
+        else:
+            self.observar('codex', 'AVAILABLE', 'menor saldo das janelas do grupo Codex',
+                          validade=validade, cota=cota)
 
 
 def retomar(estado, saude, raiz, config, perfil, permitir_remoto):

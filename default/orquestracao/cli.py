@@ -61,6 +61,7 @@ def main():
     router = comandos.add_parser('router', help='consulta provedores de todos os projetos')
     router.add_argument('acao', choices=['status'])
     router.add_argument('--atualizar', action='store_true')
+    router.add_argument('--atualizar-codex', action='store_true')
     router.add_argument('--permitir-remoto', action='store_true')
     provedor = comandos.add_parser('provedor', help='pausa ou ativa um provedor')
     provedor.add_argument('acao', choices=['pausar', 'ativar'])
@@ -83,6 +84,8 @@ def main():
                 saude.pausar(args.id, args.acao == 'pausar')
             elif args.atualizar:
                 saude.atualizar(args.permitir_remoto)
+            if args.comando == 'router' and args.atualizar_codex:
+                saude.atualizar_codex(args.permitir_remoto)
             print(json.dumps({'provedores': saude.listar()}, ensure_ascii=False))
         finally:
             global_estado.fechar()

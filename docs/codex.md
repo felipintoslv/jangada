@@ -132,6 +132,34 @@ com o esforço definido pelo papel. O protocolo do Codex não manda chamar
 subagentes do Claude. Recusa local
 nunca autoriza enviar documentos confidenciais a um provedor externo.
 
+## Cota disponível
+
+`jangada-router status --atualizar-codex --permitir-remoto` consulta somente
+metadados pelo método `account/rateLimits/read` do Codex. Não inicia conversa,
+gera texto, envia fontes ou ativa execução de ferramentas.
+
+A consulta usa uma pasta temporária privada dentro do estado da orquestração,
+com cópia temporária da autenticação existente e sem configuração do usuário.
+Encerra o grupo do processo e remove a pasta ao concluir, falhar ou receber
+interrupção. Não faz login, não altera a autenticação original e não usa
+chaves de API do ambiente. Autenticação ausente ou incompatível deixa
+o estado em `UNKNOWN`.
+
+O saldo registrado é o menor das janelas presentes no grupo de consumo
+`codex`. Grupos diferentes não substituem esse saldo. Uma janela vencida
+exige nova consulta; não se presume que a cota foi renovada. A observação
+vale no máximo 60 segundos e expira antes da renovação mais próxima.
+A reserva padrão é 25%, ajustável por `JANGADA_CODEX_COTA_MIN` entre 0 e 100.
+Saldo zero produz `QUOTA_EXHAUSTED`; abaixo da reserva, `QUOTA_LOW`.
+Pausa e espera vigente impedem a consulta.
+
+Essa observação prepara a integração de executores Codex. A fila ainda usa
+somente Ollama e agy. Não comprova acesso a um modelo específico nem cota
+independente para variantes econômicas. Os estados continuam sendo dados
+operacionais editáveis, não autorização para enviar fontes ou alterar recursos.
+
+Referência: [cotas no Codex App Server](https://learn.chatgpt.com/docs/app-server#6-rate-limits-chatgpt).
+
 ## Revisão com Codex
 
 `jangada-validar --revisor codex` também aceita `--modelo`. Sem modelo
@@ -165,6 +193,8 @@ externa para o commit exato e limpo, em `revisoes/`.
 `testes/isolar.sh` confere a separação dos dados e as montagens protegidas;
 quando o ambiente permite bubblewrap, executa também esses controles.
 `testes/validar.sh` verifica os pareceres e as falhas com Codex simulado.
+`testes/cota-codex.py` confere protocolo, janelas, reserva, prazo, interrupção
+e remoção de credenciais temporárias, sem serviços externos.
 
 Referências: [CLI](https://learn.chatgpt.com/docs/developer-commands?surface=cli),
 [configuração](https://learn.chatgpt.com/docs/config-file/config-reference) e

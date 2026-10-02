@@ -2,6 +2,14 @@
 
 ## Codex
 
+O `account/rateLimits/read` separa limites por grupo de consumo. Para a cota
+Codex, use `rateLimitsByLimitId.codex` quando o mapa estiver presente;
+`rateLimits` é a forma antiga. Considere a janela com menor saldo, não
+presuma renovação quando `resetsAt` passar nem cota separada por modelo.
+`jangada-router status --atualizar-codex --permitir-remoto` consulta esses
+metadados sem iniciar conversa; exige autenticação existente e não habilita
+delegação ao Codex.
+
 O Codex CLI 0.159.3 dispara `SessionStart` no primeiro turno, não apenas em
 `thread/start`. Os testes com o CLI real usam um provedor restrito a
 localhost para iniciar o turno sem consumir tokens externos. A confiança
