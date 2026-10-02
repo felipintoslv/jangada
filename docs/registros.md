@@ -544,6 +544,10 @@ subagente tem `.db` próprio.
   - `motivo_codigo`: motivo estável da recusa; vazio no sucesso.
   - `verificacao`: `nao_exigida`, `reprovada` ou `referencias_validas`.
     Referências válidas não comprovam a interpretação do conteúdo.
+  - `verificacao_escopo`: `relatorio_completo` na seleção documental;
+    `nenhum` nas chamadas anteriores. A prévia cortada pode omitir referências.
+  - `artefato`: arquivo completo gravado, ou vazio quando não foi gravado.
+  - `relatorio_cortado`: indica se o relatório devolvido é uma prévia.
   - `chamadas_executor`: chamadas ao modelo neste executor, incluindo partes
     locais; `null` se a interrupção impedir conhecer o total.
   - `tentativas`: destinos descartados ou executados até esse registro, com

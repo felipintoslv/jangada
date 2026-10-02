@@ -37,6 +37,10 @@ if [[ "$2" == /usage ]]; then
   exit 0
 fi
 printf '%s\n' "$@" >"$FALSO_DIR/agy.args"
+printf '%s\n' "${TMPDIR:-/tmp}" >"$FALSO_DIR/temporario"
+if [[ "${FALSO_IGNORAR_TERM:-0}" == 1 ]]; then
+  trap '' TERM
+fi
 [[ -n "${FALSO_ESPERA:-}" ]] && sleep "$FALSO_ESPERA"
 printf '%s\n' "${JANGADA_AGY_PAPEL:-}" >"$FALSO_DIR/agy.papel"
 pwd >"$FALSO_DIR/agy.pasta"
@@ -90,6 +94,7 @@ delegar() {
     ${CHAMADAS_MAX:+JANGADA_DELEGAR_CHAMADAS_MAX=$CHAMADAS_MAX} \
     ${TEMPO_TOTAL:+JANGADA_DELEGAR_TEMPO_TOTAL=$TEMPO_TOTAL} \
     ${ESPERA_AGY:+FALSO_ESPERA=$ESPERA_AGY} \
+    ${IGNORAR_TERM:+FALSO_IGNORAR_TERM=$IGNORAR_TERM} \
     ${FALSO_JOGO_ATIVO:+FALSO_JOGO_ATIVO="$FALSO_JOGO_ATIVO"} \
     ${FALSO_VRAM:+FALSO_VRAM="$FALSO_VRAM"} \
     ${SEM_VRAM:+FALSO_SEM_VRAM="$SEM_VRAM"} \
@@ -711,6 +716,111 @@ CHAMADAS_MAX=1 LOCAL_CTX=2100 LOCAL_FATIAS_MAX=5 OLLAMA_URL="http://127.0.0.1:$p
   delegar leitor "resuma" --destino local --capacidade resumo_curto --json --arquivos "$doc_grande"
 conferir "limite: partes do documento contam como chamadas" jqok -e \
   '.tentativas[0].motivo_codigo == "limite_chamadas" and .tentativas[0].chamadas == 1' "$tmp/saida"
+
+# A prévia cortada declara que a verificação vale para o arquivo completo.
+python3 -c 'print("palavra " * 610 + "doc1.txt:1")' >"$ollama_resp"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "resuma" --capacidade resumo_curto \
+  --json --arquivo "$tmp/completo.md" --arquivos "$tmp/projeto/doc1.txt"
+conferir "arquivo: roteamento bem-sucedido grava relatório completo" grep -q doc1.txt:1 "$tmp/completo.md"
+conferir "prévia: escopo da verificação é explícito" jqok -e \
+  '.relatorio_cortado and .verificacao_escopo == "relatorio_completo"
+    and .artefato != "" and (.relatorio | contains("doc1.txt:1") | not)' "$tmp/saida"
+
+# O pai limpa temporários mesmo quando o executor ignora SIGTERM.
+TEMPO_TOTAL=1 ESPERA_AGY=5 IGNORAR_TERM=1 RESPOSTA='Relatório em doc1.txt:1' delegar leitor "compare" \
+  --capacidade analise_documental --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "encerramento forçado: recusa estruturada" jqok -e '.motivo_codigo == "limite_tempo"' "$tmp/saida"
+conferir "encerramento forçado: diretório dos temporários removido" \
+  test ! -d "$(cat "$tmp/falso/temporario")"
+
+# Um executor sem resultado JSON não pode produzir uma entrega aceita.
+cat >"$tmp/bin/bash" <<'EOF'
+#!/bin/sh
+if [ -n "${JANGADA_DELEGAR_ROTEAMENTO_ID:-}" ]; then
+  echo 'resultado sem JSON'
+  exit 0
+fi
+exec /usr/bin/bash "$@"
+EOF
+chmod +x "$tmp/bin/bash"
+delegar leitor "resuma" --capacidade resumo_curto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "executor: resultado não JSON recusa" jqok -e \
+  '.motivo_codigo == "erro_execucao" and .tentativas[0].destino == "local"
+    and .tentativas[0].chamadas == null' "$tmp/saida"
+rm -f "$tmp/bin/bash"
+
+printf '\377\n' >"$tmp/projeto/binario.txt"
+printf 'Referência em binario.txt:1\n' >"$ollama_resp"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "resuma" --capacidade resumo_curto \
+  --json --arquivos "$tmp/projeto/binario.txt"
+conferir "fonte: codificação inválida reprova saída" jqok -e \
+  '.tentativas[0].motivo_codigo == "saida_invalida"' "$tmp/saida"
+
+if command -v pdftotext >/dev/null; then
+  python3 - "$tmp/projeto/fonte.pdf" <<'PY'
+import pathlib
+import sys
+
+conteudo = b"BT /F1 12 Tf 72 720 Td (Fonte de teste.) Tj ET"
+objetos = [
+    b"<< /Type /Catalog /Pages 2 0 R >>",
+    b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    b"<< /Length " + str(len(conteudo)).encode() + b" >>\nstream\n" + conteudo + b"\nendstream",
+]
+pdf = b"%PDF-1.4\n"
+posicoes = [0]
+for i, objeto in enumerate(objetos, 1):
+    posicoes.append(len(pdf))
+    pdf += f"{i} 0 obj\n".encode() + objeto + b"\nendobj\n"
+xref = len(pdf)
+pdf += f"xref\n0 {len(posicoes)}\n0000000000 65535 f \n".encode()
+pdf += b"".join(f"{p:010d} 00000 n \n".encode() for p in posicoes[1:])
+pdf += f"trailer\n<< /Size {len(posicoes)} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+pathlib.Path(sys.argv[1]).write_bytes(pdf)
+PY
+  printf 'Referência em fonte.pdf, p. 1\n' >"$ollama_resp"
+  OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "resuma" --capacidade resumo_curto \
+    --json --arquivos "$tmp/projeto/fonte.pdf"
+  conferir "PDF: extrai e valida página no fluxo completo" jqok -e '.verificacao == "referencias_validas"' "$tmp/saida"
+else
+  echo "pulado PDF no fluxo completo: pdftotext ausente"
+fi
+
+# A contagem do painel é por registro, mas o consumo não duplica o histórico.
+printf 'Relatório sem referência\n' >"$ollama_resp"
+RESPOSTA='Relatório em doc1.txt:1' OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "resuma" \
+  --capacidade resumo_curto --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+id_roteamento="$(jq -r '.roteamento_id' "$tmp/saida")"
+jq -c --arg id "$id_roteamento" 'select(.roteamento_id == $id)' "$reg" >"$tmp/roteamento.jsonl"
+painel_roteamento() {
+  python3 - "$repo_jangada" "$tmp/roteamento.jsonl" "$1" <<'PY'
+import importlib.util
+import pathlib
+import sys
+
+sys.dont_write_bytecode = True
+modulos = {}
+for nome in ("metricas", "subagentes"):
+    spec = importlib.util.spec_from_file_location(nome, pathlib.Path(sys.argv[1]) / f"default/painel/{nome}.py")
+    modulo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modulo)
+    modulos[nome] = modulo
+delegacoes = modulos["subagentes"].delegacoes(sys.argv[2])
+assert len(delegacoes) == int(sys.argv[3])
+assert len({d["roteamento_id"] for d in delegacoes}) == 1
+consumo, _ = modulos["metricas"].ollama(sys.argv[2])
+assert len(consumo) == 1
+assert consumo[0]["entrada_total"] == 120 and consumo[0]["saida"] == 45
+PY
+}
+conferir "painel: troca de executor conta duas entradas, sem duplicar consumo" painel_roteamento 2
+RESPOSTA='Relatório sem referência' OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "resuma" \
+  --capacidade resumo_curto --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+id_roteamento="$(jq -r '.roteamento_id' "$tmp/saida")"
+jq -c --arg id "$id_roteamento" 'select(.roteamento_id == $id)' "$reg" >"$tmp/roteamento.jsonl"
+conferir "painel: falha total conta executores e recusa final, sem duplicar consumo" painel_roteamento 3
 
 echo
 if ((falhas)); then

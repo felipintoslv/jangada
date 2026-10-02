@@ -134,10 +134,12 @@ destino. A autorização não vence `JANGADA_DELEGAR=local`. Sem autorização,
 a seleção descarta o agy; uma falha local nunca autoriza envio remoto.
 `--destino` explícito restringe a seleção a esse destino.
 
-Cada candidato é tentado uma vez. Indisponibilidade, cota desconhecida ou
-insuficiente, contexto insuficiente e saída inválida permitem tentar o
-próximo destino autorizado. Negação de ferramentas, ausência de confiança
-ou de proteção do leitor interrompem a seleção.
+Cada candidato é tentado uma vez. Permitem tentar o próximo destino
+autorizado: `indisponivel`, `modelo_ausente`, `ocupado`, `cota_desconhecida`,
+`cota_insuficiente`, `contexto_insuficiente`, `saida_invalida` e
+`erro_execucao`. Isso inclui jogo aberto, vaga ocupada, modelo concorrente,
+falha de chamada e tempo esgotado de uma chamada. Negação de ferramentas,
+ausência de confiança ou de proteção do leitor interrompem a seleção.
 
 `JANGADA_DELEGAR_TEMPO_TOTAL` limita a seleção e seus executores a 600
 segundos. `JANGADA_DELEGAR_CHAMADAS_MAX` limita as chamadas aos modelos a
@@ -147,15 +149,23 @@ total, mas não na contagem de chamadas ao modelo.
 Se o executor ignorar a interrupção, recebe encerramento forçado após
 mais 2 segundos.
 
-Antes de gravar ou entregar o relatório, a verificação exige uma referência
+Antes de gravar ou entregar o relatório completo, a verificação exige uma referência
 a cada fonte fornecida, em linha ou página existente. Nomes de arquivo
 ambíguos exigem o caminho. Essa conferência não comprova fidelidade nem
 aprova conclusões. Sem saída válida, recusa com código 4.
+O corte por palavras pode omitir referências na prévia. Nesse caso, leia
+o arquivo completo indicado; a verificação vale para esse arquivo.
 
 `--json` devolve o relatório, capacidade, decisão, motivos e tentativas em
-JSON. O `roteamento_id` reúne os registros dos executores da mesma seleção.
+JSON. `verificacao_escopo` identifica o relatório completo;
+`relatorio_cortado` e `artefato` identificam a prévia e seu arquivo completo.
+O `roteamento_id` reúne os registros dos executores da mesma seleção.
 As tentativas anteriores aparecem no resultado do executor seguinte. Se o
 tempo interromper um executor, seu número de chamadas fica desconhecido.
+O painel mantém a contagem por registro: cada executor e a recusa final
+da seleção são entradas distintas. Ele não agrupa pedidos por
+`roteamento_id`. As chamadas locais são medidas individualmente, sem
+somar de novo o histórico repetido em `tentativas`.
 
 ```mermaid
 flowchart LR

@@ -58,6 +58,11 @@ Uma consulta de cota que falha não pode reutilizar o valor expirado.
 O delegador valida a fração de `gemini-5h` e recusa quando não consegue
 atualizá-la. Consumo de tokens do Claude não comprova cota restante.
 
+Se testes de sinais passam isolados, mas falham na suíte, compare com
+`env --default-signal=INT,QUIT testes/verificar.sh`. Essa chamada reinicializa
+os sinais herdados e mantém todas as verificações. Investigue qualquer
+falha que persistir.
+
 | Peça | Papel |
 |---|---|
 | `jangada-agente` | escolhe projeto, cria worktree `agente/<nome>` e abre o agente numa sessão `tmux -L jangada`; `--prompt`/`--prompt-arquivo` já entregam a tarefa, `--perfil` escolhe o agente, `--sem-isolar` abre fora do bubblewrap |
