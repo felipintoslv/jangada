@@ -11,6 +11,7 @@ import sys
 
 sys.dont_write_bytecode = True
 from estado import Estado
+from executor import executar
 
 
 def especificacoes(caminho, projeto):
@@ -44,6 +45,11 @@ def main():
     fila.add_argument('--projeto', type=pathlib.Path)
     fila.add_argument('--importar', type=pathlib.Path)
     fila.add_argument('--json', action='store_true')
+    execucao = comandos.add_parser('executar', help='executa tarefas elegíveis sem aprová-las')
+    execucao.add_argument('--projeto', type=pathlib.Path)
+    execucao.add_argument('--perfil', choices=['economico', 'balanced', 'quality', 'offline'], default='balanced')
+    execucao.add_argument('--limite', type=int, default=1)
+    execucao.add_argument('--permitir-remoto', action='store_true')
     tarefa = comandos.add_parser('task', help='altera somente o estado da tarefa')
     tarefa.add_argument('--projeto', type=pathlib.Path)
     tarefa.add_argument('id')
@@ -75,6 +81,10 @@ def main():
                 for item in tarefas:
                     spec = item['especificacao']
                     print(f'{item["id"]}\t{item["status"]}\t{spec["capacidade"]}\t{item["tentativas"]} tentativa(s)')
+        elif args.comando == 'executar':
+            resultados = executar(estado, projeto, pathlib.Path(os.environ['JANGADA_PATH']),
+                                  args.perfil, args.limite, args.permitir_remoto)
+            print(json.dumps({'projeto': str(projeto), 'resultados': resultados}, ensure_ascii=False))
         else:
             if args.acao == 'revisar':
                 if not args.parecer or not (args.aprovar or args.reprovar):

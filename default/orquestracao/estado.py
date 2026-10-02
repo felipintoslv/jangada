@@ -171,6 +171,19 @@ class Estado:
             resultado.append(item)
         return resultado
 
+    def consumo(self, identificador):
+        chamadas, segundos = 0, 0
+        for linha in self.db.execute('SELECT dados FROM eventos WHERE tarefa=? AND evento=?',
+                                     (identificador, 'execucao_encerrada')):
+            metrica = json.loads(linha['dados'])['resultado'].get('metricas', {})
+            quantidade = metrica.get('chamadas', 0)
+            if quantidade is None:
+                chamadas = None
+            elif chamadas is not None:
+                chamadas += quantidade
+            segundos += metrica.get('segundos', 0)
+        return {'chamadas': chamadas, 'segundos': segundos}
+
     def reservar(self, duracao=660):
         if not isinstance(duracao, (int, float)) or not math.isfinite(duracao) or duracao <= 0:
             raise ValueError('duração da reserva inválida')
@@ -219,6 +232,18 @@ class Estado:
             raise ValueError('artefato deve ser texto')
         if status == 'REVIEW_REQUIRED' and (artefato is None or not artefato.strip()):
             raise ValueError('revisão exige artefato não vazio')
+        if not isinstance(resultado, dict):
+            raise ValueError('resultado deve ser um objeto')
+        metricas = resultado.get('metricas', {})
+        if not isinstance(metricas, dict):
+            raise ValueError('métricas devem ser um objeto')
+        if metricas.get('chamadas') is not None and (
+            type(metricas['chamadas']) is not int or metricas['chamadas'] < 0
+        ):
+            raise ValueError('quantidade de chamadas inválida')
+        segundos = metricas.get('segundos', 0)
+        if type(segundos) is not int or segundos < 0:
+            raise ValueError('tempo de execução inválido')
         serializar(resultado)
         with self.transacao():
             tarefa = self.db.execute('SELECT * FROM tarefas WHERE id=?', (identificador,)).fetchone()
@@ -246,6 +271,8 @@ class Estado:
                         pathlib.Path(temporario).unlink(missing_ok=True)
             self.db.execute('UPDATE tarefas SET status=?,resultado=?,artefato=?,hash_artefato=?,dono=NULL,prazo=NULL,atualizado=? WHERE id=?',
                             (status, serializar(resultado), hash_artefato, hash_artefato, time.time(), identificador))
+            if resultado.get('execucao_iniciada') is False:
+                self.db.execute('UPDATE tarefas SET tentativas=tentativas-1 WHERE id=?', (identificador,))
             self.evento(identificador, 'execucao_encerrada', {'status': status, 'resultado': resultado, 'artefato': hash_artefato})
 
     def revisar(self, identificador, parecer, aprovar):

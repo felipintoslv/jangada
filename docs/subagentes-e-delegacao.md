@@ -360,9 +360,41 @@ Após conferir o artefato e as fontes, o responsável registra
 registro é uma anotação editável do projeto. O comando não autentica o
 revisor nem impede que o autor registre sua própria aprovação. Portanto,
 `COMPLETED` não comprova revisão independente e não autoriza integração,
-envio externo ou operação irreversível. A fila registra tarefas e artefatos;
-não executa modelos nem substitui `jangada-validar`.
+envio externo ou operação irreversível. A revisão da fila não substitui
+`jangada-validar`.
 Tarefas em revisão não podem ser pausadas para contornar a conferência.
+
+### Execução da fila
+
+`jangada-executar --limite 10` executa até dez tarefas elegíveis em sequência.
+Usa `jangada-delegar`, sem interpretar comandos no plano. Atende `leitor`
+com `leitura_documental`, `resumo_curto` ou `analise_documental`, risco até 2
+e qualidade `low` ou `medium`. Tarefas que exigem um principal aguardam em
+`WAITING_REVIEWER`; capacidades sem adaptador aguardam em `WAITING_PROVIDER`.
+
+As fontes são conferidas antes e depois da chamada. Artefatos das dependências
+concluídas entram como fontes adicionais, com conferência de integridade.
+O relatório completo passa pela verificação de referências e requisitos;
+depois fica em `REVIEW_REQUIRED`, sem aprovação automática do conteúdo.
+
+`max_chamadas` e `tempo_total` valem para todas as tentativas da tarefa.
+Interrupção ou resposta sem contagem confiável impede repetição automática.
+Recusa antes de qualquer chamada não consome tentativa. Cota insuficiente
+ou desconhecida mantém `WAITING_QUOTA` até uma retomada explícita.
+
+Perfis disponíveis:
+
+| Perfil | Seleção |
+|---|---|
+| `balanced` | política existente por capacidade |
+| `economico` | mesma política existente, limitada aos trabalhadores local e agy |
+| `quality` | agy explícito, com revisão do conteúdo pendente |
+| `offline` | somente local, sem permissão remota |
+
+Envio remoto exige `--permitir-remoto`, `permitir_remoto: true` no plano e
+perfil de sessão compatível. Os perfis não ampliam as permissões da sessão.
+Nenhum deles chama Claude ou Codex como trabalhador externo. Os registros
+de cada tentativa ficam no resultado da tarefa e no histórico persistente.
 
 ## Registro e medição
 
