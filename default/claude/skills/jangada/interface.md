@@ -21,7 +21,14 @@
   plano congela o contador da barra onde houve o clique. Só `--parar` e
   `toggle`, que terminam na hora, ficam sem ele; o `testes/barra.sh` confere.
 - Para atualizar um módulo na hora, o módulo declara `"signal": N` e quem
-  mudou o estado roda `pkill -RTMIN+N -x waybar`.
+  mudou o estado roda `pkill -RTMIN+N -x waybar`. O sinal 10 fica reservado
+  às sessões e ao contador da Central de Tarefas. O contador consulta a cada
+  dez segundos e não importa Qt; a janela consulta a cada dois segundos.
+- A Central de Tarefas usa soquete de arquivo numa pasta 0700 em
+  `$XDG_RUNTIME_DIR/jangada-tarefas`, oculta pelo runtime privado do isolamento.
+  Soquete abstrato ignora permissões de arquivo e fica acessível no espaço
+  de rede compartilhado. O segundo clique exige confirmação da janela.
+  `--mostrar` usa QCoreApplication para encaminhar sem inicializar a tela.
 - A barra é gerada pelo `jangada-barra`, que inclui o `config.jsonc` em uso e
   aplica `JANGADA_BARRA_POSICAO`.
 - No módulo `privacy`, a folga interna (padding) fica em `#privacy-item`, não

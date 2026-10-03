@@ -574,11 +574,12 @@ existentes. O Pescador recebe sua janela geral, sem a conversa selecionada.
 Aprovações nativas e envio de respostas ficam fora desta versão.
 
 Na Waybar, `custom/agentes` passa a contar tarefas, andamento, pendências e
-interrupções. Clique abre ou foca a central existente; botão direito abre
+interrupções. O contador consulta a cada dez segundos, com atualização imediata
+pelo sinal dos hooks. Clique abre ou foca a central existente; botão direito abre
 Nova tarefa. O sinal 10 continua reservado aos estados das sessões.
 Falhas aparecem como erro, sem um zero que pareça uma consulta bem-sucedida.
 
-### Instalação depois da revisão
+### Instalação e atualização
 
 A dependência `python-pyqt6` já pertence à etapa 10 da instalação.
 Uma instalação nova usa os padrões da etapa 40. Em instalações existentes,
@@ -587,8 +588,7 @@ A migração guarda cópia de segurança e altera apenas os comandos anteriores
 conhecidos em uma cópia própria da Waybar, preservando comentários e controles
 personalizados. Sem cópia própria, a barra usa o padrão atualizado.
 
-Depois de integrar e disponibilizar os commits pelo fluxo habitual, rode
-`jangada-update` na instalação e `jangada-barra` para carregar o módulo.
+Rode `jangada-update` na instalação e `jangada-barra` para carregar o módulo.
 Se a dependência estiver ausente, instale `python-pyqt6` antes de abrir a central.
 Para conferir a migração sem aplicar, na cópia instalada:
 

@@ -50,7 +50,7 @@ opcao="$(printf '%s\n' \
 case "$opcao" in
   "Jangada Shell (Console de agentes)") exec "$b/jangada-shell" --janela ;;
   "Novo agente") exec "$b/jangada-agente" --janela ;;
-  "Central de tarefas") exec "$b/jangada-agentes" --janela ;;
+  "Central de tarefas") exec "$b/jangada-tarefas" ;;
   "Central anterior de agentes") exec "$b/jangada-agentes" --painel-anterior ;;
   "Restaurar agentes interrompidos")
     r="$("$b/jangada-agentes" --restaurar 2>&1 | tail -n1)"

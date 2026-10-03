@@ -1,65 +1,21 @@
-"""Janela companheira experimental. Sem instalação ou terminal embutido."""
-import argparse
-from dataclasses import dataclass, replace
+"""Janela da central de tarefas e acompanhamento das sessões."""
+from dataclasses import replace
 from datetime import datetime
 import html
-import hashlib
-import json
 import os
 from pathlib import Path
-import subprocess
-import sys
 import uuid
+
 from PyQt6.QtCore import QProcess, QProcessEnvironment, QTimer, Qt
 from PyQt6.QtGui import QColor
-from PyQt6.QtNetwork import QLocalServer, QLocalSocket
-from PyQt6.QtWidgets import QApplication, QComboBox, QDialog, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPlainTextEdit, QPushButton, QSplitter, QTabWidget, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
-import re
-import stat
+from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout,
+                            QHBoxLayout, QLabel, QLineEdit, QMainWindow,
+                            QPlainTextEdit, QPushButton, QSplitter, QTabWidget,
+                            QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
+from dados import (CORES, LIMITE, NOME, ORDEM, ROTULOS, Sessao,
+                   estado_exibido, idade, ler_lista, simuladas)
 
-NOME = re.compile(r"[A-Za-z0-9_.-]+")
-LIMITE = 1024 * 1024
-CORES = {'aguardando': '#f2c66d', 'trabalhando': '#85baff', 'concluido': '#96d6a8', 'interrompido': '#f09d93'}
-ROTULOS = {'aguardando': 'Precisa de você', 'trabalhando': 'Em andamento', 'concluido': 'Turno encerrado', 'interrompido': 'Interrompida'}
-ORDEM = {'aguardando': 0, 'interrompido': 1, 'trabalhando': 2, 'concluido': 4}
-AGENTES = ('claude', 'codex', 'agy')
-
-def estado_exibido(sessao):
-    return 'trabalhando' if sessao.estado in ('ativo', 'iniciado') else sessao.estado
-
-def idade(atualizado, agora=None):
-    try:
-        data = datetime.fromisoformat(atualizado)
-        agora = agora or datetime.now().astimezone()
-        if data.tzinfo is None:
-            data = data.astimezone()
-        segundos = (agora - data).total_seconds()
-        if segundos < -60:
-            return 'Horário futuro'
-        if segundos < 60:
-            return 'Agora'
-        minutos = int(segundos // 60)
-        if minutos < 60:
-            return f'Há {minutos} min'
-        horas = minutos // 60
-        dias = horas // 24
-        return f'Há {horas} h' if horas < 24 else f'Há {dias} ' + ('dia' if dias == 1 else 'dias')
-    except (ValueError, TypeError, OverflowError):
-        return 'Sem horário'
-
-def resumo_barra(sessoes):
-    contagem = {estado: sum((estado_exibido(s) == estado for s in sessoes.values())) for estado in CORES}
-    partes = [f'Tarefas {len(sessoes)}']
-    for estado, rotulo in (('trabalhando', 'em andamento'), ('aguardando', 'precisam de você'), ('interrompido', 'interrompidas')):
-        if contagem[estado]:
-            if estado == 'aguardando' and contagem[estado] == 1:
-                rotulo = 'precisa de você'
-            if estado == 'interrompido' and contagem[estado] == 1:
-                rotulo = 'interrompida'
-            partes.append(f'{contagem[estado]} {rotulo}')
-    classe = next((e for e in ORDEM if contagem[e]), 'vazio' if not sessoes else 'ativo')
-    linhas = [f'{s.projeto} · {(s.tarefa.splitlines()[0] if s.tarefa else s.nome)} [{ROTULOS.get(estado_exibido(s), estado_exibido(s))}]' for s in sorted(sessoes.values(), key=lambda s: (ORDEM.get(estado_exibido(s), 3), s.projeto, s.nome))]
-    return {'text': ' · '.join(partes), 'class': classe, 'tooltip': html.escape('\n'.join(linhas + ['Clique: central de tarefas · Clique direito: nova tarefa']))}
+AGENTES = ("claude", "codex", "agy")
 
 class NovaTarefa(QDialog):
 
@@ -145,72 +101,13 @@ class NovaTarefa(QDialog):
             if not iniciado:
                 self.erro.setText('Não foi possível iniciar jangada-agente. Confira --jangada.')
                 return
-            self.erro.setText('Abertura solicitada. Confira no terminal se a tarefa iniciou. Seu pedido foi preservado.')
+            self.erro.setText('Abertura solicitada. Se o agente falhar ao iniciar, o erro aparece no terminal. Confira se a tarefa entrou na lista. Seu pedido foi preservado.')
         self.enviar.setEnabled(False)
 
     def reeditar(self, *_):
         self.enviar.setEnabled(True)
         self.erro.clear()
 
-@dataclass
-class Sessao:
-    nome: str
-    estado: str
-    dir: str
-    atualizado: str
-    ramo: str
-    tarefa: str
-    agente: str = 'Não informado'
-    projeto: str = 'Sem projeto'
-    mensagem: str = ''
-    inicio: str = ''
-
-def texto(valor):
-    return valor[:16000] if isinstance(valor, str) else ''
-
-def registro(pasta, nome):
-    try:
-        fd = os.open(pasta / (nome + ".json"), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-        with os.fdopen(fd, "rb") as arquivo:
-            if not stat.S_ISREG(os.fstat(arquivo.fileno()).st_mode):
-                return {}
-            bruto = arquivo.read(LIMITE + 1)
-        if len(bruto) > LIMITE:
-            return {}
-        dados = json.loads(bruto)
-        return dados if isinstance(dados, dict) else {}
-    except (OSError, ValueError, UnicodeError):
-        return {}
-
-
-def ler_lista(saida, pasta):
-    sessoes = {}
-    for linha in saida.splitlines():
-        campos = linha.split('\t')
-        if len(campos) != 6:
-            raise ValueError('A listagem recebida não tem os seis campos esperados.')
-        estado, nome, diretorio, atualizado, ramo, tarefa = campos
-        if not NOME.fullmatch(nome) or nome in ('.', '..'):
-            raise ValueError('A listagem contém um nome de sessão inválido.')
-        dados = registro(pasta, nome)
-        raiz = texto(dados.get('raiz')) or diretorio
-        inicio = texto(dados.get('desde'))
-        sessoes[nome] = Sessao(nome, estado, diretorio, atualizado, html.unescape(ramo), texto(dados.get('tarefa')) or html.unescape(tarefa), texto(dados.get('agente')) or 'Não informado', Path(raiz).name or 'Sem projeto', texto(dados.get('mensagem')), inicio)
-    return sessoes
-
-def simuladas(passo):
-    estados = ['aguardando', 'trabalhando', 'concluido', 'interrompido']
-    tarefas = ['Conferir a proposta de interface', 'Ajustar o roteamento de tarefas', 'Revisar as referências do artigo', 'Retomar a revisão da instalação']
-    resultado = {}
-    for i, nome in enumerate(['jangada--interface', 'jangada--router', 'artigo--fontes', 'jangada--instalacao']):
-        if passo % 4 == 3 and i == 2:
-            continue
-        estado = estados[i]
-        if i == 1:
-            estado = ['trabalhando', 'aguardando', 'concluido', 'trabalhando'][passo % 4]
-        projeto = 'artigo' if i == 2 else 'jangada'
-        resultado[nome] = Sessao(nome, estado, f'/exemplo/{projeto}', datetime.now().astimezone().isoformat(), 'agente/' + nome.split('--')[1], tarefas[i], ['claude', 'codex', 'agy', 'claude'][i], projeto, ['Podemos começar pelo contador da Waybar?', 'Ajustando o roteamento de tarefas.', 'Referências conferidas. Quer acrescentar alguma fonte?', 'A sessão foi interrompida e pode ser retomada.'][i])
-    return resultado
 
 class Janela(QMainWindow):
 
@@ -606,94 +503,3 @@ class Janela(QMainWindow):
                 processo.kill()
                 processo.waitForFinished(1000)
         evento.accept()
-
-def barra(args):
-    if not args.real:
-        return resumo_barra(simuladas(0))
-    jangada = Path(args.jangada or Path.home() / '.local/share/jangada').expanduser().resolve()
-    estado = Path(args.estado or Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'jangada/agentes').expanduser()
-    try:
-        ambiente = dict(os.environ, JANGADA_PATH=str(jangada),
-                        XDG_STATE_HOME=str(estado.parent.parent))
-        resposta = subprocess.run([str(jangada / 'bin/jangada-agentes'), '--lista'], capture_output=True, timeout=10, env=ambiente, check=True)
-        if len(resposta.stdout) > LIMITE:
-            raise ValueError('A listagem excedeu o limite de leitura.')
-        return resumo_barra(ler_lista(resposta.stdout.decode('utf-8', 'replace'), estado))
-    except (OSError, ValueError, subprocess.SubprocessError):
-        return {'text': 'Tarefas · erro', 'class': 'erro', 'tooltip': 'Não foi possível consultar sessões. Clique para abrir a central e conferir o erro.'}
-
-def encaminhar(nome, nova=False):
-    socket = QLocalSocket()
-    socket.setSocketOptions(QLocalSocket.SocketOption.AbstractNamespaceOption)
-    socket.connectToServer(nome)
-    if not socket.waitForConnected(500):
-        return False
-    socket.write(b'nova\n' if nova else b'mostrar\n')
-    enviado = socket.waitForBytesWritten(1000)
-    socket.disconnectFromServer()
-    return enviado
-
-def receber(servidor, janela):
-    while servidor.hasPendingConnections():
-        socket = servidor.nextPendingConnection()
-        buffer = bytearray()
-
-        def ler(socket=socket, buffer=buffer):
-            buffer.extend(bytes(socket.readAll()))
-            if len(buffer) > 32:
-                socket.disconnectFromServer()
-                return
-            if b'\n' not in buffer:
-                return
-            janela.showNormal()
-            janela.raise_()
-            janela.activateWindow()
-            if os.environ.get('HYPRLAND_INSTANCE_SIGNATURE'):
-                QProcess.startDetached('hyprctl', ['dispatch', 'focuswindow', f'pid:{os.getpid()}'])
-            if bytes(buffer).split(b'\n', 1)[0] == b'nova':
-                janela.nova_tarefa()
-            socket.disconnectFromServer()
-        socket.readyRead.connect(ler)
-        socket.disconnected.connect(socket.deleteLater)
-        if socket.bytesAvailable():
-            ler()
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--real', action='store_true', help='Consultar e abrir sessões reais')
-    parser.add_argument('--jangada', type=Path, help='Pasta do jangada; padrão: ~/.local/share/jangada')
-    parser.add_argument('--estado', type=Path, help='Pasta dos JSON de sessões; padrão: estado XDG do jangada/agentes')
-    parser.add_argument('--waybar', action='store_true', help='Emitir contador JSON e sair')
-    parser.add_argument('--mostrar', action='store_true', help='Abrir ou focar a central em segundo plano')
-    parser.add_argument('--nova', action='store_true', help='Abrir o formulário de nova tarefa')
-    args = parser.parse_args()
-    if args.waybar:
-        print(json.dumps(barra(args), ensure_ascii=False))
-        return
-    app = QApplication(sys.argv[:1])
-    app.setApplicationName('org.jangada.tarefas')
-    app.setDesktopFileName('org.jangada.tarefas')
-    jangada = Path(args.jangada or Path.home() / '.local/share/jangada').expanduser().resolve()
-    estado = Path(args.estado or Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'jangada/agentes').expanduser().resolve()
-    identidade = f'{os.getuid()}:{Path(__file__).resolve()}:tarefas-v0.1:{args.real}:{jangada}:{estado}'
-    nome = 'jangada-tarefas-' + hashlib.sha256(identidade.encode()).hexdigest()[:24]
-    if encaminhar(nome, args.nova):
-        return
-    if args.mostrar:
-        argumentos = [a for a in sys.argv[1:] if a != '--mostrar']
-        subprocess.Popen([sys.executable, str(Path(__file__).resolve()), *argumentos], start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return
-    servidor = QLocalServer(app)
-    servidor.setSocketOptions(QLocalServer.SocketOption.AbstractNamespaceOption)
-    if not servidor.listen(nome):
-        if encaminhar(nome, args.nova):
-            return
-        parser.exit(1, 'Não foi possível abrir a central.\n')
-    janela = Janela(args.real, args.jangada, args.estado)
-    servidor.newConnection.connect(lambda: receber(servidor, janela))
-    janela.show()
-    if args.nova:
-        janela.nova_tarefa()
-    sys.exit(app.exec())
-if __name__ == '__main__':
-    main()

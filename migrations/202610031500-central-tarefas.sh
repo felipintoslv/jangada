@@ -49,7 +49,7 @@ for i, token in enumerate(tokens[:-2]):
     intervalo = campos.get('interval')
     if contador and json.loads(contador[0]) in (trocas['exec'][0], trocas['exec'][1]):
         if intervalo and intervalo[0] == '30':
-            edicoes.append((intervalo.start(), intervalo.end(), '2'))
+            edicoes.append((intervalo.start(), intervalo.end(), '10'))
     break
 for de, ate, valor in sorted(edicoes, reverse=True):
     texto = texto[:de] + valor + texto[ate:]

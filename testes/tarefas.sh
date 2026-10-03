@@ -29,7 +29,7 @@ bash "$migracao"
 grep -q '// manter meu comentário' "$alvo"
 grep -q 'jangada-tarefas --waybar' "$alvo"
 grep -q 'jangada-tarefas --nova' "$alvo"
-grep -q '"interval": 2' "$alvo"
+grep -q '"interval": 10' "$alvo"
 [[ "$(compgen -G "$alvo.jangada-*.bak" | wc -l)" == 1 ]]
 cmp "$alvo".jangada-*.bak "$tmp/antes"
 cp "$alvo" "$tmp/depois"
@@ -40,6 +40,11 @@ printf '{"custom/agentes":{"exec":"pessoal","on-click":"pessoal","interval":45}}
 cp "$alvo" "$tmp/pessoal"
 bash "$migracao"
 cmp "$alvo" "$tmp/pessoal"
+sed 's/"interval": 30/"interval": 45/' "$tmp/antes" >"$alvo"
+bash "$migracao"
+grep -q 'jangada-tarefas --waybar' "$alvo"
+grep -q '"interval": 45' "$alvo"
+grep -q '// manter meu comentário' "$alvo"
 rm "$alvo"
 bash "$migracao"
 [[ ! -e "$alvo" ]]
@@ -74,3 +79,24 @@ grep -qx -- '--waybar' "$tmp/saida"
 JANGADA_PATH="$tmp/jangada" bin/jangada-tarefas >"$tmp/saida"
 grep -qx -- '--painel-anterior' "$tmp/saida"
 echo 'migração, reversão e leitura das interrupções passaram'
+
+echo JANGADA_CENTRAL=agente >"$XDG_CONFIG_HOME/jangada/jangada.conf"
+bash -c 'source "$JANGADA_PATH/bin/jangada-config"; [[ "$JANGADA_CENTRAL" == tarefas ]]' 2>"$tmp/aviso"
+grep -q 'JANGADA_CENTRAL inválido' "$tmp/aviso"
+python3 - "$repo_jangada/default/tarefas/central.py" <<'PY'
+import contextlib
+import io
+import json
+import runpy
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(sys.argv[1]).parent))
+sys.modules['PyQt6'] = None
+script = sys.argv[1]
+sys.argv = [script, '--waybar']
+saida = io.StringIO()
+with contextlib.redirect_stdout(saida):
+    runpy.run_path(script, run_name='__main__')
+assert json.loads(saida.getvalue())['class'] == 'aguardando'
+print('contador funciona sem Qt')
+PY

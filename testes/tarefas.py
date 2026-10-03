@@ -8,13 +8,9 @@ try:
     import PyQt6
 except ImportError:
     print('PyQt6 ausente; testes gráficos da central ignorados')
-    sys.exit(0)
-"""Verificação da janela com dados e comando fictícios."""
+    sys.exit(1 if os.environ.get('CI') else 0)
 import json
-import os
-from pathlib import Path
 import subprocess
-import sys
 import tempfile
 import time
 import unittest
@@ -25,7 +21,10 @@ from PyQt6.QtNetwork import QLocalServer
 from PyQt6.QtGui import QTextDocument
 from PyQt6.QtWidgets import QApplication
 import janela
-from janela import Janela, barra, encaminhar, idade, ler_lista, receber, registro, resumo_barra
+from janela import Janela
+import central
+from central import encaminhar, receber
+from dados import barra, idade, ler_lista, registro, resumo_barra
 from argparse import Namespace
 APP = QApplication([])
 
@@ -43,6 +42,8 @@ class Interface(unittest.TestCase):
     def setUp(self):
         self.pasta = tempfile.TemporaryDirectory()
         self.raiz = Path(self.pasta.name)
+        self.runtime_anterior = os.environ.get('XDG_RUNTIME_DIR')
+        os.environ['XDG_RUNTIME_DIR'] = str(self.raiz)
         self.estado = self.raiz / 'estado'
         self.estado.mkdir()
         self.bin = self.raiz / 'bin'
@@ -129,6 +130,10 @@ class Interface(unittest.TestCase):
     def tearDown(self):
         self.janela.close()
         APP.processEvents()
+        if self.runtime_anterior is None:
+            os.environ.pop('XDG_RUNTIME_DIR', None)
+        else:
+            os.environ['XDG_RUNTIME_DIR'] = self.runtime_anterior
         self.pasta.cleanup()
 
     def test_selecao_detalhes_e_desaparecimento(self):
@@ -310,8 +315,7 @@ class Interface(unittest.TestCase):
 
     def test_segundo_clique_reutiliza_janela_e_abre_formulario(self):
         servidor = QLocalServer(APP)
-        servidor.setSocketOptions(QLocalServer.SocketOption.AbstractNamespaceOption)
-        nome = 'jangada-teste-' + uuid.uuid4().hex
+        nome = str(self.raiz / ('jangada-teste-' + uuid.uuid4().hex))
         self.assertTrue(servidor.listen(nome))
         servidor.newConnection.connect(lambda: receber(servidor, self.janela))
         try:
@@ -328,9 +332,31 @@ class Interface(unittest.TestCase):
             servidor.close()
             servidor.deleteLater()
 
+    def test_soquete_sem_confirmacao_nao_indica_sucesso(self):
+        servidor = QLocalServer(APP)
+        nome = str(self.raiz / 'sem-confirmacao')
+        self.assertTrue(servidor.listen(nome))
+        try:
+            self.assertFalse(encaminhar(nome))
+        finally:
+            servidor.close()
+
+    def test_pasta_do_soquete_rejeita_link_e_permissao_aberta(self):
+        pasta = self.raiz / 'jangada-tarefas'
+        pasta.symlink_to(self.estado, target_is_directory=True)
+        with self.assertRaises(ValueError):
+            central.nome_soquete(self.raiz, self.estado, True)
+        pasta.unlink()
+        pasta.mkdir(mode=0o755)
+        with self.assertRaises(ValueError):
+            central.nome_soquete(self.raiz, self.estado, True)
+        pasta.chmod(0o700)
+        nome = central.nome_soquete(self.raiz, self.estado, True)
+        self.assertEqual(Path(nome).parent, pasta)
+
     def test_cli_waybar_sem_display(self):
         ambiente = dict(os.environ, QT_QPA_PLATFORM='inexistente')
-        resposta = subprocess.run([sys.executable, str(Path(janela.__file__)), '--waybar'], capture_output=True, text=True, env=ambiente, timeout=5)
+        resposta = subprocess.run([sys.executable, str(Path(central.__file__)), '--waybar'], capture_output=True, text=True, env=ambiente, timeout=5)
         self.assertEqual(resposta.returncode, 0, resposta.stderr)
         self.assertEqual(json.loads(resposta.stdout)['class'], 'aguardando')
 
@@ -362,13 +388,13 @@ class Interface(unittest.TestCase):
     def test_cli_reutiliza_processo_existente(self):
         pronta = self.raiz / 'pronta'
         nova = self.raiz / 'nova'
-        codigo = "\nfrom pathlib import Path\nimport os\nimport janela\nmostrar = janela.Janela.show\nformulario = janela.Janela.nova_tarefa\ndef show(self):\n    mostrar(self)\n    Path(os.environ['PILOTO_TESTE_PRONTA']).touch()\ndef nova_tarefa(self):\n    formulario(self)\n    Path(os.environ['PILOTO_TESTE_NOVA']).touch()\njanela.Janela.show = show\njanela.Janela.nova_tarefa = nova_tarefa\njanela.main()\n"
+        codigo = "\nfrom pathlib import Path\nimport os\nimport janela\nimport central\nmostrar = janela.Janela.show\nformulario = janela.Janela.nova_tarefa\ndef show(self):\n    mostrar(self)\n    Path(os.environ['PILOTO_TESTE_PRONTA']).touch()\ndef nova_tarefa(self):\n    formulario(self)\n    Path(os.environ['PILOTO_TESTE_NOVA']).touch()\njanela.Janela.show = show\njanela.Janela.nova_tarefa = nova_tarefa\ncentral.main()\n"
         argumentos = ['--real', '--jangada', str(self.raiz), '--estado', str(self.estado)]
         ambiente = dict(os.environ, PILOTO_TESTE_PRONTA=str(pronta), PILOTO_TESTE_NOVA=str(nova), PYTHONPATH=str(Path(janela.__file__).parent))
         processo = subprocess.Popen([sys.executable, '-c', codigo, *argumentos], env=ambiente, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             aguardar(pronta.exists)
-            resposta = subprocess.run([sys.executable, str(Path(janela.__file__)), *argumentos, '--mostrar', '--nova'], capture_output=True, timeout=4)
+            resposta = subprocess.run([sys.executable, str(Path(central.__file__)), *argumentos, '--mostrar', '--nova'], capture_output=True, timeout=4, env=dict(os.environ, QT_QPA_PLATFORM='inexistente'))
             self.assertEqual(resposta.returncode, 0, resposta.stderr)
             aguardar(nova.exists)
             self.assertIsNone(processo.poll())

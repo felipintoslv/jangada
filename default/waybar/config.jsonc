@@ -44,7 +44,7 @@
   "custom/agentes": {
     "exec": "$JANGADA_PATH/bin/jangada-tarefas --waybar",
     "return-type": "json",
-    "interval": 2,
+    "interval": 10,
     "signal": 10,
     "format": "{}",
     "on-click": "setsid -f $JANGADA_PATH/bin/jangada-tarefas",

@@ -73,6 +73,11 @@ if [[ -f "$JANGADA_CONFIG/jangada.conf" ]]; then
   done < <(sed -e 's/^[[:space:]]*#.*//' -e 's/[[:space:]]*$//' "$JANGADA_CONFIG/jangada.conf")
   unset _chave _valor
 fi
+case "$JANGADA_CENTRAL" in
+  tarefas|agentes) ;;
+  *) printf 'jangada: JANGADA_CENTRAL inválido (%s); usando tarefas.\n' "$JANGADA_CENTRAL" >&2
+     JANGADA_CENTRAL=tarefas ;;
+esac
 if [[ -z "$JANGADA_REPO" && -d "$JANGADA_PROJETOS/jangada/.git" ]]; then
   JANGADA_REPO="$JANGADA_PROJETOS/jangada"
 fi
