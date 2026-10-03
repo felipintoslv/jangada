@@ -200,6 +200,47 @@ class Execucao(unittest.TestCase):
             assumir_principal(self.estado, 'T1', self.projeto, 'codex')
         self.assertEqual(self.estado.listar()[0]['tentativas'], 0)
 
+    def test_principal_assume_esperas_sem_chamar_modelo_adicional(self):
+        self.estado.importar([self.tarefa('P', papel='arquiteto', capacidade='architecture', risco=3),
+                             self.tarefa('R', risco=3, qualidade='high')])
+        self.assertEqual([r['status'] for r in self.rodar(limite=2)], ['WAITING_PROVIDER', 'WAITING_REVIEWER'])
+        for identificador in ('P', 'R'):
+            reserva = assumir_principal(self.estado, identificador, self.projeto, 'claude', 'declarado')
+            self.assertEqual(reserva['status'], 'RUNNING')
+            self.assertEqual(reserva['modelo_declarado'], 'declarado')
+        self.assertFalse(self.registro.exists())
+
+    def test_principal_utf8_invalido_mantem_reserva_para_corrigir(self):
+        self.estado.importar([self.tarefa(risco=3)])
+        reserva = assumir_principal(self.estado, 'T1', self.projeto, 'codex')
+        relatorio = self.projeto / 'relatorio.md'
+        relatorio.write_bytes(b'\xff')
+        with self.assertRaisesRegex(ValueError, 'UTF-8'):
+            entregar_principal(self.estado, 'T1', reserva['dono'], self.projeto, self.raiz, relatorio)
+        self.assertEqual(self.estado.listar()[0]['status'], 'RUNNING')
+        self.assertEqual(self.estado.db.execute("SELECT COUNT(*) FROM eventos WHERE evento='relatorio_recusado'").fetchone()[0], 1)
+        relatorio.write_text(f'Regra descrita em {self.fonte}:1.')
+        resultado = entregar_principal(self.estado, 'T1', reserva['dono'], self.projeto, self.raiz, relatorio)
+        self.assertEqual(resultado['status'], 'REVIEW_REQUIRED')
+
+    def test_principal_prazo_expira_durante_gate_sem_persistir_saida(self):
+        self.estado.importar([self.tarefa(risco=3)])
+        reserva = assumir_principal(self.estado, 'T1', self.projeto, 'codex')
+        relatorio = self.projeto / 'relatorio.md'
+        relatorio.write_text(f'Regra em {self.fonte}:1.')
+        with patch('executor.time.time', return_value=reserva['prazo'] - 1) as relogio, \
+                patch('executor.importlib.util.spec_from_file_location'), \
+                patch('executor.importlib.util.module_from_spec') as gate:
+            def expirar(*_):
+                relogio.return_value = reserva['prazo'] + 1
+            gate.return_value.verificar.side_effect = expirar
+            with self.assertRaisesRegex(ValueError, 'reserva válida'):
+                entregar_principal(self.estado, 'T1', reserva['dono'], self.projeto, self.raiz, relatorio)
+        item = self.estado.listar()[0]
+        self.assertEqual(item['status'], 'RUNNING')
+        self.assertIsNone(item['artefato'])
+        self.assertTrue(relatorio.is_file())
+
     def test_principal_recusa_relatorio_simbolico_especial_ou_grande(self):
         self.estado.importar([self.tarefa(risco=3)])
         reserva = assumir_principal(self.estado, 'T1', self.projeto, 'codex')
@@ -227,6 +268,12 @@ class Execucao(unittest.TestCase):
             return subprocess.run([sys.executable, str(RAIZ / 'default/orquestracao/cli.py'), *args,
                                    '--projeto', str(self.projeto)], env=ambiente, capture_output=True, text=True, timeout=10)
         self.assertEqual(comando('fila', '--importar', str(plano)).returncode, 0)
+        for args in (('assumir', '--executor', 'claude', '--dono', 'indevido'),
+                     ('assumir', '--executor', 'claude', '--arquivo', str(plano)),
+                     ('entregar', '--dono', 'indevido', '--arquivo', str(plano), '--modelo', 'indevido'),
+                     ('entregar', '--dono', 'indevido', '--arquivo', str(plano), '--executor', 'codex')):
+            with self.subTest(args=args):
+                self.assertEqual(comando('task', 'T1', *args).returncode, 2)
         reserva = comando('task', 'T1', 'assumir', '--executor', 'claude')
         self.assertEqual(reserva.returncode, 0, reserva.stderr)
         relatorio = self.projeto / 'final.md'

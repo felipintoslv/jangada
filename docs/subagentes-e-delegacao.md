@@ -422,6 +422,13 @@ As fontes importadas continuam imutáveis; alterações de código exigem
 outro fluxo. `entregar` confere reserva, integridade das fontes e dependências,
 referências e requisitos. Preserva o relatório completo, limitado a 1 MiB,
 em `REVIEW_REQUIRED`; falha de formato ou integridade gera `REVISION_REQUIRED`.
+Recusas antes da validação do conteúdo, como arquivo fora do projeto,
+especial, simbólico, acima do limite ou sem UTF-8 válido, mantêm a reserva
+para corrigir o arquivo e entregar novamente dentro do prazo. A recusa
+por codificação fica registrada, sem copiar bytes inválidos para o estado.
+O prazo é conferido novamente ao persistir: se expirar durante a validação,
+a entrega inteira é recusada, sem gravar artefato ou conclusão no estado.
+O arquivo de relatório original permanece no projeto.
 Somente a revisão separada libera os dependentes. Esses comandos não
 publicam, enviam, fazem integração de código ou substituem `jangada-validar`.
 

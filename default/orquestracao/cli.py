@@ -120,6 +120,7 @@ def main():
         finally:
             global_estado.fechar()
         return
+    raiz = pathlib.Path(os.environ['JANGADA_PATH'])
     if args.projeto:
         projeto = args.projeto.resolve()
     else:
@@ -150,7 +151,6 @@ def main():
             global_estado = Estado(raiz_estado / 'agentes/runtime', raiz=raiz_estado)
             try:
                 saude = Saude(global_estado)
-                raiz = pathlib.Path(os.environ['JANGADA_PATH'])
                 if args.comando == 'executar' and args.acompanhar:
                     def emitir(evento):
                         print(json.dumps({'projeto': str(projeto), **evento}, ensure_ascii=False), flush=True)
@@ -182,7 +182,7 @@ def main():
                 return
             elif args.acao == 'entregar':
                 print(json.dumps(entregar_principal(estado, args.id, args.dono, projeto,
-                                 pathlib.Path(os.environ['JANGADA_PATH']), args.arquivo), ensure_ascii=False))
+                                 raiz, args.arquivo), ensure_ascii=False))
                 return
             elif args.acao == 'revisar':
                 if not args.parecer or not (args.aprovar or args.reprovar):

@@ -89,10 +89,14 @@ def entregar_principal(estado, identificador, dono, projeto, raiz, arquivo):
         bruto = entrada.read(1024 * 1024 + 1)
     if len(bruto) > 1024 * 1024:
         raise ValueError('relatório excede 1 MiB')
-    texto = bruto.decode('utf-8')
+    try:
+        texto = bruto.decode('utf-8')
+    except UnicodeError as erro:
+        estado.evento(identificador, 'relatorio_recusado', {'arquivo': str(caminho), 'motivo': 'relatório deve ser UTF-8 válido'})
+        raise ValueError('relatório deve ser UTF-8 válido; reserva mantida para corrigir o arquivo') from erro
     resultado = {'executor': reserva['executor'], 'modo': 'sessao_principal',
                  'modelo_declarado': reserva.get('modelo'), 'execucao_iniciada': True,
-                 'metricas': {'chamadas': None, 'segundos': math.ceil(max(0, time.time() - reserva['inicio']))}}
+                 'metricas': {'chamadas': None}}
     status, motivo = 'REVIEW_REQUIRED', 'formato conferido; conteúdo principal aguarda revisão separada'
     try:
         tarefa, dependencias = contexto_principal(estado, identificador, projeto)
@@ -103,6 +107,7 @@ def entregar_principal(estado, identificador, dono, projeto, raiz, arquivo):
     except (OSError, UnicodeError, ValueError, subprocess.SubprocessError) as erro:
         status, motivo = 'REVISION_REQUIRED', str(erro)
     resultado['motivo'] = motivo
+    resultado['metricas']['segundos'] = math.ceil(max(0, time.time() - reserva['inicio']))
     estado.finalizar(identificador, dono, status, resultado, texto)
     return {'tarefa': identificador, 'status': status, **resultado}
 
