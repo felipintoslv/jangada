@@ -399,6 +399,40 @@ Interrupção ou resposta sem contagem confiável impede repetição automática
 Recusa antes de qualquer chamada não consome tentativa. Cota insuficiente
 ou desconhecida mantém `WAITING_QUOTA` até uma retomada explícita.
 
+### Tarefas dos agentes principais na sessão aberta
+
+Claude e Codex podem assumir uma tarefa de alta qualidade ou risco 3
+na própria sessão, sem abrir outra chamada de modelo:
+
+```sh
+jangada-task T5 assumir --executor codex
+# Use o identificador dono devolvido na reserva.
+jangada-task T5 entregar --dono IDENTIFICADOR --arquivo work/sintese.md
+jangada-task T5 revisar --aprovar --parecer 'Conferido por revisão separada'
+```
+
+`assumir` devolve a especificação, os caminhos e resumos dos artefatos das
+dependências, o identificador da reserva e seu prazo. Exige dependências
+concluídas, fontes inalteradas e orçamento disponível. Aceita tarefas em
+fila, em `WAITING_PROVIDER` ou em `WAITING_REVIEWER`. Não assume tarefas
+pausadas, em espera de cota, reservadas, com consumo desconhecido ou risco 4.
+
+O agente executa o pedido e grava um relatório UTF-8 dentro do projeto.
+As fontes importadas continuam imutáveis; alterações de código exigem
+outro fluxo. `entregar` confere reserva, integridade das fontes e dependências,
+referências e requisitos. Preserva o relatório completo, limitado a 1 MiB,
+em `REVIEW_REQUIRED`; falha de formato ou integridade gera `REVISION_REQUIRED`.
+Somente a revisão separada libera os dependentes. Esses comandos não
+publicam, enviam, fazem integração de código ou substituem `jangada-validar`.
+
+`--executor` e o `--modelo` opcional são declarações para rastreabilidade,
+sem autenticar a identidade ou conferir autoridade. Os dados da tarefa
+nunca autorizam comandos externos. A reserva respeita o tempo restante
+da tarefa; após expirar, uma entrega é recusada. Não há medição confiável
+das chamadas e tokens da sessão aberta: o consumo permanece desconhecido,
+impedindo uma repetição automática. Este fluxo não inicia agentes em segundo
+plano nem aplica uma variante econômica ou premium por conta própria.
+
 ### Conferência determinística de JSON
 
 A capacidade `validacao_json` executa um critério local de formato, sem

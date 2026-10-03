@@ -16,7 +16,7 @@ sys.dont_write_bytecode = True
 RAIZ = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / 'default/orquestracao'))
 from estado import Estado
-from executor import executar
+from executor import executar, assumir_principal, entregar_principal
 from acompanhamento import acompanhar
 from saude import Saude
 
@@ -93,6 +93,151 @@ class Execucao(unittest.TestCase):
 
     def rodar(self, perfil='balanced', limite=1):
         return executar(self.estado, self.projeto, self.raiz, perfil, limite)
+
+    def test_principais_entregam_sem_aprovar_ou_chamar_outro_modelo(self):
+        for agente in ('claude', 'codex'):
+            with self.subTest(agente=agente):
+                self.estado.importar([self.tarefa(agente, risco=3, qualidade='high')])
+                reserva = assumir_principal(self.estado, agente, self.projeto, agente)
+                relatorio = self.projeto / f'{agente}.md'
+                relatorio.write_text(f'Análise da regra documentada em {self.fonte}:1.')
+                resultado = entregar_principal(self.estado, agente, reserva['dono'], self.projeto, self.raiz, relatorio)
+                self.assertEqual(resultado['status'], 'REVIEW_REQUIRED')
+                self.assertIsNone(resultado['metricas']['chamadas'])
+                self.assertEqual(resultado['executor'], agente)
+                self.assertIsNone(self.estado.consumo(agente)['chamadas'])
+                with self.assertRaises(ValueError):
+                    entregar_principal(self.estado, agente, reserva['dono'], self.projeto, self.raiz, relatorio)
+        self.assertFalse(self.registro.exists())
+
+    def test_principal_recusa_risco_quatro_e_microtarefa(self):
+        for risco, qualidade in ((4, 'high'), (1, 'medium')):
+            id_tarefa = f'R{risco}'
+            self.estado.importar([self.tarefa(id_tarefa, risco=risco, qualidade=qualidade)])
+            with self.assertRaises(ValueError):
+                assumir_principal(self.estado, id_tarefa, self.projeto, 'codex')
+        self.assertTrue(all(t['status'] == 'QUEUED' and t['tentativas'] == 0 for t in self.estado.listar()))
+
+    def test_principal_nao_assume_espera_de_cota_pausa_ou_tarefa_reservada(self):
+        self.estado.importar([self.tarefa(risco=3)])
+        self.estado.alterar('T1', 'pausar')
+        with self.assertRaises(ValueError):
+            assumir_principal(self.estado, 'T1', self.projeto, 'codex')
+        self.estado.alterar('T1', 'retomar')
+        _, dono = self.estado.reservar()
+        with self.assertRaises(ValueError):
+            assumir_principal(self.estado, 'T1', self.projeto, 'codex')
+        self.estado.finalizar('T1', dono, 'WAITING_QUOTA', {'execucao_iniciada': False,
+                              'metricas': {'chamadas': 0, 'segundos': 0}})
+        with self.assertRaises(ValueError):
+            assumir_principal(self.estado, 'T1', self.projeto, 'codex')
+
+    def test_principal_exige_dependencia_aprovada_e_integra(self):
+        self.estado.importar([self.tarefa(), self.tarefa('Final', risco=3, dependencias=['T1'])])
+        with self.assertRaises(ValueError):
+            assumir_principal(self.estado, 'Final', self.projeto, 'claude')
+        self.rodar()
+        self.estado.revisar('T1', 'conferido', True)
+        reserva = assumir_principal(self.estado, 'Final', self.projeto, 'claude')
+        dependencia = reserva['dependencias'][0]['arquivo']
+        relatorio = self.projeto / 'final.md'
+        relatorio.write_text(f'Análise da fonte {self.fonte}:1 e do relatório {dependencia}:1.')
+        pathlib.Path(dependencia).write_text('alterado')
+        resultado = entregar_principal(self.estado, 'Final', reserva['dono'], self.projeto, self.raiz, relatorio)
+        self.assertEqual(resultado['status'], 'REVISION_REQUIRED')
+        self.assertIn('adulterado', resultado['motivo'])
+
+    def test_principal_confere_fontes_na_reserva_e_na_entrega(self):
+        self.estado.importar([self.tarefa(risco=3)])
+        original = self.fonte.read_text()
+        self.fonte.write_text('alterada')
+        with self.assertRaises(ValueError):
+            assumir_principal(self.estado, 'T1', self.projeto, 'codex')
+        self.fonte.write_text(original)
+        reserva = assumir_principal(self.estado, 'T1', self.projeto, 'codex')
+        self.fonte.write_text('alterada')
+        relatorio = self.projeto / 'final.md'
+        relatorio.write_text(f'Regra descrita em {self.fonte}:1.')
+        resultado = entregar_principal(self.estado, 'T1', reserva['dono'], self.projeto, self.raiz, relatorio)
+        self.assertEqual(resultado['status'], 'REVISION_REQUIRED')
+        self.assertIn('alterada', resultado['motivo'])
+
+    def test_principal_recusa_dono_errado_reserva_expirada_e_relatorio_externo(self):
+        self.estado.importar([self.tarefa(risco=3)])
+        reserva = assumir_principal(self.estado, 'T1', self.projeto, 'codex')
+        fora = self.pasta / 'fora.md'
+        fora.write_text(f'Regra em {self.fonte}:1.')
+        with self.assertRaises(ValueError):
+            entregar_principal(self.estado, 'T1', 'outro', self.projeto, self.raiz, fora)
+        with self.assertRaises(ValueError):
+            entregar_principal(self.estado, 'T1', reserva['dono'], self.projeto, self.raiz, fora)
+        with patch('executor.time.time', return_value=reserva['prazo'] + 1), self.assertRaises(ValueError):
+            entregar_principal(self.estado, 'T1', reserva['dono'], self.projeto, self.raiz, fora)
+        self.assertEqual(self.estado.listar()[0]['status'], 'RUNNING')
+
+    def test_principal_preserva_relatorio_reprovado_e_exige_requisitos(self):
+        self.estado.importar([self.tarefa(risco=3, requisitos=['Conclusão'])])
+        reserva = assumir_principal(self.estado, 'T1', self.projeto, 'codex')
+        relatorio = self.projeto / 'final.md'
+        relatorio.write_text(f'Regra em {self.fonte}:1.')
+        resultado = entregar_principal(self.estado, 'T1', reserva['dono'], self.projeto, self.raiz, relatorio)
+        self.assertEqual(resultado['status'], 'REVISION_REQUIRED')
+        self.assertEqual(self.estado.ler_artefato(self.estado.listar()[0]['artefato']), relatorio.read_text())
+
+    def test_principal_respeita_consumo_e_tentativas(self):
+        for campo, valor in (('max_tentativas', 1), ('tempo_total', 1), ('max_chamadas', 1)):
+            self.estado.importar([self.tarefa(campo, risco=3, **{campo: valor})])
+            _, dono = self.estado.reservar()
+            self.estado.finalizar(campo, dono, 'WAITING_REVIEWER',
+                                 {'metricas': {'chamadas': 1, 'segundos': 1}})
+            with self.assertRaises(ValueError):
+                assumir_principal(self.estado, campo, self.projeto, 'codex')
+
+    def test_principal_recusa_consumo_desconhecido(self):
+        self.estado.importar([self.tarefa(risco=3)])
+        self.estado.evento('T1', 'execucao_encerrada', {'resultado': {'metricas': {'chamadas': None, 'segundos': 1}}})
+        with self.assertRaises(ValueError):
+            assumir_principal(self.estado, 'T1', self.projeto, 'codex')
+        self.assertEqual(self.estado.listar()[0]['tentativas'], 0)
+
+    def test_principal_recusa_relatorio_simbolico_especial_ou_grande(self):
+        self.estado.importar([self.tarefa(risco=3)])
+        reserva = assumir_principal(self.estado, 'T1', self.projeto, 'codex')
+        arquivo = self.projeto / 'relatorio.md'
+        arquivo.symlink_to(self.fonte)
+        with self.assertRaises(OSError):
+            entregar_principal(self.estado, 'T1', reserva['dono'], self.projeto, self.raiz, arquivo)
+        arquivo.unlink()
+        os.mkfifo(arquivo)
+        with self.assertRaises(ValueError):
+            entregar_principal(self.estado, 'T1', reserva['dono'], self.projeto, self.raiz, arquivo)
+        arquivo.unlink()
+        arquivo.write_bytes(b'x' * (1024 * 1024 + 1))
+        with self.assertRaises(ValueError):
+            entregar_principal(self.estado, 'T1', reserva['dono'], self.projeto, self.raiz, arquivo)
+        self.assertEqual(self.estado.listar()[0]['status'], 'RUNNING')
+
+    def test_cli_principal_entrega_e_revisao_liberam_dependente(self):
+        ambiente = os.environ.copy()
+        ambiente.update(JANGADA_PATH=str(RAIZ), JANGADA_ESTADO=str(self.pasta / 'cli-estado'),
+                        XDG_STATE_HOME=str(self.pasta / 'state'), XDG_CONFIG_HOME=str(self.pasta / 'config'))
+        plano = self.projeto / 'plano.json'
+        plano.write_text(json.dumps([self.tarefa(risco=3), self.tarefa('T2', dependencias=['T1'])]))
+        def comando(*args):
+            return subprocess.run([sys.executable, str(RAIZ / 'default/orquestracao/cli.py'), *args,
+                                   '--projeto', str(self.projeto)], env=ambiente, capture_output=True, text=True, timeout=10)
+        self.assertEqual(comando('fila', '--importar', str(plano)).returncode, 0)
+        reserva = comando('task', 'T1', 'assumir', '--executor', 'claude')
+        self.assertEqual(reserva.returncode, 0, reserva.stderr)
+        relatorio = self.projeto / 'final.md'
+        relatorio.write_text(f'Regra na fonte {self.fonte}:1.')
+        entrega = comando('task', 'T1', 'entregar', '--dono', json.loads(reserva.stdout)['dono'], '--arquivo', str(relatorio))
+        self.assertEqual(entrega.returncode, 0, entrega.stderr)
+        self.assertEqual(json.loads(entrega.stdout)['status'], 'REVIEW_REQUIRED')
+        self.assertEqual(comando('task', 'T1', 'revisar', '--aprovar', '--parecer', 'conferido').returncode, 0)
+        itens = json.loads(comando('fila', '--json').stdout)['tarefas']
+        self.assertEqual([t['status'] for t in itens], ['COMPLETED', 'QUEUED'])
+        self.assertEqual(comando('task', 'T2', 'pausar', '--dono', 'indevido').returncode, 2)
 
     def test_preserva_relatorio_completo_sem_aprovar(self):
         self.estado.importar([self.tarefa(), self.tarefa('T2', dependencias=['T1'])])

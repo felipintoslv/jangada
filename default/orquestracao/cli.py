@@ -11,7 +11,7 @@ import sys
 
 sys.dont_write_bytecode = True
 from estado import Estado
-from executor import executar
+from executor import executar, assumir_principal, entregar_principal
 from acompanhamento import acompanhar
 from metricas_projeto import resumir
 from saude import Saude, retomar
@@ -75,15 +75,28 @@ def main():
     provedor = comandos.add_parser('provedor', help='pausa ou ativa um provedor')
     provedor.add_argument('acao', choices=['pausar', 'ativar'])
     provedor.add_argument('id')
-    tarefa = comandos.add_parser('task', help='altera somente o estado da tarefa')
+    tarefa = comandos.add_parser('task', help='gerencia tarefas e entregas das sessões principais')
     tarefa.add_argument('--projeto', type=pathlib.Path)
     tarefa.add_argument('id')
-    tarefa.add_argument('acao', choices=['pausar', 'retomar', 'cancelar', 'repetir', 'revisar'])
+    tarefa.add_argument('acao', choices=['pausar', 'retomar', 'cancelar', 'repetir', 'revisar', 'assumir', 'entregar'])
+    tarefa.add_argument('--executor', choices=['claude', 'codex'])
+    tarefa.add_argument('--modelo')
+    tarefa.add_argument('--dono')
+    tarefa.add_argument('--arquivo', type=pathlib.Path)
     tarefa.add_argument('--parecer')
     decisao = tarefa.add_mutually_exclusive_group()
     decisao.add_argument('--aprovar', action='store_true')
     decisao.add_argument('--reprovar', action='store_true')
     args = parser.parse_args()
+    if args.comando == 'task':
+        if args.acao == 'assumir':
+            if not args.executor or args.dono or args.arquivo or args.parecer or args.aprovar or args.reprovar:
+                parser.error('assumir exige --executor; aceita somente --modelo como opção adicional')
+        elif args.acao == 'entregar':
+            if not args.dono or not args.arquivo or args.executor or args.modelo or args.parecer or args.aprovar or args.reprovar:
+                parser.error('entregar exige --dono e --arquivo, sem opções de revisão')
+        elif args.executor or args.modelo or args.dono or args.arquivo:
+            parser.error('opções da sessão principal exigem assumir ou entregar')
     if args.comando == 'executar':
         if not args.acompanhar and (args.intervalo is not None or args.duracao is not None):
             parser.error('--intervalo e --duracao exigem --acompanhar')
@@ -164,7 +177,14 @@ def main():
             finally:
                 global_estado.fechar()
         else:
-            if args.acao == 'revisar':
+            if args.acao == 'assumir':
+                print(json.dumps(assumir_principal(estado, args.id, projeto, args.executor, args.modelo), ensure_ascii=False))
+                return
+            elif args.acao == 'entregar':
+                print(json.dumps(entregar_principal(estado, args.id, args.dono, projeto,
+                                 pathlib.Path(os.environ['JANGADA_PATH']), args.arquivo), ensure_ascii=False))
+                return
+            elif args.acao == 'revisar':
                 if not args.parecer or not (args.aprovar or args.reprovar):
                     raise ValueError('revisar exige --parecer e --aprovar ou --reprovar')
                 estado.revisar(args.id, args.parecer, args.aprovar)

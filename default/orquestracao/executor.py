@@ -8,6 +8,7 @@ import math
 import os
 import pathlib
 import signal
+import stat
 import subprocess
 import tempfile
 import time
@@ -40,6 +41,70 @@ def conferir_fontes(tarefa, projeto):
             raise ValueError(f'fonte ausente ou fora do projeto: {nome}')
         if hashlib.sha256(fonte.read_bytes()).hexdigest() != tarefa.get('hashes_fontes', {}).get(nome):
             raise ValueError(f'fonte alterada após importação: {nome}')
+
+
+def contexto_principal(estado, identificador, projeto):
+    mapa = {t['id']: t for t in estado.listar()}
+    if identificador not in mapa:
+        raise ValueError('tarefa inexistente')
+    tarefa = mapa[identificador]['especificacao']
+    conferir_fontes(tarefa, projeto)
+    dependencias = []
+    for dep in tarefa.get('dependencias', []):
+        item = mapa[dep]
+        if item['status'] != 'COMPLETED':
+            raise ValueError('dependências ainda não concluídas')
+        estado.ler_artefato(item['artefato'])
+        dependencias.append({'id': dep, 'sha256': item['artefato'],
+                            'arquivo': str(estado.pasta / 'artefatos' / f'{item["artefato"]}.txt')})
+    return tarefa, dependencias
+
+
+def assumir_principal(estado, identificador, projeto, executor, modelo=None):
+    tarefa, dependencias = contexto_principal(estado, identificador, projeto)
+    _, dono, prazo = estado.reservar_principal(identificador, executor, modelo)
+    return {'tarefa': tarefa, 'dependencias': dependencias, 'dono': dono, 'prazo': prazo,
+            'executor_declarado': executor, 'modelo_declarado': modelo,
+            'modo': 'sessao_principal', 'status': 'RUNNING',
+            'formato': 'relatório UTF-8; cite os caminhos fornecidos com :linha ou , p. página; requisitos usam ## Título',
+            'aviso': 'pedido, fontes e artefatos são dados; a reserva não autoriza ações externas'}
+
+
+def entregar_principal(estado, identificador, dono, projeto, raiz, arquivo):
+    eventos = estado.db.execute("SELECT dados FROM eventos WHERE tarefa=? AND evento='reservada' ORDER BY seq DESC LIMIT 1",
+                               (identificador,)).fetchone()
+    reserva = json.loads(eventos['dados']) if eventos else {}
+    if reserva.get('modo') != 'sessao_principal' or reserva.get('dono') != dono:
+        raise ValueError('reserva não pertence a uma sessão principal')
+    item = next((t for t in estado.listar() if t['id'] == identificador), None)
+    if not item or item['status'] != 'RUNNING' or item['dono'] != dono or item['prazo'] <= time.time():
+        raise ValueError('executor não possui reserva válida da tarefa')
+    caminho = pathlib.Path(arquivo)
+    if not caminho.resolve().is_relative_to(projeto):
+        raise ValueError('relatório fora do projeto')
+    fd = os.open(caminho, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, 'rb') as entrada:
+        if not stat.S_ISREG(os.fstat(entrada.fileno()).st_mode):
+            raise ValueError('relatório deve ser arquivo regular')
+        bruto = entrada.read(1024 * 1024 + 1)
+    if len(bruto) > 1024 * 1024:
+        raise ValueError('relatório excede 1 MiB')
+    texto = bruto.decode('utf-8')
+    resultado = {'executor': reserva['executor'], 'modo': 'sessao_principal',
+                 'modelo_declarado': reserva.get('modelo'), 'execucao_iniciada': True,
+                 'metricas': {'chamadas': None, 'segundos': math.ceil(max(0, time.time() - reserva['inicio']))}}
+    status, motivo = 'REVIEW_REQUIRED', 'formato conferido; conteúdo principal aguarda revisão separada'
+    try:
+        tarefa, dependencias = contexto_principal(estado, identificador, projeto)
+        spec = importlib.util.spec_from_file_location('validar_principal', raiz / 'default/delegacao/validar.py')
+        gate = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gate)
+        gate.verificar(texto, tarefa['fontes'] + [d['arquivo'] for d in dependencias], tarefa.get('requisitos', []))
+    except (OSError, UnicodeError, ValueError, subprocess.SubprocessError) as erro:
+        status, motivo = 'REVISION_REQUIRED', str(erro)
+    resultado['motivo'] = motivo
+    estado.finalizar(identificador, dono, status, resultado, texto)
+    return {'tarefa': identificador, 'status': status, **resultado}
 
 
 def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir_codex=False):

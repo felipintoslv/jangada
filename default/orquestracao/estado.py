@@ -262,6 +262,33 @@ class Estado:
                 return spec, dono
         return None
 
+    def reservar_principal(self, identificador, executor, modelo=None):
+        if executor not in ('claude', 'codex') or (modelo is not None and (
+            not isinstance(modelo, str) or not modelo.strip() or len(modelo) > 128
+        )):
+            raise ValueError('agente principal ou modelo inválido')
+        with self.transacao():
+            mapa = {t['id']: t for t in self.listar()}
+            tarefa = mapa.get(identificador)
+            if not tarefa or tarefa['status'] not in {'QUEUED', 'WAITING_PROVIDER', 'WAITING_REVIEWER'}:
+                raise ValueError('tarefa não está disponível para o agente principal')
+            spec = tarefa['especificacao']
+            if spec['risco'] == 4 or not (spec['risco'] == 3 or spec['qualidade'] in {'high', 'critical'}):
+                raise ValueError('reserva principal exige alta qualidade ou risco 3; risco 4 não é permitido')
+            if any(mapa[dep]['status'] != 'COMPLETED' for dep in spec.get('dependencias', [])):
+                raise ValueError('dependências ainda não concluídas')
+            consumo = self.consumo(identificador)
+            tempo = spec.get('tempo_total', 600) - consumo['segundos']
+            if (consumo['chamadas'] is None or consumo['chamadas'] >= spec.get('max_chamadas', 8)
+                    or tempo <= 0 or tarefa['tentativas'] >= spec.get('max_tentativas', 2)):
+                raise ValueError('consumo desconhecido ou orçamento da tarefa esgotado')
+            agora, dono = time.time(), str(uuid.uuid4())
+            self.db.execute('UPDATE tarefas SET status=?,tentativas=tentativas+1,dono=?,prazo=?,atualizado=? WHERE id=?',
+                            ('RUNNING', dono, agora + tempo, agora, identificador))
+            self.evento(identificador, 'reservada', {'dono': dono, 'modo': 'sessao_principal',
+                        'executor': executor, 'modelo': modelo, 'inicio': agora})
+            return spec, dono, agora + tempo
+
     def finalizar(self, identificador, dono, status, resultado, artefato=None):
         if status not in {'COMPLETED', 'REVIEW_REQUIRED', 'REVISION_REQUIRED', 'FAILED',
                           'WAITING_PROVIDER', 'WAITING_QUOTA', 'WAITING_REVIEWER'}:
