@@ -270,6 +270,18 @@ assinar <<<s
 conferir "merge alterado à mão: recusa ($rc)" \
   bash -c '[ "$1" -ne 0 ] && grep -q "mudou o conteúdo" "$2"' _ "$rc" "$tmp/saida"
 conferir "merge alterado à mão: o ramo volta ao que era" [ "$(git -C "$origem" rev-parse HEAD)" = "$antes_n" ]
+# Um commit posterior desfaz a alteração: a árvore final seria a mesma, mas o
+# merge refeito não. O commit traz outro arquivo para não ficar vazio no
+# rebase, que pararia nele.
+git -C "$origem" rm --quiet n3.txt
+echo n4 >"$origem/n4.txt"
+git -C "$origem" add n4.txt
+git -C "$origem" commit --quiet -m "feat(teste): desfaz a alteração do merge"
+antes_n="$(git -C "$origem" rev-parse HEAD)"
+assinar <<<s
+conferir "merge alterado à mão e desfeito depois: recusa ($rc)" \
+  bash -c '[ "$1" -ne 0 ] && grep -q "mudou o conteúdo" "$2"' _ "$rc" "$tmp/saida"
+conferir "merge alterado à mão e desfeito depois: o ramo volta ao que era" [ "$(git -C "$origem" rev-parse HEAD)" = "$antes_n" ]
 git -C "$origem" reset --quiet --hard "$m_assinado"
 git -C "$origem" branch --quiet -D agente/n
 

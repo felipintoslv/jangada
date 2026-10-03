@@ -59,13 +59,15 @@ read -r -p "assinar estes commits com $chave? [s/N] " r || r=""
 
 # O rebase refaz cada merge com a estratégia padrão, e o que foi resolvido ou
 # alterado à mão no merge não volta: com conflito ele para; sem conflito, a
-# comparação das árvores pega a perda. Commit já assinado cujo pai não mudou
-# é reaproveitado e fica como está.
+# comparação das árvores pega a perda. Ela vai commit a commit, porque um
+# commit posterior que desfaz a alteração deixaria a árvore final igual.
+# Commit já assinado cujo pai não mudou é reaproveitado e fica como está.
+arvores() { g log --format=%T "$primeiro^..$1" | sort; }
 antes="$(g rev-parse HEAD)"
 g rebase --quiet --rebase-merges \
   --exec '[ "$(git log -1 --format=%G?)" = G ] || git commit --quiet --amend --no-edit --no-verify -S' "$primeiro^" \
   || erro "o rebase parou; resolva em $repo (git rebase --abort desfaz)"
-if ! g diff --quiet "$antes" HEAD; then
+if [[ "$(arvores "$antes")" != "$(arvores HEAD)" ]]; then
   g reset --quiet --hard "$antes"
   erro "refazer os merges mudou o conteúdo; nada foi assinado, assine à mão"
 fi
