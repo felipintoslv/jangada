@@ -528,6 +528,34 @@ class Execucao(unittest.TestCase):
         self.assertEqual(json.loads(execucao.stdout)['resultados'][0]['status'], 'REVIEW_REQUIRED')
         self.assertFalse((self.projeto / 'invasao').exists())
 
+    def test_cli_lista_revisao_e_revisa_em_lote(self):
+        shutil.copytree(RAIZ / 'default/orquestracao', self.raiz / 'default/orquestracao')
+        plano = self.projeto / 'plano.json'
+        plano.write_text(json.dumps([self.tarefa(), self.tarefa('T2'), self.tarefa('T3')]), encoding='utf-8')
+        ambiente = os.environ.copy()
+        ambiente.update(JANGADA_PATH=str(self.raiz), XDG_STATE_HOME=str(self.pasta / 'state-cli'),
+                        XDG_CONFIG_HOME=str(self.pasta / 'config-cli'))
+
+        def comando(nome, *argumentos):
+            return subprocess.run([str(RAIZ / 'bin' / nome), *argumentos], cwd=self.projeto,
+                                  env=ambiente, text=True, capture_output=True, timeout=30)
+
+        self.assertEqual(comando('jangada-fila', '--importar', str(plano)).returncode, 0)
+        execucao = comando('jangada-executar', '--perfil', 'offline', '--limite', '2')
+        self.assertEqual(execucao.returncode, 0, execucao.stderr)
+        pendentes = json.loads(comando('jangada-fila', '--revisao', '--json').stdout)['revisao']
+        self.assertEqual([item['id'] for item in pendentes], ['T1', 'T2'])
+        for item in pendentes:
+            self.assertTrue(pathlib.Path(item['arquivo']).read_text(encoding='utf-8').strip())
+        self.assertEqual(len(comando('jangada-fila', '--revisao').stdout.splitlines()), 2)
+        recusa = comando('jangada-task', 'T1,T3', 'revisar', '--aprovar', '--parecer', 'conferido')
+        self.assertEqual(recusa.returncode, 2)
+        self.assertIn('T3', recusa.stderr)
+        self.assertEqual(len(json.loads(comando('jangada-fila', '--revisao', '--json').stdout)['revisao']), 2)
+        lote = comando('jangada-task', 'T1,T2', 'revisar', '--aprovar', '--parecer', 'conferido')
+        self.assertEqual(lote.returncode, 0, lote.stderr)
+        self.assertEqual(json.loads(comando('jangada-fila', '--revisao', '--json').stdout)['revisao'], [])
+
     def test_cli_retomada_executa_com_provedor_verificado(self):
         shutil.copytree(RAIZ / 'default/orquestracao', self.raiz / 'default/orquestracao')
         shutil.copyfile(RAIZ / 'default/delegacao/roteamento.json', self.raiz / 'default/delegacao/roteamento.json')

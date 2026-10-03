@@ -30,7 +30,7 @@ def exclusividade(estado):
 
 def acompanhar(estado, projeto, raiz, config, saude, perfil='balanced', limite=100,
                intervalo=60, duracao=28800, permitir_remoto=False, permitir_codex=False,
-               emitir=None, supervisao_automatica=False):
+               emitir=None, supervisao_automatica=False, amostrar=False):
     if (perfil not in PERFIS or type(limite) is not int or not 1 <= limite <= 1000
             or type(intervalo) is not int or not 1 <= intervalo <= 3600
             or type(duracao) is not int or not 1 <= duracao <= 86400):
@@ -58,7 +58,8 @@ def acompanhar(estado, projeto, raiz, config, saude, perfil='balanced', limite=1
             retomadas = retomar(estado, saude, raiz, config, perfil, permitir_remoto, permitir_codex)
             if time.monotonic() >= prazo:
                 break
-            resultados = executar(estado, projeto, raiz, perfil, 1, permitir_remoto, saude, permitir_codex, supervisao_automatica)
+            resultados = executar(estado, projeto, raiz, perfil, 1, permitir_remoto, saude, permitir_codex,
+                                  supervisao_automatica, amostrar)
             ciclos += 1
             iniciou = any(r.get('execucao_iniciada', r['metricas']['chamadas'] != 0) for r in resultados)
             execucoes += int(iniciou)

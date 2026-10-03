@@ -13,7 +13,8 @@ import time
 import uuid
 
 from deterministico import conferir as conferir_deterministica
-from supervisao import aprovacao_valida, elegivel as elegivel_supervisao, pendente as supervisao_pendente
+from metricas_projeto import amostragem
+from supervisao import amostravel, aprovacao_valida, elegivel as elegivel_supervisao, pendente as supervisao_pendente
 
 ESTADOS = {
     'QUEUED', 'RUNNING', 'COMPLETED', 'REVIEW_REQUIRED', 'REVISION_REQUIRED',
@@ -66,11 +67,13 @@ def tarefa_valida(tarefa):
         valor = tarefa.get(campo, padrao)
         if type(valor) is not int or not 1 <= valor <= 999999:
             raise ValueError(f'{campo} deve ser inteiro positivo')
-    for campo in ('permitir_remoto', 'permitir_codex', 'intermediaria', 'supervisao_automatica'):
+    for campo in ('permitir_remoto', 'permitir_codex', 'intermediaria', 'supervisao_automatica', 'amostragem'):
         if campo in tarefa and type(tarefa[campo]) is not bool:
             raise ValueError(f'{campo} deve ser booleano')
     if tarefa.get('supervisao_automatica') and not elegivel_supervisao(tarefa):
         raise ValueError('supervisão automática exige leitor intermediário, risco 1 e qualidade baixa ou média')
+    if tarefa.get('amostragem') and not amostravel(tarefa):
+        raise ValueError('amostragem exige leitor intermediário, risco 1 e qualidade baixa ou média')
     serializar(tarefa)
 
 
@@ -341,8 +344,10 @@ class Estado:
                         raise ValueError('artefato não corresponde à conferência determinística das fontes')
                     if metricas.get('chamadas') != 0 or resultado.get('execucao_iniciada') is not True:
                         raise ValueError('conferência determinística exige execução local sem chamadas a modelos')
-                elif not aprovacao_valida(spec, artefato, resultado):
-                    raise ValueError('conclusão intermediária exige supervisão remota independente válida')
+                elif not (aprovacao_valida(spec, artefato, resultado)
+                          or self.fora_da_amostra(spec, artefato, resultado)):
+                    raise ValueError('conclusão intermediária exige supervisão remota independente válida '
+                                     'ou sorteio fora da amostra de revisão')
             hash_artefato = None
             if artefato is not None:
                 hash_artefato = hashlib.sha256(artefato.encode()).hexdigest()
@@ -369,18 +374,32 @@ class Estado:
                 self.db.execute('UPDATE tarefas SET tentativas=tentativas-1 WHERE id=?', (identificador,))
             self.evento(identificador, 'execucao_encerrada', {'status': status, 'resultado': resultado, 'artefato': hash_artefato})
 
+    def fora_da_amostra(self, spec, artefato, resultado):
+        sorteio = resultado.get('amostragem')
+        return (amostravel(spec) and 'supervisao' not in resultado
+                and resultado.get('verificacao') == 'referencias_e_requisitos_validos'
+                and type(resultado.get('metricas', {}).get('chamadas')) is int
+                and isinstance(sorteio, dict) and sorteio.get('selecionada') is False
+                and sorteio == amostragem(self, spec, resultado, artefato))
+
     def revisar(self, identificador, parecer, aprovar):
+        self.revisar_lote([identificador], parecer, aprovar)
+
+    def revisar_lote(self, identificadores, parecer, aprovar):
         if not isinstance(parecer, str) or not parecer.strip() or type(aprovar) is not bool:
             raise ValueError('revisão exige parecer e decisão explícitos')
+        if not identificadores or len(set(identificadores)) != len(identificadores):
+            raise ValueError('revisão exige identificadores sem repetição')
+        status = 'COMPLETED' if aprovar else 'REVISION_REQUIRED'
         with self.transacao():
-            tarefa = self.db.execute('SELECT * FROM tarefas WHERE id=?', (identificador,)).fetchone()
-            if not tarefa or tarefa['status'] != 'REVIEW_REQUIRED' or not tarefa['hash_artefato']:
-                raise ValueError('tarefa sem artefato aguardando revisão')
-            self.ler_artefato(tarefa['hash_artefato'])
-            status = 'COMPLETED' if aprovar else 'REVISION_REQUIRED'
-            self.db.execute('UPDATE tarefas SET status=?,motivo=?,atualizado=? WHERE id=?',
-                            (status, parecer, time.time(), identificador))
-            self.evento(identificador, 'revisada', {'status': status, 'parecer': parecer})
+            for identificador in identificadores:
+                tarefa = self.db.execute('SELECT * FROM tarefas WHERE id=?', (identificador,)).fetchone()
+                if not tarefa or tarefa['status'] != 'REVIEW_REQUIRED' or not tarefa['hash_artefato']:
+                    raise ValueError(f'tarefa sem artefato aguardando revisão: {identificador}')
+                self.ler_artefato(tarefa['hash_artefato'])
+                self.db.execute('UPDATE tarefas SET status=?,motivo=?,atualizado=? WHERE id=?',
+                                (status, parecer, time.time(), identificador))
+                self.evento(identificador, 'revisada', {'status': status, 'parecer': parecer})
 
     def ler_artefato(self, resumo):
         if not isinstance(resumo, str) or not re.fullmatch(r'[0-9a-f]{64}', resumo):

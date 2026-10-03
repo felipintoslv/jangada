@@ -380,6 +380,13 @@ revisor nem impede que o autor registre sua própria aprovação. Portanto,
 `COMPLETED` não comprova revisão independente e não autoriza integração,
 envio externo ou operação irreversível. A revisão da fila não substitui
 `jangada-validar`.
+
+`jangada-fila --revisao` lista as tarefas em `REVIEW_REQUIRED`, com
+capacidade, executor, modelo e caminho do artefato preservado. Depois de
+conferir cada artefato, um parecer comum vale para várias tarefas:
+`jangada-task T1,T2,T3 revisar --aprovar --parecer "Conferidos nas fontes"`.
+O lote grava todas as revisões ou nenhuma: uma tarefa ausente, repetida ou
+fora de `REVIEW_REQUIRED` recusa o comando inteiro.
 Tarefas em revisão não podem ser pausadas para contornar a conferência.
 
 ### Execução da fila
@@ -665,6 +672,39 @@ Tarefas aprovadas, pausadas ou em revisão não são retomadas automaticamente.
 Quando só restam dependências de revisão ou tarefas sem adaptador, o
 acompanhamento encerra. Não aprova relatórios nem instala serviços.
 
+### Revisão por amostragem de relatórios intermediários
+
+Uma tarefa que aceita supervisão automática também pode declarar
+`amostragem: true`, com as mesmas exigências: `intermediaria: true`, papel
+`leitor`, risco 1, qualidade `low` ou `medium` e capacidade documental.
+
+```sh
+jangada-executar --amostrar --permitir-remoto
+jangada-executar --amostrar --supervisionar --permitir-remoto
+```
+
+Sem a opção do comando ou sem o campo da tarefa, todo relatório continua em
+revisão. Com os dois, depois de conferir referências, requisitos e
+integridade, o executor aplica a taxa de amostragem do grupo (capacidade,
+executor, modelo e risco) descrita em [registro e medição](#registro-e-medição).
+O sorteio vem do identificador da tarefa e do SHA-256 do relatório: repetir
+a conta dá o mesmo resultado, e o estado refaz o cálculo antes de aceitar
+a conclusão.
+
+- Relatório sorteado: segue para o supervisor, com `--supervisionar`, ou
+  fica em `REVIEW_REQUIRED`.
+- Relatório fora da amostra: fica `COMPLETED` e libera dependentes
+  intermediários **sem revisão do conteúdo**. O resultado guarda taxa,
+  sorteio e revisões na janela, e o motivo registra que o conteúdo não
+  foi conferido.
+
+A taxa só cai abaixo de 100% com 20 revisões manuais do grupo na fila do
+projeto; pareceres do supervisor e conclusões fora da amostra não contam.
+Relatório produzido pelo Ollama é sempre revisado. O histórico é uma
+anotação editável: quem aprova sem conferir reduz a própria amostra. Por
+isso a amostragem vale só para relatórios intermediários, não aprova
+entrega final e não substitui `jangada-validar`.
+
 ## Registro e medição
 
 `jangada-fila --metricas` mostra os indicadores do projeto em JSON. Consulta
@@ -702,8 +742,10 @@ Com menos de 20 revisões, risco acima de 1 ou identidade incompleta, a
 amostragem sugerida é 100%. Para os demais grupos, sugere 10% normalmente,
 50% com reprovação acima de 5% e 100% acima de 15%.
 
-São sugestões para conferências por amostragem. Não alteram permissões,
-preferências do roteador nem a revisão de conteúdo exigida pelo executor.
+A taxa é aplicada somente em tarefas com `amostragem: true` executadas com
+`--amostrar`; nos demais casos é uma sugestão. `selecionadas_na_amostra` e
+`conclusoes_fora_da_amostra` contam os sorteios. Não altera permissões nem
+preferências do roteador.
 O histórico registra pareceres editáveis; não autentica revisores nem
 comprova independência ou qualidade real das respostas.
 

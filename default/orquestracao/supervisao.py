@@ -15,11 +15,19 @@ CRITERIOS = {'fidelidade', 'completude', 'extrapolacoes'}
 REMOTOS = {'agy', 'codex-economico'}
 
 
-def elegivel(tarefa):
-    return (tarefa.get('intermediaria') is True and tarefa.get('supervisao_automatica') is True
+def intermediaria(tarefa):
+    return (tarefa.get('intermediaria') is True
             and tarefa.get('risco') == 1 and tarefa.get('qualidade') in {'low', 'medium'}
             and tarefa.get('papel') == 'leitor'
             and tarefa.get('capacidade') in {'leitura_documental', 'resumo_curto', 'analise_documental'})
+
+
+def elegivel(tarefa):
+    return tarefa.get('supervisao_automatica') is True and intermediaria(tarefa)
+
+
+def amostravel(tarefa):
+    return tarefa.get('amostragem') is True and intermediaria(tarefa)
 
 
 def parecer_valido(texto, tarefa, relatorio):

@@ -13,7 +13,7 @@ sys.dont_write_bytecode = True
 from estado import Estado
 from executor import executar, assumir_principal, entregar_principal
 from acompanhamento import acompanhar
-from metricas_projeto import resumir
+from metricas_projeto import identidade, resumir
 from saude import Saude, retomar
 from principal import executar_principal
 
@@ -50,6 +50,7 @@ def main():
     consulta = fila.add_mutually_exclusive_group()
     consulta.add_argument('--importar', type=pathlib.Path)
     consulta.add_argument('--metricas', action='store_true')
+    consulta.add_argument('--revisao', action='store_true')
     fila.add_argument('--json', action='store_true')
     execucao = comandos.add_parser('executar', help='executa tarefas elegíveis sem aprová-las')
     execucao.add_argument('--projeto', type=pathlib.Path)
@@ -61,12 +62,14 @@ def main():
     execucao.add_argument('--permitir-remoto', action='store_true')
     execucao.add_argument('--permitir-codex', action='store_true')
     execucao.add_argument('--supervisionar', action='store_true')
+    execucao.add_argument('--amostrar', action='store_true')
     retomada = comandos.add_parser('retomar', help='retoma esperas com provedor disponível')
     retomada.add_argument('--projeto', type=pathlib.Path)
     retomada.add_argument('--perfil', choices=['balanced', 'quality', 'offline'], default='balanced')
     retomada.add_argument('--permitir-remoto', action='store_true')
     retomada.add_argument('--permitir-codex', action='store_true')
     retomada.add_argument('--supervisionar', action='store_true')
+    retomada.add_argument('--amostrar', action='store_true')
     retomada.add_argument('--atualizar', action='store_true')
     retomada.add_argument('--executar', action='store_true')
     retomada.add_argument('--limite', type=int, default=1)
@@ -151,6 +154,22 @@ def main():
             if args.importar:
                 estado.importar(especificacoes(args.importar, projeto))
             tarefas = estado.listar()
+            if args.revisao:
+                pendentes = []
+                for item in tarefas:
+                    if item['status'] != 'REVIEW_REQUIRED':
+                        continue
+                    executor, modelo = identidade(item['resultado'] or {})
+                    pendentes.append({'id': item['id'], 'capacidade': item['especificacao']['capacidade'],
+                                      'executor': executor, 'modelo': modelo,
+                                      'arquivo': str(pasta / 'artefatos' / f'{item["artefato"]}.txt')})
+                if args.json:
+                    print(json.dumps({'projeto': str(projeto), 'revisao': pendentes}, ensure_ascii=False))
+                else:
+                    for item in pendentes:
+                        print('\t'.join((item['id'], item['capacidade'], item['executor'],
+                                         item['modelo'] or '-', item['arquivo'])))
+                return
             if args.json:
                 print(json.dumps({'projeto': str(projeto), 'estado': str(pasta), 'tarefas': tarefas}, ensure_ascii=False))
             else:
@@ -168,7 +187,8 @@ def main():
 
                     emitir(acompanhar(estado, projeto, raiz, os.environ['JANGADA_CONFIG'], saude,
                                       args.perfil, args.limite, args.intervalo or 60, args.duracao or 28800,
-                                      args.permitir_remoto, args.permitir_codex, emitir, args.supervisionar))
+                                      args.permitir_remoto, args.permitir_codex, emitir, args.supervisionar,
+                                      args.amostrar))
                     return
                 retomadas, resultados = [], []
                 if args.comando == 'retomar':
@@ -182,7 +202,8 @@ def main():
                                        args.perfil, args.permitir_remoto, args.permitir_codex)
                 if args.comando == 'executar' or args.executar:
                     resultados = executar(estado, projeto, raiz, args.perfil,
-                                          args.limite, args.permitir_remoto, saude, args.permitir_codex, args.supervisionar)
+                                          args.limite, args.permitir_remoto, saude, args.permitir_codex, args.supervisionar,
+                                          args.amostrar)
                 print(json.dumps({'projeto': str(projeto), 'retomadas': retomadas,
                                   'resultados': resultados}, ensure_ascii=False))
             finally:
@@ -206,7 +227,7 @@ def main():
             elif args.acao == 'revisar':
                 if not args.parecer or not (args.aprovar or args.reprovar):
                     raise ValueError('revisar exige --parecer e --aprovar ou --reprovar')
-                estado.revisar(args.id, args.parecer, args.aprovar)
+                estado.revisar_lote(args.id.split(','), args.parecer, args.aprovar)
             else:
                 if args.parecer or args.aprovar or args.reprovar:
                     raise ValueError('parecer e decisão só são usados na revisão')

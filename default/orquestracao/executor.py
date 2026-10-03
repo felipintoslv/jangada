@@ -14,7 +14,9 @@ import tempfile
 import time
 
 from deterministico import CAPACIDADE as CAPACIDADE_DETERMINISTICA, conferir, elegivel
-from supervisao import elegivel as elegivel_supervisao, supervisionar, pendente as supervisao_pendente, candidatos as supervisores
+from metricas_projeto import amostragem
+from supervisao import (amostravel, elegivel as elegivel_supervisao, supervisionar,
+                        pendente as supervisao_pendente, candidatos as supervisores)
 
 CAPACIDADES = {'leitura_documental', 'resumo_curto', 'analise_documental'}
 PERFIS = {'balanced', 'quality', 'offline'}
@@ -113,7 +115,8 @@ def entregar_principal(estado, identificador, dono, projeto, raiz, arquivo):
     return {'tarefa': identificador, 'status': status, **resultado}
 
 
-def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir_codex=False, supervisao_automatica=False):
+def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir_codex=False, supervisao_automatica=False,
+                 amostrar=False):
     reserva = estado.reservar()
     if reserva is None:
         return None
@@ -264,6 +267,16 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir
             spec.loader.exec_module(verificador)
             verificador.verificar(texto, fontes, tarefa.get('requisitos', []))
             resultado['verificacao'] = 'referencias_e_requisitos_validos'
+            if amostrar and amostravel(tarefa):
+                resultado['amostragem'] = amostragem(estado, tarefa, resultado, texto)
+                if not resultado['amostragem']['selecionada']:
+                    try:
+                        return encerrar('COMPLETED', 'fora da amostra de revisão; conteúdo não conferido', texto)
+                    except ValueError:
+                        # Uma revisão gravada depois do sorteio muda a taxa; vale a do momento da conclusão.
+                        resultado['amostragem'] = amostragem(estado, tarefa, resultado, texto)
+                        if not resultado['amostragem']['selecionada']:
+                            raise
             if supervisao_automatica and elegivel_supervisao(tarefa):
                 try:
                     revisao = supervisionar(tarefa, texto, fontes, saida, pasta, raiz, projeto, ambiente,
@@ -301,14 +314,15 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir
 
 
 def executar(estado, projeto, raiz, perfil='balanced', limite=1, permitir_remoto=False, saude=None, permitir_codex=False,
-             supervisao_automatica=False):
+             supervisao_automatica=False, amostrar=False):
     if perfil not in PERFIS or type(limite) is not int or not 1 <= limite <= 1000:
         raise ValueError('perfil ou limite de tarefas inválido')
     resultados = []
     for _ in range(limite):
         resultado = retomar_supervisao(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir_codex) if supervisao_automatica else None
         if resultado is None:
-            resultado = executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir_codex, supervisao_automatica)
+            resultado = executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir_codex,
+                                     supervisao_automatica, amostrar)
         if resultado is None:
             break
         resultados.append(resultado)

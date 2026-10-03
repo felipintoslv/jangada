@@ -216,6 +216,87 @@ class Supervisao(unittest.TestCase):
         with patch.dict(os.environ, MODO_SUPERVISAO='fonte_alterada'):
             self.assertEqual(self.rodar()[0]['status'], 'REVISION_REQUIRED')
 
+    def historico(self, reprovadas=0):
+        ids = [f'H{i}' for i in range(20)]
+        self.estado.importar([self.tarefa(i, supervisao_automatica=False, amostragem=True) for i in ids])
+        with patch.dict(os.environ, AUTOR_TESTE='agy'):
+            resultados = executar(self.estado, self.projeto, self.raiz, limite=20, permitir_remoto=True, amostrar=True)
+        self.assertEqual([r['status'] for r in resultados], ['REVIEW_REQUIRED'] * 20)
+        self.assertTrue(all(r['amostragem']['taxa'] == 1 for r in resultados))
+        if reprovadas:
+            self.estado.revisar_lote(ids[:reprovadas], 'extrapolou a fonte', False)
+        self.estado.revisar_lote(ids[reprovadas:], 'conferido com a fonte', True)
+
+    def amostrar(self, quantidade=40, **opcoes):
+        self.estado.importar([self.tarefa(f'A{i}', supervisao_automatica=False, amostragem=True)
+                              for i in range(quantidade)])
+        return executar(self.estado, self.projeto, self.raiz, limite=quantidade, permitir_remoto=True, **opcoes)
+
+    def test_amostragem_conclui_fora_da_amostra_e_revisa_o_restante(self):
+        self.historico()
+        with patch.dict(os.environ, AUTOR_TESTE='agy'):
+            resultados = self.amostrar(amostrar=True)
+        for resultado in resultados:
+            sorteio = resultado['amostragem']
+            self.assertEqual(sorteio['taxa'], 0.1)
+            self.assertEqual(sorteio['revisoes_na_janela'], 20)
+            self.assertEqual(sorteio['selecionada'], sorteio['sorteio'] < 0.1)
+            self.assertEqual(resultado['status'], 'REVIEW_REQUIRED' if sorteio['selecionada'] else 'COMPLETED')
+        concluidas = sum(r['status'] == 'COMPLETED' for r in resultados)
+        self.assertGreater(concluidas, 0)
+        metricas = resumir(self.estado)
+        self.assertEqual(metricas['conclusoes_fora_da_amostra'], concluidas)
+        self.assertEqual(metricas['selecionadas_na_amostra'], 60 - concluidas)
+        self.assertEqual(metricas['desempenho'][0]['revisoes_na_janela'], 20)
+
+    def test_amostragem_exige_opcao_e_campo_explicitos(self):
+        self.historico()
+        with patch.dict(os.environ, AUTOR_TESTE='agy'):
+            resultados = self.amostrar(10)
+            self.estado.importar([self.tarefa(f'S{i}', supervisao_automatica=False) for i in range(10)])
+            resultados += executar(self.estado, self.projeto, self.raiz, limite=10, permitir_remoto=True, amostrar=True)
+        self.assertEqual([r['status'] for r in resultados], ['REVIEW_REQUIRED'] * 20)
+        self.assertFalse(any('amostragem' in r for r in resultados))
+
+    def test_amostragem_nunca_conclui_autor_local_nem_grupo_com_erros(self):
+        self.historico(reprovadas=4)
+        with patch.dict(os.environ, AUTOR_TESTE='agy'):
+            resultados = self.amostrar(amostrar=True)
+        self.estado.importar([self.tarefa(f'L{i}', supervisao_automatica=False, amostragem=True) for i in range(10)])
+        resultados += executar(self.estado, self.projeto, self.raiz, limite=10, permitir_remoto=True, amostrar=True)
+        self.assertEqual([r['status'] for r in resultados], ['REVIEW_REQUIRED'] * 50)
+        self.assertTrue(all(r['amostragem']['taxa'] == 1 for r in resultados))
+
+    def test_amostragem_selecionada_segue_para_o_supervisor(self):
+        self.historico()
+        self.estado.importar([self.tarefa(f'A{i}', amostragem=True, permitir_codex=True) for i in range(40)])
+        with patch.dict(os.environ, AUTOR_TESTE='agy', JANGADA_CODEX_ECONOMICO_MODELO='configurado'):
+            resultados = executar(self.estado, self.projeto, self.raiz, limite=40, permitir_remoto=True,
+                                  permitir_codex=True, supervisao_automatica=True, amostrar=True)
+        self.assertEqual([r['status'] for r in resultados], ['COMPLETED'] * 40)
+        for resultado in resultados:
+            self.assertEqual('supervisao' in resultado, resultado['amostragem']['selecionada'])
+
+    def test_estado_recusa_sorteio_forjado(self):
+        self.historico()
+        self.estado.importar([self.tarefa('F1', supervisao_automatica=False, amostragem=True),
+                              self.tarefa('F2', supervisao_automatica=False)])
+        base = {'execucao_iniciada': True, 'verificacao': 'referencias_e_requisitos_validos',
+                'metricas': {'chamadas': 1, 'segundos': 1}, 'delegacao': {'destino': 'agy', 'modelo': 'simulado'}}
+        forjado = {'executor': 'agy', 'modelo': 'simulado', 'taxa': 0.0, 'sorteio': 0.5,
+                   'revisoes_na_janela': 20, 'selecionada': False}
+        for _ in range(2):
+            tarefa, dono = self.estado.reservar()
+            with self.assertRaises(ValueError):
+                self.estado.finalizar(tarefa['id'], dono, 'COMPLETED', {**base, 'amostragem': forjado}, 'relatório')
+            self.estado.finalizar(tarefa['id'], dono, 'REVIEW_REQUIRED', base, 'relatório')
+
+    def test_nao_importa_amostragem_de_tarefa_final_ou_critica(self):
+        for campos in ({'intermediaria':False}, {'risco':2}, {'qualidade':'high'}, {'amostragem':'sim'}):
+            with self.subTest(campos=campos), self.assertRaises(ValueError):
+                self.estado.importar([self.tarefa(**{'supervisao_automatica':False, 'amostragem':True, **campos})])
+        self.assertEqual(self.estado.listar(), [])
+
     def test_nao_importa_supervisao_de_tarefa_final_ou_critica(self):
         for campos in ({'intermediaria':False}, {'risco':3}, {'qualidade':'high'}, {'intermediaria':'sim'}):
             with self.subTest(campos=campos), self.assertRaises(ValueError):

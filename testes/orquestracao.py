@@ -240,6 +240,19 @@ class Persistencia(unittest.TestCase):
         self.assertEqual(outro.pasta.stat().st_mode & 0o777, 0o700)
         self.assertEqual((outro.pasta / 'tarefas.sqlite').stat().st_mode & 0o777, 0o600)
 
+    def test_revisao_em_lote_e_atomica(self):
+        self.estado.importar([tarefa('T1'), tarefa('T2'), tarefa('T3')])
+        for _ in range(2):
+            item, dono = self.estado.reservar()
+            self.estado.finalizar(item['id'], dono, 'REVIEW_REQUIRED', {}, 'relatório')
+        for ids in (['T1', 'T3'], ['T1', 'T1'], ['T1', 'ausente'], []):
+            with self.subTest(ids=ids), self.assertRaises(ValueError):
+                self.estado.revisar_lote(ids, 'conferido', True)
+        situacao = {item['id']: item['status'] for item in self.estado.listar()}
+        self.assertEqual(situacao, {'T1': 'REVIEW_REQUIRED', 'T2': 'REVIEW_REQUIRED', 'T3': 'QUEUED'})
+        self.estado.revisar_lote(['T1', 'T2'], 'conferido', True)
+        self.assertEqual([item['status'] for item in self.estado.listar()], ['COMPLETED', 'COMPLETED', 'QUEUED'])
+
     def test_revisao_exige_artefato_e_nao_permite_pausa(self):
         self.estado.importar([tarefa()])
         _, dono = self.estado.reservar()
