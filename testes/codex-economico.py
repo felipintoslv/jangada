@@ -87,9 +87,10 @@ assert os.environ['HOME'] == os.environ['CODEX_HOME']
 assert 'SEGREDO_TESTE' not in os.environ
 assert json.loads((pathlib.Path(os.environ['CODEX_HOME']) / 'auth.json').read_text())['tokens']['refresh_token'] == ''
 dados = json.loads(sys.stdin.read().splitlines()[-1])
+pid_worker = os.getppid()
+pid_shell = int((pathlib.Path('/proc') / str(pid_worker) / 'stat').read_text().split(') ')[1].split()[1])
 pathlib.Path(''' + repr(str(self.audit)) + ''').write_text(json.dumps({'args': args, 'prompt': dados,
-    'pid': os.getpid(), 'casa': os.environ['CODEX_HOME'],
-    'bash': int((pathlib.Path('/proc') / str(os.getppid()) / 'stat').read_text().split(') ')[1].split()[1])}))
+    'pid': os.getpid(), 'casa': os.environ['CODEX_HOME'], 'worker': pid_worker, 'bash': pid_shell}))
 modo = ''' + repr(modo) + '''
 if modo == 'demorado':
     time.sleep(60)
@@ -240,6 +241,11 @@ if modo == 'duplicado':
                     time.sleep(0.01)
             self.assertIsNotNone(dados)
             if matar_shell:
+                self.assertNotEqual(dados['bash'], dados['worker'])
+                comando = (pathlib.Path('/proc') / str(dados['bash']) / 'cmdline').read_bytes().split(b'\x00')
+                self.assertEqual(pathlib.Path(os.fsdecode(comando[0])).name, 'bash')
+                self.assertIn(os.fsencode(str(self.raiz / 'bin/jangada-delegar')), comando)
+                self.assertIsNone(pai.poll())
                 os.kill(dados['bash'], 9)
             else:
                 pai.kill()
