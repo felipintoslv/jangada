@@ -53,7 +53,11 @@ Os gráficos acompanham o seletor claro/escuro do painel. Fundo, textos,
 eixos, grades, dicas e cores das séries mudam ao alternar o modo, sem
 recarregar a página. No escuro, o fundo e o texto seguem a paleta do matugen;
 no claro, usam branco e texto escuro. As redes também adaptam rótulos,
-arestas e legendas ao modo selecionado. A evolução diária usa
+arestas e legendas ao modo selecionado. A variante escura tem contraste mínimo
+de 6,07:1 sobre o fundo padrão `#141311`, conferido com
+`colorspace::contrast_ratio`; outros fundos do matugen podem mudar esse valor.
+A separação das cores sob simulação de daltonismo não foi validada.
+A evolução diária usa
 linhas, preserva lacunas sem medida e passa a pequenos múltiplos acima de
 quatro séries. Comparações por destino e velocidade local usam barras
 horizontais ordenadas, com eixo a partir de zero. Período, unidade e fonte

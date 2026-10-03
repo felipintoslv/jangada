@@ -54,7 +54,12 @@ jsonlite::write_json(list(tarefas = list(
   list(projeto = "outro", id = "concluida", estado = "COMPLETED")),
   projetos = list(list(projeto = "teste", chamadas_confirmadas = 2, custo_estimado = NULL)),
   provedores = list(), erros = list()), file.path(cache, "orquestracao.json"), auto_unbox = TRUE, null = "null")
-shiny::testServer(shiny::shinyAppDir("default/painel"), {
+aplicacao <- shiny::shinyAppDir("default/painel")
+html <- as.character(environment(aplicacao$serverFuncSource())$ui)
+stopifnot(grepl('class="active">\\s*<a[^>]*data-value="Revisão e síntese"', html),
+          grepl("Esta fila reúne tarefas planejadas", html),
+          grepl("Provedores são os serviços ou executores", html))
+shiny::testServer(aplicacao, {
   session$setInputs(modo = "dark", periodo = c(Sys.Date(), Sys.Date()), executor = "ollama")
   escuro <- jsonlite::fromJSON(output$b_motores_dia, simplifyVector = FALSE)
   vazio_escuro <- plotly::plotly_build(vazio())$x$layout
@@ -110,7 +115,6 @@ shiny::testServer(shiny::shinyAppDir("default/painel"), {
   stopifnot(grepl("Nenhuma observação", output$g_provedores_aviso$html))
   session$setInputs(projeto = "sem-fila")
   stopifnot(grepl("projetos selecionados", output$g_vazia$html))
-
 })
 r7 <- r[rep(1, 7), ]
 r7$id <- paste0("serie", seq_len(7))
@@ -126,6 +130,7 @@ jsonlite::write_json(list(tarefas = list(), projetos = list(), provedores = list
                      file.path(cache, "orquestracao.json"), auto_unbox = TRUE)
 shiny::testServer(shiny::shinyAppDir("default/painel"), {
   session$setInputs(periodo = c(Sys.Date(), Sys.Date()))
+  session$setInputs(projeto = character())
   stopifnot(grepl("Nenhuma tarefa de automação cadastrada", output$g_vazia$html),
             grepl("Nenhuma observação", output$g_provedores_aviso$html))
 })

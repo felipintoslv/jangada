@@ -376,7 +376,6 @@ server <- function(input, output, session) {
     visNetwork::visLegend(v, useGroups = TRUE, position = "right", width = 0.22, zoom = FALSE)
   }
 
-
   dados <- reactivePoll(3000, session,
     checkFunc = function() file.mtime(file.path(cache, "coleta.json")),
     valueFunc = function() carregar_cache(cache))
@@ -1005,7 +1004,7 @@ server <- function(input, output, session) {
     motor <- ifelse(d$destino == "local", "ollama",
                     ifelse(d$destino == "codex-economico", "codex", d$destino))
     cor <- unname(paleta()[motor])
-    cor[is.na(cor)] <- "#B3B3B3"
+    cor[is.na(cor)] <- aparencia()$neutra
     d$destino <- ifelse(d$destino == "codex-economico", "Codex econômico", d$destino)
     pl(plotly::plot_ly(d, x = ~quantidade, y = ~destino, type = "bar", orientation = "h",
       marker = list(color = cor), text = ~quantidade, textposition = "outside",

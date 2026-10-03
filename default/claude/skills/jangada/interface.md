@@ -45,8 +45,12 @@
   Para comparar todas as séries na mesma escala, defina também o mesmo
   intervalo de valores em cada painel. Rótulos de valores na ponta podem
   ser cortados; pequenos múltiplos usam o nome da série acima do painel.
-- A paleta do protocolo de gráficos foi validada sobre branco. O painel
-  mantém esse fundo nos gráficos, mesmo com a interface em modo escuro.
+- A paleta clara do protocolo de gráficos foi validada sobre branco. O
+  painel usa uma variante no modo escuro, com fundo e texto do matugen.
+  Plotly e visNetwork precisam ler o seletor de modo numa expressão reativa:
+  trocar só o tema do bslib não atualiza fundos, rótulos e séries dos gráficos.
+  A variante escura tem contraste mínimo de 6,07:1 sobre o fundo padrão
+  `#141311`; sua separação sob simulação de daltonismo não foi validada.
 
 ## Tema (`jangada-tema`)
 
