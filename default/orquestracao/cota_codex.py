@@ -1,6 +1,7 @@
 """Consulta somente metadados de cota, sem iniciar conversas ou executar ferramentas."""
 
 import base64
+import contextlib
 import datetime
 import json
 import math
@@ -46,7 +47,8 @@ def percentual(dados, agora):
     return min(restantes), min(60, math.floor(min(renovacoes) - agora))
 
 
-def consultar(pasta):
+@contextlib.contextmanager
+def sinais_codex():
     anteriores = {}
 
     def interromper(numero, _quadro):
@@ -55,13 +57,14 @@ def consultar(pasta):
     try:
         for numero in (signal.SIGTERM, signal.SIGHUP):
             anteriores[numero] = signal.signal(numero, interromper)
-        return _consultar(pasta)
+        yield
     finally:
         for numero, tratador in anteriores.items():
             signal.signal(numero, tratador)
 
 
-def _consultar(pasta):
+@contextlib.contextmanager
+def ambiente_codex(pasta):
     casa = pathlib.Path(os.environ.get('CODEX_HOME', str(pathlib.Path.home() / '.codex')))
     fd = os.open(casa / 'auth.json', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, 'rb') as origem:
@@ -98,11 +101,16 @@ def _consultar(pasta):
                         XDG_STATE_HOME=temporario, XDG_CONFIG_HOME=temporario,
                         XDG_CACHE_HOME=temporario, XDG_DATA_HOME=temporario,
                         JANGADA_HOOK_DESLIGADO='1')
+        yield temporario, ambiente
+
+
+def consultar(pasta, grupo_proprio=True):
+    with sinais_codex(), ambiente_codex(pasta) as (temporario, ambiente):
         processo = subprocess.Popen(['codex', '--no-daemon', '-c',
                                      'log_dir=' + json.dumps(str(pathlib.Path(temporario) / 'log')),
                                      'app-server', '--stdio'], cwd=temporario, env=ambiente,
                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                    stderr=subprocess.DEVNULL, start_new_session=True)
+                                    stderr=subprocess.DEVNULL, start_new_session=grupo_proprio)
         limite = time.monotonic() + 10
         buffer, tamanho = b'', 0
 
@@ -141,7 +149,10 @@ def _consultar(pasta):
             return solicitar(2, 'account/rateLimits/read', {})
         finally:
             try:
-                os.killpg(processo.pid, signal.SIGKILL)
+                if grupo_proprio:
+                    os.killpg(processo.pid, signal.SIGKILL)
+                else:
+                    processo.kill()
             except ProcessLookupError:
                 pass
             processo.wait(timeout=5)
