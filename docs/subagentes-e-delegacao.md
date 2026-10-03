@@ -346,6 +346,19 @@ a tarefa ou o conteúdo de uma fonte exige outro identificador. Ciclos e depend�
 de gravar o plano. As fontes precisam estar dentro do projeto; caminhos
 resolvidos e resumos SHA-256 são preservados na especificação.
 
+O campo opcional `prioridade` aceita, nesta ordem, `critical`, `high`,
+`normal`, `low` e `background`. Sem esse campo, conserva `normal` e a
+ordem anterior: data de criação, depois identificador. A fila mostra a
+prioridade declarada na última coluna.
+
+Na reserva, tarefas prontas são ordenadas pela prioridade efetiva. Uma
+tarefa em fila transmite sua prioridade aos antecessores também em fila,
+para antecipar os pré-requisitos de um trabalho importante. A transmissão
+é transitiva e para em tarefas pausadas, em revisão ou fora da fila.
+Dependências continuam exigindo conclusão; a prioridade não interrompe
+uma reserva existente nem altera risco, qualidade, permissões ou orçamento.
+O evento `reservada` registra as prioridades declarada e efetiva.
+
 `jangada-task T1 pausar`, `retomar`, `cancelar` e `repetir` controlam tarefas
 fora de execução. A repetição mantém o limite total de tentativas. Uma
 reserva expirada exige conferência antes de repetir; outro executor não

@@ -109,6 +109,16 @@ class Execucao(unittest.TestCase):
         argumentos = json.loads(self.registro.read_text())['args']
         self.assertTrue(any('/artefatos/' in argumento for argumento in argumentos))
 
+    def test_prioridade_critica_nao_amplia_permissao_remota(self):
+        self.estado.importar([self.tarefa('Normal'), self.tarefa('Critica', prioridade='critical',
+                                                               permitir_remoto=False)])
+        resultado = self.rodar()[0]
+        self.assertEqual(resultado['tarefa'], 'Critica')
+        argumentos = json.loads(self.registro.read_text())['args']
+        self.assertNotIn('--permitir-remoto', argumentos)
+        self.assertNotIn('--permitir-codex', argumentos)
+        self.assertEqual(resultado['status'], 'REVIEW_REQUIRED')
+
     def test_cota_nao_gasta_tentativa_e_preserva_espera(self):
         self.estado.importar([self.tarefa(max_tentativas=1)])
         with patch.dict(os.environ, MODO_TESTE='cota'):

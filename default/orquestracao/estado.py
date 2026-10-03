@@ -20,6 +20,7 @@ ESTADOS = {
 }
 FINAIS = {'COMPLETED', 'FAILED', 'CANCELLED'}
 IDENTIFICADOR = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$')
+PRIORIDADES = ('critical', 'high', 'normal', 'low', 'background')
 
 
 def serializar(valor):
@@ -41,6 +42,8 @@ def tarefa_valida(tarefa):
         raise ValueError('risco deve estar entre 0 e 4')
     if tarefa['qualidade'] not in ('low', 'medium', 'high', 'critical'):
         raise ValueError('qualidade inválida')
+    if tarefa.get('prioridade', 'normal') not in PRIORIDADES:
+        raise ValueError('prioridade inválida')
     if not isinstance(tarefa['fontes'], list) or not tarefa['fontes'] or any(
         not isinstance(fonte, str) or not fonte for fonte in tarefa['fontes']
     ):
@@ -66,6 +69,25 @@ def tarefa_valida(tarefa):
         if campo in tarefa and type(tarefa[campo]) is not bool:
             raise ValueError(f'{campo} deve ser booleano')
     serializar(tarefa)
+
+
+def prioridades_efetivas(tarefas, estados):
+    mapa = {t['id']: t for t in tarefas}
+    prioridades = {t['id']: PRIORIDADES.index(t['especificacao'].get('prioridade', 'normal')) for t in tarefas}
+
+    propagadas = {}
+    pendentes = [(t['id'], prioridades[t['id']]) for t in tarefas if estados[t['id']] == 'QUEUED']
+    while pendentes:
+        identificador, prioridade = pendentes.pop()
+        if estados[identificador] != 'QUEUED':
+            continue
+        prioridade = min(prioridades[identificador], prioridade)
+        if propagadas.get(identificador, len(PRIORIDADES)) <= prioridade:
+            continue
+        prioridades[identificador] = prioridade
+        propagadas[identificador] = prioridade
+        pendentes.extend((dep, prioridade) for dep in mapa[identificador]['especificacao'].get('dependencias', []))
+    return prioridades
 
 
 class Estado:
@@ -226,14 +248,17 @@ class Estado:
                         estados[tarefa['id']] = 'BLOCKED'
                         self.evento(tarefa['id'], 'dependencia_impedida', {'dependencias': bloqueadas})
                         alterou = True
-            for tarefa in tarefas:
+            prioridades = prioridades_efetivas(tarefas, estados)
+            for tarefa in sorted(tarefas, key=lambda t: (prioridades[t['id']], t['criado'], t['id'])):
                 spec = tarefa['especificacao']
                 if estados[tarefa['id']] != 'QUEUED' or any(estados[dep] != 'COMPLETED' for dep in spec.get('dependencias', [])):
                     continue
                 dono = str(uuid.uuid4())
                 self.db.execute('UPDATE tarefas SET status=?,tentativas=tentativas+1,dono=?,prazo=?,atualizado=? WHERE id=?',
                                 ('RUNNING', dono, agora + duracao, agora, tarefa['id']))
-                self.evento(tarefa['id'], 'reservada', {'dono': dono})
+                self.evento(tarefa['id'], 'reservada', {'dono': dono,
+                            'prioridade': spec.get('prioridade', 'normal'),
+                            'prioridade_efetiva': PRIORIDADES[prioridades[tarefa['id']]]})
                 return spec, dono
         return None
 

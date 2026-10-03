@@ -55,6 +55,67 @@ class Persistencia(unittest.TestCase):
                 self.estado.importar(plano)
             self.assertEqual(self.estado.listar(), [])
 
+    def test_prioridades_ordenam_tarefas_prontas(self):
+        self.estado.importar([tarefa('B', prioridade='background'), tarefa('N'),
+                             tarefa('L', prioridade='low'), tarefa('H', prioridade='high'),
+                             tarefa('C', prioridade='critical')])
+        escolhidas = []
+        for _ in range(5):
+            spec, dono = self.estado.reservar()
+            escolhidas.append(spec['id'])
+            self.estado.finalizar(spec['id'], dono, 'WAITING_REVIEWER', {})
+        self.assertEqual(escolhidas, ['C', 'H', 'N', 'L', 'B'])
+
+    def test_empate_preserva_ordem_antiga_e_identificador(self):
+        with patch.object(MODULO.time, 'time', return_value=100):
+            self.estado.importar([tarefa('B'), tarefa('A')])
+        with patch.object(MODULO.time, 'time', return_value=101):
+            self.estado.importar([tarefa('AnteriorNoNome')])
+        self.assertEqual(self.estado.reservar()[0]['id'], 'A')
+
+    def test_dependencia_herda_prioridade_critica_sem_alterar_especificacao(self):
+        self.estado.importar([tarefa('Normal'), tarefa('Base', prioridade='background'),
+                             tarefa('Final', prioridade='critical', dependencias=['Base'])])
+        spec, dono = self.estado.reservar()
+        self.assertEqual(spec['id'], 'Base')
+        self.assertEqual(spec['prioridade'], 'background')
+        evento = self.estado.db.execute("SELECT dados FROM eventos WHERE evento='reservada'").fetchone()
+        self.assertEqual(json.loads(evento['dados'])['prioridade_efetiva'], 'critical')
+        self.estado.finalizar('Base', dono, 'REVIEW_REQUIRED', {}, 'relatório')
+        self.assertEqual(self.estado.reservar()[0]['id'], 'Normal')
+
+    def test_prioridade_transitiva_em_cadeia_longa(self):
+        plano = [tarefa('Normal')]
+        for indice in range(1100):
+            plano.append(tarefa(f'P{indice}', prioridade='background',
+                               dependencias=[f'P{indice - 1}'] if indice else []))
+        plano.append(tarefa('Final', prioridade='critical', dependencias=['P1099']))
+        self.estado.importar(plano)
+        self.assertEqual(self.estado.reservar()[0]['id'], 'P0')
+
+    def test_descendente_pausado_nao_promove_dependencia(self):
+        self.estado.importar([tarefa('Normal'), tarefa('Base', prioridade='background'),
+                             tarefa('Final', prioridade='critical', dependencias=['Base'])])
+        self.estado.alterar('Final', 'pausar')
+        self.assertEqual(self.estado.reservar()[0]['id'], 'Normal')
+
+    def test_descendente_bloqueado_nao_promove_outro_antecessor(self):
+        self.estado.importar([tarefa('Normal'), tarefa('Base', prioridade='background'),
+                             tarefa('Cancelada'), tarefa('Final', prioridade='critical',
+                                                        dependencias=['Base', 'Cancelada'])])
+        self.estado.alterar('Cancelada', 'cancelar')
+        self.assertEqual(self.estado.reservar()[0]['id'], 'Normal')
+        self.assertEqual(next(t for t in self.estado.listar() if t['id'] == 'Final')['status'], 'BLOCKED')
+
+    def test_reinicio_preserva_prioridade_sem_interromper_reserva(self):
+        self.estado.importar([tarefa('Normal')])
+        self.estado.reservar()
+        self.estado.importar([tarefa('Critica', prioridade='critical')])
+        outro = MODULO.Estado(self.pasta)
+        self.addCleanup(outro.fechar)
+        self.assertEqual(outro.reservar()[0]['id'], 'Critica')
+        self.assertTrue(all(t['status'] == 'RUNNING' for t in outro.listar()))
+
     def test_dependencia_exige_revisao(self):
         self.estado.importar([tarefa(), tarefa('T2', dependencias=['T1'])])
         _, dono = self.estado.reservar()
@@ -145,7 +206,8 @@ class Persistencia(unittest.TestCase):
     def test_entrada_invalida_nao_cria_tarefas(self):
         for alteracao in ({'risco': True}, {'fontes': []}, {'qualidade': 'unknown'},
                           {'max_tentativas': 0}, {'dependencias': ['T1']},
-                          {'permitir_remoto': 'true'}, {'permitir_codex': 'true'}, {'requisitos': ['-opcao']}):
+                          {'permitir_remoto': 'true'}, {'permitir_codex': 'true'}, {'requisitos': ['-opcao']},
+                          {'prioridade': 'urgente'}, {'prioridade': True}, {'prioridade': []}):
             with self.subTest(alteracao=alteracao), self.assertRaises(ValueError):
                 self.estado.importar([tarefa(**alteracao)])
         self.assertEqual(self.estado.listar(), [])

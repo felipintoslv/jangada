@@ -131,7 +131,8 @@ def main():
             else:
                 for item in tarefas:
                     spec = item['especificacao']
-                    print(f'{item["id"]}\t{item["status"]}\t{spec["capacidade"]}\t{item["tentativas"]} tentativa(s)')
+                    print(f'{item["id"]}\t{item["status"]}\t{spec["capacidade"]}\t{item["tentativas"]} tentativa(s)'
+                          f'\t{spec.get("prioridade", "normal")}')
         elif args.comando in {'executar', 'retomar'}:
             global_estado = Estado(raiz_estado / 'agentes/runtime', raiz=raiz_estado)
             try:
