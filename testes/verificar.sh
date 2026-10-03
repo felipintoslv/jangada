@@ -70,6 +70,13 @@ for d in default/claude/skills/*/; do
   grep -q '^description:' <<<"$cab" || falha "skill ${d##*/}: sem description"
 done
 
+# O tema de gráficos tem um arquivo por linguagem; as cores não podem divergir.
+cores_do_tema() { grep -o '^ *"\?[a-z]\+"\? *[=:] *"#[0-9A-Fa-f]\{6\}"' "$1" | tr -d ' "' | tr '=' ':' | sort; }
+diff <(cores_do_tema default/claude/skills/graficos/tema_dv.R) <(cores_do_tema default/claude/skills/graficos/tema_dv.py) \
+  || falha "skill graficos: tintas ou paleta diferem entre tema_dv.R e tema_dv.py"
+[[ "$(cores_do_tema default/claude/skills/graficos/tema_dv.R | wc -l)" -eq 11 ]] \
+  || falha "skill graficos: esperadas 5 tintas e 6 cores em tema_dv.R"
+
 passo "TOML"
 if python3 -c 'import tomllib' 2>/dev/null; then
   python3 -c 'import tomllib,sys; tomllib.load(open(sys.argv[1],"rb"))' default/matugen/config.toml || falha "matugen/config.toml"

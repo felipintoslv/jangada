@@ -209,6 +209,10 @@ tarefa combina com a descrição dela, mesmo abertos em outro projeto:
   com comentários curtos inseridos no PDF ou DOCX. Conduz as etapas do projeto
   `jangada-academic-review` (revisores, critical gate, anotação e QA) e
   mantém o estado e a rastreabilidade.
+- `graficos`: gráfico para relatório em R (ggplot2) ou Python (matplotlib),
+  com a escolha do tipo pela relação a mostrar, o tema padrão (`tema_dv.R` e
+  `tema_dv.py`, copiados para o projeto), título e fonte em comentário fora
+  da imagem e a checklist de 41 itens.
 
 O agy lê o mesmo `SKILL.md`, sem ajuste no frontmatter. Uma pasta ou link
 alheio com o mesmo nome nas duas pastas fica como está, com aviso.
