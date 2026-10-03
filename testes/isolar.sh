@@ -104,6 +104,20 @@ conferir "caso 1: bin do agy em camada temporária ou somente leitura" bash -c \
   _ "$casa/.gemini/antigravity-cli/bin" "$tmp/args"
 grep -A1 -xF -- --tmp-overlay "$tmp/args" | grep -qxF "$casa/.gemini/antigravity-cli/bin" && sobreposicao=1 || sobreposicao=0
 
+# Ambiente mínimo: só as variáveis da lista passam.
+conferir "caso 1: sem a opção, variável comum não é retirada" \
+  bash -c '! grep -A1 -xF -- --unsetenv "$1" | grep -qxF LESS' _ "$tmp/args"
+mostrar JANGADA_ISOLAR_AMBIENTE=minimo JANGADA_ISOLAR_AMBIENTE_MANTER=R_LIBS_USER:OUTRA \
+  LESS=x SENHA_DO_BANCO=x R_LIBS_USER=x ANTHROPIC_API_KEY=x
+retirada() { grep -A1 -xF -- --unsetenv "$tmp/args" | grep -qxF "$1"; }
+conferir "ambiente mínimo: variável fora da lista sai" retirada SENHA_DO_BANCO
+conferir "ambiente mínimo: variável comum sai" retirada LESS
+conferir "ambiente mínimo: PATH, HOME e as do jangada ficam" \
+  bash -c 'for v in PATH HOME JANGADA_PATH XDG_STATE_HOME ANTHROPIC_API_KEY; do
+    ! grep -A1 -xF -- --unsetenv "$1" | grep -qxF "$v" || exit 1; done' _ "$tmp/args"
+conferir "ambiente mínimo: JANGADA_ISOLAR_AMBIENTE_MANTER fica" bash -c '! "$@"' _ retirada R_LIBS_USER
+conferir "ambiente mínimo: o valor não aparece nos argumentos" bash -c '! grep -q "SENHA_DO_BANCO=" "$1"' _ "$tmp/args"
+
 # Casa mínima: a pasta pessoal some e volta só o que está na lista.
 conferir "caso 1: sem a opção, a pasta pessoal não é esvaziada" bash -c '! grep -A1 -xF -- --tmpfs "$1" | grep -qxF "$2"' _ "$tmp/args" "$casa"
 mostrar JANGADA_ISOLAR_CASA=minima JANGADA_ISOLAR_CASA_LER="$casa/extra"
@@ -256,6 +270,10 @@ EOF
   conferir "caso 3: variável de credencial não chega ao agente" \
     isolar "$tmp/wt" GH_TOKEN=segredo ANTHROPIC_API_KEY=chave "$repo_jangada/bin/jangada-isolar" -- \
     bash -c '[[ -z "${GH_TOKEN:-}" && "$ANTHROPIC_API_KEY" == chave ]]'
+  conferir "ambiente mínimo: variável fora da lista não chega ao agente" \
+    isolar "$tmp/wt" JANGADA_ISOLAR_AMBIENTE=minimo JANGADA_ISOLAR_AMBIENTE_MANTER=FICA \
+    SENHA_DO_BANCO=segredo FICA=sim ANTHROPIC_API_KEY=chave "$repo_jangada/bin/jangada-isolar" -- \
+    bash -c '[[ -z "${SENHA_DO_BANCO:-}" && "$FICA" == sim && "$ANTHROPIC_API_KEY" == chave && -n "$PATH" && "$JANGADA_ISOLADO" == 1 ]]'
   conferir "caso 3: hook do git não é gravável" roda "! echo x >'$tmp/repo/.git/hooks/pre-commit'"
   conferir "caso 3: config do git não é gravável" roda '! git config --local user.x y'
   conferir "caso 3: arquivo .git do worktree não é gravável" roda '! echo "gitdir: /x" >.git'

@@ -22,6 +22,9 @@
 # JANGADA_ISOLAR_CASA=minima inverte a leitura da pasta pessoal: ela começa
 # vazia e só aparece o que os agentes e o jangada usam, mais o que estiver
 # em JANGADA_ISOLAR_CASA_LER (caminhos separados por ":").
+# JANGADA_ISOLAR_AMBIENTE=minimo faz o mesmo com o ambiente: só passam as
+# variáveis do sistema, do jangada e dos agentes, mais as de
+# JANGADA_ISOLAR_AMBIENTE_MANTER (nomes separados por ":").
 #
 # Ficam somente leitura, mesmo dentro dos graváveis, os arquivos que o git,
 # o Claude ou o agy leem como configuração ou executam fora do isolamento:
@@ -41,7 +44,7 @@ mostrar=0
 while (($#)); do
   case "$1" in
     --mostrar) mostrar=1; shift ;;
-    -h|--ajuda|--help) sed -n '2,35s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    -h|--ajuda|--help) sed -n '2,38s/^# \{0,1\}//p' "$0"; exit 0 ;;
     --) shift; break ;;
     *) break ;;
   esac
@@ -416,8 +419,24 @@ for p in "${ocultos[@]}"; do
   fi
 done
 
+# Ambiente mínimo: sai toda variável exportada que não está na lista. Vai por
+# nome (--unsetenv) e não por --clearenv com --setenv, que poria os valores na
+# linha de comando do bwrap e na saída do --mostrar.
+if [[ "${JANGADA_ISOLAR_AMBIENTE:-}" == minimo ]]; then
+  while IFS= read -r v; do
+    case "$v" in
+      HOME | USER | LOGNAME | SHELL | PATH | PWD | TERM | COLORTERM | LANG | LANGUAGE | TZ | TMPDIR) continue ;;
+      EDITOR | VISUAL | PAGER | NO_COLOR | DBUS_SESSION_BUS_ADDRESS | SSL_CERT_FILE | SSL_CERT_DIR) continue ;;
+      HTTP_PROXY | HTTPS_PROXY | NO_PROXY | http_proxy | https_proxy | no_proxy) continue ;;
+      LC_* | XDG_* | JANGADA_* | MISE_* | NODE_*) continue ;;
+      CLAUDE_* | ANTHROPIC_* | CODEX_* | OPENAI_* | GEMINI_* | GOOGLE_* | AGY_* | ANTIGRAVITY_*) continue ;;
+    esac
+    [[ ":${JANGADA_ISOLAR_AMBIENTE_MANTER:-}:" == *":$v:"* ]] || args+=(--unsetenv "$v")
+  done < <(compgen -e)
+fi
+
 # As credenciais que os arquivos ocultos guardam também chegam por variável.
-# O resto do ambiente é herdado: o que o usuário exportou, o agente lê.
+# Sem o ambiente mínimo, o resto é herdado: o que o usuário exportou, o agente lê.
 credenciais=()
 for v in GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN GITLAB_TOKEN AWS_ACCESS_KEY_ID \
          AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AZURE_CLIENT_SECRET RCLONE_CONFIG_PASS \

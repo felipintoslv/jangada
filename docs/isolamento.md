@@ -33,7 +33,8 @@ o agente só conheça os dados do projeto:
 - **Ambiente.** As variáveis são herdadas. Saem as de sessão gráfica e as de
   credencial que correspondem aos ocultos (`GH_TOKEN`, `GITHUB_TOKEN`,
   `AWS_SECRET_ACCESS_KEY`, `VAULT_TOKEN` e as demais da lista no
-  `jangada-isolar`). Outro segredo exportado no shell chega ao agente.
+  `jangada-isolar`). Outro segredo exportado no shell chega ao agente, a menos
+  que `JANGADA_ISOLAR_AMBIENTE=minimo` esteja ligado (seção "Ambiente mínimo").
 - **Keyring.** Com o agy instalado, o proxy do D-Bus libera o serviço
   `org.freedesktop.secrets` inteiro, porque o agy guarda o login ali. O
   filtro não restringe a um item: com o keyring destrancado, o agente alcança
@@ -134,6 +135,20 @@ conhece: bibliotecas de R em `~/R`, `~/.cargo`, `~/.nvm` ou dados que o
 projeto alcança por link (`.jangada/links`) precisam entrar em
 `JANGADA_ISOLAR_CASA_LER`. O que fica fora da pasta pessoal (`/etc`, `/mnt`,
 outros discos) segue legível.
+
+## Ambiente mínimo
+
+Com `JANGADA_ISOLAR_AMBIENTE=minimo`, o agente recebe só as variáveis de uma
+lista: as do sistema (`HOME`, `PATH`, `TERM`, `LANG`, `LC_*`, `XDG_*`, proxy e
+certificados), as do jangada e do mise, e as dos agentes (`CLAUDE_*`,
+`ANTHROPIC_*`, `CODEX_*`, `OPENAI_*`, `GEMINI_*`, `GOOGLE_*`, `AGY_*`,
+`NODE_*`). As demais saem, inclusive as que o `~/.zshenv` exportou antes de o
+jangada abrir. O que o projeto usa (`R_LIBS_USER`, `JAVA_HOME`) entra em
+`JANGADA_ISOLAR_AMBIENTE_MANTER`, separado por `:`.
+
+As variáveis de credencial conhecidas saem mesmo quando listadas ali. O shell
+que o agente abre dentro do isolamento lê de novo os arquivos de início: o que
+eles exportam volta, a menos que a casa mínima os deixe de fora.
 
 ## Falhas
 
