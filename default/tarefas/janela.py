@@ -30,7 +30,7 @@ class NovaTarefa(QDialog):
         self.projeto.setPlaceholderText('Pasta do projeto')
         s = janela.sessoes.get(janela.selecionada())
         if s and janela.real:
-            self.projeto.setText(s.dir)
+            self.projeto.setText(s.raiz or s.dir)
         elif not janela.real:
             self.projeto.setText(str(Path.cwd()))
         escolher = QPushButton('Escolher pasta')
@@ -119,6 +119,7 @@ class Janela(QMainWindow):
         self.jangada = Path(jangada or Path.home() / '.local/share/jangada').expanduser().resolve()
         self.estado_dir = Path(estado or Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'jangada/agentes').expanduser()
         self.sessoes = {}
+        self.dados_validos = False
         self.criadas = {}
         self.formulario = None
         self.previas = {}
@@ -294,6 +295,7 @@ class Janela(QMainWindow):
                     return
 
     def mostrar(self, sessoes):
+        self.dados_validos = True
         anterior = self.selecionada()
         primeira_carga = not self.sessoes and anterior is None
         self.sessoes = sessoes
@@ -337,7 +339,7 @@ class Janela(QMainWindow):
     def selecionar(self, *_):
         s = self.sessoes.get(self.selecionada())
         ocupada = self.acao.state() != QProcess.ProcessState.NotRunning
-        self.abrir.setEnabled(s is not None and (not ocupada))
+        self.abrir.setEnabled(self.dados_validos and s is not None and (not ocupada))
         if not s:
             self.nome.setText('Selecione uma tarefa')
             self.situacao.clear()
@@ -372,6 +374,8 @@ class Janela(QMainWindow):
         barra.setValue(barra.maximum() if acompanhar else posicao)
 
     def solicitar_previa(self, sessao):
+        if not self.dados_validos:
+            return
         if self.previa.state() != QProcess.ProcessState.NotRunning:
             return
         self.previa_alvo = (sessao.nome, sessao.atualizado, sessao.inicio)
@@ -452,8 +456,9 @@ class Janela(QMainWindow):
         self.mostrar(sessoes)
 
     def falha(self, mensagem):
-        self.mostrar({})
-        self.status.setText(mensagem)
+        self.dados_validos = False
+        self.abrir.setEnabled(False)
+        self.status.setText(mensagem + ' Últimos dados preservados; abertura indisponível até atualizar.')
 
     def consulta_erro(self, erro):
         if erro == QProcess.ProcessError.FailedToStart:
@@ -465,7 +470,7 @@ class Janela(QMainWindow):
 
     def focar(self):
         nome = self.selecionada()
-        if nome not in self.sessoes or not NOME.fullmatch(nome):
+        if not self.dados_validos or nome not in self.sessoes or not NOME.fullmatch(nome):
             return
         if not self.real:
             self.status.setText(f'Simulação: abriria a sessão {nome}.')

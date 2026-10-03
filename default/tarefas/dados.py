@@ -69,6 +69,7 @@ class Sessao:
     projeto: str = 'Sem projeto'
     mensagem: str = ''
     inicio: str = ''
+    raiz: str = ''
 
 
 def texto(valor):
@@ -102,7 +103,7 @@ def ler_lista(saida, pasta):
         dados = registro(pasta, nome)
         raiz = texto(dados.get('raiz')) or diretorio
         inicio = texto(dados.get('desde'))
-        sessoes[nome] = Sessao(nome, estado, diretorio, atualizado, html.unescape(ramo), texto(dados.get('tarefa')) or html.unescape(tarefa), texto(dados.get('agente')) or 'Não informado', Path(raiz).name or 'Sem projeto', texto(dados.get('mensagem')), inicio)
+        sessoes[nome] = Sessao(nome, estado, diretorio, atualizado, html.unescape(ramo), texto(dados.get('tarefa')) or html.unescape(tarefa), texto(dados.get('agente')) or 'Não informado', Path(raiz).name or 'Sem projeto', texto(dados.get('mensagem')), inicio, raiz)
     return sessoes
 
 

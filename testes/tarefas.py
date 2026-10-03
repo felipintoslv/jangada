@@ -86,9 +86,11 @@ class Interface(unittest.TestCase):
             self.assertIn('Turno encerrado', central.situacao.text())
             self.assertIn('Turno encerrado', central.linha_tempo.toPlainText())
             self.assertEqual(central.selecionada(), 'projeto--um')
+            historico = central.linha_tempo.toPlainText()
+            atividade = central.ultima_atividade.text()
             central.falha('Falha de consulta')
-            self.assertEqual(central.linha_tempo.toPlainText(), '')
-            self.assertEqual(central.ultima_atividade.text(), '')
+            self.assertEqual(central.linha_tempo.toPlainText(), historico)
+            self.assertEqual(central.ultima_atividade.text(), atividade)
             self.assertFalse(central.abrir.isEnabled())
         finally:
             central.close()
@@ -156,13 +158,39 @@ class Interface(unittest.TestCase):
         aguardar(lambda: self.janela.acao.state() == QProcess.ProcessState.NotRunning)
         self.assertEqual(json.loads((self.raiz / 'acao.json').read_text()), ['--focar', 'projeto--um'])
 
-    def test_erro_nao_deixa_acoes_antigas(self):
+    def test_erro_preserva_selecao_e_historico_sem_permitir_acao(self):
+        self.janela.selecionar_nome('projeto--dois')
+        historico = self.janela.linha_tempo.toPlainText()
         (self.raiz / 'falhar').touch()
         self.janela.atualizar()
         self.esperar_consulta()
-        self.assertFalse(self.janela.sessoes)
+        self.assertEqual(self.janela.selecionada(), 'projeto--dois')
+        self.assertEqual(self.janela.linha_tempo.toPlainText(), historico)
         self.assertFalse(self.janela.abrir.isEnabled())
         self.assertIn('Erro de consulta simulado', self.janela.status.text())
+        self.janela.selecionar()
+        self.assertFalse(self.janela.abrir.isEnabled())
+        with patch.object(self.janela.acao, 'start') as abrir:
+            self.janela.focar()
+            abrir.assert_not_called()
+        (self.raiz / 'falhar').unlink()
+        self.janela.atualizar()
+        self.esperar_consulta()
+        self.assertEqual(self.janela.selecionada(), 'projeto--dois')
+        self.assertEqual(self.janela.linha_tempo.toPlainText(), historico)
+        self.assertTrue(self.janela.abrir.isEnabled())
+
+    def test_nova_tarefa_sugere_raiz_em_vez_de_worktree(self):
+        registro = self.estado / 'projeto--um.json'
+        dados = json.loads(registro.read_text())
+        dados['raiz'] = str(self.raiz / 'original')
+        registro.write_text(json.dumps(dados))
+        self.janela.atualizar()
+        self.esperar_consulta()
+        self.janela.nova_tarefa()
+        self.assertEqual(self.janela.formulario.projeto.text(), dados['raiz'])
+        sem_raiz = ler_lista('ativo\tsem-raiz\t/tmp/worktree\t\t\tTarefa\n', self.estado)
+        self.assertEqual(sem_raiz['sem-raiz'].raiz, '/tmp/worktree')
 
     def test_timer_atualiza_sem_intervencao(self):
         self.lista.write_text(self.lista.read_text().replace('aguardando', 'concluido'))
@@ -185,7 +213,8 @@ class Interface(unittest.TestCase):
         self.comando.unlink()
         self.janela.atualizar()
         self.esperar_consulta()
-        self.assertFalse(self.janela.sessoes)
+        self.assertTrue(self.janela.sessoes)
+        self.assertFalse(self.janela.abrir.isEnabled())
         self.assertIn('Confira o caminho', self.janela.status.text())
 
     def test_registro_invalido_e_link(self):
@@ -353,6 +382,17 @@ class Interface(unittest.TestCase):
         pasta.chmod(0o700)
         nome = central.nome_soquete(self.raiz, self.estado, True)
         self.assertEqual(Path(nome).parent, pasta)
+
+    def test_importacao_interna_informa_causa_sem_pedir_qt(self):
+        codigo = ('import sys, types, central; '
+                  'sys.modules["janela"] = types.ModuleType("janela"); central.main()')
+        resultado = subprocess.run(
+            [sys.executable, '-c', codigo, '--real', '--jangada', str(self.raiz),
+             '--estado', str(self.estado)], capture_output=True, text=True, timeout=5,
+            env=dict(os.environ, PYTHONPATH=str(Path(central.__file__).parent)))
+        self.assertNotEqual(resultado.returncode, 0)
+        self.assertIn('falha ao importar janela', resultado.stderr)
+        self.assertNotIn('instale python-pyqt6', resultado.stderr)
 
     def test_cli_waybar_sem_display(self):
         ambiente = dict(os.environ, QT_QPA_PLATFORM='inexistente')

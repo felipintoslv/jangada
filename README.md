@@ -557,9 +557,12 @@ Cada sessão representa uma tarefa. Pendências aparecem primeiro, seguidas
 por interrupções, trabalho em andamento e turnos encerrados.
 
 A consulta automática roda a cada dois segundos, preservando a seleção.
+Uma falha preserva os últimos dados e o histórico, com aviso de erro; a abertura
+de sessões fica desabilitada até a próxima consulta bem-sucedida.
 O detalhe mostra última atividade, saída recente do terminal e até 50 mudanças
 observadas nesta janela. O histórico começa ao abrir a central, fica em memória
-e recomeça quando a execução da sessão muda. A coluna Atualização usa a data
+e recomeça quando a execução da sessão muda. Sessões que saem da lista deixam
+de ser acompanhadas. A coluna Atualização usa a data
 publicada pelo agente, sem tratar uma consulta recente como atividade recente.
 
 **Turno encerrado** corresponde ao estado `concluido` dos hooks.
