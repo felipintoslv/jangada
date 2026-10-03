@@ -55,6 +55,25 @@ jsonlite::write_json(list(tarefas = list(
   projetos = list(list(projeto = "teste", chamadas_confirmadas = 2, custo_estimado = NULL)),
   provedores = list(), erros = list()), file.path(cache, "orquestracao.json"), auto_unbox = TRUE, null = "null")
 shiny::testServer(shiny::shinyAppDir("default/painel"), {
+  session$setInputs(modo = "dark", periodo = c(Sys.Date(), Sys.Date()), executor = "ollama")
+  escuro <- jsonlite::fromJSON(output$b_motores_dia, simplifyVector = FALSE)
+  vazio_escuro <- plotly::plotly_build(vazio())$x$layout
+  stopifnot(escuro$x$layout$paper_bgcolor == aparencia()$fundo,
+            escuro$x$layout$font$color == aparencia()$texto,
+            vazio_escuro$font$color == aparencia()$texto)
+  session$setInputs(modo = "light")
+  claro <- jsonlite::fromJSON(output$b_motores_dia, simplifyVector = FALSE)
+  stopifnot(claro$x$layout$paper_bgcolor == "#FFFFFF",
+            claro$x$layout$font$color == "#1A1A1A",
+            claro$x$data[[1]]$marker$color != escuro$x$data[[1]]$marker$color)
+  rede <- list(nos = data.frame(id = 1:2, label = c("Leitura", "Teste"), group = c("leitura e busca", "teste")),
+               arestas = data.frame(from = 1L, to = 2L))
+  rede_clara <- grafo(rede)$x
+  session$setInputs(modo = "dark")
+  rede_escura <- grafo(rede)$x
+  stopifnot(rede_escura$options$nodes$font$color == aparencia()$texto,
+            rede_clara$options$nodes$font$color == "#1A1A1A",
+            rede_escura$options$edges$color$color != rede_clara$options$edges$color$color)
   session$setInputs(periodo = c(Sys.Date(), Sys.Date()), executor = "ollama")
   stopifnot(nrow(motores()) == 1, nrow(pesqs()) == 1,
             identical(output$f_fato, "Sem avaliação"),
@@ -88,6 +107,10 @@ shiny::testServer(shiny::shinyAppDir("default/painel"), {
   session$setInputs(projeto = "outro")
   stopifnot(length(sub()$destinos) == 1, sub()$destinos$local == 1,
             identical(output$g_concluidas, "1"))
+  stopifnot(grepl("Nenhuma observação", output$g_provedores_aviso$html))
+  session$setInputs(projeto = "sem-fila")
+  stopifnot(grepl("projetos selecionados", output$g_vazia$html))
+
 })
 r7 <- r[rep(1, 7), ]
 r7$id <- paste0("serie", seq_len(7))
@@ -98,6 +121,19 @@ shiny::testServer(shiny::shinyAppDir("default/painel"), {
   grafico <- jsonlite::fromJSON(output$b_motores_dia, simplifyVector = FALSE)
   stopifnot(length(grafico$x$data) >= 7,
             all(vapply(grafico$x$data, function(t) t$type == "scatter", FALSE)))
+})
+jsonlite::write_json(list(tarefas = list(), projetos = list(), provedores = list(), erros = list()),
+                     file.path(cache, "orquestracao.json"), auto_unbox = TRUE)
+shiny::testServer(shiny::shinyAppDir("default/painel"), {
+  session$setInputs(periodo = c(Sys.Date(), Sys.Date()))
+  stopifnot(grepl("Nenhuma tarefa de automação cadastrada", output$g_vazia$html),
+            grepl("Nenhuma observação", output$g_provedores_aviso$html))
+})
+jsonlite::write_json(list(erros = "Coleta incompleta"), file.path(cache, "orquestracao.json"), auto_unbox = TRUE)
+shiny::testServer(shiny::shinyAppDir("default/painel"), {
+  session$setInputs(periodo = c(Sys.Date(), Sys.Date()))
+  stopifnot(grepl("Coleta incompleta", output$g_erros$html),
+            is.null(output$g_vazia), is.null(output$g_provedores_aviso))
 })
 unlink(cache, recursive = TRUE)
 message("Indicadores e filtros de motores: testes passaram")

@@ -46,29 +46,10 @@ tema <- bs_theme(
     cores[["superficie"]], cores[["texto"]], cores[["texto_suave"]], cores[["primaria"]],
     paste(grDevices::col2rgb(cores[["primaria"]]), collapse = ","), cores[["primaria"]]))
 
-# A paleta foi validada sobre branco; os gráficos mantêm esse fundo nos dois modos.
-paleta <- c(claude = "#0072B2", codex = "#D55E00", ollama = "#009E73",
-            agy = "#AA4499", deterministico = "#B8860B", desconhecido = "#3C93C2")
-
-pl <- function(p, x = "", y = "") {
-  p |>
-    plotly::layout(paper_bgcolor = "#FFFFFF", plot_bgcolor = "#FFFFFF",
-                   font = list(color = "#1A1A1A", family = "Noto Sans, sans-serif"),
-                   xaxis = list(title = list(text = x), showgrid = FALSE),
-                   yaxis = list(title = list(text = y), rangemode = "tozero",
-                                gridcolor = "#D9D9D9", nticks = 8),
-                   separators = ",.", legend = list(orientation = "h", x = 0, y = 1.15)) |>
-    plotly::config(displayModeBar = FALSE, locale = "pt-BR")
-}
-
-# Gráfico vazio: só o aviso, sem eixos.
-vazio <- function() {
-  ax <- list(visible = FALSE)
-  pl(plotly::plot_ly(type = "scatter", mode = "markers")) |>
-    plotly::layout(xaxis = ax, yaxis = ax, annotations = list(list(
-      text = "sem dado no período", showarrow = FALSE, xref = "paper", yref = "paper", x = .5, y = .5,
-      font = list(size = 14))))
-}
+paleta_clara <- c(claude = "#0072B2", codex = "#D55E00", ollama = "#009E73",
+                  agy = "#AA4499", deterministico = "#B8860B", desconhecido = "#3C93C2")
+paleta_escura <- c(claude = "#56B4E9", codex = "#E69F00", ollama = "#5DD39E",
+                   agy = "#CC79A7", deterministico = "#F0E442", desconhecido = "#8ECAE6")
 
 # Paginação e contagem só quando a tabela passa de uma página. Sem dado, uma
 # coluna vazia leva o aviso "sem dado".
@@ -103,30 +84,6 @@ cores_grupos <- c(
   "pasta" = "#888888", "conversa" = "#5f7f8f", "claude" = cores[["primaria"]], "agy" = cores[["atencao"]],
   "delegacao" = "#b08968", "recusa" = alerta)
 
-# Grafo do visNetwork com layout do igraph (sem física, para não tremer) e
-# rótulos num cinza legível nos dois modos.
-grafo <- function(r) {
-  validate(need(!is.null(r), "sem dado no período"))
-  grupos <- unique(r$nos$group)
-  v <- visNetwork::visNetwork(r$nos, r$arestas, width = "100%") |>
-    # Física só até estabilizar: o layout fica compacto e depois para quieto.
-    visNetwork::visPhysics(solver = "forceAtlas2Based", stabilization = list(iterations = 400),
-                           forceAtlas2Based = list(gravitationalConstant = -60, avoidOverlap = 0.3)) |>
-    visNetwork::visEvents(stabilizationIterationsDone = "function() { this.setOptions({physics: false}); }") |>
-    visNetwork::visLayout(randomSeed = 1) |>
-    visNetwork::visNodes(font = list(color = "#8a8a8a", size = 18), scaling = list(min = 10, max = 40)) |>
-    visNetwork::visEdges(color = list(color = "#8888884d", highlight = cores[["primaria"]]),
-                         smooth = FALSE, scaling = list(min = 1, max = 8)) |>
-    visNetwork::visOptions(highlightNearest = list(enabled = TRUE, degree = 1, hover = TRUE)) |>
-    visNetwork::visInteraction(hover = TRUE, tooltipDelay = 100)
-  for (g in grupos) {
-    cor <- if (g %in% names(cores_grupos)) cores_grupos[[g]] else alerta
-    v <- visNetwork::visGroups(v, groupname = g, color = list(background = cor, border = "#777777",
-                               highlight = list(background = cor, border = cores[["texto"]])))
-  }
-  visNetwork::visLegend(v, useGroups = TRUE, position = "right", width = 0.22, zoom = FALSE)
-}
-
 cartao <- function(titulo, ..., cob = NULL) {
   card(full_screen = TRUE, card_header(titulo), card_body(...), if (!is.null(cob)) card_footer(cob))
 }
@@ -151,9 +108,17 @@ filtros <- sidebar(
 
 ui <- page_navbar(
   title = "Indicadores do jangada", theme = tema, fillable = FALSE,
-  window_title = "Indicadores do jangada",
+  window_title = "Indicadores do jangada", selected = "Revisão e síntese",
   sidebar = filtros,
   nav_panel("Fila e provedores", icon = bsicons::bs_icon("list-task"),
+    h3("Execução automática de tarefas"),
+    p("Esta fila reúne tarefas planejadas para execução automática. As sessões da Central de Tarefas são acompanhadas separadamente."),
+    p("Provedores são os serviços ou executores usados pela automação, como Ollama, agy e Codex. Aqui aparecem apenas suas observações registradas."),
+    tags$details(tags$summary("Como os dados chegam aqui?"),
+      p("Cadastre um plano com ", code("jangada-fila --importar PLANO.json"),
+        " no projeto. A execução usa ", code("jangada-executar"),
+        "; atualizar o painel apenas coleta os registros, sem executar tarefas nem consultar provedores.")),
+    uiOutput("g_vazia"),
     p(class = "cobertura",
       "Retrato da última coleta. O projeto filtra tarefas e métricas acumuladas; o período não altera este retrato."),
     uiOutput("g_erros"),
@@ -170,7 +135,7 @@ ui <- page_navbar(
         "Estimativas usam preços declarados pelo usuário. Parcela conhecida não representa o custo total.")),
     cartao("Supervisão e revisão por amostragem", DT::DTOutput("g_supervisao"),
       cob = p(class = "cobertura", "Contagens da fila, separadas das rodadas do jangada-validar.")),
-    cartao("Provedores de todos os projetos", DT::DTOutput("g_provedores"),
+    cartao("Provedores de todos os projetos", uiOutput("g_provedores_aviso"), DT::DTOutput("g_provedores"),
       cob = p(class = "cobertura",
         "Somente observações registradas. Validade da observação não garante disponibilidade após esse horário."))
   ),
@@ -353,6 +318,65 @@ server <- function(input, output, session) {
     session$close()
     return(invisible())
   }
+  aparencia <- reactive({
+    escuro <- is.null(input$modo) || identical(input$modo, "dark")
+    if (escuro) {
+      list(fundo = cores[["superficie"]], texto = cores[["texto"]], grade = "#53575B",
+           destaque = cores[["primaria"]], neutra = "#B3B3B3", raciocinio = "#D7AD88")
+    } else {
+      list(fundo = "#FFFFFF", texto = "#1A1A1A", grade = "#D9D9D9",
+           destaque = cores[["texto_primario"]], neutra = "#4D4D4D", raciocinio = "#B08968")
+    }
+  })
+  paleta <- reactive({
+    if (is.null(input$modo) || identical(input$modo, "dark")) paleta_escura else paleta_clara
+  })
+  pl <- function(p, x = "", y = "") {
+    p |>
+      plotly::layout(paper_bgcolor = aparencia()$fundo, plot_bgcolor = aparencia()$fundo,
+                     font = list(color = aparencia()$texto, family = "Noto Sans, sans-serif"),
+                     xaxis = list(title = list(text = x), showgrid = FALSE,
+                                  zerolinecolor = aparencia()$grade),
+                     yaxis = list(title = list(text = y), rangemode = "tozero",
+                                  gridcolor = aparencia()$grade, zerolinecolor = aparencia()$grade, nticks = 8),
+                     hoverlabel = list(bgcolor = aparencia()$fundo, font = list(color = aparencia()$texto)),
+                     separators = ",.", legend = list(orientation = "h", x = 0, y = 1.15)) |>
+      plotly::config(displayModeBar = FALSE, locale = "pt-BR")
+  }
+
+  # Gráfico vazio: só o aviso, sem eixos.
+  vazio <- function() {
+    ax <- list(visible = FALSE)
+    pl(plotly::plot_ly(type = "scatter", mode = "markers")) |>
+      plotly::layout(xaxis = ax, yaxis = ax, annotations = list(list(
+        text = "sem dado no período", showarrow = FALSE, xref = "paper", yref = "paper", x = .5, y = .5,
+        font = list(size = 14))))
+  }
+
+  grafo <- function(r) {
+    validate(need(!is.null(r), "sem dado no período"))
+    grupos <- unique(r$nos$group)
+    v <- visNetwork::visNetwork(r$nos, r$arestas, width = "100%") |>
+      # Física só até estabilizar: o layout fica compacto e depois para quieto.
+      visNetwork::visPhysics(solver = "forceAtlas2Based", stabilization = list(iterations = 400),
+                             forceAtlas2Based = list(gravitationalConstant = -60, avoidOverlap = 0.3)) |>
+      visNetwork::visEvents(stabilizationIterationsDone = "function() { this.setOptions({physics: false}); }") |>
+      visNetwork::visLayout(randomSeed = 1) |>
+      visNetwork::visNodes(shape = "dot", font = list(color = aparencia()$texto, size = 18), scaling = list(min = 10, max = 40)) |>
+      visNetwork::visEdges(color = list(color = aparencia()$grade, highlight = aparencia()$destaque),
+                           smooth = FALSE, scaling = list(min = 1, max = 8)) |>
+      visNetwork::visOptions(highlightNearest = list(enabled = TRUE, degree = 1, hover = TRUE)) |>
+      visNetwork::visInteraction(hover = TRUE, tooltipDelay = 100)
+    for (g in grupos) {
+      cor <- if (g %in% names(cores_grupos)) cores_grupos[[g]] else alerta
+      v <- visNetwork::visGroups(v, groupname = g, color = list(background = cor, border = aparencia()$grade,
+                                 highlight = list(background = cor, border = aparencia()$texto)),
+                                font = list(color = aparencia()$texto))
+    }
+    visNetwork::visLegend(v, useGroups = TRUE, position = "right", width = 0.22, zoom = FALSE)
+  }
+
+
   dados <- reactivePoll(3000, session,
     checkFunc = function() file.mtime(file.path(cache, "coleta.json")),
     valueFunc = function() carregar_cache(cache))
@@ -399,6 +423,20 @@ server <- function(input, output, session) {
     if (length(erros)) div(class = "alert alert-warning",
       "Coleta incompleta; confira as lacunas antes de interpretar as contagens: ",
       paste(unlist(erros), collapse = "; "))
+  })
+  output$g_vazia <- renderUI({
+    if (!length(orq()$tarefas) && !length(orq()$erros)) {
+      if (length(dados()$orquestracao$tarefas)) {
+        div(class = "alert alert-info", "Nenhuma tarefa de automação nos projetos selecionados. Ajuste o filtro de projeto para ver as demais.")
+      } else {
+        div(class = "alert alert-info", "Nenhuma tarefa de automação cadastrada na última coleta. As sessões dos agentes não entram nesta fila.")
+      }
+    }
+  })
+  output$g_provedores_aviso <- renderUI({
+    if (!length(orq()$provedores) && !length(orq()$erros)) {
+      p("Nenhuma observação de provedor registrada na última coleta. Isso não significa que os serviços estejam indisponíveis.")
+    }
   })
   output$g_executando <- renderText(sum(vapply(orq()$tarefas, function(t) t$estado == "RUNNING", FALSE)))
   output$g_esperando <- renderText(sum(vapply(orq()$tarefas,
@@ -603,7 +641,7 @@ server <- function(input, output, session) {
     e$grupo <- ifelse(e$primeira, "aprovada de primeira", "reprovada antes")
     if (!nrow(e)) return(vazio())
     pl(plotly::plot_ly(e, x = ~grupo, y = ~diff, type = "box", boxpoints = "all", color = ~grupo,
-                       text = ~entrega, colors = c(paleta[["claude"]], paleta[["codex"]])) |>
+                       text = ~entrega, colors = c(paleta()[["claude"]], paleta()[["codex"]])) |>
          plotly::layout(showlegend = FALSE),
        "", "linhas (+ e -)")
   })
@@ -650,7 +688,7 @@ server <- function(input, output, session) {
     if (length(series) <= 4) {
       cores_series <- vapply(series, function(nome) {
         motor <- d$executor[match(nome, d$serie)]
-        unname(paleta[if (motor %in% names(paleta)) motor else "desconhecido"])
+        unname(paleta()[if (motor %in% names(paleta())) motor else "desconhecido"])
       }, "")
       p <- plotly::plot_ly(d, x = ~as.Date(dia), y = ~saida, color = ~serie, colors = cores_series,
         symbol = ~serie, symbols = c("circle", "square", "diamond", "triangle-up"),
@@ -658,7 +696,7 @@ server <- function(input, output, session) {
       if (length(series) == 1) {
         ponta <- tail(d[is.finite(d$saida), ], 1)
         p <- plotly::add_text(p, data = ponta, x = ~as.Date(dia), y = ~saida, text = esc(series),
-          cliponaxis = FALSE, textposition = "top left", textfont = list(color = "#1A1A1A"),
+          cliponaxis = FALSE, textposition = "top left", textfont = list(color = aparencia()$texto),
           inherit = FALSE, showlegend = FALSE)
       }
       pl(p |> plotly::layout(showlegend = length(series) > 1, xaxis = eixo_dias), "", "tokens de saída")
@@ -666,10 +704,10 @@ server <- function(input, output, session) {
       partes <- lapply(series, function(nome) {
         g <- d[d$serie == nome, ]
         g <- g[order(g$dia), ]
-        motor <- if (g$executor[1] %in% names(paleta)) g$executor[1] else "desconhecido"
+        motor <- if (g$executor[1] %in% names(paleta())) g$executor[1] else "desconhecido"
         p <- plotly::plot_ly(g, x = ~as.Date(dia), y = ~saida, type = "scatter", mode = "lines+markers",
           text = ~dica, hoverinfo = "text", name = nome, connectgaps = FALSE,
-          line = list(color = unname(paleta[motor])), marker = list(color = unname(paleta[motor])))
+          line = list(color = unname(paleta()[motor])), marker = list(color = unname(paleta()[motor])))
         pl(p |> plotly::layout(xaxis = eixo_dias, showlegend = FALSE,
           yaxis = list(range = c(0, max(d$saida, na.rm = TRUE) * 1.08))), "", "tokens de saída")
       })
@@ -695,8 +733,8 @@ server <- function(input, output, session) {
     d$dica <- paste(esc(d$modelo), "<br>Tokens/s:", format(round(d$tokens_s, 1), decimal.mark = ","),
                     "<br>Chamadas com medida:", d$com_tempo_geracao, "de", d$registros)
     pl(plotly::plot_ly(d, x = ~tokens_s, y = ~modelo, type = "bar", orientation = "h", text = ~dica,
-      hoverinfo = "text", marker = list(color = unname(paleta["ollama"]))) |>
-      plotly::layout(xaxis = list(rangemode = "tozero", nticks = 8, gridcolor = "#D9D9D9"),
+      hoverinfo = "text", marker = list(color = unname(paleta()["ollama"]))) |>
+      plotly::layout(xaxis = list(rangemode = "tozero", nticks = 8, gridcolor = aparencia()$grade),
         yaxis = list(categoryorder = "array", categoryarray = d$modelo, showgrid = FALSE)),
       "tokens por segundo de geração", "")
   })
@@ -765,8 +803,8 @@ server <- function(input, output, session) {
     m$saida_texto <- pmax(m$saida - m$raciocinio, 0)
     a <- aggregate(m[c("entrada", "saida_texto", "raciocinio", "cache_criado")], list(dia = as.Date(m$dia)), sum)
     p <- plotly::plot_ly(a, x = ~dia)
-    for (s in list(c("cache_criado", "cache criado", paleta[["codex"]]), c("saida_texto", "saída", paleta[["claude"]]),
-                   c("raciocinio", "raciocínio", "#b08968"), c("entrada", "entrada nova", "#888888"))) {
+    for (s in list(c("cache_criado", "cache criado", paleta()[["codex"]]), c("saida_texto", "saída", paleta()[["claude"]]),
+                   c("raciocinio", "raciocínio", aparencia()$raciocinio), c("entrada", "entrada nova", aparencia()$neutra))) {
       p <- plotly::add_bars(p, y = a[[s[1]]], name = s[2], marker = list(color = s[3]))
     }
     pl(plotly::layout(p, barmode = "stack"), "", "tokens")
@@ -775,7 +813,7 @@ server <- function(input, output, session) {
     m <- msg()
     if (!nrow(m)) return(vazio())
     a <- aggregate(m["cache_lido"], list(dia = as.Date(m$dia)), sum)
-    pl(plotly::plot_ly(a, x = ~dia, y = ~cache_lido, type = "bar", marker = list(color = "#4D4D4D"), name = "cache lido"),
+    pl(plotly::plot_ly(a, x = ~dia, y = ~cache_lido, type = "bar", marker = list(color = aparencia()$neutra), name = "cache lido"),
        "", "tokens")
   })
   output$b_blocos <- plotly::renderPlotly({
@@ -783,8 +821,8 @@ server <- function(input, output, session) {
     if (!nrow(b)) return(vazio())
     a <- aggregate(list(blocos = rep(1, nrow(b)), perto = as.integer(b$perto_limite)), list(semana = b$semana), sum)
     pl(plotly::plot_ly(a, x = ~semana) |>
-         plotly::add_bars(y = ~ (blocos - perto), name = "longe do limite", marker = list(color = "#4D4D4D")) |>
-         plotly::add_bars(y = ~perto, name = "perto do limite", marker = list(color = paleta[["codex"]])) |>
+         plotly::add_bars(y = ~ (blocos - perto), name = "longe do limite", marker = list(color = aparencia()$neutra)) |>
+         plotly::add_bars(y = ~perto, name = "perto do limite", marker = list(color = paleta()[["codex"]])) |>
          plotly::layout(barmode = "stack"), "", "blocos")
   })
   tabela_consumo <- function(por, rotulo) {
@@ -852,17 +890,17 @@ server <- function(input, output, session) {
   output$c_aguardando <- plotly::renderPlotly({
     a <- aguard()
     if (!nrow(a)) return(vazio())
-    pl(plotly::plot_ly(a, x = ~dia, y = ~horas, type = "bar", marker = list(color = paleta[["codex"]])), "", "horas")
+    pl(plotly::plot_ly(a, x = ~dia, y = ~horas, type = "bar", marker = list(color = paleta()[["codex"]])), "", "horas")
   })
   output$c_simult <- plotly::renderPlotly({
     s <- simultaneas_por_hora(iv())
     if (!nrow(s)) return(vazio())
     pl(plotly::plot_ly(s, x = ~hora, y = ~sessoes, type = "scatter", mode = "lines",
-                       line = list(shape = "hv", color = paleta[["claude"]])), "", "sessões")
+                       line = list(shape = "hv", color = paleta()[["claude"]])), "", "sessões")
   })
   output$c_foco <- plotly::renderPlotly({
     if (!nrow(foco())) return(vazio())
-    pl(plotly::plot_ly(foco(), x = ~dia, y = ~trocas, type = "bar", marker = list(color = paleta[["claude"]])), "", "trocas")
+    pl(plotly::plot_ly(foco(), x = ~dia, y = ~trocas, type = "bar", marker = list(color = paleta()[["claude"]])), "", "trocas")
   })
   output$c_paradas <- DT::renderDT({
     p <- paradas()
@@ -966,14 +1004,14 @@ server <- function(input, output, session) {
     d <- d[order(d$quantidade), ]
     motor <- ifelse(d$destino == "local", "ollama",
                     ifelse(d$destino == "codex-economico", "codex", d$destino))
-    cor <- unname(paleta[motor])
+    cor <- unname(paleta()[motor])
     cor[is.na(cor)] <- "#B3B3B3"
     d$destino <- ifelse(d$destino == "codex-economico", "Codex econômico", d$destino)
     pl(plotly::plot_ly(d, x = ~quantidade, y = ~destino, type = "bar", orientation = "h",
       marker = list(color = cor), text = ~quantidade, textposition = "outside",
-      textfont = list(color = "#1A1A1A"), hoverinfo = "x+y") |>
+      textfont = list(color = aparencia()$texto), hoverinfo = "x+y") |>
       plotly::layout(xaxis = list(rangemode = "tozero", dtick = max(1, ceiling(max(d$quantidade) / 7)),
-        nticks = 8, gridcolor = "#D9D9D9"),
+        nticks = 8, gridcolor = aparencia()$grade),
         yaxis = list(categoryorder = "array", categoryarray = d$destino, showgrid = FALSE),
         showlegend = FALSE), "delegações atendidas", "")
   })
@@ -1149,7 +1187,7 @@ server <- function(input, output, session) {
       y = ~termo,
       type = "bar",
       orientation = "h",
-      marker = list(color = paleta[["claude"]]),
+      marker = list(color = paleta()[["claude"]]),
       hoverinfo = "text",
       text = ~paste0(termo, ": ", n, " consulta(s)")
     )
