@@ -22,6 +22,8 @@ echo "exec agy" >"$casa/.gemini/antigravity-cli/bin/agentapi"
 echo "senha copiada" >"$casa/.cache/cliphist/db"
 echo "chave" >"$casa/.ssh/id_teste"
 echo "senha" >"$casa/.netrc"
+echo "senha" >"$casa/.pgpass"
+mkdir -p "$casa/.config/gcloud"
 echo "{}" >"$casa/.claude.json"
 git init -q -b main "$tmp/repo"
 git -C "$tmp/repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m inicio
@@ -62,6 +64,11 @@ conferir "caso 1: clones do yay somente leitura" seguidos --ro-bind "$casa/.cach
 conferir "caso 1: arquivo .git do worktree somente leitura" seguidos --ro-bind "$tmp/wt/.git" "$tmp/wt/.git"
 conferir "caso 1: ~/.ssh oculto" seguidos --tmpfs "$casa/.ssh" ""
 conferir "caso 1: ~/.netrc oculto" seguidos --ro-bind /dev/null "$casa/.netrc"
+conferir "caso 1: ~/.pgpass oculto" seguidos --ro-bind /dev/null "$casa/.pgpass"
+conferir "caso 1: credenciais do gcloud ocultas" seguidos --tmpfs "$casa/.config/gcloud" ""
+conferir "caso 1: variáveis de credencial não entram" \
+  bash -c 'for v in GH_TOKEN GITHUB_TOKEN AWS_SECRET_ACCESS_KEY VAULT_TOKEN; do
+    grep -A1 -xF -- --unsetenv "$1" | grep -qxF "$v" || exit 1; done' _ "$tmp/args"
 conferir "caso 1: /tmp próprio" seguidos --tmpfs /tmp ""
 conferir "caso 1: marca do isolamento montada no /tmp próprio" \
   seguidos --ro-bind /dev/null "$marca_teste"
@@ -235,6 +242,9 @@ EOF
   roda "echo x >'$casa/fora.txt'"
   conferir "caso 3: gravação na HOME não chega ao disco" test ! -e "$casa/fora.txt"
   conferir "caso 3: chave oculta" roda "! test -e '$casa/.ssh/id_teste' && ! grep -q senha '$casa/.netrc'"
+  conferir "caso 3: variável de credencial não chega ao agente" \
+    isolar "$tmp/wt" GH_TOKEN=segredo ANTHROPIC_API_KEY=chave "$repo_jangada/bin/jangada-isolar" -- \
+    bash -c '[[ -z "${GH_TOKEN:-}" && "$ANTHROPIC_API_KEY" == chave ]]'
   conferir "caso 3: hook do git não é gravável" roda "! echo x >'$tmp/repo/.git/hooks/pre-commit'"
   conferir "caso 3: config do git não é gravável" roda '! git config --local user.x y'
   conferir "caso 3: arquivo .git do worktree não é gravável" roda '! echo "gitdir: /x" >.git'

@@ -13,8 +13,12 @@
 # conteúdo de fora, mas o que o agente grava neles some no fim. O /tmp e o
 # XDG_RUNTIME_DIR são próprios; com eles somem o socket do tmux, do Hyprland,
 # do Wayland e do gpg-agent. O D-Bus da sessão passa pelo xdg-dbus-proxy, que
-# só deixa falar com o keyring e com as notificações. O agente não vê os
-# processos de fora (namespace de PID próprio) nem o Docker.
+# só deixa falar com o keyring (se o agy está instalado) e com as
+# notificações. O agente não vê os processos de fora (namespace de PID
+# próprio) nem o Docker.
+#
+# A proteção é contra escrita. O agente lê o que não está oculto, usa a rede
+# e herda o ambiente, menos as variáveis de credencial conhecidas.
 #
 # Ficam somente leitura, mesmo dentro dos graváveis, os arquivos que o git,
 # o Claude ou o agy leem como configuração ou executam fora do isolamento:
@@ -121,9 +125,12 @@ if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" ]]; then
     rm -f "$sock"
     # O proxy escreve um byte quando está pronto e sai quando o outro lado do
     # cano fecha. O bwrap guarda esse lado (--sync-fd) enquanto o agente vive.
+    # O proxy libera o serviço inteiro, não um item: com o keyring aberto, o
+    # agente alcança o que estiver nele. Sem o agy instalado, ninguém precisa.
+    falar=(--talk=org.freedesktop.Notifications)
+    ! command -v agy >/dev/null 2>&1 || falar+=(--talk=org.freedesktop.secrets)
     exec {dbus_sinc}< <(exec xdg-dbus-proxy "$DBUS_SESSION_BUS_ADDRESS" "$sock" \
-      --filter --talk=org.freedesktop.secrets --talk=org.freedesktop.Notifications \
-      --fd=1 2>/dev/null)
+      --filter "${falar[@]}" --fd=1 2>/dev/null)
     if read -r -N1 -t 5 -u "$dbus_sinc" _ && [[ -S "$sock" ]]; then
       args+=(--ro-bind "$sock" "$XDG_RUNTIME_DIR/bus" --sync-fd "$dbus_sinc"
              --setenv DBUS_SESSION_BUS_ADDRESS "unix:path=$XDG_RUNTIME_DIR/bus")
@@ -350,6 +357,9 @@ if [[ -n "${JANGADA_ISOLAR_OCULTAR+x}" ]]; then
 else
   ocultos=(.ssh .gnupg .password-store .aws .azure .kube .docker .netrc .git-credentials
            .config/gh .config/rclone .config/chromium .config/google-chrome .mozilla
+           .config/BraveSoftware .config/vivaldi .config/microsoft-edge .thunderbird
+           .config/gcloud .config/op .config/sops .config/Bitwarden .vault-token
+           .pgpass .my.cnf .pypirc .local/share/kwalletd
            .local/share/keyrings "${XDG_CACHE_HOME:-$HOME/.cache}/cliphist")
   # O banco do cliphist guarda tudo o que foi copiado, inclusive senhas, e o
   # que o agente gravasse nele o usuário colaria depois pelo SUPER+V. A pasta
@@ -378,9 +388,19 @@ for p in "${ocultos[@]}"; do
   fi
 done
 
+# As credenciais que os arquivos ocultos guardam também chegam por variável.
+# O resto do ambiente é herdado: o que o usuário exportou, o agente lê.
+credenciais=()
+for v in GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN GITLAB_TOKEN AWS_ACCESS_KEY_ID \
+         AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AZURE_CLIENT_SECRET RCLONE_CONFIG_PASS \
+         VAULT_TOKEN PGPASSWORD MYSQL_PWD OP_SERVICE_ACCOUNT_TOKEN BW_SESSION \
+         SOPS_AGE_KEY NPM_TOKEN TWINE_PASSWORD; do
+  credenciais+=(--unsetenv "$v")
+done
 args+=(--unsetenv TMUX --unsetenv TMUX_PANE --unsetenv SSH_AUTH_SOCK
        --unsetenv HYPRLAND_INSTANCE_SIGNATURE --unsetenv HYPRLAND_CMD
        --unsetenv WAYLAND_DISPLAY --unsetenv DISPLAY --unsetenv GPG_AGENT_INFO
+       "${credenciais[@]}"
        --setenv JANGADA_ISOLADO 1 --chdir "$pasta" -- env "--default-signal=INT,QUIT" "$@")
 
 if ((mostrar)); then

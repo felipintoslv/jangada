@@ -21,6 +21,23 @@ regras da base, o `jangada-update` mostra os commits) ou recusa (o
 `install.sh` não instala da cópia de trabalho). O isolamento não protege
 contra falha do próprio bubblewrap nem do kernel.
 
+A proteção é contra escrita, não contra leitura. O isolamento não garante que
+o agente só conheça os dados do projeto:
+
+- **Arquivos.** O agente lê tudo o que o usuário lê e não está na lista de
+  ocultos: documentos pessoais, o `.env` de outro projeto, o histórico do
+  shell, o `~/.Renviron`.
+- **Rede.** Não há namespace de rede próprio: o agente fala com a internet e
+  com os serviços locais da máquina. O que ele lê, pode enviar.
+- **Ambiente.** As variáveis são herdadas. Saem as de sessão gráfica e as de
+  credencial que correspondem aos ocultos (`GH_TOKEN`, `GITHUB_TOKEN`,
+  `AWS_SECRET_ACCESS_KEY`, `VAULT_TOKEN` e as demais da lista no
+  `jangada-isolar`). Outro segredo exportado no shell chega ao agente.
+- **Keyring.** Com o agy instalado, o proxy do D-Bus libera o serviço
+  `org.freedesktop.secrets` inteiro, porque o agy guarda o login ali. O
+  filtro não restringe a um item: com o keyring destrancado, o agente alcança
+  as outras senhas guardadas nele. Sem o agy, o serviço não é liberado.
+
 ## Decisão de isolar
 
 ```mermaid
@@ -76,12 +93,12 @@ ficar somente leitura dentro deles vem depois.
 |---|---|---|
 | Base | `/` somente leitura, `/dev`, `/proc`, `/tmp` próprio, `--unshare-pid`, `--die-with-parent` | um `rm` no `/tmp` não apaga os temporários do sistema; o agente não vê nem mata os processos da sessão, e o que ele deixou rodando morre com ele |
 | `/run` | Docker, containerd, podman, tailscale, sshd local e D-Bus do sistema ocultos | esses sockets dão root ou mudam a máquina |
-| `XDG_RUNTIME_DIR` | pasta vazia; o D-Bus da sessão volta pelo `xdg-dbus-proxy`, que só deixa falar com `org.freedesktop.secrets` e `org.freedesktop.Notifications` | some o socket do Hyprland (`hyprctl dispatch` rodaria comando fora), do Wayland, do gpg-agent e do systemd do usuário; o agy lê o login do keyring e os hooks avisam pelo `notify-send` |
+| `XDG_RUNTIME_DIR` | pasta vazia; o D-Bus da sessão volta pelo `xdg-dbus-proxy`, que só deixa falar com `org.freedesktop.Notifications` e, com o agy instalado, `org.freedesktop.secrets` | some o socket do Hyprland (`hyprctl dispatch` rodaria comando fora), do Wayland, do gpg-agent e do systemd do usuário; o agy lê o login do keyring e os hooks avisam pelo `notify-send` |
 | Graváveis | pasta da tarefa, `~/.claude`, `~/.gemini/antigravity-cli`, `agentes/`, `validar.jsonl`, `eventos-agentes.jsonl` e `delegacoes.jsonl` do estado, e o que estiver em `JANGADA_ISOLAR_ESCRITA` | o resto do estado (barra, marcas das migrações) alimenta código que roda fora |
 | Camada temporária | `~/.cache`; do Claude, `shell-snapshots`, `session-env` e `ide`; do agy, `bin` | o agente lê o conteúdo de fora, e o que grava some no fim (sobreposição do bwrap; sem suporte, o agente recebe uma pasta vazia em memória, e o `bin` do agy, somente leitura). O agy regrava o `agentapi` antes de cada comando, e o que ele regrava dentro não roda fora |
 | Somente leitura | do Claude: `settings*.json`, `CLAUDE.md`, `commands`, `agents`, `skills`, `hooks`, `plugins`, scripts soltos; clones do AUR | tudo isso define comando ou instrução que valeria numa sessão aberta fora |
 | Git | num worktree, o `.git` comum inteiro somente leitura, liberados `objects`, o gitdir do worktree e, das refs e dos `logs`, só a pasta do ramo da sessão (`refs/heads/agente`) e a das cópias do `reverter` (`refs/heads/backup`); direto no repositório, `config`, `hooks`, `commondir`, `worktrees` e `modules` somente leitura | `core.fsmonitor`, hooks e `commondir` rodariam fora no próximo `git status` |
-| Ocultos | `.ssh`, `.gnupg`, `.password-store`, `.aws`, `.azure`, `.kube`, `.docker`, `.netrc`, `.git-credentials`, `gh`, `rclone`, perfis de navegador, keyrings e o banco do `cliphist`; `JANGADA_ISOLAR_OCULTAR` troca a lista. A pasta `painel-chave` do estado, com o token do `jangada-painel`, e a `revisoes`, com as revisões feitas fora do isolamento, ficam ocultas sempre | segredos e o histórico da área de transferência; o painel responde a quem alcança a porta, e o agente isolado alcança; a aprovação que o `--integrar` aceita não pode ser escrita pelo agente revisado |
+| Ocultos | `.ssh`, `.gnupg`, `.password-store`, `.aws`, `.azure`, `.kube`, `.docker`, `.netrc`, `.git-credentials`, `gh`, `rclone`, `gcloud`, `op`, `sops`, Bitwarden, `.vault-token`, `.pgpass`, `.my.cnf`, `.pypirc`, perfis de navegador e do Thunderbird, keyrings, kwallet e o banco do `cliphist`; `JANGADA_ISOLAR_OCULTAR` troca a lista. A pasta `painel-chave` do estado, com o token do `jangada-painel`, e a `revisoes`, com as revisões feitas fora do isolamento, ficam ocultas sempre | segredos e o histórico da área de transferência; o painel responde a quem alcança a porta, e o agente isolado alcança; a aprovação que o `--integrar` aceita não pode ser escrita pelo agente revisado |
 
 Para ver os argumentos sem abrir nada: `jangada-isolar --mostrar -- true`.
 
