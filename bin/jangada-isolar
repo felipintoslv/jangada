@@ -437,45 +437,10 @@ if ((mostrar)); then
 fi
 
 
-set +m
-intervalo_monitor="${JANGADA_MONITOR_INTERVALO:-30}"
-(
-  sub_pid="$BASHPID"
-  sleep_pid=""
-  matar_filhos() {
-    [[ -n "$sleep_pid" ]] && kill "$sleep_pid" 2>/dev/null || true
-    pkill -P "$sub_pid" 2>/dev/null || true
-  }
-  trap 'matar_filhos; wait 2>/dev/null || true; exit 0' TERM INT EXIT
-  while kill -0 $$ 2>/dev/null; do
-    sleep "$intervalo_monitor" &
-    sleep_pid=$!
-    wait "$sleep_pid" 2>/dev/null || true
-    kill -0 $$ 2>/dev/null || exit 0
-    atualizar_marcas_host
-  done
-) 2>/dev/null &
-monitor_pid=$!
-
-# O hook isolado não enxerga a Waybar no namespace de PID do host.
-# Observe somente o nome conferido da sessão; nenhum conteúdo dela é executado.
+# As armadilhas vêm antes dos processos auxiliares: um sinal na partida
+# mataria o script e deixaria o monitor e o inotifywait órfãos.
+monitor_pid=""
 monitor_estado_pid=""
-if [[ "$codex_sessao" =~ ^[A-Za-z0-9_.-]+$ && "$codex_sessao" != . && "$codex_sessao" != .. ]] \
-   && command -v inotifywait >/dev/null 2>&1; then
-  (
-    exec {eventos_fd}< <(exec inotifywait -m -q -e moved_to,close_write,create,delete \
-      --format '%f' "$JANGADA_ESTADO/agentes")
-    vigia_pid=$!
-    trap 'kill "$vigia_pid" 2>/dev/null || true; wait "$vigia_pid" 2>/dev/null || true' EXIT
-    trap 'exit 0' TERM INT
-    while IFS= read -r arquivo <&"$eventos_fd"; do
-      [[ "$arquivo" == "$codex_sessao.json" ]] || continue
-      pkill -RTMIN+10 -x waybar 2>/dev/null || true
-    done
-  ) 2>/dev/null &
-  monitor_estado_pid=$!
-fi
-
 limpar_monitor() {
   if [[ -n "$monitor_estado_pid" ]]; then
     kill "$monitor_estado_pid" 2>/dev/null || true
@@ -500,6 +465,47 @@ trap 'limpar_monitor' EXIT
 trap 'repasse_sinal TERM; wait "$bwrap_pid" 2>/dev/null || true; limpar_monitor; exit 143' TERM
 trap 'repasse_sinal HUP; wait "$bwrap_pid" 2>/dev/null || true; limpar_monitor; exit 129' HUP
 trap '' INT
+
+set +m
+intervalo_monitor="${JANGADA_MONITOR_INTERVALO:-30}"
+(
+  sub_pid="$BASHPID"
+  sleep_pid=""
+  matar_filhos() {
+    [[ -n "$sleep_pid" ]] && kill "$sleep_pid" 2>/dev/null || true
+    pkill -P "$sub_pid" 2>/dev/null || true
+  }
+  trap 'matar_filhos; wait 2>/dev/null || true; exit 0' TERM INT EXIT
+  while kill -0 $$ 2>/dev/null; do
+    sleep "$intervalo_monitor" &
+    sleep_pid=$!
+    wait "$sleep_pid" 2>/dev/null || true
+    kill -0 $$ 2>/dev/null || exit 0
+    atualizar_marcas_host
+  done
+) 2>/dev/null &
+monitor_pid=$!
+
+# O hook isolado não enxerga a Waybar no namespace de PID do host.
+# Observe somente o nome conferido da sessão; nenhum conteúdo dela é executado.
+if [[ "$codex_sessao" =~ ^[A-Za-z0-9_.-]+$ && "$codex_sessao" != . && "$codex_sessao" != .. ]] \
+   && command -v inotifywait >/dev/null 2>&1; then
+  (
+    exec {eventos_fd}< <(exec inotifywait -m -q -e moved_to,close_write,create,delete \
+      --format '%f' "$JANGADA_ESTADO/agentes")
+    vigia_pid=$!
+    trap 'kill "$vigia_pid" 2>/dev/null || true; wait "$vigia_pid" 2>/dev/null || true' EXIT
+    trap 'exit 0' TERM INT
+    # Morto por KILL, o script não limpa nada: o vigia confere o pai a cada
+    # espera vencida e sai sozinho.
+    while kill -0 $$ 2>/dev/null; do
+      IFS= read -r -t "$intervalo_monitor" arquivo <&"$eventos_fd" || { (($? > 128)) && continue; break; }
+      [[ "$arquivo" == "$codex_sessao.json" ]] || continue
+      pkill -RTMIN+10 -x waybar 2>/dev/null || true
+    done
+  ) 2>/dev/null &
+  monitor_estado_pid=$!
+fi
 
 bwrap "${args[@]}" <&0 &
 bwrap_pid=$!

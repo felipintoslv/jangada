@@ -414,7 +414,9 @@ def achar_sleep():
     for pid in pids:
         try:
             with open(f"/proc/{pid}/cmdline", "rb") as f:
-                if "25.123" not in f.read().decode("utf-8", errors="ignore"):
+                # Só o sleep de dentro: a linha de comando do jangada-isolar
+                # também traz "sleep 25.123", antes de o bwrap existir.
+                if f.read().decode("utf-8", errors="ignore").split("\0")[:2] != ["sleep", "25.123"]:
                     continue
             with open(f"/proc/{pid}/environ", "rb") as f:
                 if f"HOME={casa}" in f.read().decode("utf-8", errors="ignore").split("\0"):
@@ -485,7 +487,9 @@ def achar_sleep():
     for pid in pids:
         try:
             with open(f"/proc/{pid}/cmdline", "rb") as f:
-                if "25.123" not in f.read().decode("utf-8", errors="ignore"):
+                # Só o sleep de dentro: a linha de comando do jangada-isolar
+                # também traz "sleep 25.123", antes de o bwrap existir.
+                if f.read().decode("utf-8", errors="ignore").split("\0")[:2] != ["sleep", "25.123"]:
                     continue
             with open(f"/proc/{pid}/environ", "rb") as f:
                 if f"HOME={casa}" in f.read().decode("utf-8", errors="ignore").split("\0"):
@@ -832,6 +836,18 @@ EOF
       bash -c '[[ "$(uniq "$1")" == $'"'"'trabalhando\naguardando\nconcluido'"'"' ]]' _ "$sinais_status"
     conferir "caso 3d: observador do estado não deixa inotifywait após encerrar" \
       bash -c '! pgrep -f "^inotifywait .*${1}/agentes" >/dev/null' _ "$casa/.local/state/jangada"
+    # O KILL não passa pelas armadilhas: o vigia tem de notar sozinho que o pai morreu.
+    isolar "$tmp/wt" JANGADA_SESSAO=status-codex JANGADA_MONITOR_INTERVALO=1 \
+      "$repo_jangada/bin/jangada-isolar" -- sleep 20 >/dev/null 2>&1 &
+    pid_morto=$!
+    vigia_vivo() { pgrep -f "^inotifywait .*$casa/.local/state/jangada/agentes" >/dev/null; }
+    for ((i = 0; i < 50; i++)); do vigia_vivo && break; sleep 0.1; done
+    conferir "caso 3d: o vigia sobe com a sessão" vigia_vivo
+    # Os subshells auxiliares têm a mesma linha de comando: -o pega só o script.
+    pkill -KILL -o -f 'bin/jangada-isolar -- sleep 20$' 2>/dev/null
+    wait "$pid_morto" 2>/dev/null
+    for ((i = 0; i < 50; i++)); do vigia_vivo || break; sleep 0.1; done
+    conferir "caso 3d: o vigia sai depois do KILL no jangada-isolar" bash -c '! "$@"' _ pgrep -f "^inotifywait .*$casa/.local/state/jangada/agentes"
   fi
 else
   echo "pulado caso 3: bwrap não cria namespace aqui"
