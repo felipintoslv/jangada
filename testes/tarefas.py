@@ -18,7 +18,7 @@ import uuid
 from unittest.mock import patch
 from PyQt6.QtCore import QProcess, Qt
 from PyQt6.QtNetwork import QLocalServer
-from PyQt6.QtGui import QTextDocument
+from PyQt6.QtGui import QTextDocument, QKeySequence
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 import janela
@@ -154,21 +154,21 @@ class Interface(unittest.TestCase):
         self.assertFalse(self.janela.abrir.isEnabled())
         self.assertIn('saiu da lista', self.janela.status.text())
 
-    def test_atalhos_acionam_a_tarefa_selecionada(self):
-        self.janela.show()
-        self.janela.activateWindow()
-        self.janela.lista.setFocus()
-        APP.processEvents()
+    def test_botoes_acionam_a_tarefa_selecionada(self):
+        self.assertEqual(self.janela.integrar.shortcut(), QKeySequence("Alt+I"))
+        self.assertEqual(self.janela.encerrar.shortcut(), QKeySequence("Ctrl+X"))
         self.janela.selecionar_nome('projeto--dois')
         with patch.object(self.janela, 'solicitar_previa'), patch.object(QProcess, 'startDetached', return_value=(True, 123)), patch.object(self.janela, 'preparar') as preparar:
-            QTest.keyClick(self.janela.lista, Qt.Key.Key_I, Qt.KeyboardModifier.AltModifier)
+            self.janela.integrar.click()
             aguardar(lambda: preparar.call_count == 1)
             argumentos = preparar.call_args.args[1]
             self.assertEqual(preparar.call_args.args[2], 'jangada-terminal')
             self.assertEqual(argumentos[-3:], [str(self.bin / 'jangada-agente-fim'), '--integrar', 'projeto--dois'])
-            (Path(self.janela.finalizando['projeto--dois'].name) / 'fim').touch()
+            pasta = self.janela.finalizando['projeto--dois']
+            (pasta / 'inicio.json').unlink()
+            pasta.rmdir()
             self.janela.conferir_finalizacoes()
-            QTest.keyClick(self.janela.lista, Qt.Key.Key_X, Qt.KeyboardModifier.ControlModifier)
+            self.janela.encerrar.click()
             aguardar(lambda: preparar.call_count == 2)
             self.assertEqual(preparar.call_args.args[1][-2:], [str(self.bin / 'jangada-agente-fim'), 'projeto--dois'])
             self.assertEqual(preparar.call_count, 2)
@@ -201,11 +201,54 @@ class Interface(unittest.TestCase):
             self.assertEqual(iniciar.call_count, 1)
             self.assertFalse(self.janela.integrar.isEnabled())
             self.assertFalse(self.janela.encerrar.isEnabled())
-            (Path(self.janela.finalizando['projeto--um'].name) / 'fim').touch()
+            pasta = self.janela.finalizando['projeto--um']
+            (pasta / 'inicio.json').unlink()
+            pasta.rmdir()
             self.janela.conferir_finalizacoes()
             self.assertTrue(self.janela.encerrar.isEnabled())
             self.janela.finalizar(False)
             self.assertEqual(iniciar.call_count, 2)
+
+    def test_reabrir_central_preserva_bloqueio_da_acao(self):
+        with patch.object(QProcess, 'startDetached', return_value=(True, 123)) as iniciar:
+            self.janela.finalizar(True)
+            self.janela.close()
+            outra = Janela(True, self.raiz, self.estado)
+            outra.timer.stop()
+            try:
+                aguardar(lambda: outra.consulta.state() == QProcess.ProcessState.NotRunning)
+                self.assertFalse(outra.integrar.isEnabled())
+                self.assertFalse(outra.encerrar.isEnabled())
+                outra.finalizar(True)
+                outra.finalizar(False)
+                self.assertEqual(iniciar.call_count, 1)
+            finally:
+                outra.close()
+
+    def test_terminal_morto_antes_da_acao_libera_nova_tentativa(self):
+        with patch.object(QProcess, 'startDetached', return_value=(True, 123)):
+            self.janela.finalizar(True)
+        pasta = self.janela.finalizando['projeto--um']
+        inicio = json.loads((pasta / 'inicio.json').read_text())
+        inicio['criado'] -= 11
+        (pasta / 'inicio.json').write_text(json.dumps(inicio))
+        with patch.object(os, 'kill', side_effect=ProcessLookupError):
+            self.janela.conferir_finalizacoes()
+        self.assertFalse(pasta.exists())
+        self.assertTrue(self.janela.encerrar.isEnabled())
+
+    def test_terminal_desacoplado_nao_libera_acao_que_ja_comecou(self):
+        with patch.object(QProcess, 'startDetached', return_value=(True, 123)):
+            self.janela.finalizar(True)
+        pasta = self.janela.finalizando['projeto--um']
+        (pasta / 'pronta').touch()
+        inicio = json.loads((pasta / 'inicio.json').read_text())
+        inicio['criado'] -= 11
+        (pasta / 'inicio.json').write_text(json.dumps(inicio))
+        with patch.object(os, 'kill', side_effect=ProcessLookupError):
+            self.janela.conferir_finalizacoes()
+        self.assertTrue(pasta.exists())
+        self.assertFalse(self.janela.encerrar.isEnabled())
 
     def test_finalizacao_recusa_nome_interpretavel_como_opcao(self):
         from dataclasses import replace
@@ -482,6 +525,7 @@ class Interface(unittest.TestCase):
 
     def test_pasta_do_soquete_rejeita_link_e_permissao_aberta(self):
         pasta = self.raiz / 'jangada-tarefas'
+        pasta.rmdir()
         pasta.symlink_to(self.estado, target_is_directory=True)
         with self.assertRaises(ValueError):
             central.nome_soquete(self.raiz, self.estado, True)

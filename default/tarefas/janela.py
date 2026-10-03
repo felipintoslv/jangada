@@ -5,7 +5,9 @@ import html
 import os
 from pathlib import Path
 import uuid
-import tempfile
+import hashlib
+import json
+import time
 
 from PyQt6.QtCore import QProcess, QProcessEnvironment, QTimer, Qt
 from PyQt6.QtGui import QColor, QKeySequence
@@ -359,7 +361,7 @@ class Janela(QMainWindow):
         s = self.sessoes.get(self.selecionada())
         ocupada = self.acao.state() != QProcess.ProcessState.NotRunning
         for botao in (self.abrir, self.integrar, self.encerrar):
-            botao.setEnabled(self.dados_validos and s is not None and (not ocupada) and s.nome not in self.finalizando)
+            botao.setEnabled(self.dados_validos and s is not None and (not ocupada) and not self.finalizacao_pendente(s.nome))
         if not s:
             self.nome.setText('Selecione uma tarefa')
             self.situacao.clear()
@@ -488,12 +490,42 @@ class Janela(QMainWindow):
     def expirar(self):
         self.consulta.kill()
 
+    def pasta_finalizacao(self, nome):
+        from central import nome_soquete
+        runtime = Path(nome_soquete(self.jangada, self.estado_dir, self.real)).parent
+        identidade = f'{self.jangada}:{self.estado_dir.resolve()}:{nome}'
+        return runtime / ('acao-' + hashlib.sha256(identidade.encode()).hexdigest()[:24])
+
+    def finalizacao_pendente(self, nome):
+        if not self.real:
+            return False
+        pasta = self.pasta_finalizacao(nome)
+        if not pasta.exists():
+            self.finalizando.pop(nome, None)
+            return False
+        self.finalizando[nome] = pasta
+        self.tempo_finalizacao.start()
+        if not (pasta / 'pronta').exists():
+            try:
+                inicio = json.loads((pasta / 'inicio.json').read_text())
+                if time.monotonic() - inicio['criado'] >= 10:
+                    try:
+                        os.kill(inicio['pid'], 0)
+                    except ProcessLookupError:
+                        (pasta / 'inicio.json').unlink()
+                        # Uma pronta criada neste intervalo impede a remoção da pasta.
+                        pasta.rmdir()
+                        self.finalizando.pop(nome, None)
+                        self.status.setText('O terminal não iniciou a ação. Você pode tentar novamente.')
+                        return False
+            except (OSError, ValueError, KeyError, TypeError):
+                pass
+        return True
+
     def conferir_finalizacoes(self):
         liberou = False
-        for nome, pasta in list(self.finalizando.items()):
-            if (Path(pasta.name) / 'fim').exists():
-                pasta.cleanup()
-                del self.finalizando[nome]
+        for nome in list(self.finalizando):
+            if not self.finalizacao_pendente(nome):
                 liberou = True
         if not self.finalizando:
             self.tempo_finalizacao.stop()
@@ -502,9 +534,9 @@ class Janela(QMainWindow):
 
     def finalizar(self, integrar):
         nome = self.selecionada()
-        if not self.dados_validos or nome not in self.sessoes or not NOME.fullmatch(nome) or nome.startswith('-') or nome in self.finalizando:
+        if not self.dados_validos or nome not in self.sessoes or not NOME.fullmatch(nome) or nome.startswith('-'):
             return
-        if self.acao.state() != QProcess.ProcessState.NotRunning:
+        if self.acao.state() != QProcess.ProcessState.NotRunning or self.finalizacao_pendente(nome):
             return
         acao = 'integrar e encerrar' if integrar else 'encerrar sem integrar'
         if not self.real:
@@ -514,32 +546,50 @@ class Janela(QMainWindow):
         if integrar:
             comando.append('--integrar')
         comando.append(nome)
-        from central import nome_soquete
         try:
-            runtime = Path(nome_soquete(self.jangada, self.estado_dir, self.real)).parent
-            pasta = tempfile.TemporaryDirectory(prefix='acao-', dir=runtime)
+            pasta = self.pasta_finalizacao(nome)
+            pasta.mkdir(mode=0o700)
+            inicio = {'pid': os.getpid(), 'criado': time.monotonic()}
+            (pasta / 'inicio.json').write_text(json.dumps(inicio))
+        except FileExistsError:
+            self.selecionar()
+            return
         except (OSError, ValueError) as erro:
             self.status.setText(f'Não foi possível preparar a ação: {erro}')
             return
-        # O terminal conserva os pedidos de confirmação e vive além desta janela.
+        # A pasta persiste ao fechar a central; o terminal a remove ao terminar.
+        roteiro = """pasta=$1; shift
+limpar() { rm -f -- "$pasta/pronta" "$pasta/inicio.json"; rmdir -- "$pasta" 2>/dev/null || true; }
+trap limpar EXIT
+trap 'exit 130' HUP INT TERM
+: > "$pasta/pronta" || exit 1
+"$@"
+resultado=$?
+limpar
+trap - EXIT
+read -r -p "Enter para fechar " _
+exit "$resultado"
+"""
         argumentos = ['--classe', 'org.jangada.tarefas.acao', '--titulo', 'Tarefa: ' + nome,
-                      '-e', 'bash', '-c',
-                      "marca=$1; shift; trap '[[ ! -d \"${marca%/*}\" ]] || : > \"$marca\"' EXIT; "
-                      "trap 'exit 130' HUP INT TERM; \"$@\"; resultado=$?; "
-                      '[[ ! -d "${marca%/*}" ]] || : > "$marca"; '
-                      'read -r -p "Enter para fechar " _; exit "$resultado"',
-                      'jangada-tarefas', str(Path(pasta.name) / 'fim'), *comando]
+                      '-e', 'bash', '-c', roteiro, 'jangada-tarefas', str(pasta), *comando]
         processo = QProcess(self)
         self.preparar(processo, argumentos, 'jangada-terminal')
-        iniciado, _ = processo.startDetached()
+        iniciado, pid = processo.startDetached()
         processo.deleteLater()
         if iniciado:
+            inicio['pid'] = pid
+            try:
+                if not (pasta / 'pronta').exists():
+                    (pasta / 'inicio.json').write_text(json.dumps(inicio))
+            except FileNotFoundError:
+                pass
             self.finalizando[nome] = pasta
             self.tempo_finalizacao.start()
             self.selecionar()
         else:
-            pasta.cleanup()
-        self.status.setText(f'Pedido para {acao} {nome} aberto no terminal. Confira o resultado lá.'
+            (pasta / 'inicio.json').unlink()
+            pasta.rmdir()
+        self.status.setText(f'Pedido para {acao} {nome} enviado ao terminal. Confira o resultado lá.'
                             if iniciado else 'Não foi possível abrir o terminal da ação.')
 
     def focar(self):
@@ -581,7 +631,5 @@ class Janela(QMainWindow):
             if processo.state() != QProcess.ProcessState.NotRunning:
                 processo.kill()
                 processo.waitForFinished(1000)
-        for pasta in self.finalizando.values():
-            pasta.cleanup()
         self.finalizando.clear()
         evento.accept()

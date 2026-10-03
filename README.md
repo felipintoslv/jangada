@@ -576,7 +576,9 @@ conferências existentes, revisão da integração e confirmação de descarte
 quando há alterações sem commit. Confira o resultado nesse terminal;
 a lista acompanha automaticamente o encerramento. Fechar a central mantém
 esse terminal aberto. Enquanto a ação está em andamento, outra ação de
-encerramento para a mesma sessão fica bloqueada. No formulário Nova tarefa, `Ctrl+X` continua recortando texto.
+encerramento para a mesma sessão fica bloqueada, inclusive ao reabrir a central.
+Se o terminal sair antes de iniciar a ação, o bloqueio é liberado após dez segundos.
+No formulário Nova tarefa, `Ctrl+X` continua recortando texto.
 A central não encerra agentes ao fechar. A consulta da janela apenas lê os
 registros; o contador da barra mantém a limpeza automática de estados órfãos
 e o registro persistente das interrupções, pelo mecanismo anterior.
