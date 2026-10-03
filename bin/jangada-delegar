@@ -6,7 +6,7 @@
 #
 # Uso: jangada-delegar PAPEL "pedido" [--destino local|agy|codex-economico] [--arquivos ARQ ...] [--arquivo SAIDA]
 #   PAPEL             explorador, leitor, pesquisador, verificador,
-#                     auditor, arquiteto, otimizador ou redator
+#                     auditor, arquiteto, otimizador, redator ou supervisor
 #                     (no destino local: apenas leitor e redator)
 #   --destino D       local (modelo no Ollama) ou agy (Flash)
 #   --arquivos ARQS   arquivos para leitura (obrigatório no destino local)
@@ -97,9 +97,9 @@ done
 if [[ "$destino_opt" == codex-economico && -z "$capacidade" ]]; then uso; fi
 ((${#requisitos[@]} == 0)) || [[ -n "$capacidade" ]] || uso
 
-declare -A esforco=([explorador]=low [leitor]=medium [pesquisador]=medium [verificador]=high [auditor]=high [arquiteto]=high [otimizador]=medium [redator]=low)
+declare -A esforco=([explorador]=low [leitor]=medium [pesquisador]=medium [verificador]=high [auditor]=high [arquiteto]=high [otimizador]=medium [redator]=low [supervisor]=medium)
 if [[ -z "${esforco[$papel]:-}" ]]; then
-  echo "jangada-delegar: papel desconhecido: $papel (explorador, leitor, pesquisador, verificador, auditor, arquiteto, otimizador ou redator)" >&2
+  echo "jangada-delegar: papel desconhecido: $papel (explorador, leitor, pesquisador, verificador, auditor, arquiteto, otimizador, redator ou supervisor)" >&2
   exit 2
 fi
 
@@ -246,8 +246,8 @@ if [[ -n "$capacidade" ]]; then
   limite_chamadas="${JANGADA_DELEGAR_CHAMADAS_RESTANTES:-${JANGADA_DELEGAR_CHAMADAS_MAX:-8}}"
   tempo_total="${JANGADA_DELEGAR_TEMPO_TOTAL:-600}"
   [[ "$limite_chamadas" =~ ^[1-9][0-9]{0,5}$ && "$tempo_total" =~ ^[1-9][0-9]{0,5}$ ]] || uso
-  if [[ "$papel" != leitor ]]; then
-    recusar "a capacidade documental exige o papel leitor" capacidade_incompativel
+  if [[ "$papel" != leitor && ( "$papel" != supervisor || "$capacidade" != analise_documental ) ]]; then
+    recusar "a capacidade documental exige leitor; supervisor aceita somente analise_documental" capacidade_incompativel
   fi
   ((${#arquivos[@]} > 0)) || uso
   for a in "${arquivos[@]}"; do
@@ -381,7 +381,7 @@ if [[ "$destino" == codex-economico ]]; then
   flock -n 9 || recusar "outro executor econômico Codex está ativo" ocupado
   temporario_codex="$(mktemp -d)"
   trap 'rm -rf "$temporario_codex"' EXIT
-  if ! python3 "$JANGADA_PATH/default/delegacao/codex.py" --pasta "$temporario_codex" \
+  if ! python3 "$JANGADA_PATH/default/delegacao/codex.py" --papel "$papel" --pasta "$temporario_codex" \
       --tempo "$tempo_total" -- "${arquivos[@]}" <<<"$pedido" >"$temporario_codex/resultado.json"; then
     chamadas_executor=null
     recusar "o executor Codex não devolveu resultado estruturado" erro_execucao
