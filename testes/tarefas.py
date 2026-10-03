@@ -167,6 +167,7 @@ class Interface(unittest.TestCase):
             pasta = self.janela.finalizando['projeto--dois']
             (pasta / 'inicio.json').unlink()
             pasta.rmdir()
+            pasta.parent.rmdir()
             self.janela.conferir_finalizacoes()
             self.janela.encerrar.click()
             aguardar(lambda: preparar.call_count == 2)
@@ -204,6 +205,7 @@ class Interface(unittest.TestCase):
             pasta = self.janela.finalizando['projeto--um']
             (pasta / 'inicio.json').unlink()
             pasta.rmdir()
+            pasta.parent.rmdir()
             self.janela.conferir_finalizacoes()
             self.assertTrue(self.janela.encerrar.isEnabled())
             self.janela.finalizar(False)
@@ -249,6 +251,40 @@ class Interface(unittest.TestCase):
             self.janela.conferir_finalizacoes()
         self.assertTrue(pasta.exists())
         self.assertFalse(self.janela.encerrar.isEnabled())
+
+    def test_runtime_invalido_bloqueia_acoes_sem_abortar_a_janela(self):
+        with patch.dict(os.environ, {'XDG_RUNTIME_DIR': 'relativo'}), patch.object(QProcess, 'startDetached') as iniciar:
+            self.janela.selecionar()
+            self.assertFalse(self.janela.integrar.isEnabled())
+            self.assertFalse(self.janela.encerrar.isEnabled())
+            self.janela.finalizar(True)
+            self.janela.finalizar(False)
+            iniciar.assert_not_called()
+            self.assertIn('Ações indisponíveis', self.janela.status.text())
+        self.janela.selecionar()
+        self.assertTrue(self.janela.integrar.isEnabled())
+
+    def test_terminal_atrasado_nao_usa_pasta_da_nova_tentativa(self):
+        with patch.object(QProcess, 'startDetached', return_value=(True, 123)), patch.object(self.janela, 'preparar') as preparar:
+            self.janela.finalizar(True)
+            argumentos = preparar.call_args.args[1]
+        pasta = self.janela.finalizando['projeto--um']
+        inicio = json.loads((pasta / 'inicio.json').read_text())
+        inicio['criado'] -= 11
+        (pasta / 'inicio.json').write_text(json.dumps(inicio))
+        with patch.object(os, 'kill', side_effect=ProcessLookupError):
+            self.janela.conferir_finalizacoes()
+        with patch.object(QProcess, 'startDetached', return_value=(True, 123)):
+            self.janela.finalizar(False)
+        nova = self.janela.finalizando['projeto--um']
+        self.assertNotEqual(nova, pasta)
+        comando = self.bin / 'jangada-agente-fim'
+        comando.write_text('#!/bin/sh\ntouch "' + str(self.raiz / 'executou-fim') + '"\n')
+        comando.chmod(448)
+        resultado = subprocess.run(argumentos[argumentos.index('-e') + 1:], input='\n', text=True, capture_output=True)
+        self.assertNotEqual(resultado.returncode, 0)
+        self.assertFalse((self.raiz / 'executou-fim').exists())
+        self.assertTrue(nova.exists())
 
     def test_finalizacao_recusa_nome_interpretavel_como_opcao(self):
         from dataclasses import replace

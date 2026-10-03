@@ -1,13 +1,13 @@
 """Janela da central de tarefas e acompanhamento das sessões."""
 from dataclasses import replace
 from datetime import datetime
+import hashlib
 import html
+import json
 import os
 from pathlib import Path
-import uuid
-import hashlib
-import json
 import time
+import uuid
 
 from PyQt6.QtCore import QProcess, QProcessEnvironment, QTimer, Qt
 from PyQt6.QtGui import QColor, QKeySequence
@@ -360,8 +360,9 @@ class Janela(QMainWindow):
     def selecionar(self, *_):
         s = self.sessoes.get(self.selecionada())
         ocupada = self.acao.state() != QProcess.ProcessState.NotRunning
+        pendente = self.finalizacao_pendente(s.nome) if self.dados_validos and s else False
         for botao in (self.abrir, self.integrar, self.encerrar):
-            botao.setEnabled(self.dados_validos and s is not None and (not ocupada) and not self.finalizacao_pendente(s.nome))
+            botao.setEnabled(self.dados_validos and s is not None and (not ocupada) and not pendente)
         if not s:
             self.nome.setText('Selecione uma tarefa')
             self.situacao.clear()
@@ -499,7 +500,18 @@ class Janela(QMainWindow):
     def finalizacao_pendente(self, nome):
         if not self.real:
             return False
-        pasta = self.pasta_finalizacao(nome)
+        try:
+            raiz = self.pasta_finalizacao(nome)
+            if not raiz.exists():
+                self.finalizando.pop(nome, None)
+                return False
+            tentativas = list(raiz.iterdir())
+            if len(tentativas) != 1 or not tentativas[0].is_dir():
+                return True
+            pasta = tentativas[0]
+        except (OSError, ValueError) as erro:
+            self.status.setText(f'Ações indisponíveis: {erro}')
+            return True
         if not pasta.exists():
             self.finalizando.pop(nome, None)
             return False
@@ -515,6 +527,7 @@ class Janela(QMainWindow):
                         (pasta / 'inicio.json').unlink()
                         # Uma pronta criada neste intervalo impede a remoção da pasta.
                         pasta.rmdir()
+                        raiz.rmdir()
                         self.finalizando.pop(nome, None)
                         self.status.setText('O terminal não iniciou a ação. Você pode tentar novamente.')
                         return False
@@ -547,7 +560,9 @@ class Janela(QMainWindow):
             comando.append('--integrar')
         comando.append(nome)
         try:
-            pasta = self.pasta_finalizacao(nome)
+            raiz = self.pasta_finalizacao(nome)
+            raiz.mkdir(mode=0o700)
+            pasta = raiz / uuid.uuid4().hex
             pasta.mkdir(mode=0o700)
             inicio = {'pid': os.getpid(), 'criado': time.monotonic()}
             (pasta / 'inicio.json').write_text(json.dumps(inicio))
@@ -559,7 +574,7 @@ class Janela(QMainWindow):
             return
         # A pasta persiste ao fechar a central; o terminal a remove ao terminar.
         roteiro = """pasta=$1; shift
-limpar() { rm -f -- "$pasta/pronta" "$pasta/inicio.json"; rmdir -- "$pasta" 2>/dev/null || true; }
+limpar() { rm -f -- "$pasta/pronta" "$pasta/inicio.json"; rmdir -- "$pasta" 2>/dev/null && rmdir -- "${pasta%/*}" 2>/dev/null || true; }
 trap limpar EXIT
 trap 'exit 130' HUP INT TERM
 : > "$pasta/pronta" || exit 1
@@ -589,6 +604,7 @@ exit "$resultado"
         else:
             (pasta / 'inicio.json').unlink()
             pasta.rmdir()
+            raiz.rmdir()
         self.status.setText(f'Pedido para {acao} {nome} enviado ao terminal. Confira o resultado lá.'
                             if iniciado else 'Não foi possível abrir o terminal da ação.')
 
