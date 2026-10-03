@@ -44,7 +44,9 @@ g symbolic-ref -q HEAD >/dev/null || erro "o HEAD de $repo não está num ramo"
 base="$(g rev-parse --verify --quiet '@{upstream}^{commit}')" || erro "o ramo de $repo não acompanha um ramo da origem"
 [[ -z "$(g rev-list --merges "$base..HEAD")" ]] || erro "há commits de merge depois de $base; assine à mão"
 
-primeiro="$(g log --reverse --format='%G? %H' "$base..HEAD" | awk '$1 != "G" { print $2; exit }')"
+# O awk lê até o fim: saindo no primeiro achado, o git log morre por SIGPIPE
+# e, com pipefail, o script termina aqui sem mensagem.
+primeiro="$(g log --reverse --format='%G? %H' "$base..HEAD" | awk '$1 != "G" && !achou { print $2; achou = 1 }')"
 if [[ -z "$primeiro" ]]; then
   echo "nada a assinar: os commits depois de $(g rev-parse --abbrev-ref '@{upstream}') já têm assinatura válida"
   exit 0
