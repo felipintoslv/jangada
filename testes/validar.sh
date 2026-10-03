@@ -242,20 +242,22 @@ conferir "caso 7: pedido identifica o autor como Claude" grep -q "agente (Claude
 conferir "caso 7: pedido alerta sobre revisão pelo mesmo modelo" grep -q "revisão pelo mesmo modelo" "$tmp/falso/claude.pedido"
 conferir "caso 7: estado registra a rodada e o revisor claude" [ "$(jq -r .validacao "$estado/s.json")" = "r1: APROVADO (claude)" ]
 
-# Caso 8: perfis agy-agy e claude-claude definem variáveis esperadas.
+# Caso 8: perfis codex-agy e claude-claude definem variáveis esperadas.
 (
   export JANGADA_PATH="$repo_jangada" XDG_CONFIG_HOME="$tmp/config"
   # shellcheck source=bin/jangada-config
   source "$repo_jangada/bin/jangada-config"
-  jangada_perfil agy-agy
-  [[ "$PERFIL_COMANDO" == "agy" ]] || exit 1
+  jangada_perfil codex-agy
+  [[ "$PERFIL_COMANDO" == "codex" ]] || exit 1
   [[ " ${PERFIL_AMBIENTE[*]} " == *" JANGADA_VALIDAR_REVISOR=agy "* ]] || exit 1
 
   jangada_perfil claude-claude
   [[ "$PERFIL_COMANDO" == "claude" ]] || exit 1
   [[ " ${PERFIL_AMBIENTE[*]} " == *" JANGADA_VALIDAR_REVISOR=claude "* ]] || exit 1
 ); rc=$?
-conferir "caso 8: perfis agy-agy e claude-claude definem comando e revisor" [ "$rc" = 0 ]
+conferir "caso 8: perfis codex-agy e claude-claude definem comando e revisor" [ "$rc" = 0 ]
+conferir "caso 8: nenhum perfil pronto abre o agy como agente principal" \
+  bash -c '! grep -lx "COMANDO=agy" "$1"/default/agentes/*.conf' _ "$repo_jangada"
 
 # Caso 9: auto-revisão fora de sessão com --revisor mesmo.
 rm -f "$tmp/falso/"*.pedido
@@ -275,13 +277,13 @@ exit 0
 EOF
 chmod +x "$tmp/bin/tmux"
 
-# 10a: Perfil agy-agy prevalece sobre JANGADA_VALIDAR_REVISOR=claude global
+# 10a: Perfil codex-agy prevalece sobre JANGADA_VALIDAR_REVISOR=claude global
 rm -f "$estado/"*.json
 env -u TMUX -u HYPRLAND_INSTANCE_SIGNATURE PATH="$tmp/bin:$PATH" \
   XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
   JANGADA_AGENTE_ESCOLHER=0 JANGADA_VALIDAR_REVISOR=claude \
-  "$repo_jangada/bin/jangada-agente" --projeto "$tmp/projeto" --direto --perfil agy-agy </dev/null >/dev/null 2>&1
-conferir "caso 10a: perfil agy-agy prevalece sobre global claude" \
+  "$repo_jangada/bin/jangada-agente" --projeto "$tmp/projeto" --direto --perfil codex-agy </dev/null >/dev/null 2>&1
+conferir "caso 10a: perfil codex-agy prevalece sobre global claude" \
   [ "$(jq -r '.revisor // ""' "$estado/projeto.json")" = "agy" ]
 
 # 10b: Perfil claude-claude prevalece sobre JANGADA_VALIDAR_REVISOR=agy global
@@ -950,8 +952,15 @@ conferir "caso 13b: com R, o Claude recebe o protocolo da sessão" \
 conferir "caso 13b: o protocolo da sessão traz o padrão, os subagentes e as regras de R" \
   bash -c 'grep -q "^7. Escrita" "$1" && grep -q "^8. Subagentes" "$1" && grep -q "^9. Código R" "$1"' _ "$estado/protocolo-comr.md"
 
-agente_em "$tmp/comr" --perfil agy-agy
-conferir "caso 13c: com R, o agy recebe as regras de R no -i" grep -q "^9. Código R" "$estado/prompt-comr.md"
+agente_em "$tmp/comr" --agente agy
+conferir "caso 13c: o agy não abre sessão principal" \
+  bash -c 'test ! -e "$1/comr.json" && test ! -e "$1/prompt-comr.md"' _ "$estado"
+env -u TMUX -u HYPRLAND_INSTANCE_SIGNATURE -u JANGADA_ISOLADO PATH="$tmp/bin:$PATH" \
+  XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
+  JANGADA_AGENTE_ESCOLHER=0 "$repo_jangada/bin/jangada-agente" --projeto "$tmp/comr" --direto --agente agy \
+  </dev/null >"$tmp/saida.log" 2>&1; rc=$?
+conferir "caso 13c: a recusa sai com 1 e diz o que o agy atende" \
+  bash -c '[ "$1" = 1 ] && grep -q "o agy não abre sessão principal" "$2"' _ "$rc" "$tmp/saida.log"
 
 # Caso 13g: o item de subagentes segue JANGADA_DELEGAR (perfil, depois global,
 # depois o padrão do agente), e o destino vai para o estado da sessão.
@@ -963,9 +972,6 @@ agente_em "$tmp/semr" --perfil claude-claude
 conferir "caso 13g: o perfil claude-claude usa os subagentes do Claude" \
   bash -c '[ "$1" = claude ] && ! grep -q "jangada-delegar" "$2" && grep -q "Nunca .general-purpose." "$2"' \
   _ "$(delegar_de)" "$estado/protocolo-semr.md"
-agente_em "$tmp/semr" --perfil agy
-conferir "caso 13g: o agy usa os próprios subagentes" \
-  bash -c '[ "$1" = nativo ] && grep -q "invoke_subagent" "$2"' _ "$(delegar_de)" "$estado/prompt-semr.md"
 JANGADA_DELEGAR=claude agente_em "$tmp/semr"
 conferir "caso 13g: JANGADA_DELEGAR global vale sem a chave no perfil" [ "$(delegar_de)" = claude ]
 JANGADA_DELEGAR=agy agente_em "$tmp/semr" --perfil claude-claude

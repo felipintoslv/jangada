@@ -196,13 +196,15 @@ jangada_perfil() {
   [[ -n "$PERFIL_COMANDO" ]] || PERFIL_COMANDO="$JANGADA_AGENTE"
 }
 
-# Destino dos subagentes de uma sessão: agy (jangada-delegar manda ao agy
-# Flash), claude (subagentes do Claude) ou nativo (subagentes do próprio agy).
+# Destino dos subagentes de uma sessão: agy (jangada-delegar manda ao agy),
+# claude (subagentes do Claude) ou local (leitor e redator no Ollama, demais
+# papéis na própria sessão).
 # Uso: jangada_delegacao COMANDO [JANGADA_DELEGAR]. Sem valor, vale agy para o
-# Claude e nativo para o agy. O agy como agente só delega aos próprios
-# subagentes, e o Claude não tem "nativo" além dos seus: vira claude. Sem o
-# agy instalado, agy vira claude, para o protocolo não mandar a um comando
-# que só recusaria.
+# Claude e local para o Codex, que só aceita agy ou local. Sem o agy
+# instalado, agy vira claude, para o protocolo não mandar a um comando que só
+# recusaria. O agy não abre mais sessão principal: nativo (subagentes do
+# próprio agy) só aparece ao restaurar uma sessão antiga, e no Claude vira
+# claude.
 jangada_delegacao() {
   local _base _valor="${2:-}"
   _base="$(basename "${1%% *}")"
