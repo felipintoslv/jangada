@@ -295,6 +295,26 @@ EOF
   else
     echo "pulado caso 3 do D-Bus: sem sessão D-Bus, xdg-dbus-proxy ou busctl"
   fi
+  # O keyring só é liberado para o agy. O proxy falso anota o que recebeu.
+  mkdir -m 0700 "$tmp/run"
+  mkdir -p "$tmp/proxy-falso" "$tmp/agy-falso"
+  printf '#!/bin/sh\nprintf "%%s\\n" "$@" >"$PROXY_ARGS"\nprintf x\n' >"$tmp/proxy-falso/xdg-dbus-proxy"
+  printf '#!/bin/sh\n' >"$tmp/agy-falso/agy"
+  chmod +x "$tmp/proxy-falso/xdg-dbus-proxy" "$tmp/agy-falso/agy"
+  proxy() {
+    isolar "$tmp/wt" PATH="$tmp/proxy-falso:$1/usr/bin:/bin" PROXY_ARGS="$tmp/proxy.args" XDG_RUNTIME_DIR="$tmp/run" \
+      DBUS_SESSION_BUS_ADDRESS=unix:path=/nada "$repo_jangada/bin/jangada-isolar" -- true >/dev/null 2>&1
+  }
+  if PATH=/usr/bin:/bin command -v agy >/dev/null 2>&1; then
+    echo "pulado caso 3 do keyring: agy instalado em /usr/bin"
+  else
+    proxy ""
+    conferir "caso 3: sem agy, o proxy não libera o keyring" \
+      bash -c 'grep -qxF -- --talk=org.freedesktop.Notifications "$1" && ! grep -q secrets "$1"' _ "$tmp/proxy.args"
+    proxy "$tmp/agy-falso:"
+    conferir "caso 3: com agy, o proxy libera o keyring e as notificações" \
+      bash -c 'grep -qxF -- --talk=org.freedesktop.Notifications "$1" && grep -qxF -- --talk=org.freedesktop.secrets "$1"' _ "$tmp/proxy.args"
+  fi
   conferir "caso 3: não vê os processos de fora" roda '[ "$(ls /proc | grep -c "^[0-9]")" -lt 10 ]'
 
   # Configuração do Claude e caches que alimentam código de fora.
