@@ -24,6 +24,9 @@ mkdir -p "$tmp/bin" "$tmp/home/.gemini/antigravity-cli/log" "$tmp/falso" "$tmp/p
 
 # O agy falso responde ao /usage com a cota de $FALSO_COTA (fração) e ao
 # pedido com $FALSO_RESPOSTA. Grava os argumentos de cada chamada.
+# $FALSO_SEMANAL troca a cota semanal do Gemini, $FALSO_TERCEIROS acrescenta o
+# grupo dos modelos Claude e GPT e $FALSO_ESGOTADO é o modelo que responde
+# sem cota.
 cat >"$tmp/bin/agy" <<'EOF'
 #!/usr/bin/env bash
 if [[ "$1" == agents ]]; then
@@ -37,10 +40,21 @@ if [[ "$2" == /usage ]]; then
     sleep "$FALSO_ESPERA_USAGE"
   fi
   [[ "${FALSO_USAGE_FALHA:-0}" == 1 ]] && exit 1
-  printf '{"status":"SUCCESS","response":"","command":{"name":"usage","data":{"groups":[{"name":"Gemini Models","buckets":[{"id":"gemini-weekly","remaining_fraction":0.9},{"id":"gemini-5h","remaining_fraction":%s}]}]}}}\n' "$FALSO_COTA"
+  terceiros=""
+  if [[ -n "${FALSO_TERCEIROS:-}" ]]; then
+    terceiros=',{"name":"Claude and GPT models","buckets":[{"id":"3p-weekly","remaining_fraction":1},{"id":"3p-5h","remaining_fraction":'"$FALSO_TERCEIROS"'}]}'
+  fi
+  printf '{"status":"SUCCESS","response":"","command":{"name":"usage","data":{"groups":[{"name":"Gemini Models","buckets":[{"id":"gemini-weekly","remaining_fraction":%s},{"id":"gemini-5h","remaining_fraction":%s}]}%s]}}}\n' \
+    "${FALSO_SEMANAL:-0.9}" "$FALSO_COTA" "$terceiros"
   exit 0
 fi
 printf '%s\n' "$@" >"$FALSO_DIR/agy.args"
+for a in "$@"; do
+  if [[ -n "${FALSO_ESGOTADO:-}" && "$a" == "$FALSO_ESGOTADO" ]]; then
+    echo "RESOURCE_EXHAUSTED (code 429): Individual quota reached." >&2
+    exit 3
+  fi
+done
 printf '%s\n' "${TMPDIR:-/tmp}" >"$FALSO_DIR/temporario"
 printf '%s\n' "$$" >"$FALSO_DIR/agy.pid"
 if [[ "${FALSO_IGNORAR_TERM:-0}" == 1 ]]; then
@@ -93,12 +107,16 @@ sed "s|@JANGADA_PATH@|$repo_jangada|g" default/agy/hooks.json >"$tmp/home/.gemin
 
 delegar() {
   rm -f "$tmp/falso/agy.args"
-  (cd "$tmp/projeto" && env -u JANGADA_DELEGAR -u JANGADA_ISOLADO -u XDG_CACHE_HOME -u XDG_STATE_HOME -u XDG_CONFIG_HOME \
+  (cd "$tmp/projeto" && env -u JANGADA_DELEGAR -u JANGADA_DELEGAR_MODELOS -u JANGADA_ISOLADO -u XDG_CACHE_HOME -u XDG_STATE_HOME -u XDG_CONFIG_HOME \
     -u JANGADA_DELEGAR_ROTEAMENTO_ID -u JANGADA_DELEGAR_TENTATIVAS -u JANGADA_DELEGAR_CHAMADAS_RESTANTES \
     HOME="$tmp/home" PATH="$tmp/bin:$PATH" JANGADA_PATH="$repo_jangada" FALSO_DIR="$tmp/falso" \
     FALSO_COTA="${COTA:-0.9}" FALSO_RESPOSTA="${RESPOSTA-relatorio em a.sh:1}" \
     FALSO_CODIGO="${CODIGO:-0}" FALSO_NEGADO="${NEGADO:-}" FALSO_LOG="${LOG:-}" FALSO_USAGE_FALHA="${USAGE_FALHA:-0}" \
     ${AGENTES:+FALSO_AGENTES="$AGENTES"} \
+    ${SEMANAL:+FALSO_SEMANAL=$SEMANAL} \
+    ${TERCEIROS:+FALSO_TERCEIROS=$TERCEIROS} \
+    ${ESGOTADO:+FALSO_ESGOTADO=$ESGOTADO} \
+    ${MODELOS:+JANGADA_DELEGAR_MODELOS="$MODELOS"} \
     ${DELEGAR:+JANGADA_DELEGAR=$DELEGAR} \
     ${AGENTE:+JANGADA_AGENTE=$AGENTE} \
     ${CHAMADAS_MAX:+JANGADA_DELEGAR_CHAMADAS_MAX=$CHAMADAS_MAX} \
@@ -127,7 +145,7 @@ conferir "caso 1: código 0" [ "$(codigo)" = 0 ]
 conferir "caso 1: imprime o relatório" grep -qx "relatorio em a.sh:1" "$tmp/saida"
 conferir "caso 1: o agy recebe o papel, que o hook do leitor lê" grep -qx explorador "$tmp/falso/agy.papel"
 conferir "caso 1: agente do papel" grep -qx -- explorador "$tmp/falso/agy.args"
-conferir "caso 1: Flash low para o explorador" grep -qx -- gemini-3.8-flash-low "$tmp/falso/agy.args"
+conferir "caso 1: Flash high para o explorador" grep -qx -- gemini-3.8-flash-high "$tmp/falso/agy.args"
 conferir "caso 1: roda com --sandbox" grep -qx -- --sandbox "$tmp/falso/agy.args"
 conferir "caso 1: roda na pasta atual" [ "$(cat "$tmp/falso/agy.pasta")" = "$tmp/projeto" ]
 
@@ -152,9 +170,47 @@ conferir "caso 3: indica o subagente do Claude" grep -q "subagente leitor do Cla
 conferir "caso 3: recusa registrada com o motivo" \
   jqok -se 'last | .recusa and .codigo_saida == 4 and (.motivo | test("15"))' "$reg"
 
+# A cota semanal zerada recusa mesmo com a de 5 horas cheia.
+rm -f "$tmp/home/.cache/jangada/agy-usage.json"
+SEMANAL=0 COTA=0.99 delegar leitor "leia"
+conferir "caso 3b: cota semanal zerada recusa" [ "$(codigo)" = 4 ]
+conferir "caso 3b: agy não é chamado" test ! -e "$tmp/falso/agy.args"
+conferir "caso 3b: motivo é a cota" \
+  jqok -se 'last | .motivo_codigo == "cota_insuficiente" and .cota_antes == 0' "$reg"
+
+# Sem cota no Gemini, o modelo seguinte da lista atende pelo outro grupo.
+rm -f "$tmp/home/.cache/jangada/agy-usage.json"
+SEMANAL=0 TERCEIROS=0.8 delegar leitor "leia"
+conferir "caso 3c: Gemini sem cota passa ao modelo seguinte" [ "$(codigo)" = 0 ]
+conferir "caso 3c: chama o Sonnet do agy" grep -qx -- claude-sonnet-5-5-high "$tmp/falso/agy.args"
+conferir "caso 3c: registra o modelo usado e a cota do grupo dele" \
+  jqok -se 'last | .modelo == "claude-sonnet-5-5-high" and .cota_antes == 80 and .recusa == false' "$reg"
+
+# O /usage diz que há cota, mas o agy responde que acabou: tenta o seguinte.
+rm -f "$tmp/home/.cache/jangada/agy-usage.json"
+TERCEIROS=0.8 ESGOTADO=gemini-3.8-flash-high delegar leitor "leia"
+conferir "caso 3d: modelo esgotado na chamada passa ao seguinte" [ "$(codigo)" = 0 ]
+conferir "caso 3d: avisa da troca" grep -q "tentando o próximo modelo" "$tmp/erro"
+conferir "caso 3d: registra o modelo que respondeu" \
+  jqok -se 'last | .modelo == "claude-sonnet-5-5-high"' "$reg"
+
+# Sem o grupo dos demais modelos no /usage, a cota deles é desconhecida.
+rm -f "$tmp/home/.cache/jangada/agy-usage.json"
+ESGOTADO=gemini-3.8-flash-high delegar leitor "leia"
+conferir "caso 3e: esgotado e sem outro grupo, recusa" [ "$(codigo)" = 4 ]
+conferir "caso 3e: motivo é a cota do primeiro modelo" \
+  jqok -se 'last | .motivo_codigo == "cota_insuficiente" and .modelo == "gemini-3.8-flash-high"' "$reg"
+
+rm -f "$tmp/home/.cache/jangada/agy-usage.json"
+MODELOS="gemini-3.1-pro-high" delegar leitor "leia"
+conferir "caso 3f: JANGADA_DELEGAR_MODELOS troca o modelo" grep -qx -- gemini-3.1-pro-high "$tmp/falso/agy.args"
+chamadas_antes="$(wc -l <"$tmp/falso/usage.chamadas")"
+
 rm -f "$tmp/home/.cache/jangada/agy-usage.json"
 USAGE_FALHA=1 delegar leitor "leia"
 conferir "caso 4: /usage falhou, recusa" [ "$(codigo)" = 4 ]
+conferir "caso 4: consulta o /usage uma vez, não uma por modelo" \
+  [ "$(wc -l <"$tmp/falso/usage.chamadas")" = "$((chamadas_antes + 1))" ]
 
 rm -f "$tmp/home/.cache/jangada/agy-usage.json"
 CODIGO=1 delegar pesquisador "busque"

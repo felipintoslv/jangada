@@ -187,15 +187,24 @@ class Saude:
             grupos = dados['command']['data']['groups']
             if not isinstance(grupos, list) or any(not isinstance(g, dict) for g in grupos):
                 raise ValueError('grupos de cota inválidos')
-            cotas = []
+            # Como no jangada-delegar: a cota de um grupo é a menor entre as
+            # janelas ativas, e vale o grupo com mais cota entre os modelos
+            # de JANGADA_DELEGAR_MODELOS.
+            cotas = {}
             for grupo in grupos:
                 buckets = grupo.get('buckets', [])
                 if not isinstance(buckets, list) or any(not isinstance(b, dict) for b in buckets):
                     raise ValueError('cotas inválidas')
-                cotas.extend(b['remaining_fraction'] for b in buckets if b.get('id') == 'gemini-5h')
-            if len(cotas) != 1 or type(cotas[0]) not in (int, float) or not math.isfinite(cotas[0]) or not 0 <= cotas[0] <= 1:
+                for b in buckets:
+                    if isinstance(b.get('id'), str) and b.get('disabled') is not True:
+                        cotas.setdefault(b['id'].split('-')[0], []).append(b['remaining_fraction'])
+            modelos = os.environ.get(
+                'JANGADA_DELEGAR_MODELOS', 'gemini-3.8-flash-high claude-sonnet-5-5-high gpt-oss-120b-medium').split()
+            usados = [cotas[g] for g in {'gemini' if m.startswith('gemini-') else '3p' for m in modelos} if g in cotas]
+            if not usados or any(type(c) not in (int, float) or not math.isfinite(c) or not 0 <= c <= 1
+                                 for grupo in usados for c in grupo):
                 raise ValueError('cota inválida')
-            percentual = cotas[0] * 100
+            percentual = max(min(grupo) for grupo in usados) * 100
             status = 'AVAILABLE' if percentual >= float(os.environ.get('JANGADA_DELEGAR_COTA_MIN', '20')) else 'QUOTA_LOW'
             if percentual == 0:
                 status = 'QUOTA_EXHAUSTED'
