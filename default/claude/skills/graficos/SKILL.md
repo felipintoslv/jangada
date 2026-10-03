@@ -36,7 +36,9 @@ tipo pela relação a mostrar, aplicar o tema e conferir contra a checklist.
    desta pasta, avise o usuário antes de trocar.
 3. **Dependências.** R: `ggplot2`, `scales`, `colorspace`, `ragg` (PNG),
    `svglite` (SVG); `systemfonts` e `ggrepel` são opcionais. Python:
-   `matplotlib`. Se faltar pacote, pergunte antes de instalar.
+   `matplotlib`. `exemplos.R` carrega também `dplyr`, `tidyr`, `forcats`
+   e `ggrepel`, e o mapa pede `sf` e `classInt`; `exemplos.py` pede
+   `numpy`. Se faltar pacote, pergunte antes de instalar.
 4. **Uma frase.** Escreva a mensagem do gráfico em uma frase antes de
    desenhar. Se não couber em uma, são dois gráficos. Se o leitor precisa do
    valor exato, é tabela.
