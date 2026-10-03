@@ -249,6 +249,18 @@ class Supervisao(unittest.TestCase):
         self.assertEqual(metricas['selecionadas_na_amostra'], 60 - concluidas)
         self.assertEqual(metricas['desempenho'][0]['revisoes_na_janela'], 20)
 
+    def test_acompanhamento_repassa_a_amostragem(self):
+        global_estado = Estado(self.pasta / 'saude')
+        self.addCleanup(global_estado.fechar)
+        self.historico()
+        self.estado.importar([self.tarefa('A1', supervisao_automatica=False, amostragem=True)])
+        with patch.dict(os.environ, AUTOR_TESTE='agy'):
+            acompanhar(self.estado, self.projeto, self.raiz, self.pasta / 'config', Saude(global_estado),
+                       limite=1, duracao=60, permitir_remoto=True, amostrar=True)
+        sorteio = self.estado.listar()[-1]['resultado']['amostragem']
+        self.assertEqual(sorteio['taxa'], 0.1)
+        self.assertEqual(self.estado.listar()[-1]['status'], 'REVIEW_REQUIRED' if sorteio['selecionada'] else 'COMPLETED')
+
     def test_amostragem_exige_opcao_e_campo_explicitos(self):
         self.historico()
         with patch.dict(os.environ, AUTOR_TESTE='agy'):

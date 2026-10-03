@@ -54,7 +54,13 @@ def executar_em_paralelo(args, projeto):
                                                                 ('--supervisionar', args.supervisionar),
                                                                 ('--amostrar', args.amostrar)) if ativa)]
     partes = [args.limite // args.paralelo + (i < args.limite % args.paralelo) for i in range(args.paralelo)]
+    def interromper(*_):
+        raise KeyboardInterrupt
+
     # Sessão própria: o Ctrl+C do terminal chega só a este processo, que o repassa uma vez a cada filho.
+    # Término e fechamento do terminal seguem o mesmo caminho, para não deixar filhos chamando provedores.
+    for sinal in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sinal, interromper)
     processos = [subprocess.Popen([*comando, '--limite', str(parte)], stdout=subprocess.PIPE, text=True,
                                   start_new_session=True) for parte in partes]
     with concurrent.futures.ThreadPoolExecutor(len(processos)) as leitores:

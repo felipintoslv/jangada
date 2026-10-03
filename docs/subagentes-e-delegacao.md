@@ -421,8 +421,10 @@ Ela não autoriza envio: cada tarefa ainda precisa de `permitir_remoto: true`.
 - A cota do agy é lida antes de cada chamada, sem reserva. Chamadas
   simultâneas podem ser liberadas pela mesma leitura; por isso o teto de
   quatro processos.
-- Ctrl+C é repassado uma vez a cada processo, que encerra a tarefa em curso
-  como na execução em sequência.
+- Ctrl+C, término (`SIGTERM`) e fechamento do terminal (`SIGHUP`) são
+  repassados uma vez a cada processo, que encerra a tarefa em curso como na
+  execução em sequência. `SIGKILL` no comando deixa os processos rodando
+  até o fim da tarefa em curso.
 - Se um processo falha, o comando imprime os resultados dos demais e sai
   com código 2. Consulte `jangada-fila` antes de repetir.
 

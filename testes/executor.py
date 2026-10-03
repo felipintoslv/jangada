@@ -6,9 +6,11 @@ import json
 import os
 import pathlib
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -595,6 +597,53 @@ class Execucao(unittest.TestCase):
         fila = json.loads(comando('jangada-fila', '--json').stdout)['tarefas']
         self.assertEqual([t['status'] for t in fila], ['REVIEW_REQUIRED'] * 3 + ['QUEUED'] * 2)
         self.assertEqual([t['tentativas'] for t in fila], [1, 1, 1, 0, 0])
+
+    def test_cli_paralelo_encerrado_interrompe_os_processos_filhos(self):
+        shutil.copytree(RAIZ / 'default/orquestracao', self.raiz / 'default/orquestracao')
+        shutil.copyfile(RAIZ / 'default/delegacao/roteamento.json', self.raiz / 'default/delegacao/roteamento.json')
+        plano = self.projeto / 'plano.json'
+        plano.write_text(json.dumps([self.tarefa(f'T{i}', permitir_remoto=True) for i in range(4)]), encoding='utf-8')
+        ambiente = os.environ.copy()
+        ambiente.update(JANGADA_PATH=str(self.raiz), XDG_STATE_HOME=str(self.pasta / 'state-cli'),
+                        XDG_CONFIG_HOME=str(self.pasta / 'config-cli'), MODO_TESTE='demorado')
+        comum = dict(cwd=self.projeto, env=ambiente, text=True)
+        self.assertEqual(subprocess.run([str(RAIZ / 'bin/jangada-fila'), '--importar', str(plano)],
+                                        capture_output=True, timeout=30, **comum).returncode, 0)
+        for sinal in (signal.SIGTERM, signal.SIGHUP):
+            with self.subTest(sinal=sinal):
+                marca = pathlib.Path(str(self.registro) + '.filho')
+                marca.unlink(missing_ok=True)
+                inicio = time.monotonic()
+                processo = subprocess.Popen([str(RAIZ / 'bin/jangada-executar'), '--paralelo', '2', '--limite', '2',
+                                             '--permitir-remoto'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, **comum)
+                while not marca.exists() and time.monotonic() - inicio < 8:
+                    time.sleep(0.05)
+                time.sleep(0.3)
+                processo.send_signal(sinal)
+                processo.communicate(timeout=8)
+                self.assertEqual(processo.returncode, 130)
+                self.assertLess(time.monotonic() - inicio, 8)
+                fila = json.loads(subprocess.run([str(RAIZ / 'bin/jangada-fila'), '--json'], capture_output=True,
+                                                 timeout=30, **comum).stdout)['tarefas']
+                self.assertNotIn('RUNNING', {t['status'] for t in fila})
+        self.assertEqual({t['status'] for t in fila}, {'REVISION_REQUIRED'})
+
+    def test_cli_retomada_repassa_a_amostragem(self):
+        shutil.copytree(RAIZ / 'default/orquestracao', self.raiz / 'default/orquestracao')
+        shutil.copyfile(RAIZ / 'default/delegacao/roteamento.json', self.raiz / 'default/delegacao/roteamento.json')
+        plano = self.projeto / 'plano.json'
+        plano.write_text(json.dumps([self.tarefa(intermediaria=True, amostragem=True)]), encoding='utf-8')
+        ambiente = os.environ.copy()
+        ambiente.update(JANGADA_PATH=str(self.raiz), XDG_STATE_HOME=str(self.pasta / 'state-cli'),
+                        XDG_CONFIG_HOME=str(self.pasta / 'config-cli'))
+        comum = dict(cwd=self.projeto, env=ambiente, text=True, capture_output=True, timeout=30)
+        self.assertEqual(subprocess.run([str(RAIZ / 'bin/jangada-fila'), '--importar', str(plano)], **comum).returncode, 0)
+        retomada = subprocess.run([str(RAIZ / 'bin/jangada-retomar'), '--executar', '--perfil', 'offline', '--amostrar'],
+                                  **comum)
+        self.assertEqual(retomada.returncode, 0, retomada.stderr)
+        resultado = json.loads(retomada.stdout)['resultados'][0]
+        self.assertEqual(resultado['status'], 'REVIEW_REQUIRED')
+        self.assertEqual(resultado['amostragem']['taxa'], 1)
 
     def test_cli_paralelo_informa_falha_de_um_processo(self):
         shutil.copytree(RAIZ / 'default/orquestracao', self.raiz / 'default/orquestracao')
