@@ -89,6 +89,34 @@ class Indicadores(unittest.TestCase):
         self.assertIsNone(resultado['chamadas'])
         self.assertIsNone(resultado['segundos'])
         self.assertIsNone(resultado['tokens_saida'])
+        grupo = resultado['por_executor'][0]
+        self.assertEqual(grupo['executor'], 'nao_informado')
+        self.assertEqual(grupo['reservas_expiradas'], 1)
+        self.assertEqual(grupo['duracoes_do_fluxo_desconhecidas'], 1)
+
+    def test_duracao_omitida_nao_e_zero_e_bloqueia_repeticao(self):
+        self.importar()
+        _, dono = self.estado.reservar()
+        self.estado.finalizar('T1', dono, 'REVISION_REQUIRED', {'metricas': {'chamadas': 1}})
+        resultado = resumir(self.estado)
+        self.assertIsNone(resultado['segundos'])
+        self.assertEqual(resultado['chamadas'], 1)
+        self.assertEqual(resultado['duracoes_desconhecidas'], 1)
+        self.assertEqual(resultado['por_executor'][0]['duracoes_do_fluxo_desconhecidas'], 1)
+        self.assertIsNone(self.estado.consumo('T1')['chamadas'])
+        self.assertEqual(resultado['processamentos_confirmados'], 1)
+
+    def test_tokens_sem_chamadas_sao_zero_e_chamada_sem_medicao_e_desconhecida(self):
+        self.importar()
+        self.finalizar(chamadas=0, status='WAITING_QUOTA')
+        resultado = resumir(self.estado)
+        self.assertEqual(resultado['tokens_entrada'], 0)
+        self.assertEqual(resultado['tokens_saida'], 0)
+        self.importar('T2')
+        self.finalizar(chamadas=1)
+        resultado = resumir(self.estado)
+        self.assertIsNone(resultado['tokens_entrada'])
+        self.assertIsNone(resultado['tokens_saida'])
 
     def test_repeticao_preserva_consumo_e_revisoes(self):
         self.importar()

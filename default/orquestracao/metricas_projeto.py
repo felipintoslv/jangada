@@ -18,6 +18,13 @@ def identidade(resultado):
     return executor, modelo
 
 
+def grupo_executor(executores, executor, modelo):
+    return executores.setdefault((executor, modelo), dict(executor=executor, modelo=modelo,
+        execucoes_registradas=0, processamentos_confirmados=0, reservas_expiradas=0,
+        chamadas_do_fluxo_confirmadas=0, chamadas_do_fluxo_desconhecidas=0,
+        segundos_do_fluxo_confirmados=0, duracoes_do_fluxo_desconhecidas=0))
+
+
 def resumir(estado):
     estado.db.execute('BEGIN')
     try:
@@ -45,6 +52,10 @@ def resumir(estado):
                 totais['reservas_expiradas'] += 1
                 totais['chamadas_desconhecidas'] += 1
                 totais['duracoes_desconhecidas'] += 1
+                grupo = grupo_executor(executores, 'nao_informado', None)
+                grupo['reservas_expiradas'] += 1
+                grupo['chamadas_do_fluxo_desconhecidas'] += 1
+                grupo['duracoes_do_fluxo_desconhecidas'] += 1
                 for campo in ('chamadas', 'segundos', 'tokens_entrada', 'tokens_saida'):
                     totais[campo] = None
                 saidas.pop(identificador, None)
@@ -68,9 +79,7 @@ def resumir(estado):
                         totais[campo] = None
                         totais[desconhecido] += 1
                 executor, modelo = identidade(resultado)
-                grupo = executores.setdefault((executor, modelo), dict(executor=executor, modelo=modelo,
-                    execucoes_registradas=0, processamentos_confirmados=0, chamadas_do_fluxo_confirmadas=0,
-                    chamadas_do_fluxo_desconhecidas=0, segundos_do_fluxo_confirmados=0))
+                grupo = grupo_executor(executores, executor, modelo)
                 grupo['execucoes_registradas'] += 1
                 grupo['processamentos_confirmados'] += int(iniciou)
                 if inteiro(quantidade):
@@ -79,6 +88,8 @@ def resumir(estado):
                     grupo['chamadas_do_fluxo_desconhecidas'] += 1
                 if inteiro(segundos):
                     grupo['segundos_do_fluxo_confirmados'] += segundos
+                else:
+                    grupo['duracoes_do_fluxo_desconhecidas'] += 1
                 registro = resultado.get('delegacao')
                 registro = registro if isinstance(registro, dict) else {}
                 tentativas = registro.get('tentativas')

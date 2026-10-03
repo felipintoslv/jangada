@@ -530,10 +530,16 @@ Um total desconhecido aparece como `null`; os campos `*_confirmados` ou
 `*_confirmadas` preservam a parcela conhecida. Reserva expirada torna
 consumo e duração desconhecidos. Ausência de preço não é custo zero:
 `custo_estimado` permanece `null`.
+Registros sem duração são aceitos por compatibilidade, mas não comprovam
+duração zero. O resumo preserva as chamadas informadas; o controle de
+orçamento recusa repetição quando a duração é desconhecida.
 
 `por_executor` agrupa pelo executor e modelo registrados no encerramento.
 Os campos `*_do_fluxo_*` abrangem toda a cadeia daquela execução, incluindo
 alternativas; não atribuem chamadas ou duração individualmente a cada provedor.
+Os contadores `chamadas_do_fluxo_desconhecidas` e `duracoes_do_fluxo_desconhecidas`
+indicam parcelas não medidas. Reservas expiradas entram em `nao_informado`,
+pois não comprovam qual executor chegou a trabalhar.
 `mudancas_entre_candidatos` conta mudanças de destino na sequência registrada,
 inclusive candidatos recusados. Tokens Codex conhecidos entram no total
 somente quando representam a única chamada; em cadeias com outras chamadas,
