@@ -133,7 +133,8 @@ flowchart TD
   agente padrão, com todas as ferramentas; por isso a validação para.
   Cada chamada ao revisor tem prazo de `JANGADA_VALIDAR_PRAZO` segundos
   (540): vencido, o revisor e o que ele abriu são encerrados, e a rodada sai
-  com código 1, sem parecer e sem contar no limite.
+  com código 1 e sem parecer. Como as rodadas são contadas pelos pareceres,
+  essa chamada não gasta uma das rodadas da entrega.
 - **Registro.** Cada rodada grava `validacao-ROTULO-rN.md` e uma linha em
   `validar.jsonl` (`registrar`), e atualiza o campo `validacao` do estado.
   Dentro do isolamento, isso vai para `agentes/` e para o `validar.jsonl` do
