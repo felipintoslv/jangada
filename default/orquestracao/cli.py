@@ -124,7 +124,7 @@ def main():
                     if args.atualizar:
                         saude.atualizar(args.permitir_remoto)
                         if (args.permitir_remoto and args.permitir_codex and args.perfil != 'offline'
-                                and os.environ.get('JANGADA_DELEGAR') == 'agy'
+                                and (os.environ.get('JANGADA_DELEGAR') or 'agy') == 'agy'
                                 and os.environ.get('JANGADA_CODEX_ECONOMICO_MODELO')):
                             saude.atualizar_codex(True)
                     retomadas = retomar(estado, saude, raiz, os.environ['JANGADA_CONFIG'],

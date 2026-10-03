@@ -122,7 +122,7 @@ fi
 if [[ -n "$destino_opt" ]]; then
   case "$destino_opt" in
     local|agy|codex-economico) destino="$destino_opt" ;;
-    *) echo "jangada-delegar: destino inválido: $destino_opt (local ou agy)" >&2; uso ;;
+    *) echo "jangada-delegar: destino inválido: $destino_opt (local, agy ou codex-economico)" >&2; uso ;;
   esac
 else
   destino="$(jangada_delegacao claude "$perfil_delegar")"

@@ -31,7 +31,9 @@ class Economico(unittest.TestCase):
         for nome in ('bin', 'default/delegacao', 'default/orquestracao'):
             (self.raiz / nome).mkdir(parents=True)
         for nome in ('bin/jangada-config', 'bin/jangada-delegar', 'default/delegacao/validar.py',
-                     'default/delegacao/codex.py', 'default/orquestracao/cota_codex.py'):
+                     'bin/jangada-retomar', 'bin/jangada-router', 'default/delegacao/codex.py',
+                     'default/orquestracao/cota_codex.py', 'default/orquestracao/cli.py',
+                     'default/orquestracao/estado.py', 'default/orquestracao/executor.py', 'default/orquestracao/saude.py'):
             shutil.copy2(RAIZ / nome, self.raiz / nome)
         self.audit = self.pasta / 'execucao.json'
         self.fonte = self.pasta / 'fonte.md'
@@ -51,6 +53,7 @@ class Economico(unittest.TestCase):
                                    JANGADA_CODEX_ECONOMICO_MODELO='modelo-economico-teste',
                                    JANGADA_CODEX_COTA_MIN='25', CODEX_HOME=str(self.casa),
                                    XDG_STATE_HOME=str(self.pasta / 'state'), XDG_CONFIG_HOME=str(self.pasta / 'config'),
+                                   XDG_CACHE_HOME=str(self.pasta / 'cache'),
                                    PATH=str(self.bin) + os.pathsep + os.environ['PATH'],
                                    JANGADA_DELEGAR_IMPEDIMENTOS=json.dumps([
                                        {'destino': 'agy', 'motivo_codigo': 'cota_indisponivel', 'motivo': 'cota esgotada'}]))
@@ -85,7 +88,8 @@ assert 'SEGREDO_TESTE' not in os.environ
 assert json.loads((pathlib.Path(os.environ['CODEX_HOME']) / 'auth.json').read_text())['tokens']['refresh_token'] == ''
 dados = json.loads(sys.stdin.read().splitlines()[-1])
 pathlib.Path(''' + repr(str(self.audit)) + ''').write_text(json.dumps({'args': args, 'prompt': dados,
-    'pid': os.getpid(), 'casa': os.environ['CODEX_HOME']}))
+    'pid': os.getpid(), 'casa': os.environ['CODEX_HOME'],
+    'bash': int((pathlib.Path('/proc') / str(os.getppid()) / 'stat').read_text().split(') ')[1].split()[1])}))
 modo = ''' + repr(modo) + '''
 if modo == 'demorado':
     time.sleep(60)
@@ -99,7 +103,7 @@ if modo == 'gigante':
     texto = 'x' * 64001
 saida.write_text(texto)
 if modo != 'sem-completo':
-    print(json.dumps({'type': 'turn.completed', 'usage': {'input_tokens': 10, 'output_tokens': 12}}))
+    print('invalido' if modo == 'json-invalido' else json.dumps({'type': 'turn.completed', 'usage': {'input_tokens': 10, 'output_tokens': 12}}))
 if modo == 'duplicado':
     print(json.dumps({'type': 'turn.completed'}))
 ''')
@@ -150,7 +154,8 @@ if modo == 'duplicado':
 
     def test_erro_conclusao_ausente_duplicada_e_saida_grande_nao_aprovam(self):
         for modo, esperado in (('erro', 'erro_execucao'), ('sem-completo', 'saida_invalida'),
-                               ('duplicado', 'saida_invalida'), ('gigante', 'saida_invalida')):
+                               ('duplicado', 'saida_invalida'), ('gigante', 'saida_invalida'),
+                               ('json-invalido', 'saida_invalida')):
             with self.subTest(modo=modo):
                 self.stub_worker(modo)
                 resultado = self.executar()
@@ -219,7 +224,7 @@ if modo == 'duplicado':
         self.assertEqual(json.loads(resposta.stdout)['tentativas'][0]['motivo_codigo'], 'ocupado')
         self.assertFalse(self.audit.exists())
 
-    def test_queda_do_orquestrador_encerra_geracao_e_remove_credenciais(self):
+    def interromper_geracao(self, matar_shell):
         self.stub_worker('demorado')
         args = [str(self.raiz / 'bin/jangada-delegar'), '--capacidade', 'analise_documental', '--json',
                 '--permitir-remoto', '--permitir-codex', '--arquivos', str(self.fonte), '--', 'leitor', 'Leia']
@@ -234,18 +239,55 @@ if modo == 'duplicado':
                 except (OSError, ValueError):
                     time.sleep(0.01)
             self.assertIsNotNone(dados)
-            pai.kill()
+            if matar_shell:
+                os.kill(dados['bash'], 9)
+            else:
+                pai.kill()
             pai.communicate(timeout=5)
             limite = time.monotonic() + 5
-            while pathlib.Path(dados['casa']).exists() and time.monotonic() < limite:
-                time.sleep(0.01)
-            self.assertFalse(pathlib.Path(dados['casa']).exists())
             proc = pathlib.Path('/proc') / str(dados['pid']) / 'stat'
-            self.assertTrue(not proc.exists() or proc.read_text().split(') ')[1].startswith('Z'))
+            while time.monotonic() < limite:
+                try:
+                    encerrado = proc.read_text().split(') ')[1].startswith('Z')
+                except FileNotFoundError:
+                    encerrado = True
+                if encerrado and not pathlib.Path(dados['casa']).exists():
+                    break
+                time.sleep(0.01)
+            self.assertTrue(encerrado)
+            self.assertFalse(pathlib.Path(dados['casa']).exists())
         finally:
             if pai.poll() is None:
                 pai.kill()
             pai.communicate(timeout=5)
+
+    def test_queda_do_orquestrador_encerra_geracao_e_remove_credenciais(self):
+        self.interromper_geracao(False)
+
+    def test_kill_no_shell_filho_encerra_geracao_com_orquestrador_vivo(self):
+        self.interromper_geracao(True)
+
+    def test_cli_atualiza_cota_codex_com_perfil_remoto_padrao(self):
+        self.programa(self.bin / 'agy', 'import json\nprint(json.dumps({"command":{"data":{"groups":[{"buckets":[{"id":"gemini-5h","remaining_fraction":0.5}]}]}}}))\n')
+        for perfil in ('', None):
+            ambiente = os.environ.copy()
+            ambiente['JANGADA_OLLAMA_URL'] = 'url-invalida'
+            ambiente['XDG_STATE_HOME'] = str(self.pasta / ('state-vazio' if perfil == '' else 'state-ausente'))
+            if perfil is None:
+                ambiente.pop('JANGADA_DELEGAR', None)
+            else:
+                ambiente['JANGADA_DELEGAR'] = perfil
+            resultado = subprocess.run([str(self.raiz / 'bin/jangada-retomar'), '--projeto', str(self.pasta),
+                                        '--atualizar', '--permitir-remoto', '--permitir-codex'],
+                                       env=ambiente, capture_output=True, text=True, timeout=20)
+            self.assertEqual(resultado.returncode, 0, resultado.stderr)
+            status = subprocess.run([str(self.raiz / 'bin/jangada-router'), 'status'], env=ambiente,
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(status.returncode, 0, status.stderr)
+            item = next(p for p in json.loads(status.stdout)['provedores'] if p['id'] == 'codex')
+            self.assertEqual(item['status'], 'AVAILABLE')
+            self.assertEqual(item['cota'], 80)
+
 
 
 if __name__ == '__main__':

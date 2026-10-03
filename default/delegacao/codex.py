@@ -28,12 +28,19 @@ def vigiar_orquestrador():
         return
     if not dono.isdecimal() or int(dono) <= 0:
         raise ValueError('identificador do orquestrador inválido')
-    fd = os.pidfd_open(int(dono))
+    descritores = []
+    try:
+        for pid in {int(dono), os.getppid()}:
+            descritores.append(os.pidfd_open(pid))
+    except BaseException:
+        for fd in descritores:
+            os.close(fd)
+        raise
     parar = threading.Event()
 
     def vigiar():
         while not parar.wait(0.1):
-            if select.select([fd], [], [], 0)[0]:
+            if select.select(descritores, [], [], 0)[0]:
                 os.kill(os.getpid(), signal.SIGTERM)
                 return
 
@@ -44,7 +51,8 @@ def vigiar_orquestrador():
     finally:
         parar.set()
         observador.join(timeout=1)
-        os.close(fd)
+        for fd in descritores:
+            os.close(fd)
 
 
 def executar(raiz, pasta, pedido, fontes, tempo):
@@ -157,6 +165,8 @@ def executar_uma(raiz, pasta, pedido, fontes, tempo):
                             resultado[destino] = valor
     except subprocess.TimeoutExpired:
         return recusar('limite_tempo')
+    except json.JSONDecodeError:
+        return recusar('saida_invalida')
     except (OSError, ValueError, TypeError, subprocess.SubprocessError):
         return recusar('erro_execucao')
     return resultado

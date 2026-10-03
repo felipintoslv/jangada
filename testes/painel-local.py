@@ -44,6 +44,26 @@ class PainelLocal(unittest.TestCase):
         self.assertIsNone(sub.resumo_local([])["tokens_entrada"])
         self.assertFalse(sub.numero_valido(10 ** 1000))
 
+    def test_codex_economico_entra_nos_totais_e_na_arvore(self):
+        registros = [sub.delegacao_limpa(dict(destino='codex-economico', papel='leitor', recusa=False,
+                     data='2026-10-02T10:00:00Z', pasta='/projeto', sessao='s', modelo='economico',
+                     tokens_codex_entrada=10, tokens_codex_saida=12))]
+        with patch.object(sub, 'claude', return_value=[]), patch.object(sub, 'agy', return_value=[]), \
+             patch.object(sub, 'delegacoes', return_value=registros), \
+             patch.object(sub, 'entregas_aprovadas', return_value=[]), \
+             patch.object(sub, 'tokens_principal', return_value=(0, 0)):
+            indicadores = sub.indicadores()
+            entrega = sub.entrega('/projeto')
+        self.assertEqual(indicadores['fracao_agy']['delegadas_codex_economico'], 1)
+        self.assertEqual(indicadores['fracao_agy']['fracao_codex_economico_pct'], 100)
+        self.assertEqual(indicadores['fracao_agy']['por_papel']['leitor']['codex-economico'], 1)
+        self.assertEqual(indicadores['arvore'][0]['filhos'][0]['tokens'], 22)
+        self.assertEqual(entrega['codex_economico']['n'], 1)
+        self.assertEqual(entrega['n'], 1)
+        invalida = sub.delegacao_limpa(dict(tokens_codex_entrada=True, tokens_codex_saida=float('nan')))
+        self.assertIsNone(invalida['tokens_codex_entrada'])
+        self.assertIsNone(invalida['tokens_codex_saida'])
+
     def test_chamadas_prevalecem_e_falha_conta_consumo(self):
         d = {"destino": "local", "recusa": True, "tokens_local_entrada": 999,
              "chamadas_local": [{"tokens_entrada": 120, "tokens_saida": 45},

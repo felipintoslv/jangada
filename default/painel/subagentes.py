@@ -347,6 +347,7 @@ def agy(raiz=None, pasta=None, memo=None):
 CAMPOS_NUM = ("segundos", "codigo_saida", "palavras", "tokens_retorno", "passos",
               "tokens_agy", "cota_antes", "cota_depois", "sem_fonte",
               "tokens_local_entrada", "tokens_local_saida", "documento_chars", "retorno_chars", "contexto")
+CAMPOS_NUM += ("tokens_codex_entrada", "tokens_codex_saida")
 CAMPOS_TEXTO = ("data", "sessao", "projeto", "pasta", "papel", "destino", "modelo",
                 "motivo", "conversa", "delegacao_id")
 
@@ -503,6 +504,7 @@ def entrega(pasta, desde=None, ate=None):
         "claude": {"n": len(c), "tokens": soma(c, "tokens"), "principal": principal,
                    "principal_cache_lido": cache_lido},
         "delegadas_agy": delegadas_agy,
+        "codex_economico": {"n": sum(d.get("destino") == "codex-economico" for d in atendidas)},
         "agy": {"n": agy_n, "passos": soma(a, "passos") + soma(atendidas, "passos")},
         "local": resumo_local(dels),
         "papeis": papeis,
@@ -605,8 +607,9 @@ def indicadores(agora=None, memo=None):
             por_papel.setdefault(chave, {"claude": 0, "agy": 0, "local": 0})[x["origem"]] += 1
     for d in atendidas:
         destino = d.get("destino")
-        if destino in ("agy", "local", "claude"):
-            por_papel.setdefault(d.get("papel") or "?", {"claude": 0, "agy": 0, "local": 0})[destino] += 1
+        if destino in ("agy", "local", "claude", "codex-economico"):
+            linha = por_papel.setdefault(d.get("papel") or "?", {"claude": 0, "agy": 0, "local": 0})
+            linha[destino] = linha.get(destino, 0) + 1
     motivos = {}
     for d in recusas:
         m = re.sub(r"\d+([.,]\d+)?%?", "N", d.get("motivo") or "")
@@ -616,6 +619,8 @@ def indicadores(agora=None, memo=None):
     fracao = {
         "delegadas_agy": agy_atendidas, "subagentes_claude": sum(x["origem"] == "claude" for x in subs),
         "delegadas_local": sum(d.get("destino") == "local" for d in atendidas),
+        "delegadas_codex_economico": sum(d.get("destino") == "codex-economico" for d in atendidas),
+        "fracao_codex_economico_pct": pct(sum(d.get("destino") == "codex-economico" for d in atendidas), len(atendidas) + len(subs)),
         "fracao_local_pct": pct(sum(d.get("destino") == "local" for d in atendidas), len(atendidas) + len(subs)),
         "subagentes_agy": sum(x["origem"] == "agy" for x in subs),
         "fracao_agy_pct": pct(agy_atendidas, len(atendidas) + len(subs)),
@@ -671,7 +676,7 @@ def indicadores(agora=None, memo=None):
                  "delegacoes": {"n": len(sf_d), "mediana": mediana(sf_d), "total": sum(sf_d)},
                  "desmentidos": None}
     qualidade["por_destino"] = {}
-    for destino in ("agy", "local"):
+    for destino in ("agy", "local", "codex-economico"):
         valores = [d["sem_fonte"] for d in atendidas if d.get("destino") == destino and numero_valido(d.get("sem_fonte"))]
         qualidade["por_destino"][destino] = {"n": len(valores), "mediana": mediana(valores), "total": sum(valores)}
 
@@ -711,6 +716,11 @@ def indicadores(agora=None, memo=None):
         if d.get("destino") == "local":
             entrada = uso_local(d, "tokens_local_entrada")
             saida = uso_local(d, "tokens_local_saida")
+            filho.update(tokens_entrada=entrada, tokens_saida=saida,
+                         tokens=entrada + saida if entrada is not None and saida is not None else None,
+                         ferramentas_disponiveis=False)
+        elif d.get("destino") == "codex-economico":
+            entrada, saida = d.get("tokens_codex_entrada"), d.get("tokens_codex_saida")
             filho.update(tokens_entrada=entrada, tokens_saida=saida,
                          tokens=entrada + saida if entrada is not None and saida is not None else None,
                          ferramentas_disponiveis=False)
