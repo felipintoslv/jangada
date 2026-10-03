@@ -685,8 +685,9 @@ RESPOSTA='Relatório em doc1.txt:1' CHAMADAS_MAX=1 OLLAMA_URL="http://127.0.0.1:
   delegar leitor "resuma" --capacidade resumo_curto --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
 conferir "limite: não chama segundo executor" test ! -e "$tmp/falso/agy.args"
 conferir "limite: registra esgotamento" jqok -e '.motivo_codigo == "limite_chamadas"' "$tmp/saida"
-TEMPO_TOTAL=1 ESPERA_AGY=3 RESPOSTA='Relatório em doc1.txt:1' delegar leitor "compare" \
+TEMPO_TOTAL=3 ESPERA_AGY=5 RESPOSTA='Relatório em doc1.txt:1' delegar leitor "compare" \
   --capacidade analise_documental --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "tempo total: executor começou antes do prazo" test -f "$tmp/falso/agy.args"
 conferir "tempo total: interrompe executor" jqok -e \
   '.motivo_codigo == "limite_tempo" and .chamadas_executor == null' "$tmp/saida"
 
