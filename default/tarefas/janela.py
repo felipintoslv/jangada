@@ -7,7 +7,7 @@ from pathlib import Path
 import uuid
 
 from PyQt6.QtCore import QProcess, QProcessEnvironment, QTimer, Qt
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QKeySequence
 from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout,
                             QHBoxLayout, QLabel, QLineEdit, QMainWindow,
                             QPlainTextEdit, QPushButton, QSplitter, QTabWidget,
@@ -203,6 +203,16 @@ class Janela(QMainWindow):
         self.abrir.setEnabled(False)
         self.abrir.clicked.connect(self.focar)
         direito.addWidget(self.abrir)
+        self.integrar = QPushButton('Integrar e encerrar · Alt+I')
+        self.encerrar = QPushButton('Encerrar sessão · Ctrl+X')
+        self.integrar.setShortcut(QKeySequence('Alt+I'))
+        self.encerrar.setShortcut(QKeySequence('Ctrl+X'))
+        self.integrar.setEnabled(False)
+        self.encerrar.setEnabled(False)
+        self.integrar.clicked.connect(lambda: self.finalizar(True))
+        self.encerrar.clicked.connect(lambda: self.finalizar(False))
+        direito.addWidget(self.integrar)
+        direito.addWidget(self.encerrar)
         explicacao = QLabel('A conversa abre no terminal neste piloto. Uma tarefa corresponde a uma sessão. Turno encerrado não confirma a conclusão da tarefa.')
         explicacao.setWordWrap(True)
         direito.addWidget(explicacao)
@@ -339,7 +349,8 @@ class Janela(QMainWindow):
     def selecionar(self, *_):
         s = self.sessoes.get(self.selecionada())
         ocupada = self.acao.state() != QProcess.ProcessState.NotRunning
-        self.abrir.setEnabled(self.dados_validos and s is not None and (not ocupada))
+        for botao in (self.abrir, self.integrar, self.encerrar):
+            botao.setEnabled(self.dados_validos and s is not None and (not ocupada))
         if not s:
             self.nome.setText('Selecione uma tarefa')
             self.situacao.clear()
@@ -457,8 +468,8 @@ class Janela(QMainWindow):
 
     def falha(self, mensagem):
         self.dados_validos = False
-        self.abrir.setEnabled(False)
-        self.status.setText(mensagem + ' Últimos dados preservados; abertura indisponível até atualizar.')
+        self.selecionar()
+        self.status.setText(mensagem + ' Últimos dados preservados; ações indisponíveis até atualizar.')
 
     def consulta_erro(self, erro):
         if erro == QProcess.ProcessError.FailedToStart:
@@ -467,6 +478,31 @@ class Janela(QMainWindow):
 
     def expirar(self):
         self.consulta.kill()
+
+    def finalizar(self, integrar):
+        nome = self.selecionada()
+        if not self.dados_validos or nome not in self.sessoes or not NOME.fullmatch(nome):
+            return
+        if self.acao.state() != QProcess.ProcessState.NotRunning:
+            return
+        acao = 'integrar e encerrar' if integrar else 'encerrar sem integrar'
+        if not self.real:
+            self.status.setText(f'Simulação: solicitaria {acao} a sessão {nome}. Nenhum comando foi executado.')
+            return
+        comando = [str(self.jangada / 'bin' / 'jangada-agente-fim')]
+        if integrar:
+            comando.append('--integrar')
+        comando.append(nome)
+        # O terminal conserva os pedidos de confirmação e vive além desta janela.
+        argumentos = ['--classe', 'org.jangada.tarefas.acao', '--titulo', 'Tarefa: ' + nome,
+                      '-e', 'bash', '-c',
+                      '"$@"; resultado=$?; read -r -p "Enter para fechar " _; exit "$resultado"',
+                      'jangada-tarefas', *comando]
+        processo = QProcess(self)
+        self.preparar(processo, argumentos, 'jangada-terminal')
+        iniciado, _ = processo.startDetached()
+        self.status.setText(f'Pedido para {acao} {nome} aberto no terminal. Confira o resultado lá.'
+                            if iniciado else 'Não foi possível abrir o terminal da ação.')
 
     def focar(self):
         nome = self.selecionada()
@@ -478,7 +514,7 @@ class Janela(QMainWindow):
         if self.acao.state() != QProcess.ProcessState.NotRunning:
             return
         self.iniciar(self.acao, ['--focar', nome])
-        self.abrir.setEnabled(False)
+        self.selecionar()
         self.status.setText('Solicitando abertura da sessão…')
         self.tempo_acao.start(30000)
 

@@ -16,9 +16,10 @@ import time
 import unittest
 import uuid
 from unittest.mock import patch
-from PyQt6.QtCore import QProcess
+from PyQt6.QtCore import QProcess, Qt
 from PyQt6.QtNetwork import QLocalServer
 from PyQt6.QtGui import QTextDocument
+from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 import janela
 from janela import Janela
@@ -152,6 +153,77 @@ class Interface(unittest.TestCase):
         self.assertIsNone(self.janela.selecionada())
         self.assertFalse(self.janela.abrir.isEnabled())
         self.assertIn('saiu da lista', self.janela.status.text())
+
+    def test_atalhos_acionam_a_tarefa_selecionada(self):
+        self.janela.show()
+        self.janela.activateWindow()
+        self.janela.lista.setFocus()
+        APP.processEvents()
+        self.janela.selecionar_nome('projeto--dois')
+        with patch.object(self.janela, 'solicitar_previa'), patch.object(QProcess, 'startDetached', return_value=(True, 123)), patch.object(self.janela, 'preparar') as preparar:
+            QTest.keyClick(self.janela.lista, Qt.Key.Key_I, Qt.KeyboardModifier.AltModifier)
+            aguardar(lambda: preparar.call_count == 1)
+            argumentos = preparar.call_args.args[1]
+            self.assertEqual(preparar.call_args.args[2], 'jangada-terminal')
+            self.assertEqual(argumentos[-3:], [str(self.bin / 'jangada-agente-fim'), '--integrar', 'projeto--dois'])
+            QTest.keyClick(self.janela.lista, Qt.Key.Key_X, Qt.KeyboardModifier.ControlModifier)
+            aguardar(lambda: preparar.call_count == 2)
+            self.assertEqual(preparar.call_args.args[1][-2:], [str(self.bin / 'jangada-agente-fim'), 'projeto--dois'])
+            self.assertEqual(preparar.call_count, 2)
+            self.assertIn('Confira o resultado lá', self.janela.status.text())
+
+    def test_finalizacao_bloqueada_sem_dados_e_na_simulacao(self):
+        with patch.object(QProcess, 'startDetached') as iniciar:
+            self.janela.falha('Erro')
+            self.assertFalse(self.janela.integrar.isEnabled())
+            self.assertFalse(self.janela.encerrar.isEnabled())
+            self.janela.finalizar(True)
+            self.janela.finalizar(False)
+            self.janela.mostrar({})
+            self.janela.finalizar(False)
+            iniciar.assert_not_called()
+            simulacao = Janela()
+            try:
+                simulacao.finalizar(True)
+                simulacao.finalizar(False)
+                self.assertIn('Nenhum comando', simulacao.status.text())
+                iniciar.assert_not_called()
+            finally:
+                simulacao.close()
+
+    def test_falha_na_abertura_do_terminal_nao_anuncia_encerramento(self):
+        with patch.object(QProcess, 'startDetached', return_value=(False, 0)):
+            self.janela.finalizar(True)
+            self.assertIn('Não foi possível', self.janela.status.text())
+            self.assertIn('projeto--um', self.janela.sessoes)
+
+    def test_ctrl_x_no_pedido_nao_encerra_sessao(self):
+        self.janela.show()
+        self.janela.nova_tarefa()
+        formulario = self.janela.formulario
+        formulario.activateWindow()
+        formulario.pedido.setFocus()
+        formulario.pedido.setPlainText('Pedido para recortar')
+        formulario.pedido.selectAll()
+        APP.processEvents()
+        with patch.object(QProcess, 'startDetached') as iniciar:
+            QTest.keyClick(formulario.pedido, Qt.Key.Key_X, Qt.KeyboardModifier.ControlModifier)
+            self.assertEqual(formulario.pedido.toPlainText(), '')
+            iniciar.assert_not_called()
+        formulario.close()
+
+    def test_terminal_preserva_argumentos_confirmacao_e_resultado(self):
+        with patch.object(QProcess, 'startDetached', return_value=(True, 123)), patch.object(self.janela, 'preparar') as preparar:
+            self.janela.finalizar(True)
+            argumentos = preparar.call_args.args[1]
+        inicio = argumentos.index('-e') + 1
+        comando = self.bin / 'jangada-agente-fim'
+        comando.write_text('#!/usr/bin/env python3\nimport json, sys\nprint(json.dumps(sys.argv[1:]))\nresposta = input("Confirmar? ")\nsys.exit(7 if resposta == "n" else 0)\n')
+        comando.chmod(448)
+        resultado = subprocess.run(argumentos[inicio:], input='n\n\n', text=True, capture_output=True)
+        self.assertEqual(resultado.returncode, 7)
+        self.assertIn('["--integrar", "projeto--um"]', resultado.stdout)
+        self.assertIn('Confirmar?', resultado.stdout)
 
     def test_foco_argumentos_separados(self):
         self.janela.focar()
