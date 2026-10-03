@@ -20,6 +20,9 @@ from dados import (CORES, LIMITE, NOME, ORDEM, ROTULOS, Sessao,
 
 AGENTES = ("claude", "codex", "agy")
 
+GRUPOS = {'aguardando': 'Precisa de você', 'interrompido': 'Interrompidas',
+          'trabalhando': 'Em andamento', 'concluido': 'Turno encerrado'}
+
 class NovaTarefa(QDialog):
 
     def __init__(self, janela):
@@ -122,6 +125,8 @@ class Janela(QMainWindow):
         self.jangada = Path(jangada or Path.home() / '.local/share/jangada').expanduser().resolve()
         self.estado_dir = Path(estado or Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'jangada/agentes').expanduser()
         self.sessoes = {}
+        self.estrutura = None
+        self.itens = {}
         self.finalizando = {}
         self.aviso_finalizacao = None
         self.dados_validos = False
@@ -322,27 +327,42 @@ class Janela(QMainWindow):
         primeira_carga = not self.sessoes and anterior is None
         self.sessoes = sessoes
         self.acompanhar_mudancas(sessoes)
+        ordenadas = sorted(sessoes.values(), key=lambda s: (ORDEM.get(estado_exibido(s), 3), s.projeto, s.nome))
+        estrutura = [(GRUPOS.get(estado_exibido(s), 'Outras tarefas'), s.nome) for s in ordenadas]
         self.lista.blockSignals(True)
-        self.lista.clear()
-        grupos = {}
-        itens = {}
-        for s in sorted(sessoes.values(), key=lambda s: (ORDEM.get(estado_exibido(s), 3), s.projeto, s.nome)):
-            grupo = {'aguardando': 'Precisa de você', 'interrompido': 'Interrompidas', 'trabalhando': 'Em andamento', 'concluido': 'Turno encerrado'}.get(estado_exibido(s), 'Outras tarefas')
-            if grupo not in grupos:
-                grupos[grupo] = QTreeWidgetItem(self.lista, [grupo])
-                grupos[grupo].setFlags(Qt.ItemFlag.ItemIsEnabled)
-                grupos[grupo].setExpanded(True)
+        # A lista só é refeita quando muda de ordem ou de grupo; no resto das
+        # atualizações os itens ficam e só o texto muda.
+        if estrutura != self.estrutura:
+            fechados = {g.text(0) for g in map(self.lista.topLevelItem, range(self.lista.topLevelItemCount()))
+                        if not g.isExpanded()}
+            self.lista.clear()
+            self.itens = {}
+            grupos = {}
+            for grupo, nome in estrutura:
+                if grupo not in grupos:
+                    grupos[grupo] = QTreeWidgetItem(self.lista, [grupo])
+                    grupos[grupo].setFlags(Qt.ItemFlag.ItemIsEnabled)
+                    grupos[grupo].setExpanded(grupo not in fechados)
+                self.itens[nome] = QTreeWidgetItem(grupos[grupo])
+                self.itens[nome].setData(0, Qt.ItemDataRole.UserRole, nome)
+            self.estrutura = estrutura
+        itens = self.itens
+        for s in ordenadas:
+            item = itens[s.nome]
             tarefa = s.tarefa.splitlines()[0] if s.tarefa else s.nome
-            item = QTreeWidgetItem(grupos[grupo], [tarefa, s.projeto, ROTULOS.get(estado_exibido(s), estado_exibido(s)), idade(s.atualizado)])
-            item.setToolTip(0, '<qt>' + html.escape(s.tarefa or s.nome).replace('\n', '<br>') + '</qt>')
-            item.setData(0, Qt.ItemDataRole.UserRole, s.nome)
+            textos = [tarefa, s.projeto, ROTULOS.get(estado_exibido(s), estado_exibido(s)), idade(s.atualizado)]
+            for coluna, texto in enumerate(textos):
+                if item.text(coluna) != texto:
+                    item.setText(coluna, texto)
+            dica = '<qt>' + html.escape(s.tarefa or s.nome).replace('\n', '<br>') + '</qt>'
+            if item.toolTip(0) != dica:
+                item.setToolTip(0, dica)
             item.setForeground(2, QColor(CORES.get(estado_exibido(s), '#b7c6cd')))
-            itens[s.nome] = item
         escolhido = itens.get(anterior)
         if primeira_carga and itens:
             prioridade = min(sessoes.values(), key=lambda s: (ORDEM.get(estado_exibido(s), 3), s.nome))
             escolhido = itens[prioridade.nome]
-        if escolhido:
+        if escolhido and escolhido is not self.lista.currentItem():
             self.lista.setCurrentItem(escolhido)
         self.lista.blockSignals(False)
         self.selecionar()

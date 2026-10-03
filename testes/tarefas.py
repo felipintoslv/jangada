@@ -464,6 +464,22 @@ class Interface(unittest.TestCase):
         finally:
             self.janela.timer.stop()
 
+    def test_atualizacao_sem_mudanca_de_ordem_preserva_itens_e_grupos(self):
+        grupo = self.janela.lista.topLevelItem(0)
+        item = self.janela.lista.topLevelItem(1).child(0)
+        grupo.setExpanded(False)
+        self.lista.write_text(self.lista.read_text().replace('Tarefa dois', 'Tarefa renomeada'))
+        self.janela.atualizar()
+        aguardar(lambda: self.janela.itens['projeto--dois'].text(0) == 'Tarefa renomeada')
+        self.assertIs(self.janela.lista.topLevelItem(1).child(0), item)
+        self.assertFalse(grupo.isExpanded())
+        self.lista.write_text(self.lista.read_text().replace('trabalhando', 'interrompido'))
+        self.janela.atualizar()
+        aguardar(lambda: self.janela.lista.topLevelItemCount() == 2
+                 and self.janela.lista.topLevelItem(1).text(0) == 'Interrompidas')
+        self.assertFalse(self.janela.lista.topLevelItem(0).isExpanded())
+        self.assertTrue(self.janela.lista.topLevelItem(1).isExpanded())
+
     def test_lista_vazia(self):
         self.lista.write_text('')
         self.janela.atualizar()
