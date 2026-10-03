@@ -17,10 +17,17 @@ indicadores", e os campos de cada registro em [registros](registros.md).
 
 ## Fila, provedores e autonomia
 
-A aba **Fila e provedores** lê `orquestracao.json`, produzido pelo coletor.
+O painel abre em **Revisão e síntese**. A aba **Fila e provedores** acompanha
+a execução automática de tarefas planejadas, separada das sessões da Central
+de Tarefas. Ela lê `orquestracao.json`, produzido pelo coletor.
 Os bancos SQLite da fila e dos provedores são abertos em modo somente de
 leitura. A coleta não cria filas, inicia tarefas ou consulta serviços.
 Uma dependência ainda não concluída aparece como bloqueio da tarefa na fila.
+Sem tarefas, a tela explica a ausência de cadastro ou de resultados no filtro
+de projeto. Sem observações de provedores, informa que a disponibilidade
+dos serviços não foi medida. Erros de coleta continuam como avisos de erro.
+A seção "Como os dados chegam aqui?" apresenta `jangada-fila --importar` e
+`jangada-executar`; abrir o painel não executa esses comandos.
 
 O filtro de projeto afeta tarefas, orçamento, custo e supervisão. São
 retratos atuais e métricas acumuladas da fila, independentemente do período
@@ -42,8 +49,11 @@ os registros do cache, sem reler conversas. Os demais filtros mantêm o
 escopo indicado na interface. Codex econômico aparece nas delegações por
 destino, no resumo e na tabela de relatórios sem fonte.
 
-Os gráficos usam a paleta de seis cores do protocolo de gráficos, com fundo
-branco e rótulos escuros nos dois modos da interface. A evolução diária usa
+Os gráficos acompanham o seletor claro/escuro do painel. Fundo, textos,
+eixos, grades, dicas e cores das séries mudam ao alternar o modo, sem
+recarregar a página. No escuro, o fundo e o texto seguem a paleta do matugen;
+no claro, usam branco e texto escuro. As redes também adaptam rótulos,
+arestas e legendas ao modo selecionado. A evolução diária usa
 linhas, preserva lacunas sem medida e passa a pequenos múltiplos acima de
 quatro séries. Comparações por destino e velocidade local usam barras
 horizontais ordenadas, com eixo a partir de zero. Período, unidade e fonte

@@ -704,6 +704,9 @@ Definições:
 As redes cobrem só o Claude Code e mostram no máximo 40 nós por padrão; o
 painel tem controles para afrouxar a poda.
 
+O painel abre em **Revisão e síntese**. **Fila e provedores** explica a
+execução automática e suas ausências de dados, separadas das sessões da Central
+de Tarefas. Os gráficos e redes acompanham o seletor claro/escuro da interface.
 Cada gráfico mostra o período e o número de observações coberto, com o aviso
 "pouco dado" abaixo de 10.
 
