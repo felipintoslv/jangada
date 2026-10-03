@@ -214,14 +214,26 @@ conferir "outra chave, depois de assinar: a cópia instalada avança" \
 
 # Commit enviado sem assinatura: o assinar não o reescreve e o update não
 # passa dele; o aviso diz o commit e o comando que avança a cópia instalada.
+# Dois ramos sem assinatura unidos por um merge assinado: o destino do
+# comando é a origem, que descende dos dois.
+git -C "$origem" branch enviado
 echo e1 >"$origem/e1.txt"
 git -C "$origem" add e1.txt
 git -C "$origem" commit --quiet -m "feat(teste): enviado sem assinatura"
+git -C "$origem" switch --quiet enviado
+echo e2 >"$origem/e2.txt"
+git -C "$origem" add e2.txt
+git -C "$origem" commit --quiet -m "feat(teste): enviado no outro ramo"
+git -C "$origem" switch --quiet main
+git -C "$origem" -c gpg.format=ssh -c user.signingkey="$HOME/.ssh/id_ed25519" \
+  merge --quiet --no-ff -S -m "Integra enviado" enviado
+git -C "$origem" branch --quiet -D enviado
 git -C "$origem" push --quiet github main 2>/dev/null
 e1="$(git -C "$origem" rev-parse HEAD)"
 assinar <<<s
 conferir "enviado sem assinatura: avisa e diz o commit" \
-  bash -c 'grep -q "já enviados sem assinatura" "$1" && grep -q "feat(teste): enviado sem assinatura" "$1"' _ "$tmp/saida"
+  bash -c 'grep -q "já enviados sem assinatura" "$1" && grep -q "feat(teste): enviado sem assinatura" "$1" &&
+    grep -q "feat(teste): enviado no outro ramo" "$1" && ! grep -q "Integra enviado" "$1"' _ "$tmp/saida"
 conferir "enviado sem assinatura: não reescreve" [ "$(git -C "$origem" rev-parse HEAD)" = "$e1" ]
 # Caminho da cópia instalada com espaço e caracteres do shell: o comando do
 # aviso sai com escape e só avança essa cópia.

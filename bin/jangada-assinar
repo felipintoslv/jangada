@@ -56,9 +56,8 @@ if [[ -n "$instalada" ]] && g merge-base --is-ancestor "$instalada" "$base" 2>/d
     {
       echo "!! commits já enviados sem assinatura válida; este comando não os reescreve e o jangada-update não passa deles:"
       printf '%s\n' "$enviados" | sed 's/^/   /'
-      echo "   confira com git log -p e avance a cópia instalada à mão:"
-      printf '   git -C %q fetch origin && git -C %q merge --ff-only %s\n' \
-        "$JANGADA_PATH" "$JANGADA_PATH" "$(awk 'NR == 1 { print $2 }' <<<"$enviados")"
+      echo "   confira com git log -p ${instalada:0:7}..${base:0:7} e avance a cópia instalada à mão até a origem:"
+      printf '   git -C %q fetch origin && git -C %q merge --ff-only %s\n' "$JANGADA_PATH" "$JANGADA_PATH" "$base"
     } >&2
   fi
 fi
