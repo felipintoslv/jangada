@@ -61,17 +61,20 @@ def executar_em_paralelo(args, projeto):
     # Término e fechamento do terminal seguem o mesmo caminho, para não deixar filhos chamando provedores.
     for sinal in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(sinal, interromper)
-    processos = [subprocess.Popen([*comando, '--limite', str(parte)], stdout=subprocess.PIPE, text=True,
-                                  start_new_session=True) for parte in partes]
-    with concurrent.futures.ThreadPoolExecutor(len(processos)) as leitores:
-        saidas = leitores.map(lambda processo: processo.communicate()[0], processos)
-        try:
-            saidas = list(saidas)
-        except KeyboardInterrupt:
-            for processo in processos:
-                if processo.poll() is None:
-                    processo.send_signal(signal.SIGINT)
-            raise
+    processos = []
+    leitores = concurrent.futures.ThreadPoolExecutor(len(partes))
+    try:
+        for parte in partes:
+            processos.append(subprocess.Popen([*comando, '--limite', str(parte)], stdout=subprocess.PIPE, text=True,
+                                              start_new_session=True))
+        saidas = list(leitores.map(lambda processo: processo.communicate()[0], processos))
+    except KeyboardInterrupt:
+        for processo in processos:
+            if processo.poll() is None:
+                processo.send_signal(signal.SIGINT)
+        raise
+    finally:
+        leitores.shutdown()
     resultados = [item for processo, saida in zip(processos, saidas) if processo.returncode == 0
                   for item in json.loads(saida)['resultados']]
     falhas = sum(processo.returncode != 0 for processo in processos)
