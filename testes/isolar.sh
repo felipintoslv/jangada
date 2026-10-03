@@ -115,7 +115,8 @@ conferir "ambiente mínimo: variável comum sai" retirada LESS
 conferir "ambiente mínimo: PATH, HOME e as do jangada ficam" \
   bash -c 'for v in PATH HOME JANGADA_PATH XDG_STATE_HOME ANTHROPIC_API_KEY; do
     ! grep -A1 -xF -- --unsetenv "$1" | grep -qxF "$v" || exit 1; done' _ "$tmp/args"
-conferir "ambiente mínimo: JANGADA_ISOLAR_AMBIENTE_MANTER fica" bash -c '! "$@"' _ retirada R_LIBS_USER
+mantida() { ! retirada "$1"; }
+conferir "ambiente mínimo: JANGADA_ISOLAR_AMBIENTE_MANTER fica" mantida R_LIBS_USER
 conferir "ambiente mínimo: o valor não aparece nos argumentos" bash -c '! grep -q "SENHA_DO_BANCO=" "$1"' _ "$tmp/args"
 
 # Casa mínima: a pasta pessoal some e volta só o que está na lista.
