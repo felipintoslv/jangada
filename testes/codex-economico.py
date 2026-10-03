@@ -35,7 +35,8 @@ class Economico(unittest.TestCase):
                      'default/orquestracao/cota_codex.py', 'default/orquestracao/cli.py',
                      'default/orquestracao/estado.py', 'default/orquestracao/executor.py',
                      'default/orquestracao/saude.py', 'default/orquestracao/acompanhamento.py',
-                     'default/orquestracao/deterministico.py', 'default/orquestracao/metricas_projeto.py'):
+                     'default/orquestracao/deterministico.py', 'default/orquestracao/metricas_projeto.py',
+                     'default/orquestracao/supervisao.py'):
             shutil.copy2(RAIZ / nome, self.raiz / nome)
         self.audit = self.pasta / 'execucao.json'
         self.fonte = self.pasta / 'fonte.md'
@@ -114,11 +115,11 @@ if modo == 'duplicado':
     def executar(self, tempo=30):
         return WORKER.executar(self.raiz, self.pasta, 'Leia a regra', [str(self.fonte)], tempo)
 
-    def delegar(self, extras=(), candidato=False):
+    def delegar(self, extras=(), candidato=False, papel='leitor'):
         args = [str(self.raiz / 'bin/jangada-delegar'), '--capacidade', 'analise_documental', '--json']
         if candidato:
             args += ['--destino', 'codex-economico']
-        args += list(extras) + ['--arquivos', str(self.fonte), '--', 'leitor', 'Leia a regra']
+        args += list(extras) + ['--arquivos', str(self.fonte), '--', papel, 'Leia a regra']
         return subprocess.run(args, cwd=self.pasta, capture_output=True, text=True, timeout=20)
 
     def test_modelo_explicito_fontes_limitadas_sem_ferramentas(self):
@@ -130,6 +131,13 @@ if modo == 'duplicado':
         self.assertEqual(resultado['cota_antes'], 80)
         dados = json.loads(self.audit.read_text())['prompt']
         self.assertEqual(dados['fontes'], [{'fonte': str(self.fonte), 'linhas': '1: Regra documentada na primeira linha.'}])
+
+    def test_supervisor_codex_documental_sem_ferramentas_e_local_proibido(self):
+        resultado = self.delegar(('--permitir-remoto', '--permitir-codex'), candidato=True, papel='supervisor')
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+        self.assertEqual(json.loads(resultado.stdout)['destino'], 'codex-economico')
+        resultado = self.delegar(('--destino', 'local'), papel='supervisor')
+        self.assertEqual(resultado.returncode, 4, resultado.stderr)
 
     def test_modelo_ausente_ou_invalido_nao_escolhe_padrao(self):
         for modelo in ('', 'modelo com espaços', '--premium'):

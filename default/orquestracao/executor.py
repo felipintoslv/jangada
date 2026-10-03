@@ -14,6 +14,7 @@ import tempfile
 import time
 
 from deterministico import CAPACIDADE as CAPACIDADE_DETERMINISTICA, conferir, elegivel
+from supervisao import elegivel as elegivel_supervisao, supervisionar, pendente as supervisao_pendente, candidatos as supervisores
 
 CAPACIDADES = {'leitura_documental', 'resumo_curto', 'analise_documental'}
 PERFIS = {'balanced', 'quality', 'offline'}
@@ -112,7 +113,7 @@ def entregar_principal(estado, identificador, dono, projeto, raiz, arquivo):
     return {'tarefa': identificador, 'status': status, **resultado}
 
 
-def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir_codex=False):
+def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir_codex=False, supervisao_automatica=False):
     reserva = estado.reservar()
     if reserva is None:
         return None
@@ -263,18 +264,131 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir
             spec.loader.exec_module(verificador)
             verificador.verificar(texto, fontes, tarefa.get('requisitos', []))
             resultado['verificacao'] = 'referencias_e_requisitos_validos'
+            if supervisao_automatica and elegivel_supervisao(tarefa):
+                try:
+                    revisao = supervisionar(tarefa, texto, fontes, saida, pasta, raiz, projeto, ambiente,
+                                            tempo - math.ceil(time.monotonic() - inicio), saldo - quantidade,
+                                            registro.get('destino'), permitir_remoto, permitir_codex,
+                                            perfil, saude, chamadas, verificador.verificar)
+                except KeyboardInterrupt:
+                    resultado['metricas'] = {'chamadas': None, 'segundos': math.ceil(time.monotonic() - inicio)}
+                    encerrar('REVISION_REQUIRED', 'supervisor interrompido; consumo desconhecido', texto)
+                    raise
+                resultado['supervisao'] = revisao
+                usadas = revisao['chamadas']
+                resultado['metricas'] = {'chamadas': None if usadas is None else quantidade + usadas,
+                                        'segundos': math.ceil(time.monotonic() - inicio)}
+                adicional = revisao.get('delegacao')
+                if isinstance(adicional, dict):
+                    novas = adicional.get('tentativas')
+                    if isinstance(novas, list):
+                        registro['tentativas'] += novas
+                    for campo in ('tokens_codex_entrada', 'tokens_codex_saida'):
+                        valor = adicional.get(campo)
+                        if type(valor) is int and valor >= 0:
+                            anterior = registro.get(campo)
+                            registro[campo] = valor + (anterior if type(anterior) is int and anterior >= 0 else 0)
+                conferir_fontes(tarefa, projeto)
+                for dependencia in tarefa.get('dependencias', []):
+                    estado.ler_artefato(mapa[dependencia]['artefato'])
+                if revisao['decisao'] == 'APPROVED' and usadas is not None:
+                    return encerrar('COMPLETED', 'relatório intermediário aprovado por supervisor independente', texto)
+                if revisao['decisao'] == 'REVISE':
+                    return encerrar('REVISION_REQUIRED', 'supervisor identificou erro no relatório', texto)
             return encerrar('REVIEW_REQUIRED', 'formato conferido; conteúdo aguarda revisão', texto)
     except (OSError, UnicodeError, ValueError, KeyError, subprocess.SubprocessError) as erro:
         return encerrar('REVISION_REQUIRED', str(erro), texto)
 
 
-def executar(estado, projeto, raiz, perfil='balanced', limite=1, permitir_remoto=False, saude=None, permitir_codex=False):
+def executar(estado, projeto, raiz, perfil='balanced', limite=1, permitir_remoto=False, saude=None, permitir_codex=False,
+             supervisao_automatica=False):
     if perfil not in PERFIS or type(limite) is not int or not 1 <= limite <= 1000:
         raise ValueError('perfil ou limite de tarefas inválido')
     resultados = []
     for _ in range(limite):
-        resultado = executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir_codex)
+        resultado = retomar_supervisao(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir_codex) if supervisao_automatica else None
+        if resultado is None:
+            resultado = executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir_codex, supervisao_automatica)
         if resultado is None:
             break
         resultados.append(resultado)
     return resultados
+
+
+def retomar_supervisao(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir_codex):
+    from saude import orcamento_disponivel
+
+    for item in estado.listar():
+        if not supervisao_pendente(item) or not orcamento_disponivel(estado, item):
+            continue
+        anterior = item['resultado']['delegacao']
+        destinos = supervisores(item['especificacao'], anterior.get('destino'), perfil, permitir_remoto, permitir_codex)
+        impedidos = {i['destino'] for i in saude.impedimentos()} if saude is not None else set()
+        if not any(d not in impedidos for d in destinos):
+            continue
+        try:
+            item, dono, tempo, saldo = estado.reservar_supervisao(item['id'])
+        except ValueError:
+            continue
+        tarefa = item['especificacao']
+        texto = None
+        resultado = {'perfil': perfil, 'fase': 'supervisao', 'execucao_iniciada': False,
+                     'delegacao': {'destino': anterior.get('destino'), 'modelo': anterior.get('modelo'), 'tentativas': []},
+                     'metricas': {'chamadas': 0, 'segundos': 0}}
+        inicio = time.monotonic()
+        status, motivo = 'REVIEW_REQUIRED', 'supervisão ainda pendente'
+        try:
+            texto = estado.ler_artefato(item['artefato'])
+            fontes = list(tarefa['fontes'])
+            mapa = {t['id']: t for t in estado.listar()}
+            conferir_fontes(tarefa, projeto)
+            for dep in tarefa.get('dependencias', []):
+                estado.ler_artefato(mapa[dep]['artefato'])
+                fontes.append(str(estado.pasta / 'artefatos' / f'{mapa[dep]["artefato"]}.txt'))
+            spec = importlib.util.spec_from_file_location('validar_supervisao', raiz / 'default/delegacao/validar.py')
+            gate = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(gate)
+            gate.verificar(texto, fontes, tarefa.get('requisitos', []))
+            resultado['verificacao'] = 'referencias_e_requisitos_validos'
+            ambiente = os.environ.copy()
+            for chave in ('JANGADA_DELEGAR_ROTEAMENTO_ID', 'JANGADA_DELEGAR_TENTATIVAS',
+                          'JANGADA_DELEGAR_CHAMADAS_RESTANTES', 'JANGADA_DELEGAR_DECISAO', 'JANGADA_DELEGAR_CACHE_PREFIXO'):
+                ambiente.pop(chave, None)
+            ambiente['JANGADA_PATH'] = str(raiz)
+            if saude is not None:
+                ambiente['JANGADA_DELEGAR_IMPEDIMENTOS'] = json.dumps(saude.impedimentos())
+            with tempfile.TemporaryDirectory(prefix='supervisao-', dir=estado.pasta) as pasta:
+                arquivo = pathlib.Path(pasta) / 'relatorio.md'
+                arquivo.write_text(texto, encoding='utf-8')
+                # Uma interrupção após iniciar o supervisor deixa o consumo desconhecido.
+                resultado['metricas']['chamadas'] = None
+                resultado['execucao_iniciada'] = True
+                revisao = supervisionar(tarefa, texto, fontes, arquivo, pasta, raiz, projeto, ambiente,
+                                        tempo - math.ceil(time.monotonic() - inicio), saldo, anterior.get('destino'),
+                                        permitir_remoto, permitir_codex, perfil, saude, chamadas, gate.verificar)
+            resultado['supervisao'] = revisao
+            resultado['metricas']['chamadas'] = revisao['chamadas']
+            resultado['execucao_iniciada'] = revisao['chamadas'] != 0
+            registro = revisao.get('delegacao')
+            if isinstance(registro, dict):
+                resultado['delegacao']['tentativas'] = registro.get('tentativas', [])
+                for campo in ('tokens_codex_entrada', 'tokens_codex_saida'):
+                    resultado['delegacao'][campo] = registro.get(campo)
+            conferir_fontes(tarefa, projeto)
+            for dep in tarefa.get('dependencias', []):
+                estado.ler_artefato(mapa[dep]['artefato'])
+            if revisao['decisao'] == 'APPROVED':
+                status, motivo = 'COMPLETED', 'relatório preservado aprovado pelo supervisor independente'
+            elif revisao['decisao'] == 'REVISE':
+                status, motivo = 'REVISION_REQUIRED', 'supervisor identificou erro no relatório preservado'
+        except KeyboardInterrupt:
+            resultado['metricas']['segundos'] = math.ceil(time.monotonic() - inicio)
+            estado.finalizar(item['id'], dono, 'REVISION_REQUIRED', resultado, texto)
+            raise
+        except (OSError, ValueError, UnicodeError, KeyError, subprocess.SubprocessError) as erro:
+            status, motivo = 'REVISION_REQUIRED', str(erro)
+        resultado['motivo'] = motivo
+        resultado['metricas']['segundos'] = math.ceil(time.monotonic() - inicio)
+        estado.finalizar(item['id'], dono, status, resultado, texto)
+        return {'tarefa': item['id'], 'status': status, **resultado}
+    return None

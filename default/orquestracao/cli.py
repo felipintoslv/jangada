@@ -59,11 +59,13 @@ def main():
     execucao.add_argument('--duracao', type=int)
     execucao.add_argument('--permitir-remoto', action='store_true')
     execucao.add_argument('--permitir-codex', action='store_true')
+    execucao.add_argument('--supervisionar', action='store_true')
     retomada = comandos.add_parser('retomar', help='retoma esperas com provedor disponível')
     retomada.add_argument('--projeto', type=pathlib.Path)
     retomada.add_argument('--perfil', choices=['balanced', 'quality', 'offline'], default='balanced')
     retomada.add_argument('--permitir-remoto', action='store_true')
     retomada.add_argument('--permitir-codex', action='store_true')
+    retomada.add_argument('--supervisionar', action='store_true')
     retomada.add_argument('--atualizar', action='store_true')
     retomada.add_argument('--executar', action='store_true')
     retomada.add_argument('--limite', type=int, default=1)
@@ -157,7 +159,7 @@ def main():
 
                     emitir(acompanhar(estado, projeto, raiz, os.environ['JANGADA_CONFIG'], saude,
                                       args.perfil, args.limite, args.intervalo or 60, args.duracao or 28800,
-                                      args.permitir_remoto, args.permitir_codex, emitir))
+                                      args.permitir_remoto, args.permitir_codex, emitir, args.supervisionar))
                     return
                 retomadas, resultados = [], []
                 if args.comando == 'retomar':
@@ -171,7 +173,7 @@ def main():
                                        args.perfil, args.permitir_remoto, args.permitir_codex)
                 if args.comando == 'executar' or args.executar:
                     resultados = executar(estado, projeto, raiz, args.perfil,
-                                          args.limite, args.permitir_remoto, saude, args.permitir_codex)
+                                          args.limite, args.permitir_remoto, saude, args.permitir_codex, args.supervisionar)
                 print(json.dumps({'projeto': str(projeto), 'retomadas': retomadas,
                                   'resultados': resultados}, ensure_ascii=False))
             finally:

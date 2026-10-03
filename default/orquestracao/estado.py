@@ -13,6 +13,7 @@ import time
 import uuid
 
 from deterministico import conferir as conferir_deterministica
+from supervisao import aprovacao_valida, elegivel as elegivel_supervisao, pendente as supervisao_pendente
 
 ESTADOS = {
     'QUEUED', 'RUNNING', 'COMPLETED', 'REVIEW_REQUIRED', 'REVISION_REQUIRED',
@@ -65,9 +66,11 @@ def tarefa_valida(tarefa):
         valor = tarefa.get(campo, padrao)
         if type(valor) is not int or not 1 <= valor <= 999999:
             raise ValueError(f'{campo} deve ser inteiro positivo')
-    for campo in ('permitir_remoto', 'permitir_codex'):
+    for campo in ('permitir_remoto', 'permitir_codex', 'intermediaria', 'supervisao_automatica'):
         if campo in tarefa and type(tarefa[campo]) is not bool:
             raise ValueError(f'{campo} deve ser booleano')
+    if tarefa.get('supervisao_automatica') and not elegivel_supervisao(tarefa):
+        raise ValueError('supervisão automática exige leitor intermediário, risco 1 e qualidade baixa ou média')
     serializar(tarefa)
 
 
@@ -289,6 +292,23 @@ class Estado:
                         'executor': executor, 'modelo': modelo, 'inicio': agora})
             return spec, dono, agora + tempo
 
+    def reservar_supervisao(self, identificador):
+        with self.transacao():
+            item = next((t for t in self.listar() if t['id'] == identificador), None)
+            if not item or not supervisao_pendente(item):
+                raise ValueError('tarefa não aguarda supervisão automática')
+            spec = item['especificacao']
+            consumo = self.consumo(identificador)
+            restante = spec.get('tempo_total', 600) - consumo['segundos']
+            if (consumo['chamadas'] is None or consumo['chamadas'] >= spec.get('max_chamadas', 8)
+                    or restante <= 0 or item['tentativas'] >= spec.get('max_tentativas', 2)):
+                raise ValueError('supervisão sem orçamento ou com consumo desconhecido')
+            agora, dono = time.time(), str(uuid.uuid4())
+            self.db.execute('UPDATE tarefas SET status=?,tentativas=tentativas+1,dono=?,prazo=?,atualizado=? WHERE id=?',
+                            ('RUNNING', dono, agora + restante + 60, agora, identificador))
+            self.evento(identificador, 'reservada', {'dono': dono, 'fase': 'supervisao', 'artefato': item['artefato']})
+            return item, dono, restante, spec.get('max_chamadas', 8) - consumo['chamadas']
+
     def finalizar(self, identificador, dono, status, resultado, artefato=None):
         if status not in {'COMPLETED', 'REVIEW_REQUIRED', 'REVISION_REQUIRED', 'FAILED',
                           'WAITING_PROVIDER', 'WAITING_QUOTA', 'WAITING_REVIEWER'}:
@@ -315,10 +335,14 @@ class Estado:
             if not tarefa or tarefa['status'] != 'RUNNING' or tarefa['dono'] != dono or tarefa['prazo'] <= time.time():
                 raise ValueError('executor não possui reserva válida da tarefa')
             if status == 'COMPLETED':
-                if artefato != conferir_deterministica(json.loads(tarefa['especificacao'])):
-                    raise ValueError('artefato não corresponde à conferência determinística das fontes')
-                if metricas.get('chamadas') != 0 or resultado.get('execucao_iniciada') is not True:
-                    raise ValueError('conferência determinística exige execução local sem chamadas a modelos')
+                spec = json.loads(tarefa['especificacao'])
+                if spec['capacidade'] == 'validacao_json':
+                    if artefato != conferir_deterministica(spec):
+                        raise ValueError('artefato não corresponde à conferência determinística das fontes')
+                    if metricas.get('chamadas') != 0 or resultado.get('execucao_iniciada') is not True:
+                        raise ValueError('conferência determinística exige execução local sem chamadas a modelos')
+                elif not aprovacao_valida(spec, artefato, resultado):
+                    raise ValueError('conclusão intermediária exige supervisão remota independente válida')
             hash_artefato = None
             if artefato is not None:
                 hash_artefato = hashlib.sha256(artefato.encode()).hexdigest()

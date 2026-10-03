@@ -440,6 +440,49 @@ das chamadas e tokens da sessão aberta: o consumo permanece desconhecido,
 impedindo uma repetição automática. Este fluxo não inicia agentes em segundo
 plano nem aplica uma variante econômica ou premium por conta própria.
 
+### Supervisão automática de relatórios intermediários
+
+Uma tarefa documental de risco 1 pode declarar `intermediaria: true` e
+`supervisao_automatica: true`. Exige papel `leitor`, qualidade `low` ou
+`medium` e uma das capacidades documentais já integradas. Tarefas finais,
+de risco maior ou alta qualidade não aceitam essa política.
+
+```sh
+jangada-executar --supervisionar --permitir-remoto
+jangada-executar --acompanhar --supervisionar --permitir-remoto
+```
+
+A opção do comando não autoriza envio por si só: a tarefa também precisa
+de `permitir_remoto: true`, e o perfil da sessão precisa permitir nuvem.
+O supervisor é agy ou Codex econômico, sempre diferente do autor. Codex
+exige modelo explícito e autorização do comando e da tarefa, como na execução.
+Ollama pode produzir o relatório, mas nunca fornece a aprovação semântica.
+
+Esse papel existe nos padrões de Claude e agy, com ferramentas somente
+de leitura; o adaptador Codex recebe o mesmo pedido sem ferramentas.
+O agy precisa encontrar `supervisor` no catálogo, como os demais papéis.
+Uma instalação anterior sem esse papel recusa a revisão até ser atualizada.
+O supervisor recebe objetivo, fontes e relatório como dados. Confere
+fidelidade, completude e extrapolações em JSON estrito, com justificativas
+e referências. O parecer identifica a tarefa e o SHA-256 do relatório.
+Somente todos os critérios `PASS`, sem observações e com referências
+conferidas, permitem `COMPLETED` e liberam dependências intermediárias.
+Erros exigem correção; ambiguidades, parecer inválido ou consumo desconhecido
+mantêm revisão pendente. Não se repetem pareceres inconclusivos até obter aprovação.
+
+Autor e supervisor compartilham o limite de chamadas e o tempo da tarefa.
+Sem quota ou supervisor autorizado, o relatório completo permanece salvo.
+`--supervisionar` retoma somente a revisão quando o provedor estiver disponível;
+`--acompanhar` consulta a saúde e aguarda a recuperação dentro do prazo configurado.
+As fontes e dependências são conferidas novamente antes da conclusão.
+
+O parecer completo fica no resultado da tarefa. Referências ao relatório
+temporário são vinculadas pelo SHA-256 ao artefato preservado. As métricas
+distinguem pareceres automáticos de revisões manuais; aprovação automática
+não alimenta o histórico usado para sugerir redução da amostragem.
+Essa supervisão não aprova entregas finais, publicação, alterações de produção
+ou a entrega de código do próprio Jangada. `jangada-validar` continua obrigatório.
+
 ### Conferência determinística de JSON
 
 A capacidade `validacao_json` executa um critério local de formato, sem
@@ -478,7 +521,8 @@ permanece zero. Funciona também no perfil `offline`.
 
 Esse critério comprova somente o formato. Não valida um esquema JSON,
 fidelidade documental, conteúdo ou autorização para operações externas.
-Os relatórios de modelos continuam sujeitos à revisão de conteúdo.
+Os relatórios de modelos continuam sujeitos à revisão de conteúdo, manual
+ou automática quando a política intermediária permitir.
 
 Perfis disponíveis:
 

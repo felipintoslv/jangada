@@ -9,6 +9,7 @@ import time
 
 from executor import executar, PERFIS
 from saude import candidatos_elegiveis, orcamento_disponivel, preferencias_delegacao, retomar
+from supervisao import pendente as supervisao_pendente, candidatos as supervisores
 
 
 @contextlib.contextmanager
@@ -29,7 +30,7 @@ def exclusividade(estado):
 
 def acompanhar(estado, projeto, raiz, config, saude, perfil='balanced', limite=100,
                intervalo=60, duracao=28800, permitir_remoto=False, permitir_codex=False,
-               emitir=None):
+               emitir=None, supervisao_automatica=False):
     if (perfil not in PERFIS or type(limite) is not int or not 1 <= limite <= 1000
             or type(intervalo) is not int or not 1 <= intervalo <= 3600
             or type(duracao) is not int or not 1 <= duracao <= 86400):
@@ -46,6 +47,9 @@ def acompanhar(estado, projeto, raiz, config, saude, perfil='balanced', limite=1
                 if item['status'] in {'WAITING_PROVIDER', 'WAITING_QUOTA'} and orcamento_disponivel(estado, item):
                     candidatos.update(candidatos_elegiveis(item['especificacao'], preferencias, perfil,
                                                           permitir_remoto, permitir_codex))
+                if supervisao_automatica and supervisao_pendente(item) and orcamento_disponivel(estado, item):
+                    candidatos.update(supervisores(item['especificacao'], item['resultado']['delegacao'].get('destino'),
+                                                   perfil, permitir_remoto, permitir_codex))
             if candidatos and time.monotonic() >= proxima_sonda:
                 proxima_sonda = time.monotonic() + 60
                 saude.atualizar('agy' in candidatos)
@@ -54,7 +58,7 @@ def acompanhar(estado, projeto, raiz, config, saude, perfil='balanced', limite=1
             retomadas = retomar(estado, saude, raiz, config, perfil, permitir_remoto, permitir_codex)
             if time.monotonic() >= prazo:
                 break
-            resultados = executar(estado, projeto, raiz, perfil, 1, permitir_remoto, saude, permitir_codex)
+            resultados = executar(estado, projeto, raiz, perfil, 1, permitir_remoto, saude, permitir_codex, supervisao_automatica)
             ciclos += 1
             iniciou = any(r.get('execucao_iniciada', r['metricas']['chamadas'] != 0) for r in resultados)
             execucoes += int(iniciou)
@@ -74,6 +78,9 @@ def acompanhar(estado, projeto, raiz, config, saude, perfil='balanced', limite=1
                 and orcamento_disponivel(estado, t)
                 and candidatos_elegiveis(t['especificacao'], preferencias, perfil,
                                          permitir_remoto, permitir_codex)) for t in tarefas)
+            esperas = esperas or (supervisao_automatica and any(supervisao_pendente(t)
+                and orcamento_disponivel(estado, t) and supervisores(t['especificacao'],
+                    t['resultado']['delegacao'].get('destino'), perfil, permitir_remoto, permitir_codex) for t in tarefas))
             if not esperas:
                 motivo = 'sem_tarefas_executaveis'
                 break
