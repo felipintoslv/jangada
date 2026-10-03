@@ -11,6 +11,13 @@ falhas=0
 ok()    { printf 'ok    %s\n' "$*"; }
 falha() { printf 'FALHA %s\n' "$*"; falhas=$((falhas + 1)); }
 conferir() { local d="$1"; shift; if "$@"; then ok "$d"; else falha "$d"; fi; }
+pular() {
+  if [[ "${JANGADA_TESTES_EXIGIR_ISOLAMENTO:-}" == 1 ]]; then
+    falha "$* (o isolamento real é exigido)"
+  else
+    echo "pulado $*"
+  fi
+}
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp" /tmp/isolar-teste' EXIT
@@ -338,7 +345,7 @@ EOF
       le "! test -e '$casa_fora/documento.txt'" JANGADA_ISOLAR_CASA=minima
     rm -rf "$casa_fora"
   else
-    echo "pulado casa mínima (leitura): /var/tmp não é gravável aqui"
+    pular "casa mínima (leitura): /var/tmp não é gravável aqui"
   fi
   conferir "casa mínima: chave segue oculta" minima "! test -e '$casa/.ssh/id_teste'"
   conferir "casa mínima: a pasta do Claude segue gravável" minima "echo x >'$casa/.claude/minima.txt'"
@@ -461,7 +468,7 @@ PY
     kill "$pid_keyring" "$pid_bus" 2>/dev/null || true
     wait "$pid_keyring" "$pid_bus" 2>/dev/null || true
   else
-    echo "pulado keyring por item (filtro real): sem xdg-dbus-proxy, dbus-daemon, gdbus ou dbus-python"
+    pular "keyring por item (filtro real): sem xdg-dbus-proxy, dbus-daemon, gdbus ou dbus-python"
   fi
   conferir "caso 3: não vê os processos de fora" roda '[ "$(ls /proc | grep -c "^[0-9]")" -lt 10 ]'
 
@@ -970,11 +977,7 @@ EOF
     conferir "caso 3d: o vigia sai depois do KILL no jangada-isolar" bash -c '! "$@"' _ pgrep -f "^inotifywait .*$casa/.local/state/jangada/agentes"
   fi
 else
-  if [[ "${JANGADA_TESTES_EXIGIR_ISOLAMENTO:-}" == 1 ]]; then
-    falha "caso 3: bwrap não cria namespace e o isolamento real é exigido"
-  else
-    echo "pulado caso 3: bwrap não cria namespace aqui"
-  fi
+  pular "caso 3: bwrap não cria namespace aqui"
 fi
 
 # Caso 4: a trava do estado não abre para escrita um caminho que o agente

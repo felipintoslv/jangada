@@ -567,7 +567,7 @@ class Interface(unittest.TestCase):
         form.criar_pasta('novo')
         self.assertIn('já existe', form.erro.text())
         self.assertEqual(form.projeto.text(), '')
-        for invalido in ('', '.oculta', '../fora', 'a/b'):
+        for invalido in ('', '.oculta', '..', '../fora', 'a/b', 'a\0b'):
             form.criar_pasta(invalido)
             self.assertIn('não pode', form.erro.text())
         self.assertEqual([p.name for p in base.iterdir()], ['novo'])

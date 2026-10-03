@@ -92,8 +92,8 @@ class NovaTarefa(QDialog):
 
     def criar_pasta(self, nome):
         nome = nome.strip()
-        if not nome or nome.startswith('.') or '/' in nome:
-            self.erro.setText('O nome da pasta não pode ser vazio, começar com ponto nem ter barra.')
+        if not nome or nome.startswith('.') or '/' in nome or '\0' in nome:
+            self.erro.setText('O nome da pasta não pode ser vazio, começar com ponto, ter barra nem caractere nulo.')
             return
         pasta = self.base / nome
         try:

@@ -58,6 +58,7 @@ entrar aqui do mesmo jeito.
 | `~/.gemini/antigravity-cli` (`settings.json`, `bin`) | `jangada-worktree-preparar`, `jangada-agente-fim`, `jangada-isolar` | confiança do agy no worktree e pasta bin para montar isolada; o original fica em `settings.json.jangada-orig` |
 | `~/.local/share/jangada-worktrees` | `jangada-agente` | worktrees das sessões de agente |
 | Repositórios em `JANGADA_PROJETOS` | `jangada-agente`, `jangada-agente-fim` | ramos `agente/*`, registro dos worktrees e a integração que o usuário confirma |
+| `JANGADA_PROJETOS` | `default/tarefas/janela.py` | pasta vazia de um projeto novo, quando o usuário pede pelo botão Nova pasta |
 | `~/.cache/jangada` | `jangada-consumo`, `jangada-delegar` | cache do consumo e da cota do agy |
 | `~/.cache/cliphist` | `jangada-isolar` | pasta criada com 0700 para poder ocultá-la do agente |
 | `$XDG_RUNTIME_DIR/jangada-tarefas` | `default/tarefas/central.py`, `default/tarefas/janela.py` | soquete privado para reutilizar a janela e avisos privados para acompanhar ações, fora do runtime visível ao agente isolado |
