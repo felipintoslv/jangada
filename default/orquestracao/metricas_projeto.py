@@ -3,6 +3,7 @@
 import collections
 import hashlib
 import json
+import math
 
 from supervisao import REMOTOS
 
@@ -25,7 +26,30 @@ def grupo_executor(executores, executor, modelo):
     return executores.setdefault((executor, modelo), dict(executor=executor, modelo=modelo,
         execucoes_registradas=0, processamentos_confirmados=0, reservas_expiradas=0, reservas_em_aberto=0,
         chamadas_do_fluxo_confirmadas=0, chamadas_do_fluxo_desconhecidas=0,
-        segundos_do_fluxo_confirmados=0, duracoes_do_fluxo_desconhecidas=0))
+        segundos_do_fluxo_confirmados=0, duracoes_do_fluxo_desconhecidas=0,
+        custo_estimado_confirmado=0, execucoes_sem_custo=0))
+
+
+def ler_precos(caminho):
+    """Lê a tabela declarada pelo usuário; sem o arquivo, nenhum custo é estimado."""
+    try:
+        dados = json.loads(caminho.read_text(encoding='utf-8'))
+    except FileNotFoundError:
+        return None
+
+    def valor(preco, campo):
+        return type(preco.get(campo)) in (int, float) and math.isfinite(preco[campo]) and preco[campo] >= 0
+
+    if (not isinstance(dados, dict) or dados.keys() != {'moeda', 'precos'}
+            or not isinstance(dados['moeda'], str) or not 1 <= len(dados['moeda']) <= 8
+            or not isinstance(dados['precos'], dict)
+            or any(not isinstance(modelos, dict) for modelos in dados['precos'].values())
+            or any(not isinstance(preco, dict) or preco.keys() != {'entrada_por_milhao', 'saida_por_milhao'}
+                   or not valor(preco, 'entrada_por_milhao') or not valor(preco, 'saida_por_milhao')
+                   for modelos in dados['precos'].values() for preco in modelos.values())):
+        raise ValueError(f'{caminho}: esperado moeda e precos[executor][modelo] com '
+                         'entrada_por_milhao e saida_por_milhao não negativos')
+    return dados
 
 
 def amostragem(estado, tarefa, resultado, artefato):
@@ -43,15 +67,15 @@ def amostragem(estado, tarefa, resultado, artefato):
             'selecionada': sorteio < taxa}
 
 
-def resumir(estado):
+def resumir(estado, precos=None):
     estado.db.execute('BEGIN')
     try:
-        return calcular(estado)
+        return calcular(estado, precos)
     finally:
         estado.db.execute('ROLLBACK')
 
 
-def calcular(estado):
+def calcular(estado, precos=None):
     tarefas = {t['id']: t for t in estado.listar()}
     totais = dict(tarefas=len(tarefas), estados=dict(collections.Counter(t['status'] for t in tarefas.values())),
                   execucoes_registradas=0, processamentos_confirmados=0, recusas_sem_chamadas=0,
@@ -63,7 +87,8 @@ def calcular(estado):
                   revisoes_aprovadas=0, revisoes_reprovadas=0, revisoes_sem_saida=0,
                   supervisoes_aprovadas=0, supervisoes_reprovadas=0, supervisoes_inconclusivas=0, esperas_supervisao=0,
                   conclusoes_fora_da_amostra=0, selecionadas_na_amostra=0,
-                  custo_estimado=None)
+                  custo_estimado=0 if precos else None, custo_estimado_confirmado=0, execucoes_sem_custo=0,
+                  moeda=precos['moeda'] if precos else None)
     executores, janelas, saidas = {}, {}, {}
     eventos = estado.db.execute('SELECT tarefa,evento,dados FROM eventos ORDER BY seq')
     for evento in eventos:
@@ -82,7 +107,9 @@ def calcular(estado):
             grupo['reservas_expiradas'] += 1
             grupo['chamadas_do_fluxo_desconhecidas'] += 1
             grupo['duracoes_do_fluxo_desconhecidas'] += 1
-            for campo in ('chamadas', 'segundos', 'tokens_entrada', 'tokens_saida'):
+            grupo['execucoes_sem_custo'] += 1
+            totais['execucoes_sem_custo'] += 1
+            for campo in ('chamadas', 'segundos', 'tokens_entrada', 'tokens_saida', 'custo_estimado'):
                 totais[campo] = None
             saidas.pop(identificador, None)
         elif tipo == 'execucao_encerrada':
@@ -138,6 +165,8 @@ def calcular(estado):
             destinos = [t.get('destino') for t in tentativas if isinstance(t, dict)
                         and isinstance(t.get('destino'), str) and t['destino']]
             totais['mudancas_entre_candidatos'] += sum(a != b for a, b in zip(destinos, destinos[1:]))
+            preco = (precos['precos'].get(executor, {}).get(modelo) if precos else None)
+            custo = 0 if quantidade == 0 else None if preco is None else 0
             for campo, origem in (('tokens_entrada', 'tokens_codex_entrada'), ('tokens_saida', 'tokens_codex_saida')):
                 valor = registro.get(origem)
                 if inteiro(valor):
@@ -146,8 +175,21 @@ def calcular(estado):
                     quantidade == 1 and executor in {'codex-economico', 'codex-principal'} and inteiro(valor)))
                 if not completo:
                     totais[campo] = None
+                    custo = None
                 elif totais[campo] is not None:
                     totais[campo] += valor if quantidade else 0
+                if custo is not None and quantidade:
+                    custo += valor * preco[campo.removeprefix('tokens_') + '_por_milhao'] / 1e6
+            # Sem preço declarado ou sem tokens de toda a cadeia, o custo é desconhecido, não zero.
+            if custo is None:
+                totais['custo_estimado'] = None
+                totais['execucoes_sem_custo'] += 1
+                grupo['execucoes_sem_custo'] += 1
+            else:
+                totais['custo_estimado_confirmado'] += custo
+                grupo['custo_estimado_confirmado'] += custo
+                if totais['custo_estimado'] is not None:
+                    totais['custo_estimado'] += custo
             saidas.pop(identificador, None)
             if dados.get('status') == 'REVIEW_REQUIRED' and dados.get('artefato'):
                 spec = tarefas[identificador]['especificacao']
@@ -168,12 +210,18 @@ def calcular(estado):
         totais['reservas_em_aberto'] = abertas
         totais['chamadas_desconhecidas'] += abertas
         totais['duracoes_desconhecidas'] += abertas
-        for campo in ('chamadas', 'segundos', 'tokens_entrada', 'tokens_saida'):
+        for campo in ('chamadas', 'segundos', 'tokens_entrada', 'tokens_saida', 'custo_estimado'):
             totais[campo] = None
+        totais['execucoes_sem_custo'] += abertas
         grupo = grupo_executor(executores, 'nao_informado', None)
         grupo['reservas_em_aberto'] += abertas
+        grupo['execucoes_sem_custo'] += abertas
         grupo['chamadas_do_fluxo_desconhecidas'] += abertas
         grupo['duracoes_do_fluxo_desconhecidas'] += abertas
+    for grupo in (totais, *executores.values()):
+        for campo in ('custo_estimado', 'custo_estimado_confirmado'):
+            if grupo.get(campo) is not None:
+                grupo[campo] = round(grupo[campo], 6)
     desempenho = []
     for (capacidade, executor, modelo, risco), janela in sorted(janelas.items(), key=lambda item: str(item[0])):
         n = len(janela)

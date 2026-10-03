@@ -15,7 +15,7 @@ sys.dont_write_bytecode = True
 from estado import Estado
 from executor import executar, assumir_principal, entregar_principal
 from acompanhamento import acompanhar
-from metricas_projeto import identidade, resumir
+from metricas_projeto import identidade, ler_precos, resumir
 from saude import Saude, retomar
 from principal import executar_principal
 
@@ -187,7 +187,9 @@ def main():
     try:
         if args.comando == 'fila':
             if args.metricas:
-                print(json.dumps({'projeto': str(projeto), 'metricas': resumir(estado)}, ensure_ascii=False))
+                config = os.environ.get('JANGADA_CONFIG')
+                precos = ler_precos(pathlib.Path(config) / 'precos.json') if config else None
+                print(json.dumps({'projeto': str(projeto), 'metricas': resumir(estado, precos)}, ensure_ascii=False))
                 return
             if args.importar:
                 estado.importar(especificacoes(args.importar, projeto))

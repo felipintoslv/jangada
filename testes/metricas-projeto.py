@@ -14,7 +14,7 @@ sys.dont_write_bytecode = True
 RAIZ = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / 'default/orquestracao'))
 from estado import Estado
-from metricas_projeto import resumir
+from metricas_projeto import ler_precos, resumir
 
 
 class Indicadores(unittest.TestCase):
@@ -154,6 +154,61 @@ class Indicadores(unittest.TestCase):
         self.assertEqual(resultado['mudancas_entre_candidatos'], 1)
         self.assertEqual(resultado['por_executor'][0]['executor'], 'codex-economico')
 
+    PRECOS = {'moeda': 'USD', 'precos': {'codex-economico': {
+        'modelo-teste': {'entrada_por_milhao': 2, 'saida_por_milhao': 10.5}}}}
+
+    def codex(self, identificador, modelo='modelo-teste', chamadas=1, **campos):
+        self.importar(identificador)
+        self.finalizar(chamadas=chamadas, registro={'destino': 'codex-economico', 'modelo': modelo,
+                                                    'tokens_codex_entrada': 100000, 'tokens_codex_saida': 20000, **campos})
+
+    def test_custo_usa_preco_declarado_e_tokens_completos(self):
+        self.codex('T1')
+        self.codex('T2')
+        self.importar('T3')
+        self.finalizar(chamadas=0, status='WAITING_QUOTA')
+        resultado = resumir(self.estado, self.PRECOS)
+        self.assertEqual(resultado['custo_estimado'], 0.82)
+        self.assertEqual(resultado['custo_estimado_confirmado'], 0.82)
+        self.assertEqual(resultado['execucoes_sem_custo'], 0)
+        self.assertEqual(resultado['moeda'], 'USD')
+        grupo = next(g for g in resultado['por_executor'] if g['executor'] == 'codex-economico')
+        self.assertEqual(grupo['custo_estimado_confirmado'], 0.82)
+        sem_tabela = resumir(self.estado)
+        self.assertIsNone(sem_tabela['custo_estimado'])
+        self.assertIsNone(sem_tabela['moeda'])
+        self.assertEqual(sem_tabela['execucoes_sem_custo'], 2)
+
+    def test_custo_desconhecido_sem_preco_tokens_ou_reserva_concluida(self):
+        self.codex('T1')
+        casos = (lambda: self.codex('S1', modelo='sem-preco'), lambda: self.codex('S2', chamadas=2),
+                 lambda: self.codex('S3', tokens_codex_saida=None),
+                 lambda: (self.importar('S4'), self.finalizar()),
+                 lambda: (self.importar('S5'), self.estado.reservar()))
+        for sem_custo, caso in enumerate(casos, 1):
+            with self.subTest(caso=sem_custo):
+                caso()
+                resultado = resumir(self.estado, self.PRECOS)
+                self.assertIsNone(resultado['custo_estimado'])
+                self.assertEqual(resultado['custo_estimado_confirmado'], 0.41)
+                self.assertEqual(resultado['execucoes_sem_custo'], sem_custo)
+        self.assertEqual(sum(g['execucoes_sem_custo'] for g in resultado['por_executor']), 5)
+
+    def test_tabela_de_precos_ausente_ou_invalida(self):
+        arquivo = self.pasta / 'precos.json'
+        self.assertIsNone(ler_precos(arquivo))
+        arquivo.write_text(json.dumps(self.PRECOS))
+        self.assertEqual(ler_precos(arquivo), self.PRECOS)
+        preco = {'entrada_por_milhao': 1, 'saida_por_milhao': 1}
+        for invalido in ([], {'moeda': 'USD'}, {'moeda': '', 'precos': {}}, {'moeda': 'USD', 'precos': {'x': preco}},
+                         {'moeda': 'USD', 'precos': {'x': {'m': {**preco, 'saida_por_milhao': -1}}}},
+                         {'moeda': 'USD', 'precos': {'x': {'m': {**preco, 'entrada_por_milhao': True}}}},
+                         {'moeda': 'USD', 'precos': {'x': {'m': {'entrada_por_milhao': 1}}}},
+                         {'moeda': 'USD', 'precos': {'x': {'m': {**preco, 'cache': 1}}}}):
+            with self.subTest(invalido=invalido), self.assertRaises(ValueError):
+                arquivo.write_text(json.dumps(invalido))
+                ler_precos(arquivo)
+
     def test_tokens_parciais_nao_viram_total_da_cadeia(self):
         self.importar()
         self.finalizar(chamadas=2, registro={'destino': 'codex-economico', 'modelo': 'teste',
@@ -225,6 +280,16 @@ class Indicadores(unittest.TestCase):
         consulta = subprocess.run([*comando, '--metricas'], env=ambiente, capture_output=True, text=True, timeout=5)
         self.assertEqual(consulta.returncode, 0, consulta.stderr)
         self.assertEqual(json.loads(consulta.stdout)['metricas']['tarefas'], 0)
+        config = self.pasta / 'config'
+        config.mkdir()
+        (config / 'precos.json').write_text(json.dumps(self.PRECOS))
+        ambiente['JANGADA_CONFIG'] = str(config)
+        consulta = subprocess.run([*comando, '--metricas'], env=ambiente, capture_output=True, text=True, timeout=5)
+        self.assertEqual(json.loads(consulta.stdout)['metricas']['custo_estimado'], 0)
+        (config / 'precos.json').write_text('{"moeda": "USD"}')
+        consulta = subprocess.run([*comando, '--metricas'], env=ambiente, capture_output=True, text=True, timeout=5)
+        self.assertEqual(consulta.returncode, 2)
+        self.assertIn('precos.json', consulta.stderr)
         recusa = subprocess.run([*comando, '--metricas', '--importar', 'ausente.json'],
                                 env=ambiente, capture_output=True, text=True, timeout=5)
         self.assertEqual(recusa.returncode, 2)

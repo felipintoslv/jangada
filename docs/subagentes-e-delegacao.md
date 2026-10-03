@@ -760,8 +760,41 @@ recusas sem chamadas, reservas expiradas, repetições solicitadas, retomadas,
 chamadas, segundos, tokens disponíveis e revisões aprovadas ou reprovadas.
 Um total desconhecido aparece como `null`; os campos `*_confirmados` ou
 `*_confirmadas` preservam a parcela conhecida. Reserva expirada torna
-consumo e duração desconhecidos. Ausência de preço não é custo zero:
-`custo_estimado` permanece `null`.
+consumo e duração desconhecidos.
+
+O custo só é estimado com preços declarados em
+`~/.config/jangada/precos.json`, por executor e modelo, na moeda e nos
+valores que você informar. O Jangada não traz tabela de preços nem os
+deduz do nome do modelo:
+
+```json
+{
+  "moeda": "USD",
+  "precos": {
+    "codex-economico": {
+      "MODELO": {"entrada_por_milhao": 0.0, "saida_por_milhao": 0.0}
+    }
+  }
+}
+```
+
+Substitua `MODELO` pelo identificador registrado em `por_executor` e os
+zeros pelo preço por milhão de tokens. Arquivo com outro formato recusa a
+consulta. Ausência de preço não é custo zero: sem o arquivo,
+`custo_estimado` permanece `null`. Com ele, cada execução entra assim:
+
+- sem chamadas a modelos: custo zero;
+- uma chamada do Codex com tokens de entrada e saída e preço declarado:
+  tokens vezes o preço;
+- qualquer outra: custo desconhecido. Isso inclui agy e Ollama, que não
+  informam tokens à fila, cadeias com mais de uma chamada, modelo sem preço
+  e reservas expiradas ou em aberto.
+
+Uma execução de custo desconhecido torna `custo_estimado` `null`.
+`custo_estimado_confirmado` soma a parcela conhecida e `execucoes_sem_custo`
+conta as demais, no total e em `por_executor`. É uma estimativa pelos
+tokens registrados: não considera cache, descontos nem assinatura, e não
+substitui a fatura do provedor.
 Registros sem duração são aceitos por compatibilidade, mas não comprovam
 duração zero. O resumo preserva as chamadas informadas; o controle de
 orçamento recusa repetição quando a duração é desconhecida.
