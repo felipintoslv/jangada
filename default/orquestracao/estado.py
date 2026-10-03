@@ -74,6 +74,9 @@ def tarefa_valida(tarefa):
         raise ValueError('supervisão automática exige leitor intermediário, risco 1 e qualidade baixa ou média')
     if tarefa.get('amostragem') and not amostravel(tarefa):
         raise ValueError('amostragem exige leitor intermediário, risco 1 e qualidade baixa ou média')
+    if 'esquema' in tarefa and (tarefa['capacidade'] != 'validacao_json' or not isinstance(tarefa['esquema'], str)
+                                or not tarefa['esquema'] or not isinstance(tarefa.get('hash_esquema'), str)):
+        raise ValueError('esquema exige validação JSON, caminho e resumo do arquivo')
     serializar(tarefa)
 
 

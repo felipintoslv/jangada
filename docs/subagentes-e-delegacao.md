@@ -566,14 +566,39 @@ Antes de gravar `COMPLETED`, o estado repete a conferência das fontes
 importadas e compara o relatório. Uma aprovação declarada na saída não
 substitui esse critério. A conclusão libera dependências automaticamente.
 
-JSON inválido ou fonte alterada deixa `REVISION_REQUIRED`. Risco maior,
+O campo opcional `esquema` indica um arquivo do projeto com um esquema
+JSON, aplicado a todas as fontes da tarefa:
+
+```json
+{
+  "id": "J2", "papel": "verificador", "capacidade": "validacao_json",
+  "pedido": "Confira os dados pelo esquema", "risco": 0,
+  "qualidade": "medium", "fontes": ["dados.json"], "esquema": "esquema.json"
+}
+```
+
+A importação guarda o caminho e o SHA-256 do esquema; alterá-lo depois
+impede a conclusão. O esquema segue os mesmos limites de leitura das fontes.
+São aceitas as palavras-chave `type`, `enum`, `const`, `required`,
+`properties`, `additionalProperties`, `items`, `minItems`, `maxItems`,
+`minLength`, `maxLength`, `minimum` e `maximum`, além das anotações
+`$schema`, `title` e `description`. Qualquer outra, como `pattern`, `$ref`
+ou `allOf`, recusa o esquema inteiro: uma regra ignorada aprovaria dados
+que o esquema proíbe. Comprimentos contam caracteres Unicode, `integer`
+aceita `1.0` e `true` não é igual a `1`. A falha informa o caminho do
+primeiro valor fora do esquema, como `$["itens"][2]`, sem copiar o valor.
+O relatório registra o critério `sintaxe_json_estrita_e_esquema` e o resumo
+do esquema.
+
+JSON inválido, fora do esquema ou fonte alterada deixa `REVISION_REQUIRED`. Risco maior,
 papel incompatível ou requisitos adicionais deixam `WAITING_REVIEWER`.
 Consumo anterior desconhecido impede repetição automática; os limites de
 tempo e tentativas continuam persistidos. O contador de chamadas a modelos
 permanece zero. Funciona também no perfil `offline`.
 
-Esse critério comprova somente o formato. Não valida um esquema JSON,
-fidelidade documental, conteúdo ou autorização para operações externas.
+Esse critério comprova somente o formato e, com `esquema`, a estrutura
+declarada. Não valida fidelidade documental, conteúdo ou autorização para
+operações externas.
 Os relatórios de modelos continuam sujeitos à revisão de conteúdo, manual
 ou automática quando a política intermediária permitir.
 

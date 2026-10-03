@@ -27,17 +27,20 @@ def especificacoes(caminho, projeto):
         if not isinstance(original, dict) or not isinstance(original.get('fontes'), list):
             raise ValueError('tarefa deve informar fontes')
         tarefa = dict(original)
-        fontes, hashes = [], {}
-        for nome in tarefa['fontes']:
+
+        def resolver(nome):
             if not isinstance(nome, str):
                 raise ValueError('fonte deve ser um caminho')
             fonte = (projeto / nome).resolve()
             if not fonte.is_relative_to(projeto) or not fonte.is_file():
                 raise ValueError(f'fonte ausente ou fora do projeto: {nome}')
-            fontes.append(str(fonte))
-            hashes[str(fonte)] = hashlib.sha256(fonte.read_bytes()).hexdigest()
-        tarefa['fontes'] = fontes
-        tarefa['hashes_fontes'] = hashes
+            return str(fonte), hashlib.sha256(fonte.read_bytes()).hexdigest()
+
+        fontes = [resolver(nome) for nome in tarefa['fontes']]
+        tarefa['fontes'] = [nome for nome, _ in fontes]
+        tarefa['hashes_fontes'] = dict(fontes)
+        if 'esquema' in tarefa:
+            tarefa['esquema'], tarefa['hash_esquema'] = resolver(tarefa['esquema'])
         resultado.append(tarefa)
     return resultado
 

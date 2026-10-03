@@ -13,7 +13,7 @@ import subprocess
 import tempfile
 import time
 
-from deterministico import CAPACIDADE as CAPACIDADE_DETERMINISTICA, conferir, elegivel
+from deterministico import CAPACIDADE as CAPACIDADE_DETERMINISTICA, conferir, criterio, elegivel
 from metricas_projeto import amostragem
 from supervisao import (amostravel, elegivel as elegivel_supervisao, supervisionar,
                         pendente as supervisao_pendente, candidatos as supervisores)
@@ -142,9 +142,9 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir
             return encerrar('FAILED', 'orçamento total da tarefa esgotado')
         inicio = time.monotonic()
         resultado.update(execucao_iniciada=True, executor='deterministico',
-                         verificacao='sintaxe_json_estrita')
+                         verificacao=criterio(tarefa))
         try:
-            for nome in tarefa['fontes']:
+            for nome in (*tarefa['fontes'], *filter(None, [tarefa.get('esquema')])):
                 if not pathlib.Path(nome).resolve().is_relative_to(projeto):
                     raise ValueError(f'fonte fora do projeto: {nome}')
             mapa = {item['id']: item for item in estado.listar()}
@@ -154,7 +154,7 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir
             resultado['metricas']['segundos'] = math.ceil(time.monotonic() - inicio)
             if resultado['metricas']['segundos'] > tempo:
                 return encerrar('FAILED', 'conferência excedeu o tempo da tarefa')
-            return encerrar('COMPLETED', 'sintaxe JSON conferida automaticamente', texto)
+            return encerrar('COMPLETED', 'JSON conferido automaticamente: ' + criterio(tarefa), texto)
         except KeyboardInterrupt:
             resultado['metricas']['segundos'] = math.ceil(time.monotonic() - inicio)
             encerrar('REVISION_REQUIRED', 'conferência local interrompida; conferir antes de repetir')
