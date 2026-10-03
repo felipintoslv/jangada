@@ -130,7 +130,7 @@ def barra(args):
     try:
         ambiente = dict(os.environ, JANGADA_PATH=str(jangada),
                         XDG_STATE_HOME=str(estado.parent.parent))
-        resposta = subprocess.run([str(jangada / 'bin/jangada-agentes'), '--lista'], capture_output=True, timeout=10, env=ambiente, check=True)
+        resposta = subprocess.run([str(jangada / 'bin/jangada-agentes'), '--lista-atualizada'], capture_output=True, timeout=10, env=ambiente, check=True)
         if len(resposta.stdout) > LIMITE:
             raise ValueError('A listagem excedeu o limite de leitura.')
         return resumo_barra(ler_lista(resposta.stdout.decode('utf-8', 'replace'), estado))

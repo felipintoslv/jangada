@@ -569,7 +569,9 @@ publicada pelo agente, sem tratar uma consulta recente como atividade recente.
 Ele não confirma conclusão da tarefa nem aprovação da entrega.
 Perguntas e permissões são atendidas pelo botão **Abrir terminal**.
 Sessões interrompidas podem ser retomadas pelo mesmo botão.
-A central não encerra agentes ao fechar nem limpa seus registros.
+A central não encerra agentes ao fechar. A consulta da janela apenas lê os
+registros; o contador da barra mantém a limpeza automática de estados órfãos
+e o registro persistente das interrupções, pelo mecanismo anterior.
 
 **Nova tarefa** escolhe projeto, agente e pedido, usando `jangada-agente`.
 **Painel de indicadores** e **Conversa de Pescador** abrem os aplicativos
@@ -581,6 +583,8 @@ interrupções. O contador consulta a cada dez segundos, com atualização imedi
 pelo sinal dos hooks. Clique abre ou foca a central existente; botão direito abre
 Nova tarefa. O sinal 10 continua reservado aos estados das sessões.
 Falhas aparecem como erro, sem um zero que pareça uma consulta bem-sucedida.
+O consumo do Claude saiu da dica da barra; continua disponível no painel
+de indicadores e em `jangada-consumo --curto`.
 
 ### Instalação e atualização
 

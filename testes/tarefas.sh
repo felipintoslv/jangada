@@ -64,6 +64,13 @@ jq '.estado="concluido"' "$tmp/registro" >"$XDG_STATE_HOME/jangada/agentes/turno
 bin/jangada-agentes --lista >"$tmp/lista"
 grep -q $'^concluido\tturno\t' "$tmp/lista"
 
+jq -n '{estado:"concluido", atualizado:"2000-01-01T00:00:00+00:00"}' \
+  >"$XDG_STATE_HOME/jangada/agentes/orfa.json"
+bin/jangada-agentes --lista-atualizada >"$tmp/lista"
+[[ ! -e "$XDG_STATE_HOME/jangada/agentes/orfa.json" ]]
+jq -e '.estado == "interrompido"' "$XDG_STATE_HOME/jangada/agentes/interrompida.json" >/dev/null
+grep -q $'^concluido\tturno\t' "$tmp/lista"
+
 mkdir -p "$tmp/jangada/bin"
 cp bin/jangada-tarefas bin/jangada-config "$tmp/jangada/bin/"
 cat >"$tmp/jangada/bin/jangada-agentes" <<'SH'
