@@ -205,7 +205,8 @@ class Conferencia(unittest.TestCase):
     def test_cli_importa_esquema_do_projeto_com_resumo(self):
         (self.pasta / 'esquema.json').write_text('{"type":"object"}')
         plano = self.pasta / 'plano.json'
-        ambiente = {**os.environ, 'JANGADA_ESTADO': str(self.pasta / 'cli-estado')}
+        ambiente = {**os.environ, 'JANGADA_ESTADO': str(self.pasta / 'cli-estado'),
+                    'JANGADA_PATH': str(RAIZ)}
         comando = [sys.executable, str(RAIZ / 'default/orquestracao/cli.py'), 'fila', '--projeto', str(self.pasta),
                    '--json', '--importar', str(plano)]
         tarefa = {k: v for k, v in self.tarefa(fontes=['dados.json']).items() if k != 'hashes_fontes'}

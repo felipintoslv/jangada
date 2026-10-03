@@ -275,7 +275,8 @@ class Indicadores(unittest.TestCase):
         self.assertTrue(all(g['amostragem_sugerida'] == 1 for g in resumir(self.estado)['desempenho']))
 
     def test_cli_consulta_metricas_e_rejeita_importacao_simultanea(self):
-        ambiente = {**os.environ, 'JANGADA_ESTADO': str(self.pasta / 'cli-estado')}
+        ambiente = {**os.environ, 'JANGADA_ESTADO': str(self.pasta / 'cli-estado'),
+                    'JANGADA_PATH': str(RAIZ)}
         comando = [sys.executable, str(RAIZ / 'default/orquestracao/cli.py'), 'fila', '--projeto', str(self.pasta)]
         consulta = subprocess.run([*comando, '--metricas'], env=ambiente, capture_output=True, text=True, timeout=5)
         self.assertEqual(consulta.returncode, 0, consulta.stderr)

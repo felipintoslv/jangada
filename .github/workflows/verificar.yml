@@ -15,16 +15,19 @@ jobs:
       # R e lintr ficam de fora: compilar o lintr leva minutos, e o caso 12 do
       # testes/validar.sh se pula sozinho sem eles.
       - name: Dependências
-        run: pacman -Syu --noconfirm --needed git sudo shellcheck lua jq python qt6-declarative gitleaks bubblewrap
+        run: pacman -Syu --noconfirm --needed git sudo shellcheck lua jq python qt6-declarative gitleaks bubblewrap diffutils openssh
 
       - uses: actions/checkout@v4
 
       - name: Testes
         run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git config --global user.name ci
-          git config --global user.email ci@localhost
-          testes/verificar.sh
+          useradd -m testes
+          chown -R testes:testes "$GITHUB_WORKSPACE"
+          runuser -u testes -- env GIT_CONFIG_GLOBAL=/tmp/jangada-ci-gitconfig sh -ec '
+            git config --global user.name ci
+            git config --global user.email ci@localhost
+            testes/verificar.sh
+          '
 
       # O install.sh recusa root e exige o sudo instalado. O usuário ci não
       # tem permissão no sudo, então qualquer escrita real fora do HOME falha,

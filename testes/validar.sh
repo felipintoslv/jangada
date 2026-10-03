@@ -770,12 +770,12 @@ sessao_de claude
 mkdir -p "$tmp/projeto/.jangada"
 printf '#!/usr/bin/env bash\nexit 0\n' >"$tmp/projeto/.jangada/validar.sh"
 chmod +x "$tmp/projeto/.jangada/validar.sh"
-validar 'STATUS: APROVADO'
+validar 'STATUS: APROVADO' --pular-local
 conferir "caso 20: .jangada/validar.sh novo ou alterado vai ao revisor para conferir" \
   grep -q "altera o .jangada/validar.sh" "$tmp/falso/agy.pedido"
 # Caso 20b: o .jangada/validar.sh é código do repositório avaliado e roda
 # pelo jangada-isolar: grava no projeto, mas não fora dele.
-if command -v bwrap >/dev/null 2>&1; then
+if command -v bwrap >/dev/null 2>&1 && bwrap --ro-bind / / --dev /dev --proc /proc true 2>/dev/null; then
   sessao_de claude
   printf '#!/usr/bin/env bash
 echo "${JANGADA_ISOLADO:-}" >.jangada/isolado
@@ -789,7 +789,7 @@ exit 0
     [ "$(cat "$tmp/projeto/.jangada/isolado" 2>/dev/null)" = 1 ]
   conferir "caso 20b: o .jangada/validar.sh não grava fora do projeto" test ! -e "$tmp/validar-fora"
 else
-  echo "bwrap ausente; caso 20b ignorado"
+  echo "pulado caso 20b: bwrap ausente ou namespaces indisponíveis"
 fi
 # Caso 20c: sem o bwrap, o .jangada/validar.sh não roda e a validação reprova.
 sem_bwrap="$tmp/sem-bwrap"
