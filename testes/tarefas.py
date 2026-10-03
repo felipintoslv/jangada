@@ -10,6 +10,7 @@ except ImportError:
     print('PyQt6 ausente; testes gráficos da central ignorados')
     sys.exit(1 if os.environ.get('CI') else 0)
 import json
+import fcntl
 import subprocess
 import tempfile
 import time
@@ -285,6 +286,78 @@ class Interface(unittest.TestCase):
         self.assertNotEqual(resultado.returncode, 0)
         self.assertFalse((self.raiz / 'executou-fim').exists())
         self.assertTrue(nova.exists())
+
+    def test_raiz_vazia_nao_bloqueia_a_sessao(self):
+        raiz = self.janela.pasta_finalizacao('projeto--um')
+        raiz.mkdir(mode=0o700)
+        self.janela.selecionar()
+        self.assertFalse(raiz.exists())
+        self.assertTrue(self.janela.integrar.isEnabled())
+        self.assertTrue(self.janela.encerrar.isEnabled())
+
+    def test_falha_de_gravacao_remove_preparacao_incompleta(self):
+        raiz = self.janela.pasta_finalizacao('projeto--um')
+        with patch.object(Path, 'write_text', side_effect=OSError('disco cheio')), patch.object(QProcess, 'startDetached') as iniciar:
+            self.janela.finalizar(True)
+            iniciar.assert_not_called()
+        self.assertFalse(raiz.exists())
+        self.assertIn('disco cheio', self.janela.status.text())
+        self.janela.selecionar()
+        self.assertTrue(self.janela.integrar.isEnabled())
+
+    def test_falha_ao_criar_tentativa_remove_raiz_sem_tocar_acao_existente(self):
+        raiz = self.janela.pasta_finalizacao('projeto--um')
+        mkdir_original = Path.mkdir
+        def criar(pasta, *args, **kwargs):
+            if pasta.parent == raiz:
+                raise OSError('quota excedida')
+            return mkdir_original(pasta, *args, **kwargs)
+        with patch.object(Path, 'mkdir', criar), patch.object(QProcess, 'startDetached') as iniciar:
+            self.janela.finalizar(False)
+            iniciar.assert_not_called()
+        self.assertFalse(raiz.exists())
+        self.janela.selecionar()
+        self.assertTrue(self.janela.encerrar.isEnabled())
+
+    def test_aviso_de_runtime_nao_sobrescreve_erro_de_consulta(self):
+        with patch.dict(os.environ, {'XDG_RUNTIME_DIR': 'relativo'}):
+            self.janela.selecionar()
+            self.janela.status.setText('Erro de consulta mais recente')
+            self.janela.selecionar()
+            self.assertEqual(self.janela.status.text(), 'Erro de consulta mais recente')
+        self.janela.selecionar()
+        with patch.dict(os.environ, {'XDG_RUNTIME_DIR': 'relativo'}):
+            self.janela.selecionar()
+            self.assertIn('Ações indisponíveis', self.janela.status.text())
+
+    def test_registros_ambiguos_preservam_bloqueio_de_seguranca(self):
+        raiz = self.janela.pasta_finalizacao('projeto--um')
+        (raiz / 'primeira').mkdir(mode=0o700, parents=True)
+        (raiz / 'segunda').mkdir(mode=0o700)
+        self.janela.selecionar()
+        with patch.object(QProcess, 'startDetached') as iniciar:
+            self.janela.finalizar(True)
+            iniciar.assert_not_called()
+        self.assertFalse(self.janela.integrar.isEnabled())
+        self.assertTrue((raiz / 'primeira').exists())
+        self.assertTrue((raiz / 'segunda').exists())
+
+    def test_trava_de_execucao_impede_segunda_acao_no_terminal(self):
+        with patch.object(QProcess, 'startDetached', return_value=(True, 123)), patch.object(self.janela, 'preparar') as preparar:
+            self.janela.finalizar(True)
+            argumentos = preparar.call_args.args[1]
+        trava = Path(argumentos[argumentos.index('jangada-tarefas') + 2])
+        comando = self.bin / 'jangada-agente-fim'
+        comando.write_text('#!/bin/sh\ntouch "' + str(self.raiz / 'executou-fim') + '"\n')
+        comando.chmod(448)
+        with trava.open('w') as arquivo:
+            fcntl.flock(arquivo, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            resultado = subprocess.run(argumentos[argumentos.index('-e') + 1:], input='\n', text=True, capture_output=True)
+        self.assertEqual(resultado.returncode, 75)
+        self.assertIn('Outra ação', resultado.stdout)
+        self.assertFalse((self.raiz / 'executou-fim').exists())
+        self.janela.conferir_finalizacoes()
+        self.assertTrue(self.janela.integrar.isEnabled())
 
     def test_finalizacao_recusa_nome_interpretavel_como_opcao(self):
         from dataclasses import replace

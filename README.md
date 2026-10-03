@@ -580,7 +580,9 @@ encerramento para a mesma sessão fica bloqueada, inclusive ao reabrir a central
 Se o terminal sair antes de iniciar a ação, o bloqueio é liberado após dez segundos.
 Cada tentativa usa uma pasta própria; um terminal atrasado não inicia a tentativa anterior após a liberação.
 Se o terminal for morto à força depois de iniciar a ação, sem executar a limpeza,
-o bloqueio permanece até encerrar a sessão gráfica. Isso evita uma segunda integração durante uma operação sem acompanhamento.
+o bloqueio permanece até encerrar a sessão gráfica. Registros inconsistentes
+(como duas tentativas na mesma pasta) também mantêm esse bloqueio.
+Isso evita uma segunda integração durante uma operação sem acompanhamento.
 No formulário Nova tarefa, `Ctrl+X` continua recortando texto.
 A central não encerra agentes ao fechar. A consulta da janela apenas lê os
 registros; o contador da barra mantém a limpeza automática de estados órfãos

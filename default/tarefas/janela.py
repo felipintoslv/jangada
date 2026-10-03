@@ -123,6 +123,7 @@ class Janela(QMainWindow):
         self.estado_dir = Path(estado or Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'jangada/agentes').expanduser()
         self.sessoes = {}
         self.finalizando = {}
+        self.aviso_finalizacao = None
         self.dados_validos = False
         self.criadas = {}
         self.formulario = None
@@ -503,15 +504,26 @@ class Janela(QMainWindow):
         try:
             raiz = self.pasta_finalizacao(nome)
             if not raiz.exists():
+                self.aviso_finalizacao = None
                 self.finalizando.pop(nome, None)
                 return False
             tentativas = list(raiz.iterdir())
+            if not tentativas:
+                raiz.rmdir()
+                self.aviso_finalizacao = None
+                self.finalizando.pop(nome, None)
+                return False
             if len(tentativas) != 1 or not tentativas[0].is_dir():
+                self.aviso_finalizacao = None
                 return True
             pasta = tentativas[0]
         except (OSError, ValueError) as erro:
-            self.status.setText(f'Ações indisponíveis: {erro}')
+            aviso = f'Ações indisponíveis: {erro}'
+            if aviso != self.aviso_finalizacao and self.dados_validos:
+                self.status.setText(aviso)
+            self.aviso_finalizacao = aviso
             return True
+        self.aviso_finalizacao = None
         if not pasta.exists():
             self.finalizando.pop(nome, None)
             return False
@@ -559,34 +571,51 @@ class Janela(QMainWindow):
         if integrar:
             comando.append('--integrar')
         comando.append(nome)
+        raiz = pasta = None
+        criou_raiz = criou_pasta = False
         try:
             raiz = self.pasta_finalizacao(nome)
             raiz.mkdir(mode=0o700)
+            criou_raiz = True
             pasta = raiz / uuid.uuid4().hex
             pasta.mkdir(mode=0o700)
+            criou_pasta = True
             inicio = {'pid': os.getpid(), 'criado': time.monotonic()}
             (pasta / 'inicio.json').write_text(json.dumps(inicio))
-        except FileExistsError:
-            self.selecionar()
-            return
         except (OSError, ValueError) as erro:
-            self.status.setText(f'Não foi possível preparar a ação: {erro}')
+            if criou_pasta:
+                try:
+                    (pasta / 'inicio.json').unlink(missing_ok=True)
+                    pasta.rmdir()
+                except OSError:
+                    pass
+            if criou_raiz:
+                try:
+                    raiz.rmdir()
+                except OSError:
+                    pass
+            if isinstance(erro, FileExistsError):
+                self.selecionar()
+            else:
+                self.status.setText(f'Não foi possível preparar a ação: {erro}')
             return
         # A pasta persiste ao fechar a central; o terminal a remove ao terminar.
-        roteiro = """pasta=$1; shift
+        roteiro = """pasta=$1; trava=$2; shift 2
+umask 077
 limpar() { rm -f -- "$pasta/pronta" "$pasta/inicio.json"; rmdir -- "$pasta" 2>/dev/null && rmdir -- "${pasta%/*}" 2>/dev/null || true; }
 trap limpar EXIT
 trap 'exit 130' HUP INT TERM
 : > "$pasta/pronta" || exit 1
-"$@"
+flock -n -E 75 "$trava" "$@"
 resultado=$?
+if ((resultado == 75)); then printf "%s\n" "Outra ação desta sessão ainda está em andamento."; fi
 limpar
 trap - EXIT
 read -r -p "Enter para fechar " _
 exit "$resultado"
 """
         argumentos = ['--classe', 'org.jangada.tarefas.acao', '--titulo', 'Tarefa: ' + nome,
-                      '-e', 'bash', '-c', roteiro, 'jangada-tarefas', str(pasta), *comando]
+                      '-e', 'bash', '-c', roteiro, 'jangada-tarefas', str(pasta), str(raiz.with_suffix('.trava')), *comando]
         processo = QProcess(self)
         self.preparar(processo, argumentos, 'jangada-terminal')
         iniciado, pid = processo.startDetached()
@@ -596,7 +625,7 @@ exit "$resultado"
             try:
                 if not (pasta / 'pronta').exists():
                     (pasta / 'inicio.json').write_text(json.dumps(inicio))
-            except FileNotFoundError:
+            except OSError:
                 pass
             self.finalizando[nome] = pasta
             self.tempo_finalizacao.start()
