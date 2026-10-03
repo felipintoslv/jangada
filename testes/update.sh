@@ -224,6 +224,95 @@ conferir "vários sem assinatura: assina todos ($rc)" \
 conferir "vários sem assinatura: o mais antigo tem assinatura válida" [ "$(assinatura HEAD~19)" = G ]
 atualizar <<<s
 
+# Merge do jangada-agente-fim --integrar: o ramo saiu de antes de um commit
+# já assinado, que fica como está; o commit do ramo e o merge são assinados.
+git -C "$origem" branch agente/m
+echo m1 >"$origem/m1.txt"
+git -C "$origem" add m1.txt
+git -C "$origem" commit --quiet -m "feat(teste): antes do merge"
+assinar <<<s
+m1="$(git -C "$origem" rev-parse HEAD)"
+git -C "$origem" checkout --quiet agente/m
+echo m2 >"$origem/m2.txt"
+git -C "$origem" add m2.txt
+git -C "$origem" commit --quiet -m "feat(teste): no ramo"
+git -C "$origem" checkout --quiet main
+git -C "$origem" merge --quiet --no-ff -m "Integra agente/m" agente/m
+arvore_m="$(git -C "$origem" rev-parse 'HEAD^{tree}')"
+assinar <<<s
+conferir "merge: assina sem erro ($rc)" [ "$rc" -eq 0 ]
+conferir "merge: continua merge, com a mesma árvore" \
+  bash -c '[ "$(git -C "$1" rev-list --parents -1 HEAD | wc -w)" -eq 3 ] && [ "$(git -C "$1" rev-parse "HEAD^{tree}")" = "$2" ]' _ "$origem" "$arvore_m"
+conferir "merge: o merge e o commit do ramo têm assinatura válida" [ "$(assinatura HEAD)$(assinatura HEAD^2)" = GG ]
+conferir "merge: o já assinado antes do ramo não muda" [ "$(git -C "$origem" rev-parse HEAD^)" = "$m1" ]
+git -C "$origem" branch --quiet -D agente/m
+m_assinado="$(git -C "$origem" rev-parse HEAD)"
+atualizar <<<s
+conferir "merge assinado: a cópia instalada avança" test "$(head_instalado)" = "$m_assinado"
+
+# Merge com alteração feita à mão: refazê-lo perderia a alteração, então nada
+# é assinado e o ramo volta ao que era.
+git -C "$origem" branch agente/n
+echo n1 >"$origem/n1.txt"
+git -C "$origem" add n1.txt
+git -C "$origem" commit --quiet -m "feat(teste): base do merge alterado"
+git -C "$origem" checkout --quiet agente/n
+echo n2 >"$origem/n2.txt"
+git -C "$origem" add n2.txt
+git -C "$origem" commit --quiet -m "feat(teste): ramo do merge alterado"
+git -C "$origem" checkout --quiet main
+git -C "$origem" merge --quiet --no-ff --no-commit agente/n >/dev/null 2>&1
+echo extra >"$origem/n3.txt"
+git -C "$origem" add n3.txt
+git -C "$origem" commit --quiet -m "Integra agente/n"
+antes_n="$(git -C "$origem" rev-parse HEAD)"
+assinar <<<s
+conferir "merge alterado à mão: recusa ($rc)" \
+  bash -c '[ "$1" -ne 0 ] && grep -q "mudou o conteúdo" "$2"' _ "$rc" "$tmp/saida"
+conferir "merge alterado à mão: o ramo volta ao que era" [ "$(git -C "$origem" rev-parse HEAD)" = "$antes_n" ]
+# Um commit posterior desfaz a alteração: a árvore final seria a mesma, mas o
+# merge refeito não. O commit traz outro arquivo para não ficar vazio no
+# rebase, que pararia nele.
+git -C "$origem" rm --quiet n3.txt
+echo n4 >"$origem/n4.txt"
+git -C "$origem" add n4.txt
+git -C "$origem" commit --quiet -m "feat(teste): desfaz a alteração do merge"
+antes_n="$(git -C "$origem" rev-parse HEAD)"
+assinar <<<s
+conferir "merge alterado à mão e desfeito depois: recusa ($rc)" \
+  bash -c '[ "$1" -ne 0 ] && grep -q "mudou o conteúdo" "$2"' _ "$rc" "$tmp/saida"
+conferir "merge alterado à mão e desfeito depois: o ramo volta ao que era" [ "$(git -C "$origem" rev-parse HEAD)" = "$antes_n" ]
+git -C "$origem" reset --quiet --hard "$m_assinado"
+git -C "$origem" branch --quiet -D agente/n
+# Dois merges que trocariam de árvore ao serem refeitos: o primeiro
+# acrescenta x.txt à mão, o segundo traz o mesmo x.txt do ramo e o tira à mão.
+# O conjunto das árvores fica igual; a de cada commit, não.
+git -C "$origem" branch agente/p
+git -C "$origem" branch agente/q
+git -C "$origem" checkout --quiet agente/p
+echo p >"$origem/p.txt"
+git -C "$origem" add p.txt
+git -C "$origem" commit --quiet -m "feat(teste): ramo p"
+git -C "$origem" checkout --quiet agente/q
+echo x >"$origem/x.txt"
+git -C "$origem" add x.txt
+git -C "$origem" commit --quiet -m "feat(teste): ramo q"
+git -C "$origem" checkout --quiet main
+git -C "$origem" merge --quiet --no-ff --no-commit agente/p >/dev/null 2>&1
+echo x >"$origem/x.txt"
+git -C "$origem" add x.txt
+git -C "$origem" commit --quiet -m "Integra agente/p"
+git -C "$origem" merge --quiet --no-ff --no-commit agente/q >/dev/null 2>&1
+git -C "$origem" rm --quiet -f x.txt
+git -C "$origem" commit --quiet -m "Integra agente/q"
+antes_pq="$(git -C "$origem" rev-parse HEAD)"
+assinar <<<s
+conferir "merges que trocariam de árvore: recusa ($rc)" \
+  bash -c '[ "$1" -ne 0 ] && grep -q "mudou o conteúdo" "$2"' _ "$rc" "$tmp/saida"
+conferir "merges que trocariam de árvore: o ramo volta ao que era" [ "$(git -C "$origem" rev-parse HEAD)" = "$antes_pq" ]
+git -C "$origem" reset --quiet --hard "$m_assinado"
+git -C "$origem" branch --quiet -D agente/p agente/q
+
 # O gpg.ssh.program do repositório não roda na assinatura nem na conferência.
 printf '#!/bin/sh\ntouch "%s"\nexit 1\n' "$alerta" >"$tmp/programa.sh"
 chmod +x "$tmp/programa.sh"

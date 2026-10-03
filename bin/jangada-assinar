@@ -11,6 +11,7 @@
 # A chave é JANGADA_ASSINATURA_CHAVE no jangada.conf (padrão ~/.ssh/id_ed25519).
 # Reescreve os commits a partir do primeiro sem assinatura válida; os
 # anteriores, que o jangada-update pode já ter aplicado, ficam como estão.
+# Os merges do jangada-agente-fim --integrar são refeitos e assinados também.
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
@@ -42,7 +43,6 @@ grep -qF -- "$(cut -d' ' -f2 "$publica")" "$assinantes" || erro "a chave $public
 [[ -z "$(g status --porcelain --ignore-submodules=all)" ]] || erro "há alterações sem commit em $repo"
 g symbolic-ref -q HEAD >/dev/null || erro "o HEAD de $repo não está num ramo"
 base="$(g rev-parse --verify --quiet '@{upstream}^{commit}')" || erro "o ramo de $repo não acompanha um ramo da origem"
-[[ -z "$(g rev-list --merges "$base..HEAD")" ]] || erro "há commits de merge depois de $base; assine à mão"
 
 # O awk lê até o fim: saindo no primeiro achado, o git log morre por SIGPIPE
 # e, com pipefail, o script termina aqui sem mensagem.
@@ -57,8 +57,22 @@ r=""
 read -r -p "assinar estes commits com $chave? [s/N] " r || r=""
 [[ "${r,,}" == s* ]] || { echo "nada assinado"; exit 1; }
 
-g rebase --quiet --exec 'git commit --quiet --amend --no-edit --no-verify -S' "$primeiro^" \
+# O rebase refaz cada merge com a estratégia padrão, e o que foi resolvido ou
+# alterado à mão no merge não volta: com conflito ele para; sem conflito, a
+# comparação das árvores pega a perda. Ela vai commit a commit, porque um
+# commit posterior que desfaz a alteração deixaria a árvore final igual, e
+# na ordem do histórico, porque dois merges podem trocar de árvore entre si.
+# A ordem é a da data de autoria, que o rebase e o amend não mudam.
+# Commit já assinado cujo pai não mudou é reaproveitado e fica como está.
+arvores() { g log --author-date-order --format=%T "$primeiro^..$1"; }
+antes="$(g rev-parse HEAD)"
+g rebase --quiet --rebase-merges \
+  --exec '[ "$(git log -1 --format=%G?)" = G ] || git commit --quiet --amend --no-edit --no-verify -S' "$primeiro^" \
   || erro "o rebase parou; resolva em $repo (git rebase --abort desfaz)"
+if [[ "$(arvores "$antes")" != "$(arvores HEAD)" ]]; then
+  g reset --quiet --hard "$antes"
+  erro "refazer os merges mudou o conteúdo; nada foi assinado, assine à mão"
+fi
 faltam="$(g log --format='%G? %h %s' "$base..HEAD" | grep -v '^G ' | sem_controle)" || true
 [[ -z "$faltam" ]] || erro "ainda sem assinatura válida:"$'\n'"$faltam"
 echo "assinados; confira com git log --show-signature e rode o push"
