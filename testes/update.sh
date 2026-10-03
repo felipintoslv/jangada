@@ -284,6 +284,34 @@ conferir "merge alterado à mão e desfeito depois: recusa ($rc)" \
 conferir "merge alterado à mão e desfeito depois: o ramo volta ao que era" [ "$(git -C "$origem" rev-parse HEAD)" = "$antes_n" ]
 git -C "$origem" reset --quiet --hard "$m_assinado"
 git -C "$origem" branch --quiet -D agente/n
+# Dois merges que trocariam de árvore ao serem refeitos: o primeiro
+# acrescenta x.txt à mão, o segundo traz o mesmo x.txt do ramo e o tira à mão.
+# O conjunto das árvores fica igual; a de cada commit, não.
+git -C "$origem" branch agente/p
+git -C "$origem" branch agente/q
+git -C "$origem" checkout --quiet agente/p
+echo p >"$origem/p.txt"
+git -C "$origem" add p.txt
+git -C "$origem" commit --quiet -m "feat(teste): ramo p"
+git -C "$origem" checkout --quiet agente/q
+echo x >"$origem/x.txt"
+git -C "$origem" add x.txt
+git -C "$origem" commit --quiet -m "feat(teste): ramo q"
+git -C "$origem" checkout --quiet main
+git -C "$origem" merge --quiet --no-ff --no-commit agente/p >/dev/null 2>&1
+echo x >"$origem/x.txt"
+git -C "$origem" add x.txt
+git -C "$origem" commit --quiet -m "Integra agente/p"
+git -C "$origem" merge --quiet --no-ff --no-commit agente/q >/dev/null 2>&1
+git -C "$origem" rm --quiet -f x.txt
+git -C "$origem" commit --quiet -m "Integra agente/q"
+antes_pq="$(git -C "$origem" rev-parse HEAD)"
+assinar <<<s
+conferir "merges que trocariam de árvore: recusa ($rc)" \
+  bash -c '[ "$1" -ne 0 ] && grep -q "mudou o conteúdo" "$2"' _ "$rc" "$tmp/saida"
+conferir "merges que trocariam de árvore: o ramo volta ao que era" [ "$(git -C "$origem" rev-parse HEAD)" = "$antes_pq" ]
+git -C "$origem" reset --quiet --hard "$m_assinado"
+git -C "$origem" branch --quiet -D agente/p agente/q
 
 # O gpg.ssh.program do repositório não roda na assinatura nem na conferência.
 printf '#!/bin/sh\ntouch "%s"\nexit 1\n' "$alerta" >"$tmp/programa.sh"

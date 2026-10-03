@@ -60,9 +60,11 @@ read -r -p "assinar estes commits com $chave? [s/N] " r || r=""
 # O rebase refaz cada merge com a estratégia padrão, e o que foi resolvido ou
 # alterado à mão no merge não volta: com conflito ele para; sem conflito, a
 # comparação das árvores pega a perda. Ela vai commit a commit, porque um
-# commit posterior que desfaz a alteração deixaria a árvore final igual.
+# commit posterior que desfaz a alteração deixaria a árvore final igual, e
+# na ordem do histórico, porque dois merges podem trocar de árvore entre si.
+# A ordem é a da data de autoria, que o rebase e o amend não mudam.
 # Commit já assinado cujo pai não mudou é reaproveitado e fica como está.
-arvores() { g log --format=%T "$primeiro^..$1" | sort; }
+arvores() { g log --author-date-order --format=%T "$primeiro^..$1"; }
 antes="$(g rev-parse HEAD)"
 g rebase --quiet --rebase-merges \
   --exec '[ "$(git log -1 --format=%G?)" = G ] || git commit --quiet --amend --no-edit --no-verify -S' "$primeiro^" \
