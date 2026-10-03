@@ -380,6 +380,14 @@ EOF
     conferir "keyring por item: a coleção do item aceita busca e gravação" \
       bash -c 'grep -qxF -- "--call=org.freedesktop.secrets=org.freedesktop.Secret.Collection.SearchItems@/org/freedesktop/secrets/collection/cofre" "$1" \
         && grep -qxF -- "--call=org.freedesktop.secrets=org.freedesktop.Secret.Collection.CreateItem@/org/freedesktop/secrets/collection/cofre" "$1"' _ "$tmp/proxy.args"
+    # O jangada.conf não passa pelo shell: o valor com espaço vai sem aspas.
+    rm -f "$tmp/proxy.args.gdbus"
+    mkdir -p "$tmp/config/jangada"
+    echo 'JANGADA_ISOLAR_KEYRING_ITEM=service=agy-teste username=eu' >"$tmp/config/jangada/jangada.conf"
+    proxy "$tmp/agy-falso:"
+    rm -f "$tmp/config/jangada/jangada.conf"
+    conferir "keyring por item: os dois atributos chegam pelo jangada.conf" \
+      grep -qF "{'service': 'agy-teste', 'username': 'eu'}" "$tmp/proxy.args.gdbus"
     rm -f "$tmp/proxy.args.gdbus"
     proxy "$tmp/agy-falso:" JANGADA_ISOLAR_KEYRING_ITEM="service=a'b"
     conferir "keyring por item: valor inválido não busca nem libera item" \
