@@ -39,7 +39,7 @@ arquivo e função, falhas e os testes que o cobrem:
 |---|---|
 | [docs/ciclo-da-tarefa.md](docs/ciclo-da-tarefa.md) | abertura da sessão, `jangada-validar` e `jangada-agente-fim` |
 | [docs/isolamento.md](docs/isolamento.md) | o que o `jangada-isolar` deixa gravável, somente leitura e oculto, e a restauração |
-| [docs/subagentes-e-delegacao.md](docs/subagentes-e-delegacao.md) | papéis, destino da delegação e `jangada-delegar` |
+| [docs/subagentes-e-delegacao.md](docs/subagentes-e-delegacao.md) | papéis, destino da delegação, `jangada-delegar`, fila de tarefas e saúde dos provedores |
 | [docs/codex.md](docs/codex.md) | Codex como executor e revisor, isolamento e retomada |
 | [docs/atualizacao-e-migracoes.md](docs/atualizacao-e-migracoes.md) | instalação, `jangada-update` e `jangada-migrar` |
 | [docs/painel.md](docs/painel.md) | coletor, cache, app e módulo da barra |
@@ -122,6 +122,12 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-agente` | escolhe o agente (Claude, agy ou Codex), o projeto e cria um worktree, e abre o agente numa sessão tmux, isolado pelo `jangada-isolar` (`--prompt`, `--prompt-arquivo`, `--perfil`, `--sem-isolar`) |
 | `jangada-isolar` | roda um comando no bubblewrap, com o sistema somente leitura e a pasta atual gravável; `--mostrar` imprime a chamada ao `bwrap` |
 | `jangada-delegar PAPEL "pedido"` | delega ao Ollama (`--destino local --arquivos ARQUIVOS`, só leitor e redator) ou ao agy Flash (`--destino agy`); `--capacidade` permite seleção documental para leitor, com autorização remota explícita e referências verificadas; `--json` explica a decisão (ver [delegação](docs/subagentes-e-delegacao.md)) |
+| `jangada-fila` | mostra a fila persistente do projeto; `--importar PLANO.json` acrescenta tarefas, `--json` detalha o estado e `--metricas` resume consumo e revisões (ver [fila](docs/subagentes-e-delegacao.md#fila-persistente-de-projetos)) |
+| `jangada-executar` | executa tarefas elegíveis da fila pelo `jangada-delegar`, sem aprovar o conteúdo (`--limite`, `--perfil balanced\|quality\|offline`, `--permitir-remoto`, `--permitir-codex`, `--supervisionar`); `--acompanhar` mantém a fila em primeiro plano até o prazo |
+| `jangada-retomar` | recoloca na fila tarefas que esperavam cota ou provedor, quando há executor, orçamento e tentativas (`--atualizar`, `--executar`) |
+| `jangada-task ID AÇÃO` | controla uma tarefa: `pausar`, `retomar`, `cancelar`, `repetir`, `revisar --aprovar\|--reprovar --parecer`, e `assumir`, `entregar` e `executar-principal` para os agentes principais |
+| `jangada-router status` | estado, cota e espera dos provedores (`--atualizar`, `--atualizar-codex`) |
+| `jangada-provedor pausar\|ativar ID` | tira um provedor da execução da fila ou o devolve |
 | `jangada-subagentes` | indicadores de subagentes e delegações (`--json`), o resumo de uma entrega (`--entrega PASTA`) e os registros por subagente (`--registros`) |
 | `jangada-filtrar` | roda um comando e condensa a saída para o agente (`-m`, `-e`, `-p`); prefira `jangada-filtrar -- COMANDO` ao modo cano, que não vê o código de saída |
 | `jangada-mapa [PASTA]` | mapa compacto do repositório (arquivos e assinaturas de funções) para dar contexto a um agente |
@@ -699,6 +705,9 @@ e não mexe na instalada. Para testar a cópia de trabalho sem instalar, rode
 | `testes/pescador.py` | pareceres, auditorias paralelas, sessões, resposta progressiva, cancelamento e janela Qt com executor falso |
 | `testes/pescador-modelo.sh` | modelos sem ferramentas e isolamento obrigatório do Pescador, mesmo com a preferência geral desligada |
 | `testes/subagentes.sh`, `testes/delegar.sh` | papéis de subagente e a instalação deles; `jangada-delegar` com agy falso |
+| `testes/delegacao.py`, `testes/orquestracao.py`, `testes/executor.py` | seleção por capacidade, fila persistente e execução com `jangada-delegar` simulado |
+| `testes/supervisao.py`, `testes/acompanhamento.py`, `testes/deterministico.py` | supervisor de relatórios intermediários, acompanhamento da fila e conferência de JSON |
+| `testes/saude.py`, `testes/metricas-projeto.py`, `testes/cota-codex.py`, `testes/codex-economico.py` | saúde dos provedores, métricas da fila, cota e executor econômico do Codex, sem serviços externos |
 | `testes/versao.sh` | `jangada-versao` num repositório temporário: grupos e prefixos das novidades, o `CHANGELOG.md` e a tag do `--lancar` e as recusas (árvore suja, versão menor, tag existente, nada novo) |
 | `testes/importar.sh` | `jangada-importar` com um config.kdl de exemplo |
 | `testes/fim.sh` | `jangada-agente-fim` recusa estado adulterado (ramo, worktree, raiz, base) sem mexer em nada; `jangada-agentes --limpar-concluidos` só age com `s` |
