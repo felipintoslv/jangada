@@ -148,7 +148,8 @@ FALSO_CODEX_ERRO=1 validar 'STATUS: APROVADO' --revisor codex; rc=$?
 conferir "caso codex-codex: falha do processo não aprova" [ "$rc" = 1 ]
 conferir "caso codex-codex: com --revisor, a falha não passa a outro modelo" test ! -e "$tmp/falso/claude.pedido"
 
-# Revisor que falha: a revisão passa aos outros modelos e, por último, ao do autor.
+# O modelo do autor só entra depois que os outros falharam: revisando o
+# próprio trabalho, ele tende a concordar.
 sessao_de codex codex
 FALSO_CODEX_ERRO=1 validar 'STATUS: APROVADO'; rc=$?
 conferir "caso reserva: falha do Codex passa ao Claude" \
