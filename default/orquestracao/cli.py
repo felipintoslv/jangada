@@ -12,6 +12,7 @@ import sys
 sys.dont_write_bytecode = True
 from estado import Estado
 from executor import executar
+from acompanhamento import acompanhar
 from saude import Saude, retomar
 
 
@@ -49,7 +50,10 @@ def main():
     execucao = comandos.add_parser('executar', help='executa tarefas elegíveis sem aprová-las')
     execucao.add_argument('--projeto', type=pathlib.Path)
     execucao.add_argument('--perfil', choices=['balanced', 'quality', 'offline'], default='balanced')
-    execucao.add_argument('--limite', type=int, default=1)
+    execucao.add_argument('--limite', type=int)
+    execucao.add_argument('--acompanhar', action='store_true')
+    execucao.add_argument('--intervalo', type=int)
+    execucao.add_argument('--duracao', type=int)
     execucao.add_argument('--permitir-remoto', action='store_true')
     execucao.add_argument('--permitir-codex', action='store_true')
     retomada = comandos.add_parser('retomar', help='retoma esperas com provedor disponível')
@@ -77,6 +81,14 @@ def main():
     decisao.add_argument('--aprovar', action='store_true')
     decisao.add_argument('--reprovar', action='store_true')
     args = parser.parse_args()
+    if args.comando == 'executar':
+        if not args.acompanhar and (args.intervalo is not None or args.duracao is not None):
+            parser.error('--intervalo e --duracao exigem --acompanhar')
+        args.limite = args.limite if args.limite is not None else (100 if args.acompanhar else 1)
+        if (not 1 <= args.limite <= 1000
+                or args.intervalo is not None and not 1 <= args.intervalo <= 3600
+                or args.duracao is not None and not 1 <= args.duracao <= 86400):
+            parser.error('limite, intervalo ou duração fora da faixa permitida')
     raiz_estado = pathlib.Path(os.environ['JANGADA_ESTADO'])
     if args.comando in {'router', 'provedor'}:
         global_estado = Estado(raiz_estado / 'agentes/runtime', raiz=raiz_estado)
@@ -119,6 +131,14 @@ def main():
             try:
                 saude = Saude(global_estado)
                 raiz = pathlib.Path(os.environ['JANGADA_PATH'])
+                if args.comando == 'executar' and args.acompanhar:
+                    def emitir(evento):
+                        print(json.dumps({'projeto': str(projeto), **evento}, ensure_ascii=False), flush=True)
+
+                    emitir(acompanhar(estado, projeto, raiz, os.environ['JANGADA_CONFIG'], saude,
+                                      args.perfil, args.limite, args.intervalo or 60, args.duracao or 28800,
+                                      args.permitir_remoto, args.permitir_codex, emitir))
+                    return
                 retomadas, resultados = [], []
                 if args.comando == 'retomar':
                     if args.atualizar:

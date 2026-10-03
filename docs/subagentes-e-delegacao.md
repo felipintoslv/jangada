@@ -444,6 +444,38 @@ jangada-retomar --atualizar --executar --limite 10 --permitir-remoto
 
 O comando faz uma passagem; não instala um serviço permanente.
 
+### Acompanhamento da fila
+
+Para manter a fila em execução enquanto houver trabalho ou espera recuperável:
+
+```sh
+jangada-executar --acompanhar --duracao 28800 --intervalo 60 --limite 100 --permitir-remoto
+```
+
+O acompanhamento roda em primeiro plano. Por padrão, dura até oito horas,
+com intervalo de 60 segundos e limite de 100 execuções. `--duracao` aceita
+1 a 86400 segundos, `--intervalo` aceita 1 a 3600 e `--limite` aceita 1 a 1000.
+Sem `--acompanhar`, o comando mantém a passagem única e o limite padrão de uma tarefa.
+
+O prazo impede iniciar novas tarefas; uma tarefa já iniciada conserva seu
+próprio orçamento de tempo. Cada execução com chamadas consome uma posição
+do limite, inclusive uma falha. Uma recusa comprovada sem chamadas não
+consome posição. Consumo desconhecido exige revisão antes de repetir.
+
+As esperas por cota ou provedor são retomadas somente com capacidade,
+permissões e orçamento restantes. As sondas ocorrem no máximo uma vez
+a cada 60 segundos por acompanhamento. Codex exige as mesmas permissões
+explícitas da passagem única, inclusive `--permitir-codex` e modelo configurado.
+O perfil da sessão continua limitando o envio à nuvem.
+
+O comando registra cada ciclo e o encerramento em linhas JSON na saída.
+Uma trava impede dois acompanhamentos simultâneos do mesmo projeto.
+Ao pressionar Ctrl+C, nenhuma outra tarefa é iniciada. Uma execução
+interrompida permanece pendente de conferência, com consumo desconhecido.
+Tarefas aprovadas, pausadas ou em revisão não são retomadas automaticamente.
+Quando só restam dependências de revisão ou tarefas sem adaptador, o
+acompanhamento encerra. Não aprova relatórios nem instala serviços.
+
 ## Registro e medição
 
 - Cada chamada do `jangada-delegar`, atendida ou recusada, vira uma linha em

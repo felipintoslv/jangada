@@ -219,7 +219,7 @@ class Saude:
                           validade=validade, cota=cota)
 
 
-def retomar(estado, saude, raiz, config, perfil, permitir_remoto, permitir_codex=False):
+def preferencias_delegacao(raiz, config):
     politica = pathlib.Path(config) / 'delegacao.json'
     if not politica.is_file():
         politica = raiz / 'default/delegacao/roteamento.json'
@@ -231,30 +231,48 @@ def retomar(estado, saude, raiz, config, perfil, permitir_remoto, permitir_codex
         for capacidade, destinos in preferencias.items()
     ):
         raise ValueError('política de capacidades inválida')
+    return preferencias
+
+
+def candidatos_elegiveis(tarefa, preferencias, perfil, permitir_remoto, permitir_codex=False):
+    if tarefa['papel'] != 'leitor' or tarefa['capacidade'] not in CAPACIDADES:
+        return []
+    if tarefa['risco'] > 2 or tarefa['qualidade'] not in {'low', 'medium'}:
+        return []
+    candidatos = preferencias.get(tarefa['capacidade'], [])
+    if perfil == 'offline':
+        candidatos = [c for c in candidatos if c == 'local']
+    elif perfil == 'quality':
+        candidatos = [c for c in candidatos if c == 'agy']
+    sessao = os.environ.get('JANGADA_DELEGAR') or 'agy'
+    if sessao in {'claude', 'nativo'}:
+        return []
+    if sessao == 'local' or not permitir_remoto or not tarefa.get('permitir_remoto', False):
+        candidatos = [c for c in candidatos if c == 'local']
+    if not permitir_codex or not tarefa.get('permitir_codex', False) or not os.environ.get('JANGADA_CODEX_ECONOMICO_MODELO'):
+        candidatos = [c for c in candidatos if c != 'codex-economico']
+    return candidatos
+
+
+def orcamento_disponivel(estado, item):
+    tarefa = item['especificacao']
+    consumo = estado.consumo(item['id'])
+    return (consumo['chamadas'] is not None
+            and consumo['chamadas'] < tarefa.get('max_chamadas', 8)
+            and consumo['segundos'] < tarefa.get('tempo_total', 600)
+            and item['tentativas'] < tarefa.get('max_tentativas', 2))
+
+
+def retomar(estado, saude, raiz, config, perfil, permitir_remoto, permitir_codex=False):
+    preferencias = preferencias_delegacao(raiz, config)
     disponiveis = {'codex-economico' if item['id'] == 'codex' else item['id'] for item in saude.listar() if item['status'] == 'AVAILABLE'}
     retomadas = []
     for item in estado.listar():
         tarefa = item['especificacao']
         if item['status'] not in {'WAITING_PROVIDER', 'WAITING_QUOTA'} or tarefa['papel'] != 'leitor':
             continue
-        if tarefa['risco'] > 2 or tarefa['qualidade'] not in {'low', 'medium'}:
-            continue
-        candidatos = preferencias.get(tarefa['capacidade'], [])
-        if perfil == 'offline':
-            candidatos = [c for c in candidatos if c == 'local']
-        elif perfil == 'quality':
-            candidatos = [c for c in candidatos if c == 'agy']
-        sessao = os.environ.get('JANGADA_DELEGAR') or 'agy'
-        if sessao in {'claude', 'nativo'}:
-            continue
-        if sessao == 'local' or not permitir_remoto or not tarefa.get('permitir_remoto', False):
-            candidatos = [c for c in candidatos if c == 'local']
-        if not permitir_codex or not tarefa.get('permitir_codex', False) or not os.environ.get('JANGADA_CODEX_ECONOMICO_MODELO'):
-            candidatos = [c for c in candidatos if c != 'codex-economico']
-        consumo = estado.consumo(item['id'])
-        if (consumo['chamadas'] is None or consumo['chamadas'] >= tarefa.get('max_chamadas', 8)
-                or consumo['segundos'] >= tarefa.get('tempo_total', 600)
-                or item['tentativas'] >= tarefa.get('max_tentativas', 2)):
+        candidatos = candidatos_elegiveis(tarefa, preferencias, perfil, permitir_remoto, permitir_codex)
+        if not orcamento_disponivel(estado, item):
             continue
         if any(c in disponiveis for c in candidatos):
             try:

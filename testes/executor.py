@@ -17,6 +17,7 @@ RAIZ = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / 'default/orquestracao'))
 from estado import Estado
 from executor import executar
+from acompanhamento import acompanhar
 from saude import Saude
 
 SIMULADO = '''#!/usr/bin/env python3
@@ -116,6 +117,37 @@ class Execucao(unittest.TestCase):
         self.assertEqual(self.rodar(), [])
         self.estado.alterar('T1', 'retomar')
         self.assertEqual(self.rodar()[0]['status'], 'REVIEW_REQUIRED')
+
+    def test_acompanhamento_retoma_com_adaptador_simulado_e_banco_real(self):
+        config = self.pasta / 'config'
+        config.mkdir()
+        (config / 'delegacao.json').write_text(json.dumps({'leitura_documental': ['local']}))
+        global_estado = Estado(self.pasta / 'global')
+        self.addCleanup(global_estado.fechar)
+        saude = Saude(global_estado)
+        self.estado.importar([self.tarefa(max_tentativas=1)])
+        agora, eventos = [0], []
+
+        def dormir(segundos):
+            agora[0] += segundos
+
+        def atualizar(remoto):
+            self.assertFalse(remoto)
+            os.environ['MODO_TESTE'] = 'ok'
+            saude.observar('local', 'AVAILABLE', 'simulado')
+
+        with patch.dict(os.environ, MODO_TESTE='cota', JANGADA_DELEGAR='local'), \
+                patch('acompanhamento.time.monotonic', side_effect=lambda: agora[0]), \
+                patch('acompanhamento.time.sleep', side_effect=dormir), \
+                patch.object(saude, 'atualizar', side_effect=atualizar):
+            fim = acompanhar(self.estado, self.projeto, self.raiz, config, saude,
+                              limite=1, intervalo=1, duracao=10, emitir=eventos.append)
+        self.assertEqual(fim['motivo'], 'limite_atingido')
+        self.assertEqual([e['resultados'][0]['status'] for e in eventos],
+                         ['WAITING_QUOTA', 'REVIEW_REQUIRED'])
+        self.assertEqual(self.estado.listar()[0]['tentativas'], 1)
+        self.assertEqual(self.estado.consumo('T1')['chamadas'], 1)
+        self.assertIn(str(self.fonte) + ':1', self.estado.ler_artefato(self.estado.listar()[0]['artefato']))
 
     def test_orcamento_compartilhado_entre_repeticoes(self):
         self.estado.importar([self.tarefa(max_chamadas=1)])
