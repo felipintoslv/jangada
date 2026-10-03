@@ -42,11 +42,17 @@ case " $* " in
 esac
 EOF
 # Revisor falso do jangada-validar: registra a chamada e responde
-# $FALSO_RESPOSTA.
+# $FALSO_RESPOSTA. Com $FALSO_AVANCA, faz antes um commit nesse worktree, como
+# o agente que segue trabalhando durante a revisão.
 cat >"$tmp/bin/claude" <<'EOF'
 #!/usr/bin/env bash
 cat >/dev/null
 : >>"$FALSO_DIR/revisor-chamado"
+if [[ -n "${FALSO_AVANCA:-}" ]]; then
+  echo depois >"$FALSO_AVANCA/depois.txt"
+  git -C "$FALSO_AVANCA" add depois.txt
+  git -C "$FALSO_AVANCA" commit --quiet -m depois
+fi
 printf '%b\n' "${FALSO_RESPOSTA:-STATUS: REVISAR}"
 EOF
 chmod +x "$tmp/bin/tmux" "$tmp/bin/claude"
@@ -217,6 +223,14 @@ conferir "--sem-revisao: pede confirmação sem aprovação" grep -q "sem aprova
 conferir "--sem-revisao: resposta n não integra" test ! -e "$proj/i3.txt"
 integrar_teste i3 s --sem-revisao
 conferir "--sem-revisao: resposta s integra ($rc)" bash -c '[ "$1" -eq 0 ] && test -e "$2/i3.txt"' _ "$rc" "$proj"
+
+# O ramo avança durante a revisão: nem o commit conferido nem o novo entram.
+preparar i5
+FALSO_AVANCA="$wts/proj/i5" FALSO_RESPOSTA='STATUS: APROVADO' integrar_teste i5 s
+conferir "ramo avançou: recusa ($rc)" test "$rc" -ne 0
+conferir "ramo avançou: explica" grep -q "mudou depois da conferência" "$tmp/saida"
+conferir "ramo avançou: nada mesclado" bash -c 'test ! -e "$1/i5.txt" && test ! -e "$1/depois.txt"' _ "$proj"
+conferir "ramo avançou: sessão mantida" test -f "$estado/i5.json"
 
 # Dentro do isolamento não há revisão que valha: nem roda o revisor.
 preparar i4

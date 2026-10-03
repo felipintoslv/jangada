@@ -180,14 +180,13 @@ avisar_copia_instalada() {
 # pelo agente e não contam. Sem a aprovação, roda o jangada-validar aqui, com
 # a base já conferida (o repositório principal está nela).
 revisao_fora() {
-  local cabeca_ramo marca="$JANGADA_ESTADO/revisoes/validacao-$s.aprovado" rc=0
-  cabeca_ramo="$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet "$ramo^{commit}")" || return 1
+  local marca="$JANGADA_ESTADO/revisoes/validacao-$s.aprovado" rc=0
   aprovada() {
     local c="" l=""
-    [[ -f "$marca" ]] && read -r c _ l <"$marca" && [[ "$c" == "$cabeca_ramo" && "$l" == limpo ]]
+    [[ -f "$marca" ]] && read -r c _ l <"$marca" && [[ "$c" == "$cabeca" && "$l" == limpo ]]
   }
   if aprovada; then
-    echo "aprovado fora do isolamento no commit ${cabeca_ramo:0:12}"
+    echo "aprovado fora do isolamento no commit ${cabeca:0:12}"
     return 0
   fi
   if ((sem_revisao)); then
@@ -244,7 +243,12 @@ if ((integrar)); then
       echo "faça commit delas (ou guarde com git stash) antes de integrar" >&2
       exit 1
     fi
-    novos="$(jangada_git_seguro -C "$raiz" log --oneline "$base..$ramo" 2>/dev/null | tr -d '\000-\010\013-\037\177' || true)"
+    # A sessão só fecha na limpeza: até lá o agente pode mover o ramo. O commit
+    # é resolvido uma vez, e é ele que se lista, se confere e se mescla.
+    cabeca="$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet "$ramo^{commit}" || true)"
+    novos=""
+    [[ -z "$cabeca" ]] \
+      || novos="$(jangada_git_seguro -C "$raiz" log --oneline "$base..$cabeca" 2>/dev/null | tr -d '\000-\010\013-\037\177' || true)"
     if [[ -z "$novos" ]]; then
       echo "o ramo $ramo não tem commits além de $base; nada a integrar"
     else
@@ -256,7 +260,11 @@ if ((integrar)); then
         echo "sem aprovação feita fora do isolamento para o commit atual de $ramo"
         confirmar "mesclar assim mesmo e encerrar a sessão?" || { echo "nada foi feito"; exit 1; }
       fi
-      if ! jangada_git_seguro -C "$raiz" merge --no-ff -m "Integra $ramo" "$ramo"; then
+      if [[ "$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet "$ramo^{commit}" || true)" != "$cabeca" ]]; then
+        echo "o ramo $ramo mudou depois da conferência (era ${cabeca:0:12}); nada foi mesclado. Rode de novo." >&2
+        exit 1
+      fi
+      if ! jangada_git_seguro -C "$raiz" merge --no-ff -m "Integra $ramo" "$cabeca"; then
         echo "o merge falhou; resolva em $raiz (git merge --abort desfaz). A sessão foi mantida." >&2
         exit 1
       fi

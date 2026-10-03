@@ -186,6 +186,10 @@ flowchart TD
   confirmação para mesclar assim mesmo. `--sem-revisao` pula essa revisão e
   vai direto à confirmação. Dentro do isolamento a revisão não roda, porque
   não valeria como aprovação.
+- O commit do ramo é resolvido uma vez, antes da lista de commits: a revisão
+  vale para ele e o merge leva esse commit, não o nome do ramo. Se o ramo
+  mudar durante a revisão ou a confirmação, o `--integrar` recusa sem mesclar,
+  porque a sessão do agente só fecha na limpeza.
 - `--integrar` mescla no repositório de trabalho e nunca na cópia instalada;
   ela só avança pelo `jangada-update` ([atualização](atualizacao-e-migracoes.md)).
 - Chamado de dentro da própria sessão, o `limpar` roda em segundo plano,
@@ -197,7 +201,7 @@ flowchart TD
 | Arquivo | O que cobre |
 |---|---|
 | `testes/validar.sh` | veredito, rodadas, limite, ponto de comparação, verificação local, pareceres e métricas, com claude e agy falsos |
-| `testes/fim.sh` | recusa de estado adulterado (ramo, worktree, raiz, base), aprovação de fora no `--integrar` (marca forjada em `agentes/`, marca `sujo`, `--sem-revisao`, chamada de dentro do isolamento) e `--limpar-concluidos` |
+| `testes/fim.sh` | recusa de estado adulterado (ramo, worktree, raiz, base), aprovação de fora no `--integrar` (marca forjada em `agentes/`, marca `sujo`, `--sem-revisao`, ramo que avança durante a revisão, chamada de dentro do isolamento) e `--limpar-concluidos` |
 | `testes/update.sh` | `--integrar` não mexe na cópia instalada nem roda ganchos do repositório do agente |
 | `testes/eventos.sh` | histórico de estados gravado pelos hooks e pela troca de foco |
 | `testes/restaurar.sh` | volta de uma sessão interrompida |
