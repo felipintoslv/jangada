@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 sys.dont_write_bytecode = True
 RAIZ = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(RAIZ / 'default/orquestracao'))
 SPEC = importlib.util.spec_from_file_location('estado', RAIZ / 'default/orquestracao/estado.py')
 MODULO = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULO)

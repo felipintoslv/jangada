@@ -353,7 +353,7 @@ pode concluir a reserva anterior. Os artefatos usam resumo SHA-256 do conteúdo
 e são gravados em UTF-8, com substituição atômica. Dependências que falharam
 ou foram canceladas deixam suas tarefas dependentes em `BLOCKED`, com motivo.
 
-Uma saída de execução fica em `REVIEW_REQUIRED`, sem liberar dependências.
+Uma saída de modelo fica em `REVIEW_REQUIRED`, sem liberar dependências.
 Após conferir o artefato e as fontes, o responsável registra
 `jangada-task T1 revisar --aprovar --parecer "Conferido nas fontes"` ou
 `--reprovar`. A revisão aceita somente o mesmo artefato preservado. Esse
@@ -367,7 +367,7 @@ Tarefas em revisão não podem ser pausadas para contornar a conferência.
 ### Execução da fila
 
 `jangada-executar --limite 10` executa até dez tarefas elegíveis em sequência.
-Usa `jangada-delegar`, sem interpretar comandos no plano. Atende `leitor`
+Para modelos, usa `jangada-delegar`, sem interpretar comandos no plano. Atende `leitor`
 com `leitura_documental`, `resumo_curto` ou `analise_documental`, risco até 2
 e qualidade `low` ou `medium`. Tarefas que exigem um principal aguardam em
 `WAITING_REVIEWER`; capacidades sem adaptador aguardam em `WAITING_PROVIDER`.
@@ -381,6 +381,44 @@ depois fica em `REVIEW_REQUIRED`, sem aprovação automática do conteúdo.
 Interrupção ou resposta sem contagem confiável impede repetição automática.
 Recusa antes de qualquer chamada não consome tentativa. Cota insuficiente
 ou desconhecida mantém `WAITING_QUOTA` até uma retomada explícita.
+
+### Conferência determinística de JSON
+
+A capacidade `validacao_json` executa um critério local de formato, sem
+modelos, comandos das fontes ou acesso à rede. Exige papel `verificador`,
+risco zero e nenhum `requisito` adicional. O `pedido` descreve a tarefa;
+não acrescenta critérios executáveis. Para importar uma conferência:
+
+```json
+[
+  {
+    "id": "J1", "papel": "verificador", "capacidade": "validacao_json",
+    "pedido": "Confira a sintaxe dos dados JSON", "risco": 0,
+    "qualidade": "medium", "fontes": ["dados.json"]
+  }
+]
+```
+
+O critério aceita raízes JSON de qualquer tipo, em UTF-8. Rejeita chaves
+repetidas, valores não finitos, substitutos Unicode isolados e texto após
+o valor. Limita a profundidade a 64 níveis, as fontes a 32 arquivos,
+o tamanho a 1 MiB por arquivo e a 4 MiB no total. Não segue links
+simbólicos nem lê arquivos especiais.
+
+O relatório preserva caminho, SHA-256, tamanho e o critério executado.
+Antes de gravar `COMPLETED`, o estado repete a conferência das fontes
+importadas e compara o relatório. Uma aprovação declarada na saída não
+substitui esse critério. A conclusão libera dependências automaticamente.
+
+JSON inválido ou fonte alterada deixa `REVISION_REQUIRED`. Risco maior,
+papel incompatível ou requisitos adicionais deixam `WAITING_REVIEWER`.
+Consumo anterior desconhecido impede repetição automática; os limites de
+tempo e tentativas continuam persistidos. O contador de chamadas a modelos
+permanece zero. Funciona também no perfil `offline`.
+
+Esse critério comprova somente o formato. Não valida um esquema JSON,
+fidelidade documental, conteúdo ou autorização para operações externas.
+Os relatórios de modelos continuam sujeitos à revisão de conteúdo.
 
 Perfis disponíveis:
 
@@ -459,8 +497,9 @@ Sem `--acompanhar`, o comando mantém a passagem única e o limite padrão de um
 
 O prazo impede iniciar novas tarefas; uma tarefa já iniciada conserva seu
 próprio orçamento de tempo. Cada execução com chamadas consome uma posição
-do limite, inclusive uma falha. Uma recusa comprovada sem chamadas não
-consome posição. Consumo desconhecido exige revisão antes de repetir.
+do limite, inclusive uma falha. Conferências determinísticas iniciadas
+também consomem posição, mesmo sem chamadas a modelos. Uma recusa antes
+da execução não consome posição. Consumo desconhecido exige revisão antes de repetir.
 
 As esperas por cota ou provedor são retomadas somente com capacidade,
 permissões e orçamento restantes. As sondas ocorrem no máximo uma vez

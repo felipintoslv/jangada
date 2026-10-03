@@ -34,7 +34,8 @@ class Economico(unittest.TestCase):
                      'bin/jangada-retomar', 'bin/jangada-router', 'default/delegacao/codex.py',
                      'default/orquestracao/cota_codex.py', 'default/orquestracao/cli.py',
                      'default/orquestracao/estado.py', 'default/orquestracao/executor.py',
-                     'default/orquestracao/saude.py', 'default/orquestracao/acompanhamento.py'):
+                     'default/orquestracao/saude.py', 'default/orquestracao/acompanhamento.py',
+                     'default/orquestracao/deterministico.py'):
             shutil.copy2(RAIZ / nome, self.raiz / nome)
         self.audit = self.pasta / 'execucao.json'
         self.fonte = self.pasta / 'fonte.md'

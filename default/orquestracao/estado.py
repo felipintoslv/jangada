@@ -12,6 +12,8 @@ import tempfile
 import time
 import uuid
 
+from deterministico import conferir as conferir_deterministica
+
 ESTADOS = {
     'QUEUED', 'RUNNING', 'COMPLETED', 'REVIEW_REQUIRED', 'REVISION_REQUIRED',
     'WAITING_PROVIDER', 'WAITING_QUOTA', 'WAITING_REVIEWER', 'FAILED', 'CANCELLED', 'PAUSED', 'BLOCKED',
@@ -236,13 +238,13 @@ class Estado:
         return None
 
     def finalizar(self, identificador, dono, status, resultado, artefato=None):
-        if status not in {'REVIEW_REQUIRED', 'REVISION_REQUIRED', 'FAILED',
+        if status not in {'COMPLETED', 'REVIEW_REQUIRED', 'REVISION_REQUIRED', 'FAILED',
                           'WAITING_PROVIDER', 'WAITING_QUOTA', 'WAITING_REVIEWER'}:
-            raise ValueError('resultado de execução deve aguardar revisão ou informar falha')
+            raise ValueError('estado de conclusão da execução inválido')
         if artefato is not None and not isinstance(artefato, str):
             raise ValueError('artefato deve ser texto')
-        if status == 'REVIEW_REQUIRED' and (artefato is None or not artefato.strip()):
-            raise ValueError('revisão exige artefato não vazio')
+        if status in {'COMPLETED', 'REVIEW_REQUIRED'} and (artefato is None or not artefato.strip()):
+            raise ValueError('conclusão ou revisão exige artefato não vazio')
         if not isinstance(resultado, dict):
             raise ValueError('resultado deve ser um objeto')
         metricas = resultado.get('metricas', {})
@@ -260,6 +262,11 @@ class Estado:
             tarefa = self.db.execute('SELECT * FROM tarefas WHERE id=?', (identificador,)).fetchone()
             if not tarefa or tarefa['status'] != 'RUNNING' or tarefa['dono'] != dono or tarefa['prazo'] <= time.time():
                 raise ValueError('executor não possui reserva válida da tarefa')
+            if status == 'COMPLETED':
+                if artefato != conferir_deterministica(json.loads(tarefa['especificacao'])):
+                    raise ValueError('artefato não corresponde à conferência determinística das fontes')
+                if metricas.get('chamadas') != 0 or resultado.get('execucao_iniciada') is not True:
+                    raise ValueError('conferência determinística exige execução local sem chamadas a modelos')
             hash_artefato = None
             if artefato is not None:
                 hash_artefato = hashlib.sha256(artefato.encode()).hexdigest()

@@ -12,6 +12,8 @@ import subprocess
 import tempfile
 import time
 
+from deterministico import CAPACIDADE as CAPACIDADE_DETERMINISTICA, conferir, elegivel
+
 CAPACIDADES = {'leitura_documental', 'resumo_curto', 'analise_documental'}
 PERFIS = {'balanced', 'quality', 'offline'}
 
@@ -55,6 +57,37 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir
         resultado['motivo'] = motivo
         estado.finalizar(identificador, dono, status, resultado, artefato)
         return {'tarefa': identificador, 'status': status, **resultado}
+
+    if tarefa['capacidade'] == CAPACIDADE_DETERMINISTICA:
+        if not elegivel(tarefa):
+            return encerrar('WAITING_REVIEWER', 'validação automática exige verificador, risco zero e nenhum requisito adicional')
+        if consumo['chamadas'] is None:
+            return encerrar('REVISION_REQUIRED', 'consumo anterior desconhecido; não repetir automaticamente')
+        tempo = tarefa.get('tempo_total', 600) - consumo['segundos']
+        if tempo <= 0 or consumo['chamadas'] >= tarefa.get('max_chamadas', 8):
+            return encerrar('FAILED', 'orçamento total da tarefa esgotado')
+        inicio = time.monotonic()
+        resultado.update(execucao_iniciada=True, executor='deterministico',
+                         verificacao='sintaxe_json_estrita')
+        try:
+            for nome in tarefa['fontes']:
+                if not pathlib.Path(nome).resolve().is_relative_to(projeto):
+                    raise ValueError(f'fonte fora do projeto: {nome}')
+            mapa = {item['id']: item for item in estado.listar()}
+            for dependencia in tarefa.get('dependencias', []):
+                estado.ler_artefato(mapa[dependencia]['artefato'])
+            texto = conferir(tarefa)
+            resultado['metricas']['segundos'] = math.ceil(time.monotonic() - inicio)
+            if resultado['metricas']['segundos'] > tempo:
+                return encerrar('FAILED', 'conferência excedeu o tempo da tarefa')
+            return encerrar('COMPLETED', 'sintaxe JSON conferida automaticamente', texto)
+        except KeyboardInterrupt:
+            resultado['metricas']['segundos'] = math.ceil(time.monotonic() - inicio)
+            encerrar('REVISION_REQUIRED', 'conferência local interrompida; conferir antes de repetir')
+            raise
+        except (OSError, ValueError, UnicodeError) as erro:
+            resultado['metricas']['segundos'] = math.ceil(time.monotonic() - inicio)
+            return encerrar('REVISION_REQUIRED', str(erro), texto)
 
     if tarefa['papel'] != 'leitor' or tarefa['capacidade'] not in CAPACIDADES:
         return encerrar('WAITING_PROVIDER', 'capacidade ainda sem adaptador de execução')

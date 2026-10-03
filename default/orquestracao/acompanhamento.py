@@ -56,7 +56,7 @@ def acompanhar(estado, projeto, raiz, config, saude, perfil='balanced', limite=1
                 break
             resultados = executar(estado, projeto, raiz, perfil, 1, permitir_remoto, saude, permitir_codex)
             ciclos += 1
-            iniciou = any(r['metricas']['chamadas'] != 0 for r in resultados)
+            iniciou = any(r.get('execucao_iniciada', r['metricas']['chamadas'] != 0) for r in resultados)
             execucoes += int(iniciou)
             if emitir is not None:
                 emitir({'evento': 'ciclo', 'ciclo': ciclos, 'execucoes': execucoes,
