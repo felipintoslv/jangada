@@ -5,6 +5,7 @@ import html
 import os
 from pathlib import Path
 import uuid
+import tempfile
 
 from PyQt6.QtCore import QProcess, QProcessEnvironment, QTimer, Qt
 from PyQt6.QtGui import QColor, QKeySequence
@@ -119,6 +120,7 @@ class Janela(QMainWindow):
         self.jangada = Path(jangada or Path.home() / '.local/share/jangada').expanduser().resolve()
         self.estado_dir = Path(estado or Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'jangada/agentes').expanduser()
         self.sessoes = {}
+        self.finalizando = {}
         self.dados_validos = False
         self.criadas = {}
         self.formulario = None
@@ -203,8 +205,12 @@ class Janela(QMainWindow):
         self.abrir.setEnabled(False)
         self.abrir.clicked.connect(self.focar)
         direito.addWidget(self.abrir)
-        self.integrar = QPushButton('Integrar e encerrar · Alt+I')
-        self.encerrar = QPushButton('Encerrar sessão · Ctrl+X')
+        self.integrar = QPushButton('Integrar e encerrar')
+        self.encerrar = QPushButton('Encerrar sem integrar')
+        self.integrar.setObjectName('integrar')
+        self.encerrar.setObjectName('encerrar')
+        self.integrar.setToolTip('Integra as alterações ao projeto e encerra a sessão. Atalho: Alt+I.')
+        self.encerrar.setToolTip('Encerra a sessão sem integrar as alterações ao projeto. Atalho: Ctrl+X.')
         self.integrar.setShortcut(QKeySequence('Alt+I'))
         self.encerrar.setShortcut(QKeySequence('Ctrl+X'))
         self.integrar.setEnabled(False)
@@ -213,7 +219,7 @@ class Janela(QMainWindow):
         self.encerrar.clicked.connect(lambda: self.finalizar(False))
         direito.addWidget(self.integrar)
         direito.addWidget(self.encerrar)
-        explicacao = QLabel('A conversa abre no terminal neste piloto. Uma tarefa corresponde a uma sessão. Turno encerrado não confirma a conclusão da tarefa.')
+        explicacao = QLabel('As ações abrem um terminal para conferir o resultado e atender confirmações. Turno encerrado não confirma a conclusão da tarefa.')
         explicacao.setWordWrap(True)
         direito.addWidget(explicacao)
         divisor.addWidget(detalhes)
@@ -223,7 +229,7 @@ class Janela(QMainWindow):
         self.status.setTextFormat(Qt.TextFormat.PlainText)
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
-        self.setStyleSheet('\n            QWidget { background: #182128; color: #e1e9ec; font-size: 13px; }\n            QTreeWidget, QPlainTextEdit, QLineEdit, QComboBox { background: #11191f; border: 1px solid #35454f;\n                border-radius: 6px; padding: 8px; }\n            QTreeWidget::item { padding: 8px 3px; }\n            QTreeWidget::item:selected { background: #2d4956; }\n            QHeaderView::section { background: #23313b; border: none; padding: 8px; }\n            QPushButton { background: #294551; border: 1px solid #48616b;\n                border-radius: 6px; padding: 10px 16px; }\n            QPushButton:hover { background: #365b69; }\n            QPushButton:disabled { color: #74838a; background: #202c33; }\n        ')
+        self.setStyleSheet('\n            QWidget { background: #182128; color: #e1e9ec; font-size: 13px; }\n            QTreeWidget, QPlainTextEdit, QLineEdit, QComboBox { background: #11191f; border: 1px solid #35454f;\n                border-radius: 6px; padding: 8px; }\n            QTreeWidget::item { padding: 8px 3px; }\n            QTreeWidget::item:selected { background: #2d4956; }\n            QHeaderView::section { background: #23313b; border: none; padding: 8px; }\n            QPushButton { background: #294551; border: 1px solid #48616b;\n                border-radius: 6px; padding: 10px 16px; }\n            QPushButton:hover { background: #365b69; }\n            QPushButton#integrar:enabled { background: #345647; border-color: #628574; }\n            QPushButton#encerrar:enabled { background: #182128; }\n            QPushButton:disabled { color: #74838a; background: #202c33; }\n        ')
         self.consulta = QProcess(self)
         self.consulta.finished.connect(self.consulta_fim)
         self.consulta.errorOccurred.connect(self.consulta_erro)
@@ -242,6 +248,9 @@ class Janela(QMainWindow):
         self.tempo_acao = QTimer(self)
         self.tempo_acao.setSingleShot(True)
         self.tempo_acao.timeout.connect(self.expirar_acao)
+        self.tempo_finalizacao = QTimer(self)
+        self.tempo_finalizacao.setInterval(500)
+        self.tempo_finalizacao.timeout.connect(self.conferir_finalizacoes)
         self.timer = QTimer(self)
         self.timer.setInterval(2000)
         self.timer.timeout.connect(self.atualizar)
@@ -350,7 +359,7 @@ class Janela(QMainWindow):
         s = self.sessoes.get(self.selecionada())
         ocupada = self.acao.state() != QProcess.ProcessState.NotRunning
         for botao in (self.abrir, self.integrar, self.encerrar):
-            botao.setEnabled(self.dados_validos and s is not None and (not ocupada))
+            botao.setEnabled(self.dados_validos and s is not None and (not ocupada) and s.nome not in self.finalizando)
         if not s:
             self.nome.setText('Selecione uma tarefa')
             self.situacao.clear()
@@ -479,9 +488,21 @@ class Janela(QMainWindow):
     def expirar(self):
         self.consulta.kill()
 
+    def conferir_finalizacoes(self):
+        liberou = False
+        for nome, pasta in list(self.finalizando.items()):
+            if (Path(pasta.name) / 'fim').exists():
+                pasta.cleanup()
+                del self.finalizando[nome]
+                liberou = True
+        if not self.finalizando:
+            self.tempo_finalizacao.stop()
+        if liberou:
+            self.selecionar()
+
     def finalizar(self, integrar):
         nome = self.selecionada()
-        if not self.dados_validos or nome not in self.sessoes or not NOME.fullmatch(nome):
+        if not self.dados_validos or nome not in self.sessoes or not NOME.fullmatch(nome) or nome.startswith('-') or nome in self.finalizando:
             return
         if self.acao.state() != QProcess.ProcessState.NotRunning:
             return
@@ -493,14 +514,31 @@ class Janela(QMainWindow):
         if integrar:
             comando.append('--integrar')
         comando.append(nome)
+        from central import nome_soquete
+        try:
+            runtime = Path(nome_soquete(self.jangada, self.estado_dir, self.real)).parent
+            pasta = tempfile.TemporaryDirectory(prefix='acao-', dir=runtime)
+        except (OSError, ValueError) as erro:
+            self.status.setText(f'Não foi possível preparar a ação: {erro}')
+            return
         # O terminal conserva os pedidos de confirmação e vive além desta janela.
         argumentos = ['--classe', 'org.jangada.tarefas.acao', '--titulo', 'Tarefa: ' + nome,
                       '-e', 'bash', '-c',
-                      '"$@"; resultado=$?; read -r -p "Enter para fechar " _; exit "$resultado"',
-                      'jangada-tarefas', *comando]
+                      "marca=$1; shift; trap '[[ ! -d \"${marca%/*}\" ]] || : > \"$marca\"' EXIT; "
+                      "trap 'exit 130' HUP INT TERM; \"$@\"; resultado=$?; "
+                      '[[ ! -d "${marca%/*}" ]] || : > "$marca"; '
+                      'read -r -p "Enter para fechar " _; exit "$resultado"',
+                      'jangada-tarefas', str(Path(pasta.name) / 'fim'), *comando]
         processo = QProcess(self)
         self.preparar(processo, argumentos, 'jangada-terminal')
         iniciado, _ = processo.startDetached()
+        processo.deleteLater()
+        if iniciado:
+            self.finalizando[nome] = pasta
+            self.tempo_finalizacao.start()
+            self.selecionar()
+        else:
+            pasta.cleanup()
         self.status.setText(f'Pedido para {acao} {nome} aberto no terminal. Confira o resultado lá.'
                             if iniciado else 'Não foi possível abrir o terminal da ação.')
 
@@ -537,10 +575,13 @@ class Janela(QMainWindow):
 
     def closeEvent(self, evento):
         self.fechando = True
-        for timer in (self.timer, self.espera, self.tempo_acao, self.tempo_previa):
+        for timer in (self.timer, self.espera, self.tempo_acao, self.tempo_previa, self.tempo_finalizacao):
             timer.stop()
         for processo in (self.consulta, self.acao, self.previa):
             if processo.state() != QProcess.ProcessState.NotRunning:
                 processo.kill()
                 processo.waitForFinished(1000)
+        for pasta in self.finalizando.values():
+            pasta.cleanup()
+        self.finalizando.clear()
         evento.accept()

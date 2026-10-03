@@ -570,12 +570,13 @@ Ele não confirma conclusão da tarefa nem aprovação da entrega.
 Perguntas e permissões são atendidas pelo botão **Abrir terminal**.
 Sessões interrompidas podem ser retomadas pelo mesmo botão.
 Na tarefa selecionada, **Integrar e encerrar** (`Alt+I`) chama
-`jangada-agente-fim --integrar`; **Encerrar sessão** (`Ctrl+X`) chama
+`jangada-agente-fim --integrar`; **Encerrar sem integrar** (`Ctrl+X`) chama
 `jangada-agente-fim` sem integração. As ações abrem um terminal com as
 conferências existentes, revisão da integração e confirmação de descarte
 quando há alterações sem commit. Confira o resultado nesse terminal;
 a lista acompanha automaticamente o encerramento. Fechar a central mantém
-esse terminal aberto. No formulário Nova tarefa, `Ctrl+X` continua recortando texto.
+esse terminal aberto. Enquanto a ação está em andamento, outra ação de
+encerramento para a mesma sessão fica bloqueada. No formulário Nova tarefa, `Ctrl+X` continua recortando texto.
 A central não encerra agentes ao fechar. A consulta da janela apenas lê os
 registros; o contador da barra mantém a limpeza automática de estados órfãos
 e o registro persistente das interrupções, pelo mecanismo anterior.

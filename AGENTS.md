@@ -60,7 +60,7 @@ entrar aqui do mesmo jeito.
 | Repositórios em `JANGADA_PROJETOS` | `jangada-agente`, `jangada-agente-fim` | ramos `agente/*`, registro dos worktrees e a integração que o usuário confirma |
 | `~/.cache/jangada` | `jangada-consumo`, `jangada-delegar` | cache do consumo e da cota do agy |
 | `~/.cache/cliphist` | `jangada-isolar` | pasta criada com 0700 para poder ocultá-la do agente |
-| `$XDG_RUNTIME_DIR/jangada-tarefas` | `default/tarefas/central.py` | soquete privado para reutilizar a janela, fora do runtime visível ao agente isolado |
+| `$XDG_RUNTIME_DIR/jangada-tarefas` | `default/tarefas/central.py`, `default/tarefas/janela.py` | soquete privado para reutilizar a janela e avisos privados para acompanhar ações, fora do runtime visível ao agente isolado |
 | `$XDG_RUNTIME_DIR/jangada-isolar` | `jangada-isolar` | soquetes do proxy do D-Bus |
 | `~/Imagens/Capturas` ou `~/Pictures/Screenshots` | `jangada-captura` | capturas de tela |
 | `/usr/share/wayland-sessions/jangada.desktop` | `install/40-interface.sh` | sessão no gerenciador de login |

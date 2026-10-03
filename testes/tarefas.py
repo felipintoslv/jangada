@@ -166,6 +166,8 @@ class Interface(unittest.TestCase):
             argumentos = preparar.call_args.args[1]
             self.assertEqual(preparar.call_args.args[2], 'jangada-terminal')
             self.assertEqual(argumentos[-3:], [str(self.bin / 'jangada-agente-fim'), '--integrar', 'projeto--dois'])
+            (Path(self.janela.finalizando['projeto--dois'].name) / 'fim').touch()
+            self.janela.conferir_finalizacoes()
             QTest.keyClick(self.janela.lista, Qt.Key.Key_X, Qt.KeyboardModifier.ControlModifier)
             aguardar(lambda: preparar.call_count == 2)
             self.assertEqual(preparar.call_args.args[1][-2:], [str(self.bin / 'jangada-agente-fim'), 'projeto--dois'])
@@ -190,6 +192,39 @@ class Interface(unittest.TestCase):
                 iniciar.assert_not_called()
             finally:
                 simulacao.close()
+
+    def test_finalizacao_impede_pedidos_simultaneos_e_permite_nova_tentativa(self):
+        with patch.object(QProcess, 'startDetached', return_value=(True, 123)) as iniciar:
+            self.janela.finalizar(True)
+            self.janela.finalizar(True)
+            self.janela.finalizar(False)
+            self.assertEqual(iniciar.call_count, 1)
+            self.assertFalse(self.janela.integrar.isEnabled())
+            self.assertFalse(self.janela.encerrar.isEnabled())
+            (Path(self.janela.finalizando['projeto--um'].name) / 'fim').touch()
+            self.janela.conferir_finalizacoes()
+            self.assertTrue(self.janela.encerrar.isEnabled())
+            self.janela.finalizar(False)
+            self.assertEqual(iniciar.call_count, 2)
+
+    def test_finalizacao_recusa_nome_interpretavel_como_opcao(self):
+        from dataclasses import replace
+        s = self.janela.sessoes['projeto--um']
+        self.janela.mostrar({'--sem-revisao': replace(s, nome='--sem-revisao')})
+        self.janela.selecionar_nome('--sem-revisao')
+        with patch.object(QProcess, 'startDetached') as iniciar:
+            self.janela.finalizar(True)
+            self.janela.finalizar(False)
+            iniciar.assert_not_called()
+
+    def test_finalizacao_bloqueada_durante_abertura(self):
+        with patch.object(self.janela.acao, 'state', return_value=QProcess.ProcessState.Running), patch.object(QProcess, 'startDetached') as iniciar:
+            self.janela.selecionar()
+            self.assertFalse(self.janela.integrar.isEnabled())
+            self.assertFalse(self.janela.encerrar.isEnabled())
+            self.janela.finalizar(True)
+            self.janela.finalizar(False)
+            iniciar.assert_not_called()
 
     def test_falha_na_abertura_do_terminal_nao_anuncia_encerramento(self):
         with patch.object(QProcess, 'startDetached', return_value=(False, 0)):
@@ -224,6 +259,9 @@ class Interface(unittest.TestCase):
         self.assertEqual(resultado.returncode, 7)
         self.assertIn('["--integrar", "projeto--um"]', resultado.stdout)
         self.assertIn('Confirmar?', resultado.stdout)
+        self.janela.conferir_finalizacoes()
+        self.assertFalse(self.janela.finalizando)
+        self.assertTrue(self.janela.encerrar.isEnabled())
 
     def test_foco_argumentos_separados(self):
         self.janela.focar()
