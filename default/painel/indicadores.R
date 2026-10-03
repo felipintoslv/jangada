@@ -95,7 +95,9 @@ carregar_cache <- function(cache) {
       papel = character(), ferramenta = character(), resultado = character())),
     fontes = tryCatch(jsonlite::read_json(file.path(cache, "cobertura.json")), error = function(e) list()),
     coleta = tryCatch(jsonlite::read_json(file.path(cache, "coleta.json")), error = function(e) list()),
-    subagentes = tryCatch(suppressWarnings(jsonlite::read_json(file.path(cache, "subagentes.json"))), error = function(e) list())
+    subagentes = tryCatch(suppressWarnings(jsonlite::read_json(file.path(cache, "subagentes.json"))), error = function(e) list()),
+    orquestracao = tryCatch(suppressWarnings(jsonlite::read_json(file.path(cache, "orquestracao.json"))),
+                          error = function(e) list(erros = "atualize a coleta para carregar a orquestração"))
   )
 }
 

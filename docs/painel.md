@@ -15,6 +15,40 @@ flowchart LR
 As definições de cada indicador estão no README, seção "Painel de
 indicadores", e os campos de cada registro em [registros](registros.md).
 
+## Fila, provedores e autonomia
+
+A aba **Fila e provedores** lê `orquestracao.json`, produzido pelo coletor.
+Os bancos SQLite da fila e dos provedores são abertos em modo somente de
+leitura. A coleta não cria filas, inicia tarefas ou consulta serviços.
+Uma dependência ainda não concluída aparece como bloqueio da tarefa na fila.
+
+O filtro de projeto afeta tarefas, orçamento, custo e supervisão. São
+retratos atuais e métricas acumuladas da fila, independentemente do período
+selecionado. A saúde dos provedores é global e mostra o estado registrado
+na coleta, o motivo, a cota e a validade da observação. Uma observação
+expirada não confirma cota nem disponibilidade; a validade não representa
+um horário garantido de retomada.
+
+O orçamento mostra limites e saldos de chamadas e segundos por tarefa.
+Execuções em andamento e consumo desconhecido deixam o saldo sem medida.
+O custo usa apenas `precos.json` do usuário. Custo total desconhecido e
+parcela conhecida aparecem separados, junto da moeda e da cobertura.
+Supervisões, revisões da fila e conclusões fora da amostra têm contagens
+próprias; não entram nas taxas de aprovação do `jangada-validar`.
+
+Na aba **Autonomia de agentes**, período e projeto filtram os metadados
+antes de recalcular contagens e medianas. O app chama `autonomia.py` sobre
+os registros do cache, sem reler conversas. Os demais filtros mantêm o
+escopo indicado na interface. Codex econômico aparece nas delegações por
+destino, no resumo e na tabela de relatórios sem fonte.
+
+Os gráficos usam a paleta de seis cores do protocolo de gráficos, com fundo
+branco e rótulos escuros nos dois modos da interface. A evolução diária usa
+linhas, preserva lacunas sem medida e passa a pequenos múltiplos acima de
+quatro séries. Comparações por destino e velocidade local usam barras
+horizontais ordenadas, com eixo a partir de zero. Período, unidade e fonte
+acompanham os gráficos.
+
 ## Consumo por executor e origem
 
 O período inicial é o dia atual. A aba de consumo reúne Claude, Codex e

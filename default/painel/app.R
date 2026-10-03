@@ -46,14 +46,17 @@ tema <- bs_theme(
     cores[["superficie"]], cores[["texto"]], cores[["texto_suave"]], cores[["primaria"]],
     paste(grDevices::col2rgb(cores[["primaria"]]), collapse = ","), cores[["primaria"]]))
 
-# Gráficos sem barra de ferramentas e com fundo transparente, para seguir o
-# tema. A legenda fica acima do gráfico, longe do título do eixo; as datas
-# saem em português.
+# A paleta foi validada sobre branco; os gráficos mantêm esse fundo nos dois modos.
+paleta <- c(claude = "#0072B2", codex = "#D55E00", ollama = "#009E73",
+            agy = "#AA4499", deterministico = "#B8860B", desconhecido = "#3C93C2")
+
 pl <- function(p, x = "", y = "") {
   p |>
-    plotly::layout(paper_bgcolor = "rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)",
-                   font = list(color = "#888"), xaxis = list(title = list(text = x)),
-                   yaxis = list(title = list(text = y)),
+    plotly::layout(paper_bgcolor = "#FFFFFF", plot_bgcolor = "#FFFFFF",
+                   font = list(color = "#1A1A1A", family = "Noto Sans, sans-serif"),
+                   xaxis = list(title = list(text = x), showgrid = FALSE),
+                   yaxis = list(title = list(text = y), rangemode = "tozero",
+                                gridcolor = "#D9D9D9", nticks = 8),
                    separators = ",.", legend = list(orientation = "h", x = 0, y = 1.15)) |>
     plotly::config(displayModeBar = FALSE, locale = "pt-BR")
 }
@@ -150,6 +153,27 @@ ui <- page_navbar(
   title = "Indicadores do jangada", theme = tema, fillable = FALSE,
   window_title = "Indicadores do jangada",
   sidebar = filtros,
+  nav_panel("Fila e provedores", icon = bsicons::bs_icon("list-task"),
+    p(class = "cobertura",
+      "Retrato da última coleta. O projeto filtra tarefas e métricas acumuladas; o período não altera este retrato."),
+    uiOutput("g_erros"),
+    layout_column_wrap(width = 1 / 4, fill = FALSE,
+      value_box("Em execução", textOutput("g_executando")),
+      value_box("Em espera ou bloqueadas", textOutput("g_esperando")),
+      value_box("Aguardando revisão", textOutput("g_revisao")),
+      value_box("Concluídas", textOutput("g_concluidas"))),
+    cartao("Tarefas e motivos da espera", DT::DTOutput("g_tarefas")),
+    cartao("Orçamento por tarefa", DT::DTOutput("g_orcamento"),
+      cob = p(class = "cobertura", "Saldo desconhecido durante execução ou quando há consumo sem medida.")),
+    cartao("Consumo e custo por projeto", DT::DTOutput("g_metricas"),
+      cob = p(class = "cobertura",
+        "Estimativas usam preços declarados pelo usuário. Parcela conhecida não representa o custo total.")),
+    cartao("Supervisão e revisão por amostragem", DT::DTOutput("g_supervisao"),
+      cob = p(class = "cobertura", "Contagens da fila, separadas das rodadas do jangada-validar.")),
+    cartao("Provedores de todos os projetos", DT::DTOutput("g_provedores"),
+      cob = p(class = "cobertura",
+        "Somente observações registradas. Validade da observação não garante disponibilidade após esse horário."))
+  ),
   nav_panel("Revisão e síntese", icon = bsicons::bs_icon("check2-square"),
     uiOutput("manchete_dia"),
     uiOutput("situacao_fontes"),
@@ -176,7 +200,7 @@ ui <- page_navbar(
   ),
   nav_panel("Consumo de modelos", icon = bsicons::bs_icon("cpu"),
     uiOutput("insight_consumo"),
-    cartao("Evolução diária do consumo", plotly::plotlyOutput("b_motores_dia", height = 320),
+    cartao("Evolução diária do consumo", uiOutput("b_motores_area"),
            cob = uiOutput("b_motores_cob")),
     cartao("Consumo por executor, origem e modelo", DT::DTOutput("b_motores"),
            p(class = "cobertura", "Entrada inclui cache lido. Saída e raciocínio são mostrados separadamente e não são somados. Campos sem medida aparecem como ausentes; totais parciais têm contagem de cobertura.")),
@@ -273,7 +297,10 @@ ui <- page_navbar(
     p(class = "cobertura", "Só o Claude Code: o agy não grava as chamadas de ferramenta de forma legível (docs/registros.md).")
   ),
   nav_panel("Autonomia de agentes", icon = bsicons::bs_icon("people"),
+    p(class = "cobertura", "Período e projeto filtram esta aba. Demais filtros se aplicam às abas indicadas."),
     uiOutput("insight_subagentes"),
+    cartao("Delegações atendidas por destino", plotly::plotlyOutput("e_destinos", height = 260),
+      cob = p(class = "cobertura", "Fonte: delegacoes.jsonl. Subagentes nativos e recusas ficam fora destas barras.")),
     layout_column_wrap(width = 1 / 4, fill = FALSE,
       value_box("Delegado ao agy", textOutput("e_fracao"), showcase = bsicons::bs_icon("share"),
                 p(textOutput("e_fracao_n", inline = TRUE))),
@@ -335,8 +362,105 @@ server <- function(input, output, session) {
     if (length(input$par)) p <- p[p$par %in% input$par, , drop = FALSE]
     p
   })
-  sub <- reactive(dados()$subagentes)
+  sub <- reactive({
+    req(input$periodo)
+    if (!is.null(dados()$subagentes$erro)) return(dados()$subagentes)
+    if (!file.exists(file.path(cache, "subagentes.json"))) {
+      return(list(erro = "atualize a coleta para carregar a autonomia"))
+    }
+    pedido <- jsonlite::toJSON(list(cache = file.path(cache, "subagentes.json"),
+      inicio = as.character(input$periodo[1]), fim = as.character(input$periodo[2]),
+      projetos = as.list(input$projeto)), auto_unbox = TRUE)
+    tryCatch({
+      saida <- suppressWarnings(system2("python3", shQuote(file.path(pasta_app, "autonomia.py")),
+                                       input = pedido, stdout = TRUE, stderr = FALSE))
+      if (!is.null(attr(saida, "status"))) stop("não foi possível recalcular a autonomia")
+      jsonlite::fromJSON(paste(saida, collapse = "\n"), simplifyVector = FALSE)
+    }, error = function(e) list(erro = conditionMessage(e)))
+  })
   pc <- function(v, suf = "%") if (is.null(v)) "-" else paste0(format(v, decimal.mark = ","), suf)
+
+  orq <- reactive({
+    d <- dados()$orquestracao
+    for (campo in c("tarefas", "projetos")) {
+      if (length(input$projeto)) {
+        d[[campo]] <- Filter(function(x) x$projeto %in% input$projeto, d[[campo]])
+      }
+    }
+    d
+  })
+  estados_fila <- c(QUEUED = "Na fila", RUNNING = "Em execução", COMPLETED = "Concluída",
+    REVIEW_REQUIRED = "Aguardando revisão", REVISION_REQUIRED = "Reprovada, corrigir",
+    WAITING_PROVIDER = "Aguardando provedor", WAITING_QUOTA = "Aguardando cota",
+    WAITING_REVIEWER = "Aguardando revisor", FAILED = "Falhou", CANCELLED = "Cancelada",
+    PAUSED = "Pausada", BLOCKED = "Bloqueada")
+  output$g_erros <- renderUI({
+    erros <- orq()$erros
+    if (length(erros)) div(class = "alert alert-warning",
+      "Coleta incompleta; confira as lacunas antes de interpretar as contagens: ",
+      paste(unlist(erros), collapse = "; "))
+  })
+  output$g_executando <- renderText(sum(vapply(orq()$tarefas, function(t) t$estado == "RUNNING", FALSE)))
+  output$g_esperando <- renderText(sum(vapply(orq()$tarefas,
+    function(t) t$estado %in% c("WAITING_PROVIDER", "WAITING_QUOTA", "WAITING_REVIEWER", "BLOCKED"), FALSE)))
+  output$g_revisao <- renderText(sum(vapply(orq()$tarefas,
+    function(t) t$estado == "REVIEW_REQUIRED", FALSE)))
+  output$g_concluidas <- renderText(sum(vapply(orq()$tarefas, function(t) t$estado == "COMPLETED", FALSE)))
+  output$g_tarefas <- DT::renderDT({
+    d <- tabela_lista(orq()$tarefas,
+      c("projeto", "id", "estado", "papel", "prioridade", "tentativas", "dependencias", "motivo"))
+    d$estado <- unname(estados_fila[d$estado])
+    prioridades <- c(critical = "Crítica", high = "Alta", normal = "Normal", low = "Baixa",
+                     background = "Segundo plano")
+    d$prioridade <- unname(prioridades[d$prioridade])
+    tabela(setNames(d, c("projeto", "tarefa", "estado", "papel", "prioridade",
+                        "tentativas", "dependências pendentes", "motivo")))
+  })
+  output$g_orcamento <- DT::renderDT({
+    d <- tabela_lista(orq()$tarefas, c("projeto", "id", "limite_chamadas", "chamadas",
+      "saldo_chamadas", "limite_segundos", "segundos", "saldo_segundos"))
+    tabela(setNames(d, c("projeto", "tarefa", "limite de chamadas", "chamadas medidas",
+      "saldo de chamadas", "limite (s)", "tempo medido (s)", "saldo (s)")))
+  })
+  output$g_metricas <- DT::renderDT({
+    d <- tabela_lista(orq()$projetos, c("projeto", "chamadas", "chamadas_confirmadas",
+      "chamadas_desconhecidas", "segundos_confirmados", "duracoes_desconhecidas",
+      "tokens_entrada_confirmados", "tokens_saida_confirmados",
+      "moeda", "custo_estimado", "custo_estimado_confirmado", "execucoes_sem_custo"))
+    for (campo in c("custo_estimado", "custo_estimado_confirmado")) {
+      d[[campo]] <- ifelse(is.na(d$moeda) | is.na(d[[campo]]), "sem medida",
+        format(as.numeric(d[[campo]]), digits = 6, decimal.mark = ",", big.mark = ".", trim = TRUE))
+    }
+    tabela(setNames(d, c("projeto", "chamadas totais", "chamadas confirmadas",
+      "execuções sem chamadas medidas", "tempo confirmado (s)", "durações desconhecidas",
+      "tokens de entrada confirmados", "tokens de saída confirmados",
+      "moeda", "custo total estimado", "custo estimado da parcela conhecida", "execuções sem custo medido")))
+  })
+  output$g_supervisao <- DT::renderDT({
+    d <- tabela_lista(orq()$projetos, c("projeto", "supervisoes_aprovadas", "supervisoes_reprovadas",
+      "supervisoes_inconclusivas", "esperas_supervisao", "selecionadas_na_amostra",
+      "conclusoes_fora_da_amostra", "revisoes_aprovadas", "revisoes_reprovadas"))
+    tabela(setNames(d, c("projeto", "supervisões aprovadas", "supervisões reprovadas",
+      "supervisões inconclusivas", "esperas por supervisão", "selecionadas para revisão",
+      "concluídas fora da amostra", "revisões aprovadas", "revisões reprovadas")))
+  })
+  output$g_provedores <- DT::renderDT({
+    d <- tabela_lista(orq()$provedores, c("id", "status", "pausado", "cota", "modelo",
+      "atualizado", "valido_ate", "espera_segundos", "motivo"))
+    nomes <- c(AVAILABLE = "Disponível", UNKNOWN = "Desconhecido", UNAVAILABLE = "Indisponível",
+      QUOTA_LOW = "Cota baixa", QUOTA_EXHAUSTED = "Cota esgotada", NETWORK_ERROR = "Falha de rede",
+      RATE_LIMITED = "Limite de chamadas", COOLDOWN = "Em espera", AUTH_ERROR = "Falha de autenticação",
+      DEGRADED = "Disponibilidade reduzida")
+    d$status <- unname(nomes[d$status])
+    d$pausado <- ifelse(d$pausado == "1", "sim", "não")
+    for (campo in c("atualizado", "valido_ate")) {
+      instante <- as.numeric(d[[campo]])
+      d[[campo]] <- ifelse(is.na(instante) | instante <= 0, "sem observação",
+        format(as.POSIXct(instante, origin = "1970-01-01"), "%d/%m %H:%M:%S"))
+    }
+    tabela(setNames(d, c("provedor", "estado na coleta", "pausado", "cota disponível (%)", "modelo",
+      "última observação", "observação válida até", "espera registrada (s)", "motivo")))
+  })
 
   output$manchete_dia <- renderUI({
     v <- dados()$validacoes
@@ -380,7 +504,10 @@ server <- function(input, output, session) {
 
   observe({
     d <- dados()
-    projetos <- sort(unique(c(d$validacoes$projeto, d$mensagens$projeto, d$eventos$projeto, d$consumo$projeto)))
+    registros <- unlist(d$subagentes$registros, recursive = FALSE)
+    projetos <- sort(unique(c(d$validacoes$projeto, d$mensagens$projeto, d$eventos$projeto,
+      d$consumo$projeto, vapply(registros, function(x) if (is.null(x$projeto)) "" else x$projeto, ""),
+      vapply(d$orquestracao$projetos, function(x) x$projeto, ""))))
     agentes <- sort(unique(c(d$validacoes$autor, d$eventos$agente, d$sessoes$agente)))
     ent <- entregas(d$validacoes)
     for (campo in c("executor", "origem", "modelo", "provedor", "papel")) {
@@ -476,7 +603,7 @@ server <- function(input, output, session) {
     e$grupo <- ifelse(e$primeira, "aprovada de primeira", "reprovada antes")
     if (!nrow(e)) return(vazio())
     pl(plotly::plot_ly(e, x = ~grupo, y = ~diff, type = "box", boxpoints = "all", color = ~grupo,
-                       text = ~entrega, colors = c(cores[["primaria"]], cores[["atencao"]])) |>
+                       text = ~entrega, colors = c(paleta[["claude"]], paleta[["codex"]])) |>
          plotly::layout(showlegend = FALSE),
        "", "linhas (+ e -)")
   })
@@ -492,30 +619,86 @@ server <- function(input, output, session) {
     d
   })
   output$b_motores <- DT::renderDT(tabela(resumo_motores(motores())))
+  output$b_motores_area <- renderUI({
+    d <- consumo_motores_diario(motores())
+    n <- if (nrow(d)) length(unique(paste(d$executor, d$origem, d$modelo))) else 0
+    altura <- if (n > 4) ceiling(n / 2) * 240 else 320
+    plotly::plotlyOutput("b_motores_dia", height = altura)
+  })
+  # Título: Evolução diária do consumo de saída por executor e modelo
+  # Fonte: consumo.parquet. Lacunas indicam dias sem medida.
   output$b_motores_dia <- plotly::renderPlotly({
     d <- consumo_motores_diario(motores())
     if (!nrow(d) || !any(is.finite(d$saida))) return(vazio())
     d$serie <- paste(d$executor, d$origem, d$modelo, sep = " · ")
     d$dica <- paste(esc(d$serie), "<br>", d$dia, "<br>Saída:", milhar(d$saida),
                     "<br>Com medida:", d$com_saida, "de", d$registros)
-    pl(plotly::plot_ly(d, x = ~as.Date(dia), y = ~saida, color = ~serie, type = "bar",
-                      text = ~dica, hoverinfo = "text") |>
-         plotly::layout(barmode = "group", xaxis = list(tickformat = "%d/%m")), "", "tokens de saída")
+    d <- do.call(rbind, lapply(split(d, d$serie), function(g) {
+      dias <- seq(min(as.Date(g$dia)), max(as.Date(g$dia)), by = "day")
+      completo <- merge(data.frame(dia = as.character(dias)), g, by = "dia", all.x = TRUE)
+      completo$serie <- g$serie[1]
+      completo$executor <- g$executor[1]
+      completo
+    }))
+    series <- sort(unique(d$serie))
+    dias_eixo <- sort(unique(as.Date(d$dia)))
+    if (length(dias_eixo) > 6) {
+      dias_eixo <- dias_eixo[unique(round(seq(1, length(dias_eixo), length.out = 6)))]
+    }
+    eixo_dias <- list(tickmode = "array", tickvals = as.character(dias_eixo),
+                      ticktext = format(dias_eixo, "%d/%m"))
+    if (length(series) <= 4) {
+      cores_series <- vapply(series, function(nome) {
+        motor <- d$executor[match(nome, d$serie)]
+        unname(paleta[if (motor %in% names(paleta)) motor else "desconhecido"])
+      }, "")
+      p <- plotly::plot_ly(d, x = ~as.Date(dia), y = ~saida, color = ~serie, colors = cores_series,
+        symbol = ~serie, symbols = c("circle", "square", "diamond", "triangle-up"),
+        type = "scatter", mode = "lines+markers", connectgaps = FALSE, text = ~dica, hoverinfo = "text")
+      if (length(series) == 1) {
+        ponta <- tail(d[is.finite(d$saida), ], 1)
+        p <- plotly::add_text(p, data = ponta, x = ~as.Date(dia), y = ~saida, text = esc(series),
+          cliponaxis = FALSE, textposition = "top left", textfont = list(color = "#1A1A1A"),
+          inherit = FALSE, showlegend = FALSE)
+      }
+      pl(p |> plotly::layout(showlegend = length(series) > 1, xaxis = eixo_dias), "", "tokens de saída")
+    } else {
+      partes <- lapply(series, function(nome) {
+        g <- d[d$serie == nome, ]
+        g <- g[order(g$dia), ]
+        motor <- if (g$executor[1] %in% names(paleta)) g$executor[1] else "desconhecido"
+        p <- plotly::plot_ly(g, x = ~as.Date(dia), y = ~saida, type = "scatter", mode = "lines+markers",
+          text = ~dica, hoverinfo = "text", name = nome, connectgaps = FALSE,
+          line = list(color = unname(paleta[motor])), marker = list(color = unname(paleta[motor])))
+        pl(p |> plotly::layout(xaxis = eixo_dias, showlegend = FALSE,
+          yaxis = list(range = c(0, max(d$saida, na.rm = TRUE) * 1.08))), "", "tokens de saída")
+      })
+      partes <- lapply(seq_along(partes), function(i) partes[[i]] |>
+        plotly::layout(annotations = list(list(text = esc(series[i]), x = 0, y = 1.08,
+          xref = "paper", yref = "paper", showarrow = FALSE, xanchor = "left"))))
+      plotly::subplot(partes, nrows = ceiling(length(partes) / 2), margin = 0.06,
+                      shareX = FALSE, shareY = TRUE, titleY = TRUE)
+    }
   })
   output$b_motores_cob <- renderUI({
     d <- motores()
     div(cobertura_ui(cobertura(d$data)),
-        p(class = "cobertura", "Barras ausentes indicam falta de medida. Tokenização varia entre provedores; o gráfico não mede custo nem economia de delegação."))
+        p(class = "cobertura", "Fonte: consumo.parquet. Lacunas indicam falta de medida. Tokens não medem custo."))
   })
   output$b_local <- DT::renderDT(tabela(desempenho_local(motores())))
+  # Título: Velocidade de geração dos modelos locais
+  # Fonte: chamadas Ollama com tokens e duração de geração registrados.
   output$b_local_grafico <- plotly::renderPlotly({
     d <- desempenho_local(motores())
     if (!nrow(d) || !any(is.finite(d$tokens_s))) return(vazio())
-    d$dica <- paste(esc(d$modelo), "<br>Tokens/s:", round(d$tokens_s, 1),
+    d <- d[order(d$tokens_s, na.last = TRUE), ]
+    d$dica <- paste(esc(d$modelo), "<br>Tokens/s:", format(round(d$tokens_s, 1), decimal.mark = ","),
                     "<br>Chamadas com medida:", d$com_tempo_geracao, "de", d$registros)
-    pl(plotly::plot_ly(d, x = ~modelo, y = ~tokens_s, type = "bar", text = ~dica,
-                      hoverinfo = "text", marker = list(color = cores[["primaria"]])),
-       "", "tokens por segundo de geração")
+    pl(plotly::plot_ly(d, x = ~tokens_s, y = ~modelo, type = "bar", orientation = "h", text = ~dica,
+      hoverinfo = "text", marker = list(color = unname(paleta["ollama"]))) |>
+      plotly::layout(xaxis = list(rangemode = "tozero", nticks = 8, gridcolor = "#D9D9D9"),
+        yaxis = list(categoryorder = "array", categoryarray = d$modelo, showgrid = FALSE)),
+      "tokens por segundo de geração", "")
   })
   fontes <- reactive({
     d <- tabela_lista(dados()$fontes,
@@ -582,7 +765,7 @@ server <- function(input, output, session) {
     m$saida_texto <- pmax(m$saida - m$raciocinio, 0)
     a <- aggregate(m[c("entrada", "saida_texto", "raciocinio", "cache_criado")], list(dia = as.Date(m$dia)), sum)
     p <- plotly::plot_ly(a, x = ~dia)
-    for (s in list(c("cache_criado", "cache criado", cores[["atencao"]]), c("saida_texto", "saída", cores[["primaria"]]),
+    for (s in list(c("cache_criado", "cache criado", paleta[["codex"]]), c("saida_texto", "saída", paleta[["claude"]]),
                    c("raciocinio", "raciocínio", "#b08968"), c("entrada", "entrada nova", "#888888"))) {
       p <- plotly::add_bars(p, y = a[[s[1]]], name = s[2], marker = list(color = s[3]))
     }
@@ -592,7 +775,7 @@ server <- function(input, output, session) {
     m <- msg()
     if (!nrow(m)) return(vazio())
     a <- aggregate(m["cache_lido"], list(dia = as.Date(m$dia)), sum)
-    pl(plotly::plot_ly(a, x = ~dia, y = ~cache_lido, type = "bar", marker = list(color = "#888888"), name = "cache lido"),
+    pl(plotly::plot_ly(a, x = ~dia, y = ~cache_lido, type = "bar", marker = list(color = "#4D4D4D"), name = "cache lido"),
        "", "tokens")
   })
   output$b_blocos <- plotly::renderPlotly({
@@ -600,8 +783,8 @@ server <- function(input, output, session) {
     if (!nrow(b)) return(vazio())
     a <- aggregate(list(blocos = rep(1, nrow(b)), perto = as.integer(b$perto_limite)), list(semana = b$semana), sum)
     pl(plotly::plot_ly(a, x = ~semana) |>
-         plotly::add_bars(y = ~ (blocos - perto), name = "longe do limite", marker = list(color = "#888888")) |>
-         plotly::add_bars(y = ~perto, name = "perto do limite", marker = list(color = cores[["atencao"]])) |>
+         plotly::add_bars(y = ~ (blocos - perto), name = "longe do limite", marker = list(color = "#4D4D4D")) |>
+         plotly::add_bars(y = ~perto, name = "perto do limite", marker = list(color = paleta[["codex"]])) |>
          plotly::layout(barmode = "stack"), "", "blocos")
   })
   tabela_consumo <- function(por, rotulo) {
@@ -669,17 +852,17 @@ server <- function(input, output, session) {
   output$c_aguardando <- plotly::renderPlotly({
     a <- aguard()
     if (!nrow(a)) return(vazio())
-    pl(plotly::plot_ly(a, x = ~dia, y = ~horas, type = "bar", marker = list(color = cores[["atencao"]])), "", "horas")
+    pl(plotly::plot_ly(a, x = ~dia, y = ~horas, type = "bar", marker = list(color = paleta[["codex"]])), "", "horas")
   })
   output$c_simult <- plotly::renderPlotly({
     s <- simultaneas_por_hora(iv())
     if (!nrow(s)) return(vazio())
     pl(plotly::plot_ly(s, x = ~hora, y = ~sessoes, type = "scatter", mode = "lines",
-                       line = list(shape = "hv", color = cores[["primaria"]])), "", "sessões")
+                       line = list(shape = "hv", color = paleta[["claude"]])), "", "sessões")
   })
   output$c_foco <- plotly::renderPlotly({
     if (!nrow(foco())) return(vazio())
-    pl(plotly::plot_ly(foco(), x = ~dia, y = ~trocas, type = "bar", marker = list(color = cores[["primaria"]])), "", "trocas")
+    pl(plotly::plot_ly(foco(), x = ~dia, y = ~trocas, type = "bar", marker = list(color = paleta[["claude"]])), "", "trocas")
   })
   output$c_paradas <- DT::renderDT({
     p <- paradas()
@@ -774,16 +957,37 @@ server <- function(input, output, session) {
 
 
   # E. Subagentes
+  # Título: Delegações atendidas por destino
+  # Fonte: delegacoes.jsonl, filtrado por período e projeto.
+  output$e_destinos <- plotly::renderPlotly({
+    destinos <- sub()$destinos
+    if (!length(destinos)) return(vazio())
+    d <- data.frame(destino = names(destinos), quantidade = as.numeric(unlist(destinos)))
+    d <- d[order(d$quantidade), ]
+    motor <- ifelse(d$destino == "local", "ollama",
+                    ifelse(d$destino == "codex-economico", "codex", d$destino))
+    cor <- unname(paleta[motor])
+    cor[is.na(cor)] <- "#B3B3B3"
+    d$destino <- ifelse(d$destino == "codex-economico", "Codex econômico", d$destino)
+    pl(plotly::plot_ly(d, x = ~quantidade, y = ~destino, type = "bar", orientation = "h",
+      marker = list(color = cor), text = ~quantidade, textposition = "outside",
+      textfont = list(color = "#1A1A1A"), hoverinfo = "x+y") |>
+      plotly::layout(xaxis = list(rangemode = "tozero", dtick = max(1, ceiling(max(d$quantidade) / 7)),
+        nticks = 8, gridcolor = "#D9D9D9"),
+        yaxis = list(categoryorder = "array", categoryarray = d$destino, showgrid = FALSE),
+        showlegend = FALSE), "delegações atendidas", "")
+  })
   output$insight_subagentes <- renderUI({
     s <- sub()
     if (is.null(s)) return(NULL)
+    if (!is.null(s$erro)) return(div(class = "alert alert-warning", s$erro))
     f <- s$fracao_agy
     fracao <- if (!is.null(f)) pc(f$fracao_agy_pct) else "-"
     recusas <- if (!is.null(f)) pc(f$taxa_recusa_pct) else "-"
     desvios <- sum(lengths(s$desvios))
 
     div(class = "alert alert-secondary py-2 px-3 mb-3",
-        sprintf("Delegações autônomas: %s de taxa de encaminhamento ao agy e %s de recusas pelo jangada-delegar. Desvios de protocolo registrados: %s (meta: zero).",
+        sprintf("No período e projeto selecionados: %s de encaminhamento ao agy e %s de recusas. Desvios registrados: %s.",
                 fracao, recusas, desvios))
   })
   output$e_fracao <- renderText(pc(sub()$fracao_agy$fracao_agy_pct))
@@ -792,7 +996,9 @@ server <- function(input, output, session) {
     # Com erro, o coletor grava só o erro, e os outros quadros ficam em "-".
     if (!is.null(sub()$erro)) paste0("indicadores não calculados na coleta de ", sub()$data, ": ", sub()$erro) else
     if (is.null(f)) "sem registro" else
-      paste0(f$delegadas_agy, " delegação(ões); ", f$subagentes_claude, " subagente(s) do Claude, ", f$subagentes_agy, " do agy; ", if (is.null(f$delegadas_local)) 0 else f$delegadas_local, " delegação(ões) local(is)")
+      paste0(f$delegadas_agy, " delegação(ões) ao agy; ", f$delegadas_local,
+        " local(is); ", f$delegadas_codex_economico, " ao Codex econômico; ",
+        f$subagentes_claude, " subagente(s) do Claude e ", f$subagentes_agy, " do agy")
   })
   output$e_recusas <- renderText(pc(sub()$fracao_agy$taxa_recusa_pct))
   output$e_recusas_n <- renderText({
@@ -805,10 +1011,10 @@ server <- function(input, output, session) {
     if (is.null(k)) "-" else paste0(k$n, " medida(s), ", k$abaixo_da_resolucao, " sem variação; cabem ",
                                     if (is.null(k$delegacoes_por_bloco)) "-" else k$delegacoes_por_bloco, " por bloco de 5 h")
   })
-  output$e_desvios <- renderText(sum(lengths(sub()$desvios)))
+  output$e_desvios <- renderText(if (!is.null(sub()$erro)) "-" else sum(lengths(sub()$desvios)))
   output$e_desvios_n <- renderText({
     d <- sub()$desvios
-    if (is.null(d)) "-" else paste(paste(sub("_", " ", names(d)), lengths(d)), collapse = ", ")
+    if (is.null(d)) "-" else paste(paste(base::sub("_", " ", names(d)), lengths(d)), collapse = ", ")
   })
   output$e_tokens <- DT::renderDT(tabela(setNames(tabela_comparar(sub()$tokens_por_entrega, "mediana_tokens"),
                                                   c("faixa", "com agy", "sem agy"))))
@@ -837,7 +1043,8 @@ server <- function(input, output, session) {
     q <- sub()$qualidade
     if (is.null(q)) return(tabela(data.frame()))
     fontes <- if (is.null(q$por_destino)) list("subagentes do Claude" = q$claude, "delegações registradas" = q$delegacoes) else
-      list("subagentes do Claude" = q$claude, "delegações ao agy" = q$por_destino$agy, "delegações locais" = q$por_destino$local)
+      list("subagentes do Claude" = q$claude, "delegações ao agy" = q$por_destino$agy,
+           "delegações locais" = q$por_destino$local, "Codex econômico" = q$por_destino$`codex-economico`)
     tabela(do.call(rbind, lapply(names(fontes), function(nome) {
       x <- fontes[[nome]]
       data.frame(origem = nome, relatorios = num_ou_na(x$n), sem_fonte = num_ou_na(x$total), mediana = num_ou_na(x$mediana))
@@ -925,14 +1132,12 @@ server <- function(input, output, session) {
     div(style = "line-height: 2.2; text-align: center; padding: 8px;", tags_list)
   })
 
-  # Gráfico de barras horizontais com os termos mais recorrentes
+  # Título: Termos mais frequentes nas consultas
+  # Fonte: pesquisas.parquet, no período e projeto selecionados.
   output$f_grafico_termos <- plotly::renderPlotly({
     df <- termos_pesquisas()
     if (nrow(df) == 0) {
-      return(plotly::plotly_empty() |> plotly::layout(
-        title = list(text = "Sem dados de pesquisa", font = list(color = cores[["texto_suave"]])),
-        paper_bgcolor = "rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)"
-      ))
+      return(vazio())
     }
     top_df <- head(df, 10)
     top_df <- top_df[order(top_df$n), ]
@@ -944,19 +1149,13 @@ server <- function(input, output, session) {
       y = ~termo,
       type = "bar",
       orientation = "h",
-      marker = list(color = cores[["primaria"]]),
+      marker = list(color = paleta[["claude"]]),
       hoverinfo = "text",
       text = ~paste0(termo, ": ", n, " consulta(s)")
     )
-    plotly::layout(
-      p,
-      xaxis = list(title = "Consultas", dtick = 1, color = cores[["texto_suave"]]),
-      yaxis = list(title = "", color = cores[["texto"]]),
-      margin = list(l = 80, r = 20, t = 10, b = 35),
-      paper_bgcolor = "rgba(0,0,0,0)",
-      plot_bgcolor = "rgba(0,0,0,0)",
-      font = list(color = cores[["texto"]])
-    )
+    pl(p, "consultas", "") |>
+      plotly::layout(xaxis = list(rangemode = "tozero", dtick = max(1, ceiling(max(top_df$n) / 7))),
+        yaxis = list(showgrid = FALSE), margin = list(l = 80, r = 20, t = 10, b = 35))
   })
 
   output$f_tabela <- DT::renderDT({

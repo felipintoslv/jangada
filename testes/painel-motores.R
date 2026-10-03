@@ -42,6 +42,18 @@ p$estado <- "sem_auditoria"; p$autor <- "teste"; p$par <- "teste"
 p$grau_fato <- c(NA_integer_, 0L); p$pergunta <- "Consulta sintética"
 arrow::write_parquet(p, file.path(cache, "pesquisas.parquet"))
 options(jangada.painel.cache = cache)
+carimbo <- format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z")
+ontem <- format(Sys.time() - 86400, "%Y-%m-%dT%H:%M:%S%z")
+jsonlite::write_json(list(registros = list(subagentes = list(), entregas = list(), delegacoes = list(
+  list(data = carimbo, projeto = "teste", destino = "codex-economico", sem_fonte = 2),
+  list(data = carimbo, projeto = "outro", destino = "local", sem_fonte = 7),
+  list(data = ontem, projeto = "teste", destino = "agy", sem_fonte = 9)))),
+  file.path(cache, "subagentes.json"), auto_unbox = TRUE)
+jsonlite::write_json(list(tarefas = list(
+  list(projeto = "teste", id = "espera", estado = "WAITING_QUOTA", saldo_chamadas = NULL),
+  list(projeto = "outro", id = "concluida", estado = "COMPLETED")),
+  projetos = list(list(projeto = "teste", chamadas_confirmadas = 2, custo_estimado = NULL)),
+  provedores = list(), erros = list()), file.path(cache, "orquestracao.json"), auto_unbox = TRUE, null = "null")
 shiny::testServer(shiny::shinyAppDir("default/painel"), {
   session$setInputs(periodo = c(Sys.Date(), Sys.Date()), executor = "ollama")
   stopifnot(nrow(motores()) == 1, nrow(pesqs()) == 1,
@@ -61,6 +73,31 @@ shiny::testServer(shiny::shinyAppDir("default/painel"), {
   stopifnot(nrow(motores()) == 1, motores()$papel == "redator")
   invisible(output$b_motores_dia); invisible(output$b_motores_cob)
   invisible(output$b_local_grafico)
+  session$setInputs(periodo = c(Sys.Date(), Sys.Date()), projeto = "teste")
+  stopifnot(sub()$destinos$`codex-economico` == 1, length(sub()$destinos) == 1,
+            length(orq()$tarefas) == 1, identical(output$g_esperando, "1"),
+            identical(output$g_concluidas, "0"),
+            sub()$qualidade$por_destino$`codex-economico`$n == 1)
+  invisible(output$e_fonte)
+  invisible(output$e_destinos)
+  invisible(output$g_metricas)
+  invisible(output$g_provedores)
+  session$setInputs(periodo = c(Sys.Date() - 1, Sys.Date()))
+  stopifnot(length(sub()$destinos) == 2, sub()$destinos$agy == 1,
+            identical(output$g_esperando, "1"))
+  session$setInputs(projeto = "outro")
+  stopifnot(length(sub()$destinos) == 1, sub()$destinos$local == 1,
+            identical(output$g_concluidas, "1"))
+})
+r7 <- r[rep(1, 7), ]
+r7$id <- paste0("serie", seq_len(7))
+r7$modelo <- paste("modelo", seq_len(7))
+arrow::write_parquet(r7, file.path(cache, "consumo.parquet"))
+shiny::testServer(shiny::shinyAppDir("default/painel"), {
+  session$setInputs(periodo = c(Sys.Date(), Sys.Date()))
+  grafico <- jsonlite::fromJSON(output$b_motores_dia, simplifyVector = FALSE)
+  stopifnot(length(grafico$x$data) >= 7,
+            all(vapply(grafico$x$data, function(t) t$type == "scatter", FALSE)))
 })
 unlink(cache, recursive = TRUE)
 message("Indicadores e filtros de motores: testes passaram")

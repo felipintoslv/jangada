@@ -29,6 +29,18 @@
   mesmo com os seletores recolhidos; já no `#privacy-item`, a barra recolhe o
   espaço por completo quando não há captura ativa.
 
+## Painel de indicadores
+
+- Em séries diárias do Plotly, marcas automáticas podem cair entre os dias
+  e repetir o rótulo `dd/mm`. Defina os dias das marcas e limite a quantidade
+  conforme o espaço disponível.
+- `subplot(..., shareY = TRUE)` compartilha escalas por linha de painéis.
+  Para comparar todas as séries na mesma escala, defina também o mesmo
+  intervalo de valores em cada painel. Rótulos de valores na ponta podem
+  ser cortados; pequenos múltiplos usam o nome da série acima do painel.
+- A paleta do protocolo de gráficos foi validada sobre branco. O painel
+  mantém esse fundo nos gráficos, mesmo com a interface em modo escuro.
+
 ## Tema (`jangada-tema`)
 
 - O matugen gera cores de bordas, barra, notificações, menu, bloqueio,
