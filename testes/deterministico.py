@@ -169,6 +169,16 @@ class Conferencia(unittest.TestCase):
         (self.estado.pasta / 'artefatos' / f'{resumo}.txt').write_text('alterado')
         self.assertEqual(self.rodar()[0]['status'], 'REVISION_REQUIRED')
 
+    def test_dependencia_ausente_na_segunda_leitura_nao_deixa_reserva_ativa(self):
+        self.estado.importar([self.tarefa(), self.tarefa('T2', dependencias=['T1'])])
+        self.rodar()
+        itens = self.estado.listar()
+        with patch.object(self.estado, 'listar', side_effect=[itens, [itens[1]]]):
+            resultado = self.rodar()[0]
+        self.assertEqual(resultado['tarefa'], 'T2')
+        self.assertEqual(resultado['status'], 'REVISION_REQUIRED')
+        self.assertIsNone(self.estado.listar()[1]['dono'])
+
     def test_limites_de_fontes_e_tamanho_total(self):
         tarefa = self.tarefa(fontes=[str(self.fonte)] * 33)
         with self.assertRaises(ValueError):

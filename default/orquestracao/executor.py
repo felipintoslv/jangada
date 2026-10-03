@@ -85,7 +85,7 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir
             resultado['metricas']['segundos'] = math.ceil(time.monotonic() - inicio)
             encerrar('REVISION_REQUIRED', 'conferência local interrompida; conferir antes de repetir')
             raise
-        except (OSError, ValueError, UnicodeError) as erro:
+        except (OSError, ValueError, UnicodeError, KeyError) as erro:
             resultado['metricas']['segundos'] = math.ceil(time.monotonic() - inicio)
             return encerrar('REVISION_REQUIRED', str(erro), texto)
 

@@ -402,8 +402,10 @@ não acrescenta critérios executáveis. Para importar uma conferência:
 O critério aceita raízes JSON de qualquer tipo, em UTF-8. Rejeita chaves
 repetidas, valores não finitos, substitutos Unicode isolados e texto após
 o valor. Limita a profundidade a 64 níveis, as fontes a 32 arquivos,
-o tamanho a 1 MiB por arquivo e a 4 MiB no total. Não segue links
-simbólicos nem lê arquivos especiais.
+o tamanho a 1 MiB por arquivo e a 4 MiB no total. Recusa arquivos
+especiais e links simbólicos no último componente do caminho. Diretórios
+intermediários podem ser links; o executor verifica antes da leitura que
+o destino resolvido permanece dentro do projeto.
 
 O relatório preserva caminho, SHA-256, tamanho e o critério executado.
 Antes de gravar `COMPLETED`, o estado repete a conferência das fontes
