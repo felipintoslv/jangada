@@ -303,7 +303,9 @@ externas. Veja
    `--revisor` escolhe o revisor à mão. O Claude revisa com o Sonnet
    (`JANGADA_VALIDAR_MODELO`), só com Read, Grep e Glob; o agy revisa com o
    agente `revisor` (`default/agy/agents/revisor`), só com ferramentas de
-   leitura e em `--sandbox`. Sem esse agente no agy, a validação para.
+   leitura e em `--sandbox`. Sem esse agente, o agy não é chamado.
+   Se o revisor falha (sem cota, fora do ar), a revisão passa aos outros
+   modelos instalados e, por último, ao do autor; com `--revisor`, não passa.
    Antes do revisor, uma verificação local procura conflitos do git, reprova
    script com byte nulo (o revisor o receberia como binário), confere
    a sintaxe de shell e Lua e roda o `lintr` nos arquivos R, só nas linhas

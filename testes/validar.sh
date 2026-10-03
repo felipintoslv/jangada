@@ -144,8 +144,31 @@ validar 'STATUS: APROVADO' --modelo modelo-teste; rc=$?
 conferir "caso codex-codex: mesmo e seleção de modelo" \
   bash -c '[[ "$1" == 0 ]] && grep -qx modelo-teste "$2"' _ "$rc" "$tmp/falso/codex.args"
 sessao_de codex codex
-FALSO_CODEX_ERRO=1 validar 'STATUS: APROVADO'; rc=$?
+FALSO_CODEX_ERRO=1 validar 'STATUS: APROVADO' --revisor codex; rc=$?
 conferir "caso codex-codex: falha do processo não aprova" [ "$rc" = 1 ]
+conferir "caso codex-codex: com --revisor, a falha não passa a outro modelo" test ! -e "$tmp/falso/claude.pedido"
+
+# Revisor que falha: a revisão passa aos outros modelos e, por último, ao do autor.
+sessao_de codex codex
+FALSO_CODEX_ERRO=1 validar 'STATUS: APROVADO'; rc=$?
+conferir "caso reserva: falha do Codex passa ao Claude" \
+  bash -c '[ "$1" = 0 ] && [ "$(jq -r .validacao "$2")" = "r1: APROVADO (claude)" ]' _ "$rc" "$estado/s.json"
+conferir "caso reserva: o Claude não revisa como o mesmo modelo" \
+  bash -c '! grep -q "revisão pelo mesmo modelo" "$1"' _ "$tmp/falso/claude.pedido"
+sessao_de claude
+FALSO_AGENTES=explorador validar 'STATUS: APROVADO'; rc=$?
+conferir "caso reserva: falha do agy passa ao Codex" \
+  bash -c '[ "$1" = 0 ] && [ "$(jq -r .validacao "$2")" = "r1: APROVADO (codex)" ]' _ "$rc" "$estado/s.json"
+conferir "caso reserva: o pedido é o do Codex, sem ferramenta de leitura" \
+  grep -q "não tem ferramenta de leitura" "$tmp/falso/codex.pedido"
+conferir "caso reserva: o autor fica para o fim" test ! -e "$tmp/falso/claude.pedido"
+conferir "caso reserva: a falha do agy fica nas métricas" \
+  bash -c '[ "$(tail -n2 "$1" | jq -r "[.resultado, .revisor] | join(\" \")" | paste -sd,)" = "erro agy,aprovado codex" ]' _ "$tmp/estado/jangada/validar.jsonl"
+sessao_de claude
+FALSO_AGENTES=explorador FALSO_CODEX_ERRO=1 validar 'STATUS: APROVADO'; rc=$?
+conferir "caso reserva: sem agy nem Codex, o Claude revisa o próprio trabalho" \
+  bash -c '[ "$1" = 0 ] && [ "$(jq -r .validacao "$2")" = "r1: APROVADO (claude)" ] && grep -q "revisão pelo mesmo modelo" "$3"' \
+  _ "$rc" "$estado/s.json" "$tmp/falso/claude.pedido"
 unset VALIDAR_PATH
 
 # Revisor preso: o prazo encerra a chamada, e a resposta que viria não aprova.
@@ -204,7 +227,7 @@ conferir "caso 6: estado registra a rodada e o revisor agy" [ "$(jq -r .validaca
 # Caso 6b: sem o agente revisor, o agy rodaria o agente padrão, com todas as
 # ferramentas; a validação para antes do pedido.
 sessao_de claude
-FALSO_AGENTES=explorador validar 'STATUS: APROVADO'; rc=$?
+FALSO_AGENTES=explorador validar 'STATUS: APROVADO' --revisor agy; rc=$?
 conferir "caso 6b: sem o agente revisor a validação falha sem chamar o agy" \
   bash -c '[ "$1" != 0 ] && [ ! -e "$2" ] && grep -q "agente revisor" "$3"' _ "$rc" "$tmp/falso/agy.pedido" "$tmp/saida.log"
 
@@ -658,7 +681,7 @@ conferir "caso 17: --metricas resume" \
 conferir "caso 17: --metricas separa por revisor" grep -q "^  agy: 2 revisão(ões), 50% aprovadas" "$tmp/saida.log"
 # Resposta vazia do agy, duas vezes, é falha do revisor.
 echo "m3" >>"$tmp/projeto/metricas.txt"
-validar ''
+validar '' --revisor agy
 conferir "caso 17: falha do revisor registrada" \
   bash -c '[ "$(tail -n1 "$1" | jq -r "[.resultado, .etapa] | join(\" \")")" = "erro revisor" ]' _ "$metricas"
 JANGADA_VALIDAR_RODADAS=0 validar 'STATUS: APROVADO'
