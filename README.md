@@ -833,6 +833,12 @@ A cada push, o GitHub Actions (`.github/workflows/verificar.yml`) roda o
 sem sudo, conferindo que nada foi escrito. R e `lintr` ficam de fora da CI, e
 o caso do `lintr` só roda na máquina local.
 
+A CI roda em dois ambientes: `fixo`, com a imagem do Arch por digest e os
+pacotes do Arch Linux Archive na mesma data, e `atual`, com `archlinux:latest`.
+Nos dois, `JANGADA_TESTES_EXIGIR_ISOLAMENTO=1` faz o teste reprovar onde o
+`bwrap` não cria o isolamento, em vez de pular. Use a mesma variável antes de
+publicar uma versão.
+
 Os testes nunca tocam a configuração real: rodam com `XDG_CONFIG_HOME` e
 `XDG_STATE_HOME` temporários, e o `jangada-tema` respeita o
 `XDG_CONFIG_HOME` também nas saídas do matugen.

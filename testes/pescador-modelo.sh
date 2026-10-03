@@ -30,5 +30,6 @@ if command -v bwrap >/dev/null && bwrap --ro-bind / / --dev /dev --proc /proc tr
   [[ ! -e "$tmp/casa/fora.txt" ]]
   echo 'ok    executor sem ferramentas e isolado, mesmo com configuração global desligada'
 else
+  [[ "${JANGADA_TESTES_EXIGIR_ISOLAMENTO:-}" != 1 ]] || { echo 'FALHA isolamento real exigido e indisponível'; exit 1; }
   echo 'pulado: isolamento real exige bubblewrap e namespaces permitidos'
 fi

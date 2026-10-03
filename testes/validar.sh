@@ -813,7 +813,11 @@ exit 0
     [ "$(cat "$tmp/projeto/.jangada/isolado" 2>/dev/null)" = 1 ]
   conferir "caso 20b: o .jangada/validar.sh não grava fora do projeto" test ! -e "$tmp/validar-fora"
 else
-  echo "pulado caso 20b: bwrap ausente ou namespaces indisponíveis"
+  if [[ "${JANGADA_TESTES_EXIGIR_ISOLAMENTO:-}" == 1 ]]; then
+    falha "caso 20b: bwrap ausente ou sem namespaces e o isolamento real é exigido"
+  else
+    echo "pulado caso 20b: bwrap ausente ou namespaces indisponíveis"
+  fi
 fi
 # Caso 20c: sem o bwrap, o .jangada/validar.sh não roda e a validação reprova.
 sem_bwrap="$tmp/sem-bwrap"

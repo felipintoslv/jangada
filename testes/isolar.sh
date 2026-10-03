@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Testa o jangada-isolar. A parte que roda o bwrap de verdade se pula onde ele
-# não consegue criar o namespace (alguns contêineres).
+# não consegue criar o namespace (alguns contêineres); com
+# JANGADA_TESTES_EXIGIR_ISOLAMENTO=1, pular vira falha.
 #
 # Uso: testes/isolar.sh
 set -uo pipefail
@@ -854,7 +855,11 @@ EOF
     conferir "caso 3d: o vigia sai depois do KILL no jangada-isolar" bash -c '! "$@"' _ pgrep -f "^inotifywait .*$casa/.local/state/jangada/agentes"
   fi
 else
-  echo "pulado caso 3: bwrap não cria namespace aqui"
+  if [[ "${JANGADA_TESTES_EXIGIR_ISOLAMENTO:-}" == 1 ]]; then
+    falha "caso 3: bwrap não cria namespace e o isolamento real é exigido"
+  else
+    echo "pulado caso 3: bwrap não cria namespace aqui"
+  fi
 fi
 
 # Caso 4: a trava do estado não abre para escrita um caminho que o agente

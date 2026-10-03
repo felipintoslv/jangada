@@ -9,21 +9,43 @@ on:
 
 jobs:
   verificar:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # "fixo" repete sempre os mesmos pacotes: imagem por digest e
+          # repositórios do Arch Linux Archive na data dela. "atual" acompanha
+          # as atualizações e acusa quebra nova.
+          - ambiente: fixo
+            imagem: archlinux@sha256:b21322c663be387c0ed9cbc7bbbfe18e41633ad4e7b7c77cfad45f128be20040
+            arquivo: 2026/09/27
+          - ambiente: atual
+            imagem: archlinux:latest
+            arquivo: ""
+    name: verificar (${{ matrix.ambiente }})
     runs-on: ubuntu-latest
-    container: archlinux:latest
+    container:
+      image: ${{ matrix.imagem }}
+      # O bwrap precisa criar namespaces, e o Docker barra isso por padrão.
+      options: --privileged
     steps:
+      - name: Repositórios da data fixa
+        if: matrix.arquivo != ''
+        run: echo 'Server = https://archive.archlinux.org/repos/${{ matrix.arquivo }}/$repo/os/$arch' >/etc/pacman.d/mirrorlist
+
       # R e lintr ficam de fora: compilar o lintr leva minutos, e o caso 12 do
       # testes/validar.sh se pula sozinho sem eles.
       - name: Dependências
         run: pacman -Syu --noconfirm --needed git sudo shellcheck lua jq python python-pyqt6 qt6-declarative gitleaks bubblewrap diffutils openssh
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
+      # Sem o isolamento de verdade, o teste reprova em vez de pular.
       - name: Testes
         run: |
           useradd -m testes
           chown -R testes:testes "$GITHUB_WORKSPACE"
-          runuser -u testes -- env GIT_CONFIG_GLOBAL=/tmp/jangada-ci-gitconfig sh -ec '
+          runuser -u testes -- env GIT_CONFIG_GLOBAL=/tmp/jangada-ci-gitconfig JANGADA_TESTES_EXIGIR_ISOLAMENTO=1 sh -ec '
             git config --global user.name ci
             git config --global user.email ci@localhost
             testes/verificar.sh
