@@ -223,6 +223,16 @@ assinar <<<s
 conferir "enviado sem assinatura: avisa e diz o commit" \
   bash -c 'grep -q "já enviados sem assinatura" "$1" && grep -q "feat(teste): enviado sem assinatura" "$1"' _ "$tmp/saida"
 conferir "enviado sem assinatura: não reescreve" [ "$(git -C "$origem" rev-parse HEAD)" = "$e1" ]
+# Caminho da cópia instalada com espaço e caracteres do shell: o comando do
+# aviso sai com escape e só avança essa cópia.
+especial="$tmp/inst alada;\$(touch alerta-escape)"
+git clone --quiet "$origem" "$especial"
+git -C "$especial" reset --quiet --hard "$(head_instalado)"
+(cd "$tmp" && JANGADA_PATH="$especial" "$repo_jangada/bin/jangada-assinar" "$origem") >"$tmp/saida-especial" 2>&1 <<<s
+conferir "enviado sem assinatura, caminho com espaço e \$(): o comando do aviso avança só essa cópia" \
+  bash -c 'cd "$5" && eval "$(grep -o "git -C .* merge --ff-only [0-9a-f]*" "$1")" >/dev/null 2>&1
+    [ "$(git -C "$2" rev-parse HEAD)" = "$3" ] && [ "$(git -C "$4" rev-parse HEAD)" != "$3" ] && [ ! -e alerta-escape ]' \
+  _ "$tmp/saida-especial" "$especial" "$e1" "$instalado" "$tmp"
 avanco="$(grep -o 'git -C .* merge --ff-only [0-9a-f]*' "$tmp/saida")"
 conferir "enviado sem assinatura: o comando do aviso avança a cópia instalada" \
   bash -c 'eval "$1" >/dev/null 2>&1 && [ "$(git -C "$2" rev-parse HEAD)" = "$3" ]' _ "$avanco" "$instalado" "$e1"
