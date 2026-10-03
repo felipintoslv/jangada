@@ -3,6 +3,7 @@
 
 import base64
 import fcntl
+import hashlib
 import importlib.util
 import json
 import os
@@ -101,6 +102,10 @@ if modo == 'erro':
     sys.exit(1)
 saida = pathlib.Path(args[args.index('--output-last-message') + 1])
 texto = 'A regra possui conteúdo documentado na fonte fornecida. ' + dados['fontes'][0]['fonte'] + ':1'
+if modo == 'parecer':
+    texto = json.dumps({'task_id':'S1','relatorio_sha256':'0'*64,'decisao':'APPROVED',
+                        'criterios':{c:{'resultado':'PASS','justificativa':'Regra conferida na fonte '+dados['fontes'][0]['fonte']+':1'}
+                                     for c in ('fidelidade','completude','extrapolacoes')},'observacoes':[]})
 if modo == 'sem-fonte':
     texto = 'Texto sem referência.'
 if modo == 'gigante':
@@ -133,11 +138,52 @@ if modo == 'duplicado':
         self.assertEqual(dados['fontes'], [{'fonte': str(self.fonte), 'linhas': '1: Regra documentada na primeira linha.'}])
 
     def test_supervisor_codex_documental_sem_ferramentas_e_local_proibido(self):
+        self.stub_worker('parecer')
         resultado = self.delegar(('--permitir-remoto', '--permitir-codex'), candidato=True, papel='supervisor')
         self.assertEqual(resultado.returncode, 0, resultado.stderr)
         self.assertEqual(json.loads(resultado.stdout)['destino'], 'codex-economico')
+        registro = json.loads(resultado.stdout)
+        self.assertEqual(json.loads(pathlib.Path(registro['artefato']).read_text())['decisao'], 'APPROVED')
         resultado = self.delegar(('--destino', 'local'), papel='supervisor')
         self.assertEqual(resultado.returncode, 4, resultado.stderr)
+
+    def test_pipeline_real_codex_autor_agy_supervisor_com_modelos_simulados(self):
+        from estado import Estado
+        from executor import executar
+
+        (self.config / 'delegacao.json').write_text(json.dumps({'analise_documental': ['codex-economico', 'agy']}))
+        casa = self.pasta / 'home'
+        configuracao = casa / '.gemini/antigravity-cli'
+        configuracao.mkdir(parents=True)
+        (configuracao / 'settings.json').write_text(json.dumps({'trustedWorkspaces':[str(self.pasta)]}))
+        self.programa(self.bin / 'agy', '''import json,sys
+if sys.argv[1]=='agents':
+    print('supervisor');sys.exit(0)
+if sys.argv[2]=='/usage':
+    print(json.dumps({'status':'SUCCESS','response':'','command':{'name':'usage','data':{'groups':[
+        {'name':'Gemini Models','buckets':[{'id':'gemini-5h','remaining_fraction':0.9}]}]}}}));sys.exit(0)
+pedido=sys.argv[sys.argv.index('-p')+1]
+vinculo=json.loads(next(l for l in pedido.splitlines() if l.startswith('{"task_id":')))
+fontes=[l.split(':N (texto);')[0] for l in pedido.splitlines() if ':N (texto);' in l]
+justificativa='Informações conferidas e coerentes com as fontes: '+', '.join(f'{f}:1' for f in fontes)
+parecer={'task_id':vinculo['task_id'],'relatorio_sha256':vinculo['relatorio_sha256'],'decisao':'APPROVED',
+         'criterios':{c:{'resultado':'PASS','justificativa':justificativa} for c in
+                     ('fidelidade','completude','extrapolacoes')},'observacoes':[]}
+print(json.dumps({'status':'SUCCESS','conversation_id':'sup','response':json.dumps(parecer)}))
+''')
+        estado = Estado(self.pasta / 'execucao')
+        self.addCleanup(estado.fechar)
+        estado.importar([{'id':'S1','pedido':'Resuma a regra','papel':'leitor','capacidade':'analise_documental',
+                          'risco':1,'qualidade':'medium','fontes':[str(self.fonte)],
+                          'hashes_fontes':{str(self.fonte):hashlib.sha256(self.fonte.read_bytes()).hexdigest()},
+                          'intermediaria':True,'supervisao_automatica':True,'permitir_remoto':True,'permitir_codex':True}])
+        with patch.dict(os.environ, HOME=str(casa), JANGADA_DELEGAR_IMPEDIMENTOS='[]'):
+            resultado = executar(estado,self.pasta,self.raiz,permitir_remoto=True,
+                                 permitir_codex=True,supervisao_automatica=True)[0]
+        self.assertEqual(resultado['status'],'COMPLETED',resultado)
+        self.assertEqual(resultado['delegacao']['destino'],'codex-economico')
+        self.assertEqual(resultado['supervisao']['executor'],'agy')
+        self.assertEqual(resultado['metricas']['chamadas'],2)
 
     def test_modelo_ausente_ou_invalido_nao_escolhe_padrao(self):
         for modelo in ('', 'modelo com espaços', '--premium'):

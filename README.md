@@ -380,6 +380,7 @@ vale pela instrução e, no agy, pelo `permissions.allow`.
 | `arquiteto` | estrutura de módulos, contratos de API e impacto de mudanças | sonnet | flash (high) |
 | `otimizador` | gargalos de desempenho, complexidade e uso de memória | sonnet | flash (medium) |
 | `redator` | conformidade textual, clareza e regras de escrita do AGENTS.md | haiku | flash (low) |
+| `supervisor` | fidelidade de relatório intermediário às fontes, sem aprovação de entrega final | haiku | flash (medium) |
 
 O item 8 do protocolo diz a quem delegar, conforme `JANGADA_DELEGAR` do
 perfil (ou global), e o seletor mostra o destino:

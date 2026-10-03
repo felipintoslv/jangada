@@ -3,4 +3,4 @@
      web, verificar antes do `jangada-validar`, auditar segurança, analisar
      arquitetura, otimizar desempenho ou revisar redação, use os subagentes do
      Claude dos papéis explorador, leitor, pesquisador, verificador, auditor,
-     arquiteto, otimizador e redator. Nunca `general-purpose` para essas funções.
+     arquiteto, otimizador, redator e supervisor. Nunca `general-purpose` para essas funções.

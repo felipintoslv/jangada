@@ -37,7 +37,7 @@ def resumir(estado):
                       tokens_entrada=0, tokens_saida=0, tokens_entrada_confirmados=0,
                       tokens_saida_confirmados=0, mudancas_entre_candidatos=0,
                       revisoes_aprovadas=0, revisoes_reprovadas=0, revisoes_sem_saida=0,
-                      supervisoes_aprovadas=0, supervisoes_reprovadas=0, supervisoes_inconclusivas=0,
+                      supervisoes_aprovadas=0, supervisoes_reprovadas=0, supervisoes_inconclusivas=0, esperas_supervisao=0,
                       custo_estimado=None)
         executores, janelas, saidas = {}, {}, {}
         eventos = estado.db.execute('SELECT tarefa,evento,dados FROM eventos ORDER BY seq')
@@ -70,8 +70,9 @@ def resumir(estado):
                 totais['execucoes_registradas'] += 1
                 supervisao = resultado.get('supervisao')
                 if isinstance(supervisao, dict):
-                    campo = {'APPROVED': 'supervisoes_aprovadas', 'REVISE': 'supervisoes_reprovadas'}.get(
-                        supervisao.get('decisao'), 'supervisoes_inconclusivas')
+                    campo = 'esperas_supervisao' if supervisao.get('aguardando') is True else {
+                        'APPROVED': 'supervisoes_aprovadas', 'REVISE': 'supervisoes_reprovadas'}.get(
+                            supervisao.get('decisao'), 'supervisoes_inconclusivas')
                     totais[campo] += 1
                 totais['processamentos_confirmados'] += int(iniciou)
                 totais['recusas_sem_chamadas'] += int(inteiro(quantidade) and quantidade == 0 and resultado.get('execucao_iniciada') is False)

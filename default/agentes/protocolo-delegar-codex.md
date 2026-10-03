@@ -12,3 +12,6 @@
      e `--arquivos`. Use `--permitir-remoto` somente quando houver autorização
      para enviar as fontes ao agy e o perfil permitir. A verificação de
      referências não aprova o conteúdo nem substitui a revisão da entrega.
+   - O papel `supervisor`, com `analise_documental`, confere somente relatórios
+     intermediários autorizados. Não use o Ollama para emitir esse parecer
+     nem substitua o `jangada-validar` por supervisão de conteúdo.

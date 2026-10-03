@@ -903,6 +903,21 @@ id_roteamento="$(jq -r '.roteamento_id' "$tmp/saida")"
 jq -c --arg id "$id_roteamento" 'select(.roteamento_id == $id)' "$reg" >"$tmp/roteamento.jsonl"
 conferir "painel: falha total conta executores e recusa final, sem duplicar consumo" painel_roteamento 3
 
+parecer_supervisor="$(jq -cn --arg fonte "A informação foi conferida na fonte $tmp/projeto/doc1.txt:1" \
+  '{task_id:"S1",relatorio_sha256:("0" * 64),decisao:"APPROVED",
+    criterios:{fidelidade:{resultado:"PASS",justificativa:$fonte},
+               completude:{resultado:"PASS",justificativa:$fonte},
+               extrapolacoes:{resultado:"PASS",justificativa:$fonte}},observacoes:[]}')"
+AGENTES=supervisor RESPOSTA="$parecer_supervisor" delegar supervisor "compare as fontes" \
+  --destino agy --capacidade analise_documental --permitir-remoto --json \
+  --arquivo "$tmp/parecer-supervisor.json" --arquivos "$tmp/projeto/doc1.txt"
+conferir "supervisor agy: JSON puro passa pelo comando real e pelo gate de referências" [ "$(codigo)" = 0 ]
+conferir "supervisor agy: relatório completo continua JSON" jqok -e '.decisao == "APPROVED"' "$tmp/parecer-supervisor.json"
+AGENTES=leitor delegar supervisor "compare as fontes" --destino agy \
+  --capacidade analise_documental --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "supervisor ausente do catálogo: recusa antes da geração" [ "$(codigo)" = 4 ]
+conferir "supervisor ausente do catálogo: não usa agente padrão" test ! -e "$tmp/falso/agy.args"
+
 echo
 if ((falhas)); then
   echo "$falhas teste(s) falharam"

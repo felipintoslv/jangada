@@ -57,6 +57,7 @@ if revisao:
     saida.write_text('{quebrado' if modo=='json' else json.dumps(parecer,ensure_ascii=False))
 else:
     saida.write_text('Resumo da regra conferida: '+', '.join(f'{f}:1' for f in fontes))
+    if modo=='autor_sem_tentativas':registro['tentativas']=None
 print(json.dumps(registro))
 '''
 
@@ -147,6 +148,14 @@ class Supervisao(unittest.TestCase):
         self.assertEqual(self.estado.listar()[0]['artefato'], artefato)
         self.assertEqual(self.estado.consumo('T1')['chamadas'], 2)
         self.assertEqual(resumir(self.estado)['chamadas_confirmadas'], 2)
+        self.assertEqual(resumir(self.estado)['esperas_supervisao'], 1)
+        self.assertEqual(resumir(self.estado)['supervisoes_inconclusivas'], 0)
+
+    def test_autor_sem_lista_de_tentativas_nao_chega_a_supervisao(self):
+        self.estado.importar([self.tarefa()])
+        with patch.dict(os.environ, MODO_SUPERVISAO='autor_sem_tentativas'):
+            self.assertEqual(self.rodar()[0]['status'], 'REVISION_REQUIRED')
+        self.assertEqual([c['fase'] for c in self.chamadas()], ['autor'])
 
     def test_acompanhamento_retoma_supervisao_quando_quota_retorna(self):
         global_estado = Estado(self.pasta / 'saude')
@@ -214,8 +223,15 @@ class Supervisao(unittest.TestCase):
         self.assertEqual(self.estado.listar(), [])
 
     def test_parecer_com_chave_duplicada_e_rejeitado(self):
+        valido = {'task_id':'T1', 'relatorio_sha256':hashlib.sha256(b'texto').hexdigest(),
+                  'decisao':'APPROVED', 'criterios':{c:{'resultado':'PASS',
+                    'justificativa':'A informação corresponde à fonte indicada em fonte.md:1.'} for c in
+                    ('fidelidade','completude','extrapolacoes')}, 'observacoes':[]}
+        texto = json.dumps(valido)
+        self.assertEqual(parecer_valido(texto, self.tarefa(), 'texto')['decisao'], 'APPROVED')
+        duplicado = texto.replace('"task_id": "T1"', '"task_id": "T1", "task_id": "T1"', 1)
         with self.assertRaises(ValueError):
-            parecer_valido('{"task_id":"T1","task_id":"T2"}', self.tarefa(), 'texto')
+            parecer_valido(duplicado, self.tarefa(), 'texto')
 
     def test_aprovacao_do_worker_nao_substitui_supervisor(self):
         self.estado.importar([self.tarefa()])

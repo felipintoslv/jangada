@@ -159,6 +159,15 @@ conferir "rodar de novo não muda nada" \
   bash -c '[ "$1" = "$(cat "$2")" ] && [ "$3" = "$(find "$4" -name "*.bak" | wc -l)" ] && grep -q "já registrados" "$5"' \
   _ "$antes" "$agentes_json" "$n_bak" "$tmp/home/.gemini/config" "$tmp/saida.log"
 
+rm "$tmp/home/.claude/agents/supervisor.md"
+env HOME="$tmp/home" JANGADA_PATH="$repo_jangada" JANGADA_SIMULAR=0 \
+  bash migrations/202610030100-supervisor-intermediario.sh >"$tmp/migracao.log"
+conferir "migração liga supervisor sem reinstalar" \
+  [ "$(readlink "$tmp/home/.claude/agents/supervisor.md")" = "$repo_jangada/default/claude/agents/supervisor.md" ]
+env HOME="$tmp/home" JANGADA_PATH="$repo_jangada" JANGADA_SIMULAR=0 \
+  bash migrations/202610030100-supervisor-intermediario.sh >"$tmp/migracao.log"
+conferir "migração repetida preserva configuração do agy" [ "$(cat "$agentes_json")" = "$antes" ]
+
 # Registros de subagentes e delegações, com as amostras de
 # testes/amostras-subagentes.py.
 amostra="$tmp/amostra"

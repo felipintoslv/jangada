@@ -37,7 +37,7 @@ AGY = os.environ.get("JANGADA_AGY_DIR") or os.path.join(CASA, ".gemini/antigravi
 
 PAPEIS = (
     "explorador", "leitor", "pesquisador", "verificador",
-    "auditor", "arquiteto", "otimizador", "redator",
+    "auditor", "arquiteto", "otimizador", "redator", "supervisor",
 )
 EDICAO_CLAUDE = {"Edit", "Write", "NotebookEdit", "MultiEdit"}
 EDICAO_AGY = (b"write_to_file", b"replace_file_content", b"multi_replace_file_content")

@@ -22,6 +22,7 @@ Cada papel existe nos dois agentes, com o mesmo nome: no Claude em
 | arquiteto | módulos, contratos e impacto de mudança | sonnet | Flash, alto |
 | otimizador | gargalos, leituras redundantes, memória | sonnet | Flash, médio |
 | redator | clareza e regras de texto do `AGENTS.md` | haiku | Flash, baixo |
+| supervisor | fidelidade de relatório intermediário às fontes | haiku | Flash, médio |
 
 O agy tem também o `revisor`, usado só pelo `jangada-validar`, com
 ferramentas de leitura.
@@ -471,6 +472,10 @@ Erros exigem correção; ambiguidades, parecer inválido ou consumo desconhecido
 mantêm revisão pendente. Não se repetem pareceres inconclusivos até obter aprovação.
 
 Autor e supervisor compartilham o limite de chamadas e o tempo da tarefa.
+As retomadas de supervisão também compartilham `max_tentativas`, cujo padrão
+é 2. Uma retomada que inicia chamadas usa a segunda tentativa; recusas com
+zero chamadas não gastam tentativa. Esgotar esse limite deixa o relatório
+para revisão manual, sem repetir o autor.
 Sem quota ou supervisor autorizado, o relatório completo permanece salvo.
 `--supervisionar` retoma somente a revisão quando o provedor estiver disponível;
 `--acompanhar` consulta a saúde e aguarda a recuperação dentro do prazo configurado.
@@ -478,7 +483,9 @@ As fontes e dependências são conferidas novamente antes da conclusão.
 
 O parecer completo fica no resultado da tarefa. Referências ao relatório
 temporário são vinculadas pelo SHA-256 ao artefato preservado. As métricas
-distinguem pareceres automáticos de revisões manuais; aprovação automática
+distinguem pareceres automáticos, revisões manuais e esperas de quota. `esperas_supervisao`
+conta tentativas que aguardaram um supervisor, separadas dos pareceres.
+Uma aprovação automática
 não alimenta o histórico usado para sugerir redução da amostragem.
 Essa supervisão não aprova entregas finais, publicação, alterações de produção
 ou a entrega de código do próprio Jangada. `jangada-validar` continua obrigatório.
