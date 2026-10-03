@@ -221,6 +221,9 @@ O revisor recebe as regras da base, commits, diff e parecer anterior pela
 entrada padrão. Nesta etapa ele avalia somente esse pedido, sem ler outros
 arquivos do projeto. Isso preserva a proibição de comandos do protocolo.
 Ausência de contexto pode resultar em `STATUS: REVISAR`.
+Quando o diff é cortado ou traz arquivo novo acima de 50 KB, o
+`jangada-validar` recusa o Codex como revisor: ele aprovaria sem ter lido a
+entrega inteira.
 
 A última mensagem é normalizada pelo mesmo mecanismo de Claude e agy.
 Erro do processo não aprova a entrega, mesmo que tenha produzido um arquivo

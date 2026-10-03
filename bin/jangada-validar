@@ -23,6 +23,8 @@
 # tempo limite deve dar pelo menos 10 minutos. Cada chamada ao revisor tem
 # prazo de JANGADA_VALIDAR_PRAZO segundos (540); vencido, o revisor é
 # encerrado e a rodada sai com código 1, sem parecer.
+# O diff acima de JANGADA_VALIDAR_DIFF_MAX bytes (150000) vai cortado; o
+# Codex, que revisa sem ferramentas, recusa a entrega que não cabe no pedido.
 #
 # Saída: o parecer, que começa por "STATUS: APROVADO" ou "STATUS: REVISAR", e
 # fica gravado em ~/.local/state/jangada/agentes/validacao-SESSAO-rN.md.
@@ -51,7 +53,7 @@ while (($#)); do
     --pular-local) pular_local=1; shift ;;
     --reverter-se-limite) reverter_se_limite=1; shift ;;
     --metricas) metricas=1; shift ;;
-    -h|--ajuda|--help) sed -n '2,28s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    -h|--ajuda|--help) sed -n '2,32s/^# \{0,1\}//p' "$0"; exit 0 ;;
     --) shift; break ;;
     -*) echo "opção desconhecida: $1" >&2; exit 1 ;;
     *) break ;;
@@ -333,6 +335,7 @@ while IFS= read -r n; do
     && mais=$((mais + $(wc -l <"$dir/$n")))
 done <<<"$novos"
 [[ -n "$novos" ]] && arquivos+="${arquivos:+$'\n'}$(sed 's/^/??\t/' <<<"$novos")"
+fora_do_pedido=""
 if [[ -n "$novos" ]]; then
   conteudo_novos=""
   while IFS= read -r n; do
@@ -352,6 +355,7 @@ if [[ -n "$novos" ]]; then
         conteudo_novos+="$(<"$dir/$n")"
       else
         conteudo_novos+="${conteudo_novos:+$'\n\n'}=== Arquivo novo (não rastreado, >50KB): $n ==="$'\n[arquivo muito grande para o diff; leia com a ferramenta se necessário]'
+        fora_do_pedido+="$n"$'\n'
       fi
     else
       conteudo_novos+="${conteudo_novos:+$'\n\n'}=== Arquivo novo (não rastreado, binário): $n ==="
@@ -425,6 +429,15 @@ ou em parte; leia cada um com a ferramenta antes de aprovar e diga no parecer
 se não conseguiu:
 $cortados
 ...]"
+  fora_do_pedido+="$cortados"$'\n'
+fi
+# O Codex revisa sem ferramentas: o que não vai no pedido ele não lê, e a
+# aprovação dele valeria para um diff visto pela metade.
+if [[ "$revisor" == codex && -n "$fora_do_pedido" ]]; then
+  echo "jangada-validar: o Codex revisa sem ferramentas e não leria o que ficou fora do pedido:" >&2
+  sed '/^$/d; s/^/  /' <<<"$fora_do_pedido" >&2
+  echo "Use --revisor claude ou agy, aumente JANGADA_VALIDAR_DIFF_MAX ($diff_max) ou divida a entrega." >&2
+  exit 1
 fi
 
 # As regras do projeto vão da base, não do worktree: o autor não reescreve o

@@ -759,7 +759,20 @@ conferir "caso 19: o pedido lista o arquivo depois do corte" \
   bash -c 'sed -n "/diff cortado/,\$p" "$1" | grep -qF "=== Arquivo novo (não rastreado): zzz-depois.txt ==="' _ "$tmp/falso/agy.pedido"
 conferir "caso 19: o pedido lista o arquivo partido no corte" \
   bash -c 'sed -n "/diff cortado/,\$p" "$1" | grep -qF "aaa-grande.txt"' _ "$tmp/falso/agy.pedido"
+# O Codex não tem ferramenta para ler o que o corte deixou de fora.
+sessao_de claude
+JANGADA_VALIDAR_DIFF_MAX=1000 validar 'STATUS: APROVADO' --revisor codex; rc=$?
+conferir "caso 19: Codex recusa o diff cortado" [ "$rc" = 1 ]
+conferir "caso 19: a recusa lista o arquivo de fora" grep -qF "zzz-depois.txt" "$tmp/saida.log"
+conferir "caso 19: o Codex não é chamado" [ ! -s "$tmp/falso/codex.pedido" ]
+conferir "caso 19: a recusa não deixa aprovação" \
+  bash -c '! ls "$1"/validacao-s-r*.md "$1"/validacao-s.aprovado >/dev/null 2>&1' _ "$estado"
 rm -f "$tmp/projeto/aaa-grande.txt" "$tmp/projeto/zzz-depois.txt"
+head -c 60000 /dev/zero | tr '\0' 'a' | fold -w 60 >"$tmp/projeto/novo-grande.txt"
+validar 'STATUS: APROVADO' --revisor codex; rc=$?
+conferir "caso 19: Codex recusa arquivo novo acima de 50 KB" \
+  bash -c '[ "$1" = 1 ] && grep -qF novo-grande.txt "$2"' _ "$rc" "$tmp/saida.log"
+rm -f "$tmp/projeto/novo-grande.txt"
 
 # Caso 20: as regras do projeto vão ao revisor lidas da base, e a entrega que
 # muda o AGENTS.md não muda o critério.

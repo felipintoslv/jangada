@@ -135,6 +135,10 @@ flowchart TD
   (540): vencido, o revisor e o que ele abriu são encerrados, e a rodada sai
   com código 1 e sem parecer. Como as rodadas são contadas pelos pareceres,
   essa chamada não gasta uma das rodadas da entrega.
+  O diff acima de `JANGADA_VALIDAR_DIFF_MAX` bytes (150.000) vai cortado, com
+  a lista do que ficou de fora para o revisor ler. O Codex revisa sem
+  ferramentas: com diff cortado ou arquivo novo acima de 50 KB, a validação
+  recusa a chamada com código 1, antes de gastar a rodada.
 - **Registro.** Cada rodada grava `validacao-ROTULO-rN.md` e uma linha em
   `validar.jsonl` (`registrar`), e atualiza o campo `validacao` do estado.
   Dentro do isolamento, isso vai para `agentes/` e para o `validar.jsonl` do
