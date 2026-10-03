@@ -12,7 +12,7 @@ import uuid
 from PyQt6.QtCore import QProcess, QProcessEnvironment, QTimer, Qt
 from PyQt6.QtGui import QColor, QKeySequence
 from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout,
-                            QHBoxLayout, QLabel, QLineEdit, QMainWindow,
+                            QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow,
                             QPlainTextEdit, QPushButton, QSplitter, QTabWidget,
                             QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 from dados import (CORES, LIMITE, NOME, ORDEM, ROTULOS, Sessao,
@@ -44,6 +44,12 @@ class NovaTarefa(QDialog):
         linha = QHBoxLayout()
         linha.addWidget(self.projeto)
         linha.addWidget(escolher)
+        self.base = Path(os.environ.get('JANGADA_PROJETOS') or Path.home() / 'Projetos').expanduser()
+        nova = QPushButton('Nova pasta')
+        nova.setToolTip(f'Cria a pasta de um projeto novo em {self.base}' if janela.real else 'Simulação: nenhuma pasta é criada.')
+        nova.setEnabled(janela.real)
+        nova.clicked.connect(self.nova_pasta)
+        linha.addWidget(nova)
         formulario.addRow('Projeto', linha)
         self.agente = QComboBox()
         self.agente.addItems(AGENTES)
@@ -78,6 +84,27 @@ class NovaTarefa(QDialog):
         pasta = QFileDialog.getExistingDirectory(self, 'Escolher projeto', self.projeto.text())
         if pasta:
             self.projeto.setText(pasta)
+
+    def nova_pasta(self):
+        nome, aceito = QInputDialog.getText(self, 'Nova pasta', f'Nome do projeto, criado em {self.base}')
+        if aceito:
+            self.criar_pasta(nome)
+
+    def criar_pasta(self, nome):
+        nome = nome.strip()
+        if not nome or nome.startswith('.') or '/' in nome:
+            self.erro.setText('O nome da pasta não pode ser vazio, começar com ponto nem ter barra.')
+            return
+        pasta = self.base / nome
+        try:
+            pasta.mkdir(parents=True)
+        except FileExistsError:
+            self.erro.setText(f'{pasta} já existe. Use Escolher pasta para abrir esse projeto.')
+            return
+        except OSError as erro:
+            self.erro.setText(f'Não foi possível criar {pasta}: {erro.strerror}.')
+            return
+        self.projeto.setText(str(pasta))
 
     def criar(self):
         pedido = self.pedido.toPlainText().strip()

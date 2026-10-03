@@ -21,7 +21,7 @@ from PyQt6.QtCore import QProcess, Qt
 from PyQt6.QtNetwork import QLocalServer
 from PyQt6.QtGui import QTextDocument, QKeySequence
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QPushButton
 import janela
 from janela import Janela
 import central
@@ -554,6 +554,33 @@ class Interface(unittest.TestCase):
         self.assertIs(form, self.janela.formulario)
         self.assertEqual(form.pedido.toPlainText(), 'Meu pedido')
         self.assertFalse((self.raiz / 'acao.json').exists())
+
+    def test_nova_pasta_cria_o_projeto_e_preenche_o_campo(self):
+        base = self.raiz / 'projetos'
+        with patch.dict(os.environ, {'JANGADA_PROJETOS': str(base)}):
+            self.janela.nova_tarefa()
+        form = self.janela.formulario
+        form.criar_pasta(' novo ')
+        self.assertTrue((base / 'novo').is_dir())
+        self.assertEqual(form.projeto.text(), str(base / 'novo'))
+        form.projeto.clear()
+        form.criar_pasta('novo')
+        self.assertIn('já existe', form.erro.text())
+        self.assertEqual(form.projeto.text(), '')
+        for invalido in ('', '.oculta', '../fora', 'a/b'):
+            form.criar_pasta(invalido)
+            self.assertIn('não pode', form.erro.text())
+        self.assertEqual([p.name for p in base.iterdir()], ['novo'])
+        self.assertFalse((self.raiz / 'fora').exists())
+
+    def test_nova_pasta_desligada_na_simulacao(self):
+        demo = Janela(False, self.raiz, self.estado)
+        try:
+            demo.nova_tarefa()
+            botao = next(b for b in demo.formulario.findChildren(QPushButton) if b.text() == 'Nova pasta')
+            self.assertFalse(botao.isEnabled())
+        finally:
+            demo.close()
 
     def test_criar_simulada_persiste_entre_cenarios(self):
         demo = Janela(False, self.raiz, self.estado)

@@ -590,6 +590,8 @@ registros; o contador da barra mantém a limpeza automática de estados órfãos
 e o registro persistente das interrupções, pelo mecanismo anterior.
 
 **Nova tarefa** escolhe projeto, agente e pedido, usando `jangada-agente`.
+**Nova pasta**, no formulário, cria a pasta de um projeto novo em
+`JANGADA_PROJETOS` e a deixa selecionada; a pasta nasce sem repositório Git.
 **Painel de indicadores** e **Conversa de Pescador** abrem os aplicativos
 existentes. O Pescador recebe sua janela geral, sem a conversa selecionada.
 Aprovações nativas e envio de respostas ficam fora desta versão.
