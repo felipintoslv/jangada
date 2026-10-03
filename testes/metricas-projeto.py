@@ -94,6 +94,17 @@ class Indicadores(unittest.TestCase):
         self.assertEqual(grupo['reservas_expiradas'], 1)
         self.assertEqual(grupo['duracoes_do_fluxo_desconhecidas'], 1)
 
+    def test_reserva_em_aberto_nao_parece_consumo_zero(self):
+        self.importar()
+        self.estado.reservar()
+        resultado = resumir(self.estado)
+        self.assertEqual(resultado['reservas_em_aberto'], 1)
+        self.assertEqual(resultado['processamentos_confirmados'], 0)
+        self.assertIsNone(resultado['chamadas'])
+        self.assertIsNone(resultado['tokens_entrada'])
+        self.assertIsNone(resultado['segundos'])
+        self.assertEqual(resultado['por_executor'][0]['reservas_em_aberto'], 1)
+
     def test_duracao_omitida_nao_e_zero_e_bloqueia_repeticao(self):
         self.importar()
         _, dono = self.estado.reservar()

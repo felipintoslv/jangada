@@ -20,7 +20,7 @@ def identidade(resultado):
 
 def grupo_executor(executores, executor, modelo):
     return executores.setdefault((executor, modelo), dict(executor=executor, modelo=modelo,
-        execucoes_registradas=0, processamentos_confirmados=0, reservas_expiradas=0,
+        execucoes_registradas=0, processamentos_confirmados=0, reservas_expiradas=0, reservas_em_aberto=0,
         chamadas_do_fluxo_confirmadas=0, chamadas_do_fluxo_desconhecidas=0,
         segundos_do_fluxo_confirmados=0, duracoes_do_fluxo_desconhecidas=0))
 
@@ -31,7 +31,7 @@ def resumir(estado):
         tarefas = {t['id']: t for t in estado.listar()}
         totais = dict(tarefas=len(tarefas), estados=dict(collections.Counter(t['status'] for t in tarefas.values())),
                       execucoes_registradas=0, processamentos_confirmados=0, recusas_sem_chamadas=0,
-                      reservas_expiradas=0, repeticoes_solicitadas=0, retomadas=0,
+                      reservas_expiradas=0, reservas_em_aberto=0, repeticoes_solicitadas=0, retomadas=0,
                       chamadas=0, chamadas_confirmadas=0, chamadas_desconhecidas=0,
                       segundos=0, segundos_confirmados=0, duracoes_desconhecidas=0,
                       tokens_entrada=0, tokens_saida=0, tokens_entrada_confirmados=0,
@@ -127,6 +127,17 @@ def resumir(estado):
                     totais['revisoes_sem_saida'] += 1
                 else:
                     janelas.setdefault(chave, collections.deque(maxlen=50)).append(aprovado)
+        abertas = sum(t['status'] == 'RUNNING' for t in tarefas.values())
+        if abertas:
+            totais['reservas_em_aberto'] = abertas
+            totais['chamadas_desconhecidas'] += abertas
+            totais['duracoes_desconhecidas'] += abertas
+            for campo in ('chamadas', 'segundos', 'tokens_entrada', 'tokens_saida'):
+                totais[campo] = None
+            grupo = grupo_executor(executores, 'nao_informado', None)
+            grupo['reservas_em_aberto'] += abertas
+            grupo['chamadas_do_fluxo_desconhecidas'] += abertas
+            grupo['duracoes_do_fluxo_desconhecidas'] += abertas
         desempenho = []
         for (capacidade, executor, modelo, risco), janela in sorted(janelas.items(), key=lambda item: str(item[0])):
             n = len(janela)

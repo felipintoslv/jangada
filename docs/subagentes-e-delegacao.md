@@ -540,6 +540,8 @@ alternativas; não atribuem chamadas ou duração individualmente a cada provedo
 Os contadores `chamadas_do_fluxo_desconhecidas` e `duracoes_do_fluxo_desconhecidas`
 indicam parcelas não medidas. Reservas expiradas entram em `nao_informado`,
 pois não comprovam qual executor chegou a trabalhar.
+Reservas ainda em `RUNNING` aparecem em `reservas_em_aberto`, com consumo
+e duração desconhecidos. O estado não comprova que o processo continua vivo.
 `mudancas_entre_candidatos` conta mudanças de destino na sequência registrada,
 inclusive candidatos recusados. Tokens Codex conhecidos entram no total
 somente quando representam a única chamada; em cadeias com outras chamadas,
