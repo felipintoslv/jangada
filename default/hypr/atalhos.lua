@@ -20,8 +20,8 @@ j.atalho(SUPER .. " + CTRL + L", "Bloquear a tela", j.cmd("jangada-bloquear"))
 
 -- Agentes
 j.atalho(SUPER .. " + A", "Novo agente", j.cmd("jangada-agente", "--janela"))
-j.atalho(SUPER .. " + SHIFT + A", "Lista de agentes", j.cmd("jangada-agentes", "--janela"))
-j.atalho(SUPER .. " + CTRL + A", "Painel de agentes", j.cmd("jangada-agentes", "--painel"))
+j.atalho(SUPER .. " + SHIFT + A", "Central de tarefas", j.cmd("jangada-agentes", "--janela"))
+j.atalho(SUPER .. " + CTRL + A", "Central de tarefas", j.cmd("jangada-agentes", "--painel"))
 j.atalho(SUPER .. " + N", "Próximo agente que espera", j.cmd("jangada-agentes", "--proximo"))
 j.atalho(SUPER .. " + SHIFT + N", "Agente focado antes do atual", j.cmd("jangada-agentes", "--anterior"))
 

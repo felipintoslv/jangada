@@ -68,7 +68,7 @@ window#waybar {
   border: 1px solid alpha(@primaria, 0.35);
 }
 
-/* Ciclo encerrado e aprovado: fica aceso até alguém encerrar a sessão. Usa as
+/* Turno encerrado: fica aceso até alguém encerrar a sessão. Usa as
    cores que já existem, para não depender de um token novo do matugen que um
    cores.css antigo não teria. */
 #custom-agentes.concluido {
@@ -201,3 +201,5 @@ window#waybar.vertical .modules-right {
   margin: 4px 2px;
   padding: 4px 0;
 }
+
+#custom-agentes.erro, #custom-agentes.interrompido { color: @texto_primario; background: @atencao; }

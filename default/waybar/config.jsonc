@@ -42,13 +42,13 @@
   },
 
   "custom/agentes": {
-    "exec": "$JANGADA_PATH/bin/jangada-agentes --waybar",
+    "exec": "$JANGADA_PATH/bin/jangada-tarefas --waybar",
     "return-type": "json",
-    "interval": 30,
+    "interval": 2,
     "signal": 10,
     "format": "{}",
-    "on-click": "setsid -f $JANGADA_PATH/bin/jangada-agentes --janela",
-    "on-click-right": "setsid -f $JANGADA_PATH/bin/jangada-agentes --painel",
+    "on-click": "setsid -f $JANGADA_PATH/bin/jangada-tarefas",
+    "on-click-right": "setsid -f $JANGADA_PATH/bin/jangada-tarefas --nova",
     "tooltip": true
   },
 

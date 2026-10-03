@@ -119,6 +119,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-migrar` | aplica as migrações pendentes (o `jangada-update` já chama) |
 | `jangada-snapshot "descrição"` | cria um snapshot manual do sistema; com `--agente`, o do `jangada-agente --snapshot`, fora da limpeza do snapper e limitado aos `JANGADA_SNAPSHOTS_AGENTE` mais recentes |
 | `jangada-tema [imagem]` | gera as cores a partir de um papel de parede e recarrega a interface |
+| `jangada-tarefas` | central gráfica de tarefas (`--nova`, `--waybar`, `--simular`, `--anterior`) |
 | `jangada-agente` | escolhe o agente (Claude, agy ou Codex), o projeto e cria um worktree, e abre o agente numa sessão tmux, isolado pelo `jangada-isolar` (`--prompt`, `--prompt-arquivo`, `--perfil`, `--sem-isolar`) |
 | `jangada-isolar` | roda um comando no bubblewrap, com o sistema somente leitura e a pasta atual gravável; `--mostrar` imprime a chamada ao `bwrap` |
 | `jangada-delegar PAPEL "pedido"` | delega ao Ollama (`--destino local --arquivos ARQUIVOS`, só leitor e redator) ou ao agy Flash (`--destino agy`); `--capacidade` permite seleção documental para leitor, com autorização remota explícita e referências verificadas; `--json` explica a decisão (ver [delegação](docs/subagentes-e-delegacao.md)) |
@@ -228,7 +229,7 @@ O fluxo completo, com fluxogramas, está em
    refletem a configuração global, o perfil e as opções do comando.
 2. O estado aparece na barra e no painel (`SUPER + CTRL + A`) pelos hooks do
    Claude Code: trabalhando, aguardando (notificação com botão que foca a
-   janela) ou concluído. `SUPER + N` pula para quem espera.
+   janela) ou turno encerrado. `SUPER + N` pula para quem espera.
 3. Antes de entregar, o agente roda `jangada-validar` e o revisor configurado avalia
    o diff (veja abaixo). O último parecer aparece na prévia do seletor.
 4. Para fechar: `jangada-agente-fim --integrar SESSAO` (ou `Alt+I` no seletor)
@@ -548,6 +549,71 @@ desliga o isolamento volta isolada se a configuração global o mantiver ligado.
 Sem o pacote `bubblewrap`, o `jangada-isolar` recusa e o agente não abre; a
 mensagem fica no terminal da sessão. As opções para desligar não liberam o
 Codex nem o executor do Conversa de Pescador.
+
+## Central de tarefas v0.1
+
+`jangada-tarefas`, `SUPER + SHIFT + A` e `SUPER + CTRL + A` abrem a central.
+Cada sessão representa uma tarefa. Pendências aparecem primeiro, seguidas
+por interrupções, trabalho em andamento e turnos encerrados.
+
+A consulta automática roda a cada dois segundos, preservando a seleção.
+O detalhe mostra última atividade, saída recente do terminal e até 50 mudanças
+observadas nesta janela. O histórico começa ao abrir a central, fica em memória
+e recomeça quando a execução da sessão muda. A coluna Atualização usa a data
+publicada pelo agente, sem tratar uma consulta recente como atividade recente.
+
+**Turno encerrado** corresponde ao estado `concluido` dos hooks.
+Ele não confirma conclusão da tarefa nem aprovação da entrega.
+Perguntas e permissões são atendidas pelo botão **Abrir terminal**.
+Sessões interrompidas podem ser retomadas pelo mesmo botão.
+A central não encerra agentes ao fechar nem limpa seus registros.
+
+**Nova tarefa** escolhe projeto, agente e pedido, usando `jangada-agente`.
+**Painel de indicadores** e **Conversa de Pescador** abrem os aplicativos
+existentes. O Pescador recebe sua janela geral, sem a conversa selecionada.
+Aprovações nativas e envio de respostas ficam fora desta versão.
+
+Na Waybar, `custom/agentes` passa a contar tarefas, andamento, pendências e
+interrupções. Clique abre ou foca a central existente; botão direito abre
+Nova tarefa. O sinal 10 continua reservado aos estados das sessões.
+Falhas aparecem como erro, sem um zero que pareça uma consulta bem-sucedida.
+
+### Instalação depois da revisão
+
+A dependência `python-pyqt6` já pertence à etapa 10 da instalação.
+Uma instalação nova usa os padrões da etapa 40. Em instalações existentes,
+`jangada-update` aplica `202610031500-central-tarefas.sh` pelo migrador.
+A migração guarda cópia de segurança e altera apenas os comandos anteriores
+conhecidos em uma cópia própria da Waybar, preservando comentários e controles
+personalizados. Sem cópia própria, a barra usa o padrão atualizado.
+
+Depois de integrar e disponibilizar os commits pelo fluxo habitual, rode
+`jangada-update` na instalação e `jangada-barra` para carregar o módulo.
+Se a dependência estiver ausente, instale `python-pyqt6` antes de abrir a central.
+Para conferir a migração sem aplicar, na cópia instalada:
+
+```sh
+JANGADA_SIMULAR=1 bash "$JANGADA_PATH/migrations/202610031500-central-tarefas.sh"
+```
+
+Para revisar o visual no worktree, sem agentes ou configuração ativa:
+
+```sh
+JANGADA_PATH="$PWD" bin/jangada-tarefas --simular
+```
+
+### Voltar à central anterior
+
+`jangada-tarefas --anterior` abre o painel anterior uma vez.
+`jangada-agentes --janela-anterior` abre o seletor anterior.
+Para voltar também pelos atalhos e pelo módulo da barra, depois da instalação,
+defina `JANGADA_CENTRAL=agentes` em `~/.config/jangada/jangada.conf` e reinicie
+a barra com `jangada-barra`. Feche a janela nova que já estiver aberta.
+`JANGADA_CENTRAL=tarefas` restaura a nova central.
+
+A configuração própria da Waybar também pode ser restaurada da cópia
+`config.jsonc.jangada-AAAAMMDD-HHMMSS.bak` criada pela migração.
+A reversão não apaga sessões, conversas ou worktrees.
 
 ## Painel de indicadores
 
