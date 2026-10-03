@@ -86,6 +86,11 @@ Se testes de sinais passam isolados, mas falham na suíte, compare com
 os sinais herdados e mantém todas as verificações. Investigue qualquer
 falha que persistir.
 
+Ao conferir `/proc/PID/stat` depois de cancelar um processo, a leitura pode
+levantar `FileNotFoundError` ou `ProcessLookupError`. Ambos indicam que o
+processo desapareceu. O teste deve aceitar esses dois erros, mantendo a
+conferência de processo zumbi e o prazo; outros erros continuam sendo falhas.
+
 | Peça | Papel |
 |---|---|
 | `jangada-agente` | escolhe projeto, cria worktree `agente/<nome>` e abre o agente numa sessão `tmux -L jangada`; `--prompt`/`--prompt-arquivo` já entregam a tarefa, `--perfil` escolhe o agente, `--sem-isolar` abre fora do bubblewrap |

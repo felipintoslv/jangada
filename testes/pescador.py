@@ -290,7 +290,7 @@ time.sleep(30)
                 pid = int(pid_arquivo.read_text())
                 def encerrado():
                     try: return Path(f'/proc/{pid}/stat').read_text().split()[2] == 'Z'
-                    except FileNotFoundError: return True
+                    except (FileNotFoundError, ProcessLookupError): return True
                 limite = time.monotonic() + 2
                 while not encerrado() and time.monotonic() < limite: time.sleep(0.01)
                 self.assertTrue(encerrado(), 'O filho do modelo ficou em execução após cancelar.')
