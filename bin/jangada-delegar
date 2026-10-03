@@ -4,7 +4,7 @@
 # código, ler documento longo, pesquisar na web ou verificar antes do
 # jangada-validar.
 #
-# Uso: jangada-delegar PAPEL "pedido" [--destino local|agy] [--arquivos ARQ ...] [--arquivo SAIDA]
+# Uso: jangada-delegar PAPEL "pedido" [--destino local|agy|codex-economico] [--arquivos ARQ ...] [--arquivo SAIDA]
 #   PAPEL             explorador, leitor, pesquisador, verificador,
 #                     auditor, arquiteto, otimizador ou redator
 #                     (no destino local: apenas leitor e redator)
@@ -12,7 +12,8 @@
 #   --arquivos ARQS   arquivos para leitura (obrigatório no destino local)
 #   --arquivo SAIDA   grava o relatório completo em SAIDA
 #   --capacidade C    leitura_documental, resumo_curto ou analise_documental
-#   --permitir-remoto autoriza o agy nesta tarefa, sujeito ao perfil
+#   --permitir-remoto autoriza envio remoto nesta tarefa, sujeito ao perfil
+#   --permitir-codex  autoriza também o Codex econômico (exige capacidade)
 #   --json            devolve resultado e decisão em JSON
 #   --requisito TEXTO exige seção com explicação e referência (repetível, com capacidade)
 #
@@ -35,9 +36,10 @@
 # Cada chamada, atendida ou recusada, acrescenta uma linha a
 # ~/.local/state/jangada/delegacoes.jsonl.
 #
+# Codex econômico exige capacidade, --permitir-remoto e --permitir-codex.
 # Código de saída: 0 relatório; 2 uso errado; 4 recusa (perfil sem delegação,
 # pasta sem confiança, papel não instalado, cota baixa, modelo ausente,
-# jogo aberto, erro ou tempo esgotado). Nunca chama Claude ou Codex.
+# jogo aberto, erro ou tempo esgotado). Não chama Claude nem escolhe Codex premium automaticamente.
 set -euo pipefail
 agente_sessao="${JANGADA_AGENTE:-}"
 # shellcheck source=bin/jangada-config
@@ -48,10 +50,10 @@ if [[ "${JANGADA_SESSAO:-}" =~ ^[A-Za-z0-9_.-]+$ && -f "$JANGADA_ESTADO/agentes/
 fi
 agente_sessao="${agente_sessao:-$JANGADA_AGENTE}"
 
-uso() { sed -n '7,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+uso() { sed -n '7,19p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 papel=""; pedido=""; arquivo=""; destino_opt=""
-capacidade=""; permitir_remoto=0; modo_json=0
+capacidade=""; permitir_remoto=0; permitir_codex=0; modo_json=0
 declare -a arquivos=()
 declare -a requisitos=()
 while (($#)); do
@@ -60,6 +62,7 @@ while (($#)); do
     --destino) [[ $# -ge 2 ]] || uso; destino_opt="$2"; shift 2 ;;
     --capacidade) [[ $# -ge 2 && -n "$2" ]] || uso; capacidade="$2"; shift 2 ;;
     --permitir-remoto) permitir_remoto=1; shift ;;
+    --permitir-codex) permitir_codex=1; shift ;;
     --json) modo_json=1; shift ;;
     --requisito) [[ $# -ge 2 && "$2" =~ [^[:space:]] && "$2" != -* && "$2" != *$'\n'* ]] || uso; requisitos+=("$2"); shift 2 ;;
     --arquivos)
@@ -91,6 +94,7 @@ while (($#)); do
   esac
 done
 [[ -n "$papel" && -n "$pedido" ]] || uso
+if [[ "$destino_opt" == codex-economico && -z "$capacidade" ]]; then uso; fi
 ((${#requisitos[@]} == 0)) || [[ -n "$capacidade" ]] || uso
 
 declare -A esforco=([explorador]=low [leitor]=medium [pesquisador]=medium [verificador]=high [auditor]=high [arquiteto]=high [otimizador]=medium [redator]=low)
@@ -102,7 +106,7 @@ fi
 perfil_delegar="${JANGADA_DELEGAR:-agy}"
 impedimentos="${JANGADA_DELEGAR_IMPEDIMENTOS:-[]}"
 if ! jq -e 'type == "array" and all(.[]; type == "object"
-  and (.destino == "local" or .destino == "agy")
+  and (.destino == "local" or .destino == "agy" or .destino == "codex-economico")
   and (.motivo | type == "string")
   and (.motivo_codigo == "provedor_pausado" or .motivo_codigo == "provedor_em_espera"
     or .motivo_codigo == "cota_indisponivel"))' <<<"$impedimentos" >/dev/null; then
@@ -117,7 +121,7 @@ fi
 
 if [[ -n "$destino_opt" ]]; then
   case "$destino_opt" in
-    local|agy) destino="$destino_opt" ;;
+    local|agy|codex-economico) destino="$destino_opt" ;;
     *) echo "jangada-delegar: destino inválido: $destino_opt (local ou agy)" >&2; uso ;;
   esac
 else
@@ -129,6 +133,7 @@ fi
 inicio=$SECONDS
 cota=""; cota_depois=""; passos=""; tokens_agy=""; conversa=""; palavras=0; retorno=0; sem_fonte=""
 tokens_local_entrada=""; tokens_local_saida=""
+tokens_codex_entrada=""; tokens_codex_saida=""
 delegacao_id="$(cat /proc/sys/kernel/random/uuid)"
 chamadas_local='[]'; documento_chars=""; retorno_chars=""; ctx=""
 texto=""; motivo_codigo=""; verificacao="nao_exigida"; chamadas_executor=0
@@ -141,6 +146,8 @@ projeto="$(basename "$(dirname "${projeto:-$pasta/.}")")"
 
 if [[ "$destino" == local ]]; then
   modelo="${JANGADA_LOCAL_MODELO:-qwen3:4b}"
+elif [[ "$destino" == codex-economico ]]; then
+  modelo="${JANGADA_CODEX_ECONOMICO_MODELO:-}"
 else
   modelo="gemini-3.8-flash-${esforco[$papel]}"
 fi
@@ -155,6 +162,7 @@ registrar() {
     --arg tokens_agy "$tokens_agy" --arg antes "$cota" --arg depois "$cota_depois" \
     --arg conversa "$conversa" --arg sem_fonte "$sem_fonte" \
     --arg tokens_local_entrada "$tokens_local_entrada" --arg tokens_local_saida "$tokens_local_saida" \
+    --arg tokens_codex_entrada "$tokens_codex_entrada" --arg tokens_codex_saida "$tokens_codex_saida" \
     --arg id "$delegacao_id" --argjson chamadas "$chamadas_local" \
     --arg documento_chars "$documento_chars" --arg retorno_chars "$retorno_chars" --arg contexto "$ctx" \
     --arg capacidade "$capacidade" --arg motivo_codigo "$motivo_codigo" --arg verificacao "$verificacao" \
@@ -169,6 +177,8 @@ registrar() {
       tokens_agy: ($tokens_agy | num),
       tokens_local_entrada: ($tokens_local_entrada | num),
       tokens_local_saida: ($tokens_local_saida | num),
+      tokens_codex_entrada: ($tokens_codex_entrada | num),
+      tokens_codex_saida: ($tokens_codex_saida | num),
       versao_registro: 3, delegacao_id: $id, roteamento_id: $roteamento_id,
       capacidade: $capacidade, motivo_codigo: $motivo_codigo, verificacao: $verificacao,
       requisitos: $requisitos,
@@ -181,7 +191,7 @@ registrar() {
       chamadas_local: (if $destino == "local" then $chamadas else null end),
       documento_chars: ($documento_chars | num), retorno_chars: ($retorno_chars | num),
       contexto: ($contexto | num),
-      ferramentas_disponiveis: (if $destino == "local" then false else null end),
+      ferramentas_disponiveis: (if $destino == "local" or $destino == "codex-economico" then false else null end),
       cota_antes: ($antes | num), cota_depois: ($depois | num),
       recusa: ($motivo != ""), motivo: $motivo, conversa: $conversa,
       sem_fonte: ($sem_fonte | num)}')"
@@ -268,8 +278,10 @@ if [[ -n "$capacidade" ]]; then
       fi
       if [[ "$perfil_delegar" == claude || "$perfil_delegar" == nativo ]]; then
         motivo="o perfil exige execução na sessão"
-      elif [[ "$candidato" == agy ]] && { [[ "$perfil_delegar" == local ]] || ((!permitir_remoto)); }; then
+      elif [[ "$candidato" != local ]] && { [[ "$perfil_delegar" == local ]] || ((!permitir_remoto)); }; then
         motivo="o perfil ou a tarefa não autoriza envio remoto"
+      elif [[ "$candidato" == codex-economico ]] && ((!permitir_codex)); then
+        motivo="a tarefa não autoriza envio ao Codex"
       fi
       if [[ -n "$motivo" ]]; then
         tentativas="$(jq -c --arg destino "$candidato" --arg motivo "$motivo" \
@@ -285,15 +297,18 @@ if [[ -n "$capacidade" ]]; then
       fi
       args=("$papel" "$pedido" --destino "$candidato" --capacidade "$capacidade" --json)
       ((permitir_remoto)) && args+=(--permitir-remoto)
+      ((permitir_codex)) && args+=(--permitir-codex)
       [[ -n "$arquivo" ]] && args+=(--arquivo "$arquivo")
       args+=(--arquivos "${arquivos[@]}")
       for requisito in "${requisitos[@]}"; do args+=(--requisito "$requisito"); done
       codigo=0
       env JANGADA_DELEGAR_TENTATIVAS="$tentativas" JANGADA_DELEGAR_ROTEAMENTO_ID="$roteamento_id" \
+        JANGADA_DELEGAR_DONO_PID="$BASHPID" \
         TMPDIR="$temporario" \
         JANGADA_AGENTE="$agente_sessao" \
         JANGADA_DELEGAR_DECISAO="$decisao" \
         JANGADA_DELEGAR_CACHE_PREFIXO="$cache_prefixo" \
+        JANGADA_DELEGAR_TEMPO_TOTAL="$restante" \
         JANGADA_DELEGAR_CHAMADAS_RESTANTES="$((limite_chamadas - usadas))" \
         timeout --signal=KILL "$restante" bash "${BASH_SOURCE[0]}" "${args[@]}" \
         >"$temporario/resultado" 2>"$temporario/erro" || codigo=$?
@@ -333,7 +348,7 @@ if [[ -n "$capacidade" ]]; then
     recusar "nenhum executor elegível concluiu a delegação; consulte as tentativas registradas" sem_executor
   fi
   decisao="${JANGADA_DELEGAR_DECISAO:-destino_explicito}"
-  if [[ "$destino" == agy ]] && ((!permitir_remoto)); then
+  if [[ "$destino" != local ]] && ((!permitir_remoto)); then
     recusar "a tarefa não autoriza envio remoto" destino_proibido
   fi
 fi
@@ -344,7 +359,7 @@ fi
 if [[ "$perfil_delegar" == claude || "$destino" == claude ]]; then
   recusar "o perfil da sessão não delega ao agy nem ao destino local (JANGADA_DELEGAR=claude)" destino_proibido
 fi
-if [[ "$perfil_delegar" == local && "$destino" == agy ]]; then
+if [[ "$perfil_delegar" == local && "$destino" != local ]]; then
   recusar "o perfil da sessão restringe a delegação ao destino local (JANGADA_DELEGAR=local)" destino_proibido
 fi
 
@@ -357,6 +372,52 @@ if [[ -n "$capacidade" ]]; then
   for a in "${arquivos[@]}"; do
     pedido+="$a:N (texto); $a, p. N (PDF)"$'\n'
   done
+fi
+
+if [[ "$destino" == codex-economico ]]; then
+  ((permitir_codex)) || recusar "a tarefa não autoriza envio ao Codex" destino_proibido
+  mkdir -p "$JANGADA_ESTADO/agentes"
+  exec 9>"$JANGADA_ESTADO/agentes/codex-economico.lock"
+  flock -n 9 || recusar "outro executor econômico Codex está ativo" ocupado
+  temporario_codex="$(mktemp -d)"
+  trap 'rm -rf "$temporario_codex"' EXIT
+  if ! python3 "$JANGADA_PATH/default/delegacao/codex.py" --pasta "$temporario_codex" \
+      --tempo "$tempo_total" -- "${arquivos[@]}" <<<"$pedido" >"$temporario_codex/resultado.json"; then
+    chamadas_executor=null
+    recusar "o executor Codex não devolveu resultado estruturado" erro_execucao
+  fi
+  if ! jq -e 'type == "object" and (.chamadas == 0 or .chamadas == 1)
+      and (.motivo_codigo | type == "string") and (.relatorio | type == "string")' \
+      "$temporario_codex/resultado.json" >/dev/null; then
+    chamadas_executor=null
+    recusar "resultado do Codex inválido" erro_execucao
+  fi
+  chamadas_executor="$(jq '.chamadas' "$temporario_codex/resultado.json")"
+  cota="$(jq -r '.cota_antes // empty' "$temporario_codex/resultado.json")"
+  tokens_codex_entrada="$(jq -r '.tokens_entrada // empty' "$temporario_codex/resultado.json")"
+  tokens_codex_saida="$(jq -r '.tokens_saida // empty' "$temporario_codex/resultado.json")"
+  motivo_codigo="$(jq -r '.motivo_codigo' "$temporario_codex/resultado.json")"
+  [[ -z "$motivo_codigo" ]] || recusar "Codex econômico recusou ou falhou: $motivo_codigo" "$motivo_codigo"
+  texto="$(jq -r '.relatorio' "$temporario_codex/resultado.json")"
+  verificar_saida
+  palavras="$(wc -w <<<"$texto" | tr -d ' ')"
+  [[ -n "$arquivo" ]] || arquivo="$JANGADA_ESTADO/agentes/delegacao-$delegacao_id.md"
+  mkdir -p "$(dirname "$arquivo")"
+  printf '%s\n' "$texto" >"$arquivo"
+  artefato="$arquivo"; impresso="$texto"
+  limite="${JANGADA_DELEGAR_PALAVRAS:-600}"
+  [[ "$limite" =~ ^[1-9][0-9]{0,5}$ ]] || uso
+  if ((palavras > limite)); then
+    cortado=true
+    impresso="$(awk -v n="$limite" '
+      c + NF <= n { print; c += NF; next }
+      { l = ""; for (i = 1; i <= n - c; i++) l = l (i > 1 ? " " : "") $i; if (l != "") print l; exit }' <<<"$texto")"
+    impresso+=$'\n\n'"[relatório cortado em $limite de $palavras palavras; completo em $arquivo]"
+  fi
+  retorno=$(( (${#impresso} + 3) / 4 )); retorno_chars=${#impresso}
+  ((modo_json)) || printf '%s\n' "$impresso"
+  registrar 0
+  exit 0
 fi
 
 if [[ "$destino" == local ]]; then

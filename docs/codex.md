@@ -156,12 +156,50 @@ A reserva padrão é 25%, ajustável por `JANGADA_CODEX_COTA_MIN` entre 0 e 100.
 Saldo zero produz `QUOTA_EXHAUSTED`; abaixo da reserva, `QUOTA_LOW`.
 Pausa e espera vigente impedem a consulta.
 
-Essa observação prepara a integração de executores Codex. A fila ainda usa
-somente Ollama e agy. Não comprova acesso a um modelo específico nem cota
+Essa observação pode apoiar o executor econômico configurado. Não comprova
+acesso a um modelo específico nem cota
 independente para variantes econômicas. Os estados continuam sendo dados
 operacionais editáveis, não autorização para enviar fontes ou alterar recursos.
 
 Referência: [cotas no Codex App Server](https://learn.chatgpt.com/docs/app-server#6-rate-limits-chatgpt).
+
+## Executor econômico
+
+O destino `codex-economico` aceita as três capacidades documentais do leitor.
+Configure `JANGADA_CODEX_ECONOMICO_MODELO` com o identificador exato escolhido
+pelo usuário. Vazio desabilita o executor. Não há modelo padrão nem troca
+automática para outro modelo. Essa configuração declara a escolha econômica;
+o Jangada não infere preço, acesso ou qualidade pelo nome.
+
+Inclua `codex-economico` na lista da capacidade em `delegacao.json`, por exemplo
+`"analise_documental": ["agy", "codex-economico", "local"]`. A chamada exige
+`--permitir-remoto --permitir-codex` e perfil de sessão que permita delegação
+remota. O perfil `local` continua impedindo envio ao Codex.
+
+Na fila, são necessários também `permitir_remoto: true` e
+`permitir_codex: true` na tarefa. `jangada-executar` e `jangada-retomar`
+aceitam as duas opções. O perfil `offline` impede envio; `quality` continua
+escolhendo agy explicitamente. Risco alto continua aguardando executor principal.
+Os campos do plano são dados e não comprovam aprovação externa.
+
+O executor consulta a cota antes de gerar, respeita a reserva compartilhada e
+usa uma trava para impedir duas delegações Codex simultâneas no mesmo estado.
+Sem cota conhecida, recusa. Após geração, não presume que o saldo anterior
+continua disponível. Para pausar essa alternativa, use `jangada-provedor pausar codex`.
+
+São enviados somente pedido e fontes de texto UTF-8 numeradas, até 80 mil
+caracteres no conjunto preparado. PDF e binários exigem outro executor.
+O Codex usa o adaptador isolado da revisão, com terminal, ferramentas, busca,
+plugins e configuração do usuário desativados. Não retoma conversa e não
+recebe token de renovação. Cada execução registra modelo, cota anterior,
+consumo informado e decisão. O coletor lê o consumo em `delegacoes.jsonl`.
+Se o orquestrador morrer, o executor interrompe a geração e remove sua
+autenticação temporária. O observador usa identificador de processo do Linux.
+
+Sucesso exige processo encerrado sem erro, um turno concluído, texto não vazio
+e referências válidas. A fila mantém `REVIEW_REQUIRED`, pois esses controles
+não comprovam a interpretação. Os testes usam executores simulados; acesso
+e qualidade de cada modelo configurado precisam ser conferidos em uso.
 
 ## Revisão com Codex
 

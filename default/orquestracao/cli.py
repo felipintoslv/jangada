@@ -51,10 +51,12 @@ def main():
     execucao.add_argument('--perfil', choices=['balanced', 'quality', 'offline'], default='balanced')
     execucao.add_argument('--limite', type=int, default=1)
     execucao.add_argument('--permitir-remoto', action='store_true')
+    execucao.add_argument('--permitir-codex', action='store_true')
     retomada = comandos.add_parser('retomar', help='retoma esperas com provedor disponível')
     retomada.add_argument('--projeto', type=pathlib.Path)
     retomada.add_argument('--perfil', choices=['balanced', 'quality', 'offline'], default='balanced')
     retomada.add_argument('--permitir-remoto', action='store_true')
+    retomada.add_argument('--permitir-codex', action='store_true')
     retomada.add_argument('--atualizar', action='store_true')
     retomada.add_argument('--executar', action='store_true')
     retomada.add_argument('--limite', type=int, default=1)
@@ -121,11 +123,15 @@ def main():
                 if args.comando == 'retomar':
                     if args.atualizar:
                         saude.atualizar(args.permitir_remoto)
+                        if (args.permitir_remoto and args.permitir_codex and args.perfil != 'offline'
+                                and os.environ.get('JANGADA_DELEGAR') == 'agy'
+                                and os.environ.get('JANGADA_CODEX_ECONOMICO_MODELO')):
+                            saude.atualizar_codex(True)
                     retomadas = retomar(estado, saude, raiz, os.environ['JANGADA_CONFIG'],
-                                       args.perfil, args.permitir_remoto)
+                                       args.perfil, args.permitir_remoto, args.permitir_codex)
                 if args.comando == 'executar' or args.executar:
                     resultados = executar(estado, projeto, raiz, args.perfil,
-                                          args.limite, args.permitir_remoto, saude)
+                                          args.limite, args.permitir_remoto, saude, args.permitir_codex)
                 print(json.dumps({'projeto': str(projeto), 'retomadas': retomadas,
                                   'resultados': resultados}, ensure_ascii=False))
             finally:

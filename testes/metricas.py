@@ -258,6 +258,17 @@ class Metricas(unittest.TestCase):
         self.assertEqual(cs[0]['tempo_geracao_ms'], 10)
         self.assertEqual(cs[0]['estado'], 'parcial')
 
+    def test_codex_delegado_preserva_modelo_e_nao_duplica_consumo(self):
+        d = dict(data='2026-09-30T22:00:00-03:00', destino='codex-economico', delegacao_id='c1',
+                 modelo='economico', tokens_codex_entrada=10, tokens_codex_saida=12, recusa=False)
+        self.gravar(self.estado / 'delegacoes.jsonl', [d, d, dict(d, destino='', delegacao_id='recusa-final')])
+        cs, _, _ = self.coletar()
+        self.assertEqual(len(cs), 1)
+        self.assertEqual(cs[0]['executor'], 'codex')
+        self.assertEqual(cs[0]['modelo'], 'economico')
+        self.assertEqual(cs[0]['entrada_total'], 10)
+        self.assertEqual(cs[0]['saida'], 12)
+
     def test_legados_iguais_preservam_duas_ocorrencias(self):
         d = dict(data='2026-09-30T22:00:00-03:00', destino='local', tokens_local_entrada=5, tokens_local_saida=0)
         self.gravar(self.estado / 'delegacoes.jsonl', [d, d])

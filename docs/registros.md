@@ -532,7 +532,8 @@ subagente tem `.db` próprio.
 - **Campos:**
   - `pasta`: raiz git da pasta atual; é por ela que o validar liga a
     delegação à entrega.
-  - `destino`: `agy`, `claude` (perfil sem agy; recusa) ou `local` (Ollama local).
+  - `destino`: `agy`, `claude` (perfil sem agy; recusa), `local` (Ollama local)
+    ou `codex-economico` (modelo explicitamente configurado).
     Vazio quando a seleção por capacidade termina sem executor.
   - `modelo`: Flash com o esforço do papel (no agy) ou modelo local (ex.: `qwen3:4b`).
   - `codigo_saida`: 0 atendida, 4 recusada.
@@ -560,6 +561,8 @@ subagente tem `.db` próprio.
     palavras).
   - `passos`: linhas da tabela `steps` do `.db` da conversa do agy.
   - `tokens_agy`: `usage.total_tokens` da saída JSON do agy.
+  - `tokens_codex_entrada`, `tokens_codex_saida` (opcionais): consumo informado
+    pelo evento `turn.completed` do executor Codex. Ausência permanece `null`.
   - `tokens_local_entrada` (opcional): tokens de prompt avaliados pelo Ollama
     (`prompt_eval_count`).
   - `tokens_local_saida` (opcional): tokens de resposta gerados pelo Ollama

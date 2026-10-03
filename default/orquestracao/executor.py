@@ -40,7 +40,7 @@ def conferir_fontes(tarefa, projeto):
             raise ValueError(f'fonte alterada após importação: {nome}')
 
 
-def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude):
+def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir_codex=False):
     reserva = estado.reservar()
     if reserva is None:
         return None
@@ -85,6 +85,8 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude):
             argumentos += ['--destino', 'agy']
         if permitir_remoto and tarefa.get('permitir_remoto', False) and perfil != 'offline':
             argumentos.append('--permitir-remoto')
+            if permitir_codex and tarefa.get('permitir_codex', False):
+                argumentos.append('--permitir-codex')
         for requisito in tarefa.get('requisitos', []):
             argumentos += ['--requisito', requisito]
         argumentos += ['--arquivos', *fontes]
@@ -163,12 +165,12 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude):
         return encerrar('REVISION_REQUIRED', str(erro), texto)
 
 
-def executar(estado, projeto, raiz, perfil='balanced', limite=1, permitir_remoto=False, saude=None):
+def executar(estado, projeto, raiz, perfil='balanced', limite=1, permitir_remoto=False, saude=None, permitir_codex=False):
     if perfil not in PERFIS or type(limite) is not int or not 1 <= limite <= 1000:
         raise ValueError('perfil ou limite de tarefas inválido')
     resultados = []
     for _ in range(limite):
-        resultado = executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude)
+        resultado = executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir_codex)
         if resultado is None:
             break
         resultados.append(resultado)

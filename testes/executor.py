@@ -261,6 +261,23 @@ class Execucao(unittest.TestCase):
         executar(self.estado, self.projeto, self.raiz, 'quality', permitir_remoto=True)
         self.assertIn('--permitir-remoto', json.loads(self.registro.read_text())['args'])
 
+    def test_codex_exige_duas_permissoes_no_plano_e_na_chamada(self):
+        tarefas = [self.tarefa(permitir_remoto=True, permitir_codex=True),
+                   self.tarefa('T2', permitir_remoto=True),
+                   self.tarefa('T3', permitir_codex=True),
+                   self.tarefa('T4', permitir_remoto=True, permitir_codex=True)]
+        self.estado.importar(tarefas)
+        executar(self.estado, self.projeto, self.raiz, permitir_remoto=True)
+        self.assertNotIn('--permitir-codex', json.loads(self.registro.read_text())['args'])
+        for esperado in (False, False, True):
+            executar(self.estado, self.projeto, self.raiz, permitir_remoto=True, permitir_codex=True)
+            self.assertEqual('--permitir-codex' in json.loads(self.registro.read_text())['args'], esperado)
+
+    def test_offline_nao_envia_ao_codex_mesmo_com_permissoes(self):
+        self.estado.importar([self.tarefa(permitir_remoto=True, permitir_codex=True)])
+        executar(self.estado, self.projeto, self.raiz, 'offline', permitir_remoto=True, permitir_codex=True)
+        self.assertNotIn('--permitir-codex', json.loads(self.registro.read_text())['args'])
+
     def test_cli_executa_plano_sem_interpretar_pedido(self):
         shutil.copytree(RAIZ / 'default/orquestracao', self.raiz / 'default/orquestracao')
         plano = self.projeto / 'plano.json'

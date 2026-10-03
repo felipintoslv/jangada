@@ -152,6 +152,7 @@ python3 testes/orquestracao.py || falha "testes/orquestracao.py"
 python3 testes/executor.py || falha "testes/executor.py"
 python3 testes/saude.py || falha "testes/saude.py"
 python3 testes/cota-codex.py || falha "testes/cota-codex.py"
+python3 testes/codex-economico.py || falha "testes/codex-economico.py"
 
 passo "versões"
 testes/versao.sh || falha "testes/versao.sh"

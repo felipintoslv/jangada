@@ -144,7 +144,7 @@ class Persistencia(unittest.TestCase):
     def test_entrada_invalida_nao_cria_tarefas(self):
         for alteracao in ({'risco': True}, {'fontes': []}, {'qualidade': 'unknown'},
                           {'max_tentativas': 0}, {'dependencias': ['T1']},
-                          {'permitir_remoto': 'true'}, {'requisitos': ['-opcao']}):
+                          {'permitir_remoto': 'true'}, {'permitir_codex': 'true'}, {'requisitos': ['-opcao']}):
             with self.subTest(alteracao=alteracao), self.assertRaises(ValueError):
                 self.estado.importar([tarefa(**alteracao)])
         self.assertEqual(self.estado.listar(), [])

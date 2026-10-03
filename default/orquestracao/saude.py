@@ -105,14 +105,14 @@ class Saude:
     def impedimentos(self):
         resultado = []
         for item in self.listar():
-            if item['id'] not in {'local', 'agy'}:
+            if item['id'] not in {'local', 'agy', 'codex'}:
                 continue
             if item['status'] in {'AVAILABLE', 'DEGRADED', 'UNKNOWN'}:
                 continue
             codigo = 'cota_indisponivel' if item['status'] in {'QUOTA_LOW', 'QUOTA_EXHAUSTED'} else 'provedor_em_espera'
             if item['pausado']:
                 codigo = 'provedor_pausado'
-            resultado.append({'destino': item['id'], 'motivo_codigo': codigo, 'motivo': item['motivo']})
+            resultado.append({'destino': 'codex-economico' if item['id'] == 'codex' else item['id'], 'motivo_codigo': codigo, 'motivo': item['motivo']})
         return resultado
 
     def registrar_delegacao(self, registro, codigo):
@@ -120,20 +120,22 @@ class Saude:
         for tentativa in registro.get('tentativas', []):
             if isinstance(tentativa, dict) and tentativa.get('destino') != provedor:
                 self.registrar_delegacao(tentativa, tentativa.get('codigo_saida', 4))
-        if provedor not in {'local', 'agy'}:
+        if provedor == 'codex-economico':
+            provedor = 'codex'
+        if provedor not in {'local', 'agy', 'codex'}:
             return
         motivo = registro.get('motivo_codigo')
         if motivo in {'provedor_em_espera', 'provedor_pausado', 'cota_indisponivel', 'destino_proibido'}:
             return
         if codigo == 0:
-            cota = registro.get('cota_depois') if provedor == 'agy' else None
+            cota = registro.get('cota_depois') if provedor in {'agy', 'codex'} else None
             if cota is not None and (type(cota) not in (int, float) or not math.isfinite(cota) or not 0 <= cota <= 100):
                 cota = None
             status = 'AVAILABLE'
-            if provedor == 'agy':
+            if provedor in {'agy', 'codex'}:
                 if cota is None:
                     status = 'UNKNOWN'
-                elif cota < float(os.environ.get('JANGADA_DELEGAR_COTA_MIN', '20')):
+                elif cota == 0 or cota < float(os.environ.get('JANGADA_CODEX_COTA_MIN', '25') if provedor == 'codex' else os.environ.get('JANGADA_DELEGAR_COTA_MIN', '20')):
                     status = 'QUOTA_EXHAUSTED' if cota == 0 else 'QUOTA_LOW'
             self.observar(provedor, status, 'executor concluiu chamada', cota=cota, modelo=registro.get('modelo'))
         elif motivo == 'cota_insuficiente':
@@ -217,19 +219,19 @@ class Saude:
                           validade=validade, cota=cota)
 
 
-def retomar(estado, saude, raiz, config, perfil, permitir_remoto):
+def retomar(estado, saude, raiz, config, perfil, permitir_remoto, permitir_codex=False):
     politica = pathlib.Path(config) / 'delegacao.json'
     if not politica.is_file():
         politica = raiz / 'default/delegacao/roteamento.json'
     preferencias = json.loads(politica.read_text(encoding='utf-8'))
     if not isinstance(preferencias, dict) or any(
         capacidade not in CAPACIDADES or not isinstance(destinos, list) or not destinos
-        or any(not isinstance(d, str) or d not in {'local', 'agy'} for d in destinos)
+        or any(not isinstance(d, str) or d not in {'local', 'agy', 'codex-economico'} for d in destinos)
         or len(destinos) != len(set(destinos))
         for capacidade, destinos in preferencias.items()
     ):
         raise ValueError('política de capacidades inválida')
-    disponiveis = {item['id'] for item in saude.listar() if item['status'] == 'AVAILABLE'}
+    disponiveis = {'codex-economico' if item['id'] == 'codex' else item['id'] for item in saude.listar() if item['status'] == 'AVAILABLE'}
     retomadas = []
     for item in estado.listar():
         tarefa = item['especificacao']
@@ -246,7 +248,9 @@ def retomar(estado, saude, raiz, config, perfil, permitir_remoto):
         if sessao in {'claude', 'nativo'}:
             continue
         if sessao == 'local' or not permitir_remoto or not tarefa.get('permitir_remoto', False):
-            candidatos = [c for c in candidatos if c != 'agy']
+            candidatos = [c for c in candidatos if c == 'local']
+        if not permitir_codex or not tarefa.get('permitir_codex', False) or not os.environ.get('JANGADA_CODEX_ECONOMICO_MODELO'):
+            candidatos = [c for c in candidatos if c != 'codex-economico']
         consumo = estado.consumo(item['id'])
         if (consumo['chamadas'] is None or consumo['chamadas'] >= tarefa.get('max_chamadas', 8)
                 or consumo['segundos'] >= tarefa.get('tempo_total', 600)

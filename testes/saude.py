@@ -183,6 +183,25 @@ class Disponibilidade(unittest.TestCase):
         self.saude.registrar_delegacao(registro, 0)
         self.assertEqual([p['status'] for p in self.saude.listar()], ['QUOTA_LOW', 'AVAILABLE'])
 
+    def test_codex_compartilha_cota_e_nao_presume_saldo_apos_geracao(self):
+        self.saude.registrar_delegacao({'destino': 'codex-economico', 'motivo_codigo': 'cota_insuficiente',
+                                       'cota_antes': 10}, 4)
+        self.assertEqual(self.saude.impedimentos()[0]['destino'], 'codex-economico')
+        self.saude.registrar_delegacao({'destino': 'codex-economico', 'modelo': 'economico'}, 0)
+        item = next(p for p in self.saude.listar() if p['id'] == 'codex')
+        self.assertEqual(item['status'], 'UNKNOWN')
+
+    def test_retomada_codex_exige_autorizacao_especifica_e_modelo(self):
+        self.aguardar(permitir_remoto=True, permitir_codex=True)
+        (self.pasta / 'delegacao.json').write_text(json.dumps({'leitura_documental': ['codex-economico']}))
+        self.saude.observar('codex', 'AVAILABLE', 'saldo confirmado', cota=50)
+        with patch.dict(os.environ, JANGADA_DELEGAR='agy', JANGADA_CODEX_ECONOMICO_MODELO='economico'):
+            self.assertEqual(retomar(self.estado, self.saude, RAIZ, self.pasta, 'balanced', True), [])
+            self.assertEqual(retomar(self.estado, self.saude, RAIZ, self.pasta, 'offline', True, True), [])
+            with patch.dict(os.environ, JANGADA_CODEX_ECONOMICO_MODELO=''):
+                self.assertEqual(retomar(self.estado, self.saude, RAIZ, self.pasta, 'balanced', True, True), [])
+            self.assertEqual(retomar(self.estado, self.saude, RAIZ, self.pasta, 'balanced', True, True), ['T1'])
+
     def test_delegacao_recusa_impedidos_sem_chamar_modelo(self):
         fonte = self.pasta / 'fonte.md'
         fonte.write_text('regra')

@@ -392,7 +392,10 @@ Perfis disponíveis:
 
 Envio remoto exige `--permitir-remoto`, `permitir_remoto: true` no plano e
 perfil de sessão compatível. Os perfis não ampliam as permissões da sessão.
-Nenhum deles chama Claude ou Codex como trabalhador externo. Os registros
+O destino opcional `codex-economico` exige também `--permitir-codex`,
+`permitir_codex: true` no plano e modelo econômico explicitamente configurado.
+Consulte [as restrições do executor Codex](codex.md#executor-economico).
+Nenhum perfil chama Claude como trabalhador externo. Os registros
 de cada tentativa ficam no resultado da tarefa e no histórico persistente.
 
 ### Disponibilidade dos provedores e retomada

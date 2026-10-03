@@ -60,7 +60,7 @@ def tarefa_valida(tarefa):
         valor = tarefa.get(campo, padrao)
         if type(valor) is not int or not 1 <= valor <= 999999:
             raise ValueError(f'{campo} deve ser inteiro positivo')
-    for campo in ('permitir_remoto',):
+    for campo in ('permitir_remoto', 'permitir_codex'):
         if campo in tarefa and type(tarefa[campo]) is not bool:
             raise ValueError(f'{campo} deve ser booleano')
     serializar(tarefa)

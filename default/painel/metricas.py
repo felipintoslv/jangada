@@ -295,6 +295,22 @@ def ollama(caminho):
     return consumo, []
 
 
+def codex_delegado(caminho):
+    consumo = []
+    for d in linhas(caminho):
+        if d.get('destino') != 'codex-economico' or not texto(d.get('delegacao_id')):
+            continue
+        t = data(d.get('data'))
+        if not t or not any(numero(d.get(k)) is not None for k in ('tokens_codex_entrada', 'tokens_codex_saida')):
+            continue
+        b = base('codex-delegado:' + d['delegacao_id'], t, 'jangada', 'codex', 'openai',
+                 d.get('modelo'), d.get('sessao'), d.get('projeto'), d.get('papel'))
+        consumo.append(dict(b, entrada_total=numero(d.get('tokens_codex_entrada')),
+                            saida=numero(d.get('tokens_codex_saida')), estado='parcial' if d.get('recusa') else 'registrado',
+                            cache_lido=None, cache_criado=None, raciocinio=None, **dict.fromkeys(TEMPOS)))
+    return consumo, []
+
+
 def claude(cache):
     import pyarrow.parquet as pq
     consumo, ferramentas = [], []
@@ -346,6 +362,7 @@ def coletar(cache, agora, retencao_dias=180):
     gerenciado = estado / 'codex'
     fontes = [('claude', 'misto', lambda: claude(cache)),
               ('ollama', 'jangada', lambda: ollama(estado / 'delegacoes.jsonl')),
+              ('codex_delegado', 'jangada', lambda: codex_delegado(estado / 'delegacoes.jsonl')),
               ('codex_jangada', 'jangada', lambda: codex(gerenciado, 'jangada', cache, leituras['codex_jangada'], limite))]
     if not home_codex.resolve().is_relative_to(gerenciado.resolve()):
         fontes.append(('codex_externo', 'interface_externa', lambda: codex(home_codex / 'sessions', 'interface_externa', cache, leituras['codex_externo'], limite)))
