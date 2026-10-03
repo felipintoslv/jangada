@@ -211,6 +211,19 @@ atualizar <<<s
 conferir "outra chave, depois de assinar: a cópia instalada avança" \
   test "$(head_instalado)" = "$(git -C "$origem" rev-parse HEAD)"
 
+# Vários commits sem assinatura: o primeiro é achado sem cortar a saída do
+# git log, que morreria por SIGPIPE e encerraria o script sem mensagem.
+for i in $(seq 20); do
+  echo "$i" >"$origem/lote.txt"
+  git -C "$origem" add lote.txt
+  git -C "$origem" commit --quiet -m "feat(teste): lote $i"
+done
+assinar <<<s
+conferir "vários sem assinatura: assina todos ($rc)" \
+  bash -c '[ "$1" -eq 0 ] && grep -q "^assinados" "$2"' _ "$rc" "$tmp/saida"
+conferir "vários sem assinatura: o mais antigo tem assinatura válida" [ "$(assinatura HEAD~19)" = G ]
+atualizar <<<s
+
 # O gpg.ssh.program do repositório não roda na assinatura nem na conferência.
 printf '#!/bin/sh\ntouch "%s"\nexit 1\n' "$alerta" >"$tmp/programa.sh"
 chmod +x "$tmp/programa.sh"
