@@ -557,8 +557,8 @@ Cada sessão representa uma tarefa. Pendências aparecem primeiro, seguidas
 por interrupções, trabalho em andamento e turnos encerrados.
 
 A consulta automática roda a cada dois segundos, preservando a seleção.
-Uma falha preserva os últimos dados e o histórico, com aviso de erro; a abertura
-de sessões fica desabilitada até a próxima consulta bem-sucedida.
+Uma falha preserva os últimos dados e o histórico, com aviso de erro; as ações
+sobre sessões ficam desabilitadas até a próxima consulta bem-sucedida.
 O detalhe mostra última atividade, saída recente do terminal e até 50 mudanças
 observadas nesta janela. O histórico começa ao abrir a central, fica em memória
 e recomeça quando a execução da sessão muda. Sessões que saem da lista deixam
@@ -569,6 +569,13 @@ publicada pelo agente, sem tratar uma consulta recente como atividade recente.
 Ele não confirma conclusão da tarefa nem aprovação da entrega.
 Perguntas e permissões são atendidas pelo botão **Abrir terminal**.
 Sessões interrompidas podem ser retomadas pelo mesmo botão.
+Na tarefa selecionada, **Integrar e encerrar** (`Alt+I`) chama
+`jangada-agente-fim --integrar`; **Encerrar sessão** (`Ctrl+X`) chama
+`jangada-agente-fim` sem integração. As ações abrem um terminal com as
+conferências existentes, revisão da integração e confirmação de descarte
+quando há alterações sem commit. Confira o resultado nesse terminal;
+a lista acompanha automaticamente o encerramento. Fechar a central mantém
+esse terminal aberto. No formulário Nova tarefa, `Ctrl+X` continua recortando texto.
 A central não encerra agentes ao fechar. A consulta da janela apenas lê os
 registros; o contador da barra mantém a limpeza automática de estados órfãos
 e o registro persistente das interrupções, pelo mecanismo anterior.

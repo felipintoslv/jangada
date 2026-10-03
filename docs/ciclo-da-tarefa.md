@@ -73,7 +73,10 @@ Na Central de Tarefas v0.1, `concluido` aparece como **Turno encerrado**,
 sem afirmar que a tarefa foi concluída. Cada sessão representa uma tarefa.
 A central acompanha estados e mensagens a cada dois segundos; mudanças
 observadas ficam em memória durante a janela. Perguntas e permissões
-continuam no terminal. Veja [instalação e reversão](../README.md#central-de-tarefas-v01).
+continuam no terminal. Na tarefa selecionada, `Alt+I` abre a integração e
+encerramento; `Ctrl+X` abre o encerramento sem integração. Ambos usam
+`jangada-agente-fim` num terminal, preservando suas conferências e confirmações.
+Veja [instalação e reversão](../README.md#central-de-tarefas-v01).
 
 Cada mudança registrada vira uma linha em `eventos-agentes.jsonl`
 ([registros](registros.md)).
