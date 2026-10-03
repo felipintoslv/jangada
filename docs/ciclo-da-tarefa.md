@@ -131,6 +131,9 @@ flowchart TD
   a sessão como concluída. Pedido acima de 131.072 bytes leva o diff num
   arquivo que o agy lê. Sem o agente `revisor` instalado, o agy cairia no
   agente padrão, com todas as ferramentas; por isso a validação para.
+  Cada chamada ao revisor tem prazo de `JANGADA_VALIDAR_PRAZO` segundos
+  (540): vencido, o revisor e o que ele abriu são encerrados, e a rodada sai
+  com código 1, sem parecer e sem contar no limite.
 - **Registro.** Cada rodada grava `validacao-ROTULO-rN.md` e uma linha em
   `validar.jsonl` (`registrar`), e atualiza o campo `validacao` do estado.
   Dentro do isolamento, isso vai para `agentes/` e para o `validar.jsonl` do
@@ -146,7 +149,7 @@ flowchart TD
 | 0 | APROVADO |
 | 3 | REVISAR (do revisor ou da verificação local) |
 | 4 | limite de rodadas |
-| 1 | erro: sem diff, revisor ausente, opção desconhecida |
+| 1 | erro: sem diff, revisor ausente ou sem resposta no prazo, opção desconhecida |
 
 ## Fim da sessão
 

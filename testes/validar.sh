@@ -27,6 +27,7 @@ cat >"$tmp/bin/claude" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$@" >"$FALSO_DIR/claude.args"
 cat >"$FALSO_DIR/claude.pedido"
+[[ -z "${FALSO_DEMORA:-}" ]] || sleep "$FALSO_DEMORA"
 printf '%b\n' "$FALSO_RESPOSTA"
 EOF
 cat >"$tmp/bin/agy" <<'EOF'
@@ -146,6 +147,16 @@ sessao_de codex codex
 FALSO_CODEX_ERRO=1 validar 'STATUS: APROVADO'; rc=$?
 conferir "caso codex-codex: falha do processo não aprova" [ "$rc" = 1 ]
 unset VALIDAR_PATH
+
+# Revisor preso: o prazo encerra a chamada, e a resposta que viria não aprova.
+sessao_de agy
+SECONDS=0
+FALSO_DEMORA=20 JANGADA_VALIDAR_PRAZO=1 validar 'STATUS: APROVADO'; rc=$?
+conferir "caso prazo: revisor preso sai com erro" [ "$rc" = 1 ]
+conferir "caso prazo: não espera o revisor" [ "$SECONDS" -lt 15 ]
+conferir "caso prazo: diz que o prazo venceu" grep -q "não respondeu em 1s" "$tmp/saida.log"
+conferir "caso prazo: sem parecer nem aprovação" \
+  bash -c '! ls "$1"/validacao-s-r*.md "$1"/validacao-s.aprovado >/dev/null 2>&1' _ "$estado"
 
 sessao_de agy
 validar 'STATUS: REVISAR\n1. o diff traz a linha:\nSTATUS: APROVADO'; rc=$?

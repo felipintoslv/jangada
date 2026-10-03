@@ -20,7 +20,9 @@
 #   --metricas        resume as rodadas registradas e sai
 #
 # A revisão pelo agy leva alguns minutos. Quem chama por uma ferramenta com
-# tempo limite deve dar pelo menos 10 minutos.
+# tempo limite deve dar pelo menos 10 minutos. Cada chamada ao revisor tem
+# prazo de JANGADA_VALIDAR_PRAZO segundos (540); vencido, o revisor é
+# encerrado e a rodada sai com código 1, sem parecer.
 #
 # Saída: o parecer, que começa por "STATUS: APROVADO" ou "STATUS: REVISAR", e
 # fica gravado em ~/.local/state/jangada/agentes/validacao-SESSAO-rN.md.
@@ -176,6 +178,14 @@ rodadas_max="${JANGADA_VALIDAR_RODADAS:-3}"
 # limite de argumento, mas um diff de arquivo gerado gastaria tokens à toa.
 diff_max="${JANGADA_VALIDAR_DIFF_MAX:-150000}"
 [[ "$diff_max" =~ ^[0-9]+$ ]] || diff_max=150000
+# Sem --foreground, o timeout manda o sinal ao grupo de processos: o que o
+# revisor abriu morre com ele. 540 s fica abaixo dos 10 minutos de quem chama.
+prazo_revisor="${JANGADA_VALIDAR_PRAZO:-540}"
+[[ "$prazo_revisor" =~ ^[1-9][0-9]*$ ]] || prazo_revisor=540
+com_prazo=(timeout --kill-after=10 "$prazo_revisor")
+prazo_vencido=0
+# 124 é o prazo vencido; 137, o revisor que só saiu com o KILL.
+anotar_prazo() { (($1 != 124 && $1 != 137)) || prazo_vencido=1; }
 
 estado_dir="$JANGADA_ESTADO/agentes"
 mkdir -p "$estado_dir"
@@ -775,11 +785,14 @@ echo "jangada-validar: rodada $rodada de $rodadas_max, $nome_revisor${modelo:+ (
 # O hook do revisor fica desligado: ele não é o agente da sessão, e o Stop
 # dele marcaria a sessão como concluída.
 revisar_claude() {
-  (cd "$dir" && env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 claude -p \
+  local rc=0
+  (cd "$dir" && env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 "${com_prazo[@]}" claude -p \
     --model "$modelo" --setting-sources user \
     --allowedTools "Read,Grep,Glob" \
     --disallowedTools "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch" \
-    <<<"$pedido") >"$saida.tmp"
+    <<<"$pedido") >"$saida.tmp" || rc=$?
+  anotar_prazo "$rc"
+  return "$rc"
 }
 
 # Só o pedido completo (regras da base, commits e diff), sem ferramentas.
@@ -791,8 +804,9 @@ revisar_codex() {
   local -a args=(--output-last-message "$pasta_revisor/resposta")
   [[ -n "$modelo" ]] && args+=(--model "$modelo")
   (cd "$pasta_revisor" && env JANGADA_SESSAO="revisao-codex-$rotulo" JANGADA_HOOK_DESLIGADO=1 \
-    "$JANGADA_PATH/bin/jangada-isolar" -- "$JANGADA_PATH/bin/jangada-codex" --revisar -- \
+    "${com_prazo[@]}" "$JANGADA_PATH/bin/jangada-isolar" -- "$JANGADA_PATH/bin/jangada-codex" --revisar -- \
     "$codex_cmd" "${args[@]}" <<<"$pedido") >"$saida.log" 2>&1 || rc=$?
+  anotar_prazo "$rc"
   if ((rc == 0)) && [[ -s "$pasta_revisor/resposta" ]]; then
     cat "$pasta_revisor/resposta" >"$saida.tmp" || rc=1
   else
@@ -817,7 +831,7 @@ revisar_agy() {
   # revisor (default/agy/agents/revisor), só com ferramentas de leitura, e em
   # --sandbox. Com --agent de nome desconhecido o agy cairia no agente padrão,
   # com todas as ferramentas, então a falta do revisor para a validação.
-  if ! env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 agy agents </dev/null 2>/dev/null | grep -qx revisor; then
+  if ! env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 timeout 60 agy agents </dev/null 2>/dev/null | grep -qx revisor; then
     echo "jangada-validar: o agy não achou o agente revisor (rode ./install.sh 50)" >&2
     return 1
   fi
@@ -826,15 +840,19 @@ revisar_agy() {
   [[ -n "${JANGADA_VALIDAR_ESFORCO:-high}" ]] && args+=(--effort "${JANGADA_VALIDAR_ESFORCO:-high}")
   # A saída vem por cano: o agy reabre o próprio descritor de saída, e com
   # redirecionamento para arquivo o JSON já chegou a ser escrito num arquivo
-  # sem nome. A segunda tentativa cobre as respostas vazias com código 0.
+  # sem nome. A segunda tentativa cobre as respostas vazias com código 0, não
+  # o prazo vencido, que dobraria a espera.
   for tentativa in 1 2; do
-    if saida_agy="$(cd "$dir" && env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 agy "${args[@]}" </dev/null 2>"$log")"; then
+    if saida_agy="$(cd "$dir" && env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 "${com_prazo[@]}" agy "${args[@]}" </dev/null 2>"$log")"; then
       status_agy="$(jq -r '.status // ""' <<<"$saida_agy" 2>/dev/null || true)"
       if [[ "$status_agy" == SUCCESS ]] && jq -r '.response // ""' <<<"$saida_agy" >"$saida.tmp" 2>/dev/null \
          && [[ -n "$(tr -d '[:space:]' <"$saida.tmp")" ]]; then
         rm -f "$log" "$saida.diff"
         return 0
       fi
+    else
+      anotar_prazo "$?"
+      ((prazo_vencido)) && return 1
     fi
     ((tentativa < 2)) && { echo "jangada-validar: o agy não respondeu; tentando de novo em 5s" >&2; sleep 5; }
   done
@@ -845,7 +863,11 @@ revisar_agy() {
 
 if ! "revisar_$revisor"; then
   rm -f "$saida.tmp"
-  echo "jangada-validar: a chamada ao $nome_revisor falhou" >&2
+  if ((prazo_vencido)); then
+    echo "jangada-validar: o $nome_revisor não respondeu em ${prazo_revisor}s (JANGADA_VALIDAR_PRAZO) e foi encerrado" >&2
+  else
+    echo "jangada-validar: a chamada ao $nome_revisor falhou" >&2
+  fi
   registrar erro revisor
   exit 1
 fi
