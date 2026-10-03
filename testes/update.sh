@@ -190,6 +190,7 @@ assinar <<<s
 conferir "assinar: termina sem erro ($rc)" [ "$rc" -eq 0 ]
 conferir "assinar: mostra o commit" grep -q "feat(teste): sem assinatura" "$tmp/saida"
 conferir "assinar: o commit tem assinatura válida" [ "$(assinatura HEAD)" = G ]
+conferir "assinar: sem commit enviado por assinar, não avisa" bash -c '! grep -q "já enviados" "$1"' _ "$tmp/saida"
 conferir "assinar: o já enviado não muda" [ "$(git -C "$origem" rev-parse "main@{upstream}")" = "$(git -C "$remoto" rev-parse main)" ]
 c1="$(git -C "$origem" rev-parse HEAD)"
 assinar <<<s
@@ -210,6 +211,24 @@ conferir "outra chave: assinar só reescreve o commit dela" \
 atualizar <<<s
 conferir "outra chave, depois de assinar: a cópia instalada avança" \
   test "$(head_instalado)" = "$(git -C "$origem" rev-parse HEAD)"
+
+# Commit enviado sem assinatura: o assinar não o reescreve e o update não
+# passa dele; o aviso diz o commit e o comando que avança a cópia instalada.
+echo e1 >"$origem/e1.txt"
+git -C "$origem" add e1.txt
+git -C "$origem" commit --quiet -m "feat(teste): enviado sem assinatura"
+git -C "$origem" push --quiet github main 2>/dev/null
+e1="$(git -C "$origem" rev-parse HEAD)"
+assinar <<<s
+conferir "enviado sem assinatura: avisa e diz o commit" \
+  bash -c 'grep -q "já enviados sem assinatura" "$1" && grep -q "feat(teste): enviado sem assinatura" "$1"' _ "$tmp/saida"
+conferir "enviado sem assinatura: não reescreve" [ "$(git -C "$origem" rev-parse HEAD)" = "$e1" ]
+avanco="$(grep -o 'git -C .* merge --ff-only [0-9a-f]*' "$tmp/saida")"
+conferir "enviado sem assinatura: o comando do aviso avança a cópia instalada" \
+  bash -c 'eval "$1" >/dev/null 2>&1 && [ "$(git -C "$2" rev-parse HEAD)" = "$3" ]' _ "$avanco" "$instalado" "$e1"
+assinar <<<s
+conferir "enviado sem assinatura, cópia instalada avançada: não avisa mais" \
+  bash -c '! grep -q "já enviados" "$1"' _ "$tmp/saida"
 
 # Vários commits sem assinatura: o primeiro é achado sem cortar a saída do
 # git log, que morreria por SIGPIPE e encerraria o script sem mensagem.

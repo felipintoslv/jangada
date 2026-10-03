@@ -11,13 +11,15 @@
 # A chave é JANGADA_ASSINATURA_CHAVE no jangada.conf (padrão ~/.ssh/id_ed25519).
 # Reescreve os commits a partir do primeiro sem assinatura válida; os
 # anteriores, que o jangada-update pode já ter aplicado, ficam como estão.
+# Commit já enviado sem assinatura e ainda não aplicado pelo jangada-update
+# não é reescrito: o comando avisa e diz como avançar a cópia instalada.
 # Os merges do jangada-agente-fim --integrar são refeitos e assinados também.
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
 case "${1:-}" in
-  -h|--ajuda) sed -n '2,13s/^# \{0,1\}//p' "$0"; exit 0 ;;
+  -h|--ajuda) sed -n '2,16s/^# \{0,1\}//p' "$0"; exit 0 ;;
 esac
 
 erro() { echo "jangada-assinar: $*" >&2; exit 1; }
@@ -43,6 +45,22 @@ grep -qF -- "$(cut -d' ' -f2 "$publica")" "$assinantes" || erro "a chave $public
 [[ -z "$(g status --porcelain --ignore-submodules=all)" ]] || erro "há alterações sem commit em $repo"
 g symbolic-ref -q HEAD >/dev/null || erro "o HEAD de $repo não está num ramo"
 base="$(g rev-parse --verify --quiet '@{upstream}^{commit}')" || erro "o ramo de $repo não acompanha um ramo da origem"
+
+# Commit enviado sem assinatura fica fora do alcance daqui, que só olha depois
+# da origem, e dentro do que o jangada-update confere, da cópia instalada em
+# diante: o update recusa toda vez e este comando responde "nada a assinar".
+instalada="$(jangada_git_seguro -C "$JANGADA_PATH" rev-parse --verify --quiet 'HEAD^{commit}' 2>/dev/null)" || instalada=""
+if [[ -n "$instalada" ]] && g merge-base --is-ancestor "$instalada" "$base" 2>/dev/null; then
+  enviados="$(g log --format='%G? %h %s' "$instalada..$base" | grep -v '^G ' | sem_controle)" || true
+  if [[ -n "$enviados" ]]; then
+    {
+      echo "!! commits já enviados sem assinatura válida; este comando não os reescreve e o jangada-update não passa deles:"
+      printf '%s\n' "$enviados" | sed 's/^/   /'
+      echo "   confira com git log -p e avance a cópia instalada à mão:"
+      echo "   git -C $JANGADA_PATH fetch origin && git -C $JANGADA_PATH merge --ff-only $(awk 'NR == 1 { print $2 }' <<<"$enviados")"
+    } >&2
+  fi
+fi
 
 # O awk lê até o fim: saindo no primeiro achado, o git log morre por SIGPIPE
 # e, com pipefail, o script termina aqui sem mensagem.
