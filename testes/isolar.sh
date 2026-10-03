@@ -39,7 +39,11 @@ mostrar
 conferir "caso 1: a pasta é gravável" seguidos --bind "$tmp/wt" "$tmp/wt"
 conferir "caso 1: o .git comum do worktree é somente leitura" seguidos --ro-bind "$tmp/repo/.git" "$tmp/repo/.git"
 conferir "caso 1: objetos do git graváveis" seguidos --bind "$tmp/repo/.git/objects" "$tmp/repo/.git/objects"
-conferir "caso 1: refs do git graváveis" seguidos --bind "$tmp/repo/.git/refs" "$tmp/repo/.git/refs"
+conferir "caso 1: das refs, só a pasta do ramo e a das cópias são graváveis" \
+  bash -c 'for d in refs/heads/agente refs/heads/backup logs/refs/heads/agente logs/refs/heads/backup; do
+    grep -A2 -xF -- --bind "$1" | paste -sd" " | grep -qF -- "--bind $2/$d $2/$d" || exit 1; done' _ "$tmp/args" "$tmp/repo/.git"
+conferir "caso 1: refs e logs inteiros não são graváveis" \
+  bash -c 'for d in refs logs refs/heads; do ! grep -qxF -- "$2/$d" "$1" || exit 1; done' _ "$tmp/args" "$tmp/repo/.git"
 conferir "caso 1: pasta do worktree no .git gravável" \
   seguidos --bind "$tmp/repo/.git/worktrees/wt" "$tmp/repo/.git/worktrees/wt"
 conferir "caso 1: commondir do worktree somente leitura" \
@@ -222,6 +226,12 @@ EOF
   conferir "caso 3: commit no worktree" \
     roda 'git add dentro.txt && git -c user.name=t -c user.email=t@t commit -qm dentro'
   conferir "caso 3: o commit chega ao repositório" git -C "$tmp/repo" rev-parse --verify -q agente/t~1 >/dev/null
+  conferir "caso 3: o agente não move o main" roda '! git update-ref refs/heads/main HEAD'
+  conferir "caso 3: o main segue onde estava" \
+    [ "$(git -C "$tmp/repo" rev-parse main)" = "$(git -C "$tmp/repo" rev-parse agente/t~1)" ]
+  conferir "caso 3: o agente não cria tag" roda '! git tag v-teste'
+  conferir "caso 3: o agente não grava o stash" roda '! git update-ref refs/stash HEAD'
+  conferir "caso 3: ramo de cópia em backup/ é criado" roda 'git branch backup/copia HEAD'
   roda "echo x >'$casa/fora.txt'"
   conferir "caso 3: gravação na HOME não chega ao disco" test ! -e "$casa/fora.txt"
   conferir "caso 3: chave oculta" roda "! test -e '$casa/.ssh/id_teste' && ! grep -q senha '$casa/.netrc'"

@@ -80,7 +80,7 @@ ficar somente leitura dentro deles vem depois.
 | Graváveis | pasta da tarefa, `~/.claude`, `~/.gemini/antigravity-cli`, `agentes/`, `validar.jsonl`, `eventos-agentes.jsonl` e `delegacoes.jsonl` do estado, e o que estiver em `JANGADA_ISOLAR_ESCRITA` | o resto do estado (barra, marcas das migrações) alimenta código que roda fora |
 | Camada temporária | `~/.cache`; do Claude, `shell-snapshots`, `session-env` e `ide`; do agy, `bin` | o agente lê o conteúdo de fora, e o que grava some no fim (sobreposição do bwrap; sem suporte, o agente recebe uma pasta vazia em memória, e o `bin` do agy, somente leitura). O agy regrava o `agentapi` antes de cada comando, e o que ele regrava dentro não roda fora |
 | Somente leitura | do Claude: `settings*.json`, `CLAUDE.md`, `commands`, `agents`, `skills`, `hooks`, `plugins`, scripts soltos; clones do AUR | tudo isso define comando ou instrução que valeria numa sessão aberta fora |
-| Git | num worktree, o `.git` comum inteiro somente leitura, liberados `objects`, `refs`, `logs` e o gitdir do worktree; direto no repositório, `config`, `hooks`, `commondir`, `worktrees` e `modules` somente leitura | `core.fsmonitor`, hooks e `commondir` rodariam fora no próximo `git status` |
+| Git | num worktree, o `.git` comum inteiro somente leitura, liberados `objects`, o gitdir do worktree e, das refs e dos `logs`, só a pasta do ramo da sessão (`refs/heads/agente`) e a das cópias do `reverter` (`refs/heads/backup`); direto no repositório, `config`, `hooks`, `commondir`, `worktrees` e `modules` somente leitura | `core.fsmonitor`, hooks e `commondir` rodariam fora no próximo `git status` |
 | Ocultos | `.ssh`, `.gnupg`, `.password-store`, `.aws`, `.azure`, `.kube`, `.docker`, `.netrc`, `.git-credentials`, `gh`, `rclone`, perfis de navegador, keyrings e o banco do `cliphist`; `JANGADA_ISOLAR_OCULTAR` troca a lista. A pasta `painel-chave` do estado, com o token do `jangada-painel`, e a `revisoes`, com as revisões feitas fora do isolamento, ficam ocultas sempre | segredos e o histórico da área de transferência; o painel responde a quem alcança a porta, e o agente isolado alcança; a aprovação que o `--integrar` aceita não pode ser escrita pelo agente revisado |
 
 Para ver os argumentos sem abrir nada: `jangada-isolar --mostrar -- true`.
@@ -102,6 +102,11 @@ variável herdada não basta para pular o isolamento.
   agente abre sem D-Bus, e o agy não acha o login.
 - Apagar ramo ou tag e o `git gc` falham dentro de um worktree, porque
   regravam o `packed-refs`, que fica na raiz somente leitura.
+- Dentro de um worktree, o agente não move `main` nem outro ramo fora de
+  `agente/` e `backup/`, e não cria tag, stash nem ref de remoto: `git stash`,
+  `git tag`, `git fetch` e `git branch outro-nome` falham. Os ramos das outras
+  sessões ficam na mesma pasta `agente/` e seguem ao alcance. Num repositório
+  com `reftable`, todas as refs ficam numa pasta só e seguem graváveis.
 
 ## Restauração
 

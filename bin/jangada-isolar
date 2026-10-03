@@ -304,13 +304,25 @@ if gitdir="$(jangada_git_seguro -C "$pasta" rev-parse --path-format=absolute --a
   [[ "$(git config --file "$comum/config" --type=bool --get extensions.worktreeConfig 2>/dev/null)" == true ]] && wt_config=1
   if [[ "$gitdir" != "$comum" ]]; then
     # Worktree: o .git comum inteiro fica somente leitura, e só se libera o
-    # que add, commit, branch, reset e stash gravam. Assim nenhum arquivo novo
-    # (commondir, config.worktree, rebase-merge) aparece no repositório
-    # principal. Apagar ramo ou tag e o git gc falham: eles regravam o
-    # packed-refs, que fica na raiz.
+    # que add, commit e reset gravam. Assim nenhum arquivo novo (commondir,
+    # config.worktree, rebase-merge) aparece no repositório principal. Apagar
+    # ramo ou tag e o git gc falham: eles regravam o packed-refs, que fica na
+    # raiz.
     somente_leitura "$comum"
-    for d in objects refs logs rr-cache reftable; do
+    for d in objects rr-cache reftable; do
       gravavel "$comum/$d"
+    done
+    # Das refs, só a pasta do ramo do worktree e a das cópias do "reverter":
+    # o git cria o .lock ao lado da ref, então a pasta inteira é o mínimo.
+    # main, tags, remotos e o stash do usuário ficam fora do alcance. Um ramo
+    # sem prefixo (refs/heads/x) libera refs/heads inteira.
+    ramo_ref="$(jangada_git_seguro -C "$pasta" symbolic-ref -q HEAD 2>/dev/null || true)"
+    pastas_ref=(refs/heads/backup)
+    [[ "$ramo_ref" == refs/heads/* ]] && pastas_ref+=("${ramo_ref%/*}")
+    for d in "${pastas_ref[@]}"; do
+      mkdir -p "$comum/$d" "$comum/logs/$d" 2>/dev/null || true
+      gravavel "$comum/$d"
+      gravavel "$comum/logs/$d"
     done
     gravavel "$gitdir"
     ((wt_config)) && { [[ -e "$gitdir/config.worktree" ]] || : 2>/dev/null >>"$gitdir/config.worktree" || true; }
