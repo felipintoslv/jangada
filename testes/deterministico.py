@@ -280,7 +280,7 @@ class Conferencia(unittest.TestCase):
         self.estado.importar([self.tarefa(), self.tarefa('T2', dependencias=['T1'])])
         self.rodar()
         itens = self.estado.listar()
-        with patch.object(self.estado, 'listar', side_effect=[itens, [itens[1]]]):
+        with patch.object(self.estado, 'listar', side_effect=[[itens[1]]]):
             resultado = self.rodar()[0]
         self.assertEqual(resultado['tarefa'], 'T2')
         self.assertEqual(resultado['status'], 'REVISION_REQUIRED')

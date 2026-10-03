@@ -138,6 +138,7 @@ class Estado:
                 evento TEXT NOT NULL, dados TEXT NOT NULL,
                 FOREIGN KEY(tarefa) REFERENCES tarefas(id)
             );
+            CREATE INDEX IF NOT EXISTS tarefas_status ON tarefas(status);
         ''')
 
     def fechar(self):
@@ -237,10 +238,13 @@ class Estado:
                 self.db.execute('UPDATE tarefas SET status=?,dono=NULL,prazo=NULL,motivo=?,atualizado=? WHERE id=?',
                                 ('REVISION_REQUIRED', 'executor interrompido; conferir antes de repetir', agora, antiga['id']))
                 self.evento(antiga['id'], 'reserva_expirada', {'dono': antiga['dono']})
-            tarefas = self.listar()
-            estados = {t['id']: t['status'] for t in tarefas}
+            # Só a fila é lida por inteiro: o histórico entra pelo estado, sem
+            # interpretar especificação nem resultado sob a transação de escrita.
+            estados = {r['id']: r['status'] for r in self.db.execute('SELECT id,status FROM tarefas')}
+            tarefas = [dict(r, especificacao=json.loads(r['especificacao'])) for r in self.db.execute(
+                'SELECT id,especificacao,tentativas,criado FROM tarefas WHERE status=? ORDER BY criado,id', ('QUEUED',))]
             for tarefa in tarefas:
-                if tarefa['status'] == 'QUEUED' and tarefa['tentativas'] >= tarefa['especificacao'].get('max_tentativas', 2):
+                if tarefa['tentativas'] >= tarefa['especificacao'].get('max_tentativas', 2):
                     self.db.execute('UPDATE tarefas SET status=?,motivo=?,atualizado=? WHERE id=?',
                                     ('FAILED', 'limite de tentativas atingido', agora, tarefa['id']))
                     estados[tarefa['id']] = 'FAILED'

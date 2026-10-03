@@ -429,9 +429,8 @@ class Execucao(unittest.TestCase):
         self.estado.importar([self.tarefa(), self.tarefa('T2', dependencias=['T1'])])
         self.rodar()
         self.estado.revisar('T1', 'conferido na fonte', True)
-        itens = self.estado.listar()
         self.registro.unlink()
-        with patch.object(self.estado, 'listar', side_effect=[itens, []]):
+        with patch.object(self.estado, 'listar', side_effect=[[]]):
             self.assertEqual(self.rodar()[0]['status'], 'REVISION_REQUIRED')
         self.assertFalse(self.registro.exists())
 
