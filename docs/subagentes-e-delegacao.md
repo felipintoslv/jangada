@@ -407,6 +407,25 @@ Interrupção ou resposta sem contagem confiável impede repetição automática
 Recusa antes de qualquer chamada não consome tentativa. Cota insuficiente
 ou desconhecida mantém `WAITING_QUOTA` até uma retomada explícita.
 
+`jangada-executar --paralelo 3 --limite 12 --permitir-remoto` divide o limite
+entre três processos, de 2 a 4. Cada processo reserva uma tarefa diferente
+da mesma fila, e as dependências continuam valendo: só entra tarefa cujas
+dependências já concluíram. A opção exige `--permitir-remoto` e perfil com
+nuvem, porque o modelo local tem uma vaga só; não combina com `--acompanhar`.
+Ela não autoriza envio: cada tarefa ainda precisa de `permitir_remoto: true`.
+
+- Tarefa que cai no modelo local ocupado espera a vaga por
+  `JANGADA_LOCAL_ESPERA` segundos. Esgotada a espera, fica em
+  `WAITING_PROVIDER` sem gastar tentativa e volta com `jangada-retomar`.
+- O Codex econômico também tem uma vaga: a segunda chamada é recusada.
+- A cota do agy é lida antes de cada chamada, sem reserva. Chamadas
+  simultâneas podem ser liberadas pela mesma leitura; por isso o teto de
+  quatro processos.
+- Ctrl+C é repassado uma vez a cada processo, que encerra a tarefa em curso
+  como na execução em sequência.
+- Se um processo falha, o comando imprime os resultados dos demais e sai
+  com código 2. Consulte `jangada-fila` antes de repetir.
+
 ### Tarefas dos agentes principais na sessão aberta
 
 Claude e Codex podem assumir uma tarefa de alta qualidade ou risco 3

@@ -32,6 +32,12 @@ if modo == 'demorado':
     filho = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(10)'])
     pathlib.Path(os.environ['REGISTRO_TESTE'] + '.filho').write_text(str(filho.pid))
     time.sleep(10)
+if modo == 'paralelo':
+    inicio = time.time()
+    time.sleep(1)
+    with open(os.environ['REGISTRO_TESTE'] + '.tempos', 'a') as tempos:
+        tempos.write(json.dumps([inicio, time.time()]) + '\\n')
+    modo = 'ok'
 if modo == 'quebrado':
     print('saída não estruturada')
     sys.exit(0)
@@ -555,6 +561,61 @@ class Execucao(unittest.TestCase):
         lote = comando('jangada-task', 'T1,T2', 'revisar', '--aprovar', '--parecer', 'conferido')
         self.assertEqual(lote.returncode, 0, lote.stderr)
         self.assertEqual(json.loads(comando('jangada-fila', '--revisao', '--json').stdout)['revisao'], [])
+
+    def test_cli_paralelo_executa_tarefas_distintas_ao_mesmo_tempo(self):
+        shutil.copytree(RAIZ / 'default/orquestracao', self.raiz / 'default/orquestracao')
+        shutil.copyfile(RAIZ / 'default/delegacao/roteamento.json', self.raiz / 'default/delegacao/roteamento.json')
+        plano = self.projeto / 'plano.json'
+        plano.write_text(json.dumps([self.tarefa(f'T{i}', permitir_remoto=True) for i in range(5)]), encoding='utf-8')
+        ambiente = os.environ.copy()
+        ambiente.update(JANGADA_PATH=str(self.raiz), XDG_STATE_HOME=str(self.pasta / 'state-cli'),
+                        XDG_CONFIG_HOME=str(self.pasta / 'config-cli'), MODO_TESTE='paralelo')
+
+        def comando(nome, *argumentos):
+            return subprocess.run([str(RAIZ / 'bin' / nome), *argumentos], cwd=self.projeto,
+                                  env=ambiente, text=True, capture_output=True, timeout=30)
+
+        self.assertEqual(comando('jangada-fila', '--importar', str(plano)).returncode, 0)
+        for argumentos in (('--paralelo', '2', '--limite', '4'), ('--paralelo', '5', '--limite', '5', '--permitir-remoto'),
+                           ('--paralelo', '2', '--permitir-remoto'),
+                           ('--paralelo', '2', '--limite', '4', '--permitir-remoto', '--perfil', 'offline'),
+                           ('--paralelo', '2', '--limite', '4', '--permitir-remoto', '--acompanhar')):
+            with self.subTest(argumentos=argumentos):
+                self.assertEqual(comando('jangada-executar', *argumentos).returncode, 2)
+        self.assertFalse(pathlib.Path(str(self.registro) + '.tempos').exists())
+        execucao = comando('jangada-executar', '--paralelo', '2', '--limite', '3', '--permitir-remoto')
+        self.assertEqual(execucao.returncode, 0, execucao.stderr)
+        resultados = json.loads(execucao.stdout)['resultados']
+        self.assertEqual(sorted(r['tarefa'] for r in resultados), ['T0', 'T1', 'T2'])
+        self.assertEqual({r['status'] for r in resultados}, {'REVIEW_REQUIRED'})
+        tempos = sorted(json.loads(linha) for linha in
+                        pathlib.Path(str(self.registro) + '.tempos').read_text().splitlines())
+        self.assertEqual(len(tempos), 3)
+        self.assertLess(tempos[1][0], tempos[0][1])
+        fila = json.loads(comando('jangada-fila', '--json').stdout)['tarefas']
+        self.assertEqual([t['status'] for t in fila], ['REVIEW_REQUIRED'] * 3 + ['QUEUED'] * 2)
+        self.assertEqual([t['tentativas'] for t in fila], [1, 1, 1, 0, 0])
+
+    def test_cli_paralelo_informa_falha_de_um_processo(self):
+        shutil.copytree(RAIZ / 'default/orquestracao', self.raiz / 'default/orquestracao')
+        shutil.copyfile(RAIZ / 'default/delegacao/roteamento.json', self.raiz / 'default/delegacao/roteamento.json')
+        (self.raiz / 'default/orquestracao/executor.py').write_text(
+            (RAIZ / 'default/orquestracao/executor.py').read_text(encoding='utf-8')
+            + "\n\n_original = executar\n\n\ndef executar(estado, projeto, raiz, perfil, limite, *resto):\n"
+              "    if limite == 1:\n        raise ValueError('falha simulada')\n"
+              "    return _original(estado, projeto, raiz, perfil, limite, *resto)\n", encoding='utf-8')
+        plano = self.projeto / 'plano.json'
+        plano.write_text(json.dumps([self.tarefa(f'T{i}', permitir_remoto=True) for i in range(3)]), encoding='utf-8')
+        ambiente = os.environ.copy()
+        ambiente.update(JANGADA_PATH=str(self.raiz), XDG_STATE_HOME=str(self.pasta / 'state-cli'),
+                        XDG_CONFIG_HOME=str(self.pasta / 'config-cli'))
+        comum = dict(cwd=self.projeto, env=ambiente, text=True, capture_output=True, timeout=30)
+        self.assertEqual(subprocess.run([str(RAIZ / 'bin/jangada-fila'), '--importar', str(plano)], **comum).returncode, 0)
+        execucao = subprocess.run([str(RAIZ / 'bin/jangada-executar'), '--paralelo', '2', '--limite', '3',
+                                   '--permitir-remoto'], **comum)
+        self.assertEqual(execucao.returncode, 2)
+        self.assertIn('1 processo(s) paralelo(s) falharam', execucao.stderr)
+        self.assertEqual(len(json.loads(execucao.stdout)['resultados']), 2)
 
     def test_cli_retomada_executa_com_provedor_verificado(self):
         shutil.copytree(RAIZ / 'default/orquestracao', self.raiz / 'default/orquestracao')

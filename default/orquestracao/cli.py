@@ -1,10 +1,12 @@
 """Comandos da fila do jangada. Os arquivos de plano contêm somente dados."""
 
 import argparse
+import concurrent.futures
 import hashlib
 import json
 import os
 import pathlib
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -45,6 +47,34 @@ def especificacoes(caminho, projeto):
     return resultado
 
 
+def executar_em_paralelo(args, projeto):
+    """Divide o limite entre processos; cada um reserva tarefas diferentes na mesma fila."""
+    comando = [sys.executable, __file__, 'executar', '--projeto', str(projeto), '--perfil', args.perfil,
+               '--permitir-remoto', *(opcao for opcao, ativa in (('--permitir-codex', args.permitir_codex),
+                                                                ('--supervisionar', args.supervisionar),
+                                                                ('--amostrar', args.amostrar)) if ativa)]
+    partes = [args.limite // args.paralelo + (i < args.limite % args.paralelo) for i in range(args.paralelo)]
+    # Sessão própria: o Ctrl+C do terminal chega só a este processo, que o repassa uma vez a cada filho.
+    processos = [subprocess.Popen([*comando, '--limite', str(parte)], stdout=subprocess.PIPE, text=True,
+                                  start_new_session=True) for parte in partes]
+    with concurrent.futures.ThreadPoolExecutor(len(processos)) as leitores:
+        saidas = leitores.map(lambda processo: processo.communicate()[0], processos)
+        try:
+            saidas = list(saidas)
+        except KeyboardInterrupt:
+            for processo in processos:
+                if processo.poll() is None:
+                    processo.send_signal(signal.SIGINT)
+            raise
+    resultados = [item for processo, saida in zip(processos, saidas) if processo.returncode == 0
+                  for item in json.loads(saida)['resultados']]
+    falhas = sum(processo.returncode != 0 for processo in processos)
+    if falhas:
+        print(json.dumps({'projeto': str(projeto), 'retomadas': [], 'resultados': resultados}, ensure_ascii=False))
+        raise ValueError(f'{falhas} processo(s) paralelo(s) falharam; consulte a fila antes de repetir')
+    return resultados
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     comandos = parser.add_subparsers(dest='comando', required=True)
@@ -66,6 +96,7 @@ def main():
     execucao.add_argument('--permitir-codex', action='store_true')
     execucao.add_argument('--supervisionar', action='store_true')
     execucao.add_argument('--amostrar', action='store_true')
+    execucao.add_argument('--paralelo', type=int, default=1)
     retomada = comandos.add_parser('retomar', help='retoma esperas com provedor disponível')
     retomada.add_argument('--projeto', type=pathlib.Path)
     retomada.add_argument('--perfil', choices=['balanced', 'quality', 'offline'], default='balanced')
@@ -122,6 +153,10 @@ def main():
                 or args.intervalo is not None and not 1 <= args.intervalo <= 3600
                 or args.duracao is not None and not 1 <= args.duracao <= 86400):
             parser.error('limite, intervalo ou duração fora da faixa permitida')
+        if args.paralelo != 1 and (not 2 <= args.paralelo <= 4 or args.acompanhar or not args.permitir_remoto
+                                   or args.perfil == 'offline' or args.limite < args.paralelo):
+            parser.error('--paralelo aceita de 2 a 4 processos, exige --permitir-remoto, perfil com nuvem '
+                         'e --limite igual ou maior, e não combina com --acompanhar')
     raiz_estado = pathlib.Path(os.environ['JANGADA_ESTADO'])
     if args.comando in {'router', 'provedor'}:
         global_estado = Estado(raiz_estado / 'agentes/runtime', raiz=raiz_estado)
@@ -192,6 +227,10 @@ def main():
                                       args.perfil, args.limite, args.intervalo or 60, args.duracao or 28800,
                                       args.permitir_remoto, args.permitir_codex, emitir, args.supervisionar,
                                       args.amostrar))
+                    return
+                if args.comando == 'executar' and args.paralelo > 1:
+                    print(json.dumps({'projeto': str(projeto), 'retomadas': [],
+                                      'resultados': executar_em_paralelo(args, projeto)}, ensure_ascii=False))
                     return
                 retomadas, resultados = [], []
                 if args.comando == 'retomar':
