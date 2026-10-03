@@ -74,10 +74,14 @@ shiny::testServer(aplicacao, {
   rede <- list(nos = data.frame(id = 1:2, label = c("Leitura", "Teste"), group = c("leitura e busca", "teste")),
                arestas = data.frame(from = 1L, to = 2L))
   rede_clara <- grafo(rede)$x
+  stopifnot(rede_clara$options$edges$color$color == "#888888",
+            rede_clara$options$edges$color$color != aparencia()$grade)
   session$setInputs(modo = "dark")
   rede_escura <- grafo(rede)$x
   stopifnot(rede_escura$options$nodes$font$color == aparencia()$texto,
             rede_clara$options$nodes$font$color == "#1A1A1A",
+            rede_escura$options$edges$color$color == "#999999",
+            rede_escura$options$edges$color$color != aparencia()$grade,
             rede_escura$options$edges$color$color != rede_clara$options$edges$color$color)
   session$setInputs(periodo = c(Sys.Date(), Sys.Date()), executor = "ollama")
   stopifnot(nrow(motores()) == 1, nrow(pesqs()) == 1,

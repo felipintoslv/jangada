@@ -322,10 +322,10 @@ server <- function(input, output, session) {
     escuro <- is.null(input$modo) || identical(input$modo, "dark")
     if (escuro) {
       list(fundo = cores[["superficie"]], texto = cores[["texto"]], grade = "#53575B",
-           destaque = cores[["primaria"]], neutra = "#B3B3B3", raciocinio = "#D7AD88")
+           aresta = "#999999", destaque = cores[["primaria"]], neutra = "#B3B3B3", raciocinio = "#D7AD88")
     } else {
       list(fundo = "#FFFFFF", texto = "#1A1A1A", grade = "#D9D9D9",
-           destaque = cores[["texto_primario"]], neutra = "#4D4D4D", raciocinio = "#B08968")
+           aresta = "#888888", destaque = cores[["texto_primario"]], neutra = "#4D4D4D", raciocinio = "#B08968")
     }
   })
   paleta <- reactive({
@@ -363,13 +363,13 @@ server <- function(input, output, session) {
       visNetwork::visEvents(stabilizationIterationsDone = "function() { this.setOptions({physics: false}); }") |>
       visNetwork::visLayout(randomSeed = 1) |>
       visNetwork::visNodes(shape = "dot", font = list(color = aparencia()$texto, size = 18), scaling = list(min = 10, max = 40)) |>
-      visNetwork::visEdges(color = list(color = aparencia()$grade, highlight = aparencia()$destaque),
+      visNetwork::visEdges(color = list(color = aparencia()$aresta, highlight = aparencia()$destaque),
                            smooth = FALSE, scaling = list(min = 1, max = 8)) |>
       visNetwork::visOptions(highlightNearest = list(enabled = TRUE, degree = 1, hover = TRUE)) |>
       visNetwork::visInteraction(hover = TRUE, tooltipDelay = 100)
     for (g in grupos) {
       cor <- if (g %in% names(cores_grupos)) cores_grupos[[g]] else alerta
-      v <- visNetwork::visGroups(v, groupname = g, color = list(background = cor, border = aparencia()$grade,
+      v <- visNetwork::visGroups(v, groupname = g, color = list(background = cor, border = aparencia()$aresta,
                                  highlight = list(background = cor, border = aparencia()$texto)),
                                 font = list(color = aparencia()$texto))
     }
