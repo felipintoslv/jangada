@@ -68,9 +68,11 @@ class Persistencia(unittest.TestCase):
 
     def test_empate_preserva_ordem_antiga_e_identificador(self):
         with patch.object(MODULO.time, 'time', return_value=100):
-            self.estado.importar([tarefa('B'), tarefa('A')])
+            self.estado.importar([tarefa('Z'), tarefa('Y')])
         with patch.object(MODULO.time, 'time', return_value=101):
-            self.estado.importar([tarefa('AnteriorNoNome')])
+            self.estado.importar([tarefa('B'), tarefa('A')])
+        self.assertEqual(self.estado.reservar()[0]['id'], 'Y')
+        self.assertEqual(self.estado.reservar()[0]['id'], 'Z')
         self.assertEqual(self.estado.reservar()[0]['id'], 'A')
 
     def test_dependencia_herda_prioridade_critica_sem_alterar_especificacao(self):
@@ -92,6 +94,15 @@ class Persistencia(unittest.TestCase):
         plano.append(tarefa('Final', prioridade='critical', dependencias=['P1099']))
         self.estado.importar(plano)
         self.assertEqual(self.estado.reservar()[0]['id'], 'P0')
+
+    def test_antecipa_base_mesmo_com_outra_dependencia_em_revisao(self):
+        self.estado.importar([tarefa('Revisao')])
+        _, dono = self.estado.reservar()
+        self.estado.finalizar('Revisao', dono, 'REVIEW_REQUIRED', {}, 'relatório')
+        self.estado.importar([tarefa('Normal'), tarefa('Base', prioridade='background'),
+                             tarefa('Final', prioridade='critical', dependencias=['Base', 'Revisao'])])
+        self.assertEqual(self.estado.reservar()[0]['id'], 'Base')
+        self.assertEqual(next(t for t in self.estado.listar() if t['id'] == 'Final')['status'], 'QUEUED')
 
     def test_descendente_pausado_nao_promove_dependencia(self):
         self.estado.importar([tarefa('Normal'), tarefa('Base', prioridade='background'),
@@ -292,7 +303,8 @@ class Persistencia(unittest.TestCase):
         projeto = pathlib.Path(self.tmp.name) / 'projeto'
         projeto.mkdir()
         (projeto / 'fonte.md').write_text('conteúdo de teste')
-        (projeto / 'plano.json').write_text(json.dumps([tarefa(comando='touch invasao')]))
+        (projeto / 'plano.json').write_text(json.dumps([tarefa(comando='touch invasao'),
+                                                     tarefa('T2', prioridade='critical')]))
         ambiente = os.environ.copy()
         ambiente.update(JANGADA_PATH=str(RAIZ), XDG_STATE_HOME=str(pathlib.Path(self.tmp.name) / 'state'),
                         XDG_CONFIG_HOME=str(pathlib.Path(self.tmp.name) / 'config'))
@@ -305,6 +317,11 @@ class Persistencia(unittest.TestCase):
         self.assertEqual(resultado.returncode, 0, resultado.stderr)
         fila = json.loads(resultado.stdout)
         self.assertEqual(fila['tarefas'][0]['status'], 'QUEUED')
+        listagem = executar('jangada-fila')
+        self.assertEqual(listagem.returncode, 0, listagem.stderr)
+        linhas = {linha.split('\t')[0]: linha.split('\t') for linha in listagem.stdout.splitlines()}
+        self.assertEqual(linhas['T1'][-1], 'normal')
+        self.assertEqual(linhas['T2'][-1], 'critical')
         self.assertFalse((projeto / 'invasao').exists())
         self.assertEqual(executar('jangada-task', 'T1', 'pausar').returncode, 0)
         self.assertEqual(json.loads(executar('jangada-fila', '--json').stdout)['tarefas'][0]['status'], 'PAUSED')

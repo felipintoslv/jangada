@@ -355,6 +355,10 @@ Na reserva, tarefas prontas são ordenadas pela prioridade efetiva. Uma
 tarefa em fila transmite sua prioridade aos antecessores também em fila,
 para antecipar os pré-requisitos de um trabalho importante. A transmissão
 é transitiva e para em tarefas pausadas, em revisão ou fora da fila.
+Um antecessor pronto pode ser antecipado mesmo quando outra dependência
+do trabalho importante aguarda revisão ou provedor. Assim, seus demais
+pré-requisitos avançam durante a espera; o descendente continua impedido
+até a conclusão de todas as dependências.
 Dependências continuam exigindo conclusão; a prioridade não interrompe
 uma reserva existente nem altera risco, qualidade, permissões ou orçamento.
 O evento `reservada` registra as prioridades declarada e efetiva.
