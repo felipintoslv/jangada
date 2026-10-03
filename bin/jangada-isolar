@@ -74,8 +74,9 @@ args=(--ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --ro-bind /dev/null "$m
 gravavel() { [[ -e "$1" ]] && args+=(--bind "$1" "$1"); return 0; }
 somente_leitura() { [[ -e "$1" ]] && args+=(--ro-bind "$1" "$1"); return 0; }
 # Mostra o conteúdo de fora, e o que o agente grava fica numa camada em
-# memória que some no fim. Sem suporte no bwrap ou no kernel, fica gravável,
-# ou somente leitura com "ro" no segundo argumento.
+# memória que some no fim. Sem suporte no bwrap ou no kernel, vira uma pasta
+# vazia em memória, ou somente leitura com "ro" no segundo argumento: a falta
+# da sobreposição nunca deixa o agente gravar no disco.
 sobreposicao_ok=""
 temporario() {
   [[ -d "$1" ]] || return 0
@@ -88,7 +89,7 @@ temporario() {
   elif [[ "${2:-}" == ro ]]; then
     args+=(--ro-bind "$1" "$1")
   else
-    args+=(--bind "$1" "$1")
+    args+=(--tmpfs "$1")
   fi
 }
 

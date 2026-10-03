@@ -92,6 +92,20 @@ conferir "caso 1: bin do agy em camada temporária ou somente leitura" bash -c \
   _ "$casa/.gemini/antigravity-cli/bin" "$tmp/args"
 grep -A1 -xF -- --tmp-overlay "$tmp/args" | grep -qxF "$casa/.gemini/antigravity-cli/bin" && sobreposicao=1 || sobreposicao=0
 
+# Sem a sobreposição (bwrap que a recusa), nada do que seria temporário fica
+# gravável no disco.
+mkdir -p "$tmp/bwrap-sem-overlay"
+printf '#!/bin/sh\nexit 1\n' >"$tmp/bwrap-sem-overlay/bwrap"
+chmod +x "$tmp/bwrap-sem-overlay/bwrap"
+mostrar PATH="$tmp/bwrap-sem-overlay:$PATH"
+conferir "caso 1: sem sobreposição, nenhuma camada temporária" bash -c '! grep -qxF -- --tmp-overlay "$1"' _ "$tmp/args"
+for d in "$casa/.cache" "$casa/.claude/shell-snapshots" "$casa/.claude/session-env" "$casa/.claude/ide"; do
+  conferir "caso 1: sem sobreposição, ${d#"$casa"/} vazio em memória" seguidos --tmpfs "$d" ""
+  conferir "caso 1: sem sobreposição, ${d#"$casa"/} não é gravável no disco" bash -c '! grep -A2 -xF -- --bind "$2" | paste -sd" " | grep -qF -- "--bind $1 $1"' _ "$d" "$tmp/args"
+done
+conferir "caso 1: sem sobreposição, bin do agy somente leitura" \
+  seguidos --ro-bind "$casa/.gemini/antigravity-cli/bin" "$casa/.gemini/antigravity-cli/bin"
+
 mostrar JANGADA_ISOLAR_ESCRITA="$casa/extra:"
 conferir "caso 1: JANGADA_ISOLAR_ESCRITA acrescenta gravável" seguidos --bind "$casa/extra" "$casa/extra"
 mostrar JANGADA_ISOLAR_OCULTAR=
