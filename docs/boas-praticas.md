@@ -113,7 +113,8 @@ no Codex com destino `local`, ela fica na própria sessão.
 - `testes/verificar.sh` roda antes de concluir qualquer mudança. Dentro de uma
   sessão isolada, rode com
   `env -u JANGADA_ISOLADO -u JANGADA_DELEGAR -u JANGADA_PAPEL -u JANGADA_PAPEL_AJUSTE`;
-  o `testes/isolar.sh` só passa fora do isolamento, num terminal comum.
+  o `testes/isolar.sh` pula ali o caso do D-Bus e a leitura da casa mínima,
+  que só rodam num terminal comum.
 - Para testar a cópia de trabalho sem instalar: `JANGADA_PATH=$PWD bin/...`.
 - Regra que dá para conferir vira teste: o caso 8 de `testes/barra.sh`
   confere o `setsid -f` de todo clique da barra. Regra só escrita é

@@ -189,8 +189,10 @@ e o processo de `inotifywait` são encerrados junto com o isolamento.
 | `testes/isolar.sh` | argumentos do bwrap (gravável, somente leitura, oculto, `/tmp`, marca), repositório direto, `JANGADA_AGENTE_ISOLAR=0`, variável sem marca não dispensa, recusa sem bwrap e um isolamento de verdade: gravação, commit, chave oculta, D-Bus restrito e PID próprio |
 | `testes/restaurar.sh` | comando gravado e `.isolar: false` ignorados, `JANGADA_AGENTE_ISOLAR=0` abre fora, campos inválidos recusados, perfil não desliga o isolamento, protocolo refeito sem seguir link |
 
-O `testes/isolar.sh` só passa fora do isolamento: dentro de uma sessão do
-agente, o bwrap não cria outro. Rode num terminal comum.
+Dentro de uma sessão do agente, o `testes/isolar.sh` passa, mas pula o caso
+do D-Bus (o endereço do barramento não entra no teste) e a leitura da casa
+mínima (`/var/tmp` é somente leitura). A conferência completa é num terminal
+comum.
 
 Veja também o [ciclo da tarefa](ciclo-da-tarefa.md) e a seção de isolamento
 da skill em `default/claude/skills/jangada/agentes.md`.
