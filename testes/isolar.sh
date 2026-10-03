@@ -843,8 +843,12 @@ EOF
     vigia_vivo() { pgrep -f "^inotifywait .*$casa/.local/state/jangada/agentes" >/dev/null; }
     for ((i = 0; i < 50; i++)); do vigia_vivo && break; sleep 0.1; done
     conferir "caso 3d: o vigia sobe com a sessão" vigia_vivo
-    # Os subshells auxiliares têm a mesma linha de comando: -o pega só o script.
-    pkill -KILL -o -f 'bin/jangada-isolar -- sleep 20$' 2>/dev/null
+    # O alvo sai da árvore deste teste: o subshell de isolar() ou, se o bash
+    # trocou o subshell pelo comando, o próprio pid_morto.
+    alvo="$pid_morto"
+    grep -qz 'bin/jangada-isolar$' "/proc/$pid_morto/cmdline" 2>/dev/null \
+      || alvo="$(pgrep -P "$pid_morto" -f 'bin/jangada-isolar -- sleep 20$' | head -n 1)"
+    kill -KILL "${alvo:-$pid_morto}" 2>/dev/null
     wait "$pid_morto" 2>/dev/null
     for ((i = 0; i < 50; i++)); do vigia_vivo || break; sleep 0.1; done
     conferir "caso 3d: o vigia sai depois do KILL no jangada-isolar" bash -c '! "$@"' _ pgrep -f "^inotifywait .*$casa/.local/state/jangada/agentes"
