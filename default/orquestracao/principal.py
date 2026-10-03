@@ -19,7 +19,25 @@ from executor import assumir_principal, contexto_principal
 CAPACIDADES = {'analise_documental', 'sintese', 'revisao_critica'}
 
 
+def parar_processo(processo):
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(processo.pid, signal.SIGTERM)
+    try:
+        processo.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(processo.pid, signal.SIGKILL)
+        processo.wait(timeout=5)
+    finally:
+        for canal in (processo.stdin, processo.stdout, processo.stderr):
+            if canal is not None:
+                canal.close()
+
+
 def executar_principal(estado, identificador, projeto, raiz, saude, permitir_remoto=False, permitir_codex=False):
+    raiz_estado = os.environ.get('JANGADA_ESTADO')
+    if not raiz_estado:
+        raise ValueError('pasta de estado do Jangada não configurada')
     tarefa, dependencias = contexto_principal(estado, identificador, projeto)
     if (not permitir_remoto or not permitir_codex or not tarefa.get('permitir_remoto')
             or not tarefa.get('permitir_codex') or (os.environ.get('JANGADA_DELEGAR') or 'agy') != 'agy'):
@@ -32,7 +50,7 @@ def executar_principal(estado, identificador, projeto, raiz, saude, permitir_rem
     bloqueios = [i for i in saude.impedimentos() if i['destino'] == 'codex-economico']
     if bloqueios:
         raise ValueError('Codex indisponível: ' + bloqueios[0]['motivo'])
-    trava = pathlib.Path(os.environ['JANGADA_ESTADO']) / 'agentes/codex-economico.lock'
+    trava = pathlib.Path(raiz_estado) / 'agentes/codex-economico.lock'
     trava.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(trava, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
     try:
@@ -76,21 +94,17 @@ def executar_principal(estado, identificador, projeto, raiz, saude, permitir_rem
                                         text=True, encoding='utf-8', start_new_session=True)
             resultado.update(execucao_iniciada=True, metricas={'chamadas': None, 'segundos': 0})
             try:
-                bruto, erro = processo.communicate(pedido, timeout=tempo)
+                # O filho precisa concluir a limpeza das credenciais antes do prazo do pai.
+                bruto, _ = processo.communicate(pedido, timeout=tempo + 5)
             except (subprocess.TimeoutExpired, KeyboardInterrupt) as interrupcao:
-                with contextlib.suppress(ProcessLookupError):
-                    os.killpg(processo.pid, signal.SIGKILL)
-                processo.communicate()
+                parar_processo(processo)
                 encerrado = encerrar('REVISION_REQUIRED', 'execução principal interrompida; consumo desconhecido')
                 if isinstance(interrupcao, KeyboardInterrupt):
                     raise
                 return encerrado
             except (OSError, UnicodeError):
-                with contextlib.suppress(ProcessLookupError):
-                    os.killpg(processo.pid, signal.SIGKILL)
-                processo.wait()
+                parar_processo(processo)
                 raise
-            resultado['erro'] = erro[-4000:]
             registro = json.loads(bruto)
             if (processo.returncode != 0 or not isinstance(registro, dict)
                     or type(registro.get('chamadas')) is not int or registro['chamadas'] not in (0, 1)
@@ -109,7 +123,7 @@ def executar_principal(estado, identificador, projeto, raiz, saude, permitir_rem
             saude.registrar_delegacao({**resultado['delegacao'], 'destino': 'codex-economico'}, 4 if codigo else 0)
             if codigo:
                 return encerrar('WAITING_QUOTA' if codigo in {'cota_insuficiente', 'cota_desconhecida'}
-                                else 'REVISION_REQUIRED' if registro['chamadas'] else 'WAITING_PROVIDER', codigo)
+                                else 'WAITING_PROVIDER' if codigo == 'indisponivel' else 'REVISION_REQUIRED', codigo)
             if registro['chamadas'] != 1 or not isinstance(registro.get('relatorio'), str):
                 raise ValueError('relatório principal sem chamada comprovada')
             texto = registro['relatorio']

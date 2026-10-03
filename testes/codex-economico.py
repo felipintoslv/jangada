@@ -83,7 +83,7 @@ sys.stdin.read()
 ''')
 
     def stub_worker(self, modo='ok', modelo='modelo-economico-teste'):
-        self.programa(self.raiz / 'bin/jangada-codex', '''import json, os, pathlib, sys, time
+        self.programa(self.raiz / 'bin/jangada-codex', '''import hashlib, json, os, pathlib, sqlite3, sys, time
 args = sys.argv[1:]
 assert args[:3] == ['--revisar', '--', 'codex']
 assert args[args.index('--model') + 1] == ''' + repr(modelo) + '''
@@ -105,6 +105,13 @@ saida = pathlib.Path(args[args.index('--output-last-message') + 1])
 texto = 'A regra possui conteúdo documentado na fonte fornecida. ' + dados['fontes'][0]['fonte'] + ':1'
 if modo == 'mudou':
     pathlib.Path(dados['fontes'][0]['fonte']).write_text('fonte alterada durante a execução')
+if modo == 'mudou_dependencia':
+    pasta=pathlib.Path(dados['fontes'][1]['fonte']).parent
+    conteudo='novo artefato intermediário'
+    sha=hashlib.sha256(conteudo.encode()).hexdigest()
+    (pasta / (sha+'.txt')).write_text(conteudo)
+    with sqlite3.connect(pasta.parent / 'tarefas.sqlite') as db:
+        db.execute('UPDATE tarefas SET artefato=?,hash_artefato=? WHERE id=?',(sha,sha,'D1'))
 if modo == 'parecer':
     texto = json.dumps({'task_id':'S1','relatorio_sha256':'0'*64,'decisao':'APPROVED',
                         'criterios':{c:{'resultado':'PASS','justificativa':'Regra conferida na fonte '+dados['fontes'][0]['fonte']+':1'}
@@ -189,6 +196,14 @@ if modo == 'duplicado':
         self.assertEqual(estado.listar()[0]['status'],'QUEUED')
         self.assertFalse(self.audit.exists())
 
+    def test_principal_sem_pasta_estado_recusa_sem_reserva(self):
+        estado, saude = self.preparar_principal()
+        with patch.dict(os.environ):
+            os.environ.pop('JANGADA_ESTADO')
+            with self.assertRaisesRegex(ValueError,'estado'):
+                self.principal(estado,saude)
+        self.assertEqual(estado.listar()[0]['status'],'QUEUED')
+
     def test_principal_cota_baixa_nao_gera_e_preserva_orcamento(self):
         estado, saude = self.preparar_principal()
         self.stub_cota(80)
@@ -244,6 +259,32 @@ if modo == 'duplicado':
         self.assertEqual(resultado['metricas']['chamadas'],0)
         self.assertFalse(self.audit.exists())
 
+    def test_principal_pdf_exige_revisao_sem_esperar_provedor(self):
+        self.fonte.write_text('%PDF-1.4\nfonte sem extração')
+        estado, saude = self.preparar_principal()
+        resultado = self.principal(estado,saude)
+        self.assertEqual(resultado['status'],'REVISION_REQUIRED')
+        self.assertEqual(resultado['motivo'],'contexto_insuficiente')
+        self.assertEqual(resultado['metricas']['chamadas'],0)
+        self.assertFalse(self.audit.exists())
+
+    def test_principal_politica_invalida_exige_revisao(self):
+        estado, saude = self.preparar_principal()
+        with patch.dict(os.environ,JANGADA_CODEX_COTA_MIN='inválido'):
+            resultado=self.principal(estado,saude)
+        self.assertEqual(resultado['status'],'REVISION_REQUIRED')
+        self.assertEqual(resultado['motivo'],'politica_invalida')
+        self.assertEqual(resultado['metricas']['chamadas'],0)
+        self.assertFalse(self.audit.exists())
+
+    def test_principal_binario_ausente_aguarda_provedor(self):
+        estado, saude = self.preparar_principal()
+        with patch.dict(os.environ,PATH=str(self.pasta / 'bin-vazio')):
+            resultado=self.principal(estado,saude)
+        self.assertEqual(resultado['status'],'WAITING_PROVIDER')
+        self.assertEqual(resultado['metricas']['chamadas'],0)
+        self.assertFalse(self.audit.exists())
+
     def test_principal_fonte_alterada_durante_chamada_preserva_relatorio(self):
         estado, saude = self.preparar_principal()
         self.stub_worker('mudou',modelo='modelo-principal-teste')
@@ -252,6 +293,24 @@ if modo == 'duplicado':
         self.assertEqual(resultado['metricas']['chamadas'],1)
         self.assertTrue(estado.listar()[0]['artefato'])
 
+    def test_principal_dependencia_trocada_durante_chamada_preserva_relatorio(self):
+        from estado import Estado
+        from saude import Saude
+        inicial, _ = self.preparar_principal()
+        tarefa=inicial.listar()[0]['especificacao']
+        estado=Estado(self.pasta / 'dependencias')
+        self.addCleanup(estado.fechar)
+        estado.importar([{**tarefa,'id':'D1'},{**tarefa,'dependencias':['D1']}])
+        _, dono, _ = estado.reservar_principal('D1','codex')
+        estado.finalizar('D1',dono,'REVIEW_REQUIRED',{'execucao_iniciada':True,
+                         'metricas':{'chamadas':1,'segundos':0}},f'Regra documentada: {self.fonte}:1')
+        estado.revisar('D1','conferido separadamente',True)
+        self.stub_worker('mudou_dependencia',modelo='modelo-principal-teste')
+        resultado=self.principal(estado,Saude(estado))
+        self.assertEqual(resultado['status'],'REVISION_REQUIRED')
+        self.assertIn('dependências alteradas',resultado['motivo'])
+        self.assertTrue(next(t for t in estado.listar() if t['id']=='P1')['artefato'])
+
     def test_principal_requisito_ausente_preserva_saida_reprovada(self):
         estado, saude = self.preparar_principal(requisitos=['Conclusão'])
         resultado = self.principal(estado,saude)
@@ -259,12 +318,46 @@ if modo == 'duplicado':
         self.assertEqual(estado.consumo('P1')['chamadas'],1)
         self.assertTrue(estado.listar()[0]['artefato'])
 
-    def test_principal_timeout_impede_repeticao_com_consumo_desconhecido(self):
+    def test_principal_timeout_registra_chamada_e_limpa_credenciais(self):
         estado, saude = self.preparar_principal(tempo_total=1)
         self.stub_worker('demorado',modelo='modelo-principal-teste')
         resultado = self.principal(estado,saude)
         self.assertEqual(resultado['status'],'REVISION_REQUIRED')
+        self.assertEqual(estado.consumo('P1')['chamadas'],1)
+        self.assertFalse(pathlib.Path(json.loads(self.audit.read_text())['casa']).exists())
+
+    def test_principal_interrupcao_limpa_credenciais_e_exige_revisao(self):
+        estado, saude = self.preparar_principal()
+        self.stub_worker('demorado',modelo='modelo-principal-teste')
+        criar=subprocess.Popen
+
+        def interromper(*args,**kwargs):
+            processo=criar(*args,**kwargs)
+            comunicar=processo.communicate
+            primeira=True
+
+            def comunicacao(*args,**kwargs):
+                nonlocal primeira
+                if primeira:
+                    primeira=False
+                    processo.stdin.write(args[0])
+                    processo.stdin.close()
+                    processo.stdin=None
+                    prazo=time.monotonic()+3
+                    while not self.audit.exists() and time.monotonic()<prazo:
+                        time.sleep(0.01)
+                    raise KeyboardInterrupt
+                return comunicar(*args,**kwargs)
+
+            processo.communicate=comunicacao
+            return processo
+
+        with patch('principal.subprocess.Popen',side_effect=interromper):
+            with self.assertRaises(KeyboardInterrupt):
+                self.principal(estado,saude)
+        self.assertEqual(estado.listar()[0]['status'],'REVISION_REQUIRED')
         self.assertIsNone(estado.consumo('P1')['chamadas'])
+        self.assertFalse(pathlib.Path(json.loads(self.audit.read_text())['casa']).exists())
 
     def test_cli_principal_exige_autorizacoes_e_usa_adapter_real_simulado(self):
         estado, _ = self.preparar_principal()
@@ -277,6 +370,18 @@ if modo == 'duplicado':
         args=['task','P1','executar-principal','--projeto',str(self.pasta),'--executor','codex']
         recusado=subprocess.run(comando+args,capture_output=True,text=True,timeout=10)
         self.assertEqual(recusado.returncode,2)
+        for extras in (['--modelo','indevido'],['--dono','indevido'],['--arquivo',str(plano)],
+                       ['--aprovar'],['--parecer','indevido']):
+            with self.subTest(extras=extras):
+                recusado=subprocess.run(comando+args+['--permitir-remoto','--permitir-codex']+extras,
+                                        capture_output=True,text=True,timeout=10)
+                self.assertEqual(recusado.returncode,2)
+        for acao in ('pausar','retomar','cancelar','assumir'):
+            for opcao in ('--permitir-remoto','--permitir-codex'):
+                with self.subTest(acao=acao,opcao=opcao):
+                    recusado=subprocess.run(comando+['task','P1',acao,'--projeto',str(self.pasta),opcao],
+                                            capture_output=True,text=True,timeout=10)
+                    self.assertEqual(recusado.returncode,2)
         resultado=subprocess.run(comando+args+['--permitir-remoto','--permitir-codex'],
                                  capture_output=True,text=True,timeout=10)
         self.assertEqual(resultado.returncode,0,resultado.stderr)
