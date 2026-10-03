@@ -509,7 +509,8 @@ e do systemd do usuário, e `TMUX`, `TMUX_PANE`, `SSH_AUTH_SOCK`,
 `HYPRLAND_INSTANCE_SIGNATURE`, `WAYLAND_DISPLAY` e `DISPLAY` saem do
 ambiente. Colar imagem no Claude isolado não funciona. O D-Bus da sessão
 passa pelo `xdg-dbus-proxy`, que só deixa falar com `org.freedesktop.secrets`
-(o agy lê o login do chaveiro) e `org.freedesktop.Notifications` (os avisos
+(o agy lê o login do chaveiro; `JANGADA_ISOLAR_KEYRING_ITEM` limita a leitura
+a um item) e `org.freedesktop.Notifications` (os avisos
 dos hooks); sem o proxy, o agente fica sem D-Bus. O D-Bus do sistema e os
 sockets do Docker, do containerd, do podman e do tailscale ficam ocultos, e o
 agente tem namespace de PID próprio: não vê nem mata os processos de fora. A

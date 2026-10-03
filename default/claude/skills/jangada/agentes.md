@@ -148,7 +148,8 @@ O agente aberto pelo `jangada-agente` roda no bubblewrap, com
 - O `XDG_RUNTIME_DIR` é próprio: sem Hyprland (`hyprctl` falha), Wayland, X,
   gpg-agent e systemd do usuário. O D-Bus da sessão vem pelo
   `xdg-dbus-proxy`, que só fala com `org.freedesktop.Notifications` e, com
-  o agy instalado, `org.freedesktop.secrets`; o proxy vive enquanto o bwrap guarda o
+  o agy instalado, `org.freedesktop.secrets` (inteiro, ou só os itens de
+  `JANGADA_ISOLAR_KEYRING_ITEM`); o proxy vive enquanto o bwrap guarda o
   cano de sincronização (`--sync-fd`). Esse cano é aberto com
   `exec {fd}< <(...)`, e não com `coproc`: o bash fecha os descritores do
   coproc no `exec bwrap`, e o proxy morreria antes de o agente abrir. O D-Bus do sistema e o Docker ficam

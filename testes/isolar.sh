@@ -355,7 +355,7 @@ EOF
   chmod +x "$tmp/proxy-falso/xdg-dbus-proxy" "$tmp/agy-falso/agy"
   proxy() {
     isolar "$tmp/wt" PATH="$tmp/proxy-falso:$1/usr/bin:/bin" PROXY_ARGS="$tmp/proxy.args" XDG_RUNTIME_DIR="$tmp/run" \
-      DBUS_SESSION_BUS_ADDRESS=unix:path=/nada "$repo_jangada/bin/jangada-isolar" -- true >/dev/null 2>&1
+      DBUS_SESSION_BUS_ADDRESS=unix:path=/nada "${@:2}" "$repo_jangada/bin/jangada-isolar" -- true >/dev/null 2>&1
   }
   if PATH=/usr/bin:/bin command -v agy >/dev/null 2>&1; then
     echo "pulado caso 3 do keyring: agy instalado em /usr/bin"
@@ -366,6 +366,94 @@ EOF
     proxy "$tmp/agy-falso:"
     conferir "caso 3: com agy, o proxy libera o keyring e as notificações" \
       bash -c 'grep -qxF -- --talk=org.freedesktop.Notifications "$1" && grep -qxF -- --talk=org.freedesktop.secrets "$1"' _ "$tmp/proxy.args"
+    # Com o item configurado, o serviço inteiro sai e entra só o item achado.
+    printf '#!/bin/sh\nprintf "%%s\\n" "$*" >"$PROXY_ARGS.gdbus"\necho "([objectpath %s/collection/cofre/7], @ao [])"\n' \
+      "'/org/freedesktop/secrets" >"$tmp/proxy-falso/gdbus"
+    chmod +x "$tmp/proxy-falso/gdbus"
+    proxy "$tmp/agy-falso:" JANGADA_ISOLAR_KEYRING_ITEM="service=agy-teste username=eu"
+    conferir "keyring por item: o serviço inteiro não é liberado" \
+      bash -c '! grep -qxF -- --talk=org.freedesktop.secrets "$1" && grep -qxF -- --see=org.freedesktop.secrets "$1"' _ "$tmp/proxy.args"
+    conferir "keyring por item: a busca leva os atributos" \
+      grep -qF "{'service': 'agy-teste', 'username': 'eu'}" "$tmp/proxy.args.gdbus"
+    conferir "keyring por item: só o item achado é liberado por inteiro" \
+      bash -c '[ "$(grep -F "=*@" "$1")" = "--call=org.freedesktop.secrets=*@/org/freedesktop/secrets/collection/cofre/7" ]' _ "$tmp/proxy.args"
+    conferir "keyring por item: a coleção do item aceita busca e gravação" \
+      bash -c 'grep -qxF -- "--call=org.freedesktop.secrets=org.freedesktop.Secret.Collection.SearchItems@/org/freedesktop/secrets/collection/cofre" "$1" \
+        && grep -qxF -- "--call=org.freedesktop.secrets=org.freedesktop.Secret.Collection.CreateItem@/org/freedesktop/secrets/collection/cofre" "$1"' _ "$tmp/proxy.args"
+    rm -f "$tmp/proxy.args.gdbus"
+    proxy "$tmp/agy-falso:" JANGADA_ISOLAR_KEYRING_ITEM="service=a'b"
+    conferir "keyring por item: valor inválido não busca nem libera item" \
+      bash -c '! grep -qF "=*@" "$1" && ! grep -qF -- --talk=org.freedesktop.secrets "$1" && [ ! -e "$1.gdbus" ]' _ "$tmp/proxy.args"
+    rm -f "$tmp/proxy-falso/gdbus"
+  fi
+  # O filtro de verdade, num barramento próprio com um keyring falso de dois itens.
+  if command -v xdg-dbus-proxy >/dev/null 2>&1 && command -v dbus-daemon >/dev/null 2>&1 \
+     && command -v gdbus >/dev/null 2>&1 && python3 -c 'import dbus, gi' 2>/dev/null; then
+    mkdir -p "$tmp/kr"
+    cat >"$tmp/kr/keyring.py" <<'PY'
+import dbus, dbus.service, dbus.mainloop.glib
+from gi.repository import GLib
+
+dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+bus = dbus.SessionBus()
+nome = dbus.service.BusName("org.freedesktop.secrets", bus)
+RAIZ = "/org/freedesktop/secrets"
+ITENS = {RAIZ + "/collection/login/1": "agy-teste", RAIZ + "/collection/login/2": "outro"}
+
+
+def achar(atributos):
+    return [dbus.ObjectPath(c) for c, s in ITENS.items() if atributos.get("service", s) == s]
+
+
+class Servico(dbus.service.Object):
+    @dbus.service.method("org.freedesktop.Secret.Service", in_signature="a{ss}", out_signature="aoao")
+    def SearchItems(self, atributos):
+        return dbus.Array(achar(atributos), signature="o"), dbus.Array([], signature="o")
+
+    @dbus.service.method("org.freedesktop.Secret.Service", in_signature="aoo", out_signature="s")
+    def GetSecrets(self, itens, sessao):
+        return "todos"
+
+
+class Colecao(dbus.service.Object):
+    @dbus.service.method("org.freedesktop.Secret.Collection", in_signature="a{ss}", out_signature="ao")
+    def SearchItems(self, atributos):
+        return dbus.Array(achar(atributos), signature="o")
+
+
+class Item(dbus.service.Object):
+    @dbus.service.method("org.freedesktop.Secret.Item", in_signature="o", out_signature="s")
+    def GetSecret(self, sessao):
+        return "segredo de " + self._object_path
+
+
+objetos = [Servico(bus, RAIZ), Colecao(bus, RAIZ + "/collection/login")] + [Item(bus, c) for c in ITENS]
+open(__file__ + ".pronto", "w").close()
+GLib.MainLoop().run()
+PY
+    dbus-daemon --session --nofork --address="unix:path=$tmp/kr/bus" >/dev/null 2>&1 &
+    pid_bus=$!
+    for _ in {1..50}; do [[ -S "$tmp/kr/bus" ]] && break; sleep 0.1; done
+    DBUS_SESSION_BUS_ADDRESS="unix:path=$tmp/kr/bus" python3 "$tmp/kr/keyring.py" >/dev/null 2>&1 &
+    pid_keyring=$!
+    for _ in {1..50}; do [[ -e "$tmp/kr/keyring.py.pronto" ]] && break; sleep 0.1; done
+    keyring() {
+      isolar "$tmp/wt" PATH="$tmp/agy-falso:$PATH" XDG_RUNTIME_DIR="$tmp/run" DBUS_SESSION_BUS_ADDRESS="unix:path=$tmp/kr/bus" \
+        "${@:2}" "$repo_jangada/bin/jangada-isolar" -- bash -c "$1" >/dev/null 2>&1
+    }
+    segredo() { printf 'gdbus call --session --dest org.freedesktop.secrets --object-path /org/freedesktop/secrets/collection/login/%s --method org.freedesktop.Secret.Item.GetSecret /' "$1"; }
+    um="JANGADA_ISOLAR_KEYRING_ITEM=service=agy-teste"
+    conferir "keyring por item: sem a opção, o outro item é lido" keyring "$(segredo 2) | grep -q 'segredo de'"
+    conferir "keyring por item: o item do agy é lido" keyring "$(segredo 1) | grep -q 'segredo de'" "$um"
+    conferir "keyring por item: o outro item é negado" keyring "! $(segredo 2)" "$um"
+    conferir "keyring por item: a leitura em lote pelo serviço é negada" \
+      keyring '! gdbus call --session --dest org.freedesktop.secrets --object-path /org/freedesktop/secrets --method org.freedesktop.Secret.Service.GetSecrets "[]" /' "$um"
+    conferir "keyring por item: a busca na coleção passa" \
+      keyring 'gdbus call --session --dest org.freedesktop.secrets --object-path /org/freedesktop/secrets/collection/login --method org.freedesktop.Secret.Collection.SearchItems "@a{ss} {}" | grep -q login/2' "$um"
+    kill "$pid_keyring" "$pid_bus" 2>/dev/null || true
+    wait "$pid_keyring" "$pid_bus" 2>/dev/null || true
+  else
+    echo "pulado keyring por item (filtro real): sem xdg-dbus-proxy, dbus-daemon, gdbus ou dbus-python"
   fi
   conferir "caso 3: não vê os processos de fora" roda '[ "$(ls /proc | grep -c "^[0-9]")" -lt 10 ]'
 

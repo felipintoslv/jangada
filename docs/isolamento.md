@@ -36,9 +36,10 @@ o agente só conheça os dados do projeto:
   `jangada-isolar`). Outro segredo exportado no shell chega ao agente, a menos
   que `JANGADA_ISOLAR_AMBIENTE=minimo` esteja ligado (seção "Ambiente mínimo").
 - **Keyring.** Com o agy instalado, o proxy do D-Bus libera o serviço
-  `org.freedesktop.secrets` inteiro, porque o agy guarda o login ali. O
-  filtro não restringe a um item: com o keyring destrancado, o agente alcança
-  as outras senhas guardadas nele. Sem o agy, o serviço não é liberado.
+  `org.freedesktop.secrets` inteiro, porque o agy guarda o login ali: com o
+  keyring destrancado, o agente alcança as outras senhas guardadas nele.
+  `JANGADA_ISOLAR_KEYRING_ITEM` restringe a leitura a um item (seção "Keyring
+  por item"). Sem o agy, o serviço não é liberado.
 
 ## Decisão de isolar
 
@@ -135,6 +136,37 @@ conhece: bibliotecas de R em `~/R`, `~/.cargo`, `~/.nvm` ou dados que o
 projeto alcança por link (`.jangada/links`) precisam entrar em
 `JANGADA_ISOLAR_CASA_LER`. O que fica fora da pasta pessoal (`/etc`, `/mnt`,
 outros discos) segue legível.
+
+## Keyring por item
+
+`JANGADA_ISOLAR_KEYRING_ITEM` recebe os atributos do item do agy no keyring,
+em pares `atributo=valor` separados por espaço. Na abertura, fora do
+isolamento, o `jangada-isolar` procura os itens com esses atributos e o proxy
+passa a liberar só eles. O resto do serviço fica assim:
+
+- leitura de outro item (`GetSecret`, propriedades) e leitura em lote
+  (`Service.GetSecrets`): negadas;
+- busca por atributos na coleção: liberada, devolve caminhos e não segredos;
+- `CreateItem` na coleção: liberado, porque o agy regrava o token por ele.
+  Com isso o agente ainda cria item e sobrescreve um item cujos atributos
+  conheça, sem ler o valor antigo;
+- destrancar a coleção e responder ao pedido de senha: liberados.
+
+Um item criado durante a sessão só fica legível na abertura seguinte. Valor
+fora do formato fecha a leitura do keyring e avisa no terminal.
+
+Os atributos do item do agy não estão documentados. Para listar os de todos
+os itens, sem os segredos, num terminal fora do isolamento:
+
+```bash
+for i in $(gdbus call --session --dest org.freedesktop.secrets \
+    --object-path /org/freedesktop/secrets \
+    --method org.freedesktop.Secret.Service.SearchItems '@a{ss} {}' \
+    | grep -oE '/org/freedesktop/secrets/collection/[A-Za-z0-9_]+/[A-Za-z0-9_]+'); do
+  gdbus call --session --dest org.freedesktop.secrets --object-path "$i" \
+    --method org.freedesktop.DBus.Properties.Get org.freedesktop.Secret.Item Attributes
+done
+```
 
 ## Ambiente mínimo
 

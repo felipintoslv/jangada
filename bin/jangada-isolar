@@ -14,8 +14,9 @@
 # XDG_RUNTIME_DIR são próprios; com eles somem o socket do tmux, do Hyprland,
 # do Wayland e do gpg-agent. O D-Bus da sessão passa pelo xdg-dbus-proxy, que
 # só deixa falar com o keyring (se o agy está instalado) e com as
-# notificações. O agente não vê os processos de fora (namespace de PID
-# próprio) nem o Docker.
+# notificações. JANGADA_ISOLAR_KEYRING_ITEM (pares atributo=valor separados
+# por espaço) limita a leitura do keyring aos itens com esses atributos. O
+# agente não vê os processos de fora (namespace de PID próprio) nem o Docker.
 #
 # A proteção é contra escrita. O agente lê o que não está oculto, usa a rede
 # e herda o ambiente, menos as variáveis de credencial conhecidas.
@@ -44,7 +45,7 @@ mostrar=0
 while (($#)); do
   case "$1" in
     --mostrar) mostrar=1; shift ;;
-    -h|--ajuda|--help) sed -n '2,38s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    -h|--ajuda|--help) sed -n '2,39s/^# \{0,1\}//p' "$0"; exit 0 ;;
     --) shift; break ;;
     *) break ;;
   esac
@@ -156,10 +157,51 @@ if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" ]]; then
     rm -f "$sock"
     # O proxy escreve um byte quando está pronto e sai quando o outro lado do
     # cano fecha. O bwrap guarda esse lado (--sync-fd) enquanto o agente vive.
-    # O proxy libera o serviço inteiro, não um item: com o keyring aberto, o
-    # agente alcança o que estiver nele. Sem o agy instalado, ninguém precisa.
+    # Sem o agy instalado, ninguém precisa do keyring. Com ele, o proxy libera
+    # o serviço inteiro: com o keyring aberto, o agente alcança o que estiver
+    # nele. JANGADA_ISOLAR_KEYRING_ITEM restringe a leitura aos itens com
+    # aqueles atributos, achados aqui fora; item criado depois só entra na
+    # próxima abertura. A busca e o CreateItem seguem liberados: o go-keyring
+    # do agy procura o item pelos atributos e regrava o token por CreateItem.
     falar=(--talk=org.freedesktop.Notifications)
-    ! command -v agy >/dev/null 2>&1 || falar+=(--talk=org.freedesktop.secrets)
+    if command -v agy >/dev/null 2>&1; then
+      if [[ -z "${JANGADA_ISOLAR_KEYRING_ITEM:-}" ]]; then
+        falar+=(--talk=org.freedesktop.secrets)
+      else
+        segredos=org.freedesktop.secrets raiz=/org/freedesktop/secrets
+        falar+=(--see="$segredos"
+          --call="$segredos=org.freedesktop.DBus.Properties.Get@$raiz"
+          --call="$segredos=org.freedesktop.Secret.Service.OpenSession@$raiz"
+          --call="$segredos=org.freedesktop.Secret.Service.Unlock@$raiz"
+          --call="$segredos=org.freedesktop.Secret.Session.Close@$raiz/session/*"
+          --call="$segredos=org.freedesktop.Secret.Prompt.*@$raiz/prompt/*"
+          --broadcast="$segredos=org.freedesktop.Secret.Prompt.Completed@$raiz/prompt/*")
+        colecoes=("$raiz/aliases/default" "$raiz/collection/login")
+        atributos=""
+        read -ra pares <<<"$JANGADA_ISOLAR_KEYRING_ITEM"
+        for par in "${pares[@]}"; do
+          if [[ "$par" =~ ^([A-Za-z0-9_.:@+-]+)=([A-Za-z0-9_.:@/+-]+)$ ]]; then
+            atributos+="${atributos:+, }'${BASH_REMATCH[1]}': '${BASH_REMATCH[2]}'"
+          else
+            echo "jangada-isolar: JANGADA_ISOLAR_KEYRING_ITEM espera pares atributo=valor separados por espaço; sem eles o agente não lê o keyring." >&2
+            atributos=""
+            break
+          fi
+        done
+        if [[ -n "$atributos" ]]; then
+          while IFS= read -r item; do
+            falar+=(--call="$segredos=*@$item")
+            [[ " ${colecoes[*]} " == *" ${item%/*} "* ]] || colecoes+=("${item%/*}")
+          done < <(timeout 5 gdbus call --session --dest "$segredos" --object-path "$raiz" \
+            --method org.freedesktop.Secret.Service.SearchItems "{$atributos}" 2>/dev/null \
+            | grep -oE "$raiz/collection/[A-Za-z0-9_]+/[A-Za-z0-9_]+" || true)
+        fi
+        for colecao in "${colecoes[@]}"; do
+          falar+=(--call="$segredos=org.freedesktop.Secret.Collection.SearchItems@$colecao"
+                  --call="$segredos=org.freedesktop.Secret.Collection.CreateItem@$colecao")
+        done
+      fi
+    fi
     exec {dbus_sinc}< <(exec xdg-dbus-proxy "$DBUS_SESSION_BUS_ADDRESS" "$sock" \
       --filter "${falar[@]}" --fd=1 2>/dev/null)
     if read -r -N1 -t 5 -u "$dbus_sinc" _ && [[ -S "$sock" ]]; then
