@@ -205,6 +205,10 @@ tarefa combina com a descrição dela, mesmo abertos em outro projeto:
 - `relatorio-academico`: artigo, monografia e tese, com o que levantar antes
   de redigir, `[FALTA: ...]` no lugar de dado ou citação sem origem e o
   checklist de entrega.
+- `revisao-academica`: revisão de TCC, artigo ou dissertação como orientador,
+  com comentários curtos inseridos no PDF ou DOCX. Conduz as etapas do projeto
+  `jangada-academic-review` (revisores, critical gate, anotação e QA) e
+  mantém o estado e a rastreabilidade.
 
 O agy lê o mesmo `SKILL.md`, sem ajuste no frontmatter. Uma pasta ou link
 alheio com o mesmo nome nas duas pastas fica como está, com aviso.
