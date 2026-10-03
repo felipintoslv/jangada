@@ -39,6 +39,7 @@ import hashlib
 import json
 import math
 import os
+from pathlib import Path
 import re
 import sys
 import time
@@ -51,6 +52,7 @@ import pyarrow.parquet as pq
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import subagentes  # noqa: E402
+import orquestracao  # noqa: E402
 
 INICIO = time.monotonic()
 CASA = os.path.expanduser("~")
@@ -916,12 +918,23 @@ def main():
         memo = ler_json(arq_memo, {})
         if not isinstance(memo, dict):
             memo = {}
-        gravar_json(os.path.join(cache, "subagentes.json"), subagentes.indicadores(memo=memo))
+        autonomia = subagentes.indicadores(memo=memo, guardar_registros=True)
+        for grupo, campo in (("subagentes", "pasta"), ("delegacoes", "pasta")):
+            for item in autonomia['registros'][grupo]:
+                item['projeto'] = projeto_de(item[campo]) if item.get(campo) else slug(item.get('projeto'))
+        for item in autonomia['registros']['entregas']:
+            item['projeto'] = slug(item.get('projeto'))
+        gravar_json(os.path.join(cache, "subagentes.json"), autonomia)
         gravar_json(arq_memo, memo)
     except Exception as e:  # noqa: BLE001
         print(f"subagentes: {e!r}", file=sys.stderr)
         gravar_json(os.path.join(cache, "subagentes.json"),
                     {"erro": repr(e), "data": agora.astimezone(FUSO).isoformat(timespec="seconds")})
+    projetos = glob.glob(os.path.join(PROJETOS, '*'))
+    projetos += [d.get('pasta') for d in subagentes.delegacoes() if d.get('pasta')]
+    projetos += [os.environ['JANGADA_REPO']] if os.environ.get('JANGADA_REPO') else []
+    retrato = orquestracao.coletar(ESTADO, [Path(p) for p in projetos], projeto_de)
+    gravar_json(os.path.join(cache, 'orquestracao.json'), retrato)
     resumo.update({"mensagens_novas": len(mens), "ferramentas_novas": len(ferr),
                    "resultados_novos": len(res), "dias_agregados": agregados, "linhas_podadas": tirados,
                    "validacoes": len(vals), "eventos": len(evs),

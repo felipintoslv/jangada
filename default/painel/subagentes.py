@@ -578,7 +578,7 @@ def aprovacao(g):
             "rodadas_media": round(sum(e["rodadas"] or 0 for e in g) / len(g), 2) if g else None}
 
 
-def indicadores(agora=None, memo=None):
+def indicadores(agora=None, memo=None, guardar_registros=False):
     """Os oito indicadores da etapa 4 da especificação de subagentes. O memo
     ({"claude": {}, "agy": {}}, guardado entre coletas) evita reler os
     subagentes cujos arquivos não mudaram."""
@@ -591,9 +591,17 @@ def indicadores(agora=None, memo=None):
                 memo[k] = {}
         subs = claude(memo=memo["claude"]) + agy(memo=memo["agy"])
     dels = delegacoes()
+    ents = entregas_aprovadas()
+    resumo = resumir(subs, dels, ents, agora)
+    if guardar_registros:
+        resumo['registros'] = dict(subagentes=subs, delegacoes=dels, entregas=ents)
+    return resumo
+
+
+def resumir(subs, dels, ents, agora):
+    """Calcula os indicadores sobre registros já lidos, inclusive recortes do painel."""
     atendidas = [d for d in dels if not d.get("recusa")]
     recusas = [d for d in dels if d.get("recusa")]
-    ents = entregas_aprovadas()
     faixas(ents)
 
     # 1. Tokens do Claude por entrega aprovada, com e sem delegação ao agy.
@@ -736,6 +744,8 @@ def indicadores(agora=None, memo=None):
     return {
         "data": agora.isoformat(timespec="seconds"), "pouco_dado": POUCO_DADO,
         "entregas_com_resumo": len(ents),
+        "destinos": {destino: sum(d.get('destino') == destino for d in atendidas)
+                     for destino in sorted({d.get('destino') or '?' for d in atendidas})},
         "tokens_por_entrega": tokens, "fracao_agy": fracao, "compressao": compressao, "cota_agy": cota,
         "validacao": validacao, "qualidade": qualidade, "desvios": desvios, "arvore": ramos,
         "local": resumo_local(dels),
