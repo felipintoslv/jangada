@@ -103,6 +103,16 @@ conferir "caso 1: bin do agy em camada temporária ou somente leitura" bash -c \
   _ "$casa/.gemini/antigravity-cli/bin" "$tmp/args"
 grep -A1 -xF -- --tmp-overlay "$tmp/args" | grep -qxF "$casa/.gemini/antigravity-cli/bin" && sobreposicao=1 || sobreposicao=0
 
+# Casa mínima: a pasta pessoal some e volta só o que está na lista.
+conferir "caso 1: sem a opção, a pasta pessoal não é esvaziada" bash -c '! grep -A1 -xF -- --tmpfs "$1" | grep -qxF "$2"' _ "$tmp/args" "$casa"
+mostrar JANGADA_ISOLAR_CASA=minima JANGADA_ISOLAR_CASA_LER="$casa/extra"
+conferir "casa mínima: a pasta pessoal vira pasta vazia" seguidos --tmpfs "$casa" ""
+conferir "casa mínima: o .claude.json volta somente leitura" seguidos --ro-bind "$casa/.claude.json" "$casa/.claude.json"
+conferir "casa mínima: JANGADA_ISOLAR_CASA_LER volta somente leitura" seguidos --ro-bind "$casa/extra" "$casa/extra"
+conferir "casa mínima: a pasta vazia vem antes das outras montagens" \
+  bash -c '[ "$(grep -n -xF -- "$2" "$1" | head -n1 | cut -d: -f1)" -lt "$(grep -n -xF -- "$3" "$1" | head -n1 | cut -d: -f1)" ]' \
+  _ "$tmp/args" "$casa" "$tmp/wt"
+
 # Sem a sobreposição (bwrap que a recusa), nada do que seria temporário fica
 # gravável no disco.
 mkdir -p "$tmp/bwrap-sem-overlay"
@@ -295,6 +305,28 @@ EOF
   else
     echo "pulado caso 3 do D-Bus: sem sessão D-Bus, xdg-dbus-proxy ou busctl"
   fi
+  echo guardado >"$casa/.cache/guardado.txt"
+  minima() { isolar "$tmp/wt" JANGADA_ISOLAR_CASA=minima "$repo_jangada/bin/jangada-isolar" -- bash -c "$1" >/dev/null 2>&1; }
+  # O /tmp do agente é próprio e já esconde a casa do teste: a leitura só se
+  # confere com uma casa fora dele.
+  if casa_fora="$(mktemp -d -p /var/tmp 2>/dev/null)"; then
+    echo pessoal >"$casa_fora/documento.txt"
+    le() { (cd "$tmp/wt" && env -u JANGADA_ISOLADO HOME="$casa_fora" JANGADA_PATH="$repo_jangada" JANGADA_MARCA_ISOLADO="$marca_teste" \
+      "${@:2}" "$repo_jangada/bin/jangada-isolar" -- bash -c "$1" >/dev/null 2>&1); }
+    conferir "casa mínima: sem ela o documento pessoal é legível" le "grep -q pessoal '$casa_fora/documento.txt'"
+    conferir "casa mínima: documento pessoal fora de alcance" \
+      le "! test -e '$casa_fora/documento.txt'" JANGADA_ISOLAR_CASA=minima
+    rm -rf "$casa_fora"
+  else
+    echo "pulado casa mínima (leitura): /var/tmp não é gravável aqui"
+  fi
+  conferir "casa mínima: chave segue oculta" minima "! test -e '$casa/.ssh/id_teste'"
+  conferir "casa mínima: a pasta do Claude segue gravável" minima "echo x >'$casa/.claude/minima.txt'"
+  conferir "casa mínima: o cache de fora segue legível" minima "grep -q guardado '$casa/.cache/guardado.txt'"
+  conferir "casa mínima: commit no worktree" \
+    minima 'echo m >minima.txt && git add minima.txt && git -c user.name=t -c user.email=t@t commit -qm minima'
+  minima "echo x >'$casa/solto.txt'"
+  conferir "casa mínima: o que o agente grava na casa não chega ao disco" test ! -e "$casa/solto.txt"
   # O keyring só é liberado para o agy. O proxy falso anota o que recebeu.
   mkdir -m 0700 "$tmp/run"
   mkdir -p "$tmp/proxy-falso" "$tmp/agy-falso"

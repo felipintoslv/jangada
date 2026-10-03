@@ -19,6 +19,9 @@
 #
 # A proteção é contra escrita. O agente lê o que não está oculto, usa a rede
 # e herda o ambiente, menos as variáveis de credencial conhecidas.
+# JANGADA_ISOLAR_CASA=minima inverte a leitura da pasta pessoal: ela começa
+# vazia e só aparece o que os agentes e o jangada usam, mais o que estiver
+# em JANGADA_ISOLAR_CASA_LER (caminhos separados por ":").
 #
 # Ficam somente leitura, mesmo dentro dos graváveis, os arquivos que o git,
 # o Claude ou o agy leem como configuração ou executam fora do isolamento:
@@ -38,7 +41,7 @@ mostrar=0
 while (($#)); do
   case "$1" in
     --mostrar) mostrar=1; shift ;;
-    -h|--ajuda|--help) sed -n '2,28s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    -h|--ajuda|--help) sed -n '2,35s/^# \{0,1\}//p' "$0"; exit 0 ;;
     --) shift; break ;;
     *) break ;;
   esac
@@ -77,6 +80,31 @@ args=(--ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --ro-bind /dev/null "$m
 
 gravavel() { [[ -e "$1" ]] && args+=(--bind "$1" "$1"); return 0; }
 somente_leitura() { [[ -e "$1" ]] && args+=(--ro-bind "$1" "$1"); return 0; }
+
+# Casa mínima: a pasta pessoal vira uma pasta vazia em memória, e por cima
+# volta, somente leitura, só o que os agentes e o jangada leem. As montagens
+# seguintes (graváveis, somente leitura, ocultos) valem por cima dela.
+if [[ "${JANGADA_ISOLAR_CASA:-}" == minima ]]; then
+  args+=(--tmpfs "$HOME")
+  visiveis=("$JANGADA_PATH" "$JANGADA_CONFIG" "$JANGADA_ESTADO")
+  IFS=: read -ra dirs_path <<<"$PATH"
+  for p in "${dirs_path[@]}"; do
+    [[ "$p" == "$HOME"/?* ]] && visiveis+=("$p")
+  done
+  for p in .local/bin .local/lib .local/share/claude .local/share/mise .config/mise \
+           .config/git .gitconfig .claude.json .gemini .codex \
+           .zshenv .zprofile .zshrc .bash_profile .bashrc .profile; do
+    visiveis+=("$HOME/$p")
+  done
+  IFS=: read -ra extras <<<"${JANGADA_ISOLAR_CASA_LER:-}"
+  for p in "${extras[@]}"; do
+    [[ -n "$p" ]] && visiveis+=("$(realpath -m "${p/#\~/$HOME}")")
+  done
+  for p in "${visiveis[@]}"; do
+    somente_leitura "$p"
+  done
+fi
+
 # Mostra o conteúdo de fora, e o que o agente grava fica numa camada em
 # memória que some no fim. Sem suporte no bwrap ou no kernel, vira uma pasta
 # vazia em memória, ou somente leitura com "ro" no segundo argumento: a falta

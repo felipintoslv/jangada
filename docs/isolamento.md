@@ -26,7 +26,8 @@ o agente só conheça os dados do projeto:
 
 - **Arquivos.** O agente lê tudo o que o usuário lê e não está na lista de
   ocultos: documentos pessoais, o `.env` de outro projeto, o histórico do
-  shell, o `~/.Renviron`.
+  shell, o `~/.Renviron`. `JANGADA_ISOLAR_CASA=minima` fecha a pasta
+  pessoal (veja Casa mínima); o resto do disco segue legível.
 - **Rede.** Não há namespace de rede próprio: o agente fala com a internet e
   com os serviços locais da máquina. O que ele lê, pode enviar.
 - **Ambiente.** As variáveis são herdadas. Saem as de sessão gráfica e as de
@@ -109,6 +110,30 @@ valem: `JANGADA_ISOLADO` no ambiente e o ponto de montagem
 `/tmp/.jangada-isolado` em `/proc/self/mountinfo`. Qualquer processo cria um
 arquivo no `/tmp`, mas só quem monta cria um ponto de montagem; por isso a
 variável herdada não basta para pular o isolamento.
+
+## Casa mínima
+
+Com `JANGADA_ISOLAR_CASA=minima` no `jangada.conf`, a pasta pessoal vira uma
+pasta vazia em memória antes das outras montagens. Por cima dela voltam,
+somente leitura:
+
+- as pastas do `PATH` dentro da pasta pessoal, `~/.local/bin`, `~/.local/lib`,
+  `~/.local/share/claude`, `~/.local/share/mise` e `~/.config/mise`;
+- a cópia instalada, a configuração e o estado do jangada;
+- `~/.gitconfig`, `~/.config/git` e os arquivos de início do zsh e do bash;
+- `~/.claude.json`, `~/.gemini` e `~/.codex`;
+- o que estiver em `JANGADA_ISOLAR_CASA_LER`, separado por `:`.
+
+As regras de graváveis, somente leitura e ocultos valem como antes, por cima.
+Documentos, outros projetos, o histórico do shell e o `~/.Renviron` deixam de
+existir para o agente. O que ele grava solto na pasta pessoal fica em memória
+e some no fim.
+
+O padrão continua sendo a casa inteira legível. A lista cobre o que o jangada
+conhece: bibliotecas de R em `~/R`, `~/.cargo`, `~/.nvm` ou dados que o
+projeto alcança por link (`.jangada/links`) precisam entrar em
+`JANGADA_ISOLAR_CASA_LER`. O que fica fora da pasta pessoal (`/etc`, `/mnt`,
+outros discos) segue legível.
 
 ## Falhas
 
