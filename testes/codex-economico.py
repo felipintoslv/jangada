@@ -572,6 +572,20 @@ print(json.dumps({'status':'SUCCESS','conversation_id':'sup','response':json.dum
             if pai.poll() is None:
                 pai.kill()
             pai.communicate(timeout=5)
+            # O jangada-delegar filho sobrevive ao orquestrador morto e ainda grava
+            # delegacoes.jsonl: sem esta espera, a limpeza da pasta corre contra ele.
+            marca = os.fsencode(str(self.pasta))
+            limite = time.monotonic() + 5
+            while time.monotonic() < limite and any(self.linha_de_comando(p).find(marca) >= 0
+                                                    for p in pathlib.Path('/proc').glob('[0-9]*')):
+                time.sleep(0.01)
+
+    @staticmethod
+    def linha_de_comando(proc):
+        try:
+            return (proc / 'cmdline').read_bytes()
+        except OSError:
+            return b''
 
     def test_queda_do_orquestrador_encerra_geracao_e_remove_credenciais(self):
         self.interromper_geracao(False)
