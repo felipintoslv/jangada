@@ -123,6 +123,8 @@ listar() {
       printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado" "$ramo" "$tarefa"
     elif guardado "$estado" "$atualizado"; then
       printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado" "$ramo" "$tarefa"
+    elif [[ -z "$pid" && "$estado" != interrompido ]] && ! estado_final "$estado" && restauravel "$arq"; then
+      printf '%s\t%s\t%s\t%s\t%s\t%s\n' interrompido "$s" "$dir" "$atualizado" "$ramo" "$tarefa"
     fi
   done
 }
@@ -655,7 +657,10 @@ case "${1:-}" in
       echo "sessões restauradas: $n"
     fi
     ;;
-  --janela)
+  --janela|--janela-anterior)
+    if [[ "$1" == --janela && "$JANGADA_CENTRAL" == tarefas ]]; then
+      exec "$JANGADA_PATH/bin/jangada-tarefas"
+    fi
     # Solto do processo que chamou, como no --painel. A waybar espera o fim do
     # on-click antes de rodar o exec do módulo de novo, então um terminal em
     # primeiro plano congelava o contador da barra onde houve o clique
@@ -668,7 +673,10 @@ case "${1:-}" in
     setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.lista \
       -e env JANGADA_LISTA_JANELA=1 "$0" >/dev/null 2>&1
     ;;
-  --painel)
+  --painel|--painel-anterior)
+    if [[ "$1" == --painel && "$JANGADA_CENTRAL" == tarefas ]]; then
+      exec "$JANGADA_PATH/bin/jangada-tarefas"
+    fi
     if ! hyprctl clients -j | jq -e 'any(.class == "org.jangada.painel")' >/dev/null; then
       setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.painel -e "$0" --monitor >/dev/null 2>&1
       sleep 0.4

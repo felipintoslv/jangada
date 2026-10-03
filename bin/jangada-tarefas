@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Abre a central de tarefas ou emite seus contadores para a Waybar.
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+case "${1:-}" in
+  --anterior) exec "$JANGADA_PATH/bin/jangada-agentes" --painel-anterior ;;
+  --simular) shift; exec python3 "$JANGADA_PATH/default/tarefas/janela.py" "$@" ;;
+  --waybar)
+    if [[ "$JANGADA_CENTRAL" == agentes ]]; then
+      exec "$JANGADA_PATH/bin/jangada-agentes" --waybar
+    fi
+    ;;
+  ""|--nova) ;;
+  *) printf 'Uso: jangada-tarefas [--nova|--waybar|--simular|--anterior]\n' >&2; exit 1 ;;
+esac
+if [[ "$JANGADA_CENTRAL" == agentes && "${1:-}" != --waybar ]]; then
+  exec "$JANGADA_PATH/bin/jangada-agentes" --painel-anterior
+fi
+if ! python3 -c 'import PyQt6.QtWidgets, PyQt6.QtNetwork' 2>/dev/null; then
+  if [[ "${1:-}" == --waybar ]]; then
+    printf '%s\n' '{"text":"Tarefas · erro","class":"erro","tooltip":"PyQt6 ausente. Instale python-pyqt6."}'
+    exit 0
+  fi
+  printf 'Central de tarefas: instale python-pyqt6. Alternativa: jangada-tarefas --anterior.\n' >&2
+  exit 1
+fi
+args=(--real --jangada "$JANGADA_PATH" --estado "$JANGADA_ESTADO/agentes")
+if [[ "${1:-}" == --waybar ]]; then
+  args+=(--waybar)
+else
+  args+=(--mostrar)
+  [[ "${1:-}" != --nova ]] || args+=(--nova)
+fi
+exec python3 "$JANGADA_PATH/default/tarefas/janela.py" "${args[@]}"
