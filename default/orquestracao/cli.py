@@ -13,6 +13,7 @@ sys.dont_write_bytecode = True
 from estado import Estado
 from executor import executar
 from acompanhamento import acompanhar
+from metricas_projeto import resumir
 from saude import Saude, retomar
 
 
@@ -45,7 +46,9 @@ def main():
     comandos = parser.add_subparsers(dest='comando', required=True)
     fila = comandos.add_parser('fila', help='inspeciona ou importa tarefas')
     fila.add_argument('--projeto', type=pathlib.Path)
-    fila.add_argument('--importar', type=pathlib.Path)
+    consulta = fila.add_mutually_exclusive_group()
+    consulta.add_argument('--importar', type=pathlib.Path)
+    consulta.add_argument('--metricas', action='store_true')
     fila.add_argument('--json', action='store_true')
     execucao = comandos.add_parser('executar', help='executa tarefas elegíveis sem aprová-las')
     execucao.add_argument('--projeto', type=pathlib.Path)
@@ -117,6 +120,9 @@ def main():
     estado = Estado(pasta, raiz=os.environ['JANGADA_ESTADO'])
     try:
         if args.comando == 'fila':
+            if args.metricas:
+                print(json.dumps({'projeto': str(projeto), 'metricas': resumir(estado)}, ensure_ascii=False))
+                return
             if args.importar:
                 estado.importar(especificacoes(args.importar, projeto))
             tarefas = estado.listar()

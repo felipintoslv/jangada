@@ -519,6 +519,38 @@ acompanhamento encerra. Não aprova relatórios nem instala serviços.
 
 ## Registro e medição
 
+`jangada-fila --metricas` mostra os indicadores do projeto em JSON. Consulta
+o histórico em uma transação de leitura, sem chamar provedores ou importar
+tarefas. Não aceita `--importar` na mesma chamada.
+
+O resumo inclui estados, execuções registradas, processamentos confirmados,
+recusas sem chamadas, reservas expiradas, repetições solicitadas, retomadas,
+chamadas, segundos, tokens disponíveis e revisões aprovadas ou reprovadas.
+Um total desconhecido aparece como `null`; os campos `*_confirmados` ou
+`*_confirmadas` preservam a parcela conhecida. Reserva expirada torna
+consumo e duração desconhecidos. Ausência de preço não é custo zero:
+`custo_estimado` permanece `null`.
+
+`por_executor` agrupa pelo executor e modelo registrados no encerramento.
+Os campos `*_do_fluxo_*` abrangem toda a cadeia daquela execução, incluindo
+alternativas; não atribuem chamadas ou duração individualmente a cada provedor.
+`mudancas_entre_candidatos` conta mudanças de destino na sequência registrada,
+inclusive candidatos recusados. Tokens Codex conhecidos entram no total
+somente quando representam a única chamada; em cadeias com outras chamadas,
+entram na parcela conhecida e o total permanece desconhecido.
+
+`desempenho` separa capacidade, executor, modelo e risco. Considera as últimas
+50 revisões de cada grupo, ligadas a uma saída preservada. Conferências
+determinísticas concluídas automaticamente não entram na taxa de revisão.
+Com menos de 20 revisões, risco acima de 1 ou identidade incompleta, a
+amostragem sugerida é 100%. Para os demais grupos, sugere 10% normalmente,
+50% com reprovação acima de 5% e 100% acima de 15%.
+
+São sugestões para conferências por amostragem. Não alteram permissões,
+preferências do roteador nem a revisão de conteúdo exigida pelo executor.
+O histórico registra pareceres editáveis; não autentica revisores nem
+comprova independência ou qualidade real das respostas.
+
 - Cada chamada do `jangada-delegar`, atendida ou recusada, vira uma linha em
   `delegacoes.jsonl`, com papel, modelo, segundos, código, palavras, cota
   antes e depois e motivo da recusa.

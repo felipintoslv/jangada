@@ -35,7 +35,7 @@ class Economico(unittest.TestCase):
                      'default/orquestracao/cota_codex.py', 'default/orquestracao/cli.py',
                      'default/orquestracao/estado.py', 'default/orquestracao/executor.py',
                      'default/orquestracao/saude.py', 'default/orquestracao/acompanhamento.py',
-                     'default/orquestracao/deterministico.py'):
+                     'default/orquestracao/deterministico.py', 'default/orquestracao/metricas_projeto.py'):
             shutil.copy2(RAIZ / nome, self.raiz / nome)
         self.audit = self.pasta / 'execucao.json'
         self.fonte = self.pasta / 'fonte.md'
