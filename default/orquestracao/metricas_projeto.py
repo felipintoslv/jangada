@@ -114,7 +114,7 @@ def resumir(estado):
                     if inteiro(valor):
                         totais[campo + '_confirmados'] += valor
                     completo = inteiro(quantidade) and (quantidade == 0 or (
-                        quantidade == 1 and executor == 'codex-economico' and inteiro(valor)))
+                        quantidade == 1 and executor in {'codex-economico', 'codex-principal'} and inteiro(valor)))
                     if not completo:
                         totais[campo] = None
                     elif totais[campo] is not None:

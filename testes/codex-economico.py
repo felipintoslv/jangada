@@ -37,7 +37,7 @@ class Economico(unittest.TestCase):
                      'default/orquestracao/estado.py', 'default/orquestracao/executor.py',
                      'default/orquestracao/saude.py', 'default/orquestracao/acompanhamento.py',
                      'default/orquestracao/deterministico.py', 'default/orquestracao/metricas_projeto.py',
-                     'default/orquestracao/supervisao.py'):
+                     'default/orquestracao/supervisao.py', 'default/orquestracao/principal.py'):
             shutil.copy2(RAIZ / nome, self.raiz / nome)
         self.audit = self.pasta / 'execucao.json'
         self.fonte = self.pasta / 'fonte.md'
@@ -82,18 +82,19 @@ print(json.dumps({'id': 2, 'result': {'rateLimits': {'limitId': 'codex',
 sys.stdin.read()
 ''')
 
-    def stub_worker(self, modo='ok'):
+    def stub_worker(self, modo='ok', modelo='modelo-economico-teste'):
         self.programa(self.raiz / 'bin/jangada-codex', '''import json, os, pathlib, sys, time
 args = sys.argv[1:]
 assert args[:3] == ['--revisar', '--', 'codex']
-assert args[args.index('--model') + 1] == 'modelo-economico-teste'
+assert args[args.index('--model') + 1] == ''' + repr(modelo) + '''
 assert os.environ['HOME'] == os.environ['CODEX_HOME']
 assert 'SEGREDO_TESTE' not in os.environ
 assert json.loads((pathlib.Path(os.environ['CODEX_HOME']) / 'auth.json').read_text())['tokens']['refresh_token'] == ''
-dados = json.loads(sys.stdin.read().splitlines()[-1])
+entrada = sys.stdin.read()
+dados = json.loads(entrada.splitlines()[-1])
 pid_worker = os.getppid()
 pid_shell = int((pathlib.Path('/proc') / str(pid_worker) / 'stat').read_text().split(') ')[1].split()[1])
-pathlib.Path(''' + repr(str(self.audit)) + ''').write_text(json.dumps({'args': args, 'prompt': dados,
+pathlib.Path(''' + repr(str(self.audit)) + ''').write_text(json.dumps({'args': args, 'prompt': dados, 'instrucao': entrada.splitlines()[0],
     'pid': os.getpid(), 'casa': os.environ['CODEX_HOME'], 'worker': pid_worker, 'bash': pid_shell}))
 modo = ''' + repr(modo) + '''
 if modo == 'demorado':
@@ -102,6 +103,8 @@ if modo == 'erro':
     sys.exit(1)
 saida = pathlib.Path(args[args.index('--output-last-message') + 1])
 texto = 'A regra possui conteúdo documentado na fonte fornecida. ' + dados['fontes'][0]['fonte'] + ':1'
+if modo == 'mudou':
+    pathlib.Path(dados['fontes'][0]['fonte']).write_text('fonte alterada durante a execução')
 if modo == 'parecer':
     texto = json.dumps({'task_id':'S1','relatorio_sha256':'0'*64,'decisao':'APPROVED',
                         'criterios':{c:{'resultado':'PASS','justificativa':'Regra conferida na fonte '+dados['fontes'][0]['fonte']+':1'}
@@ -136,6 +139,148 @@ if modo == 'duplicado':
         self.assertEqual(resultado['cota_antes'], 80)
         dados = json.loads(self.audit.read_text())['prompt']
         self.assertEqual(dados['fontes'], [{'fonte': str(self.fonte), 'linhas': '1: Regra documentada na primeira linha.'}])
+
+    def preparar_principal(self, **campos):
+        from estado import Estado
+        from saude import Saude
+        ambiente = patch.dict(os.environ, JANGADA_CODEX_PRINCIPAL_MODELO='modelo-principal-teste',
+                              JANGADA_ESTADO=str(self.pasta / 'state/jangada'))
+        ambiente.start()
+        self.addCleanup(ambiente.stop)
+        self.stub_worker(modelo='modelo-principal-teste')
+        estado = Estado(self.pasta / 'principal')
+        self.addCleanup(estado.fechar)
+        estado.importar([{'id':'P1','pedido':'Sintetize a regra','papel':'redator','capacidade':'sintese',
+                          'risco':3,'qualidade':'high','fontes':[str(self.fonte)],
+                          'hashes_fontes':{str(self.fonte):hashlib.sha256(self.fonte.read_bytes()).hexdigest()},
+                          'permitir_remoto':True,'permitir_codex':True, **campos}])
+        return estado, Saude(estado)
+
+    def principal(self, estado, saude, **opcoes):
+        from principal import executar_principal
+        return executar_principal(estado, 'P1', self.pasta, self.raiz, saude,
+                                  **{'permitir_remoto':True, 'permitir_codex':True, **opcoes})
+
+    def test_principal_modelo_explicito_preserva_relatorio_sem_aprovar(self):
+        from metricas_projeto import resumir
+        estado, saude = self.preparar_principal()
+        resultado = self.principal(estado,saude)
+        self.assertEqual(resultado['status'],'REVIEW_REQUIRED',resultado)
+        self.assertEqual(resultado['modelo'],'modelo-principal-teste')
+        self.assertEqual(estado.consumo('P1')['chamadas'],1)
+        self.assertIn(str(self.fonte),estado.ler_artefato(estado.listar()[0]['artefato']))
+        self.assertEqual(resumir(estado)['tokens_entrada'],10)
+        dados=json.loads(self.audit.read_text())
+        self.assertIn('modelo-principal-teste',dados['args'])
+        self.assertIn('análise documental principal',dados['instrucao'])
+        self.assertEqual(saude.listar()[0]['id'],'agy')
+        with self.assertRaises(ValueError):
+            self.principal(estado,saude)
+
+    def test_principal_sem_permissao_modelo_ou_perfil_nao_reserva(self):
+        estado, saude = self.preparar_principal()
+        casos=[({'permitir_remoto':False},{}),({'permitir_codex':False},{}),
+               ({},{'JANGADA_DELEGAR':'local'}),({},{'JANGADA_CODEX_PRINCIPAL_MODELO':''}),
+               ({},{'JANGADA_CODEX_PRINCIPAL_MODELO':'--premium'})]
+        for opcoes, ambiente in casos:
+            with self.subTest(opcoes=opcoes,ambiente=ambiente), patch.dict(os.environ,**ambiente):
+                with self.assertRaises(ValueError):
+                    self.principal(estado,saude,**opcoes)
+        self.assertEqual(estado.listar()[0]['status'],'QUEUED')
+        self.assertFalse(self.audit.exists())
+
+    def test_principal_cota_baixa_nao_gera_e_preserva_orcamento(self):
+        estado, saude = self.preparar_principal()
+        self.stub_cota(80)
+        resultado = self.principal(estado,saude)
+        self.assertEqual(resultado['status'],'WAITING_QUOTA')
+        self.assertEqual(resultado['metricas']['chamadas'],0)
+        self.assertEqual(estado.listar()[0]['tentativas'],0)
+        self.assertFalse(self.audit.exists())
+        self.assertEqual(next(i for i in saude.listar() if i['id']=='codex')['status'],'QUOTA_LOW')
+
+    def test_principal_pausa_cooldown_e_trava_compartilhada_nao_geram(self):
+        estado, saude = self.preparar_principal()
+        saude.pausar('codex',True)
+        with self.assertRaises(ValueError):
+            self.principal(estado,saude)
+        saude.pausar('codex',False)
+        saude.observar('codex','COOLDOWN','limite de chamadas')
+        with self.assertRaises(ValueError):
+            self.principal(estado,saude)
+        saude.observar('codex','UNKNOWN','aguarda consulta')
+        trava=pathlib.Path(os.environ['JANGADA_ESTADO']) / 'agentes/codex-economico.lock'
+        trava.parent.mkdir(parents=True,exist_ok=True)
+        with trava.open('w') as arquivo:
+            fcntl.flock(arquivo,fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaises(ValueError):
+                self.principal(estado,saude)
+        self.assertEqual(estado.listar()[0]['status'],'QUEUED')
+        self.assertFalse(self.audit.exists())
+
+    def test_principal_nao_executa_microtarefa(self):
+        estado, saude = self.preparar_principal(risco=1,qualidade='medium')
+        with self.assertRaises(ValueError):
+            self.principal(estado,saude)
+        self.assertFalse(self.audit.exists())
+
+    def test_principal_nao_executa_risco_quatro(self):
+        estado, saude = self.preparar_principal(risco=4)
+        with self.assertRaises(ValueError):
+            self.principal(estado,saude)
+        self.assertFalse(self.audit.exists())
+
+    def test_principal_nao_executa_capacidade_de_codigo(self):
+        estado, saude = self.preparar_principal(capacidade='coding_complex')
+        with self.assertRaises(ValueError):
+            self.principal(estado,saude)
+        self.assertFalse(self.audit.exists())
+
+    def test_principal_cota_desconhecida_nao_gera(self):
+        estado, saude = self.preparar_principal()
+        self.programa(self.bin / 'codex','print("cota desconhecida")')
+        resultado = self.principal(estado,saude)
+        self.assertEqual(resultado['status'],'WAITING_QUOTA')
+        self.assertEqual(resultado['metricas']['chamadas'],0)
+        self.assertFalse(self.audit.exists())
+
+    def test_principal_fonte_alterada_durante_chamada_preserva_relatorio(self):
+        estado, saude = self.preparar_principal()
+        self.stub_worker('mudou',modelo='modelo-principal-teste')
+        resultado = self.principal(estado,saude)
+        self.assertEqual(resultado['status'],'REVISION_REQUIRED')
+        self.assertEqual(resultado['metricas']['chamadas'],1)
+        self.assertTrue(estado.listar()[0]['artefato'])
+
+    def test_principal_requisito_ausente_preserva_saida_reprovada(self):
+        estado, saude = self.preparar_principal(requisitos=['Conclusão'])
+        resultado = self.principal(estado,saude)
+        self.assertEqual(resultado['status'],'REVISION_REQUIRED',resultado)
+        self.assertEqual(estado.consumo('P1')['chamadas'],1)
+        self.assertTrue(estado.listar()[0]['artefato'])
+
+    def test_principal_timeout_impede_repeticao_com_consumo_desconhecido(self):
+        estado, saude = self.preparar_principal(tempo_total=1)
+        self.stub_worker('demorado',modelo='modelo-principal-teste')
+        resultado = self.principal(estado,saude)
+        self.assertEqual(resultado['status'],'REVISION_REQUIRED')
+        self.assertIsNone(estado.consumo('P1')['chamadas'])
+
+    def test_cli_principal_exige_autorizacoes_e_usa_adapter_real_simulado(self):
+        estado, _ = self.preparar_principal()
+        plano=self.pasta / 'plano-principal.json'
+        plano.write_text(json.dumps([estado.listar()[0]['especificacao']]))
+        comando=[sys.executable,str(self.raiz / 'default/orquestracao/cli.py')]
+        importar=subprocess.run(comando+['fila','--projeto',str(self.pasta),'--importar',str(plano)],
+                                capture_output=True,text=True,timeout=10)
+        self.assertEqual(importar.returncode,0,importar.stderr)
+        args=['task','P1','executar-principal','--projeto',str(self.pasta),'--executor','codex']
+        recusado=subprocess.run(comando+args,capture_output=True,text=True,timeout=10)
+        self.assertEqual(recusado.returncode,2)
+        resultado=subprocess.run(comando+args+['--permitir-remoto','--permitir-codex'],
+                                 capture_output=True,text=True,timeout=10)
+        self.assertEqual(resultado.returncode,0,resultado.stderr)
+        self.assertEqual(json.loads(resultado.stdout)['status'],'REVIEW_REQUIRED')
 
     def test_supervisor_codex_documental_sem_ferramentas_e_local_proibido(self):
         self.stub_worker('parecer')

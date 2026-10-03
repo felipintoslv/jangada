@@ -15,6 +15,7 @@ from executor import executar, assumir_principal, entregar_principal
 from acompanhamento import acompanhar
 from metricas_projeto import resumir
 from saude import Saude, retomar
+from principal import executar_principal
 
 
 def especificacoes(caminho, projeto):
@@ -80,18 +81,26 @@ def main():
     tarefa = comandos.add_parser('task', help='gerencia tarefas e entregas das sessões principais')
     tarefa.add_argument('--projeto', type=pathlib.Path)
     tarefa.add_argument('id')
-    tarefa.add_argument('acao', choices=['pausar', 'retomar', 'cancelar', 'repetir', 'revisar', 'assumir', 'entregar'])
+    tarefa.add_argument('acao', choices=['pausar', 'retomar', 'cancelar', 'repetir', 'revisar', 'assumir', 'entregar', 'executar-principal'])
     tarefa.add_argument('--executor', choices=['claude', 'codex'])
     tarefa.add_argument('--modelo')
     tarefa.add_argument('--dono')
     tarefa.add_argument('--arquivo', type=pathlib.Path)
     tarefa.add_argument('--parecer')
+    tarefa.add_argument('--permitir-remoto', action='store_true')
+    tarefa.add_argument('--permitir-codex', action='store_true')
     decisao = tarefa.add_mutually_exclusive_group()
     decisao.add_argument('--aprovar', action='store_true')
     decisao.add_argument('--reprovar', action='store_true')
     args = parser.parse_args()
     if args.comando == 'task':
-        if args.acao == 'assumir':
+        if args.acao != 'executar-principal' and (args.permitir_remoto or args.permitir_codex):
+            parser.error('autorizações remotas exigem executar-principal')
+        if args.acao == 'executar-principal':
+            if (args.executor != 'codex' or not args.permitir_remoto or not args.permitir_codex
+                    or args.modelo or args.dono or args.arquivo or args.parecer or args.aprovar or args.reprovar):
+                parser.error('executar-principal exige --executor codex, --permitir-remoto e --permitir-codex')
+        elif args.acao == 'assumir':
             if not args.executor or args.dono or args.arquivo or args.parecer or args.aprovar or args.reprovar:
                 parser.error('assumir exige --executor; aceita somente --modelo como opção adicional')
         elif args.acao == 'entregar':
@@ -179,7 +188,15 @@ def main():
             finally:
                 global_estado.fechar()
         else:
-            if args.acao == 'assumir':
+            if args.acao == 'executar-principal':
+                global_estado = Estado(raiz_estado / 'agentes/runtime', raiz=raiz_estado)
+                try:
+                    print(json.dumps(executar_principal(estado, args.id, projeto, raiz, Saude(global_estado),
+                                     args.permitir_remoto, args.permitir_codex), ensure_ascii=False))
+                finally:
+                    global_estado.fechar()
+                return
+            elif args.acao == 'assumir':
                 print(json.dumps(assumir_principal(estado, args.id, projeto, args.executor, args.modelo), ensure_ascii=False))
                 return
             elif args.acao == 'entregar':

@@ -61,7 +61,8 @@ def executar(raiz, pasta, pedido, fontes, tempo, papel='leitor'):
 
 
 def executar_uma(raiz, pasta, pedido, fontes, tempo, papel='leitor'):
-    resultado = {'chamadas': 0, 'motivo_codigo': '', 'modelo': os.environ.get('JANGADA_CODEX_ECONOMICO_MODELO', ''),
+    chave_modelo = 'JANGADA_CODEX_PRINCIPAL_MODELO' if papel == 'principal' else 'JANGADA_CODEX_ECONOMICO_MODELO'
+    resultado = {'chamadas': 0, 'motivo_codigo': '', 'modelo': os.environ.get(chave_modelo, ''),
                  'cota_antes': None, 'tokens_entrada': None, 'tokens_saida': None, 'relatorio': ''}
 
     def recusar(codigo):
@@ -105,7 +106,10 @@ def executar_uma(raiz, pasta, pedido, fontes, tempo, papel='leitor'):
             return recusar('cota_insuficiente')
     except (OSError, ValueError, TypeError, subprocess.SubprocessError):
         return recusar('cota_desconhecida')
-    instrucao = ('Você supervisiona somente um relatório intermediário de baixo risco. '
+    instrucao = ('Você produz uma análise documental principal do Jangada. '
+                 'Não aprove a entrega nem execute ações externas. Declare ambiguidades relevantes. '
+                 if papel == 'principal' else
+                 'Você supervisiona somente um relatório intermediário de baixo risco. '
                  'Retorne o parecer em JSON estrito. APPROVED avalia apenas esse relatório intermediário; '
                  'nunca aprove entrega final, publicação ou alteração de produção. '
                  if papel == 'supervisor' else 'Você é um leitor documental do Jangada. Não aprove a entrega. ')
@@ -179,7 +183,7 @@ def executar_uma(raiz, pasta, pedido, fontes, tempo, papel='leitor'):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--pasta', type=pathlib.Path, required=True)
-    parser.add_argument('--papel', choices=['leitor', 'supervisor'], default='leitor')
+    parser.add_argument('--papel', choices=['leitor', 'supervisor', 'principal'], default='leitor')
     parser.add_argument('--tempo', type=int, required=True)
     parser.add_argument('fontes', nargs='+')
     args = parser.parse_args()

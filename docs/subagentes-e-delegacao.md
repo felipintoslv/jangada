@@ -441,6 +441,45 @@ das chamadas e tokens da sessão aberta: o consumo permanece desconhecido,
 impedindo uma repetição automática. Este fluxo não inicia agentes em segundo
 plano nem aplica uma variante econômica ou premium por conta própria.
 
+### Execução documental principal pelo Codex
+
+Uma tarefa de risco 3 ou qualidade `high` ou `critical` pode executar uma
+análise principal por chamada delimitada, sem ferramentas. Configure
+`JANGADA_CODEX_PRINCIPAL_MODELO` com o identificador do modelo disponível
+na sua conta. O padrão vazio desativa essa execução; não há modelo implícito.
+O nome configurado não comprova qualidade: o relatório exige revisão separada.
+
+```sh
+jangada-task T5 executar-principal --executor codex --permitir-remoto --permitir-codex
+```
+
+A tarefa também exige `permitir_remoto: true` e `permitir_codex: true`,
+perfil de delegação `agy`, dependências concluídas e fontes inalteradas.
+Aceita capacidades `analise_documental`, `sintese` e `revisao_critica`.
+Recusa microtarefas, risco 4, programação e ações externas. Este comando
+não faz parte das alternativas econômicas nem da execução automática da fila.
+Claude permanece disponível pelo fluxo da sessão aberta.
+
+Antes de gerar texto, consulta a cota real do Codex e respeita
+`JANGADA_CODEX_COTA_MIN`, com reserva de 25% por padrão. Usa a mesma cota
+e trava da variante econômica; modelos distintos não têm cotas independentes.
+Cota desconhecida ou insuficiente produz `WAITING_QUOTA`, sem consumir
+tentativa de geração. Após atualizar a saúde do provedor, retome a tarefa
+com `jangada-task T5 retomar` e solicite novamente a execução principal.
+Pausa, indisponibilidade ou trava ocupada recusam o comando antes da reserva.
+
+O orçamento da tarefa inclui chamadas e tempo anteriores. Fontes e artefatos
+das dependências são enviados como texto UTF-8 numerado, sujeito ao limite
+de contexto do adaptador. PDF precisa de extração prévia. A execução usa
+credenciais copiadas para uma pasta privada temporária, sem renovação,
+ferramentas ou gravação nas fontes. Interrupção com consumo desconhecido
+impede repetição automática. Chamadas e tokens confirmados ficam nas métricas.
+
+O relatório completo passa pelos critérios de referências, requisitos e
+integridade e fica em `REVIEW_REQUIRED`. Saída reprovada fica preservada em
+`REVISION_REQUIRED`. Somente a revisão separada libera dependentes. A execução
+principal não aprova a entrega final nem substitui `jangada-validar`.
+
 ### Supervisão automática de relatórios intermediários
 
 Uma tarefa documental de risco 1 pode declarar `intermediaria: true` e
