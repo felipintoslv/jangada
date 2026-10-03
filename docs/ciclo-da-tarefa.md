@@ -130,10 +130,17 @@ flowchart TD
 - **Revisor.** O hook do revisor fica desligado, para o Stop dele não marcar
   a sessão como concluída. Pedido acima de 131.072 bytes leva o diff num
   arquivo que o agy lê. Sem o agente `revisor` instalado, o agy cairia no
-  agente padrão, com todas as ferramentas; por isso a validação para.
+  agente padrão, com todas as ferramentas; por isso o agy não é chamado.
+  Quando a chamada ao revisor falha (sem cota, fora do ar, sem o agente
+  `revisor`), a revisão passa aos outros modelos instalados, na ordem
+  `claude`, `agy`, `codex`, e por último ao modelo do autor, com o aviso de
+  revisão pelo mesmo modelo no pedido. Cada falha vira uma linha `erro` no
+  `validar.jsonl`, e o estado registra quem deu o parecer. O Codex fica fora
+  da troca quando o diff não cabe no pedido. Com `--revisor`, vale só o
+  revisor pedido.
   Cada chamada ao revisor tem prazo de `JANGADA_VALIDAR_PRAZO` segundos
   (540): vencido, o revisor e o que ele abriu são encerrados, e a rodada sai
-  com código 1 e sem parecer. Como as rodadas são contadas pelos pareceres,
+  com código 1 e sem parecer, sem passar a outro modelo. Como as rodadas são contadas pelos pareceres,
   essa chamada não gasta uma das rodadas da entrega.
   O diff acima de `JANGADA_VALIDAR_DIFF_MAX` bytes (150.000) vai cortado, com
   a lista do que ficou de fora para o revisor ler. O Codex revisa sem
@@ -154,7 +161,7 @@ flowchart TD
 | 0 | APROVADO |
 | 3 | REVISAR (do revisor ou da verificação local) |
 | 4 | limite de rodadas |
-| 1 | erro: sem diff, revisor ausente ou sem resposta no prazo, opção desconhecida |
+| 1 | erro: sem diff, nenhum revisor respondeu, prazo vencido, opção desconhecida |
 
 ## Fim da sessão
 

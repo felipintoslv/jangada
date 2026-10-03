@@ -7,7 +7,9 @@
 # Uso: jangada-validar [opções] [PASTA]
 #   --revisor NOME    claude, agy ou codex, ou mesmo para o modelo da sessão (padrão:
 #                     o revisor da sessão; sem ele, JANGADA_VALIDAR_REVISOR;
-#                     sem ele, o oposto do agente da sessão, e claude fora de sessão)
+#                     sem ele, o oposto do agente da sessão, e claude fora de sessão).
+#                     Sem --revisor, o revisor que falha (sem cota, fora do ar)
+#                     passa a vez aos outros modelos e, por último, ao do autor
 #   --base REF        compara a partir de REF (padrão: base gravada no estado
 #                     da sessão; sem ela, main ou master; sem eles, HEAD)
 #   --modelo MODELO   modelo do revisor (padrão: JANGADA_VALIDAR_MODELO; sem
@@ -249,12 +251,16 @@ if [[ -z "$revisor" ]]; then
     *) revisor=agy ;;
   esac
 fi
-case "$revisor" in
-  claude) nome_revisor="Claude"; modelo="${modelo:-sonnet}" ;;
-  agy) nome_revisor="Antigravity" ;;
-  codex) nome_revisor="Codex" ;;
-  *) echo "jangada-validar: revisor desconhecido: $revisor (use claude, agy, codex ou mesmo)" >&2; exit 1 ;;
-esac
+nomear_revisor() {
+  case "$revisor" in
+    claude) nome_revisor="Claude"; modelo="${modelo:-sonnet}" ;;
+    agy) nome_revisor="Antigravity" ;;
+    codex) nome_revisor="Codex" ;;
+    *) return 1 ;;
+  esac
+}
+nomear_revisor \
+  || { echo "jangada-validar: revisor desconhecido: $revisor (use claude, agy, codex ou mesmo)" >&2; exit 1; }
 
 if [[ -n "$autor" && "$revisor" == "$autor" ]]; then
   auto_revisao=1
@@ -457,6 +463,9 @@ if ! git -C "$dir" diff --quiet "$ponto" -- .jangada/validar.sh 2>/dev/null \
   validar_mudou=1
 fi
 
+# O pedido depende do revisor (leitura, revisão pelo mesmo modelo), e o
+# revisar_agy troca o diff por um arquivo: cada revisor recebe o seu.
+montar_pedido() {
 # O Codex revisa sem ferramentas: mandá-lo ler arquivos só gera parecer inventado.
 if [[ "$revisor" == codex ]]; then
   leitura="Você não tem ferramenta de leitura: julgue só pelo que está neste pedido."
@@ -529,6 +538,8 @@ seguido de apontamentos numerados, cada um com arquivo:linha, o problema e a
 correção sugerida, do mais grave para o menos grave.
 EOF
 )"
+}
+montar_pedido
 
 saida="$pareceres_dir/validacao-$rotulo-r$num.md"
 
@@ -880,7 +891,37 @@ revisar_agy() {
   return 1
 }
 
-if ! "revisar_$revisor"; then
+# Revisor sem cota ou fora do ar não deixa a entrega sem parecer: entram os
+# outros modelos e, por último, o do autor, em revisão pelo mesmo modelo. Não
+# vale para o revisor de --revisor nem para o prazo vencido, que somaria outra
+# espera à de quem chamou.
+revisar() {
+  local reserva falhou="$revisor"
+  local -a ordem=()
+  "revisar_$revisor" && return 0
+  ((revisor_dado)) && return 1
+  for reserva in claude agy codex; do
+    [[ "$reserva" == "$autor" ]] || ordem+=("$reserva")
+  done
+  case "$autor" in claude|agy|codex) ordem+=("$autor") ;; esac
+  for reserva in "${ordem[@]}"; do
+    ((prazo_vencido)) && return 1
+    [[ "$reserva" != "$falhou" ]] || continue
+    command -v "$reserva" >/dev/null 2>&1 || continue
+    [[ "$reserva" == codex && -n "$fora_do_pedido" ]] && continue
+    rm -f "$saida.tmp"
+    registrar erro revisor
+    echo "jangada-validar: a chamada ao $nome_revisor falhou; passando a revisão ao $reserva" >&2
+    revisor="$reserva"; modelo=""; auto_revisao=0
+    [[ "$revisor" == "$autor" ]] && auto_revisao=1
+    nomear_revisor
+    montar_pedido
+    "revisar_$revisor" && return 0
+  done
+  return 1
+}
+
+if ! revisar; then
   rm -f "$saida.tmp"
   if ((prazo_vencido)); then
     echo "jangada-validar: o $nome_revisor não respondeu em ${prazo_revisor}s (JANGADA_VALIDAR_PRAZO) e foi encerrado" >&2

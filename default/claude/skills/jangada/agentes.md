@@ -317,6 +317,10 @@ porta de entrada. O que se aprendeu com ele vale para o revisor agy:
 - O revisor padrão é o oposto do `.agente` da sessão; fora de sessão, Claude.
   Com `--revisor mesmo` ou nos perfis `claude-claude` e `agy-agy`, o mesmo
   modelo revisa em processo isolado.
+- Revisor que falha (agy sem cota, por exemplo) passa a vez: outros modelos
+  na ordem `claude`, `agy`, `codex`, e por último o do autor. Não passa com
+  `--revisor` nem com o prazo vencido. O estado e o `validar.jsonl` dizem
+  quem deu o parecer.
 - Sem terminal, o agy não tem como pedir permissão: comando ou escrita é
   recusado e ele devolve `status: SUCCESS` com `response` vazio. O pedido
   manda **não executar comandos** e ler com a ferramenta de leitura.
