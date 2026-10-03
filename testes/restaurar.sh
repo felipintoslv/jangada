@@ -178,6 +178,14 @@ restaurar '{"agente":"codex"}'
 conferir "caso 13: Codex direto sem UUID abre conversa nova" \
   bash -c 'test -s "$1" && ! grep -q "resume" "$1"' _ "$log"
 
+mv "$tmp/bin/agy" "$tmp/agy-guardado"
+rm -f "$estado/protocolo-s.md"
+restaurar '{}' env PATH="$tmp/bin:/usr/bin:/bin"
+conferir "caso 14: sem revisor, restauração preserva o protocolo" \
+  bash -c 'grep -q "append-system-prompt" "$1" && grep -q "^7. Escrita" "$2"' _ "$log" "$estado/protocolo-s.md"
+conferir "caso 14: sem revisor, restauração avisa" grep -q 'revisão indisponível' "$tmp/saida"
+mv "$tmp/agy-guardado" "$tmp/bin/agy"
+
 if ((falhas)); then
   echo "$falhas falha(s); saídas em $tmp (mantido)"
   trap - EXIT

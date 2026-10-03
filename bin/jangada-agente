@@ -38,6 +38,7 @@ janela=0; projeto=""; nome=""; nome_dado=0; direto=0; snapshot=0
 agente="$JANGADA_AGENTE"; extras=(); prompt=""; perfil=""; agente_dado=0
 revisor="${JANGADA_VALIDAR_REVISOR:-}"; revisor_dado=0
 isolar="$JANGADA_AGENTE_ISOLAR"; isolar_dado=0
+PERFIL_AMBIENTE=()
 while (($#)); do
   case "$1" in
     --janela) janela=1; shift ;;
@@ -80,39 +81,50 @@ fi
 if ((!agente_dado)) && [[ -z "$perfil" && -t 0 && "${JANGADA_AGENTE_ESCOLHER:-1}" != 0 ]]; then
   mapfile -t _perfis < <(jangada_perfis)
   if ((${#_perfis[@]})); then
-    # O que cada opção faz, entre parênteses: quem implementa e quem revisa.
     _descrever() {
-      local base
+      local base rev="$revisor" destino="${JANGADA_DELEGAR:-}" modelo="${JANGADA_VALIDAR_MODELO:-}" e
+      local isolamento="$isolar"
       base="$(basename "${1%% *}")"
-      case "$base" in
-        claude) command -v agy >/dev/null 2>&1 && echo "Claude implementa, o agy revisa; gasta mais tokens do Claude" \
-                  || echo "Claude implementa, sem revisão: agy não instalado" ;;
-        agy) command -v claude >/dev/null 2>&1 && echo "agy implementa, o Claude só revisa o diff; economiza mais tokens do Claude" \
-                  || echo "agy implementa, sem revisão: Claude não instalado" ;;
-        codex) echo "Codex implementa, o Claude revisa" ;;
-        *) echo "$base" ;;
-      esac
-    }
-    # O destino dos subagentes (jangada_delegacao) vai no fim da descrição.
-    _delegar_perfil() {
-      local _e _v=""
-      for _e in "${PERFIL_AMBIENTE[@]}"; do
-        [[ "$_e" =~ ^JANGADA_DELEGAR=(.*)$ ]] && _v="${BASH_REMATCH[1]}"
+      for e in "${PERFIL_AMBIENTE[@]}"; do
+        if ((!revisor_dado)) && [[ "$e" =~ ^JANGADA_VALIDAR_REVISOR=(.*)$ ]]; then rev="${BASH_REMATCH[1]}"; fi
+        [[ "$e" =~ ^JANGADA_DELEGAR=(.*)$ ]] && destino="${BASH_REMATCH[1]}"
+        [[ "$e" =~ ^JANGADA_VALIDAR_MODELO=(.*)$ ]] && modelo="${BASH_REMATCH[1]}"
+        if ((!isolar_dado)) && [[ "$e" =~ ^JANGADA_AGENTE_ISOLAR=(.*)$ ]]; then isolamento="${BASH_REMATCH[1]}"; fi
       done
-      jangada_delegacao "$PERFIL_COMANDO" "${_v:-${JANGADA_DELEGAR:-}}"
+      rev="$(jangada_revisor "$1" "$rev")"
+      destino="$(jangada_delegacao "$1" "$destino")"
+      command -v "${1%% *}" >/dev/null 2>&1 || printf 'INDISPONÍVEL: %s não instalado; ' "$base"
+      printf '%s implementa; %s revisa' "$base" "$rev"
+      [[ -n "$modelo" ]] && printf ' (%s)' "$modelo"
+      command -v "$rev" >/dev/null 2>&1 || printf '; revisão indisponível: %s não instalado' "$rev"
+      [[ "$rev" == "$base" ]] && printf '; autorrevisão pelo mesmo provedor'
+      case "$destino" in
+        nativo) printf '; subagentes do %s' "$base" ;;
+        claude) printf '; subagentes do Claude' ;;
+        local) printf '; leitor e redator no Ollama, demais papéis nesta sessão' ;;
+        agy)
+          [[ "$base" == codex ]] && printf '; leitor e redator no Ollama, demais papéis no agy' || printf '; delegação ao agy'
+          command -v agy >/dev/null 2>&1 || printf '; delegação indisponível: agy não instalado'
+          ;;
+      esac
+      [[ "$base" == codex ]] && isolamento=1
+      [[ "$isolamento" == 0 ]] && printf '; sem isolamento' || printf '; isolado'
+      if [[ "$destino" == local || "$base" == codex ]]; then
+        command -v ollama >/dev/null 2>&1 || printf '; delegação local indisponível: Ollama não instalado'
+      fi
+      printf '\n'
     }
-    _escolha="$({ printf '%s\t(%s; subagentes: %s)\n' "$JANGADA_AGENTE" "$(_descrever "$JANGADA_AGENTE")" \
-                    "$(jangada_delegacao "$JANGADA_AGENTE" "${JANGADA_DELEGAR:-}")"
+    _escolha="$({ printf 'padrão\t(%s)\n' "$(_descrever "$JANGADA_AGENTE")"
                   for _p in "${_perfis[@]}"; do
                     jangada_perfil "$_p" || continue
-                    printf '%s\t(%s; subagentes: %s)\n' "$_p" "${PERFIL_DESCRICAO:-$(_descrever "$PERFIL_COMANDO")}" \
-                      "$(_delegar_perfil)"
+                    printf '%s\t(%s)\n' "$_p" "$(_descrever "$PERFIL_COMANDO")"
                   done; } \
       | column -t -s $'\t' -o '   ' \
-      | fzf --prompt 'agente > ' --height 40% --reverse --no-sort \
+      | fzf --prompt 'agente > ' --height 60% --reverse --no-sort --wrap \
+        --header 'Sessão interativa. Fila e orçamento são configurados separadamente.' \
       | awk '{print $1}')" || true
     [[ -n "$_escolha" ]] || exit 0
-    [[ "$_escolha" == "$JANGADA_AGENTE" ]] || perfil="$_escolha"
+    [[ "$_escolha" == padrão ]] || perfil="$_escolha"
   fi
 fi
 
@@ -126,6 +138,10 @@ if [[ -n "$perfil" ]]; then
     exit 1
   fi
   agente="$PERFIL_COMANDO"
+fi
+if ! command -v "${agente%% *}" >/dev/null 2>&1; then
+  echo "agente indisponível: ${agente%% *} não instalado; nenhuma sessão criada" >&2
+  exit 1
 fi
 
 # Nome seguro para ramo, pasta e sessão do tmux. Acentos viram a letra sem
@@ -320,18 +336,13 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
     cmd_agente="$(printf '%q' "$JANGADA_PATH/bin/jangada-isolar") -- $cmd_agente"
     cmd_base="$cmd_agente"
   fi
-  revisor_efetivo="$revisor"
-  case "$revisor_efetivo" in
-    mesmo) revisor_efetivo="$base_agente" ;;
-    oposto|"")
-      [[ "$base_agente" == agy || "$base_agente" == codex ]] && revisor_efetivo="claude" || revisor_efetivo="agy"
-      ;;
-  esac
+  revisor_efetivo="$(jangada_revisor "$agente" "$revisor")"
 
   protocolo="$JANGADA_PATH/default/agentes/protocolo.md"
   [[ "${JANGADA_AGENTE_PROTOCOLO:-1}" != 0 && -r "$protocolo" ]] || protocolo=""
-  # Sem o revisor instalado, o protocolo mandaria rodar um comando que falharia.
-  ! command -v "$revisor_efetivo" >/dev/null 2>&1 && protocolo=""
+  if ! command -v "$revisor_efetivo" >/dev/null 2>&1; then
+    echo "revisão indisponível: $revisor_efetivo não instalado; protocolo e testes continuam obrigatórios" >&2
+  fi
   # O protocolo da sessão fica num arquivo próprio, lido pelo comando na hora
   # (o --restaurar o refaz das mesmas fontes). Leva o item de subagentes do
   # destino da delegação e, em projeto com arquivos R, as regras de código R.
@@ -347,6 +358,10 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
     fi
     rm -f "$estado_dir/protocolo-$sessao.md"
     cat "${partes[@]}" >"$estado_dir/protocolo-$sessao.md"
+    if ! command -v "$revisor_efetivo" >/dev/null 2>&1; then
+      printf '\nRevisão indisponível: %s não instalado. Execute os testes obrigatórios e o jangada-validar. Informe a revisão pendente; não declare aprovação.\n' \
+        "$revisor_efetivo" >>"$estado_dir/protocolo-$sessao.md"
+    fi
     protocolo="$estado_dir/protocolo-$sessao.md"
   fi
   arq_prompt="$estado_dir/prompt-$sessao.md"

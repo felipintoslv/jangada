@@ -224,7 +224,8 @@ O fluxo completo, com fluxogramas, está em
 
 1. `SUPER + A` (ou `jangada-agente --prompt "..."`) pergunta o agente e abre
    num worktree `agente/<nome>`. Cada opção diz entre parênteses quem
-   implementa, quem revisa e qual economiza mais tokens do Claude.
+   implementa, quem revisa, para onde delega e se roda isolada. Os valores
+   refletem a configuração global, o perfil e as opções do comando.
 2. O estado aparece na barra e no painel (`SUPER + CTRL + A`) pelos hooks do
    Claude Code: trabalhando, aguardando (notificação com botão que foca a
    janela) ou concluído. `SUPER + N` pula para quem espera.
@@ -244,15 +245,23 @@ O fluxo completo, com fluxogramas, está em
 
 ### Quem implementa e quem revisa
 
-| No seletor | Implementa | Revisa | Tokens do Claude |
+| No seletor | Implementa | Revisa | Delegação padrão |
 |---|---|---|---|
-| `claude` | Claude | agy | gasta mais: o Claude faz o trabalho todo |
-| `agy` | agy | Claude, só o diff | economiza mais: o Claude só lê o diff |
-| `claude-claude` | Claude | Claude | usa apenas o Claude |
-| `agy-agy` | agy | agy | não gasta tokens do Claude |
-| `codex` | Codex | Claude | Claude recebe só a revisão |
-| `codex-codex` | Codex | outra instância do Codex | não gasta tokens do Claude |
-| `codex-agy` | Codex | agy Flash, esforço alto | não gasta tokens do Claude |
+| `padrão` (Claude na configuração inicial) | Claude | agy | agy, com alternativa no Claude |
+| `agy` | agy | Claude, só o diff | subagentes do agy |
+| `claude-claude` | Claude | Claude | subagentes do Claude |
+| `agy-agy` | agy | agy | subagentes do agy |
+| `codex` | Codex | Claude | leitor e redator no Ollama |
+| `codex-codex` | Codex | outra instância do Codex | leitor e redator no Ollama |
+| `codex-agy` | Codex | agy Flash, esforço alto | leitor e redator no Ollama, demais papéis no agy |
+
+O seletor identifica autorrevisão quando executor e revisor usam o mesmo
+provedor. Ele informa programas ausentes e recusa um executor indisponível
+antes de criar a sessão. Sem o revisor, mantém o protocolo, o isolamento
+configurado e os testes obrigatórios; a entrega continua sem aprovação.
+Esses perfis abrem sessões interativas. Fila e orçamento são configurados
+separadamente. As descrições são calculadas; `DESCRICAO` em perfis antigos
+continua sendo lida, mas não substitui os valores efetivos no seletor.
 
 O Codex usa os worktrees e o tmux da Jangada, sem criar worktree próprio
 nem conectar ao servidor compartilhado do CLI. Todos os perfis Codex usam
@@ -280,8 +289,8 @@ externas. Veja
    regras de `default/agentes/protocolo-r.md` (sem `cat()` como mensagem,
    sem código comentado, `seq_along()`). No Claude ele vai por
    `--append-system-prompt`; no agy, por `-i` junto com a tarefa.
-   `JANGADA_AGENTE_PROTOCOLO=0` desliga. Sem o revisor instalado, o agente abre
-   sem o protocolo, porque não haveria quem revisasse.
+   `JANGADA_AGENTE_PROTOCOLO=0` desliga. Sem o revisor instalado, o agente
+   recebe o protocolo e um aviso de que a revisão está indisponível.
 2. Prefira fazer o commit antes de `jangada-validar`, para revisar uma
    entrega limpa. O comando também aceita alterações sem commit e arquivos
    novos; nesse caso, a aprovação recebe a marca `sujo`.
@@ -366,7 +375,7 @@ Detalhes que valem para o dia a dia:
 
 Perfis de agente (outra conta, outro modelo, outro programa) ficam em
 `~/.config/jangada/agentes/NOME.conf`; veja `default/agentes/exemplo.conf`.
-A chave `DESCRICAO=` é o texto entre parênteses no seletor.
+O seletor calcula a descrição a partir do comando, revisor e delegação efetivos.
 Ganchos do usuário ficam em `~/.config/jangada/ganchos/EVENTO` ou
 `EVENTO.d/`, para os eventos `pos-update`, `pos-tema`, `pos-agente-fim`
 (recebe sessão, raiz e se houve integração) e `pos-validar` (sessão e status). Um exemplo útil: `pos-tema` rodando `jangada-sddm aplicar`.

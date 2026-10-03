@@ -217,7 +217,9 @@ refazer_protocolo() {
   [[ "${5:-}" == codex ]] && delegar=codex
   base="$JANGADA_PATH/default/agentes/protocolo.md"
   [[ "${JANGADA_AGENTE_PROTOCOLO:-1}" != 0 && -r "$base" ]] || return 0
-  command -v "$revisor" >/dev/null 2>&1 || return 0
+  if ! command -v "$revisor" >/dev/null 2>&1; then
+    echo "revisão indisponível: $revisor não instalado; protocolo e testes continuam obrigatórios" >&2
+  fi
   local -a partes=("$base" "$JANGADA_PATH/default/agentes/protocolo-delegar-$delegar.md"
                    "$JANGADA_PATH/default/agentes/protocolo-delegar.md")
   if [[ -n "$(find "$dir" -maxdepth 2 -not -path '*/.git/*' \
@@ -227,6 +229,10 @@ refazer_protocolo() {
   fi
   tmp="$(mktemp "$estado_dir/.protocolo-$s.XXXXXX")" || return 1
   cat "${partes[@]}" >"$tmp" 2>/dev/null || { rm -f "$tmp"; return 1; }
+  if ! command -v "$revisor" >/dev/null 2>&1; then
+    printf '\nRevisão indisponível: %s não instalado. Execute os testes obrigatórios e o jangada-validar. Informe a revisão pendente; não declare aprovação.\n' \
+      "$revisor" >>"$tmp"
+  fi
   mv -fT "$tmp" "$estado_dir/protocolo-$s.md" || { rm -f "$tmp"; return 1; }
   printf '%s\n' "$estado_dir/protocolo-$s.md"
 }

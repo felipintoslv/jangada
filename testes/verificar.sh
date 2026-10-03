@@ -122,6 +122,7 @@ for c in $(grep -ho '`jangada-[a-z-]*' default/agentes/protocolo*.md | tr -d '`'
 done
 
 passo "jangada-validar com claude e agy falsos"
+python3 testes/agente-seletor.py || falha "testes/agente-seletor.py"
 if command -v git >/dev/null && command -v jq >/dev/null; then
   testes/validar.sh || falha "testes/validar.sh"
 else

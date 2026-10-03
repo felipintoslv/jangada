@@ -229,6 +229,18 @@ jangada_candidatos() {
   ' "$politica"
 }
 
+jangada_revisor() {
+  local base
+  base="$(basename "${1%% *}")"
+  case "${2:-}" in
+    mesmo) echo "$base" ;;
+    oposto|"")
+      [[ "$base" == agy || "$base" == codex ]] && echo claude || echo agy
+      ;;
+    *) echo "$2" ;;
+  esac
+}
+
 jangada_perfis() {
   local _a
   for _a in "$JANGADA_CONFIG"/agentes/*.conf "$JANGADA_PATH"/default/agentes/*.conf; do
