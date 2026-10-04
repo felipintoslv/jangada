@@ -26,6 +26,8 @@ jangada/
 ├── migrations/            ajustes aplicados em ordem a cada atualização
 ├── docs/                  processos com fluxogramas, registros e boas práticas
 ├── testes/                verificar.sh (estático + os demais testes) e aninhado.sh
+├── estudos/               auditorias do funcionamento atual, com data e commit
+├── benchmarking/          comparação de módulos e repositórios de Waybar
 ├── mapeamento/            inventários do jangada-mapear (fora do git)
 └── revisao/               pareceres, avaliações e comparações; índice em revisao/README.md
 ```
@@ -46,6 +48,8 @@ arquivo e função, falhas e os testes que o cobrem:
 | [docs/registros.md](docs/registros.md) | campos de cada registro usado pelo painel |
 | [docs/conversa-de-pescador.md](docs/conversa-de-pescador.md) | janela de conversa progressiva, pesquisa com fontes e auditoria paralela |
 | [docs/boas-praticas.md](docs/boas-praticas.md) | regras de código, testes, textos e commits |
+| [docs/analise-painel-20260930.md](docs/analise-painel-20260930.md) | leitura do painel com os dados de 30/09/2026 |
+| [docs/proposta-atualizacao-painel.md](docs/proposta-atualizacao-painel.md) | proposta de atualização do painel, com implementação parcial |
 
 ## Antes de instalar: mapear a máquina
 
@@ -120,9 +124,9 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-snapshot "descrição"` | cria um snapshot manual do sistema; com `--agente`, o do `jangada-agente --snapshot`, fora da limpeza do snapper e limitado aos `JANGADA_SNAPSHOTS_AGENTE` mais recentes |
 | `jangada-tema [imagem]` | gera as cores a partir de um papel de parede e recarrega a interface |
 | `jangada-tarefas` | central gráfica de tarefas (`--nova`, `--waybar`, `--simular`, `--anterior`) |
-| `jangada-agente` | escolhe o agente (Claude, agy ou Codex), o projeto e cria um worktree, e abre o agente numa sessão tmux, isolado pelo `jangada-isolar` (`--prompt`, `--prompt-arquivo`, `--perfil`, `--sem-isolar`) |
+| `jangada-agente` | escolhe o agente (Claude ou Codex; o agy fica só de suporte), o projeto e cria um worktree, e abre o agente numa sessão tmux, isolado pelo `jangada-isolar` (`--prompt`, `--prompt-arquivo`, `--perfil`, `--sem-isolar`) |
 | `jangada-isolar` | roda um comando no bubblewrap, com o sistema somente leitura e a pasta atual gravável; `--mostrar` imprime a chamada ao `bwrap` |
-| `jangada-delegar PAPEL "pedido"` | delega ao Ollama (`--destino local --arquivos ARQUIVOS`, só leitor e redator) ou ao agy Flash (`--destino agy`); `--capacidade` permite seleção documental para leitor, com autorização remota explícita e referências verificadas; `--json` explica a decisão (ver [delegação](docs/subagentes-e-delegacao.md)) |
+| `jangada-delegar PAPEL "pedido"` | delega ao Ollama (`--destino local --arquivos ARQUIVOS`, só leitor e redator) ou ao agy (`--destino agy`, modelos de `JANGADA_DELEGAR_MODELOS`); `--capacidade` permite seleção documental para leitor, com autorização remota explícita e referências verificadas; `--json` explica a decisão (ver [delegação](docs/subagentes-e-delegacao.md)) |
 | `jangada-fila` | mostra a fila persistente do projeto; `--importar PLANO.json` acrescenta tarefas, `--json` detalha o estado, `--revisao` lista o que aguarda revisão e `--metricas` resume consumo, revisões e custo estimado pelos preços de `precos.json` (ver [fila](docs/subagentes-e-delegacao.md#fila-persistente-de-projetos)) |
 | `jangada-executar` | executa tarefas elegíveis da fila pelo `jangada-delegar`, sem aprovar o conteúdo (`--limite`, `--perfil balanced\|quality\|offline`, `--permitir-remoto`, `--permitir-codex`, `--supervisionar`, `--amostrar`, `--paralelo`); `--acompanhar` mantém a fila em primeiro plano até o prazo |
 | `jangada-retomar` | recoloca na fila tarefas que esperavam cota ou provedor, quando há executor, orçamento e tentativas (`--atualizar`, `--executar`) |
@@ -249,12 +253,14 @@ O fluxo completo, com fluxogramas, está em
 | No seletor | Implementa | Revisa | Delegação padrão |
 |---|---|---|---|
 | `padrão` (Claude na configuração inicial) | Claude | agy | agy, com alternativa no Claude |
-| `agy` | agy | Claude, só o diff | subagentes do agy |
 | `claude-claude` | Claude | Claude | subagentes do Claude |
-| `agy-agy` | agy | agy | subagentes do agy |
 | `codex` | Codex | Claude | leitor e redator no Ollama |
 | `codex-codex` | Codex | outra instância do Codex | leitor e redator no Ollama |
 | `codex-agy` | Codex | agy Flash, esforço alto | leitor e redator no Ollama, demais papéis no agy |
+
+O agy não abre sessão principal: o `jangada-agente` recusa `--agente agy` e
+todo perfil com `COMANDO=agy`. Ele atende as delegações e a revisão, ao lado
+do Ollama. Uma sessão antiga do agy aberta sem perfil ainda é restaurada.
 
 O seletor identifica autorrevisão quando executor e revisor usam o mesmo
 provedor. Ele informa programas ausentes e recusa um executor indisponível
@@ -267,7 +273,7 @@ continua sendo lida, mas não substitui os valores efetivos no seletor.
 O Codex usa os worktrees e o tmux da Jangada, sem criar worktree próprio
 nem conectar ao servidor compartilhado do CLI. Todos os perfis Codex usam
 primeiro Ollama para leitor e redator. Os demais papéis ficam na sessão nos
-perfis `codex` e `codex-codex`; no `codex-agy`, são delegados ao agy Flash.
+perfis `codex` e `codex-codex`; no `codex-agy`, são delegados ao agy.
 
 ```mermaid
 flowchart LR
@@ -276,7 +282,7 @@ flowchart LR
     A -- codex-agy --> G[Revisão: agy Flash<br>esforço alto]
     C --> L[Leitor e redator: Ollama<br>Outros papéis: na sessão]
     X --> L
-    G --> D[Leitor e redator: Ollama<br>Outros papéis: agy Flash]
+    G --> D[Leitor e redator: Ollama<br>Outros papéis: agy]
 ```
 
 O revisor Codex recebe o pedido completo, sem terminal ou ferramentas
@@ -289,7 +295,7 @@ externas. Veja
    projeto com arquivos R até dois níveis abaixo da raiz, vão também as
    regras de `default/agentes/protocolo-r.md` (sem `cat()` como mensagem,
    sem código comentado, `seq_along()`). No Claude ele vai por
-   `--append-system-prompt`; no agy, por `-i` junto com a tarefa.
+   `--append-system-prompt`; no Codex, pelo `jangada-codex`.
    `JANGADA_AGENTE_PROTOCOLO=0` desliga. Sem o revisor instalado, o agente
    recebe o protocolo e um aviso de que a revisão está indisponível.
 2. Prefira fazer o commit antes de `jangada-validar`, para revisar uma
@@ -352,7 +358,8 @@ externas. Veja
    `~/.local/state/jangada/eventos-agentes.jsonl`. É o histórico de onde saem
    o tempo em espera e as sessões simultâneas; `docs/registros.md` descreve
    este e os outros registros.
-5. A barra acompanha o agy pelo hook `jangada-hook-agy`, instalado em
+5. Numa sessão antiga do agy restaurada, a barra o acompanha pelo hook
+   `jangada-hook-agy`, instalado em
    `~/.gemini/config/hooks.json`: trabalhando e concluído. O agy não tem
    evento de pedido de permissão, então não há "aguardando". `Enter` restaura
    com `agy --conversation`.
@@ -388,47 +395,62 @@ Ganchos do usuário ficam em `~/.config/jangada/ganchos/EVENTO` ou
 Fluxogramas em
 [docs/subagentes-e-delegacao.md](docs/subagentes-e-delegacao.md).
 
-Oito papéis, com o mesmo nome e o mesmo texto no Claude Code
+Nove papéis, com o mesmo nome e o mesmo texto no Claude Code
 (`default/claude/agents/`, ligados em `~/.claude/agents/`) e no agy
-(`default/agy/agents/`, registrados em `~/.gemini/config/agents.json`). Nenhum
+(`default/agy/agents/`, registrados em `~/.gemini/config/agents.json`). O agy
+tem mais dois, fora da delegação: `revisor`, do `jangada-validar`, e
+`pescador`, da Conversa de Pescador. Nenhum
 edita arquivos, e todos citam caminho e linha, página, célula ou URL em cada
 afirmação. O explorador, o pesquisador, o auditor, o arquiteto, o otimizador e o
 redator não têm terminal; o leitor e o verificador têm, e o "só leitura" deles
 vale pela instrução e, no agy, pelo `permissions.allow`.
 
-| Papel | Faz | Claude | agy |
-|---|---|---|---|
-| `explorador` | mapeia código, dados e registros; até ~300 palavras | haiku | flash (low) |
-| `leitor` | trechos pedidos de PDF, planilha ou relatório | haiku | flash (medium) |
-| `pesquisador` | documentação, normas e dados públicos na web | haiku | flash (medium) |
-| `verificador` | testes, lint e regras do AGENTS.md antes do `jangada-validar` | sonnet | flash (high) |
-| `auditor` | auditoria de segurança (injeções, caminhos, permissões, CWEs) | sonnet | flash (high) |
-| `arquiteto` | estrutura de módulos, contratos de API e impacto de mudanças | sonnet | flash (high) |
-| `otimizador` | gargalos de desempenho, complexidade e uso de memória | sonnet | flash (medium) |
-| `redator` | conformidade textual, clareza e regras de escrita do AGENTS.md | haiku | flash (low) |
-| `supervisor` | fidelidade de relatório intermediário às fontes, sem aprovação de entrega final | haiku | flash (medium) |
+| Papel | Faz | Claude |
+|---|---|---|
+| `explorador` | mapeia código, dados e registros; até ~300 palavras | haiku |
+| `leitor` | trechos pedidos de PDF, planilha ou relatório | haiku |
+| `pesquisador` | documentação, normas e dados públicos na web | haiku |
+| `verificador` | testes, lint e regras do AGENTS.md antes do `jangada-validar` | sonnet |
+| `auditor` | auditoria de segurança (injeções, caminhos, permissões, CWEs) | sonnet |
+| `arquiteto` | estrutura de módulos, contratos de API e impacto de mudanças | sonnet |
+| `otimizador` | gargalos de desempenho, complexidade e uso de memória | sonnet |
+| `redator` | conformidade textual, clareza e regras de escrita do AGENTS.md | haiku |
+| `supervisor` | fidelidade de relatório intermediário às fontes, sem aprovação de entrega final | haiku |
+
+No agy, todo papel usa o primeiro modelo de `JANGADA_DELEGAR_MODELOS` com
+cota (padrão `gemini-3.8-flash-high`).
 
 O item 8 do protocolo diz a quem delegar, conforme `JANGADA_DELEGAR` do
 perfil (ou global), e o seletor mostra o destino:
 
 | `JANGADA_DELEGAR` | Perfis | Efeito |
 |---|---|---|
-| `agy` | `claude` (padrão do Claude) | `jangada-delegar PAPEL` manda ao agy Flash; o subagente do Claude só se ele recusar |
+| `agy` | `padrão` (Claude), `codex-agy` | `jangada-delegar PAPEL` manda ao agy; o subagente do Claude só se ele recusar |
 | `claude` | `claude-claude` | subagentes do Claude dos papéis, nunca `general-purpose` |
-| `nativo` | `agy`, `agy-agy` (padrão do agy) | subagentes do próprio agy (`invoke_subagent`) |
+| `local` | `codex`, `codex-codex` (padrão do Codex) | leitor e redator no Ollama; os demais papéis na própria sessão |
 
 `jangada-delegar PAPEL "pedido" [--arquivo SAIDA]` roda o agente do papel
-no agy (Flash low no explorador e no redator, medium no leitor, no pesquisador e
-no otimizador, high no verificador, no auditor e no arquiteto), com `--sandbox`,
+no agy, com `--sandbox`,
 na raiz do repositório atual, e imprime só o relatório. A pasta precisa ser confiável para o agy (o worktree da sessão
 é, e as outras só se você já respondeu à pergunta do agy nelas): o
 `jangada-delegar` não confia por conta própria, porque a confiança libera
 agentes, regras e MCP da própria pasta. Acima de 600 palavras
 (`JANGADA_DELEGAR_PALAVRAS`), o relatório sai cortado, com o caminho do
-texto completo. Antes, lê a cota do agy
-(`agy -p /usage`, guardada por 5 minutos) e recusa, com código 4 e uma
-linha indicando o subagente do Claude do mesmo papel, quando o limite de 5
-horas do Gemini está abaixo de 20% (`JANGADA_DELEGAR_COTA_MIN`), quando a
+texto completo.
+
+O modelo sai de `JANGADA_DELEGAR_MODELOS`, lista em ordem de preferência
+(padrão `gemini-3.8-flash-high claude-sonnet-5-5-high gpt-oss-120b-medium`).
+Antes de cada chamada, o comando lê a cota do agy (`agy -p /usage`, guardada
+por 5 minutos, no máximo uma consulta por execução). O agy separa a cota em
+dois grupos: o dos modelos Gemini, que Flash e Pro dividem, e o dos modelos
+Claude e GPT. Cada grupo tem limite semanal e de 5 horas, e vale o menor dos
+dois. O modelo cujo grupo está abaixo de 20% (`JANGADA_DELEGAR_COTA_MIN`) ou
+sem cota legível é pulado, e o seguinte da lista é tentado. Se o agy responder
+que a cota acabou no meio da chamada, o comando também passa ao seguinte. Por
+isso o padrão põe depois do Flash dois modelos do outro grupo.
+
+O comando recusa, com código 4 e uma linha indicando o subagente do Claude
+do mesmo papel, quando nenhum modelo da lista tem cota, quando a
 pasta não é confiável, quando o `agy agents` não lista o papel, quando o
 agy falha ou passa de 300 segundos (`JANGADA_DELEGAR_TEMPO`) e quando o
 perfil não delega ao agy. Sem terminal, o agy só roda os comandos listados
@@ -540,7 +562,7 @@ git sobre pastas de agentes com `jangada_git_seguro`.
 separadas por `:` (`~/dados:~/R`). `JANGADA_ISOLAR_OCULTAR` substitui a lista
 de ocultos, com caminhos relativos à pasta pessoal ou absolutos; definida
 vazia, não oculta nada. A pasta do token do `jangada-painel` fica oculta
-sempre. Para Claude e agy, `jangada-agente --sem-isolar` desliga o isolamento
+sempre. Para o Claude, `jangada-agente --sem-isolar` desliga o isolamento
 numa sessão; `JANGADA_AGENTE_ISOLAR=0` desliga num perfil ou no `jangada.conf`.
 O Codex e o executor do Conversa de Pescador exigem isolamento mesmo com
 essas opções.
@@ -818,7 +840,11 @@ e não mexe na instalada. Para testar a cópia de trabalho sem instalar, rode
 | `testes/painel.sh` | coletor do painel sobre registros de exemplo e, com os pacotes R, o app no ar |
 | `testes/pescador.py` | pareceres, auditorias paralelas, sessões, resposta progressiva, cancelamento e janela Qt com executor falso |
 | `testes/pescador-modelo.sh` | modelos sem ferramentas e isolamento obrigatório do Pescador, mesmo com a preferência geral desligada |
-| `testes/subagentes.sh`, `testes/delegar.sh` | papéis de subagente e a instalação deles; `jangada-delegar` com agy falso |
+| `testes/subagentes.sh`, `testes/delegar.sh` | papéis de subagente e a instalação deles; `jangada-delegar` com agy falso, cota por grupo e troca de modelo |
+| `testes/agente-seletor.py` | seletor do `jangada-agente` num terminal falso, sem executar modelos nem criar sessões |
+| `testes/interface.sh` | identificação da interface sem abrir janelas nem tocar em outras sessões |
+| `testes/tarefas.py` | central de tarefas com sessões fictícias, sem configuração ativa |
+| `testes/metricas.py`, `testes/painel-local.py`, `testes/painel-orquestracao.py`, `testes/painel-motores.R` | métricas e painel sobre fontes sintéticas: consumo, modelos locais, retratos da fila e regressões dos indicadores em R |
 | `testes/delegacao.py`, `testes/orquestracao.py`, `testes/executor.py` | seleção por capacidade, fila persistente e execução com `jangada-delegar` simulado |
 | `testes/supervisao.py`, `testes/acompanhamento.py`, `testes/deterministico.py` | supervisor de relatórios intermediários, acompanhamento da fila e conferência de JSON |
 | `testes/saude.py`, `testes/metricas-projeto.py`, `testes/cota-codex.py`, `testes/codex-economico.py` | saúde dos provedores, métricas da fila, cota e executor econômico do Codex, sem serviços externos |

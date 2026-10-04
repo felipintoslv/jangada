@@ -9,7 +9,7 @@
 #   --snapshot        cria um snapshot do sistema antes de iniciar
 #   --agente CMD      usa outro agente (padrão: JANGADA_AGENTE, hoje "claude")
 #   --perfil NOME     usa o perfil NOME (~/.config/jangada/agentes/NOME.conf ou,
-#                     sem ele, default/agentes/NOME.conf; o agy vem pronto)
+#                     sem ele, default/agentes/NOME.conf)
 #   --revisor NOME    revisor para jangada-validar (claude, agy, codex, mesmo ou oposto)
 #   --prompt TEXTO    tarefa inicial, entregue ao agente ao abrir
 #   --prompt-arquivo ARQ  o mesmo, lida de um arquivo
@@ -19,12 +19,15 @@
 # abrir: o padrão (JANGADA_AGENTE) ou um dos perfis, cada um com a descrição
 # entre parênteses. JANGADA_AGENTE_ESCOLHER=0 desliga a pergunta.
 #
-# O Claude e o agy recebem o protocolo de default/agentes/protocolo.md, que
-# manda validar a entrega com jangada-validar: o outro modelo revisa o diff.
-# No Claude ele vai por --append-system-prompt; no agy, por -i junto com a
-# tarefa. Num projeto com arquivos R, vão também as regras de
+# O agente principal é o Claude ou o Codex. O agy não abre sessão: ele atende
+# as delegações (jangada-delegar) e a revisão do jangada-validar.
+#
+# O agente recebe o protocolo de default/agentes/protocolo.md, que manda
+# validar a entrega com jangada-validar: o outro modelo revisa o diff. No
+# Claude ele vai por --append-system-prompt; no Codex, pelo jangada-codex.
+# Num projeto com arquivos R, vão também as regras de
 # default/agentes/protocolo-r.md. O item de subagentes depende de
-# JANGADA_DELEGAR (agy, claude ou nativo; ver jangada_delegacao em
+# JANGADA_DELEGAR (agy, claude ou local; ver jangada_delegacao em
 # jangada-config) e vem de default/agentes/protocolo-delegar-*.md.
 # JANGADA_AGENTE_PROTOCOLO=0 desliga o protocolo.
 #
@@ -99,7 +102,6 @@ if ((!agente_dado)) && [[ -z "$perfil" && -t 0 && "${JANGADA_AGENTE_ESCOLHER:-1}
       command -v "$rev" >/dev/null 2>&1 || printf '; revisão indisponível: %s não instalado' "$rev"
       [[ "$rev" == "$base" ]] && printf '; autorrevisão pelo mesmo provedor'
       case "$destino" in
-        nativo) printf '; subagentes do %s' "$base" ;;
         claude) printf '; subagentes do Claude' ;;
         local) printf '; leitor e redator no Ollama, demais papéis nesta sessão' ;;
         agy)
@@ -138,6 +140,10 @@ if [[ -n "$perfil" ]]; then
     exit 1
   fi
   agente="$PERFIL_COMANDO"
+fi
+if [[ "$(basename "${agente%% *}")" == agy ]]; then
+  echo "o agy não abre sessão principal: ele atende só as delegações e a revisão; use claude ou codex" >&2
+  exit 1
 fi
 if ! command -v "${agente%% *}" >/dev/null 2>&1; then
   echo "agente indisponível: ${agente%% *} não instalado; nenhuma sessão criada" >&2
@@ -303,8 +309,7 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
   # (bash ou zsh) lê o arquivo como um argumento só.
   # O protocolo do jangada (worktree, commits, jangada-validar) vai no Claude
   # como instrução de sistema e fica no comando guardado, para valer também
-  # numa sessão restaurada. O agy não tem essa opção nem aceita a tarefa como
-  # argumento solto: os dois vão por -i, que abre a conversa já com o pedido.
+  # numa sessão restaurada.
   base_agente="$(basename "${agente%% *}")"
   cmd_codex="$cmd_agente"
   # Precedência do revisor:
@@ -366,17 +371,7 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
   fi
   arq_prompt="$estado_dir/prompt-$sessao.md"
   rm -f "$arq_prompt"
-  if [[ "$base_agente" == agy ]]; then
-    {
-      [[ -n "$protocolo" ]] && { cat "$protocolo"; printf '\n'; }
-      if [[ -n "$prompt" ]]; then
-        printf 'Tarefa:\n\n%s\n' "$prompt"
-      elif [[ -n "$protocolo" ]]; then
-        printf 'Ainda não há tarefa. Confirme em uma linha que leu o protocolo e aguarde o pedido.\n'
-      fi
-    } >"$arq_prompt"
-    [[ -s "$arq_prompt" ]] && cmd_agente+=" -i \"\$(cat $(printf '%q' "$arq_prompt"))\""
-  elif [[ "$base_agente" == codex ]]; then
+  if [[ "$base_agente" == codex ]]; then
     cmd_agente="$(printf '%q' "$JANGADA_PATH/bin/jangada-codex")"
     [[ -n "$protocolo" ]] && cmd_agente+=" --protocolo $(printf '%q' "$protocolo")"
     cmd_agente+=" -- $cmd_codex"

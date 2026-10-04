@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Delega uma tarefa de leitura a um modelo local no Ollama ou a um agente
-# Flash do agy e devolve um relatório curto. Poupa a cota do Claude: explorar
+# do agy e devolve um relatório curto. Poupa a cota do Claude: explorar
 # código, ler documento longo, pesquisar na web ou verificar antes do
 # jangada-validar.
 #
@@ -8,7 +8,7 @@
 #   PAPEL             explorador, leitor, pesquisador, verificador,
 #                     auditor, arquiteto, otimizador, redator ou supervisor
 #                     (no destino local: apenas leitor e redator)
-#   --destino D       local (modelo no Ollama) ou agy (Flash)
+#   --destino D       local (modelo no Ollama) ou agy (JANGADA_DELEGAR_MODELOS)
 #   --arquivos ARQS   arquivos para leitura (obrigatório no destino local)
 #   --arquivo SAIDA   grava o relatório completo em SAIDA
 #   --capacidade C    leitura_documental, resumo_curto ou analise_documental
@@ -20,8 +20,11 @@
 # PAPEL e "pedido" devem vir antes das opções quando --arquivos for utilizado.
 #
 # No destino agy: roda na raiz do repositório atual, que o agy precisa
-# confiar, com --sandbox e ferramentas de leitura do papel. Recusa se a cota
-# de 5 horas do Gemini estiver abaixo de JANGADA_DELEGAR_COTA_MIN (padrão 20%).
+# confiar, com --sandbox e ferramentas de leitura do papel. Os modelos de
+# JANGADA_DELEGAR_MODELOS são tentados em ordem: passa ao seguinte quando a
+# cota do grupo do modelo (a menor entre a semanal e a de 5 horas) está abaixo
+# de JANGADA_DELEGAR_COTA_MIN (padrão 20%) ou é desconhecida, e quando o agy
+# responde que a cota acabou. Sem modelo com cota, recusa.
 # As chamadas a /usage são cacheadas por JANGADA_DELEGAR_CACHE minutos
 # (padrão 5) para economizar tempo.
 #
@@ -97,11 +100,14 @@ done
 if [[ "$destino_opt" == codex-economico && -z "$capacidade" ]]; then uso; fi
 ((${#requisitos[@]} == 0)) || [[ -n "$capacidade" ]] || uso
 
-declare -A esforco=([explorador]=low [leitor]=medium [pesquisador]=medium [verificador]=high [auditor]=high [arquiteto]=high [otimizador]=medium [redator]=low [supervisor]=medium)
-if [[ -z "${esforco[$papel]:-}" ]]; then
-  echo "jangada-delegar: papel desconhecido: $papel (explorador, leitor, pesquisador, verificador, auditor, arquiteto, otimizador, redator ou supervisor)" >&2
-  exit 2
-fi
+case "$papel" in
+  explorador|leitor|pesquisador|verificador|auditor|arquiteto|otimizador|redator|supervisor) ;;
+  *)
+    echo "jangada-delegar: papel desconhecido: $papel (explorador, leitor, pesquisador, verificador, auditor, arquiteto, otimizador, redator ou supervisor)" >&2
+    exit 2 ;;
+esac
+read -ra modelos_agy <<<"$JANGADA_DELEGAR_MODELOS"
+((${#modelos_agy[@]})) || { echo "jangada-delegar: JANGADA_DELEGAR_MODELOS vazio" >&2; exit 2; }
 
 perfil_delegar="${JANGADA_DELEGAR:-agy}"
 impedimentos="${JANGADA_DELEGAR_IMPEDIMENTOS:-[]}"
@@ -149,7 +155,7 @@ if [[ "$destino" == local ]]; then
 elif [[ "$destino" == codex-economico ]]; then
   modelo="${JANGADA_CODEX_ECONOMICO_MODELO:-}"
 else
-  modelo="gemini-3.8-flash-${esforco[$papel]}"
+  modelo="${modelos_agy[0]}"
 fi
 
 registrar() {
@@ -722,7 +728,7 @@ if [[ "$destino" == local ]]; then
 fi
 
 # ==============================================================================
-# DESTINO AGY (Flash)
+# DESTINO AGY
 # ==============================================================================
 agy_limpo() { env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 agy "$@" </dev/null; }
 command -v agy >/dev/null 2>&1 || recusar "agy não instalado" indisponivel
@@ -750,35 +756,46 @@ if [[ "$papel" == leitor ]] && ! jq -e --arg bin "${JANGADA_PATH%/}/bin/jangada-
   recusar "o hook do leitor não está em ~/.gemini/config/hooks.json (rode jangada-migrar ou ./install.sh 50)" destino_proibido
 fi
 
-# Cota do Gemini (limite de 5 horas), em % restante, com duas casas.
+# Cota de um grupo do /usage (gemini ou 3p), em % restante, com duas casas: a
+# menor entre as janelas ativas do grupo. O agy desliga a de 5 horas quando a
+# semanal acaba, e a semanal zerada recusa qualquer modelo do grupo.
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/jangada/agy-usage.json"
 mkdir -p "${cache%/*}"
-ler_cota() {
-  local tmp atualizado agora
-  atualizado="$(stat -c %Y "$cache" 2>/dev/null || echo 0)"
-  agora="$(date +%s)"
-  if [[ "${1:-}" == nova || ! -s "$cache" ]] \
-     || ((atualizado > agora || agora - atualizado >= ${JANGADA_DELEGAR_CACHE:-5} * 60)); then
-    tmp="$(mktemp "${JANGADA_DELEGAR_CACHE_PREFIXO:-$cache}.XXXXXX")"
-    if agy_limpo -p "/usage" --output-format json --print-timeout 60s 2>/dev/null >"$tmp" \
-       && jq -e '[.command.data.groups[]?.buckets[]? | select(.id == "gemini-5h") | .remaining_fraction]
-         | length == 1 and (.[0] | type == "number" and isfinite and . >= 0 and . <= 1)' "$tmp" >/dev/null 2>&1; then
-      mv "$tmp" "$cache"
-    else
-      rm -f "$tmp"
-      return 0
-    fi
-    rm -f "$tmp"
-  fi
-  jq -er '[.command.data.groups[]?.buckets[]? | select(.id == "gemini-5h") | .remaining_fraction]
-    | if length == 1 and (.[0] | type == "number" and isfinite and . >= 0 and . <= 1)
-      then .[0] * 10000 | round / 100 else empty end' "$cache" 2>/dev/null || true
+cota_do_grupo() {
+  jq -er --arg prefixo "$1-" '[.command.data.groups[]?.buckets[]?
+      | select((.id | type == "string") and (.id | startswith($prefixo)) and .disabled != true)
+      | .remaining_fraction]
+    | if length > 0 and all(.[]; type == "number" and isfinite and . >= 0 and . <= 1)
+      then min * 10000 | round / 100 else empty end' "$2" 2>/dev/null || true
 }
-cota="$(ler_cota)"
-[[ -n "$cota" ]] || recusar "não consegui ler uma cota válida e atual do agy (agy -p /usage)" cota_desconhecida
-if ((${cota%.*} < ${JANGADA_DELEGAR_COTA_MIN:-20})); then
-  recusar "cota de 5 horas do Gemini em $cota%, abaixo de ${JANGADA_DELEGAR_COTA_MIN:-20}%" cota_insuficiente
-fi
+# Uso: ler_cota MODELO [nova]; o resultado fica em cota_lida. Consulta o /usage no máximo uma vez por
+# execução, mais uma com "nova". Só troca o cache por uma resposta com a cota
+# do grupo do primeiro modelo válida; sem cache atual, não devolve nada.
+cota_consultada=0; cota_atual=0; cota_lida=""
+ler_cota() {
+  local tmp atualizado agora grupo=3p principal=3p
+  [[ "$1" == gemini-* ]] && grupo=gemini
+  [[ "${modelos_agy[0]}" == gemini-* ]] && principal=gemini
+  if [[ "${2:-}" == nova ]] || ((!cota_consultada)); then
+    cota_consultada=1; cota_atual=1
+    atualizado="$(stat -c %Y "$cache" 2>/dev/null || echo 0)"
+    agora="$(date +%s)"
+    if [[ "${2:-}" == nova || ! -s "$cache" ]] \
+       || ((atualizado > agora || agora - atualizado >= ${JANGADA_DELEGAR_CACHE:-5} * 60)); then
+      tmp="$(mktemp "${JANGADA_DELEGAR_CACHE_PREFIXO:-$cache}.XXXXXX")"
+      if agy_limpo -p "/usage" --output-format json --print-timeout 60s 2>/dev/null >"$tmp" \
+         && [[ -n "$(cota_do_grupo "$principal" "$tmp")" ]]; then
+        mv "$tmp" "$cache"
+      else
+        cota_atual=0
+      fi
+      rm -f "$tmp"
+    fi
+  fi
+  cota_lida=""
+  ((cota_atual)) && cota_lida="$(cota_do_grupo "$grupo" "$cache")"
+  return 0
+}
 
 log_agy="${JANGADA_AGY_LOG:-$HOME/.gemini/antigravity-cli/log}"
 marca="$(mktemp)"
@@ -799,13 +816,42 @@ tempo="${JANGADA_DELEGAR_TEMPO:-300}"
 limite_agy=()
 # O limite global precisa alcançar os filhos sem outro grupo intermediário.
 [[ -n "${JANGADA_DELEGAR_ROTEAMENTO_ID:-}" ]] && limite_agy+=(--foreground)
-codigo=0
-contar_chamada
-resposta="$(cd "$pasta" && timeout "${limite_agy[@]}" "$((tempo + 30))" env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 JANGADA_AGY_PAPEL="$papel" \
-  agy -p "$pedido" --agent "$papel" --model "$modelo" --sandbox \
-  --output-format json --print-timeout "${tempo}s" </dev/null 2>"$saida")" || codigo=$?
-if ((codigo == 124)); then recusar "tempo esgotado (${tempo}s)"; fi
-if ((codigo)); then recusar "o agy saiu com código $codigo: $(head -c 300 "$saida")"; fi
+minimo="${JANGADA_DELEGAR_COTA_MIN:-20}"
+sem_cota=""; sem_cota_codigo=""; atendido=0; cota_primeira=""
+for modelo in "${modelos_agy[@]}"; do
+  ler_cota "$modelo"; cota="$cota_lida"
+  [[ "$modelo" == "${modelos_agy[0]}" ]] && cota_primeira="$cota"
+  if [[ -z "$cota" ]]; then
+    : "${sem_cota:=não consegui ler uma cota válida e atual do agy para $modelo (agy -p /usage)}"
+    : "${sem_cota_codigo:=cota_desconhecida}"
+    continue
+  fi
+  if ((${cota%.*} < minimo)); then
+    : "${sem_cota:=cota do agy para $modelo em $cota%, abaixo de $minimo%}"
+    : "${sem_cota_codigo:=cota_insuficiente}"
+    continue
+  fi
+  codigo=0
+  contar_chamada
+  resposta="$(cd "$pasta" && timeout "${limite_agy[@]}" "$((tempo + 30))" env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 JANGADA_AGY_PAPEL="$papel" \
+    agy -p "$pedido" --agent "$papel" --model "$modelo" --sandbox \
+    --output-format json --print-timeout "${tempo}s" </dev/null 2>"$saida")" || codigo=$?
+  if ((codigo == 124)); then recusar "tempo esgotado (${tempo}s)"; fi
+  # O /usage pode dizer que há cota e o agy recusar mesmo assim: vale a recusa.
+  if ((codigo)) && grep -qE 'RESOURCE_EXHAUSTED|[Qq]uota reached' "$saida"; then
+    : "${sem_cota:=o agy respondeu que a cota de $modelo acabou}"
+    : "${sem_cota_codigo:=cota_insuficiente}"
+    echo "jangada-delegar: cota de $modelo esgotada no agy; tentando o próximo modelo" >&2
+    continue
+  fi
+  if ((codigo)); then recusar "o agy saiu com código $codigo: $(head -c 300 "$saida")"; fi
+  atendido=1
+  break
+done
+if ((!atendido)); then
+  modelo="${modelos_agy[0]}"; cota="$cota_primeira"
+  recusar "$sem_cota" "$sem_cota_codigo"
+fi
 if [[ -d "$log_agy" ]] && find "$log_agy" -name 'cli-*.log' -newer "$marca" -print0 2>/dev/null \
      | xargs -0r grep -l "Agent \"$papel\" not found" 2>/dev/null | grep -q .; then
   recusar "o agy não achou o agente $papel (rode ./install.sh 50)" capacidade_incompativel
@@ -817,7 +863,7 @@ if [[ -n "$conversa" && -f "$banco" ]] && command -v sqlite3 >/dev/null 2>&1; th
   passos="$(sqlite3 -readonly "$banco" 'select count(*) from steps' 2>/dev/null || true)"
 fi
 # A cota depois é lida de novo, sem o cache: custa uns 3 segundos.
-cota_depois="$(ler_cota nova)"
+ler_cota "$modelo" nova; cota_depois="$cota_lida"
 status="$(jq -r '.status // ""' <<<"$resposta" 2>/dev/null || true)"
 [[ "$status" == SUCCESS ]] || recusar "o agy não respondeu (status ${status:-vazio})"
 if [[ -n "$capacidade" ]] && ! jq -e '.response | type == "string"' <<<"$resposta" >/dev/null; then

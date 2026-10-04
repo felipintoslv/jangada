@@ -148,10 +148,15 @@ conferir "caso 6: o perfil não desliga o isolamento na restauração" grep -q '
 conferir "caso 6: o resto do ambiente do perfil vale" \
   bash -c 'grep -qx FALSO_PERFIL=1 "$1" && ! grep -q "^JANGADA_AGENTE_ISOLAR=" "$1"' _ "$tmp/ambiente"
 
-# Caso 7: agy pelo perfil: argumentos do perfil e a mesma conversa.
-restaurar "{\"agente\":\"agy\", \"perfil\":\"agy\", \"conversa\":\"$uuid\", \"comando\":\"agy --yolo\"}"
-conferir "caso 7: o agy volta com os argumentos do perfil e a conversa" \
-  grep -qx "isolado|$tmp/projetos/proj|agy --effort high --conversation $uuid" "$log"
+# Caso 7: sessão antiga do agy (ele não abre mais sessão nova) volta na mesma
+# conversa; a que usava um perfil retirado é recusada com o motivo.
+restaurar "{\"agente\":\"agy\", \"conversa\":\"$uuid\", \"comando\":\"agy --yolo\"}"
+conferir "caso 7: a sessão antiga do agy volta na mesma conversa" \
+  grep -qx "isolado|$tmp/projetos/proj|agy --conversation $uuid" "$log"
+restaurar "{\"agente\":\"agy\", \"perfil\":\"agy\", \"conversa\":\"$uuid\"}"
+conferir "caso 7: o perfil agy retirado é recusado com o motivo" \
+  bash -c 'grep -q "perfil agy não existe mais" "$1"' _ "$tmp/saida"
+conferir "caso 7: a recusa não roda nada" nada_rodou
 
 # Caso 8: worktree sem id de conversa usa --continue.
 restaurar "{\"dir\":\"$tmp/wt/proj/tarefa\", \"worktree\":\"$tmp/wt/proj/tarefa\"}"

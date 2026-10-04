@@ -9,23 +9,27 @@ um só. Paralelismo de implementação é outra sessão do jangada.
 
 ## Papéis
 
-Cada papel existe nos dois agentes, com o mesmo nome: no Claude em
+São nove papéis, e cada um existe no Claude e no agy, com o mesmo nome: no Claude em
 `default/claude/agents/PAPEL.md`, no agy em `default/agy/agents/PAPEL/agent.md`.
 
-| Papel | Uso | Claude | agy (`jangada-delegar`) |
-|---|---|---|---|
-| explorador | localizar código e ligações entre partes | haiku | Flash, esforço baixo |
-| leitor | trechos de PDF, planilha, relatório | haiku | Flash, médio |
-| pesquisador | documentação e dados públicos na web | haiku | Flash, médio |
-| verificador | testes, lint e regras antes do `jangada-validar` | sonnet | Flash, alto |
-| auditor | segurança: injeção, credenciais, permissões | sonnet | Flash, alto |
-| arquiteto | módulos, contratos e impacto de mudança | sonnet | Flash, alto |
-| otimizador | gargalos, leituras redundantes, memória | sonnet | Flash, médio |
-| redator | clareza e regras de texto do `AGENTS.md` | haiku | Flash, baixo |
-| supervisor | fidelidade de relatório intermediário às fontes | haiku | Flash, médio |
+| Papel | Uso | Claude |
+|---|---|---|
+| explorador | localizar código e ligações entre partes | haiku |
+| leitor | trechos de PDF, planilha, relatório | haiku |
+| pesquisador | documentação e dados públicos na web | haiku |
+| verificador | testes, lint e regras antes do `jangada-validar` | sonnet |
+| auditor | segurança: injeção, credenciais, permissões | sonnet |
+| arquiteto | módulos, contratos e impacto de mudança | sonnet |
+| otimizador | gargalos, leituras redundantes, memória | sonnet |
+| redator | clareza e regras de texto do `AGENTS.md` | haiku |
+| supervisor | fidelidade de relatório intermediário às fontes | haiku |
 
-O agy tem também o `revisor`, usado só pelo `jangada-validar`, com
-ferramentas de leitura.
+No agy, o `jangada-delegar` roda todo papel no primeiro modelo de
+`JANGADA_DELEGAR_MODELOS` com cota (padrão `gemini-3.8-flash-high`).
+
+O agy tem mais dois agentes, fora da delegação: o `revisor`, usado só pelo
+`jangada-validar`, com ferramentas de leitura, e o `pescador`, da Conversa
+de Pescador.
 
 Só o leitor e o verificador têm terminal (Bash no Claude, `run_command` no
 agy). O leitor lê documentos de fora, que podem trazer injeção de prompt: no
@@ -63,9 +67,8 @@ existente por migração, como `migrations/202609272200-subagentes-novos.sh`.
 
 ```mermaid
 flowchart TD
-    A{Agente da sessão} -- agy --> N[Subagentes nativos do agy]
-    A -- Claude --> C{JANGADA_DELEGAR}
-    C -- claude ou nativo --> CL[Subagente do Claude]
+    A{Agente da sessão} -- Claude --> C{JANGADA_DELEGAR}
+    C -- claude --> CL[Subagente do Claude]
     C -- local --> L{Leitor ou redator?}
     L -- sim --> OL[Ollama com arquivos explícitos]
     L -- não --> CL
@@ -84,14 +87,16 @@ flowchart TD
 ```
 
 `jangada_delegacao` em `bin/jangada-config` decide o destino. No Claude,
-o perfil prevalece sobre a configuração global; no agy, vale sempre
-`nativo`. No Codex, vale `agy` quando configurado; nos demais casos, `local`.
+o perfil prevalece sobre a configuração global. No Codex, vale `agy` quando
+configurado; nos demais casos, `local`. O agy não abre sessão principal: ele
+só recebe delegações e revisa. O destino `nativo` (subagentes do próprio
+agy) resta para sessões antigas do agy restauradas.
 
 | Agente e destino | Protocolo em `default/agentes/` | Regra |
 |---|---|---|
 | Claude, `agy` | `protocolo-delegar-agy.md` | primeiro agy; na recusa, subagente do Claude |
 | Claude, `claude` | `protocolo-delegar-claude.md` | subagentes do Claude |
-| agy, `nativo` | `protocolo-delegar-nativo.md` | subagentes do próprio agy |
+| agy restaurado, `nativo` | `protocolo-delegar-nativo.md` | subagentes do próprio agy |
 | Claude, `local` | `protocolo-delegar-local.md` | leitor e redator primeiro no Ollama; demais papéis no Claude |
 | Codex, `local` ou `agy` | `protocolo-delegar-codex.md` | leitor e redator primeiro no Ollama; outros papéis no agy se permitido, ou na sessão |
 
@@ -126,8 +131,8 @@ jangada-delegar leitor "Compare os documentos" \
 
 A ordem vem de `default/delegacao/roteamento.json`. Um arquivo opcional
 `~/.config/jangada/delegacao.json` substitui essa política: contém um objeto
-com capacidades e listas de destinos, sem comandos. Aceita apenas `local`
-e `agy`, sem repetições. Capacidade ausente ou configuração inválida recusa
+com capacidades e listas de destinos, sem comandos. Aceita apenas `local`,
+`agy` e `codex-economico`, sem repetições. Capacidade ausente ou configuração inválida recusa
 a execução. Claude e Codex não são alternativas automáticas.
 
 O agy exige `--permitir-remoto` nesta tarefa e um perfil que permita o
@@ -195,7 +200,7 @@ flowchart LR
     D -- local --> L[Leitor ou redator<br>--arquivos obrigatório]
     L --> O[Ollama, sem ferramentas]
     D -- agy --> G[Papéis instalados no agy<br>confiança, hook do leitor e cota]
-    G --> F[agy Flash, com ferramentas do papel]
+    G --> F[agy, com ferramentas do papel]
     O --> J[Relatório e delegacoes.jsonl]
     F --> J
 ```
@@ -215,10 +220,11 @@ flowchart TD
     D -- não --> R
     D -- sim --> E{papel instalado no agy?}
     E -- não --> R
-    E -- sim --> F{cota de 5 horas acima<br>de JANGADA_DELEGAR_COTA_MIN?}
+    E -- sim --> F{algum modelo da lista com cota<br>acima de JANGADA_DELEGAR_COTA_MIN?}
     F -- não --> R
     F -- sim --> G[timeout agy -p --agent PAPEL<br>--sandbox --output-format json]
-    G -- 124 ou erro --> R
+    G -- cota esgotada --> F
+    G -- 124 ou outro erro --> R
     G -- ok --> H{status SUCCESS e<br>resposta não vazia?}
     H -- não --> R
     H -- sim --> I{mais de<br>JANGADA_DELEGAR_PALAVRAS?}
@@ -234,16 +240,23 @@ flowchart TD
   `jangada-worktree-preparar`, só se a raiz já estiver lá, e sai no
   `jangada-agente-fim`.
 - A cota vem de `agy -p "/usage"`, guardada por `JANGADA_DELEGAR_CACHE`
-  minutos (5). Exige uma única fração numérica entre 0 e 1 para `gemini-5h`.
-  Se a atualização falhar, não usa o valor expirado. Cota desconhecida ou
-  abaixo de `JANGADA_DELEGAR_COTA_MIN` (20%) recusa.
+  minutos (5), com no máximo uma consulta por execução. O agy separa dois
+  grupos: `gemini-*` (Flash e Pro dividem a mesma cota) e `3p-*` (Claude e
+  GPT). Cada grupo tem um limite semanal e um de 5 horas, e vale a menor
+  fração entre os que não vêm com `disabled`. Se a atualização falhar, não
+  usa o valor expirado.
+- Os modelos vêm de `JANGADA_DELEGAR_MODELOS`, em ordem de preferência
+  (padrão `gemini-3.8-flash-high claude-sonnet-5-5-high gpt-oss-120b-medium`).
+  O modelo com cota desconhecida ou abaixo de `JANGADA_DELEGAR_COTA_MIN`
+  (20%) é pulado. Se o agy responder que a cota acabou, o comando tenta o
+  seguinte. Sem nenhum modelo atendido, recusa com o motivo do primeiro.
 - O tempo limite é `JANGADA_DELEGAR_TEMPO` segundos (300).
 - Comando de terminal que o agy nega aparece listado; libera-se em
   `permissions.allow` do `settings.json` do agy.
 - O relatório conta as frases sem fonte (`caminho:linha`, URL, página ou
   célula), que entram no registro.
 - Na recusa, o comando orienta conforme o agente da sessão: subagente do
-  Claude, investigação na sessão do Codex ou `invoke_subagent` no agy.
+  Claude ou investigação na sessão do Codex.
   O `jangada-delegar` nunca chama o Claude.
 
 ## Destino local

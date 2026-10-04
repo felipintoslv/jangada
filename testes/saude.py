@@ -115,6 +115,19 @@ class Disponibilidade(unittest.TestCase):
         self.assertEqual([p['status'] for p in self.saude.listar()], ['AVAILABLE', 'AVAILABLE'])
         self.assertEqual(self.saude.listar()[0]['cota'], 50)
 
+    def test_cota_semanal_zerada_e_grupo_de_terceiros(self):
+        gemini = {'buckets': [{'id': 'gemini-weekly', 'remaining_fraction': 0},
+                              {'id': 'gemini-5h', 'disabled': True, 'remaining_fraction': 0.99}]}
+        terceiros = {'buckets': [{'id': '3p-weekly', 'remaining_fraction': 1}, {'id': '3p-5h', 'remaining_fraction': 0.8}]}
+        for grupos, status, cota in (([gemini], 'QUOTA_EXHAUSTED', 0), ([gemini, terceiros], 'AVAILABLE', 80)):
+            with self.subTest(status=status):
+                self.cache.write_text(json.dumps({'command': {'data': {'groups': grupos}}}))
+                with patch('saude.urllib.request.urlopen', side_effect=OSError()), \
+                        patch.dict(os.environ, JANGADA_DELEGAR_MODELOS='gemini-3.8-flash-high claude-sonnet-5-5-high'):
+                    self.saude.atualizar()
+                agy = self.saude.listar()[0]
+                self.assertEqual((agy['status'], agy['cota']), (status, cota))
+
     def test_cota_expirada_futura_ou_invalida_nao_libera_chamada(self):
         for valor, idade in ((0.8, 301), (0.8, -100), (True, 0), (float('nan'), 0)):
             with self.subTest(valor=valor, idade=idade):
