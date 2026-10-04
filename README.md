@@ -127,6 +127,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-agente` | escolhe o agente (Claude ou Codex; o agy fica só de suporte), o projeto e cria um worktree, e abre o agente numa sessão tmux, isolado pelo `jangada-isolar` (`--prompt`, `--prompt-arquivo`, `--perfil`, `--sem-isolar`) |
 | `jangada-isolar` | roda um comando no bubblewrap, com o sistema somente leitura e a pasta atual gravável; `--mostrar` imprime a chamada ao `bwrap` |
 | `jangada-delegar PAPEL "pedido"` | delega ao Ollama (`--destino local --arquivos ARQUIVOS`, só leitor e redator) ou ao agy (`--destino agy`, modelos de `JANGADA_DELEGAR_MODELOS`); `--capacidade` permite seleção documental para leitor, com autorização remota explícita e referências verificadas; `--json` explica a decisão (ver [delegação](docs/subagentes-e-delegacao.md)) |
+| `jangada-avaliar-ollama` | repete três casos de leitura com fontes sintéticas, compara fatos e referências com um gabarito e registra recusas, tempo e variação; não promove o modelo nem chama provedores remotos |
 | `jangada-fila` | mostra a fila persistente do projeto; `--importar PLANO.json` acrescenta tarefas, `--json` detalha o estado, `--revisao` lista o que aguarda revisão e `--metricas` resume consumo, revisões e custo estimado pelos preços de `precos.json` (ver [fila](docs/subagentes-e-delegacao.md#fila-persistente-de-projetos)) |
 | `jangada-executar` | executa tarefas elegíveis da fila pelo `jangada-delegar`, sem aprovar o conteúdo (`--limite`, `--perfil balanced\|quality\|offline`, `--permitir-remoto`, `--permitir-codex`, `--supervisionar`, `--amostrar`, `--paralelo`); `--acompanhar` mantém a fila em primeiro plano até o prazo |
 | `jangada-retomar` | recoloca na fila tarefas que esperavam cota ou provedor, quando há executor, orçamento e tentativas (`--atualizar`, `--executar`) |
@@ -484,6 +485,15 @@ Regras de decisão:
 Sem o agy instalado, `agy` vira `claude`. Subagente não revisa a entrega: o
 `verificador` confere regras e testes, não o mérito, e o `jangada-validar`
 continua com o revisor de sempre.
+
+Para observar o Ollama antes de ampliar a delegação, rode
+`jangada-avaliar-ollama` (três repetições por caso) ou
+`jangada-avaliar-ollama --repeticoes 1` para uma conferência inicial.
+O comando usa o modelo local configurado e salva fontes, respostas, erros e
+`resultado.json` em `$JANGADA_ESTADO/avaliacoes-ollama/`, numa pasta por execução.
+Os casos medem extração, informação ausente e consolidação de documento
+dividido. Uma resposta conforme ao gabarito não aprova o modelo para outros
+documentos. Veja [a avaliação controlada](docs/subagentes-e-delegacao.md#avaliação-controlada-do-ollama).
 
 ### Isolamento
 

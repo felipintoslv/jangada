@@ -259,6 +259,39 @@ flowchart TD
   Claude ou investigação na sessão do Codex.
   O `jangada-delegar` nunca chama o Claude.
 
+## Avaliação controlada do Ollama
+
+`jangada-avaliar-ollama` executa três repetições de cada caso pelo
+`jangada-delegar leitor --destino local --capacidade leitura_documental`.
+Aceita `--repeticoes N`, de 1 a 10, e `--saida PASTA`, dentro da pasta atual.
+Usa apenas fontes sintéticas geradas
+para a execução, sem autorização de envio remoto.
+
+Os casos são extração de fatos, informação ausente e documento dividido.
+O último usa contexto de 3.000 tokens e exige registros de pelo menos duas
+fatias e uma consolidação. O gabarito fica no avaliador, fora do pedido
+enviado ao modelo. Cada campo exige valor do tipo esperado e referência à
+linha correspondente; informação ausente exige valor e referência nulos.
+
+As fontes, respostas, erros e medições ficam numa pasta própria em
+`$JANGADA_ESTADO/avaliacoes-ollama/`. O `resultado.json` é atualizado após
+cada repetição; `concluida: false` identifica uma execução incompleta.
+Ele registra modelo, contexto, tempo, chamadas locais, omissões e
+divergências do gabarito. O resumo conta respostas conformes, recusas e
+variantes interpretáveis, ignorando formatação e caminhos equivalentes.
+Resposta estável e errada continua divergente.
+As marcas de jogos e memória de vídeo continuam sendo lidas do estado
+original. Recusas por essas proteções não medem a qualidade do modelo.
+Cada repetição respeita a trava compartilhada do Ollama; vaga ocupada
+recusa sem chamar o modelo. O consumo conhecido de tentativas recusadas
+também aparece no resultado.
+
+O comando sai com código 0 quando a avaliação termina, inclusive com
+recusas ou divergências. Isso não aprova o modelo, não altera o roteamento
+nem substitui a conferência do principal. Os casos medem leitura em formato
+JSON e não avaliam redação livre ou documentos reais. Não há comparação de
+tempo com Claude ou Codex nesta avaliação.
+
 ## Destino local
 
 O destino `local` do `jangada-delegar` despacha tarefas de leitura a um modelo

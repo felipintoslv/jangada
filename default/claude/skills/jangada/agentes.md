@@ -308,6 +308,14 @@ trava é solta antes do `xdg-open`, que também a passaria ao navegador.
   teste precisa ver (ou quem responde por cano) sai num `echo` antes da
   pergunta.
 
+## Avaliação local (`jangada-avaliar-ollama`)
+
+Na avaliação pelo `jangada-avaliar-ollama`, o estado das delegações fica
+separado, mas as marcas de jogos e memória de vídeo apontam para o estado
+original, e cada repetição adquire a trava compartilhada do Ollama. Uma
+pasta de estado vazia perde essas marcas e causa recusa por
+memória não verificável no isolamento; essa recusa não avalia o modelo.
+
 ## Revisão cruzada (`jangada-validar`)
 
 O `jangada-par` (Claude implementando em lote, agy revisando) saiu em
