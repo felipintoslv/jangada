@@ -140,7 +140,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-validar` | confere a entrega localmente e manda o diff ao revisor configurado (Claude, agy ou Codex) e devolve `STATUS: APROVADO` ou `REVISAR`; o agente chama antes de entregar |
 | `jangada-shell` | inicia subshell enriquecida com comandos diretos de agentes e projetos |
 | `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir, integrar ou encerrar (`--proximo`, `--anterior`, `--restaurar`) |
-| `jangada-agente-fim` | encerra uma sessão e remove o worktree, com conferência de alterações pendentes; `--integrar` revisa fora do isolamento, faz o merge na base e apaga o ramo; no repositório do jangada, avisa para rodar `jangada-update`, que atualiza a cópia instalada |
+| `jangada-agente-fim` | encerra uma sessão e remove o worktree, com conferência de alterações pendentes; `--integrar` revisa fora do isolamento, faz o merge na base e apaga o ramo; no repositório do jangada, chama o `jangada-assinar` quando há `allowed_signers` e avisa para rodar `jangada-update`, que atualiza a cópia instalada |
 | `jangada-consumo` | tokens do Claude Code no bloco de 5 horas em andamento (também na dica da barra) |
 | `jangada-painel` | painel de indicadores do uso de IA num app Shiny local; `--json` imprime os do dia, `--parar` encerra o app, `--conferir` lista o que falta |
 | `jangada-gancho` | roda os ganchos do usuário de um evento (chamado pelos outros comandos) |
@@ -792,13 +792,15 @@ Com `~/.config/jangada/allowed_signers`, o `jangada-update` só aplica commits
 assinados por uma chave desse arquivo. O arquivo fica fora da cópia de
 trabalho e é somente leitura para o agente isolado, que também não vê a
 chave: os commits dos agentes chegam sem assinatura, e o `jangada-assinar`
-os assina antes do push. Para ligar, num terminal comum:
+os assina antes do push. O `jangada-agente-fim --integrar` chama o
+`jangada-assinar` no fim da integração, com a mesma confirmação. Para ligar,
+num terminal comum:
 
 ```sh
 ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519   # se ainda não houver chave
 echo "$(git config user.email) namespaces=\"git\" $(cat ~/.ssh/id_ed25519.pub)" \
   >~/.config/jangada/allowed_signers
-jangada-assinar          # antes de cada push
+jangada-assinar          # antes do push, para o que não veio de uma integração
 ```
 
 Outra chave vai em `JANGADA_ASSINATURA_CHAVE` no `jangada.conf`. Nas outras
@@ -834,7 +836,7 @@ e não mexe na instalada. Para testar a cópia de trabalho sem instalar, rode
 | `testes/isolar.sh` | `jangada-isolar`: o que fica gravável, somente leitura e oculto, no worktree e direto no repositório |
 | `testes/restaurar.sh` | `jangada-agentes --restaurar` com tmux falso: o comando sai de campos conferidos, nunca do estado |
 | `testes/codex.sh` | lançamento do Codex, protocolo, argumentos TOML, hooks e recusas sem rede |
-| `testes/update.sh` | `jangada-update` só aplica com confirmação e, com `allowed_signers`, só commits assinados; `jangada-assinar`; `jangada-agente-fim --integrar` não mexe na cópia instalada nem roda ganchos do repositório do agente |
+| `testes/update.sh` | `jangada-update` só aplica com confirmação e, com `allowed_signers`, só commits assinados; `jangada-assinar`; `jangada-agente-fim --integrar` chama o `jangada-assinar` e não mexe na cópia instalada nem roda ganchos do repositório do agente |
 | `testes/eventos.sh` | histórico de estados dos agentes gravado pelos hooks e pela troca de foco |
 | `testes/barra.sh` | módulo `custom/indicadores`, barra em pé do `jangada-barra` e a migração que o acrescenta |
 | `testes/painel.sh` | coletor do painel sobre registros de exemplo e, com os pacotes R, o app no ar |

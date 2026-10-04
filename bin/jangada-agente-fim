@@ -2,7 +2,8 @@
 # Encerra uma sessão de agente e remove o worktree, conferindo alterações pendentes.
 # O ramo agente/<nome> é mantido; apague-o com git branch -d quando quiser.
 # Com --integrar, antes mescla o ramo na base (merge --no-ff no repositório
-# principal) e, depois da limpeza, apaga o ramo já integrado.
+# principal) e, depois da limpeza, apaga o ramo já integrado. No repositório
+# do jangada, com allowed_signers, chama o jangada-assinar no fim.
 #
 # A aprovação que vale para integrar é a feita fora do isolamento, gravada em
 # ~/.local/state/jangada/revisoes para o commit exato do ramo. Sem ela, o
@@ -334,6 +335,14 @@ limpar() {
   done
   rm -f "$JANGADA_ESTADO/revisoes/validacao-$s.aprovado" "$JANGADA_ESTADO/revisoes/$s.json"
   echo "sessão encerrada: $s"
+  # Só depois do branch -d: assinar reescreve os commits do ramo, e o git
+  # deixaria de vê-lo como mesclado. A limpeza que segue em processo separado
+  # não tem terminal para a confirmação.
+  if ((integrado)) && [[ "${JANGADA_SESSAO:-}" != "$s" && -f "$JANGADA_CONFIG/allowed_signers" \
+    && "$raiz" -ef "${JANGADA_REPO:-}" ]]; then
+    "$JANGADA_PATH/bin/jangada-assinar" "$raiz" \
+      || echo "!! a integração ficou sem assinatura; rode jangada-assinar antes do push" >&2
+  fi
   "$JANGADA_PATH/bin/jangada-gancho" pos-agente-fim "$s" "$raiz" "$integrado"
 }
 
