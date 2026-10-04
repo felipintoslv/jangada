@@ -109,7 +109,8 @@ flowchart TD
   commits. Os merges do
   `jangada-agente-fim --integrar` são refeitos e assinados junto, e o
   próprio `--integrar` chama o `jangada-assinar` depois de apagar o ramo,
-  quando a raiz é a cópia de trabalho do jangada. Refazer
+  quando a raiz é a cópia de trabalho do jangada; chamado de dentro da
+  própria sessão, ele só avisa, porque a limpeza segue sem terminal. Refazer
   um merge perde o que foi resolvido ou alterado nele à mão: com conflito, o
   rebase para e `git rebase --abort` desfaz; sem conflito, o comando nota a
   diferença, volta o ramo ao que era e não assina nada. O `jangada-update` e
@@ -153,7 +154,7 @@ verdade, pular uma migração que nunca foi aplicada.
 
 | Arquivo | O que cobre |
 |---|---|
-| `testes/update.sh` | só aplica com `s`; sem terminal não aplica; migração nova roda e grava marca; filtro de caracteres de controle; origem reescrita recusada; com `allowed_signers`, commit sem assinatura ou com chave de fora não é aplicado, o `jangada-assinar` assina só a partir do primeiro sem assinatura, assina também os merges da integração, avisa do commit enviado sem assinatura, recusa merge alterado à mão, não roda sem terminal nem sem a chave e ignora o `gpg.ssh.program` do repositório; `jangada-agente-fim --integrar` não mexe na cópia instalada e, com `allowed_signers`, assina depois da confirmação; `install.sh` recusa a cópia de trabalho, um worktree e `JANGADA_WORKTREES` |
+| `testes/update.sh` | só aplica com `s`; sem terminal não aplica; migração nova roda e grava marca; filtro de caracteres de controle; origem reescrita recusada; com `allowed_signers`, commit sem assinatura ou com chave de fora não é aplicado, o `jangada-assinar` assina só a partir do primeiro sem assinatura, assina também os merges da integração, avisa do commit enviado sem assinatura, recusa merge alterado à mão, não roda sem terminal nem sem a chave e ignora o `gpg.ssh.program` do repositório; `jangada-agente-fim --integrar` não mexe na cópia instalada e, com `allowed_signers`, assina depois da confirmação e, de dentro da própria sessão, só avisa; `install.sh` recusa a cópia de trabalho, um worktree e `JANGADA_WORKTREES` |
 | `testes/hooks.sh` | `mesclar_hooks_claude` e `mesclar_hooks_agy` com o arquivo vazio gravam os hooks (o vazio conta como `{}`); com JSON inválido, avisam e não gravam; o `jangada-verificar` aponta o arquivo vazio ou inválido |
 | `testes/barra.sh` | exemplo de migração testada: a que acrescenta o módulo de indicadores |
 | `.github/workflows/verificar.yml` | a CI simula a instalação como usuário sem sudo e confere que nada foi escrito |

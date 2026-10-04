@@ -317,6 +317,20 @@ conferir "integrar sem confirmar a assinatura: encerra a sessão e avisa ($rc)" 
 conferir "integrar sem confirmar a assinatura: o merge fica sem assinatura" [ "$(assinatura HEAD)" != G ]
 git -C "$origem" reset --quiet --hard "$m_assinado"
 
+# De dentro da própria sessão a limpeza segue sem terminal: avisa e não assina.
+JANGADA_SESSAO=y integrar_y c s
+registro_y="$XDG_STATE_HOME/jangada/agentes/fim-y.log"
+for _ in $(seq 50); do
+  grep -q "sessão encerrada: y" "$registro_y" 2>/dev/null && break
+  sleep 0.2
+done
+conferir "integrar de dentro da sessão: termina sem erro e avisa ($rc)" \
+  bash -c '[ "$1" -eq 0 ] && grep -q "ficou sem assinatura" "$2"' _ "$rc" "$tmp/saida"
+conferir "integrar de dentro da sessão: a limpeza termina sem chamar o jangada-assinar" \
+  bash -c 'grep -q "sessão encerrada: y" "$1" && ! grep -q "assinar" "$1"' _ "$registro_y"
+conferir "integrar de dentro da sessão: o merge fica sem assinatura" [ "$(assinatura HEAD)" != G ]
+git -C "$origem" reset --quiet --hard "$m_assinado"
+
 # Merge com alteração feita à mão: refazê-lo perderia a alteração, então nada
 # é assinado e o ramo volta ao que era.
 git -C "$origem" branch agente/n
