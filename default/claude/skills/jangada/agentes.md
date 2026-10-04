@@ -69,6 +69,16 @@ antigo abre `<think>` mesmo com a opção desligada. Para Qwen3, a mensagem
 termina também em `/no_think`, conforme o [controle do Qwen3](https://qwen.readthedocs.io/en/stable/getting_started/quickstart.html).
 O modelo de 4 bilhões disponível continuou raciocinando mesmo com ambos
 os controles. Não presuma suporte: saída limitada deve ser recusada.
+Nos testes sintéticos, uma estrutura JSON obrigatória eliminou o estouro;
+`format: "json"` sozinho deixou campos e citações incorretos.
+Para extração, use `--destino local --capacidade leitura_documental` e
+`--extrair campo:tipo`, com `texto`, `inteiro` ou `booleano`.
+Campos ausentes no trecho usam valor e referência nulos. A conferência
+valida os tipos e a presença da posição citada naquele trecho, sem avaliar o sentido.
+A consolidação por modelo chegou a apagar a responsável encontrada na última
+parte. A extração agora une partes de forma determinística: valores presentes
+substituem ausências, `false` e zero são preservados, conflitos recusam.
+Essa união não consome chamada; textos livres ainda usam consolidação pelo modelo.
 Use requisitos explícitos (`--requisito`) para exigir explicações em cada seção, além
 das referências. Essa conferência estrutural não aprova o sentido.
 Documentos divididos exigem orçamento para todas as partes e consolidação

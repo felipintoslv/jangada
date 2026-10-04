@@ -108,6 +108,9 @@ def avaliar(pasta, repeticoes, ambiente):
             inicio = time.monotonic()
             comando = [str(pathlib.Path(env["JANGADA_PATH"]) / "bin/jangada-delegar"), "leitor", pedido,
                        "--destino", "local", "--capacidade", "leitura_documental", "--json",
+                       "--extrair", "destino:texto", "--extrair", "prazo_dias:inteiro",
+                       "--extrair", "limite_arquivos:inteiro", "--extrair", "reenvio:booleano",
+                       "--extrair", "responsavel:texto",
                        "--arquivo", str(relatorio), "--arquivos", str(fonte)]
             lock = origem / "local.lock"
             with lock.open("rb" if lock.exists() else "a") as trava:
@@ -144,7 +147,7 @@ def avaliar(pasta, repeticoes, ambiente):
             if nome == "dividido" and chamada.returncode == 0:
                 partes = sum(c.get("fase") == "fatia" for c in metricas.get("chamadas_local", []))
                 consolidacoes = sum(c.get("fase") == "consolidacao" for c in metricas.get("chamadas_local", []))
-                if partes < 2 or consolidacoes != 1:
+                if partes < 2 or consolidacoes != 0 or metricas.get("consolidacao") != "deterministica":
                     medicao["problemas"].append("divisão e consolidação não confirmadas")
                     estado = "divergente"
             resultado["resultados"].append({
@@ -154,6 +157,7 @@ def avaliar(pasta, repeticoes, ambiente):
                 "motivo": registro.get("motivo"), "tentativas": registro.get("tentativas", []),
                 "segundos": round(time.monotonic() - inicio, 3), "gabarito": esperado,
                 "chamadas_local": metricas.get("chamadas_local", []) or [], **medicao,
+                "consolidacao": metricas.get("consolidacao"),
             })
             (pasta / "resultado.json").write_text(json.dumps(resultado, ensure_ascii=False, indent=2), encoding="utf-8")
         medidas = [r for r in resultado["resultados"] if r["caso"] == nome]

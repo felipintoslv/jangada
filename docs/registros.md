@@ -545,8 +545,13 @@ subagente tem `.db` próprio.
   - `motivo_codigo`: motivo estável da recusa; vazio no sucesso.
   - `verificacao`: `nao_exigida`, `reprovada`, `referencias_validas` ou
     `referencias_e_requisitos_validos`, com explicações e referências por requisito.
+    Extração tipada usa `estrutura_e_referencias_validas`: campos, tipos,
+    pares nulos e posições presentes no trecho, sem conferência semântica.
     Referências válidas não comprovam a interpretação do conteúdo.
   - `requisitos`: lista dos itens exigidos por `--requisito`; vazia sem essa opção.
+  - `campos_extracao`: declarações `campo:tipo` de `--extrair`; vazia sem essa opção.
+  - `consolidacao`: `deterministica` quando a extração uniu partes sem geração;
+    vazio nos demais casos. A união recusa valores conflitantes.
   - `verificacao_escopo`: `relatorio_completo` na seleção documental;
     `nenhum` nas chamadas anteriores. A prévia cortada pode omitir referências.
   - `artefato`: arquivo completo gravado, ou vazio quando não foi gravado.

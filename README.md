@@ -495,6 +495,12 @@ Os casos medem extração, informação ausente e consolidação de documento
 dividido. Uma resposta conforme ao gabarito não aprova o modelo para outros
 documentos. Veja [a avaliação controlada](docs/subagentes-e-delegacao.md#avaliação-controlada-do-ollama).
 
+Extrações locais podem declarar campos com `--extrair campo:tipo`, usando
+`texto`, `inteiro` ou `booleano`, junto de `--destino local --capacidade leitura_documental`.
+Cada campo devolve valor e referência; ausência usa `null` nos dois.
+A união das partes preserva fatos encontrados e recusa valores conflitantes,
+sem nova chamada ao modelo. A conferência estrutural não aprova os fatos.
+
 ### Isolamento
 
 Fluxogramas e a tabela das camadas em

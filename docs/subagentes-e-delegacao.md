@@ -155,6 +155,7 @@ total, mas não na contagem de chamadas ao modelo.
 Antes de processar um documento dividido, o executor local verifica se há
 chamadas suficientes para todas as partes e uma consolidação. Se faltar
 orçamento, recusa antes de consumir tokens.
+Na extração estruturada, a consolidação é determinística e não consome uma chamada.
 Cada chamada documental com capacidade solicita raciocínio desligado e limita a geração
 a 1.024 tokens. Alguns modelos continuam raciocinando; saída interrompida
 pelo limite de geração é recusada, sem aprovação parcial. Chamadas sem
@@ -176,6 +177,29 @@ a explicação responde corretamente ao pedido. Confira o conteúdo na fonte.
 Essa opção exige `--capacidade`; pedidos sem requisitos mantêm a conferência
 de referências. Quando os requisitos passam, `verificacao` contém
 `referencias_e_requisitos_validos`.
+
+Para extrair campos tipados no Ollama, use `--destino local`,
+`--capacidade leitura_documental` e repita `--extrair campo:tipo`.
+Os tipos são `texto`, `inteiro` e `booleano`; nomes usam letras minúsculas,
+números e sublinhado, começando com letra. Campos repetidos são recusados.
+Essa opção exige leitor e não aceita `--requisito`, que usa seções de texto.
+
+```sh
+jangada-delegar leitor "Extraia o prazo em dias e a responsável" \
+  --destino local --capacidade leitura_documental \
+  --extrair prazo_dias:inteiro --extrair responsavel:texto --arquivos politica.txt
+```
+
+O Ollama recebe uma estrutura JSON obrigatória. Cada campo contém `valor`
+e `referencia`; ausência no trecho exige ambos `null`.
+Valores presentes exigem o tipo declarado e uma referência ao próprio trecho.
+O delegador normaliza as referências para caminhos completos.
+Partes são unidas sem nova geração: ausência não apaga fatos, valores iguais
+preservam a primeira citação e valores diferentes recusam a extração.
+O registro contém `campos_extracao` e, quando houve divisão,
+`consolidacao: "deterministica"`. A conferência devolve
+`estrutura_e_referencias_validas`; ela não verifica se a linha sustenta o fato,
+nem se o modelo omitiu informação presente. A revisão do conteúdo continua necessária.
 Relatórios reprovados pela conferência ficam em
 `$JANGADA_ESTADO/agentes/delegacao-reprovada-ID.md`, com o caminho registrado
 no executor e `verificacao=reprovada`. Não substituem o arquivo da entrega.
@@ -269,7 +293,8 @@ para a execução, sem autorização de envio remoto.
 
 Os casos são extração de fatos, informação ausente e documento dividido.
 O último usa contexto de 3.000 tokens e exige registros de pelo menos duas
-fatias e uma consolidação. O gabarito fica no avaliador, fora do pedido
+fatias e consolidação determinística. Os casos usam `--extrair`;
+a consolidação não faz nova chamada ao modelo. O gabarito fica no avaliador, fora do pedido
 enviado ao modelo. Cada campo exige valor do tipo esperado e referência à
 linha correspondente; informação ausente exige valor e referência nulos.
 

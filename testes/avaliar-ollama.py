@@ -83,8 +83,9 @@ class Avaliacao(unittest.TestCase):
         chamadas = [{"fase": "documento"}]
         if fonte.stem == "dividido":
             self.assertEqual(opcoes["env"]["JANGADA_LOCAL_CTX"], "3000")
-            chamadas = [{"fase": "fatia"}, {"fase": "fatia"}, {"fase": "consolidacao"}]
-        registro = {"modelo": "modelo-simulado", "relatorio": json.dumps(resposta), "chamadas_local": chamadas}
+            chamadas = [{"fase": "fatia"}, {"fase": "fatia"}]
+        registro = {"modelo": "modelo-simulado", "relatorio": json.dumps(resposta), "chamadas_local": chamadas,
+                    "consolidacao": "deterministica" if fonte.stem == "dividido" else ""}
         return subprocess.CompletedProcess(comando, 0, json.dumps(registro), "")
 
     def rodar(self, simulado):

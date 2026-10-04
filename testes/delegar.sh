@@ -386,6 +386,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 f.write(body.decode('utf-8') + '\n')
             with open(sys.argv[3], 'r') as f:
                 conteudo = f.read()
+            if os.path.exists(sys.argv[3] + '.sequencia'):
+                with open(sys.argv[3] + '.sequencia') as f:
+                    partes = json.load(f)
+                if partes:
+                    conteudo = json.dumps(partes.pop(0))
+                    with open(sys.argv[3] + '.sequencia', 'w') as f:
+                        json.dump(partes, f)
             eval_in = 120
             if os.path.exists(sys.argv[6]):
                 try:
@@ -797,6 +804,66 @@ conferir "completude: explica requisito com referência" jqok -e \
 conferir "geração: desativa raciocínio e limita saída" jqok -se \
   'last | .think == false and .options.num_predict == 1024
     and (.messages[1].content | endswith("/no_think"))' "$ollama_reqs"
+printf '{"destino":{"valor":"local","referencia":"doc1.txt:1"}}\n' >"$ollama_resp"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia o destino" --destino local \
+  --capacidade leitura_documental --extrair destino:texto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "extração: confere estrutura e referência" jqok -e \
+  '.verificacao == "estrutura_e_referencias_validas" and (.relatorio | fromjson | .destino.valor == "local")' "$tmp/saida"
+conferir "extração: formato obrigatório enviado ao Ollama" jqok -se \
+  'last | .format.required == ["destino"] and .format.additionalProperties == false
+    and .format.properties.destino.properties.valor.type == ["string","null"]' "$ollama_reqs"
+printf '{"destino":{"valor":"local","referencia":"doc1.txt:99"}}\n' >"$ollama_resp"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia o destino" --destino local \
+  --capacidade leitura_documental --extrair destino:texto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "extração: referência inexistente recusa" jqok -e \
+  '.tentativas[0].motivo_codigo == "saida_invalida"' "$tmp/saida"
+printf '{"destino":{"valor":null,"referencia":null}}\n' >"$ollama_resp"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia o destino" --destino local \
+  --capacidade leitura_documental --extrair destino:texto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "extração: permite ausência sem inventar citação" jqok -e \
+  '.codigo_saida == 0 and (.relatorio | fromjson | .destino.valor == null)' "$tmp/saida"
+delegar leitor "extraia" --destino agy --capacidade leitura_documental --extrair destino:texto --arquivos "$tmp/projeto/doc1.txt"
+conferir "extração: exige destino local explícito" [ "$(codigo)" = 2 ]
+delegar leitor "extraia" --destino local --capacidade leitura_documental --extrair destino:numero --arquivos "$tmp/projeto/doc1.txt"
+conferir "extração: tipo desconhecido é erro de uso" [ "$(codigo)" = 2 ]
+delegar leitor "extraia" --destino local --capacidade leitura_documental --extrair destino:texto --extrair destino:texto --arquivos "$tmp/projeto/doc1.txt"
+conferir "extração: campo repetido é erro de uso" [ "$(codigo)" = 2 ]
+python3 - "$tmp/projeto/extracao.txt" "$ollama_resp.sequencia" <<'PY'
+import json, pathlib, sys
+pathlib.Path(sys.argv[1]).write_text('Destino local.\n' + ('Contexto sem novos fatos. ' * 8 + '\n') * 20 + 'Responsável Helena.\n')
+partes = [
+    {'destino': {'valor': 'local', 'referencia': 'extracao.txt:1'}, 'responsavel': {'valor': None, 'referencia': None}},
+    {'destino': {'valor': None, 'referencia': None}, 'responsavel': {'valor': 'Helena', 'referencia': 'extracao.txt:22'}},
+]
+pathlib.Path(sys.argv[2]).write_text(json.dumps(partes))
+PY
+: >"$ollama_reqs"
+CHAMADAS_MAX=2 LOCAL_CTX=3000 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia fatos" --destino local \
+  --capacidade leitura_documental --extrair destino:texto --extrair responsavel:texto --json --arquivos "$tmp/projeto/extracao.txt"
+conferir "extração: consolida sem apagar fatos e sem chamada adicional" jqok -e \
+  '.codigo_saida == 0 and .consolidacao == "deterministica" and .chamadas_executor == 2
+    and (.relatorio | fromjson | .destino.valor == "local" and .responsavel.valor == "Helena")' "$tmp/saida"
+conferir "extração: somente as partes são chamadas" jqok -se 'length == 2' "$ollama_reqs"
+python3 - "$tmp/projeto/extracao.txt" "$ollama_resp.sequencia" <<'PY'
+import json, pathlib, sys
+fonte = pathlib.Path(sys.argv[1])
+linhas = fonte.read_text().splitlines()
+linhas[-1] = 'Destino remoto. Responsável Helena.'
+fonte.write_text('\n'.join(linhas) + '\n')
+partes = [
+    {'destino': {'valor': 'local', 'referencia': 'extracao.txt:1'}, 'responsavel': {'valor': None, 'referencia': None}},
+    {'destino': {'valor': 'remoto', 'referencia': 'extracao.txt:22'}, 'responsavel': {'valor': 'Helena', 'referencia': 'extracao.txt:22'}},
+]
+pathlib.Path(sys.argv[2]).write_text(json.dumps(partes))
+PY
+printf 'preservar\n' >"$tmp/extracao-anterior.json"
+CHAMADAS_MAX=2 LOCAL_CTX=3000 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia fatos" --destino local \
+  --capacidade leitura_documental --extrair destino:texto --extrair responsavel:texto --json \
+  --arquivo "$tmp/extracao-anterior.json" --arquivos "$tmp/projeto/extracao.txt"
+conferir "extração: conflito recusa sem escolher um fato" jqok -e \
+  '.tentativas[0].motivo_codigo == "saida_invalida" and .tentativas[0].chamadas == 2' "$tmp/saida"
+conferir "extração: recusa preserva arquivo anterior" grep -qx preservar "$tmp/extracao-anterior.json"
+rm "$ollama_resp.sequencia"
 printf '## Destino\ndoc1.txt:1\n' >"$ollama_resp"
 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia a regra" \
   --capacidade leitura_documental --requisito Destino --json --arquivos "$tmp/projeto/doc1.txt"
