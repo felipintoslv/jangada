@@ -127,8 +127,8 @@ Ollama, com arquivos explícitos. Os demais papéis ficam na sessão. Um perfil
 com `JANGADA_DELEGAR=agy` permite delegar pelo `jangada-delegar` ao agy.
 O perfil `codex-agy` já configura esse destino e fixa o revisor em
 `gemini-3.8-flash-high`, evitando herdar o modelo principal do agy. Leitor
-e redator continuam indo primeiro ao Ollama; os outros papéis usam Flash
-com o esforço definido pelo papel. O protocolo do Codex não manda chamar
+e redator continuam indo primeiro ao Ollama; os outros papéis usam o
+primeiro modelo de `JANGADA_DELEGAR_MODELOS` com cota. O protocolo do Codex não manda chamar
 subagentes do Claude. Recusa local
 nunca autoriza enviar documentos confidenciais a um provedor externo.
 

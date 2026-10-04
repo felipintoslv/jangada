@@ -315,7 +315,7 @@ O `jangada-par` (Claude implementando em lote, agy revisando) saiu em
 porta de entrada. O que se aprendeu com ele vale para o revisor agy:
 
 - O revisor padrão é o oposto do `.agente` da sessão; fora de sessão, Claude.
-  Com `--revisor mesmo` ou nos perfis `claude-claude` e `agy-agy`, o mesmo
+  Com `--revisor mesmo` ou no perfil `claude-claude`, o mesmo
   modelo revisa em processo isolado.
 - Revisor que falha (agy sem cota, por exemplo) passa a vez: outros modelos
   na ordem `claude`, `agy`, `codex`, e por último o do autor. Não passa com
@@ -362,15 +362,18 @@ porta de entrada. O que se aprendeu com ele vale para o revisor agy:
 Depois de integrar uma mudança no próprio jangada, confira e
 atualize a cópia instalada com `jangada-update`.
 
-## agy como agente da sessão
+## agy como suporte
 
+- O agy não abre sessão principal desde 03/10/2026: o `jangada-agente`
+  recusa `--agente agy` e perfil com `COMANDO=agy`. Ele atende o
+  `jangada-delegar` e a revisão do `jangada-validar`. Sessão antiga do agy
+  aberta sem perfil ainda é restaurada pelo `jangada-agentes`.
 - O seletor do `jangada-agente` oferece o padrão e os perfis, cada um com a
-  descrição entre parênteses (`DESCRICAO=` do perfil). Os perfis
-  `default/agentes/agy.conf`, `agy-agy.conf` e `claude-claude.conf` vêm no
-  repositório e perdem para perfis de mesmo nome em `~/.config/jangada/agentes`.
-- O protocolo é `default/agentes/protocolo.md`. No agy a tarefa vai por `-i`,
-  precedida dele; sem tarefa, vai só o protocolo. O agy não aceita a tarefa
-  como argumento solto. No Claude vai por `--append-system-prompt`; na restauração o
+  descrição calculada entre parênteses. Os perfis de `default/agentes/`
+  (`claude-claude.conf`, `codex*.conf`) perdem para perfis de mesmo nome em
+  `~/.config/jangada/agentes`.
+- O protocolo é `default/agentes/protocolo.md`. No Claude vai por
+  `--append-system-prompt` e no Codex pelo `jangada-codex`; na restauração o
   `jangada-agentes` monta o protocolo de novo (`refazer_protocolo`), sem ler o
   `comando` guardado.
 - Hooks do agy: só o global `~/.gemini/config/hooks.json` foi carregado pelo
@@ -465,6 +468,14 @@ Testes de 27/09/2026, agy 1.2.12:
   gastar cota: a fração restante fica em
   `.command.data.groups[].buckets[]` com `id` `gemini-5h`, `gemini-weekly`,
   `3p-5h` e `3p-weekly` (`remaining_fraction`, de 0 a 1).
+- **O limite de 5 horas sozinho engana**: com a semanal zerada, o `/usage`
+  devolve `gemini-weekly` em 0 e `gemini-5h` em 0,99 com `"disabled": true`,
+  e toda chamada falha com 429 (`RESOURCE_EXHAUSTED`). Em 03/10/2026 o
+  `jangada-delegar` lia só o `gemini-5h` e mandava ao agy sem cota. A cota de
+  um grupo é a menor fração entre os buckets sem `disabled`.
+- Flash e Pro dividem o grupo `gemini-*`; trocar entre eles não rende cota.
+  Os modelos Claude e GPT do agy usam o grupo `3p-*`. Por isso
+  `JANGADA_DELEGAR_MODELOS` põe depois do Flash modelos do outro grupo.
 - `agy agents` lista um nome por linha só dos agentes que carregaram (um
   `model:` inválido some da lista). Em 27/09/2026, com a saída num cano ou
   num arquivo e sem terminal (`setsid`, `</dev/null`), a lista saiu inteira.

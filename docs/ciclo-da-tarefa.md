@@ -128,7 +128,7 @@ flowchart TD
   mesmo motivo, o `.jangada/validar.sh` roda pelo `jangada-isolar`, que numa
   sessão isolada roda direto e fora dela abre o bwrap.
 - **Revisor.** O hook do revisor fica desligado, para o Stop dele não marcar
-  a sessão como concluída. Pedido acima de 131.072 bytes leva o diff num
+  a sessão como concluída. Pedido acima de 126.000 bytes leva o diff num
   arquivo que o agy lê. Sem o agente `revisor` instalado, o agy cairia no
   agente padrão, com todas as ferramentas; por isso o agy não é chamado.
   Quando a chamada ao revisor falha (sem cota, fora do ar, sem o agente
