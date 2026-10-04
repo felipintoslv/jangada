@@ -314,7 +314,8 @@ O `jangada-par` (Claude implementando em lote, agy revisando) saiu em
 22/09/2026: o agente interativo com o protocolo faz o mesmo sem uma segunda
 porta de entrada. O que se aprendeu com ele vale para o revisor agy:
 
-- O revisor padrão é o oposto do `.agente` da sessão; fora de sessão, Claude.
+- Por padrão, Codex revisa Claude e Claude revisa Codex. Fora de sessão e
+  nas sessões antigas do agy, Claude revisa.
   Com `--revisor mesmo` ou no perfil `claude-claude`, o mesmo
   modelo revisa em processo isolado.
 - Revisor que falha (agy sem cota, por exemplo) passa a vez: outros modelos

@@ -52,7 +52,8 @@ flowchart TD
   casa com `.worktreeinclude` e é ignorado pelo git é copiado, o que está em
   `.jangada/links` vira link e `.jangada/preparar.sh` roda por último.
 - Revisor: `--revisor`, depois o `JANGADA_VALIDAR_REVISOR` do perfil, depois o
-  da configuração; sem nenhum, o modelo oposto ao do agente.
+  da configuração; sem nenhum, Codex revisa Claude e Claude revisa Codex.
+  Fora de sessão e nas sessões antigas do agy, o padrão é Claude.
 - O protocolo vai ao Claude por `--append-system-prompt`, ao agy por `-i`
   junto com a tarefa e ao Codex por `developer_instructions`. O item de
   subagentes depende do destino; veja

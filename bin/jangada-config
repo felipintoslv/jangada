@@ -246,7 +246,7 @@ jangada_revisor() {
   case "${2:-}" in
     mesmo) echo "$base" ;;
     oposto|"")
-      [[ "$base" == agy || "$base" == codex ]] && echo claude || echo agy
+      [[ "$base" == agy || "$base" == codex || -z "$base" ]] && echo claude || echo codex
       ;;
     *) echo "$2" ;;
   esac

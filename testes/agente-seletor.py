@@ -64,6 +64,16 @@ class Seletor(unittest.TestCase):
         self.assertNotIn('economiza', opcoes)
         self.assertIn('Fila e orçamento', (self.pasta / 'argumentos').read_text())
 
+    def test_revisao_cruzada_por_padrao(self):
+        opcoes = self.menu().splitlines()
+        padrao = next(linha for linha in opcoes if linha.startswith('padrão'))
+        self.assertIn('claude implementa; codex revisa', padrao)
+        self.assertIn('delegação ao agy', padrao)
+        (self.config / 'jangada.conf').write_text('JANGADA_AGENTE=codex\n')
+        padrao = next(linha for linha in self.menu().splitlines()
+                      if linha.startswith('padrão'))
+        self.assertIn('codex implementa; claude revisa', padrao)
+
     def test_opcao_explicita_prevalece_sobre_perfis(self):
         opcoes = self.menu('--revisor', 'mesmo')
         for linha in opcoes.splitlines():
@@ -90,9 +100,10 @@ class Seletor(unittest.TestCase):
 
     def test_revisor_ausente_e_delegacao_alternativa(self):
         (self.bin / 'agy').unlink()
+        (self.bin / 'codex').unlink()
         padrao = next(linha for linha in self.menu().splitlines()
                       if linha.startswith('padrão'))
-        self.assertIn('revisão indisponível: agy não instalado', padrao)
+        self.assertIn('revisão indisponível: codex não instalado', padrao)
         self.assertIn('subagentes do Claude', padrao)
 
     def test_agente_ausente_recusa_antes_de_criar_estado(self):
@@ -105,7 +116,7 @@ class Seletor(unittest.TestCase):
         self.assertFalse((self.pasta / 'estado').exists())
 
     def test_revisor_ausente_preserva_protocolo_e_isolamento(self):
-        (self.bin / 'agy').unlink()
+        (self.bin / 'codex').unlink()
         self.script('tmux', '[[ " $* " == *" has-session "* ]] && exit 1\nexit 0\n')
         resultado = subprocess.run([str(RAIZ / 'bin/jangada-agente'), '--agente', 'claude',
                                    '--projeto', str(self.pasta), '--direto'],

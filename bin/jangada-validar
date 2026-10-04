@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Manda o trabalho do agente para o outro modelo revisar: o Claude revisa o
-# agy, e o agy revisa o Claude. O revisor não implementa nada: recebe o diff,
+# Codex, e o Codex revisa o Claude. O revisor não implementa nada: recebe o diff,
 # lê o que precisar e devolve um parecer. O agente chama antes de entregar
 # (default/agentes/protocolo.md).
 #
@@ -237,19 +237,13 @@ if [[ "$revisor" == "mesmo" ]]; then
   auto_revisao=1
   revisor="${autor:-claude}"
 elif [[ "$revisor" == "oposto" ]]; then
-  case "$autor" in
-    agy|codex|"") revisor=claude ;;
-    *) revisor=agy ;;
-  esac
+  revisor="$(jangada_revisor "$autor" oposto)"
 fi
 
 # Quem revisa é o outro modelo por padrão: um modelo revisando o próprio
 # trabalho tende a concordar com ele.
 if [[ -z "$revisor" ]]; then
-  case "$autor" in
-    agy|codex|"") revisor=claude ;;
-    *) revisor=agy ;;
-  esac
+  revisor="$(jangada_revisor "$autor")"
 fi
 nomear_revisor() {
   case "$revisor" in

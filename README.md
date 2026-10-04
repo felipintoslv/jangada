@@ -252,7 +252,7 @@ O fluxo completo, com fluxogramas, está em
 
 | No seletor | Implementa | Revisa | Delegação padrão |
 |---|---|---|---|
-| `padrão` (Claude na configuração inicial) | Claude | agy | agy, com alternativa no Claude |
+| `padrão` (Claude na configuração inicial) | Claude | Codex | agy, com alternativa no Claude |
 | `claude-claude` | Claude | Claude | subagentes do Claude |
 | `codex` | Codex | Claude | leitor e redator no Ollama |
 | `codex-codex` | Codex | outra instância do Codex | leitor e redator no Ollama |
