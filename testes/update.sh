@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Testa, em repositórios temporários, o que chega à cópia instalada: o
 # jangada-update só aplica commits novos da origem com confirmação e, com
-# allowed_signers, só os assinados, que o jangada-assinar assina; o
+# allowed_signers, só os assinados, que o jangada-assinar assina, chamado
+# também pelo --integrar; o
 # jangada-agente-fim --integrar não atualiza a cópia instalada nem roda o git
 # com fsmonitor ou ganchos do repositório do agente; o install.sh recusa a
 # cópia de trabalho e os worktrees. pacman, checkupdates,
@@ -290,6 +291,31 @@ git -C "$origem" branch --quiet -D agente/m
 m_assinado="$(git -C "$origem" rev-parse HEAD)"
 atualizar <<<s
 conferir "merge assinado: a cópia instalada avança" test "$(head_instalado)" = "$m_assinado"
+
+# O --integrar chama o jangada-assinar depois de apagar o ramo: a primeira
+# resposta confirma o merge, a segunda a assinatura.
+integrar_y() {
+  git -C "$origem" worktree add --quiet -b agente/y "$wt_y" main
+  echo "$1" >"$wt_y/y.txt"
+  git -C "$wt_y" add y.txt
+  git -C "$wt_y" commit --quiet -m "feat(teste): tarefa y $1"
+  jq -n --arg w "$wt_y" --arg r "$origem" \
+    '{worktree: $w, ramo: "agente/y", base: "main", raiz: $r, estado: "concluido"}' \
+    >"$XDG_STATE_HOME/jangada/agentes/y.json"
+  printf '%s\n' s "$2" | (cd "$tmp" && "$repo_jangada/bin/jangada-agente-fim" --integrar y) >"$tmp/saida" 2>&1
+  rc=$?
+}
+wt_y="$HOME/.local/share/jangada-worktrees/origem/y"
+integrar_y a s
+conferir "integrar com allowed_signers: termina sem erro ($rc)" [ "$rc" -eq 0 ]
+conferir "integrar com allowed_signers: o merge e o commit do ramo têm assinatura válida" \
+  [ "$(assinatura HEAD)$(assinatura HEAD^2)" = GG ]
+conferir "integrar com allowed_signers: ramo apagado" test -z "$(git -C "$origem" branch --list agente/y)"
+integrar_y b n
+conferir "integrar sem confirmar a assinatura: encerra a sessão e avisa ($rc)" \
+  bash -c '[ "$1" -eq 0 ] && grep -q "sessão encerrada: y" "$2" && grep -q "ficou sem assinatura" "$2"' _ "$rc" "$tmp/saida"
+conferir "integrar sem confirmar a assinatura: o merge fica sem assinatura" [ "$(assinatura HEAD)" != G ]
+git -C "$origem" reset --quiet --hard "$m_assinado"
 
 # Merge com alteração feita à mão: refazê-lo perderia a alteração, então nada
 # é assinado e o ramo volta ao que era.

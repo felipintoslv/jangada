@@ -37,7 +37,7 @@ O `jangada-update` busca a origem, mostra os commits novos e só aplica
 com alterações locais na cópia instalada: por isso a edição acontece na cópia
 de trabalho. Com `~/.config/jangada/allowed_signers`, só aplica commits
 assinados; os do agente saem sem assinatura, e o usuário os assina com
-`jangada-assinar` num terminal comum. O `jangada-agente-fim --integrar` também não atualiza a cópia
+`jangada-assinar` num terminal comum; o `jangada-agente-fim --integrar` chama esse comando no fim. O `jangada-agente-fim --integrar` também não atualiza a cópia
 instalada, só avisa para rodar o `jangada-update`. Git sobre pasta que um
 agente pode ter gravado roda com `jangada_git_seguro` (`bin/jangada-config`),
 que desliga fsmonitor, hooks, pager e `sshCommand` do repositório.

@@ -187,7 +187,7 @@ flowchart TD
     H -- não --> X3[nada foi feito, código 1]
     H -- sim --> I
     G -- não --> I[limpar]
-    I --> J[fecha o tmux, remove o worktree,<br>apaga o ramo se integrado,<br>o estado e os pareceres]
+    I --> J[fecha o tmux, remove o worktree,<br>apaga o ramo se integrado,<br>o estado e os pareceres;<br>no jangada, com allowed_signers,<br>chama o jangada-assinar]
 ```
 
 - `conferir_estado` recusa caracteres de controle, caminhos relativos, ramo
