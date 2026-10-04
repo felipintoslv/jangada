@@ -293,8 +293,8 @@ para a execução, sem autorização de envio remoto.
 
 Os casos são extração de fatos, informação ausente e documento dividido.
 O último usa contexto de 3.000 tokens e exige registros de pelo menos duas
-fatias e consolidação determinística. Os casos usam `--extrair`;
-a consolidação não faz nova chamada ao modelo. O gabarito fica no avaliador, fora do pedido
+fatias e consolidação determinística. Os casos usam `--extrair`.
+O gabarito fica no avaliador, fora do pedido
 enviado ao modelo. Cada campo exige valor do tipo esperado e referência à
 linha correspondente; informação ausente exige valor e referência nulos.
 

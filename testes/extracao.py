@@ -65,7 +65,8 @@ class Extracao(unittest.TestCase):
 
     def test_tipo_exato_e_par_nulo(self):
         for nome, valor, ref in (("reenvio", 0, "a.txt:2"), ("prazo", False, "a.txt:1"),
-                                 ("responsavel", None, "a.txt:1"), ("responsavel", "Helena", None)):
+                                 ("responsavel", None, "a.txt:1"), ("responsavel", "Helena", None),
+                                 ("responsavel", "", "a.txt:1"), ("responsavel", " \t\n", "a.txt:1")):
             original = self.resposta[nome]
             self.resposta[nome] = {"valor": valor, "referencia": ref}
             with self.subTest(nome=nome, valor=valor), self.assertRaises(ValueError):

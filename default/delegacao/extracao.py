@@ -79,6 +79,8 @@ def conferir(texto, fonte, campos):
             continue
         if type(valor) is not TIPOS[tipo]:
             raise ValueError(f"tipo inválido: {nome}")
+        if isinstance(valor, str) and not valor.strip():
+            raise ValueError(f"texto vazio não representa um fato: {nome}")
         if not isinstance(referencia, str) or len(locais.get(referencia, ())) != 1:
             raise ValueError(f"referência fora do trecho ou ambígua: {nome}")
         fato["referencia"] = next(iter(locais[referencia]))

@@ -76,7 +76,7 @@ Para extração, use `--destino local --capacidade leitura_documental` e
 Campos ausentes no trecho usam valor e referência nulos. A conferência
 valida os tipos e a presença da posição citada naquele trecho, sem avaliar o sentido.
 A consolidação por modelo chegou a apagar a responsável encontrada na última
-parte. A extração agora une partes de forma determinística: valores presentes
+parte. A extração une partes de forma determinística: valores presentes
 substituem ausências, `false` e zero são preservados, conflitos recusam.
 Essa união não consome chamada; textos livres ainda usam consolidação pelo modelo.
 Use requisitos explícitos (`--requisito`) para exigir explicações em cada seção, além

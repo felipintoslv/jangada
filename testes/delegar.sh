@@ -828,6 +828,12 @@ delegar leitor "extraia" --destino local --capacidade leitura_documental --extra
 conferir "extração: tipo desconhecido é erro de uso" [ "$(codigo)" = 2 ]
 delegar leitor "extraia" --destino local --capacidade leitura_documental --extrair destino:texto --extrair destino:texto --arquivos "$tmp/projeto/doc1.txt"
 conferir "extração: campo repetido é erro de uso" [ "$(codigo)" = 2 ]
+delegar leitor "extraia" --destino local --capacidade leitura_documental --extrair destino:texto \
+  --requisito Destino --arquivos "$tmp/projeto/doc1.txt"
+conferir "extração: requisito textual é incompatível" [ "$(codigo)" = 2 ]
+delegar redator "extraia" --destino local --capacidade leitura_documental --extrair destino:texto \
+  --arquivos "$tmp/projeto/doc1.txt"
+conferir "extração: papel diferente de leitor é incompatível" [ "$(codigo)" = 2 ]
 python3 - "$tmp/projeto/extracao.txt" "$ollama_resp.sequencia" <<'PY'
 import json, pathlib, sys
 pathlib.Path(sys.argv[1]).write_text('Destino local.\n' + ('Contexto sem novos fatos. ' * 8 + '\n') * 20 + 'Responsável Helena.\n')
