@@ -295,6 +295,11 @@ if [[ -n "$worktree" && -d "$worktree" ]]; then
   fi
 fi
 
+assinar=0
+if ((integrado)) && [[ -f "$JANGADA_CONFIG/allowed_signers" && "$raiz" -ef "${JANGADA_REPO:-}" ]]; then
+  assinar=1
+fi
+
 # A limpeza encerra a sessão, remove o worktree e apaga o estado, nessa ordem:
 # o agente para antes de a pasta dele sumir. Quando o comando é chamado de
 # dentro da própria sessão, encerrar a sessão mataria este script no meio;
@@ -336,10 +341,8 @@ limpar() {
   rm -f "$JANGADA_ESTADO/revisoes/validacao-$s.aprovado" "$JANGADA_ESTADO/revisoes/$s.json"
   echo "sessão encerrada: $s"
   # Só depois do branch -d: assinar reescreve os commits do ramo, e o git
-  # deixaria de vê-lo como mesclado. A limpeza que segue em processo separado
-  # não tem terminal para a confirmação.
-  if ((integrado)) && [[ "${JANGADA_SESSAO:-}" != "$s" && -f "$JANGADA_CONFIG/allowed_signers" \
-    && "$raiz" -ef "${JANGADA_REPO:-}" ]]; then
+  # deixaria de vê-lo como mesclado.
+  if ((assinar)); then
     "$JANGADA_PATH/bin/jangada-assinar" "$raiz" \
       || echo "!! a integração ficou sem assinatura; rode jangada-assinar antes do push" >&2
   fi
@@ -349,7 +352,12 @@ limpar() {
 if [[ "${JANGADA_SESSAO:-}" == "$s" ]]; then
   registro="$JANGADA_ESTADO/agentes/fim-$s.log"
   echo "encerrando a partir da própria sessão; registro em $registro"
-  export s worktree ramo raiz arq forcar apagar_ramo integrado
+  # A limpeza em processo separado não tem terminal para a confirmação.
+  if ((assinar)); then
+    echo "!! a integração ficou sem assinatura; rode jangada-assinar num terminal comum antes do push" >&2
+    assinar=0
+  fi
+  export s worktree ramo raiz arq forcar apagar_ramo integrado assinar
   export -f limpar
   if command -v setsid >/dev/null 2>&1; then
     # shellcheck disable=SC1090,SC2016
