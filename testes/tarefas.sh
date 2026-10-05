@@ -104,6 +104,19 @@ done
 JANGADA_PATH="$tmp/jangada" bin/jangada-agente --janela >"$tmp/saida"
 grep -qx central "$tmp/saida"
 grep -qx -- '--nova' "$tmp/saida"
+cat >"$tmp/jangada/bin/jangada-terminal" <<'SH'
+#!/bin/sh
+printf '%s\n' "$@"
+SH
+chmod +x "$tmp/jangada/bin/jangada-terminal"
+JANGADA_PATH="$tmp/jangada" bin/jangada-agente --janela --projeto "$tmp" >"$tmp/saida"
+grep -qx -- '--projeto' "$tmp/saida"
+! grep -qx central "$tmp/saida"
+mkdir -p "$XDG_CONFIG_HOME/jangada/agentes"
+printf 'COMANDO=codex\nDESCRICAO=Meu perfil local\nJANGADA_VALIDAR_REVISOR=agy\n' >"$XDG_CONFIG_HOME/jangada/agentes/codex.conf"
+printf 'COMANDO=agy\n' >"$XDG_CONFIG_HOME/jangada/agentes/antigo.conf"
+JANGADA_PATH="$repo_jangada" bin/jangada-agente --perfis >"$tmp/perfis.json"
+jq -e 'any(.[]; .nome == "codex" and .descricao == "Meu perfil local") and any(.[]; .nome == "codex-agy") and all(.[]; .nome != "antigo")' "$tmp/perfis.json" >/dev/null
 cat >"$tmp/bin/fuzzel" <<'SH'
 #!/bin/sh
 cat >"$MENU_TESTE"

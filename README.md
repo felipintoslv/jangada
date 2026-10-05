@@ -671,8 +671,9 @@ JANGADA_PATH="$PWD" bin/jangada-tarefas --simular
 
 `SUPER+A` e **Nova tarefa** no menu abrem o formulário da central de tarefas.
 Os atalhos de acompanhamento e os cliques da barra usam essa mesma central.
-O formulário oferece Claude e Codex como agentes principais; o agy atende
-as delegações e a revisão.
+O formulário oferece Claude e Codex como agentes principais e os perfis
+configurados, como `codex-agy` e `claude-claude`. A escolha do perfil preserva
+executor, revisor e delegação. O agy atende as delegações e a revisão.
 
 Os comandos antigos `jangada-agentes --janela`, `--painel`,
 `--janela-anterior`, `--painel-anterior` e `jangada-tarefas --anterior`

@@ -53,7 +53,7 @@ class NovaTarefa(QDialog):
         formulario.addRow('Projeto', linha)
         self.agente = QComboBox()
         self.agente.addItems(AGENTES)
-        formulario.addRow('Agente', self.agente)
+        formulario.addRow('Agente ou perfil', self.agente)
         layout.addLayout(formulario)
         layout.addWidget(QLabel('O que você quer que o agente faça?'))
         self.pedido = QPlainTextEdit()
@@ -79,6 +79,32 @@ class NovaTarefa(QDialog):
         botoes.addStretch()
         botoes.addWidget(self.enviar)
         layout.addLayout(botoes)
+
+        if janela.real:
+            self.perfis = QProcess(self)
+            janela.preparar(self.perfis, ['--perfis'], 'jangada-agente')
+            self.perfis.finished.connect(self.carregar_perfis)
+            self.perfis.errorOccurred.connect(lambda _: self.aviso.setText('Não foi possível consultar os perfis. Claude e Codex continuam disponíveis.'))
+            self.perfis.start()
+            QTimer.singleShot(3000, self.perfis.kill)
+
+    def carregar_perfis(self, codigo, estado):
+        try:
+            if codigo != 0 or estado != QProcess.ExitStatus.NormalExit:
+                raise ValueError('consulta falhou')
+            perfis = json.loads(bytes(self.perfis.readAllStandardOutput()))
+            if not isinstance(perfis, list) or any(
+                not isinstance(p, dict) or not isinstance(p.get('nome'), str)
+                or not isinstance(p.get('descricao'), str) for p in perfis
+            ):
+                raise ValueError('perfis inválidos')
+        except (ValueError, UnicodeDecodeError):
+            self.aviso.setText('Não foi possível consultar os perfis. Claude e Codex continuam disponíveis.')
+            return
+        for perfil in perfis:
+            nome = perfil['nome']
+            texto = nome + (': ' + perfil['descricao'] if perfil['descricao'] else '')
+            self.agente.addItem(texto, nome)
 
     def escolher_pasta(self):
         pasta = QFileDialog.getExistingDirectory(self, 'Escolher projeto', self.projeto.text())
@@ -120,6 +146,7 @@ class NovaTarefa(QDialog):
             return
         projeto = Path(pasta).expanduser().resolve()
         agente = self.agente.currentText()
+        perfil = self.agente.currentData()
         nome = 'tarefa-' + uuid.uuid4().hex[:12]
         if not self.janela.real:
             sessao = Sessao(nome, 'trabalhando', str(projeto), datetime.now().isoformat(), 'agente/' + nome, pedido, agente, projeto.name, 'Tarefa simulada. Nenhum agente foi executado.')
@@ -129,7 +156,7 @@ class NovaTarefa(QDialog):
             self.erro.setText('Tarefa simulada criada. Você pode acompanhar na lista.')
         else:
             processo = QProcess(self)
-            self.janela.preparar(processo, ['--janela', '--projeto', str(projeto), '--nome', nome, '--agente', agente, '--prompt', pedido], 'jangada-agente')
+            self.janela.preparar(processo, ['--janela', '--projeto', str(projeto), '--nome', nome, '--perfil' if perfil else '--agente', perfil or agente, '--prompt', pedido], 'jangada-agente')
             iniciado, _ = processo.startDetached()
             if not iniciado:
                 self.erro.setText('Não foi possível iniciar jangada-agente. Confira --jangada.')

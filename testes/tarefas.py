@@ -54,7 +54,9 @@ class Interface(unittest.TestCase):
         self.comando.write_text("#!/usr/bin/env python3\nimport pathlib, sys, json\npasta = pathlib.Path(__file__).resolve().parent.parent\nif sys.argv[1] in ('--lista', '--lista-atualizada'):\n    if (pasta / 'falhar').exists():\n        print('Erro de consulta simulado', file=sys.stderr)\n        sys.exit(1)\n    print((pasta / 'lista').read_text(), end='')\nelif sys.argv[1] == '--previa':\n    previa = pasta / ('previa-' + sys.argv[2])\n    print(previa.read_text() if previa.exists() else 'Atividade da sessão ' + sys.argv[2])\nelse:\n    (pasta / 'acao.json').write_text(json.dumps(sys.argv[1:]))\n")
         self.comando.chmod(448)
         self.criar_comando = self.bin / 'jangada-agente'
-        self.criar_comando.write_text(self.comando.read_text())
+        self.criar_comando.write_text(self.comando.read_text().replace(
+            "if sys.argv[1] in ('--lista', '--lista-atualizada'):",
+            "if sys.argv[1] == '--perfis':\n    print((pasta / 'perfis.json').read_text() if (pasta / 'perfis.json').exists() else '[]')\nelif sys.argv[1] in ('--lista', '--lista-atualizada'):"))
         self.criar_comando.chmod(448)
         self.lista = self.raiz / 'lista'
         self.lista.write_text('aguardando\tprojeto--um\t/tmp/projeto\thoje\tagente/um\tTarefa um\ntrabalhando\tprojeto--dois\t/tmp/projeto\thoje\tagente/dois\tTarefa dois\n')
@@ -622,6 +624,31 @@ class Interface(unittest.TestCase):
         self.assertEqual(form.pedido.toPlainText(), pedido)
         self.assertIn('Abertura solicitada', form.erro.text())
         self.assertFalse(form.enviar.isEnabled())
+
+    def test_perfil_preserva_escolha_de_revisor_e_delegacao_no_lancamento(self):
+        (self.raiz / 'perfis.json').write_text(json.dumps([
+            {'nome': 'codex-agy', 'descricao': 'Codex implementa, agy revisa'},
+            {'nome': 'claude-claude', 'descricao': 'Claude implementa e revisa'},
+        ]))
+        self.janela.nova_tarefa()
+        form = self.janela.formulario
+        aguardar(lambda: form.agente.count() == 4)
+        form.agente.setCurrentIndex(2)
+        form.projeto.setText(str(self.raiz))
+        form.pedido.setPlainText('Executar com o perfil escolhido')
+        form.criar()
+        arquivo = self.raiz / 'acao.json'
+        aguardar(arquivo.exists)
+        argumentos = json.loads(arquivo.read_text())
+        self.assertEqual(argumentos[:3], ['--janela', '--projeto', str(self.raiz)])
+        self.assertEqual(argumentos[5:7], ['--perfil', 'codex-agy'])
+
+    def test_falha_de_consulta_preserva_agentes_simples(self):
+        (self.raiz / 'perfis.json').write_text('inválido')
+        self.janela.nova_tarefa()
+        form = self.janela.formulario
+        aguardar(lambda: 'Não foi possível consultar' in form.aviso.text())
+        self.assertEqual([form.agente.itemText(i) for i in range(form.agente.count())], ['claude', 'codex'])
 
     def test_criar_comando_ausente_permite_tentar_novamente(self):
         self.criar_comando.unlink()
