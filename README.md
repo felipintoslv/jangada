@@ -255,6 +255,7 @@ O fluxo completo, com fluxogramas, está em
 |---|---|---|---|
 | `padrão` (Claude na configuração inicial) | Claude | Codex | agy, com alternativa no Claude |
 | `claude-claude` | Claude | Claude | subagentes do Claude |
+| `claude-agy` | Claude | agy Flash, esforço alto | agy, com alternativa no Claude |
 | `codex` | Codex | Claude | leitor e redator no Ollama |
 | `codex-codex` | Codex | outra instância do Codex | leitor e redator no Ollama |
 | `codex-agy` | Codex | agy Flash, esforço alto | leitor e redator no Ollama, demais papéis no agy |
@@ -426,7 +427,7 @@ perfil (ou global), e o seletor mostra o destino:
 
 | `JANGADA_DELEGAR` | Perfis | Efeito |
 |---|---|---|
-| `agy` | `padrão` (Claude), `codex-agy` | `jangada-delegar PAPEL` manda ao agy; o subagente do Claude só se ele recusar |
+| `agy` | `padrão` (Claude), `claude-agy`, `codex-agy` | `jangada-delegar PAPEL` manda ao agy; o subagente do Claude só se ele recusar |
 | `claude` | `claude-claude` | subagentes do Claude dos papéis, nunca `general-purpose` |
 | `local` | `codex`, `codex-codex` (padrão do Codex) | leitor e redator no Ollama; os demais papéis na própria sessão |
 
@@ -672,7 +673,7 @@ JANGADA_PATH="$PWD" bin/jangada-tarefas --simular
 `SUPER+A` e **Nova tarefa** no menu abrem o formulário da central de tarefas.
 Os atalhos de acompanhamento e os cliques da barra usam essa mesma central.
 O formulário oferece Claude e Codex como agentes principais e os perfis
-configurados, como `codex-agy` e `claude-claude`. A escolha do perfil preserva
+configurados, como `claude-agy`, `codex-agy` e `claude-claude`. A escolha do perfil preserva
 executor, revisor e delegação. O agy atende as delegações e a revisão.
 
 Os comandos antigos `jangada-agentes --janela`, `--painel`,
