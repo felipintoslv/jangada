@@ -204,6 +204,14 @@ conferir "caso 3e: motivo é a cota do primeiro modelo" \
 rm -f "$tmp/home/.cache/jangada/agy-usage.json"
 MODELOS="gemini-3.1-pro-high" delegar leitor "leia"
 conferir "caso 3f: JANGADA_DELEGAR_MODELOS troca o modelo" grep -qx -- gemini-3.1-pro-high "$tmp/falso/agy.args"
+rm -f "$tmp/home/.cache/jangada/agy-usage.json"
+COTA='"invalida"' TERCEIROS=0.8 delegar leitor "leia"
+conferir "cota parcial: grupo ilegível não impede outro válido" [ "$(codigo)" = 0 ]
+conferir "cota parcial: usa somente o grupo válido" grep -qx -- claude-sonnet-5-5-high "$tmp/falso/agy.args"
+rm -f "$tmp/home/.cache/jangada/agy-usage.json"
+MODELOS="claude-sonnet-5-5-high gemini-3.8-flash-high" delegar leitor "leia"
+conferir "cota parcial: primeiro grupo ausente permite Gemini" [ "$(codigo)" = 0 ]
+conferir "cota parcial: preserva ordem e pula cota desconhecida" grep -qx -- gemini-3.8-flash-high "$tmp/falso/agy.args"
 chamadas_antes="$(wc -l <"$tmp/falso/usage.chamadas")"
 
 rm -f "$tmp/home/.cache/jangada/agy-usage.json"

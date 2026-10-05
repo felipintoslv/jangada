@@ -269,6 +269,8 @@ flowchart TD
   GPT). Cada grupo tem um limite semanal e um de 5 horas, e vale a menor
   fração entre os que não vêm com `disabled`. Se a atualização falhar, não
   usa o valor expirado.
+  Uma resposta atual com cota válida de algum grupo configurado pode ser usada.
+  Grupo ausente ou ilegível é pulado, sem bloquear modelos de outro grupo válido.
 - Os modelos vêm de `JANGADA_DELEGAR_MODELOS`, em ordem de preferência
   (padrão `gemini-3.8-flash-high claude-sonnet-5-5-high gpt-oss-120b-medium`).
   O modelo com cota desconhecida ou abaixo de `JANGADA_DELEGAR_COTA_MIN`

@@ -197,12 +197,13 @@ class Saude:
                     raise ValueError('cotas inválidas')
                 for b in buckets:
                     if isinstance(b.get('id'), str) and b.get('disabled') is not True:
-                        cotas.setdefault(b['id'].split('-')[0], []).append(b['remaining_fraction'])
+                        cotas.setdefault(b['id'].split('-')[0], []).append(b.get('remaining_fraction'))
             modelos = os.environ.get(
                 'JANGADA_DELEGAR_MODELOS', 'gemini-3.8-flash-high claude-sonnet-5-5-high gpt-oss-120b-medium').split()
-            usados = [cotas[g] for g in {'gemini' if m.startswith('gemini-') else '3p' for m in modelos} if g in cotas]
-            if not usados or any(type(c) not in (int, float) or not math.isfinite(c) or not 0 <= c <= 1
-                                 for grupo in usados for c in grupo):
+            usados = [cotas[g] for g in {'gemini' if m.startswith('gemini-') else '3p' for m in modelos}
+                      if g in cotas and cotas[g] and all(
+                          type(c) in (int, float) and math.isfinite(c) and 0 <= c <= 1 for c in cotas[g])]
+            if not usados:
                 raise ValueError('cota inválida')
             percentual = max(min(grupo) for grupo in usados) * 100
             status = 'AVAILABLE' if percentual >= float(os.environ.get('JANGADA_DELEGAR_COTA_MIN', '20')) else 'QUOTA_LOW'

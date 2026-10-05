@@ -139,6 +139,25 @@ class Disponibilidade(unittest.TestCase):
                     nuvem.assert_not_called()
                 self.assertEqual(self.saude.listar()[0]['status'], 'UNKNOWN')
 
+    def test_grupo_invalido_nao_impede_modelo_de_outro_grupo(self):
+        gemini = {'buckets': [{'id': 'gemini-5h', 'remaining_fraction': 'invalida'}]}
+        terceiros = {'buckets': [{'id': '3p-5h', 'remaining_fraction': 0.8}]}
+        self.cache.write_text(json.dumps({'command': {'data': {'groups': [gemini, terceiros]}}}))
+        with patch('saude.urllib.request.urlopen', side_effect=OSError()), \
+                patch.dict(os.environ, JANGADA_DELEGAR_MODELOS='gemini-3.8-flash-high claude-sonnet-5-5-high'):
+            self.saude.atualizar()
+        agy = self.saude.listar()[0]
+        self.assertEqual((agy['status'], agy['cota']), ('AVAILABLE', 80))
+
+    def test_cota_valida_de_grupo_nao_configurado_nao_libera_provedor(self):
+        grupos = [{'buckets': [{'id': 'gemini-5h', 'remaining_fraction': 'invalida'}]},
+                  {'buckets': [{'id': '3p-5h', 'remaining_fraction': 0.8}]}]
+        self.cache.write_text(json.dumps({'command': {'data': {'groups': grupos}}}))
+        with patch('saude.urllib.request.urlopen', side_effect=OSError()), \
+                patch.dict(os.environ, JANGADA_DELEGAR_MODELOS='gemini-3.8-flash-high'):
+            self.saude.atualizar()
+        self.assertEqual(self.saude.listar()[0]['status'], 'UNKNOWN')
+
     def test_retorno_respeita_privacidade_e_perfil(self):
         self.aguardar(permitir_remoto=True)
         self.saude.observar('agy', 'AVAILABLE', 'cota conferida', cota=50)

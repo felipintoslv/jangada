@@ -811,13 +811,12 @@ cota_do_grupo() {
       then min * 10000 | round / 100 else empty end' "$2" 2>/dev/null || true
 }
 # Uso: ler_cota MODELO [nova]; o resultado fica em cota_lida. Consulta o /usage no máximo uma vez por
-# execução, mais uma com "nova". Só troca o cache por uma resposta com a cota
-# do grupo do primeiro modelo válida; sem cache atual, não devolve nada.
+# execução, mais uma com "nova". Só troca o cache por uma resposta com cota
+# válida de algum grupo configurado; cada modelo exige a cota do próprio grupo.
 cota_consultada=0; cota_atual=0; cota_lida=""
 ler_cota() {
-  local tmp atualizado agora grupo=3p principal=3p
+  local tmp atualizado agora grupo=3p grupo_cache candidato cache_valido
   [[ "$1" == gemini-* ]] && grupo=gemini
-  [[ "${modelos_agy[0]}" == gemini-* ]] && principal=gemini
   if [[ "${2:-}" == nova ]] || ((!cota_consultada)); then
     cota_consultada=1; cota_atual=1
     atualizado="$(stat -c %Y "$cache" 2>/dev/null || echo 0)"
@@ -825,8 +824,18 @@ ler_cota() {
     if [[ "${2:-}" == nova || ! -s "$cache" ]] \
        || ((atualizado > agora || agora - atualizado >= ${JANGADA_DELEGAR_CACHE:-5} * 60)); then
       tmp="$(mktemp "${JANGADA_DELEGAR_CACHE_PREFIXO:-$cache}.XXXXXX")"
-      if agy_limpo -p "/usage" --output-format json --print-timeout 60s 2>/dev/null >"$tmp" \
-         && [[ -n "$(cota_do_grupo "$principal" "$tmp")" ]]; then
+      cache_valido=0
+      if agy_limpo -p "/usage" --output-format json --print-timeout 60s 2>/dev/null >"$tmp"; then
+        for candidato in "${modelos_agy[@]}"; do
+          grupo_cache=3p
+          [[ "$candidato" == gemini-* ]] && grupo_cache=gemini
+          if [[ -n "$(cota_do_grupo "$grupo_cache" "$tmp")" ]]; then
+            cache_valido=1
+            break
+          fi
+        done
+      fi
+      if ((cache_valido)); then
         mv "$tmp" "$cache"
       else
         cota_atual=0

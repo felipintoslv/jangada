@@ -88,8 +88,12 @@ Limites internos do agy usam `--foreground` nas seleções por capacidade
 para manter os filhos no grupo do limite global.
 
 Uma consulta de cota que falha não pode reutilizar o valor expirado.
-O delegador valida a fração de `gemini-5h` e recusa quando não consegue
-atualizá-la. Consumo de tokens do Claude não comprova cota restante.
+Uma resposta parcial de `/usage` não torna todos os grupos inválidos.
+Validar o cache somente pelo primeiro modelo bloqueava outro grupo com cota válida.
+O delegador aceita cache atual com algum grupo configurado válido; cada modelo
+continua exigindo a cota do próprio grupo. O indicador de disponibilidade segue essa regra.
+Cota desconhecida impede a chamada ao modelo daquele grupo.
+Consumo de tokens do Claude não comprova cota restante.
 
 Se testes de sinais passam isolados, mas falham na suíte, compare com
 `env --default-signal=INT,QUIT testes/verificar.sh`. Essa chamada reinicializa
