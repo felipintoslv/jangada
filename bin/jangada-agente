@@ -2,12 +2,13 @@
 # Escolhe um projeto, cria um worktree (opcional) e abre um agente numa sessão tmux.
 #
 # Uso: jangada-agente [opções] [-- argumentos extras para o agente]
-#   --janela          abre num terminal novo (usado pelo atalho SUPER+A)
+#   --janela          sem opções, abre Nova tarefa; com opções, abre o agente num terminal
 #   --projeto DIR     pula o seletor e usa este diretório
 #   --nome NOME       nome da tarefa; cria o worktree agente/NOME
 #   --direto          trabalha no próprio repositório, sem worktree
 #   --snapshot        cria um snapshot do sistema antes de iniciar
 #   --agente CMD      usa outro agente (padrão: JANGADA_AGENTE, hoje "claude")
+#   --perfis          lista os perfis disponíveis em JSON
 #   --perfil NOME     usa o perfil NOME (~/.config/jangada/agentes/NOME.conf ou,
 #                     sem ele, default/agentes/NOME.conf)
 #   --revisor NOME    revisor para jangada-validar (claude, agy, codex, mesmo ou oposto)
@@ -37,6 +38,19 @@ set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
+if [[ "${1:-}" == --perfis ]]; then
+  while read -r perfil; do
+    jangada_perfil "$perfil" || continue
+    case "$(basename "${PERFIL_COMANDO%% *}")" in
+      claude|codex) ;;
+      *) continue ;;
+    esac
+    jq -n --arg nome "$perfil" --arg descricao "$PERFIL_DESCRICAO" \
+      '{nome:$nome, descricao:$descricao}'
+  done < <(jangada_perfis) | jq -s .
+  exit 0
+fi
+
 janela=0; projeto=""; nome=""; nome_dado=0; direto=0; snapshot=0
 agente="$JANGADA_AGENTE"; extras=(); prompt=""; perfil=""; agente_dado=0
 revisor="${JANGADA_VALIDAR_REVISOR:-}"; revisor_dado=0
@@ -63,7 +77,12 @@ while (($#)); do
   esac
 done
 
-# Vindo de um atalho, não há terminal: reabre o próprio comando dentro de um.
+# Com --projeto, a central abre a sessão; sem tarefa, abre o formulário.
+if ((janela)) && [[ -z "$projeto$nome$perfil$prompt" ]] && \
+    ((!direto && !snapshot && !agente_dado && !revisor_dado && !isolar_dado && ${#extras[@]} == 0)); then
+  exec "$JANGADA_PATH/bin/jangada-tarefas" --nova
+fi
+
 if ((janela)); then
   args=()
   [[ -n "$projeto" ]] && args+=(--projeto "$projeto")

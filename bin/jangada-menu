@@ -20,9 +20,8 @@ fi
 
 opcao="$(printf '%s\n' \
   "Jangada Shell (Console de agentes)" \
-  "Novo agente" \
+  "Nova tarefa" \
   "Central de tarefas" \
-  "Central anterior de agentes" \
   "Restaurar agentes interrompidos" \
   "Conversa de pescador" \
   "Histórico de pesquisas (Pescador)" \
@@ -49,9 +48,8 @@ opcao="$(printf '%s\n' \
 
 case "$opcao" in
   "Jangada Shell (Console de agentes)") exec "$b/jangada-shell" --janela ;;
-  "Novo agente") exec "$b/jangada-agente" --janela ;;
+  "Nova tarefa") exec "$b/jangada-tarefas" --nova ;;
   "Central de tarefas") exec "$b/jangada-tarefas" ;;
-  "Central anterior de agentes") exec "$b/jangada-agentes" --painel-anterior ;;
   "Restaurar agentes interrompidos")
     r="$("$b/jangada-agentes" --restaurar 2>&1 | tail -n1)"
     notify-send -a jangada "Agentes" "$r" 2>/dev/null || true ;;

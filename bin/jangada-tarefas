@@ -4,19 +4,11 @@ set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 case "${1:-}" in
-  --anterior) exec "$JANGADA_PATH/bin/jangada-agentes" --painel-anterior ;;
+  --anterior) shift ;;
   --simular) shift; exec python3 "$JANGADA_PATH/default/tarefas/central.py" "$@" ;;
-  --waybar)
-    if [[ "$JANGADA_CENTRAL" == agentes ]]; then
-      exec "$JANGADA_PATH/bin/jangada-agentes" --waybar
-    fi
-    ;;
-  ""|--nova) ;;
-  *) printf 'Uso: jangada-tarefas [--nova|--waybar|--simular|--anterior]\n' >&2; exit 1 ;;
+  ""|--nova|--waybar) ;;
+  *) printf 'Uso: jangada-tarefas [--nova|--waybar|--simular]\n' >&2; exit 1 ;;
 esac
-if [[ "$JANGADA_CENTRAL" == agentes && "${1:-}" != --waybar ]]; then
-  exec "$JANGADA_PATH/bin/jangada-agentes" --painel-anterior
-fi
 args=(--real --jangada "$JANGADA_PATH" --estado "$JANGADA_ESTADO/agentes")
 if [[ "${1:-}" == --waybar ]]; then
   args+=(--waybar)

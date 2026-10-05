@@ -13,22 +13,6 @@ hl.window_rule({
   no_focus = true,
 })
 
--- Painel de agentes: sempre no workspace especial "agentes", sem roubar o foco.
-hl.window_rule({
-  name = "painel-agentes",
-  match = { class = "^org\\.jangada\\.painel$" },
-  workspace = "special:agentes silent",
-})
-
--- Seletor de agentes (SUPER+SHIFT+A): janela flutuante no centro.
-hl.window_rule({
-  name = "lista-agentes",
-  match = { class = "^org\\.jangada\\.lista$" },
-  float = true,
-  size = "1100 650",
-  center = true,
-})
-
 -- Conversa de Pescador e Histórico: janela flutuante no centro.
 hl.window_rule({
   name = "pescador",
