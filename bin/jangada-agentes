@@ -3,9 +3,9 @@
 #
 # Uso:
 #   jangada-agentes            seletor interativo (Enter abre, Ctrl+X encerra)
-#   jangada-agentes --janela   o seletor num terminal flutuante
-#   jangada-agentes --painel   mostra ou esconde o painel (workspace especial "agentes")
-#   jangada-agentes --monitor  tabela atualizada a cada 2 segundos (conteúdo do painel)
+#   jangada-agentes --janela   abre a central de tarefas
+#   jangada-agentes --painel   abre a central de tarefas
+#   jangada-agentes --monitor  tabela no terminal atualizada a cada 2 segundos
 #   jangada-agentes --waybar   saída JSON para o módulo da barra
 #   jangada-agentes --focar S  foca a janela da sessão S ou abre uma nova
 #   jangada-agentes --lista    lista simples: estado, sessão, diretório
@@ -587,7 +587,7 @@ case "${1:-}" in
       consumo="$("$JANGADA_PATH/bin/jangada-consumo" --curto 2>/dev/null || true)"
     fi
     if [[ -z "$linhas" ]]; then
-      dica=$'nenhum agente ativo\n\nSUPER+A: novo agente\nSUPER+SHIFT+A: lista de agentes\nSUPER+CTRL+A: painel de agentes'
+      dica=$'nenhum agente ativo\n\nSUPER+A: nova tarefa\nSUPER+SHIFT+A: central de tarefas\nSUPER+CTRL+A: central de tarefas'
       [[ -n "$consumo" ]] && dica+=$'\n\n'"$consumo"
       jq -cn --arg d "$dica" '{text:"󰚩 0", tooltip:$d, class:"vazio"}'
       exit 0
@@ -634,7 +634,7 @@ case "${1:-}" in
       dica+=$'\n\n... e mais '"$((total - 10))"' sessões'
     fi
     [[ -n "$consumo" ]] && dica+=$'\n\n'"$consumo"
-    dica+=$'\n\nClique: lista de agentes · Clique direito: painel'
+    dica+=$'\n\nClique: central de tarefas · Clique direito: nova tarefa'
     jq -cn --arg t "$texto" --arg d "$dica" --arg c "$classe" '{text:$t, tooltip:$d, class:$c}'
     ;;
   --focar)
@@ -662,31 +662,8 @@ case "${1:-}" in
       echo "sessões restauradas: $n"
     fi
     ;;
-  --janela|--janela-anterior)
-    if [[ "$1" == --janela && "$JANGADA_CENTRAL" == tarefas ]]; then
-      exec "$JANGADA_PATH/bin/jangada-tarefas"
-    fi
-    # Solto do processo que chamou, como no --painel. A waybar espera o fim do
-    # on-click antes de rodar o exec do módulo de novo, então um terminal em
-    # primeiro plano congelava o contador da barra onde houve o clique
-    # enquanto a lista ficasse aberta.
-    # Se a lista já está aberta, o atalho só a traz para a frente.
-    jangada_focar_classe org.jangada.lista && exit 0
-    # JANGADA_LISTA_JANELA faz a lista esperar um Enter depois do Alt+I e do
-    # Ctrl+X: sem isso a janela fecha com o fim do comando e leva junto a
-    # mensagem, inclusive a de recusa do --integrar.
-    setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.lista \
-      -e env JANGADA_LISTA_JANELA=1 "$0" >/dev/null 2>&1
-    ;;
-  --painel|--painel-anterior)
-    if [[ "$1" == --painel && "$JANGADA_CENTRAL" == tarefas ]]; then
-      exec "$JANGADA_PATH/bin/jangada-tarefas"
-    fi
-    if ! hyprctl clients -j | jq -e 'any(.class == "org.jangada.painel")' >/dev/null; then
-      setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.painel -e "$0" --monitor >/dev/null 2>&1
-      sleep 0.4
-    fi
-    hyprctl dispatch 'hl.dsp.workspace.toggle_special("agentes")' >/dev/null
+  --janela|--janela-anterior|--painel|--painel-anterior)
+    exec "$JANGADA_PATH/bin/jangada-tarefas"
     ;;
   --monitor)
     while true; do
@@ -695,7 +672,7 @@ case "${1:-}" in
       limpar_orfaos
       linhas="$(listar)"
       if [[ -z "$linhas" ]]; then
-        echo "nenhum agente ativo. SUPER+A inicia um."
+        echo "nenhum agente ativo. SUPER+A abre Nova tarefa."
       else
         while IFS="$US" read -r estado s dir atualizado _resto; do
           printf '%s  %-12s %-32s %s\n' "$(icone "$estado")" "$estado" "$s" "${atualizado:11:8}"
@@ -763,10 +740,7 @@ case "${1:-}" in
       alt-l) fim=("$0" --limpar-concluidos) ;;
     esac
     if ((${#fim[@]})); then
-      [[ -n "${JANGADA_LISTA_JANELA:-}" ]] || exec "${fim[@]}"
-      rc=0; "${fim[@]}" || rc=$?
-      read -r -p "Enter para fechar " _ || true
-      exit "$rc"
+      exec "${fim[@]}"
     fi
     [[ -n "$s" ]] || exit 0
     focar "$s"

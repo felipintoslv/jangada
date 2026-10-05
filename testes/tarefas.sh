@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Testa migração, reversão e interrupções com estado e comandos temporários.
+# Testa migração, central única e interrupções com estado e comandos temporários.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 repo_jangada="$PWD"
@@ -71,25 +71,50 @@ bin/jangada-agentes --lista-atualizada >"$tmp/lista"
 jq -e '.estado == "interrompido"' "$XDG_STATE_HOME/jangada/agentes/interrompida.json" >/dev/null
 grep -q $'^concluido\tturno\t' "$tmp/lista"
 
-mkdir -p "$tmp/jangada/bin"
+mkdir -p "$tmp/jangada/bin" "$tmp/jangada/default/tarefas"
 cp bin/jangada-tarefas bin/jangada-config "$tmp/jangada/bin/"
+cat >"$tmp/jangada/default/tarefas/central.py" <<'PYTHON'
+import sys
+print('\n'.join(sys.argv[1:]))
+PYTHON
 cat >"$tmp/jangada/bin/jangada-agentes" <<'SH'
 #!/bin/sh
-printf '%s\n' "$@"
+exit 99
 SH
 chmod +x "$tmp/jangada/bin/jangada-agentes"
-JANGADA_PATH="$tmp/jangada" bin/jangada-tarefas --anterior >"$tmp/saida"
-grep -qx -- '--painel-anterior' "$tmp/saida"
 echo JANGADA_CENTRAL=agentes >"$XDG_CONFIG_HOME/jangada/jangada.conf"
-JANGADA_PATH="$tmp/jangada" bin/jangada-tarefas --waybar >"$tmp/saida"
-grep -qx -- '--waybar' "$tmp/saida"
-JANGADA_PATH="$tmp/jangada" bin/jangada-tarefas >"$tmp/saida"
-grep -qx -- '--painel-anterior' "$tmp/saida"
-echo 'migração, reversão e leitura das interrupções passaram'
+for opcao in '' --anterior --nova --waybar; do
+  JANGADA_PATH="$tmp/jangada" bin/jangada-tarefas ${opcao:+"$opcao"} >"$tmp/saida"
+  grep -qx -- '--real' "$tmp/saida"
+  if [[ "$opcao" == --nova || "$opcao" == --waybar ]]; then
+    grep -qx -- "$opcao" "$tmp/saida"
+  else
+    grep -qx -- '--mostrar' "$tmp/saida"
+  fi
+done
+cat >"$tmp/jangada/bin/jangada-tarefas" <<'SH'
+#!/bin/sh
+printf 'central\n%s\n' "$*"
+SH
+chmod +x "$tmp/jangada/bin/jangada-tarefas"
+for opcao in --janela --janela-anterior --painel --painel-anterior; do
+  JANGADA_PATH="$tmp/jangada" bin/jangada-agentes "$opcao" >"$tmp/saida"
+  grep -qx central "$tmp/saida"
+done
+JANGADA_PATH="$tmp/jangada" bin/jangada-agente --janela >"$tmp/saida"
+grep -qx central "$tmp/saida"
+grep -qx -- '--nova' "$tmp/saida"
+cat >"$tmp/bin/fuzzel" <<'SH'
+#!/bin/sh
+cat >"$MENU_TESTE"
+printf 'Nova tarefa\n'
+SH
+chmod +x "$tmp/bin/fuzzel"
+MENU_TESTE="$tmp/menu" JANGADA_PATH="$tmp/jangada" bin/jangada-menu >"$tmp/saida"
+grep -qx -- '--nova' "$tmp/saida"
+! grep -q 'Central anterior' "$tmp/menu"
+echo 'migração, central única e leitura das interrupções passaram'
 
-echo JANGADA_CENTRAL=agente >"$XDG_CONFIG_HOME/jangada/jangada.conf"
-bash -c 'source "$JANGADA_PATH/bin/jangada-config"; [[ "$JANGADA_CENTRAL" == tarefas ]]' 2>"$tmp/aviso"
-grep -q 'JANGADA_CENTRAL inválido' "$tmp/aviso"
 python3 - "$repo_jangada/default/tarefas/central.py" <<'PY'
 import contextlib
 import io

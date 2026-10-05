@@ -19,7 +19,7 @@ j.atalho(SUPER .. " + SLASH", "Mostrar todos os atalhos", j.cmd("jangada-atalhos
 j.atalho(SUPER .. " + CTRL + L", "Bloquear a tela", j.cmd("jangada-bloquear"))
 
 -- Agentes
-j.atalho(SUPER .. " + A", "Novo agente", j.cmd("jangada-agente", "--janela"))
+j.atalho(SUPER .. " + A", "Nova tarefa", j.cmd("jangada-tarefas", "--nova"))
 j.atalho(SUPER .. " + SHIFT + A", "Abrir central", j.cmd("jangada-tarefas"))
 j.atalho(SUPER .. " + CTRL + A", "Mostrar central", j.cmd("jangada-tarefas"))
 j.atalho(SUPER .. " + N", "Próximo agente que espera", j.cmd("jangada-agentes", "--proximo"))

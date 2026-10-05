@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout,
 from dados import (CORES, LIMITE, NOME, ORDEM, ROTULOS, Sessao,
                    estado_exibido, idade, ler_lista, simuladas)
 
-AGENTES = ("claude", "codex", "agy")
+AGENTES = ("claude", "codex")
 
 GRUPOS = {'aguardando': 'Precisa de você', 'interrompido': 'Interrompidas',
           'trabalhando': 'Em andamento', 'concluido': 'Turno encerrado'}

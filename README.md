@@ -123,7 +123,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-migrar` | aplica as migrações pendentes (o `jangada-update` já chama) |
 | `jangada-snapshot "descrição"` | cria um snapshot manual do sistema; com `--agente`, o do `jangada-agente --snapshot`, fora da limpeza do snapper e limitado aos `JANGADA_SNAPSHOTS_AGENTE` mais recentes |
 | `jangada-tema [imagem]` | gera as cores a partir de um papel de parede e recarrega a interface |
-| `jangada-tarefas` | central gráfica de tarefas (`--nova`, `--waybar`, `--simular`, `--anterior`) |
+| `jangada-tarefas` | central gráfica de tarefas (`--nova`, `--waybar`, `--simular`) |
 | `jangada-agente` | escolhe o agente (Claude ou Codex; o agy fica só de suporte), o projeto e cria um worktree, e abre o agente numa sessão tmux, isolado pelo `jangada-isolar` (`--prompt`, `--prompt-arquivo`, `--perfil`, `--sem-isolar`) |
 | `jangada-isolar` | roda um comando no bubblewrap, com o sistema somente leitura e a pasta atual gravável; `--mostrar` imprime a chamada ao `bwrap` |
 | `jangada-delegar PAPEL "pedido"` | delega ao Ollama (`--destino local --arquivos ARQUIVOS`, só leitor e redator) ou ao agy (`--destino agy`, modelos de `JANGADA_DELEGAR_MODELOS`); `--capacidade` permite seleção documental para leitor, com autorização remota explícita e referências verificadas; `--json` explica a decisão (ver [delegação](docs/subagentes-e-delegacao.md)) |
@@ -667,18 +667,18 @@ Para revisar o visual no worktree, sem agentes ou configuração ativa:
 JANGADA_PATH="$PWD" bin/jangada-tarefas --simular
 ```
 
-### Voltar à central anterior
+### Central única
 
-`jangada-tarefas --anterior` abre o painel anterior uma vez.
-`jangada-agentes --janela-anterior` abre o seletor anterior.
-Para voltar também pelos atalhos e pelo módulo da barra, depois da instalação,
-defina `JANGADA_CENTRAL=agentes` em `~/.config/jangada/jangada.conf` e reinicie
-a barra com `jangada-barra`. Feche a janela nova que já estiver aberta.
-`JANGADA_CENTRAL=tarefas` restaura a nova central.
+`SUPER+A` e **Nova tarefa** no menu abrem o formulário da central de tarefas.
+Os atalhos de acompanhamento e os cliques da barra usam essa mesma central.
+O formulário oferece Claude e Codex como agentes principais; o agy atende
+as delegações e a revisão.
 
-A configuração própria da Waybar também pode ser restaurada da cópia
-`config.jsonc.jangada-AAAAMMDD-HHMMSS.bak` criada pela migração.
-A reversão não apaga sessões, conversas ou worktrees.
+Os comandos antigos `jangada-agentes --janela`, `--painel`,
+`--janela-anterior`, `--painel-anterior` e `jangada-tarefas --anterior`
+encaminham para a central de tarefas. `JANGADA_CENTRAL` deixou de selecionar
+outra interface. A criação de sessões pelo terminal continua disponível
+com `jangada-agente`.
 
 ## Painel de indicadores
 

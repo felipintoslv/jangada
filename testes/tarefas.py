@@ -606,6 +606,7 @@ class Interface(unittest.TestCase):
     def test_criar_real_argumentos_e_pedido_preservados(self):
         self.janela.nova_tarefa()
         form = self.janela.formulario
+        self.assertEqual([form.agente.itemText(i) for i in range(form.agente.count())], ['claude', 'codex'])
         form.projeto.setText(str(self.raiz))
         form.agente.setCurrentText('codex')
         pedido = "Confira 'aspas', $(comando) e `texto`\nOutra linha: çã"

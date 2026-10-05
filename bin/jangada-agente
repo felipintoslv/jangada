@@ -2,7 +2,7 @@
 # Escolhe um projeto, cria um worktree (opcional) e abre um agente numa sessão tmux.
 #
 # Uso: jangada-agente [opções] [-- argumentos extras para o agente]
-#   --janela          abre num terminal novo (usado pelo atalho SUPER+A)
+#   --janela          sem opções, abre Nova tarefa; com opções, abre o agente num terminal
 #   --projeto DIR     pula o seletor e usa este diretório
 #   --nome NOME       nome da tarefa; cria o worktree agente/NOME
 #   --direto          trabalha no próprio repositório, sem worktree
@@ -63,7 +63,11 @@ while (($#)); do
   esac
 done
 
-# Vindo de um atalho, não há terminal: reabre o próprio comando dentro de um.
+if ((janela)) && [[ -z "$projeto$nome$perfil$prompt" ]] && \
+    ((!direto && !snapshot && !agente_dado && !revisor_dado && !isolar_dado && ${#extras[@]} == 0)); then
+  exec "$JANGADA_PATH/bin/jangada-tarefas" --nova
+fi
+
 if ((janela)); then
   args=()
   [[ -n "$projeto" ]] && args+=(--projeto "$projeto")
