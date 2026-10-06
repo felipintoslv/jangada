@@ -197,6 +197,37 @@ marca() {
       reviewer: "agy", author: "claude", independent: true}' | jq "${3:-.}" >"$2/validacao-$1.aprovado"
 }
 
+# Confirmação gráfica vincula os dois commits e exige aprovação independente.
+preparar gui
+b_gui="$(git -C "$proj" rev-parse main)"
+c_gui="$(git -C "$proj" rev-parse agente/gui)"
+integrar_teste gui '' --confirmacao "$b_gui" "$c_gui"
+conferir "GUI: sem marca recusa" test "$rc" -ne 0
+conferir "GUI: sem marca mantém worktree" test -d "$wts/proj/gui"
+marca gui "$revisoes" '.independent = false'
+integrar_teste gui '' --confirmacao "$b_gui" "$c_gui"
+conferir "GUI: autorrevisão recusa" test "$rc" -ne 0
+marca gui "$revisoes"
+integrar_teste gui '' --confirmacao "$b_gui" "$b_gui"
+conferir "GUI: candidato diferente recusa" test "$rc" -ne 0
+integrar_teste gui '' --confirmacao "$c_gui" "$c_gui"
+conferir "GUI: base diferente recusa" test "$rc" -ne 0
+# A aprovação é retirada depois da prévia, antes da reconferência sob trava.
+mkdir -p "$tmp/hash-gui"
+cat >"$tmp/hash-gui/sha256sum" <<EOF
+#!/usr/bin/env bash
+rm -f "$revisoes/validacao-gui.aprovado"
+exec $(command -v sha256sum) "\$@"
+EOF
+chmod +x "$tmp/hash-gui/sha256sum"
+PATH="$tmp/hash-gui:$PATH" integrar_teste gui '' --confirmacao "$b_gui" "$c_gui"
+conferir "GUI: marca retirada antes da trava recusa" test "$rc" -ne 0
+conferir "GUI: marca retirada não mescla" test ! -e "$proj/gui.txt"
+marca gui "$revisoes"
+integrar_teste gui '' --confirmacao "$b_gui" "$c_gui"
+conferir "GUI: confirmação exata integra sem entrada padrão" test "$rc" -eq 0
+conferir "GUI: conteúdo integrado" test -e "$proj/gui.txt"
+
 # Aprovação de fora para o commit do ramo: integra sem chamar o revisor.
 preparar i1
 marca i1 "$revisoes"

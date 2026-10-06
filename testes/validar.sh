@@ -108,6 +108,8 @@ conferir "caso 2: APROVADO sai com 0" [ "$rc" = 0 ]
 conferir "caso 2: pedido traz a resposta do agente" grep -q MARCA-RESPOSTA "$tmp/falso/agy.pedido"
 conferir "caso 2: pedido traz o parecer anterior" grep -q "problema" "$tmp/falso/agy.pedido"
 
+conferir "caso 2: marca registra verificação local" jq -e '.local_verified == true' "$estado/validacao-s.aprovado"
+
 # Caso 3: sessão do agy, o revisor é o Claude; status com Markdown.
 sessao_de agy
 validar '## **STATUS: APROVADO**'; rc=$?
@@ -362,6 +364,7 @@ conferir "caso 11a: estado gravado como REVISAR (local)" [ "$(jq -r .validacao "
 # 11b: --pular-local ignora a checagem e chama o revisor
 validar 'STATUS: APROVADO' --pular-local; rc=$?
 conferir "caso 11b: --pular-local chama o revisor mesmo com falha local" [ "$rc" = 0 ]
+conferir "caso 11b: marca registra teste local pulado" jq -e '.local_verified == false' "$estado/validacao-s.aprovado"
 conferir "caso 11b: o revisor foi chamado com --pular-local" test -s "$tmp/falso/agy.pedido"
 
 git -C "$tmp/projeto" rm -qf conflito.txt

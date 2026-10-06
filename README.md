@@ -616,13 +616,19 @@ Os hooks não registram falha da tarefa nem integração. Por isso, a Central
 não deriva os estados Falhou e Integrada; encerramentos removem a sessão da lista.
 Perguntas e permissões são atendidas pelo botão **Abrir terminal**.
 Sessões interrompidas podem ser retomadas pelo mesmo botão.
-Na tarefa selecionada, **Integrar e encerrar** (`Alt+I`) chama
-`jangada-agente-fim --integrar`; **Encerrar sem integrar** (`Ctrl+X`) chama
-`jangada-agente-fim` sem integração. As ações abrem um terminal com as
-conferências existentes, revisão da integração e confirmação de descarte
-quando há alterações sem commit. Confira o resultado nesse terminal;
-a lista acompanha automaticamente o encerramento. Fechar a central mantém
-esse terminal aberto. Enquanto a ação está em andamento, outra ação de
+Na tarefa selecionada, **Conferir e integrar** (`Alt+I`) consulta
+`jangada-agentes --integracao-json` e mostra arquivos, linhas, revisão e SHA.
+A confirmação gráfica vincula base e candidato; `jangada-agente-fim`
+exige aprovação independente e reconfere a marca sob a trava.
+A Central não aprova entregas; a indicação local informa o registro disponível,
+sem certificar uma passagem quando falta dado.
+**Integrar pelo terminal** preserva o diagnóstico e as confirmações originais.
+**Encerrar sem integrar** (`Ctrl+X`) chama
+`jangada-agente-fim` sem integração. As ações pelo terminal mantêm as conferências, a revisão e a confirmação
+de descarte quando há alterações sem commit. A integração gráfica mostra
+seu resultado na aba Entrega e impede fechar a Central enquanto está em curso.
+A lista acompanha automaticamente o encerramento. Terminais abertos pela
+Central permanecem abertos quando ela fecha. Enquanto a ação está em andamento, outra ação de
 encerramento para a mesma sessão fica bloqueada, inclusive ao reabrir a central.
 Se o terminal sair antes de iniciar a ação, o bloqueio é liberado após dez segundos.
 Cada tentativa usa uma pasta própria; um terminal atrasado não inicia a tentativa anterior após a liberação.

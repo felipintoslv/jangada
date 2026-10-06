@@ -71,6 +71,23 @@ bin/jangada-agentes --lista-atualizada >"$tmp/lista"
 jq -e '.estado == "interrompido"' "$XDG_STATE_HOME/jangada/agentes/interrompida.json" >/dev/null
 grep -q $'^concluido\tturno\t' "$tmp/lista"
 
+# Prévia gráfica sai dos metadados protegidos e informa os commits atuais.
+mkdir -p "$XDG_STATE_HOME/jangada/revisoes" "$tmp/projeto"
+git -C "$tmp/projeto" init -q -b main
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm inicio --allow-empty
+git -C "$tmp/projeto" checkout -qb agente/previa
+echo proposta >"$tmp/projeto/proposta.txt"
+git -C "$tmp/projeto" add proposta.txt
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm proposta
+jq -n --arg raiz "$tmp/projeto" '{raiz:$raiz, ramo:"agente/previa", base:"main"}' \
+  >"$XDG_STATE_HOME/jangada/revisoes/previa.json"
+bin/jangada-agentes --integracao-json previa >"$tmp/previa.json"
+jq -e '.candidate_sha != .base_sha and (.arquivos | contains("proposta.txt")) and .marca == {}' "$tmp/previa.json" >/dev/null
+# Estado gravável não muda a origem da prévia.
+jq -n '{raiz:"/inexistente", ramo:"agente/outro"}' >"$XDG_STATE_HOME/jangada/agentes/previa.json"
+bin/jangada-agentes --integracao-json previa >"$tmp/previa2.json"
+cmp "$tmp/previa.json" "$tmp/previa2.json"
+
 mkdir -p "$tmp/jangada/bin" "$tmp/jangada/default/tarefas"
 cp bin/jangada-tarefas bin/jangada-config "$tmp/jangada/bin/"
 cat >"$tmp/jangada/default/tarefas/central.py" <<'PYTHON'

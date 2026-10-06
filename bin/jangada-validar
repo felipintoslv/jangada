@@ -876,6 +876,7 @@ verificar_local() {
   return 0
 }
 
+local_verificado=false
 if ((!pular_local)) && [[ "${JANGADA_VALIDAR_TESTANDO:-0}" != "1" ]]; then
   erros_locais=""
   if ! erros_locais="$(verificar_local)"; then
@@ -900,6 +901,7 @@ if ((!pular_local)) && [[ "${JANGADA_VALIDAR_TESTANDO:-0}" != "1" ]]; then
     "$JANGADA_PATH/bin/jangada-gancho" pos-validar "$rotulo" "REVISAR" || true
     exit 3
   fi
+  local_verificado=true
 fi
 
 echo "jangada-validar: rodada $rodada de $rodadas_max, $nome_revisor${modelo:+ ($modelo)} revisando $(wc -l <<<"$arquivos") arquivo(s)..." >&2
@@ -1066,10 +1068,10 @@ if [[ "$status" == APROVADO ]]; then
   jq -n --arg cabeca "$cabeca" --argjson num "$num" --arg limpo "$limpo" --arg base "$base" \
     --arg base_sha "$base_sha" --arg ponto "$ponto" --arg candidato "$candidato" \
     --arg arvore "$arvore_candidato" --arg revisor "$revisor" --arg modelo "$modelo" --arg autor "$autor" \
-    --argjson independente "$((1 - auto_revisao))" \
+    --argjson local_verificado "$local_verificado" --argjson independente "$((1 - auto_revisao))" \
     '{cabeca: $cabeca, num: $num, limpo: ($limpo == "limpo"), base: $base, base_sha: $base_sha,
       ponto: $ponto, candidate_sha: $candidato, candidate_tree: $arvore, reviewer: $revisor,
-      model: $modelo, author: $autor, independent: ($independente == 1)}' >"$arq_aprovado.tmp" \
+      model: $modelo, author: $autor, local_verified: $local_verificado, independent: ($independente == 1)}' >"$arq_aprovado.tmp" \
     && mv -f "$arq_aprovado.tmp" "$arq_aprovado"
   exit 0
 fi

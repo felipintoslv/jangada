@@ -76,7 +76,7 @@ class Interface(unittest.TestCase):
             central.show()
             APP.processEvents()
             self.assertIn('Central de tarefas', central.windowTitle())
-            self.assertEqual([central.abas.tabText(i) for i in range(central.abas.count())], ['Acompanhamento', 'Saída do agente', 'Detalhes'])
+            self.assertEqual([central.abas.tabText(i) for i in range(central.abas.count())], ['Acompanhamento', 'Saída do agente', 'Detalhes', 'Entrega'])
             self.assertFalse(hasattr(central, 'resposta'))
             self.assertIn('1 precisa da sua resposta', central.cartoes.text())
             self.assertIn('<b>Texto puro</b>', central.ultima_atividade.text())
@@ -157,12 +157,54 @@ class Interface(unittest.TestCase):
         self.assertFalse(self.janela.abrir.isEnabled())
         self.assertIn('saiu da lista', self.janela.status.text())
 
+    def test_confirmacao_grafica_mostra_sha_e_recusa_padrao(self):
+        dados = dict(base_sha='a' * 40, candidate_sha='b' * 40, arquivos='arquivo.py | +2 -1',
+                     marca={'reviewer': 'claude', 'independent': True}, parecer='STATUS: APROVADO',
+                     validacao_local='consulte o parecer')
+        with patch.object(janela.QMessageBox, 'exec', return_value=janela.QMessageBox.StandardButton.No):
+            self.assertFalse(self.janela.confirmar_entrega(dados))
+        texto = self.janela.entrega.toPlainText()
+        self.assertIn('a' * 40, texto)
+        self.assertIn('b' * 40, texto)
+        self.assertIn('arquivo.py', texto)
+        self.assertIn('claude', texto)
+        with patch.object(janela.QMessageBox, 'exec', return_value=janela.QMessageBox.StandardButton.Yes):
+            self.assertTrue(self.janela.confirmar_entrega(dados))
+
+    def test_integracao_grafica_envia_so_a_entrega_confirmada(self):
+        dados = dict(base_sha='a' * 40, candidate_sha='b' * 40, arquivos='teste.py | +2 -1',
+                     marca={}, parecer='Sem revisão', validacao_local='Não certificada')
+        self.comando.write_text(self.comando.read_text().replace(
+            "elif sys.argv[1] == '--previa':",
+            "elif sys.argv[1] == '--integracao-json':\n    print(" + repr(json.dumps(dados)) + ")\nelif sys.argv[1] == '--previa':"))
+        fim = self.bin / 'jangada-agente-fim'
+        fim.write_text('#!/usr/bin/env python3\nimport json, pathlib, sys, time\n'
+                       'pathlib.Path(__file__).parent.parent.joinpath("gui.json").write_text(json.dumps(sys.argv[1:]))\n'
+                       'time.sleep(.3)\n')
+        fim.chmod(0o700)
+        with patch.object(janela.QMessageBox, 'exec', return_value=janela.QMessageBox.StandardButton.No):
+            self.janela.integrar_interface()
+            aguardar(lambda: self.janela.integracao_etapa is None)
+        self.assertFalse((self.raiz / 'gui.json').exists())
+        with patch.object(janela.QMessageBox, 'exec', return_value=janela.QMessageBox.StandardButton.Yes):
+            self.janela.integrar_interface()
+            aguardar(lambda: (self.raiz / 'gui.json').exists())
+            self.janela.close()
+            self.assertFalse(self.janela.fechando)
+            with patch.object(QProcess, 'startDetached') as terminal:
+                self.janela.finalizar(True)
+                terminal.assert_not_called()
+            aguardar(lambda: self.janela.integracao_etapa is None)
+        self.assertEqual(json.loads((self.raiz / 'gui.json').read_text()),
+                         ['--integrar', '--confirmacao', 'a' * 40, 'b' * 40, 'projeto--um'])
+        self.assertFalse(self.janela.pasta_finalizacao('projeto--um').exists())
+
     def test_botoes_acionam_a_tarefa_selecionada(self):
         self.assertEqual(self.janela.integrar.shortcut(), QKeySequence("Alt+I"))
         self.assertEqual(self.janela.encerrar.shortcut(), QKeySequence("Ctrl+X"))
         self.janela.selecionar_nome('projeto--dois')
         with patch.object(self.janela, 'solicitar_previa'), patch.object(QProcess, 'startDetached', return_value=(True, 123)), patch.object(self.janela, 'preparar') as preparar:
-            self.janela.integrar.click()
+            self.janela.integrar_terminal.click()
             aguardar(lambda: preparar.call_count == 1)
             argumentos = preparar.call_args.args[1]
             self.assertEqual(preparar.call_args.args[2], 'jangada-terminal')
@@ -443,6 +485,20 @@ class Interface(unittest.TestCase):
         self.assertEqual(self.janela.selecionada(), 'projeto--dois')
         self.assertEqual(self.janela.linha_tempo.toPlainText(), historico)
         self.assertTrue(self.janela.abrir.isEnabled())
+
+    def test_opcoes_avancadas_preservam_controles_explicitos(self):
+        self.janela.nova_tarefa()
+        form = self.janela.formulario
+        aguardar(lambda: form.perfis.state() == QProcess.ProcessState.NotRunning)
+        form.projeto.setText(str(self.raiz))
+        form.pedido.setPlainText('Aplicar controles explícitos')
+        form.revisor.setCurrentText('agy')
+        form.seguranca.setCurrentIndex(1)
+        form.delegacao.setCurrentText('local')
+        with patch.object(QProcess, 'startDetached', return_value=(True, 123)), patch.object(self.janela, 'preparar') as preparar:
+            form.criar()
+        args = preparar.call_args.args[1]
+        self.assertEqual(args[-5:], ['--revisor', 'agy', '--sem-isolar', '--delegacao', 'local'])
 
     def test_modo_recomendado_e_opcoes_recolhidas(self):
         self.janela.nova_tarefa()
