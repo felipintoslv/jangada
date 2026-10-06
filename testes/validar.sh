@@ -849,6 +849,8 @@ head -c 3000 /dev/zero | tr '\0' 'a' | fold -w 60 >"$tmp/projeto/aaa-grande.txt"
 echo "mudança importante" >"$tmp/projeto/zzz-depois.txt"
 JANGADA_VALIDAR_DIFF_MAX=1000 validar 'STATUS: APROVADO'; rc=$?
 conferir "caso 19: corte sem cobertura no parecer não aprova" [ "$rc" = 3 ]
+conferir "caso 19: parecer registra a recusa por cobertura" \
+  bash -c '[ "$(head -n1 "$1")" = "STATUS: REVISAR" ] && grep -q "cobertura do diff" "$1"' _ "$estado/validacao-s-r1.md"
 conferir "caso 19: corte sem cobertura não grava marca" test ! -e "$estado/validacao-s.aprovado"
 conferir "caso 19: o pedido lista o arquivo depois do corte" \
   bash -c 'sed -n "/diff cortado/,\$p" "$1" | grep -qF "zzz-depois.txt"' _ "$tmp/falso/agy.pedido"

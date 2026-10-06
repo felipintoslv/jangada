@@ -1026,7 +1026,6 @@ if ! revisar; then
   exit 1
 fi
 mv "$saida.tmp" "$saida"
-cat "$saida"
 
 status="REVISAR"
 # Só a primeira linha com texto vale: um apontamento pode citar do diff uma
@@ -1044,10 +1043,16 @@ if [[ "$status" == APROVADO && -n "$fora_do_pedido" ]]; then
     if ! grep -qxF "CONFERIDO: $caminho" "$saida"; then
       echo "jangada-validar: parecer não declara a conferência de $caminho; conta como REVISAR" >&2
       status=REVISAR
+      {
+        printf 'STATUS: REVISAR\n\n1. [cobertura do diff]: parecer não declara a conferência de %s.\n\nParecer original:\n' "$caminho"
+        cat "$saida"
+      } >"$saida.cobertura"
+      mv "$saida.cobertura" "$saida"
       break
     fi
   done <<<"$fora_do_pedido"
 fi
+cat "$saida"
 # O mesmo modelo que escreveu tende a concordar consigo: a aprovação dele fica
 # registrada à parte e não vale como revisão independente no --integrar.
 veredito="$status"
