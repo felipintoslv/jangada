@@ -459,6 +459,10 @@ atualize a cópia instalada com `jangada-update`.
   repositório principal, o `jangada-worktree-preparar` não confia no
   worktree, e o agy abre com a pergunta "Do you trust the contents of this
   project?", que o usuário responde na janela.
+  A pasta `~/.gemini/antigravity-cli` é gravável pelo agente isolado, e o
+  fim da sessão regrava o `settings.json` de fora do isolamento: se o arquivo
+  virou link simbólico, o jangada não mexe nele, e a troca é por rename
+  (`jangada_gravar_atomico`), que não segue link.
 - Para testar hooks sem tocar no estado real, mude `XDG_STATE_HOME`; o
   `jangada-config` recalcula `JANGADA_ESTADO` a partir dele.
 - Clones de referência em subpastas (como `referencia/`): se contiverem
