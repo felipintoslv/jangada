@@ -337,6 +337,34 @@ conferir "objeto forjado: explica" grep -q "não conferem com o espelho" "$tmp/s
 conferir "objeto forjado: nada mesclado" test ! -e "$proj/i8.txt"
 rm -f "$objeto"
 
+# Objeto trocado entre a conferência com o espelho e o merge: um git falso
+# forja o blob na hora do merge. A mescla refeita no espelho não bate com o
+# que foi escrito, e a base volta para onde estava.
+preparar i9
+FALSO_RESPOSTA='STATUS: APROVADO' integrar_teste i9 n
+blob="$(git -C "$proj" rev-parse agente/i9:i9.txt)"
+objeto="$proj/.git/objects/${blob:0:2}/${blob:2}"
+git_real="$(command -v git)"
+mkdir -p "$tmp/git-forja"
+cat >"$tmp/git-forja/git" <<FIM
+#!/usr/bin/env bash
+if [[ " \$* " == *" merge --no-ff "* ]]; then
+  chmod u+w "$objeto"
+  python3 -c 'import sys, zlib
+d = b"forjado\n"
+sys.stdout.buffer.write(zlib.compress(b"blob %d\0" % len(d) + d))' >"$objeto"
+fi
+exec "$git_real" "\$@"
+FIM
+chmod +x "$tmp/git-forja/git"
+base_antes="$(git -C "$proj" rev-parse main)"
+PATH="$tmp/git-forja:$PATH" integrar_teste i9 s
+conferir "objeto forjado durante o merge: recusa ($rc)" test "$rc" -ne 0
+conferir "objeto forjado durante o merge: explica" grep -q "não confere com a mescla refeita no espelho" "$tmp/saida"
+conferir "objeto forjado durante o merge: a base volta e nada fica mesclado" \
+  bash -c '[ "$(git -C "$1" rev-parse main)" = "$2" ] && [ ! -e "$1/i9.txt" ]' _ "$proj" "$base_antes"
+rm -f "$objeto"
+
 # Dentro do isolamento não há revisão que valha: nem roda o revisor.
 preparar i4
 JANGADA_ISOLADO=1 integrar_teste i4 n

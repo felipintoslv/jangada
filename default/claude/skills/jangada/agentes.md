@@ -390,6 +390,13 @@ porta de entrada. O que se aprendeu com ele vale para o revisor agy:
   não precisa de `fetch.fsckObjects`. Por isso o `jangada-validar` e o
   `--integrar` buscam a entrega num espelho em `revisoes/espelhos/` e comparam
   o `cat-file --batch` dos dois lados antes do merge.
+  O merge ainda lê os objetos depois dessa comparação, então o `--integrar`
+  refaz a mescla no espelho (`git merge-tree --write-tree`), exige a mesma
+  árvore e relê os arquivos escritos (`update-index --really-refresh` e
+  `diff-index`); diferença desfaz o merge. Não serve `git diff --quiet HEAD`:
+  ele compara o arquivo com o conteúdo do objeto forjado e não vê diferença.
+  O que isso não cobre: o agente segue gravando em `.git/objects` depois da
+  integração, e um objeto trocado mais tarde só aparece no `git fsck`.
 - Uma marca `.aprovado` que não vale para o merge (base andou, árvore
   trocada, formato antigo) tem de sair antes de revisar de novo: com ela, o
   `jangada-validar` parte do commit aprovado e responde "nada a revisar".

@@ -307,6 +307,25 @@ conferir "caso 16b: settings.json trocado por link não é seguido" \
   bash -c '[ -L "$1" ] && [ "$(cat "$2")" = "{\"alvo\": 1}" ]' _ "$conf_agy" "$tmp/alvo.json"
 rm -f "$conf_agy"
 mv "$conf_agy.guardado" "$conf_agy"
+# O link aparece depois da conferência e o rename falha: nada é regravado no
+# lugar, e o temporário nunca fica na pasta do settings.json.
+mkdir -p "$tmp/mv-falso"
+cat >"$tmp/mv-falso/mv" <<FIM
+#!/bin/sh
+printf '%s\\n' "\$*" >"$tmp/mv.args"
+rm -f "$conf_agy"
+ln -s "$tmp/alvo.json" "$conf_agy"
+exit 1
+FIM
+chmod +x "$tmp/mv-falso/mv"
+cp "$conf_agy" "$conf_agy.guardado"
+PATH="$tmp/mv-falso:$PATH" confianca adicionar "$tmp/projeto"
+conferir "caso 16c: rename falho com link no lugar não grava no alvo" \
+  bash -c '[ "$(cat "$1")" = "{\"alvo\": 1}" ]' _ "$tmp/alvo.json"
+conferir "caso 16c: o temporário fica no estado, fora da pasta do settings.json" \
+  bash -c 'read -r _ origem _ <"$1"; [[ "$origem" == "$2"/* ]]' _ "$tmp/mv.args" "$tmp/estado"
+rm -f "$conf_agy"
+mv "$conf_agy.guardado" "$conf_agy"
 
 # O worktree só herda a confiança do repositório principal: com a raiz fora
 # do trustedWorkspaces, o jangada-worktree-preparar não confia no worktree.
