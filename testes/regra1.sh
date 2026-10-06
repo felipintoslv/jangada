@@ -38,8 +38,10 @@ cat >"$tmp/leituras" <<'FIM'
 ~/.cache/noctalia
 ~/.cache/paru
 ~/.cache/yay
+~/.claude.json
 ~/.claude/projects
 ~/.codex
+~/.config/claude
 ~/.config/hypr
 ~/.config/niri
 ~/.config/noctalia
