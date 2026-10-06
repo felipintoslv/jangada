@@ -354,10 +354,11 @@ if [[ " \$* " == *" merge --no-ff "* ]]; then
 d = b"forjado\n"
 sys.stdout.buffer.write(zlib.compress(b"blob %d\0" % len(d) + d))' >"$objeto"
   "$git_real" "\$@" || exit \$?
-  indice="\$("$git_real" -C "$proj" rev-parse --git-path index)"
+  indice="\$("$git_real" -C "$proj" rev-parse --path-format=absolute --git-path index)"
   python3 -c 'import os, sys, time; t = time.time() + 10; os.utime(sys.argv[1], (t, t))' "\$indice"
-  "$git_real" -C "$proj" update-index --really-refresh &&
-    "$git_real" -C "$proj" diff-index --quiet HEAD -- && touch "$tmp/indice-enganado"
+  "$git_real" -C "$proj" update-index --really-refresh
+  python3 -c 'import os, sys, time; t = time.time() + 10; os.utime(sys.argv[1], (t, t))' "\$indice"
+  "$git_real" -C "$proj" diff-index --quiet HEAD -- && touch "$tmp/indice-enganado"
   exit 0
 fi
 exec "$git_real" "\$@"
@@ -371,6 +372,45 @@ conferir "objeto forjado durante o merge: explica" grep -q "não confere com a m
 conferir "objeto forjado durante o merge: a base volta e nada fica mesclado" \
   bash -c '[ "$(git -C "$1" rev-parse main)" = "$2" ] && [ ! -e "$1/i9.txt" ]' _ "$proj" "$base_antes"
 rm -f "$objeto"
+
+# Falha ao listar os arquivos e troca de tipo ou permissão depois do merge.
+for caso in diff-tree link executavel sem-execucao; do
+  preparar "i-$caso"
+  if [[ "$caso" == sem-execucao ]]; then
+    chmod +x "$wts/proj/i-$caso/i-$caso.txt"
+    git -C "$wts/proj/i-$caso" add .
+    git -C "$wts/proj/i-$caso" commit --quiet -m executavel
+  fi
+  marca "i-$caso" "$revisoes"
+  mkdir -p "$tmp/git-conferencia"
+  cat >"$tmp/git-conferencia/git" <<FIM
+#!/usr/bin/env bash
+if [[ "$caso" == diff-tree && " \$* " == *" diff-tree "* ]]; then
+  exit 1
+fi
+if [[ " \$* " == *" merge --no-ff "* ]]; then
+  "$git_real" "\$@" || exit \$?
+  case "$caso" in
+    link)
+      mv "$proj/i-$caso.txt" "$tmp/alvo-link"
+      ln -s "$tmp/alvo-link" "$proj/i-$caso.txt"
+      ;;
+    executavel) chmod +x "$proj/i-$caso.txt" ;;
+    sem-execucao) chmod -x "$proj/i-$caso.txt" ;;
+  esac
+  exit 0
+fi
+exec "$git_real" "\$@"
+FIM
+  chmod +x "$tmp/git-conferencia/git"
+  base_antes="$(git -C "$proj" rev-parse main)"
+  PATH="$tmp/git-conferencia:$PATH" integrar_teste "i-$caso" s
+  conferir "conferência $caso: recusa ($rc)" test "$rc" -ne 0
+  conferir "conferência $caso: explica" grep -q "não confere com a mescla refeita no espelho" "$tmp/saida"
+  conferir "conferência $caso: a base volta e a sessão permanece" \
+    bash -c '[ "$(git -C "$1" rev-parse main)" = "$2" ] && test -e "$3"' \
+    _ "$proj" "$base_antes" "$estado/i-$caso.json"
+done
 
 # Dentro do isolamento não há revisão que valha: nem roda o revisor.
 preparar i4

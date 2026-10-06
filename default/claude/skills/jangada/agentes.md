@@ -180,7 +180,10 @@ O agente aberto pelo `jangada-agente` roda no bubblewrap, com
   mesmo com `JANGADA_AGENTE_ISOLAR=0`: a sessão do agente ainda tem logins
   e rede que o `lintr` e o `.jangada/validar.sh` não devem herdar.
   `revisar` no jangada shell e o `.jangada/preparar.sh` também passam pelo
-  `jangada-isolar`.
+  `jangada-isolar`. Para rodar os testes dentro da sessão, use
+  `env -u JANGADA_ISOLADO testes/verificar.sh`. Se uma rodada anterior deixou
+  `/tmp/isolar-teste`, remova esse arquivo antes: ele falseia o teste do
+  `/tmp` próprio.
 - Se a tarefa precisa gravar fora dessas pastas, pare e peça ao usuário:
   acrescentar a pasta em `JANGADA_ISOLAR_ESCRITA` no `jangada.conf` ou reabrir
   com `jangada-agente --sem-isolar`. Não contorne o isolamento.

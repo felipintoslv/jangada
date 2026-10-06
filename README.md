@@ -564,7 +564,8 @@ notificação de uma sessão isolada vem sem o botão Abrir. Ficam ocultos
 por isso o `git push` fica com o usuário, fora da sessão. Dentro dela,
 `JANGADA_ISOLADO=1`, e um `jangada-isolar` chamado ali no perfil `agente` roda
 o comando direto. Os perfis `verificacao` e `verificacao-rede` criam outro
-isolamento para retirar as credenciais, mesmo com `JANGADA_AGENTE_ISOLAR=0`. A variável sozinha não basta: vale só com a marca
+isolamento para retirar as credenciais, mesmo com `JANGADA_AGENTE_ISOLAR=0`.
+A variável sozinha não basta: vale só com a marca
 `/tmp/.jangada-isolado` montada pelo bwrap, que um processo de fora cria
 como arquivo mas não como ponto de montagem. A função `revisar` do jangada shell e o
 `.jangada/preparar.sh` do worktree também rodam isolados.

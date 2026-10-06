@@ -266,19 +266,37 @@ objetos_integros() {
 # do nome que leva na árvore do espelho. O hash é recalculado do arquivo: o
 # índice e o stat não entram, porque quem os gravou foi o merge conferido.
 mescla_integra() {
-  local espelho arvore meta caminho modo nome atual
+  local espelho arvore meta caminho modo nome atual lista rc=0
   espelho="$(jangada_espelho "$(dir_comum "$raiz")")" || return 1
   arvore="$(jangada_git_seguro --git-dir="$espelho" merge-tree --write-tree "$ponta_base" "$cabeca" 2>/dev/null)" || return 1
   [[ -n "$arvore" && "$arvore" == "$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet 'HEAD^{tree}')" ]] || return 1
-  while IFS= read -r -d '' meta && IFS= read -r -d '' caminho; do
+  lista="$(mktemp)" || return 1
+  if ! jangada_git_seguro --git-dir="$espelho" diff-tree -r -z --no-renames "$ponta_base" "$arvore" >"$lista"; then
+    rm -f "$lista"
+    return 1
+  fi
+  while IFS= read -r -d '' meta; do
+    IFS= read -r -d '' caminho <&0 || { rc=1; break; }
     read -r _ modo _ nome _ <<<"$meta"
     case "$modo" in
       000000 | 160000) continue ;;
-      120000) atual="$(readlink -n -- "$raiz/$caminho" | jangada_git_seguro hash-object --stdin)" ;;
-      *) atual="$(cd "$raiz" && jangada_git_seguro hash-object -- "$caminho" 2>/dev/null)" ;;
+      120000)
+        [[ -L "$raiz/$caminho" ]] || { rc=1; break; }
+        atual="$(readlink -n -- "$raiz/$caminho" | jangada_git_seguro hash-object --stdin)" || { rc=1; break; }
+        ;;
+      *)
+        [[ -f "$raiz/$caminho" && ! -L "$raiz/$caminho" ]] || { rc=1; break; }
+        if { [[ "$modo" == 100755 ]] && [[ ! -x "$raiz/$caminho" ]]; } ||
+           { [[ "$modo" == 100644 ]] && [[ -x "$raiz/$caminho" ]]; }; then
+          rc=1; break
+        fi
+        atual="$(cd "$raiz" && jangada_git_seguro hash-object -- "$caminho" 2>/dev/null)" || { rc=1; break; }
+        ;;
     esac
-    [[ "$atual" == "$nome" ]] || return 1
-  done < <(jangada_git_seguro --git-dir="$espelho" diff-tree -r -z --no-renames "$ponta_base" "$arvore")
+    [[ "$atual" == "$nome" ]] || { rc=1; break; }
+  done <"$lista"
+  rm -f "$lista"
+  return "$rc"
 }
 
 # Roda sob a trava do repositório: entre a conferência e o merge o usuário
