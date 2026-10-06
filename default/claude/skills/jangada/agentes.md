@@ -173,16 +173,14 @@ O agente aberto pelo `jangada-agente` roda no bubblewrap, com
   os perfis de navegador aparecem vazios, e `SSH_AUTH_SOCK` sai do ambiente.
   `git push` por ssh ou com credencial guardada não funciona: o push é do
   usuário, fora da sessão.
-- `jangada-isolar` chamado de dentro roda o comando direto, sem aninhar,
-  desde que `JANGADA_ISOLADO` venha com a marca `/tmp/.jangada-isolado`
-  montada pelo bwrap (conferida em `/proc/self/mountinfo`); só a variável
-  não basta. O `jangada-validar` chamado pelo agente roda, portanto, com as
-  mesmas regras;
+- `jangada-isolar` chamado de dentro no perfil `agente` roda direto, desde
+  que `JANGADA_ISOLADO` venha com a marca `/tmp/.jangada-isolado` montada
+  pelo bwrap, conferida em `/proc/self/mountinfo`. Só a variável não basta.
+  Os perfis `verificacao` e `verificacao-rede` sempre criam outro isolamento,
+  mesmo com `JANGADA_AGENTE_ISOLAR=0`: a sessão do agente ainda tem logins
+  e rede que o `lintr` e o `.jangada/validar.sh` não devem herdar.
   `revisar` no jangada shell e o `.jangada/preparar.sh` também passam pelo
-  `jangada-isolar`. Pelo mesmo motivo, o `testes/isolar.sh` falha inteiro
-  dentro de uma sessão isolada (`JANGADA_ISOLADO=1`): rode
-  `env -u JANGADA_ISOLADO testes/verificar.sh`, e apague o `/tmp/isolar-teste`
-  que uma rodada sem isso deixa, ou o caso do `/tmp` próprio falha depois.
+  `jangada-isolar`.
 - Se a tarefa precisa gravar fora dessas pastas, pare e peça ao usuário:
   acrescentar a pasta em `JANGADA_ISOLAR_ESCRITA` no `jangada.conf` ou reabrir
   com `jangada-agente --sem-isolar`. Não contorne o isolamento.

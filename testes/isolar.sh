@@ -546,6 +546,19 @@ PY
   saida="$(isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- \
     "$repo_jangada/bin/jangada-isolar" --mostrar -- true 2>/dev/null)"
   conferir "caso 3: já isolado, roda direto sem aninhar" [ -z "$saida" ]
+  for perfil in verificacao verificacao-rede; do
+    conferir "verificação aninhada ($perfil): credenciais e D-Bus ficam ocultos" \
+      isolar "$tmp/wt" ANTHROPIC_API_KEY=chave OPENAI_API_KEY=chave \
+      "$repo_jangada/bin/jangada-isolar" -- env JANGADA_ISOLAR_PERFIL="$perfil" \
+      JANGADA_AGENTE_ISOLAR=0 "$repo_jangada/bin/jangada-isolar" -- \
+      bash -c '[[ -z "${ANTHROPIC_API_KEY:-}${OPENAI_API_KEY:-}${DBUS_SESSION_BUS_ADDRESS:-}" &&
+        ! -s "$HOME/.claude.json" && -z "$(ls -A "$HOME/.claude")" &&
+        ! -s "$HOME/.codex/auth.json" ]]'
+  done
+  conferir "verificação aninhada: só a interface de loopback existe" \
+    isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- \
+    env JANGADA_ISOLAR_PERFIL=verificacao "$repo_jangada/bin/jangada-isolar" -- \
+    bash -c '[[ "$(awk -F: "NR > 2 { gsub(/ /, \"\", \$1); print \$1 }" /proc/net/dev | tr "\n" " ")" == "lo " ]]'
   conferir "caso 3: a marca não é removível de dentro" roda "! rm -f '$marca_teste'"
 
   # Propagação de código de saída e sinais

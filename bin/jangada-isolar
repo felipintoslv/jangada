@@ -42,7 +42,8 @@
 # "verificacao-rede" mantém a rede. Perfil desconhecido é recusado.
 #
 # JANGADA_AGENTE_ISOLAR=0 desliga; já isolado (JANGADA_ISOLADO=1 e a marca
-# que só o bwrap monta), o comando roda direto; sem o bwrap, recusa.
+# que só o bwrap monta), o perfil agente roda direto; os de verificação
+# sempre criam outro isolamento. Sem o bwrap, recusa.
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
@@ -67,11 +68,17 @@ ja_isolado() {
   awk -v m="$marca" '$5 == m { achou = 1 } END { exit !achou }' /proc/self/mountinfo 2>/dev/null
 }
 
+perfil="${JANGADA_ISOLAR_PERFIL:-agente}"
+case "$perfil" in
+  agente | verificacao | verificacao-rede) ;;
+  *) echo "jangada-isolar: perfil desconhecido em JANGADA_ISOLAR_PERFIL: $perfil" >&2; exit 1 ;;
+esac
+
 codex_comando=0
 [[ "$(basename -- "$1")" == jangada-codex ]] && codex_comando=1
 isolamento_obrigatorio="$codex_comando"
 [[ "$(basename -- "$1")" == jangada-pescador-modelo ]] && isolamento_obrigatorio=1
-if { [[ "$JANGADA_AGENTE_ISOLAR" == 0 ]] && ((!isolamento_obrigatorio)); } || ja_isolado; then
+if [[ "$perfil" == agente ]] && { { [[ "$JANGADA_AGENTE_ISOLAR" == 0 ]] && ((!isolamento_obrigatorio)); } || ja_isolado; }; then
   exec "$@"
 fi
 if ((!mostrar)) && ! command -v bwrap >/dev/null 2>&1; then
@@ -79,12 +86,6 @@ if ((!mostrar)) && ! command -v bwrap >/dev/null 2>&1; then
   echo "Para abrir mesmo assim: jangada-agente --sem-isolar, ou JANGADA_AGENTE_ISOLAR=0 no jangada.conf." >&2
   exit 1
 fi
-
-perfil="${JANGADA_ISOLAR_PERFIL:-agente}"
-case "$perfil" in
-  agente | verificacao | verificacao-rede) ;;
-  *) echo "jangada-isolar: perfil desconhecido em JANGADA_ISOLAR_PERFIL: $perfil" >&2; exit 1 ;;
-esac
 
 pasta="$(pwd -P)"
 # /tmp próprio: um rm do agente ali não apaga os temporários do sistema.
