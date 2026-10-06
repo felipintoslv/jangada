@@ -92,7 +92,7 @@ while (($#)); do
 done
 
 # Com --projeto, a central abre a sessão; sem tarefa, abre o formulário.
-if ((janela)) && [[ -z "$projeto$nome$perfil$prompt" ]] && \
+if ((janela)) && [[ -z "$projeto$nome$perfil$prompt$delegacao_dada" ]] && \
     ((!direto && !snapshot && !agente_dado && !revisor_dado && !isolar_dado && ${#extras[@]} == 0)); then
   exec "$JANGADA_PATH/bin/jangada-tarefas" --nova
 fi
@@ -129,6 +129,7 @@ if ((!agente_dado)) && [[ -z "$perfil" && -t 0 && "${JANGADA_AGENTE_ESCOLHER:-1}
         if ((!isolar_dado)) && [[ "$e" =~ ^JANGADA_AGENTE_ISOLAR=(.*)$ ]]; then isolamento="${BASH_REMATCH[1]}"; fi
       done
       rev="$(jangada_revisor "$1" "$rev")"
+      [[ -z "$delegacao_dada" ]] || destino="$delegacao_dada"
       destino="$(jangada_delegacao "$1" "$destino")"
       command -v "${1%% *}" >/dev/null 2>&1 || printf 'INDISPONÍVEL: %s não instalado; ' "$base"
       printf '%s implementa; %s revisa' "$base" "$rev"
