@@ -16,3 +16,6 @@ referencia/
 # Bytecode do Python (o coletor do painel roda direto do repositório).
 __pycache__/
 *.pyc
+
+# Estudos visuais ficam disponíveis na tarefa sem integrar os padrões instalados.
+output/identidade/
