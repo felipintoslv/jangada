@@ -5,14 +5,15 @@ import hashlib
 import html
 import json
 import os
+import re
 from pathlib import Path
 import time
 import uuid
 
-from PyQt6.QtCore import QProcess, QProcessEnvironment, QTimer, Qt
+from PyQt6.QtCore import QFileSystemWatcher, QProcess, QProcessEnvironment, QTimer, Qt
 from PyQt6.QtGui import QColor, QKeySequence
 from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout,
-                            QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow,
+                            QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow, QMessageBox,
                             QPlainTextEdit, QPushButton, QSplitter, QTabWidget,
                             QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 from dados import (CORES, LIMITE, NOME, ORDEM, ROTULOS, Sessao,
@@ -22,8 +23,8 @@ from dados import (CORES, LIMITE, NOME, ORDEM, ROTULOS, Sessao,
 # jangada-agente --capacidades-json, que também é quem valida a escolha.
 AGENTES = ("claude", "codex")
 
-GRUPOS = {'aguardando': 'Precisa de você', 'interrompido': 'Interrompidas',
-          'trabalhando': 'Em andamento', 'concluido': 'Turno encerrado'}
+GRUPOS = {'aguardando': 'Precisa da sua resposta', 'interrompido': 'Interrompidas',
+          'trabalhando': 'Em execução', 'concluido': 'Pronto para conferir'}
 
 class NovaTarefa(QDialog):
 
@@ -55,12 +56,35 @@ class NovaTarefa(QDialog):
         formulario.addRow('Projeto', linha)
         self.agente = QComboBox()
         self.agente.addItems(AGENTES)
-        formulario.addRow('Agente ou perfil', self.agente)
         layout.addLayout(formulario)
-        layout.addWidget(QLabel('O que você quer que o agente faça?'))
+        layout.addWidget(QLabel('O que precisa ser feito?'))
         self.pedido = QPlainTextEdit()
         self.pedido.setPlaceholderText('Descreva a tarefa, o resultado esperado e as restrições.')
         layout.addWidget(self.pedido)
+        self.recomendado = None if janela.real else AGENTES[0]
+        self.modo = QComboBox()
+        self.modo.addItems(['Recomendado', 'Personalizado'])
+        modo_linha = QFormLayout()
+        modo_linha.addRow('Modo', self.modo)
+        layout.addLayout(modo_linha)
+        self.avancadas = QPushButton('Opções avançadas')
+        self.avancadas.setCheckable(True)
+        layout.addWidget(self.avancadas)
+        self.opcoes = QWidget()
+        opcoes = QFormLayout(self.opcoes)
+        opcoes.addRow('Executor ou perfil', self.agente)
+        self.revisor = QComboBox()
+        self.revisor.addItems(['Padrão configurado', 'oposto', 'claude', 'codex', 'agy', 'mesmo'])
+        opcoes.addRow('Revisor', self.revisor)
+        self.seguranca = QComboBox()
+        self.seguranca.addItems(['Padrão configurado', 'Sem isolamento'])
+        opcoes.addRow('Segurança', self.seguranca)
+        self.delegacao = QComboBox()
+        self.delegacao.addItems(['Padrão configurado', 'local', 'agy', 'claude'])
+        opcoes.addRow('Delegação', self.delegacao)
+        layout.addWidget(self.opcoes)
+        self.opcoes.hide()
+        self.avancadas.toggled.connect(self.opcoes.setVisible)
         self.aviso = QLabel('Em projetos Git, a tarefa usa um worktree próprio.' if janela.real else 'Simulação: a tarefa aparece na lista sem executar agentes.')
         self.aviso.setTextFormat(Qt.TextFormat.PlainText)
         self.aviso.setWordWrap(True)
@@ -76,7 +100,9 @@ class NovaTarefa(QDialog):
         self.enviar.clicked.connect(self.criar)
         self.projeto.textChanged.connect(self.reeditar)
         self.pedido.textChanged.connect(self.reeditar)
-        self.agente.currentTextChanged.connect(self.reeditar)
+        self.modo.currentTextChanged.connect(self.reeditar)
+        for controle in (self.agente, self.revisor, self.seguranca, self.delegacao):
+            controle.currentTextChanged.connect(self.personalizar)
         botoes.addWidget(fechar)
         botoes.addStretch()
         botoes.addWidget(self.enviar)
@@ -124,6 +150,9 @@ class NovaTarefa(QDialog):
         if self.agente.findText(escolhido) >= 0:
             self.agente.setCurrentIndex(self.agente.findText(escolhido))
         self.agente.blockSignals(False)
+        self.recomendado = next((a['nome'] for a in principais if a['instalado']), None)
+        if self.recomendado:
+            self.aviso.setText(f'Recomendado: {self.recomendado}, primeiro executor instalado no catálogo. Revisor, segurança e delegação seguem os padrões configurados.')
         if not self.agente.count():
             self.aviso.setText('Nenhum agente instalado: instale o claude ou o codex.')
             self.enviar.setEnabled(False)
@@ -169,6 +198,11 @@ class NovaTarefa(QDialog):
         projeto = Path(pasta).expanduser().resolve()
         agente = self.agente.currentText()
         perfil = self.agente.currentData()
+        if self.modo.currentText() == 'Recomendado':
+            if not self.recomendado:
+                self.erro.setText('Nenhum executor recomendado disponível. Confira o catálogo ou escolha nas opções avançadas.')
+                return
+            agente, perfil = self.recomendado, None
         nome = 'tarefa-' + uuid.uuid4().hex[:12]
         if not self.janela.real:
             sessao = Sessao(nome, 'trabalhando', str(projeto), datetime.now().isoformat(), 'agente/' + nome, pedido, agente, projeto.name, 'Tarefa simulada. Nenhum agente foi executado.')
@@ -178,13 +212,26 @@ class NovaTarefa(QDialog):
             self.erro.setText('Tarefa simulada criada. Você pode acompanhar na lista.')
         else:
             processo = QProcess(self)
-            self.janela.preparar(processo, ['--janela', '--projeto', str(projeto), '--nome', nome, '--perfil' if perfil else '--agente', perfil or agente, '--prompt', pedido], 'jangada-agente')
+            argumentos = ['--janela', '--projeto', str(projeto), '--nome', nome,
+                          '--perfil' if perfil else '--agente', perfil or agente, '--prompt', pedido]
+            personalizado = self.modo.currentText() == 'Personalizado'
+            if personalizado and self.revisor.currentIndex():
+                argumentos += ['--revisor', self.revisor.currentText()]
+            if personalizado and self.seguranca.currentIndex():
+                argumentos += ['--sem-isolar']
+            if personalizado and self.delegacao.currentIndex():
+                argumentos += ['--delegacao', self.delegacao.currentText()]
+            self.janela.preparar(processo, argumentos, 'jangada-agente')
             iniciado, _ = processo.startDetached()
             if not iniciado:
                 self.erro.setText('Não foi possível iniciar jangada-agente. Confira --jangada.')
                 return
             self.erro.setText('Abertura solicitada. Se o agente falhar ao iniciar, o erro aparece no terminal. Confira se a tarefa entrou na lista. Seu pedido foi preservado.')
         self.enviar.setEnabled(False)
+
+    def personalizar(self, *_):
+        self.modo.setCurrentText('Personalizado')
+        self.reeditar()
 
     def reeditar(self, *_):
         self.enviar.setEnabled(True)
@@ -284,12 +331,16 @@ class Janela(QMainWindow):
         self.abas.addTab(acompanhamento, 'Acompanhamento')
         self.abas.addTab(self.atividade, 'Saída do agente')
         self.abas.addTab(self.detalhes, 'Detalhes')
+        self.entrega = QPlainTextEdit()
+        self.entrega.setReadOnly(True)
+        self.entrega.setPlainText('Use Conferir e integrar para consultar a entrega antes da confirmação.')
+        self.abas.addTab(self.entrega, 'Entrega')
         direito.addWidget(self.abas)
         self.abrir = QPushButton('Abrir sessão')
         self.abrir.setEnabled(False)
         self.abrir.clicked.connect(self.focar)
         direito.addWidget(self.abrir)
-        self.integrar = QPushButton('Integrar e encerrar')
+        self.integrar = QPushButton('Conferir e integrar')
         self.encerrar = QPushButton('Encerrar sem integrar')
         self.integrar.setObjectName('integrar')
         self.encerrar.setObjectName('encerrar')
@@ -299,11 +350,14 @@ class Janela(QMainWindow):
         self.encerrar.setShortcut(QKeySequence('Ctrl+X'))
         self.integrar.setEnabled(False)
         self.encerrar.setEnabled(False)
-        self.integrar.clicked.connect(lambda: self.finalizar(True))
+        self.integrar.clicked.connect(self.integrar_interface)
+        self.integrar_terminal = QPushButton('Integrar pelo terminal')
+        self.integrar_terminal.clicked.connect(lambda: self.finalizar(True))
+        direito.addWidget(self.integrar_terminal)
         self.encerrar.clicked.connect(lambda: self.finalizar(False))
         direito.addWidget(self.integrar)
         direito.addWidget(self.encerrar)
-        explicacao = QLabel('As ações abrem um terminal para conferir o resultado e atender confirmações. Turno encerrado não confirma a conclusão da tarefa.')
+        explicacao = QLabel('A integração mostra a entrega e pede confirmação. O terminal permite diagnóstico e encerramento. Pronto para conferir não confirma conclusão.')
         explicacao.setWordWrap(True)
         direito.addWidget(explicacao)
         divisor.addWidget(detalhes)
@@ -314,6 +368,12 @@ class Janela(QMainWindow):
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
         self.setStyleSheet('\n            QWidget { background: #182128; color: #e1e9ec; font-size: 13px; }\n            QTreeWidget, QPlainTextEdit, QLineEdit, QComboBox { background: #11191f; border: 1px solid #35454f;\n                border-radius: 6px; padding: 8px; }\n            QTreeWidget::item { padding: 8px 3px; }\n            QTreeWidget::item:selected { background: #2d4956; }\n            QHeaderView::section { background: #23313b; border: none; padding: 8px; }\n            QPushButton { background: #294551; border: 1px solid #48616b;\n                border-radius: 6px; padding: 10px 16px; }\n            QPushButton:hover { background: #365b69; }\n            QPushButton#integrar:enabled { background: #345647; border-color: #628574; }\n            QPushButton#encerrar:enabled { background: #182128; }\n            QPushButton:disabled { color: #74838a; background: #202c33; }\n        ')
+        self.integracao = QProcess(self)
+        self.integracao.finished.connect(self.integracao_fim)
+        self.integracao.errorOccurred.connect(self.integracao_erro)
+        self.integracao_etapa = None
+        self.integracao_nome = None
+        self.integracao_pasta = None
         self.consulta = QProcess(self)
         self.consulta.finished.connect(self.consulta_fim)
         self.consulta.errorOccurred.connect(self.consulta_erro)
@@ -336,9 +396,18 @@ class Janela(QMainWindow):
         self.tempo_finalizacao.setInterval(500)
         self.tempo_finalizacao.timeout.connect(self.conferir_finalizacoes)
         self.timer = QTimer(self)
-        self.timer.setInterval(2000)
+        self.timer.setInterval(30000)
         self.timer.timeout.connect(self.atualizar)
+        self.observador = QFileSystemWatcher(self)
+        self.observador.directoryChanged.connect(self.mudanca_estado)
+        self.observador.fileChanged.connect(self.mudanca_estado)
+        self.evento_estado = QTimer(self)
+        self.evento_estado.setSingleShot(True)
+        self.evento_estado.setInterval(200)
+        self.evento_estado.timeout.connect(self.atualizar)
+        self.atualizacao_pendente = False
         if real:
+            self.observar_estado()
             self.timer.start()
         self.atualizar()
 
@@ -445,20 +514,21 @@ class Janela(QMainWindow):
         esperando = sum((estado_exibido(s) == 'aguardando' for s in sessoes.values()))
         interrompidas = sum((estado_exibido(s) == 'interrompido' for s in sessoes.values()))
         rotulo = 'interrompida' if interrompidas == 1 else 'interrompidas'
-        self.resumo.setText((f'{len(sessoes)} tarefas acompanhadas · Atualização a cada 2 segundos' if self.real else f'{len(sessoes)} tarefas fictícias · Avance a simulação para acompanhar as mudanças') if sessoes else 'Nenhuma tarefa. Inicie pelo botão Nova tarefa.')
+        self.resumo.setText((f'{len(sessoes)} tarefas acompanhadas · Atualização por eventos; reserva a cada 30 segundos' if self.real else f'{len(sessoes)} tarefas fictícias · Avance a simulação para acompanhar as mudanças') if sessoes else 'Nenhuma tarefa. Inicie pelo botão Nova tarefa.')
         andando = sum((estado_exibido(s) == 'trabalhando' for s in sessoes.values()))
         encerrados = sum((estado_exibido(s) == 'concluido' for s in sessoes.values()))
-        espera_rotulo = 'precisa de você' if esperando == 1 else 'precisam de você'
-        turno_rotulo = 'turno encerrado' if encerrados == 1 else 'turnos encerrados'
-        self.cartoes.setText(f'{esperando} {espera_rotulo}    ·    {andando} em andamento    ·    {interrompidas} {rotulo}    ·    {encerrados} {turno_rotulo}')
+        espera_rotulo = 'precisa da sua resposta' if esperando == 1 else 'precisam da sua resposta'
+        turno_rotulo = 'pronto para conferir' if encerrados == 1 else 'prontos para conferir'
+        self.cartoes.setText(f'{esperando} {espera_rotulo}    ·    {andando} em execução    ·    {interrompidas} {rotulo}    ·    {encerrados} {turno_rotulo}')
         if anterior and anterior not in sessoes:
             self.status.setText('A sessão selecionada saiu da lista. Selecione outra sessão.')
 
     def selecionar(self, *_):
         s = self.sessoes.get(self.selecionada())
-        ocupada = self.acao.state() != QProcess.ProcessState.NotRunning
+        ocupada = (self.acao.state() != QProcess.ProcessState.NotRunning
+                   or self.integracao_etapa is not None)
         pendente = self.finalizacao_pendente(s.nome) if self.dados_validos and s else False
-        for botao in (self.abrir, self.integrar, self.encerrar):
+        for botao in (self.abrir, self.integrar, self.integrar_terminal, self.encerrar):
             botao.setEnabled(self.dados_validos and s is not None and (not ocupada) and not pendente)
         if not s:
             self.nome.setText('Selecione uma tarefa')
@@ -538,6 +608,27 @@ class Janela(QMainWindow):
         self.preparar(processo, argumentos)
         processo.start()
 
+    def observar_estado(self):
+        caminhos = set()
+        for pasta in (self.estado_dir, self.estado_dir.parent / 'revisoes'):
+            if pasta.is_dir():
+                caminhos.add(str(pasta))
+                caminhos.update(str(p) for p in pasta.glob('*.json') if p.is_file())
+            else:
+                while not pasta.is_dir() and pasta != pasta.parent:
+                    pasta = pasta.parent
+                caminhos.add(str(pasta))
+        atuais = set(self.observador.directories() + self.observador.files())
+        if atuais - caminhos:
+            self.observador.removePaths(sorted(atuais - caminhos))
+        if caminhos - atuais:
+            self.observador.addPaths(sorted(caminhos - atuais))
+
+    def mudanca_estado(self, *_):
+        self.atualizacao_pendente = True
+        if not self.evento_estado.isActive():
+            self.evento_estado.start()
+
     def avancar(self):
         self.passo += 1
         self.atualizar()
@@ -552,11 +643,15 @@ class Janela(QMainWindow):
                     sessoes[nome] = replace(s, atualizado=anterior.atualizado)
             self.mostrar(sessoes)
         elif self.consulta.state() == QProcess.ProcessState.NotRunning:
+            self.atualizacao_pendente = False
+            self.observar_estado()
             self.iniciar(self.consulta, ['--lista'])
             self.espera.start(10000)
 
     def consulta_fim(self, codigo, tipo):
         self.espera.stop()
+        if self.atualizacao_pendente and not self.fechando:
+            self.evento_estado.start()
         if self.fechando:
             return
         saida = bytes(self.consulta.readAllStandardOutput())
@@ -653,11 +748,118 @@ class Janela(QMainWindow):
         if liberou:
             self.selecionar()
 
+    def confirmar_entrega(self, dados):
+        marca = dados.get('marca') or {}
+        independencia = ('Sim' if marca['independent'] else 'Não') if isinstance(marca.get('independent'), bool) else 'Não informado'
+        correspondencia = ('Sim' if dados['marca_atual'] else 'Não') if isinstance(dados.get('marca_atual'), bool) else 'Não informado'
+        texto = (f"Base: {dados['base_sha']}\nCandidato: {dados['candidate_sha']}\n\n"
+                 f"Arquivos e linhas (+/-)\n{dados['arquivos']}\n\n"
+                 f"Validação local: {dados['validacao_local']}\n"
+                 f"Revisor da marca: {marca.get('reviewer', 'Não informado')}\n"
+                 f"Independência declarada na marca: {independencia}\n"
+                 f"Marca corresponde aos SHA exibidos: {correspondencia}\n"
+                 f"Base da aprovação: {marca.get('base_sha', 'Sem marca')}\n"
+                 f"Candidato aprovado: {marca.get('candidate_sha', 'Sem marca')}\n\n"
+                 f"Parecer\n{dados['parecer'] or 'Sem parecer externo'}")
+        self.entrega.setPlainText(texto)
+        self.abas.setCurrentWidget(self.entrega)
+        pergunta = QMessageBox(self)
+        pergunta.setWindowTitle('Confirmar integração')
+        pergunta.setTextFormat(Qt.TextFormat.PlainText)
+        pergunta.setText('Mesclar esta entrega e encerrar a sessão?')
+        pergunta.setInformativeText(texto)
+        pergunta.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        pergunta.setDefaultButton(QMessageBox.StandardButton.No)
+        return pergunta.exec() == QMessageBox.StandardButton.Yes
+
+    def integrar_interface(self):
+        nome = self.selecionada()
+        if (not self.dados_validos or nome not in self.sessoes or self.integracao_etapa is not None
+                or not NOME.fullmatch(nome) or nome.startswith('-')):
+            return
+        if self.acao.state() != QProcess.ProcessState.NotRunning or self.finalizacao_pendente(nome):
+            return
+        if not self.real:
+            self.status.setText('Simulação: integração não executada.')
+            return
+        self.integracao_nome = nome
+        self.integracao_etapa = 'previa'
+        self.preparar(self.integracao, ['--integracao-json', nome])
+        self.integracao.start()
+        self.selecionar()
+
+    def limpar_integracao(self):
+        pasta = self.integracao_pasta
+        if pasta:
+            try:
+                (pasta / 'pronta').unlink(missing_ok=True)
+                (pasta / 'inicio.json').unlink(missing_ok=True)
+                pasta.rmdir()
+                pasta.parent.rmdir()
+            except OSError:
+                self.status.setText('A trava da ação não pôde ser removida; confira o terminal.')
+        self.integracao_pasta = None
+        self.integracao_etapa = None
+        self.selecionar()
+
+    def integracao_fim(self, codigo, tipo):
+        bruto = bytes(self.integracao.readAllStandardOutput())
+        erro = bytes(self.integracao.readAllStandardError()).decode('utf-8', 'replace')[:16000]
+        if self.integracao_etapa != 'previa':
+            self.entrega.appendPlainText(bruto.decode('utf-8', 'replace')[:16000] + '\n' + erro)
+            self.status.setText('Integração encerrada; confira o resultado na aba Entrega.'
+                                if codigo == 0 else 'Integração recusada ou falhou. Confira a aba Entrega ou o terminal.')
+            self.limpar_integracao()
+            self.atualizar()
+            return
+        try:
+            if codigo != 0 or tipo != QProcess.ExitStatus.NormalExit or len(bruto) > LIMITE:
+                raise ValueError('consulta da entrega falhou')
+            dados = json.loads(bruto)
+            if not isinstance(dados, dict) or not isinstance(dados.get('marca'), dict):
+                raise ValueError('prévia inválida')
+            if any(not isinstance(dados.get(c), str) for c in ('arquivos', 'validacao_local', 'parecer')):
+                raise ValueError('conteúdo inválido na prévia')
+            for campo in ('base_sha', 'candidate_sha'):
+                if not isinstance(dados.get(campo), str) or not re.fullmatch('[0-9a-f]{40}', dados[campo]):
+                    raise ValueError('SHA inválido na prévia')
+            if not self.confirmar_entrega(dados):
+                self.status.setText('Integração cancelada; nenhum merge solicitado.')
+                self.limpar_integracao()
+                return
+            nome = self.integracao_nome
+            raiz = self.pasta_finalizacao(nome)
+            raiz.mkdir(mode=0o700)
+            pasta = raiz / uuid.uuid4().hex
+            self.integracao_pasta = pasta
+            pasta.mkdir(mode=0o700)
+            (pasta / 'inicio.json').write_text(json.dumps({'pid': os.getpid(), 'criado': time.monotonic()}))
+            (pasta / 'pronta').touch(mode=0o600)
+            self.finalizando[nome] = pasta
+            argumentos = ['--integrar', '--confirmacao', dados['base_sha'], dados['candidate_sha'], nome]
+            self.preparar(self.integracao, argumentos, 'jangada-agente-fim')
+            self.integracao.setProgram('flock')
+            self.integracao.setArguments(['-n', str(raiz.with_suffix('.trava')),
+                str(self.jangada / 'bin/jangada-agente-fim'), *argumentos])
+            self.integracao_etapa = 'mescla'
+            self.integracao.start()
+            self.integracao.closeWriteChannel()
+            self.status.setText('Integrando a entrega confirmada; acompanhe a aba Entrega.')
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            self.status.setText(f'Não foi possível integrar pela interface: {exc}. Use o terminal para diagnóstico.')
+            self.limpar_integracao()
+
+    def integracao_erro(self, erro):
+        if erro == QProcess.ProcessError.FailedToStart:
+            self.status.setText('Não foi possível iniciar a integração. Use o terminal para diagnóstico.')
+            self.limpar_integracao()
+
     def finalizar(self, integrar):
         nome = self.selecionada()
         if not self.dados_validos or nome not in self.sessoes or not NOME.fullmatch(nome) or nome.startswith('-'):
             return
-        if self.acao.state() != QProcess.ProcessState.NotRunning or self.finalizacao_pendente(nome):
+        if (self.acao.state() != QProcess.ProcessState.NotRunning or self.integracao_etapa is not None
+                or self.finalizacao_pendente(nome)):
             return
         acao = 'integrar e encerrar' if integrar else 'encerrar sem integrar'
         if not self.real:
@@ -765,10 +967,14 @@ exit "$resultado"
         self.acao.kill()
 
     def closeEvent(self, evento):
+        if self.integracao_etapa is not None:
+            self.status.setText('Aguarde a consulta ou integração terminar antes de fechar a Central.')
+            evento.ignore()
+            return
         self.fechando = True
-        for timer in (self.timer, self.espera, self.tempo_acao, self.tempo_previa, self.tempo_finalizacao):
+        for timer in (self.timer, self.evento_estado, self.espera, self.tempo_acao, self.tempo_previa, self.tempo_finalizacao):
             timer.stop()
-        for processo in (self.consulta, self.acao, self.previa):
+        for processo in (self.consulta, self.acao, self.previa, self.integracao):
             if processo.state() != QProcess.ProcessState.NotRunning:
                 processo.kill()
                 processo.waitForFinished(1000)

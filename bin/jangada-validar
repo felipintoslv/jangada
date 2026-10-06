@@ -395,7 +395,8 @@ if ! congelar; then
 fi
 dir="$foto"
 
-diff_conteudo="$(git -C "$dir" diff "$ponto" 2>/dev/null || true)"
+diff_arquivo="$foto/.git/entrega.diff"
+git -C "$dir" diff "$ponto" >"$diff_arquivo" || exit 1
 arquivos="$(git -C "$dir" diff --name-status "$ponto" 2>/dev/null || true)"
 # Com -z os nomes chegam crus; sem ele, aspas, barra invertida e tab vêm
 # escapados e o arquivo escaparia das verificações. Nome com quebra de linha
@@ -421,39 +422,30 @@ done <<<"$novos"
 [[ -n "$novos" ]] && arquivos+="${arquivos:+$'\n'}$(sed 's/^/??\t/' <<<"$novos")"
 fora_do_pedido=""
 if [[ -n "$novos" ]]; then
-  conteudo_novos=""
   while IFS= read -r n; do
-    # Link simbólico: vai o destino, nunca o conteúdo. Ler o alvo mandaria ao
-    # revisor um arquivo de fora do projeto.
     if [[ -L "$dir/$n" ]]; then
-      conteudo_novos+="${conteudo_novos:+$'\n\n'}=== Arquivo novo (não rastreado, link simbólico): $n -> $(readlink -- "$dir/$n") ==="
-      continue
-    fi
-    [[ -f "$dir/$n" ]] || continue
-    if [[ ! -s "$dir/$n" ]]; then
-      conteudo_novos+="${conteudo_novos:+$'\n\n'}=== Arquivo novo (não rastreado, vazio): $n ==="
-    elif grep -Iq '^' "$dir/$n" 2>/dev/null; then
-      tam="$(wc -c <"$dir/$n" 2>/dev/null || echo 0)"
-      if ((tam <= 50000)); then
-        conteudo_novos+="${conteudo_novos:+$'\n\n'}=== Arquivo novo (não rastreado): $n ==="$'\n'
-        conteudo_novos+="$(<"$dir/$n")"
-      else
-        conteudo_novos+="${conteudo_novos:+$'\n\n'}=== Arquivo novo (não rastreado, >50KB): $n ==="$'\n[arquivo muito grande para o diff; leia com a ferramenta se necessário]'
-        fora_do_pedido+="$n"$'\n'
+      printf '\n=== Arquivo novo (não rastreado, link simbólico): %s -> %s ===\n' "$n" "$(readlink -- "$dir/$n")"
+    elif [[ -f "$dir/$n" ]]; then
+      printf '\n=== Arquivo novo (não rastreado): %s ===\n' "$n"
+      if grep -Iq '^' "$dir/$n" 2>/dev/null; then
+        tam="$(wc -c <"$dir/$n")"
+        if ((tam <= 50000)); then
+          cat -- "$dir/$n"
+        else
+          printf '[arquivo acima de 50 KB; leia na foto da entrega]\n'
+          fora_do_pedido+="$n"$'\n'
+        fi
+      elif [[ -s "$dir/$n" ]]; then
+        printf '[arquivo binário]\n'
       fi
-    else
-      conteudo_novos+="${conteudo_novos:+$'\n\n'}=== Arquivo novo (não rastreado, binário): $n ==="
     fi
-  done <<<"$novos"
-  if [[ -n "$conteudo_novos" ]]; then
-    diff_conteudo+="${diff_conteudo:+$'\n\n'}$conteudo_novos"
-  fi
+  done <<<"$novos" >>"$diff_arquivo"
 fi
 # Mensagem inteira, para o revisor julgar o corpo; limitada a 30 commits e
 # 8 KB para não tomar o espaço do diff.
 commits="$(git -C "$dir" log -30 --format='%h %s%n%w(0,4,4)%b' "$ponto..HEAD" 2>/dev/null | head -c 8000 || true)"
 
-if [[ -z "$diff_conteudo" && -z "$novos" && -z "$quebrado" ]]; then
+if [[ ! -s "$diff_arquivo" && -z "$novos" && -z "$quebrado" ]]; then
   echo "jangada-validar: nada a revisar desde $(git -C "$dir" rev-parse --short "$ponto")" >&2
   exit 1
 fi
@@ -497,23 +489,18 @@ fi
 ultimo=""
 ((rodada > 1)) && ultimo="$(printf '%s\n' "${anteriores[@]}" | sort -V | tail -n1)"
 
-if (( ${#diff_conteudo} > diff_max )); then
-  echo "jangada-validar: diff de ${#diff_conteudo} bytes; vão os primeiros $diff_max" >&2
-  # O revisor precisa saber o que não viu: o arquivo partido no corte e os que
-  # vêm depois dele.
-  cabecalho='^(diff --git |=== Arquivo novo )'
-  corpo="${diff_conteudo:0:diff_max}"
-  # O resto começa na linha partida pelo corte, que pode ser um cabeçalho.
-  resto="${corpo##*$'\n'}${diff_conteudo:diff_max}"
-  cortados="$( { grep -E "$cabecalho" <<<"${corpo%$'\n'*}" | tail -n1
-                 grep -E "$cabecalho" <<<"$resto"; } || true)"
-  diff_conteudo="$corpo
-[... diff cortado pelo jangada-validar. Estes arquivos ficaram de fora, no todo
-ou em parte; leia cada um com a ferramenta antes de aprovar e diga no parecer
-se não conseguiu:
-$cortados
-...]"
-  fora_do_pedido+="$cortados"$'\n'
+diff_tamanho="$(wc -c <"$diff_arquivo")"
+diff_conteudo="$(head -c "$diff_max" "$diff_arquivo")"
+if ((diff_tamanho > diff_max)); then
+  echo "jangada-validar: diff de $diff_tamanho bytes; vão os primeiros $diff_max" >&2
+  # O inventário completo evita inferir nomes a partir de cabeçalhos partidos.
+  fora_do_pedido="$(git -C "$dir" diff --name-only -z "$ponto" | nomes_z)"$'\n'"$novos"
+  diff_conteudo+=$'\n[... diff cortado pelo jangada-validar. Confira na foto os arquivos do inventário completo abaixo.]'
+fi
+if [[ -n "$fora_do_pedido" ]]; then
+  fora_do_pedido="$(sed '/^$/d' <<<"$fora_do_pedido" | sort -u)"
+  diff_conteudo+=$'\nConteúdo fora do pedido, no todo ou em parte:\n'"$fora_do_pedido"
+  diff_conteudo+=$'\nAntes de aprovar, leia cada arquivo na foto e registre no parecer uma linha CONFERIDO: CAMINHO para cada caminho acima. Se não puder conferir, responda REVISAR.'
 fi
 # O Codex revisa sem ferramentas: o que não vai no pedido ele não lê, e a
 # aprovação dele valeria para um diff visto pela metade.
@@ -889,6 +876,7 @@ verificar_local() {
   return 0
 }
 
+local_verificado=false
 if ((!pular_local)) && [[ "${JANGADA_VALIDAR_TESTANDO:-0}" != "1" ]]; then
   erros_locais=""
   if ! erros_locais="$(verificar_local)"; then
@@ -913,6 +901,7 @@ if ((!pular_local)) && [[ "${JANGADA_VALIDAR_TESTANDO:-0}" != "1" ]]; then
     "$JANGADA_PATH/bin/jangada-gancho" pos-validar "$rotulo" "REVISAR" || true
     exit 3
   fi
+  local_verificado=true
 fi
 
 echo "jangada-validar: rodada $rodada de $rodadas_max, $nome_revisor${modelo:+ ($modelo)} revisando $(wc -l <<<"$arquivos") arquivo(s)..." >&2
@@ -1037,7 +1026,6 @@ if ! revisar; then
   exit 1
 fi
 mv "$saida.tmp" "$saida"
-cat "$saida"
 
 status="REVISAR"
 # Só a primeira linha com texto vale: um apontamento pode citar do diff uma
@@ -1050,6 +1038,21 @@ if [[ "$primeira" =~ ^[#[:space:]*]*STATUS:[[:space:]*]*(APROVADO|REVISAR)[[:spa
 else
   echo "jangada-validar: a primeira linha do parecer não é \"STATUS: APROVADO\" nem \"STATUS: REVISAR\"; conta como REVISAR" >&2
 fi
+if [[ "$status" == APROVADO && -n "$fora_do_pedido" ]]; then
+  while IFS= read -r caminho; do
+    if ! grep -qxF "CONFERIDO: $caminho" "$saida"; then
+      echo "jangada-validar: parecer não declara a conferência de $caminho; conta como REVISAR" >&2
+      status=REVISAR
+      {
+        printf 'STATUS: REVISAR\n\n1. [cobertura do diff]: parecer não declara a conferência de %s.\n\nParecer original:\n' "$caminho"
+        cat "$saida"
+      } >"$saida.cobertura"
+      mv "$saida.cobertura" "$saida"
+      break
+    fi
+  done <<<"$fora_do_pedido"
+fi
+cat "$saida"
 # O mesmo modelo que escreveu tende a concordar consigo: a aprovação dele fica
 # registrada à parte e não vale como revisão independente no --integrar.
 veredito="$status"
@@ -1070,10 +1073,10 @@ if [[ "$status" == APROVADO ]]; then
   jq -n --arg cabeca "$cabeca" --argjson num "$num" --arg limpo "$limpo" --arg base "$base" \
     --arg base_sha "$base_sha" --arg ponto "$ponto" --arg candidato "$candidato" \
     --arg arvore "$arvore_candidato" --arg revisor "$revisor" --arg modelo "$modelo" --arg autor "$autor" \
-    --argjson independente "$((1 - auto_revisao))" \
+    --argjson local_verificado "$local_verificado" --argjson independente "$((1 - auto_revisao))" \
     '{cabeca: $cabeca, num: $num, limpo: ($limpo == "limpo"), base: $base, base_sha: $base_sha,
       ponto: $ponto, candidate_sha: $candidato, candidate_tree: $arvore, reviewer: $revisor,
-      model: $modelo, author: $autor, independent: ($independente == 1)}' >"$arq_aprovado.tmp" \
+      model: $modelo, author: $autor, local_verified: $local_verificado, independent: ($independente == 1)}' >"$arq_aprovado.tmp" \
     && mv -f "$arq_aprovado.tmp" "$arq_aprovado"
   exit 0
 fi

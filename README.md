@@ -610,17 +610,25 @@ e recomeça quando a execução da sessão muda. Sessões que saem da lista deix
 de ser acompanhadas. A coluna Atualização usa a data
 publicada pelo agente, sem tratar uma consulta recente como atividade recente.
 
-**Turno encerrado** corresponde ao estado `concluido` dos hooks.
+**Pronto para conferir** corresponde ao estado `concluido` dos hooks.
 Ele não confirma conclusão da tarefa nem aprovação da entrega.
+Os hooks não registram falha da tarefa nem integração. Por isso, a Central
+não deriva os estados Falhou e Integrada; encerramentos removem a sessão da lista.
 Perguntas e permissões são atendidas pelo botão **Abrir terminal**.
 Sessões interrompidas podem ser retomadas pelo mesmo botão.
-Na tarefa selecionada, **Integrar e encerrar** (`Alt+I`) chama
-`jangada-agente-fim --integrar`; **Encerrar sem integrar** (`Ctrl+X`) chama
-`jangada-agente-fim` sem integração. As ações abrem um terminal com as
-conferências existentes, revisão da integração e confirmação de descarte
-quando há alterações sem commit. Confira o resultado nesse terminal;
-a lista acompanha automaticamente o encerramento. Fechar a central mantém
-esse terminal aberto. Enquanto a ação está em andamento, outra ação de
+Na tarefa selecionada, **Conferir e integrar** (`Alt+I`) consulta
+`jangada-agentes --integracao-json` e mostra arquivos, linhas, revisão e SHA.
+A confirmação gráfica vincula base e candidato; `jangada-agente-fim`
+exige aprovação independente e reconfere a marca sob a trava.
+A Central não aprova entregas; a indicação local informa o registro disponível,
+sem certificar uma passagem quando falta dado.
+**Integrar pelo terminal** preserva o diagnóstico e as confirmações originais.
+**Encerrar sem integrar** (`Ctrl+X`) chama
+`jangada-agente-fim` sem integração. As ações pelo terminal mantêm as conferências, a revisão e a confirmação
+de descarte quando há alterações sem commit. A integração gráfica mostra
+seu resultado na aba Entrega e impede fechar a Central enquanto está em curso.
+A lista acompanha automaticamente o encerramento. Terminais abertos pela
+Central permanecem abertos quando ela fecha. Enquanto a ação está em andamento, outra ação de
 encerramento para a mesma sessão fica bloqueada, inclusive ao reabrir a central.
 Se o terminal sair antes de iniciar a ação, o bloqueio é liberado após dez segundos.
 Cada tentativa usa uma pasta própria; um terminal atrasado não inicia a tentativa anterior após a liberação.
@@ -629,11 +637,19 @@ o bloqueio permanece até encerrar a sessão gráfica. Registros inconsistentes
 (como duas tentativas na mesma pasta) também mantêm esse bloqueio.
 Isso evita uma segunda integração durante uma operação sem acompanhamento.
 No formulário Nova tarefa, `Ctrl+X` continua recortando texto.
-A central não encerra agentes ao fechar. A consulta da janela apenas lê os
+A central não encerra agentes ao fechar. A janela observa substituições dos arquivos de estado e consulta a cada
+30 segundos como reserva. Eventos próximos são agrupados por 200 ms.
+A consulta da janela apenas lê os
 registros; o contador da barra mantém a limpeza automática de estados órfãos
 e o registro persistente das interrupções, pelo mecanismo anterior.
 
-**Nova tarefa** escolhe projeto, agente e pedido, usando `jangada-agente`.
+**Nova tarefa** pede projeto e pedido, com modo **Recomendado**.
+Esse modo escolhe o primeiro executor instalado na ordem de
+`jangada-agente --capacidades-json`, atualmente Claude e depois Codex.
+Revisor, segurança e delegação seguem os padrões configurados do lançador.
+As opções avançadas ficam recolhidas e preservam agente e perfil; também
+permitem escolher revisor, delegação e desativar o isolamento.
+Alterar um controle seleciona o modo Personalizado; recolher a área preserva as escolhas.
 **Nova pasta**, no formulário, cria a pasta de um projeto novo em
 `JANGADA_PROJETOS` e a deixa selecionada; a pasta nasce sem repositório Git.
 **Painel de indicadores** e **Conversa de Pescador** abrem os aplicativos
@@ -752,7 +768,10 @@ Definições:
 As redes cobrem só o Claude Code e mostram no máximo 40 nós por padrão; o
 painel tem controles para afrouxar a poda.
 
-O painel abre em **Revisão e síntese**. **Fila e provedores** explica a
+O painel abre em **Hoje**, com sessões aguardando, revisões pendentes de
+sessões abertas e da fila, provedores, consumo do dia e sessões sem entrega.
+A tela mostra o retrato da última coleta de todos os projetos, sem filtros.
+As sete telas analíticas continuam no menu **Avançado**, com os filtros atuais. **Fila e provedores** explica a
 execução automática e suas ausências de dados, separadas das sessões da Central
 de Tarefas. Os gráficos e redes acompanham o seletor claro/escuro da interface.
 

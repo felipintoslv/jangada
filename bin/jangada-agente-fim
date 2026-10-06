@@ -10,21 +10,28 @@
 # --integrar roda o jangada-validar aqui; sem aprovação, pede confirmação
 # explícita. Com --sem-revisao, não roda o revisor e pede a mesma confirmação.
 #
+# --confirmacao BASE CANDIDATO aceita a confirmação da interface apenas para
+# esses commits, com aprovação independente reconferida sob a trava.
 # Uso: jangada-agente-fim [--integrar [--sem-revisao]] SESSAO
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
-integrar=0; sem_revisao=0; s=""
+integrar=0; sem_revisao=0; s=""; gui_base=""; gui_candidato=""
 while (($#)); do
   case "$1" in
     -h|--ajuda) sed -n '2,13s/^# \{0,1\}//p' "$0"; exit 0 ;;
     --integrar) integrar=1; shift ;;
+    --confirmacao) gui_base="${2:-}"; gui_candidato="${3:-}"; shift 3 ;;
     --sem-revisao) sem_revisao=1; shift ;;
     -*) echo "opção desconhecida: $1" >&2; exit 1 ;;
     *) [[ -z "$s" ]] || { echo "sessão repetida: $1" >&2; exit 1; }; s="$1"; shift ;;
   esac
 done
+if [[ -n "$gui_base$gui_candidato" ]]; then
+  [[ "$gui_base" =~ ^[0-9a-f]{40}$ && "$gui_candidato" =~ ^[0-9a-f]{40}$ ]] \
+    && ((integrar && !sem_revisao)) || { echo "confirmação gráfica exige --integrar, dois SHA completos e revisão" >&2; exit 1; }
+fi
 [[ -n "$s" ]] || { echo "informe a sessão (veja jangada-agentes --lista)" >&2; exit 1; }
 [[ "$s" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "nome de sessão inválido: $s" >&2; exit 1; }
 arq="$JANGADA_ESTADO/agentes/$s.json"
@@ -186,6 +193,7 @@ motivo_marca=""
 revisao_fora() {
   local marca="$JANGADA_ESTADO/revisoes/validacao-$s.aprovado" rc=0
   aprovada() {
+    local marca="$JANGADA_ESTADO/revisoes/validacao-$s.aprovado"
     local c="" l="" b="" t="" i=""
     motivo_marca="sem aprovação feita fora do isolamento para o commit atual de $ramo"
     [[ -f "$marca" ]] || return 1
@@ -303,6 +311,10 @@ mescla_integra() {
 # decide sem prazo, e nesse meio outra sessão pode ter sido integrada. Aqui o
 # ramo e a base têm de estar onde estavam quando foram listados e conferidos.
 mesclar_sob_trava() {
+  if [[ -n "$gui_base" ]] && ! aprovada; then
+    echo "a aprovação mudou depois da confirmação gráfica; nada foi mesclado" >&2
+    return 11
+  fi
   if [[ "$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet "$ramo^{commit}" || true)" != "$cabeca" ]]; then
     echo "o ramo $ramo mudou depois da conferência (era ${cabeca:0:12}); nada foi mesclado. Rode de novo." >&2
     return 11
@@ -367,7 +379,13 @@ if ((integrar)); then
     else
       echo "commits de $ramo a integrar em $base ($raiz):"
       printf '%s\n' "$novos" | head -30
-      if revisao_fora; then
+      if [[ -n "$gui_base" ]]; then
+        if [[ "$gui_base" != "$ponta_base" || "$gui_candidato" != "$cabeca" ]]; then
+          echo "os commits mudaram desde a confirmação gráfica; nada foi mesclado" >&2
+          exit 1
+        fi
+        revisao_fora || { echo "a integração gráfica exige aprovação independente" >&2; exit 1; }
+      elif revisao_fora; then
         confirmar "mesclar e encerrar a sessão?" || { echo "nada foi feito"; exit 1; }
       else
         echo "$motivo_marca"

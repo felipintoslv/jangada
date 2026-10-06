@@ -82,6 +82,10 @@ class Seletor(unittest.TestCase):
         for linha in opcoes.splitlines():
             self.assertIn('autorrevisão pelo mesmo provedor', linha)
 
+    def test_delegacao_explicita_prevalece_na_descricao_dos_perfis(self):
+        for linha in self.menu('--delegacao', 'local').splitlines():
+            self.assertIn('leitor e redator no Ollama, demais papéis nesta sessão', linha)
+
     def test_perfil_personalizado_usa_valores_efetivos(self):
         perfis = self.config / 'agentes'
         perfis.mkdir()

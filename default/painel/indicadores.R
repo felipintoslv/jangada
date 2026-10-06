@@ -1,3 +1,8 @@
+nomes_provedores <- c(AVAILABLE = "Disponível", UNKNOWN = "Desconhecido", UNAVAILABLE = "Indisponível",
+      QUOTA_LOW = "Cota baixa", QUOTA_EXHAUSTED = "Cota esgotada", NETWORK_ERROR = "Falha de rede",
+      RATE_LIMITED = "Limite de chamadas", COOLDOWN = "Em espera", AUTH_ERROR = "Falha de autenticação",
+      DEGRADED = "Disponibilidade reduzida")
+
 # Indicadores do jangada-painel, calculados sobre o cache em Parquet que o
 # coletor.py grava. Funções puras: recebem tabelas e devolvem tabelas, para o
 # app e os testes usarem as mesmas definições.

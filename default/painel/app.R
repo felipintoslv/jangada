@@ -8,6 +8,7 @@ library(bslib)
 
 pasta_app <- getwd()
 source(file.path(pasta_app, "indicadores.R"), local = TRUE)
+source(file.path(pasta_app, "hoje.R"), local = TRUE)
 
 estado <- file.path(Sys.getenv("XDG_STATE_HOME", file.path(Sys.getenv("HOME"), ".local/state")), "jangada")
 cache <- getOption("jangada.painel.cache", file.path(estado, "painel"))
@@ -108,8 +109,12 @@ filtros <- sidebar(
 
 ui <- page_navbar(
   title = "Indicadores do jangada", theme = tema, fillable = FALSE,
-  window_title = "Indicadores do jangada", selected = "Revisão e síntese",
+  window_title = "Indicadores do jangada", selected = "Hoje",
   sidebar = filtros,
+  nav_panel("Hoje", icon = bsicons::bs_icon("calendar-check"),
+    hoje_ui("hoje")
+  ),
+  nav_menu("Avançado",
   nav_panel("Fila e provedores", icon = bsicons::bs_icon("list-task"),
     h3("Execução automática de tarefas"),
     p("Esta fila reúne tarefas planejadas para execução automática. As sessões da Central de Tarefas são acompanhadas separadamente."),
@@ -308,6 +313,7 @@ ui <- page_navbar(
     ),
     cartao("Consultas realizadas e veredito da bancada", DT::DTOutput("f_tabela"))
   ),
+  ),
   nav_spacer(),
   nav_item(input_dark_mode(id = "modo", mode = "dark"))
 )
@@ -412,6 +418,7 @@ server <- function(input, output, session) {
     }
     d
   })
+  hoje_server("hoje", dados)
   estados_fila <- c(QUEUED = "Na fila", RUNNING = "Em execução", COMPLETED = "Concluída",
     REVIEW_REQUIRED = "Aguardando revisão", REVISION_REQUIRED = "Reprovada, corrigir",
     WAITING_PROVIDER = "Aguardando provedor", WAITING_QUOTA = "Aguardando cota",
@@ -484,11 +491,7 @@ server <- function(input, output, session) {
   output$g_provedores <- DT::renderDT({
     d <- tabela_lista(orq()$provedores, c("id", "status", "pausado", "cota", "modelo",
       "atualizado", "valido_ate", "espera_segundos", "motivo"))
-    nomes <- c(AVAILABLE = "Disponível", UNKNOWN = "Desconhecido", UNAVAILABLE = "Indisponível",
-      QUOTA_LOW = "Cota baixa", QUOTA_EXHAUSTED = "Cota esgotada", NETWORK_ERROR = "Falha de rede",
-      RATE_LIMITED = "Limite de chamadas", COOLDOWN = "Em espera", AUTH_ERROR = "Falha de autenticação",
-      DEGRADED = "Disponibilidade reduzida")
-    d$status <- unname(nomes[d$status])
+    d$status <- unname(nomes_provedores[d$status])
     d$pausado <- ifelse(d$pausado == "1", "sim", "não")
     for (campo in c("atualizado", "valido_ate")) {
       instante <- as.numeric(d[[campo]])

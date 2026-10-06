@@ -23,7 +23,7 @@
 - Para atualizar um módulo na hora, o módulo declara `"signal": N` e quem
   mudou o estado roda `pkill -RTMIN+N -x waybar`. O sinal 10 fica reservado
   às sessões e ao contador da Central de Tarefas. O contador consulta a cada
-  dez segundos e não importa Qt; a janela consulta a cada dois segundos.
+  dez segundos e não importa Qt; a janela observa o estado e consulta a cada 30 segundos como reserva.
 - A Central de Tarefas usa soquete de arquivo numa pasta 0700 em
   `$XDG_RUNTIME_DIR/jangada-tarefas`, oculta pelo runtime privado do isolamento.
   Soquete abstrato ignora permissões de arquivo e fica acessível no espaço
@@ -95,3 +95,14 @@ Depois de trocar cores ou papel de parede, rode `jangada-sddm aplicar`.
   só vale na simulação e quando a consulta falha. `QComboBox.clear()` dispara
   `currentTextChanged`: ao trocar a lista depois da resposta, bloqueie os
   sinais, ou o formulário reabre o envio de um pedido que já saiu.
+
+## Central de tarefas
+
+- `QComboBox.clear()` emite sinais. Troque o catálogo com `blockSignals`
+  para preservar o pedido já enviado e o modo escolhido.
+- Ao simular a resposta de uma prévia nos testes, aguarde a consulta real
+  terminar. Seu sinal `finished` pode substituir o texto simulado e mover
+  a rolagem depois da asserção.
+
+- `QFileSystemWatcher` perde a observação do arquivo após substituição atômica.
+  Observe também a pasta e reponha os caminhos após cada consulta.

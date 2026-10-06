@@ -108,6 +108,8 @@ conferir "caso 2: APROVADO sai com 0" [ "$rc" = 0 ]
 conferir "caso 2: pedido traz a resposta do agente" grep -q MARCA-RESPOSTA "$tmp/falso/agy.pedido"
 conferir "caso 2: pedido traz o parecer anterior" grep -q "problema" "$tmp/falso/agy.pedido"
 
+conferir "caso 2: marca registra verificação local" jq -e '.local_verified == true' "$estado/validacao-s.aprovado"
+
 # Caso 3: sessão do agy, o revisor é o Claude; status com Markdown.
 sessao_de agy
 validar '## **STATUS: APROVADO**'; rc=$?
@@ -362,6 +364,7 @@ conferir "caso 11a: estado gravado como REVISAR (local)" [ "$(jq -r .validacao "
 # 11b: --pular-local ignora a checagem e chama o revisor
 validar 'STATUS: APROVADO' --pular-local; rc=$?
 conferir "caso 11b: --pular-local chama o revisor mesmo com falha local" [ "$rc" = 0 ]
+conferir "caso 11b: marca registra teste local pulado" jq -e '.local_verified == false' "$estado/validacao-s.aprovado"
 conferir "caso 11b: o revisor foi chamado com --pular-local" test -s "$tmp/falso/agy.pedido"
 
 git -C "$tmp/projeto" rm -qf conflito.txt
@@ -844,11 +847,19 @@ rm -f "$tmp/projeto/link.txt"
 sessao_de claude agy
 head -c 3000 /dev/zero | tr '\0' 'a' | fold -w 60 >"$tmp/projeto/aaa-grande.txt"
 echo "mudança importante" >"$tmp/projeto/zzz-depois.txt"
-JANGADA_VALIDAR_DIFF_MAX=1000 validar 'STATUS: APROVADO'
+JANGADA_VALIDAR_DIFF_MAX=1000 validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 19: corte sem cobertura no parecer não aprova" [ "$rc" = 3 ]
+conferir "caso 19: parecer registra a recusa por cobertura" \
+  bash -c '[ "$(head -n1 "$1")" = "STATUS: REVISAR" ] && grep -q "cobertura do diff" "$1"' _ "$estado/validacao-s-r1.md"
+conferir "caso 19: corte sem cobertura não grava marca" test ! -e "$estado/validacao-s.aprovado"
 conferir "caso 19: o pedido lista o arquivo depois do corte" \
-  bash -c 'sed -n "/diff cortado/,\$p" "$1" | grep -qF "=== Arquivo novo (não rastreado): zzz-depois.txt ==="' _ "$tmp/falso/agy.pedido"
+  bash -c 'sed -n "/diff cortado/,\$p" "$1" | grep -qF "zzz-depois.txt"' _ "$tmp/falso/agy.pedido"
 conferir "caso 19: o pedido lista o arquivo partido no corte" \
   bash -c 'sed -n "/diff cortado/,\$p" "$1" | grep -qF "aaa-grande.txt"' _ "$tmp/falso/agy.pedido"
+sessao_de claude agy
+cobertura="$( { git -C "$tmp/projeto" diff --name-only -z main | tr '\0' '\n'; git -C "$tmp/projeto" ls-files --others --exclude-standard; } | sort -u | sed 's/^/CONFERIDO: /')"
+JANGADA_VALIDAR_DIFF_MAX=1000 validar "STATUS: APROVADO\n$cobertura"; rc=$?
+conferir "caso 19: cobertura explícita permite aprovação" [ "$rc" = 0 ]
 # O Codex não tem ferramenta para ler o que o corte deixou de fora.
 sessao_de claude agy
 JANGADA_VALIDAR_DIFF_MAX=1000 validar 'STATUS: APROVADO' --revisor codex; rc=$?
