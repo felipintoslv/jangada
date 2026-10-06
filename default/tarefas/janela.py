@@ -11,7 +11,7 @@ import time
 import uuid
 
 from PyQt6.QtCore import QFileSystemWatcher, QProcess, QProcessEnvironment, QTimer, Qt
-from PyQt6.QtGui import QColor, QKeySequence
+from PyQt6.QtGui import QColor, QKeySequence, QPixmap
 from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout,
                             QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow, QMessageBox,
                             QPlainTextEdit, QPushButton, QSplitter, QTabWidget,
@@ -269,6 +269,15 @@ class Janela(QMainWindow):
         layout = QVBoxLayout(centro)
         layout.setContentsMargins(24, 22, 24, 18)
         topo = QHBoxLayout()
+        topo.setSpacing(8)
+        imagem_marca = QPixmap(str(Path(__file__).resolve().parents[1] / 'logo/jangada.png'))
+        if not imagem_marca.isNull():
+            marca = QLabel()
+            marca.setAccessibleName('Jangada')
+            marca.setPixmap(imagem_marca)
+            marca.setFixedSize(24, 24)
+            marca.setScaledContents(True)
+            topo.addWidget(marca)
         titulo = QLabel(nome_central)
         titulo.setStyleSheet('font-size: 24px; font-weight: 600;')
         topo.addWidget(titulo)
