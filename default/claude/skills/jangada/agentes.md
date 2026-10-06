@@ -237,7 +237,12 @@ acima, o arquivo tem `inicio` e `fim` (SessionStart e SessionEnd do Claude),
 `foco` (cada `--focar` numa sessão viva) e `subagente-inicio` e
 `subagente-fim` (com `subagente_id`, `subagente_tipo` e `conversa`). Só
 gravam o histórico os hooks e o `jangada-agentes`, por
-`jangada_registrar_evento` (`bin/jangada-config`), que nunca falha: um erro ao gravar não pode derrubar o hook. O histórico só
+`jangada_registrar_evento` (`bin/jangada-config`), que nunca falha: um erro ao gravar não pode derrubar o hook. A linha entra por
+`jangada_anexar_linha`, sob `flock` no próprio arquivo: o `printf` do bash
+divide uma linha grande em várias escritas, e duas sessões anexando ao mesmo
+tempo misturavam os pedaços. O `delegacoes.jsonl` usa a mesma função. Em
+teste, linha grande se gera com `printf`, não com `jq --arg` (300 KB estouram
+o limite de argumentos). O histórico só
 cresce; o mapa de todos os registros usados pelo painel de indicadores está
 em `docs/registros.md`.
 
