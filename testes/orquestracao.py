@@ -34,6 +34,17 @@ class Persistencia(unittest.TestCase):
         self.estado = MODULO.Estado(self.pasta)
         self.addCleanup(lambda: self.estado.fechar())
 
+    def test_consultas_de_eventos_por_tarefa_usam_indice(self):
+        consultas = (
+            "SELECT dados FROM eventos WHERE tarefa=? AND evento='reservada' ORDER BY seq DESC LIMIT 1",
+            'SELECT evento,dados FROM eventos WHERE tarefa=? AND evento IN (?,?)',
+        )
+        for consulta in consultas:
+            plano = ' '.join(linha['detail'] for linha in self.estado.db.execute(
+                'EXPLAIN QUERY PLAN ' + consulta, ('T1', 'a', 'b')[:consulta.count('?')]))
+            self.assertIn('USING INDEX eventos_tarefa', plano)
+            self.assertNotIn('SCAN eventos', plano)
+
     def test_importacao_idempotente_sem_apagar_execucao(self):
         self.estado.importar([tarefa()])
         _, dono = self.estado.reservar()

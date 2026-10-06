@@ -139,6 +139,7 @@ class Estado:
                 FOREIGN KEY(tarefa) REFERENCES tarefas(id)
             );
             CREATE INDEX IF NOT EXISTS tarefas_status ON tarefas(status);
+            CREATE INDEX IF NOT EXISTS eventos_tarefa ON eventos(tarefa, evento);
         ''')
 
     def fechar(self):
