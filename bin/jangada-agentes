@@ -513,7 +513,7 @@ previa() {
 
   # Último parecer feito fora do isolamento (revisoes/, oculta para o agente),
   # com a marca de aprovação conferida contra o commit atual do ramo.
-  local revisoes="$JANGADA_ESTADO/revisoes" validacao fora ramo_s raiz_s cabeca c="" l=""
+  local revisoes="$JANGADA_ESTADO/revisoes" validacao fora ramo_s raiz_s cabeca c="" l="" i=""
   fora="$(mais_recente "$revisoes/validacao-$s-r")"
   if [[ -n "$fora" ]]; then
     echo ""
@@ -525,9 +525,13 @@ previa() {
     cabeca=""
     [[ "$ramo_s" =~ ^agente/[a-z0-9_][a-z0-9_-]*$ && "$raiz_s" == /* && -d "$raiz_s" ]] \
       && cabeca="$(jangada_git_seguro -C "$raiz_s" rev-parse --verify --quiet "$ramo_s^{commit}" 2>/dev/null || true)"
-    [[ -f "$revisoes/validacao-$s.aprovado" ]] && read -r c _ l <"$revisoes/validacao-$s.aprovado"
-    if [[ -n "$c" && "$c" == "$cabeca" && "$l" == limpo ]]; then
-      echo "(aprovação vale para o commit atual do ramo, ${c:0:12})"
+    [[ -f "$revisoes/validacao-$s.aprovado" ]] \
+      && IFS=$'\t' read -r c l i < <(jq -r 'objects | [.candidate_sha, .limpo, .independent] | map(tostring) | @tsv' \
+        "$revisoes/validacao-$s.aprovado" 2>/dev/null)
+    if [[ -n "$c" && "$c" == "$cabeca" && "$l" == true && "$i" != true ]]; then
+      echo "(autorrevisão do commit atual do ramo, ${c:0:12}: não vale como revisão independente)"
+    elif [[ -n "$c" && "$c" == "$cabeca" && "$l" == true ]]; then
+      echo "(aprovação vale para o commit atual do ramo, ${c:0:12}; o --integrar confere a base)"
     elif [[ -n "$c" ]]; then
       echo "(a última aprovação, ${c:0:12}, não é do commit atual do ramo)"
     fi

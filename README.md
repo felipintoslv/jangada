@@ -578,7 +578,8 @@ git sobre pastas de agentes com `jangada_git_seguro`.
 `JANGADA_ISOLAR_ESCRITA` no `jangada.conf` acrescenta pastas graváveis,
 separadas por `:` (`~/dados:~/R`). `JANGADA_ISOLAR_OCULTAR` substitui a lista
 de ocultos, com caminhos relativos à pasta pessoal ou absolutos; definida
-vazia, não oculta nada. A pasta do token do `jangada-painel` fica oculta
+vazia, não oculta nada. Para acrescentar sem perder a lista padrão, use
+`JANGADA_ISOLAR_OCULTAR_EXTRA`. A pasta do token do `jangada-painel` fica oculta
 sempre. Para o Claude, `jangada-agente --sem-isolar` desliga o isolamento
 numa sessão; `JANGADA_AGENTE_ISOLAR=0` desliga num perfil ou no `jangada.conf`.
 O Codex e o executor do Conversa de Pescador exigem isolamento mesmo com

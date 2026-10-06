@@ -115,9 +115,9 @@ conferência de processo zumbi e o prazo; outros erros continuam sendo falhas.
 | `jangada-hook-leitor` | PreToolUse do leitor: só comandos de leitura no terminal; no Claude pelo frontmatter do agente, no agy (`--agy`) pelo `PreToolUse` do `run_command` no `~/.gemini/config/hooks.json` |
 | `jangada-filtrar` | condensa saídas longas de comandos no terminal para poupar tokens; atalho `resumir` no jangada shell |
 | `jangada-mapa` | extrai a estrutura de arquivos e assinaturas em Markdown; atalho `mapa` no jangada shell |
-| `jangada-validar` | revisão do diff por outro modelo ou pelo mesmo modelo isolado (claude ou agy), só leitura, chamada pelo agente antes de entregar; executa portão determinístico local antes (conflitos, script com byte nulo, sintaxe, lintr, gitleaks nas linhas acrescentadas; sem gitleaks reprova, salvo `JANGADA_VALIDAR_SEM_GITLEAKS=1`; `.gitleaks.toml`, `.gitleaksignore`, `AGENTS.md` e `CLAUDE.md` valem da base, e `.lintr` também quando a base tem um); só a primeira linha não vazia do parecer decide o status; pareceres em `validacao-<sessao>-rN.md`; depois de um APROVADO, `validacao-<sessao>.aprovado` guarda o commit, e a próxima entrega parte dele com as rodadas zeradas; cada rodada vira uma linha em `~/.local/state/jangada/validar.jsonl`, resumida por `--metricas` |
+| `jangada-validar` | revisão do diff por outro modelo ou pelo mesmo modelo isolado (claude ou agy), só leitura, chamada pelo agente antes de entregar; executa portão determinístico local antes (conflitos, script com byte nulo, sintaxe, lintr, gitleaks nas linhas acrescentadas; sem gitleaks reprova, salvo `JANGADA_VALIDAR_SEM_GITLEAKS=1`; `.gitleaks.toml`, `.gitleaksignore`, `AGENTS.md` e `CLAUDE.md` valem da base, e `.lintr` também quando a base tem um); só a primeira linha não vazia do parecer decide o status; pareceres em `validacao-<sessao>-rN.md`; a primeira linha tem de ser exatamente `STATUS: APROVADO` ou `STATUS: REVISAR`, e a aprovação pelo modelo do autor sai como `APROVADO_AUTORREVISAO`; a revisão lê uma foto congelada da entrega, não o worktree vivo; depois de um APROVADO, `validacao-<sessao>.aprovado` (JSON) guarda commit, árvore, base e revisor, e a próxima entrega parte dele com as rodadas zeradas; cada rodada vira uma linha em `~/.local/state/jangada/validar.jsonl`, resumida por `--metricas` |
 | `jangada-agentes` | seletor, painel, módulo da barra, `--focar`, `--proximo`, `--anterior`, `--restaurar` |
-| `jangada-agente-fim` | encerra a sessão e remove o worktree (mantém o ramo); `--integrar` exige aprovação feita fora do isolamento (`revisoes/`, commit atual do ramo, worktree limpo), roda o `jangada-validar` fora se não houver e, sem APROVADO, pede confirmação (`--sem-revisao` pula a revisão); faz o merge na base, avisa para rodar o `jangada-update` se for o repositório do jangada, apaga o ramo e, nesse repositório e com `allowed_signers`, chama o `jangada-assinar` |
+| `jangada-agente-fim` | encerra a sessão e remove o worktree (mantém o ramo); `--integrar` exige aprovação independente feita fora do isolamento (`revisoes/`: commit e árvore atuais do ramo, worktree limpo, base na mesma ponta da revisão), roda o `jangada-validar` fora se não houver e, sem APROVADO ou só com autorrevisão, pede confirmação (`--sem-revisao` pula a revisão); sob a trava do repositório (`revisoes/travas/`), reconfere ramo, base e objetos contra o espelho e faz o merge na base, avisa para rodar o `jangada-update` se for o repositório do jangada, apaga o ramo e, nesse repositório e com `allowed_signers`, chama o `jangada-assinar` |
 | `jangada-consumo` | tokens do Claude no bloco de 5 horas, lidos de `~/.claude/projects` |
 | `jangada-painel` | indicadores num app Shiny em 127.0.0.1; `default/painel/coletor.py` grava o cache em Parquet (`~/.local/state/jangada/painel`), `default/painel/app.R` só lê o cache |
 | `jangada-gancho` | roda os ganchos do usuário em `~/.config/jangada/ganchos/` |
@@ -194,7 +194,12 @@ chaveiro inteiro é legível pelo D-Bus filtrado, `~/.claude/projects` e o
 `settings.json` do agy seguem graváveis, e repositórios aninhados no índice
 só ficam protegidos quando o git de fora passa por `jangada_git_seguro`.
 `JANGADA_AGENTE_ISOLAR=0` desliga (no `jangada.conf` ou num perfil), e
-`JANGADA_ISOLAR_OCULTAR` substitui a lista de ocultos. O estado guarda
+`JANGADA_ISOLAR_OCULTAR` substitui a lista de ocultos, e
+`JANGADA_ISOLAR_OCULTAR_EXTRA` acrescenta a ela. `JANGADA_ISOLAR_PERFIL=verificacao`
+(usado pelo `jangada-validar` no `lintr` e no `.jangada/validar.sh`) corta a
+rede e oculta os logins e as chaves dos provedores. Repositório em reftable
+é recusado. O `/sys` é o do host mesmo sem rede: para conferir a rede de
+dentro, leia `/proc/net/dev`. O estado guarda
 `comando` e `isolar` só para consulta: o `--restaurar` recompõe o comando e
 volta isolado, a menos que `JANGADA_AGENTE_ISOLAR=0` esteja no `jangada.conf`
 ou no ambiente (perfil e `--sem-isolar` não contam). Sem o `bwrap`, o
@@ -232,7 +237,12 @@ acima, o arquivo tem `inicio` e `fim` (SessionStart e SessionEnd do Claude),
 `foco` (cada `--focar` numa sessão viva) e `subagente-inicio` e
 `subagente-fim` (com `subagente_id`, `subagente_tipo` e `conversa`). Só
 gravam o histórico os hooks e o `jangada-agentes`, por
-`jangada_registrar_evento` (`bin/jangada-config`), que nunca falha: um erro ao gravar não pode derrubar o hook. O histórico só
+`jangada_registrar_evento` (`bin/jangada-config`), que nunca falha: um erro ao gravar não pode derrubar o hook. A linha entra por
+`jangada_anexar_linha`, sob `flock` no próprio arquivo: o `printf` do bash
+divide uma linha grande em várias escritas, e duas sessões anexando ao mesmo
+tempo misturavam os pedaços. O `delegacoes.jsonl` usa a mesma função. Em
+teste, linha grande se gera com `printf`, não com `jq --arg` (300 KB estouram
+o limite de argumentos). O histórico só
 cresce; o mapa de todos os registros usados pelo painel de indicadores está
 em `docs/registros.md`.
 
@@ -370,10 +380,32 @@ porta de entrada. O que se aprendeu com ele vale para o revisor agy:
   chamam o `jangada-validar` sem querer esse modo passam `JANGADA_ISOLADO=1`.
 - Prefira fazer o commit antes de `jangada-validar`, para revisar uma entrega
   limpa. O comando também aceita alterações sem commit; nesse caso, registra
-  a aprovação como `sujo`. Veja o [ciclo da tarefa](../../../../docs/ciclo-da-tarefa.md).
-- `.aprovado` com `sujo` (worktree com alteração sem commit) não move o ponto
+  a aprovação com `limpo` falso. Veja o [ciclo da tarefa](../../../../docs/ciclo-da-tarefa.md).
+- `.aprovado` com `limpo` falso (worktree com alteração sem commit) não move o ponto
   de comparação: com o commit igual ao `HEAD`, a próxima rodada daria "nada a
   revisar" sem ninguém ter visto o commit sozinho.
+- O git não reconfere o hash de um objeto solto ao ler: um blob trocado em
+  `.git/objects` passa pelo `cat-file`, pelo `diff` e pelo `merge` com o nome
+  do original. Quem recalcula é o `git fetch` para outro repositório, e ele
+  não precisa de `fetch.fsckObjects`. Por isso o `jangada-validar` e o
+  `--integrar` buscam a entrega num espelho em `revisoes/espelhos/` e comparam
+  o `cat-file --batch` dos dois lados antes do merge.
+  O merge ainda lê os objetos depois dessa comparação, então o `--integrar`
+  refaz a mescla no espelho (`git merge-tree --write-tree`), exige a mesma
+  árvore e recalcula o hash de cada arquivo mudado (`git hash-object`) contra
+  o nome na árvore do espelho; diferença desfaz o merge. Não servem `git diff
+  --quiet HEAD` (compara o arquivo com o conteúdo do objeto forjado e não vê
+  diferença) nem `update-index --really-refresh` com `diff-index` (o
+  `--really-refresh` só ignora o assume-unchanged: com o stat igual ao do
+  índice, o arquivo não é relido).
+  O que isso não cobre: o agente segue gravando em `.git/objects` depois da
+  integração, e um objeto trocado mais tarde só aparece no `git fsck`.
+- Uma marca `.aprovado` que não vale para o merge (base andou, árvore
+  trocada, formato antigo) tem de sair antes de revisar de novo: com ela, o
+  `jangada-validar` parte do commit aprovado e responde "nada a revisar".
+- `read -p` só mostra a pergunta com a entrada num terminal. Teste que
+  responde pela entrada padrão confere a mensagem anterior à pergunta, não a
+  pergunta.
 - O `jangada-validar` executa uma checagem determinística local antes do revisor por IA (marcadores de conflito do Git, sintaxe de scripts alterados e `.jangada/validar.sh`). Se falhar, grava `STATUS: REVISAR (local)` sem acionar a API externa, economizando tokens. A opção `--pular-local` ignora o portão local.
 - Um comentário de shell que começa pela palavra `shellcheck` vira diretiva e
   quebra a análise do arquivo inteiro (SC1073). Reescreva a frase.
@@ -437,6 +469,10 @@ atualize a cópia instalada com `jangada-update`.
   repositório principal, o `jangada-worktree-preparar` não confia no
   worktree, e o agy abre com a pergunta "Do you trust the contents of this
   project?", que o usuário responde na janela.
+  A pasta `~/.gemini/antigravity-cli` é gravável pelo agente isolado, e o
+  fim da sessão regrava o `settings.json` de fora do isolamento: se o arquivo
+  virou link simbólico, o jangada não mexe nele, e a troca é por rename
+  (`jangada_gravar_atomico`), que não segue link.
 - Para testar hooks sem tocar no estado real, mude `XDG_STATE_HOME`; o
   `jangada-config` recalcula `JANGADA_ESTADO` a partir dele.
 - Clones de referência em subpastas (como `referencia/`): se contiverem

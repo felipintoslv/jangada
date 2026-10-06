@@ -176,20 +176,40 @@ avisar_copia_instalada() {
 }
 
 # Aprovação do revisor que vale para o merge: gravada em revisoes/, que o
-# jangada-isolar oculta, para o commit exato do ramo e com o worktree limpo
-# (o merge leva só o que tem commit). Os pareceres em agentes/ são graváveis
-# pelo agente e não contam. Sem a aprovação, roda o jangada-validar aqui, com
-# a base já conferida (o repositório principal está nela).
+# jangada-isolar oculta. Vale só para o que vai ser mesclado: o commit exato
+# do ramo, com a árvore que o revisor leu, contra a base como está agora, e
+# dada por um modelo que não é o do autor. Os pareceres em agentes/ são
+# graváveis pelo agente e não contam. Sem a aprovação, roda o jangada-validar
+# aqui, com a base já conferida (o repositório principal está nela).
+# motivo_marca diz por que a marca não valeu.
+motivo_marca=""
 revisao_fora() {
   local marca="$JANGADA_ESTADO/revisoes/validacao-$s.aprovado" rc=0
   aprovada() {
-    local c="" l=""
-    [[ -f "$marca" ]] && read -r c _ l <"$marca" && [[ "$c" == "$cabeca" && "$l" == limpo ]]
+    local c="" l="" b="" t="" i=""
+    motivo_marca="sem aprovação feita fora do isolamento para o commit atual de $ramo"
+    [[ -f "$marca" ]] || return 1
+    IFS=$'\t' read -r c l b t i < <(jq -r 'objects | [.candidate_sha, .limpo, .base_sha, .candidate_tree, .independent]
+      | map(tostring) | @tsv' "$marca" 2>/dev/null) || return 1
+    [[ "$c" == "$cabeca" && "$l" == true ]] || return 1
+    [[ "$t" == "$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet "$cabeca^{tree}" || true)" ]] || return 1
+    if [[ "$b" != "$ponta_base" ]]; then
+      motivo_marca="a base $base mudou depois da revisão (era ${b:0:12}, está em ${ponta_base:0:12})"
+      return 1
+    fi
+    if [[ "$i" != true ]]; then
+      motivo_marca="o commit ${cabeca:0:12} só tem autorrevisão (revisor e autor são o mesmo modelo), que não vale como revisão independente"
+      return 2
+    fi
   }
-  if aprovada; then
-    echo "aprovado fora do isolamento no commit ${cabeca:0:12}"
+  aprovada || rc=$?
+  if ((rc == 0)); then
+    echo "aprovado fora do isolamento no commit ${cabeca:0:12}, contra $base em ${ponta_base:0:12}"
     return 0
   fi
+  # Revisar de novo daria a mesma autorrevisão.
+  ((rc != 2)) || return 1
+  rc=0
   if ((sem_revisao)); then
     echo "revisão fora do isolamento pulada (--sem-revisao)"
     return 1
@@ -209,12 +229,85 @@ revisao_fora() {
   echo "revisando fora do isolamento com o jangada-validar (pode levar alguns minutos)..."
   # --forcar: o limite de rodadas segura um agente em ciclo, e aqui quem pede
   # é o usuário.
+  # A marca que não valeu sai antes: com ela, o jangada-validar partiria do
+  # commit aprovado e não teria o que revisar.
+  rm -f "$marca"
   JANGADA_SESSAO="$s" "$JANGADA_PATH/bin/jangada-validar" --base "$base" --forcar "$worktree" || rc=$?
   if ((rc == 0)) && aprovada; then
     return 0
   fi
   ((rc == 0)) || echo "o jangada-validar terminou com código $rc (3 é REVISAR)"
   return 1
+}
+
+# O agente grava em .git/objects, e o git não reconfere o hash de um objeto
+# solto ao ler: um blob trocado entraria no merge com o nome do original. O
+# espelho recebe o ramo e a base por fetch, que recalcula cada hash, e o
+# conteúdo de cada objeto que o merge lê tem de ser igual nos dois lados.
+objetos_integros() {
+  local comum espelho chave lista rc=0
+  comum="$(dir_comum "$raiz")" && espelho="$(jangada_espelho "$comum")" || return 1
+  chave="$(printf '%s' "$s" | sha256sum | cut -c1-16)"
+  jangada_git_seguro --git-dir="$espelho" fetch -q --no-tags "$comum" \
+    "+$cabeca:refs/jangada/$chave/candidato" "+$ponta_base:refs/jangada/$chave/base" || return 1
+  lista="$(mktemp)"
+  { jangada_git_seguro --git-dir="$espelho" rev-list --objects "$ponta_base..$cabeca"
+    jangada_git_seguro --git-dir="$espelho" rev-list --objects --no-walk "$ponta_base" "$cabeca"
+  } | cut -d' ' -f1 | sort -u >"$lista" || rc=1
+  ((rc)) || cmp -s <(jangada_git_seguro --git-dir="$espelho" cat-file --batch <"$lista") \
+                   <(jangada_git_seguro -C "$raiz" cat-file --batch <"$lista") || rc=1
+  rm -f "$lista"
+  return "$rc"
+}
+
+# O merge lê objetos que o agente ainda grava, depois de objetos_integros. O
+# espelho refaz a mescla só com objetos protegidos: a árvore tem de ser a
+# mesma, e cada arquivo que a mescla mudou tem de ter, no disco, o conteúdo
+# do nome que leva na árvore do espelho. O hash é recalculado do arquivo: o
+# índice e o stat não entram, porque quem os gravou foi o merge conferido.
+mescla_integra() {
+  local espelho arvore meta caminho modo nome atual
+  espelho="$(jangada_espelho "$(dir_comum "$raiz")")" || return 1
+  arvore="$(jangada_git_seguro --git-dir="$espelho" merge-tree --write-tree "$ponta_base" "$cabeca" 2>/dev/null)" || return 1
+  [[ -n "$arvore" && "$arvore" == "$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet 'HEAD^{tree}')" ]] || return 1
+  while IFS= read -r -d '' meta && IFS= read -r -d '' caminho; do
+    read -r _ modo _ nome _ <<<"$meta"
+    case "$modo" in
+      000000 | 160000) continue ;;
+      120000) atual="$(readlink -n -- "$raiz/$caminho" | jangada_git_seguro hash-object --stdin)" ;;
+      *) atual="$(cd "$raiz" && jangada_git_seguro hash-object -- "$caminho" 2>/dev/null)" ;;
+    esac
+    [[ "$atual" == "$nome" ]] || return 1
+  done < <(jangada_git_seguro --git-dir="$espelho" diff-tree -r -z --no-renames "$ponta_base" "$arvore")
+}
+
+# Roda sob a trava do repositório: entre a conferência e o merge o usuário
+# decide sem prazo, e nesse meio outra sessão pode ter sido integrada. Aqui o
+# ramo e a base têm de estar onde estavam quando foram listados e conferidos.
+mesclar_sob_trava() {
+  if [[ "$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet "$ramo^{commit}" || true)" != "$cabeca" ]]; then
+    echo "o ramo $ramo mudou depois da conferência (era ${cabeca:0:12}); nada foi mesclado. Rode de novo." >&2
+    return 11
+  fi
+  if [[ "$(jangada_git_seguro -C "$raiz" rev-parse --abbrev-ref HEAD)" != "$base" \
+        || "$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet HEAD || true)" != "$ponta_base" ]]; then
+    echo "a base $base mudou depois da conferência (era ${ponta_base:0:12}); nada foi mesclado. Rode de novo." >&2
+    return 11
+  fi
+  if ! objetos_integros; then
+    echo "os objetos de $ramo ou de $base em $raiz não conferem com o espelho (objeto adulterado ou repositório corrompido); nada foi mesclado." >&2
+    return 11
+  fi
+  if ! jangada_git_seguro -C "$raiz" merge --no-ff -m "Integra $ramo" "$cabeca"; then
+    echo "o merge falhou; resolva em $raiz (git merge --abort desfaz). A sessão foi mantida." >&2
+    return 12
+  fi
+  if ! mescla_integra; then
+    jangada_git_seguro -C "$raiz" reset -q --hard "$ponta_base" \
+      || echo "não consegui desfazer o merge: confira $raiz (git reset --hard ${ponta_base:0:12})." >&2
+    echo "o que o merge escreveu em $raiz não confere com a mescla refeita no espelho (objeto adulterado durante o merge); o merge foi desfeito." >&2
+    return 11
+  fi
 }
 
 integrado=0
@@ -247,6 +340,7 @@ if ((integrar)); then
     # A sessão só fecha na limpeza: até lá o agente pode mover o ramo. O commit
     # é resolvido uma vez, e é ele que se lista, se confere e se mescla.
     cabeca="$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet "$ramo^{commit}" || true)"
+    ponta_base="$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet HEAD)"
     novos=""
     [[ -z "$cabeca" ]] \
       || novos="$(jangada_git_seguro -C "$raiz" log --oneline "$base..$cabeca" 2>/dev/null | tr -d '\000-\010\013-\037\177' || true)"
@@ -258,15 +352,16 @@ if ((integrar)); then
       if revisao_fora; then
         confirmar "mesclar e encerrar a sessão?" || { echo "nada foi feito"; exit 1; }
       else
-        echo "sem aprovação feita fora do isolamento para o commit atual de $ramo"
+        echo "$motivo_marca"
         confirmar "mesclar assim mesmo e encerrar a sessão?" || { echo "nada foi feito"; exit 1; }
       fi
-      if [[ "$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet "$ramo^{commit}" || true)" != "$cabeca" ]]; then
-        echo "o ramo $ramo mudou depois da conferência (era ${cabeca:0:12}); nada foi mesclado. Rode de novo." >&2
-        exit 1
-      fi
-      if ! jangada_git_seguro -C "$raiz" merge --no-ff -m "Integra $ramo" "$cabeca"; then
-        echo "o merge falhou; resolva em $raiz (git merge --abort desfaz). A sessão foi mantida." >&2
+      # A trava só cobre a reconferência e o merge, nunca a espera pelo usuário.
+      trava="$JANGADA_ESTADO/revisoes/travas/$(dir_comum "$raiz" | sha256sum | cut -c1-16)"
+      (umask 077; mkdir -p "$trava")
+      rc=0
+      jangada_com_trava_dir "$trava" mesclar_sob_trava || rc=$?
+      if ((rc)); then
+        ((rc == 11 || rc == 12)) || echo "outra integração segura a trava deste repositório; nada foi mesclado. Rode de novo." >&2
         exit 1
       fi
       echo "integrado em $base"

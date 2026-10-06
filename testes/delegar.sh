@@ -297,6 +297,51 @@ conferir "caso 16: confiança adicionada e removida por caminho" \
 conferir "caso 16: cópia do settings.json de antes da primeira alteração" \
   jqok -e '.trustedWorkspaces == [] and .outra == 1' "$conf_agy.jangada-orig"
 
+# A pasta do settings.json é gravável pelo agente isolado: um link posto ali
+# não pode levar a escrita de fora do isolamento a outro arquivo.
+echo '{"alvo": 1}' >"$tmp/alvo.json"
+mv "$conf_agy" "$conf_agy.guardado"
+ln -s "$tmp/alvo.json" "$conf_agy"
+confianca adicionar "$tmp/projeto"
+conferir "caso 16b: settings.json trocado por link não é seguido" \
+  bash -c '[ -L "$1" ] && [ "$(cat "$2")" = "{\"alvo\": 1}" ]' _ "$conf_agy" "$tmp/alvo.json"
+rm -f "$conf_agy"
+mv "$conf_agy.guardado" "$conf_agy"
+# O link aparece depois da conferência e o rename falha: nada é regravado no
+# lugar, e o temporário nunca fica na pasta do settings.json.
+mkdir -p "$tmp/mv-falso"
+cat >"$tmp/mv-falso/mv" <<FIM
+#!/bin/sh
+printf '%s\\n' "\$*" >"$tmp/mv.args"
+rm -f "$conf_agy"
+ln -s "$tmp/alvo.json" "$conf_agy"
+exit 1
+FIM
+chmod +x "$tmp/mv-falso/mv"
+cp "$conf_agy" "$conf_agy.guardado"
+PATH="$tmp/mv-falso:$PATH" confianca adicionar "$tmp/projeto"
+conferir "caso 16c: rename falho com link no lugar não grava no alvo" \
+  bash -c '[ "$(cat "$1")" = "{\"alvo\": 1}" ]' _ "$tmp/alvo.json"
+conferir "caso 16c: o temporário fica no estado, fora da pasta do settings.json" \
+  bash -c 'read -r _ _ origem _ <"$1"; [[ "$origem" == "$2"/* ]]' _ "$tmp/mv.args" "$tmp/estado"
+rm -f "$conf_agy"
+mv "$conf_agy.guardado" "$conf_agy"
+# O link para uma pasta aparece logo antes do rename (um chmod falso o cria):
+# o mv troca o próprio link, não põe o arquivo dentro da pasta apontada.
+mkdir -p "$tmp/chmod-falso" "$tmp/pasta-alvo"
+cat >"$tmp/chmod-falso/chmod" <<FIM
+#!/bin/sh
+rm -f "$conf_agy"
+ln -s "$tmp/pasta-alvo" "$conf_agy"
+FIM
+chmod +x "$tmp/chmod-falso/chmod"
+cp "$conf_agy" "$conf_agy.guardado"
+PATH="$tmp/chmod-falso:$PATH" confianca adicionar "$tmp/projeto"
+conferir "caso 16d: link para pasta posto antes do rename não recebe o arquivo" \
+  bash -c '[ -z "$(ls -A "$1")" ] && [ ! -L "$2" ]' _ "$tmp/pasta-alvo" "$conf_agy"
+rm -f "$conf_agy"
+mv "$conf_agy.guardado" "$conf_agy"
+
 # O worktree só herda a confiança do repositório principal: com a raiz fora
 # do trustedWorkspaces, o jangada-worktree-preparar não confia no worktree.
 git init --quiet "$tmp/raiz"

@@ -90,3 +90,8 @@ Depois de trocar cores ou papel de parede, rode `jangada-sddm aplicar`.
 - O xdph lê `$XDG_CONFIG_HOME/hypr/xdph.conf`. Para limitar quadros sem
   escrever em `~/.config/hypr`, use o mesmo recurso do hypridle: um drop-in do
   serviço de usuário com `XDG_CONFIG_HOME` apontando para `default/`.
+- A lista de agentes da Nova tarefa vem do `jangada-agente --capacidades-json`
+  (`principais` com `instalado`, e `perfis`); a constante `AGENTES` da Central
+  só vale na simulação e quando a consulta falha. `QComboBox.clear()` dispara
+  `currentTextChanged`: ao trocar a lista depois da resposta, bloqueie os
+  sinais, ou o formulário reabre o envio de um pedido que já saiu.

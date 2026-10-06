@@ -18,6 +18,8 @@ from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout,
 from dados import (CORES, LIMITE, NOME, ORDEM, ROTULOS, Sessao,
                    estado_exibido, idade, ler_lista, simuladas)
 
+# Só para a janela simulada e para quando a consulta falha: o catálogo vem do
+# jangada-agente --capacidades-json, que também é quem valida a escolha.
 AGENTES = ("claude", "codex")
 
 GRUPOS = {'aguardando': 'Precisa de você', 'interrompido': 'Interrompidas',
@@ -82,7 +84,7 @@ class NovaTarefa(QDialog):
 
         if janela.real:
             self.perfis = QProcess(self)
-            janela.preparar(self.perfis, ['--perfis'], 'jangada-agente')
+            janela.preparar(self.perfis, ['--capacidades-json'], 'jangada-agente')
             self.perfis.finished.connect(self.carregar_perfis)
             self.perfis.errorOccurred.connect(lambda _: self.aviso.setText('Não foi possível consultar os perfis. Claude e Codex continuam disponíveis.'))
             self.perfis.start()
@@ -92,7 +94,15 @@ class NovaTarefa(QDialog):
         try:
             if codigo != 0 or estado != QProcess.ExitStatus.NormalExit:
                 raise ValueError('consulta falhou')
-            perfis = json.loads(bytes(self.perfis.readAllStandardOutput()))
+            catalogo = json.loads(bytes(self.perfis.readAllStandardOutput()))
+            if not isinstance(catalogo, dict):
+                raise ValueError('catálogo inválido')
+            principais, perfis = catalogo.get('principais'), catalogo.get('perfis')
+            if not isinstance(principais, list) or not principais or any(
+                not isinstance(a, dict) or not isinstance(a.get('nome'), str)
+                or not isinstance(a.get('instalado'), bool) for a in principais
+            ):
+                raise ValueError('agentes inválidos')
             if not isinstance(perfis, list) or any(
                 not isinstance(p, dict) or not isinstance(p.get('nome'), str)
                 or not isinstance(p.get('descricao'), str) for p in perfis
@@ -101,10 +111,22 @@ class NovaTarefa(QDialog):
         except (ValueError, UnicodeDecodeError):
             self.aviso.setText('Não foi possível consultar os perfis. Claude e Codex continuam disponíveis.')
             return
+        # Sem os sinais: a troca da lista não é edição do usuário, e reabriria
+        # o envio de um pedido que já saiu.
+        escolhido = self.agente.currentText()
+        self.agente.blockSignals(True)
+        self.agente.clear()
+        self.agente.addItems([a['nome'] for a in principais if a['instalado']])
         for perfil in perfis:
             nome = perfil['nome']
             texto = nome + (': ' + perfil['descricao'] if perfil['descricao'] else '')
             self.agente.addItem(texto, nome)
+        if self.agente.findText(escolhido) >= 0:
+            self.agente.setCurrentIndex(self.agente.findText(escolhido))
+        self.agente.blockSignals(False)
+        if not self.agente.count():
+            self.aviso.setText('Nenhum agente instalado: instale o claude ou o codex.')
+            self.enviar.setEnabled(False)
 
     def escolher_pasta(self):
         pasta = QFileDialog.getExistingDirectory(self, 'Escolher projeto', self.projeto.text())

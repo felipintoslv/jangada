@@ -33,7 +33,13 @@
 # agents, skills, hooks e plugins do Claude; os binários do agy; os clones
 # do AUR. Ficam ocultas as chaves, os perfis de navegador e o histórico da
 # área de transferência (JANGADA_ISOLAR_OCULTAR substitui a lista), e sempre
-# o token do jangada-painel.
+# o token do jangada-painel. JANGADA_ISOLAR_OCULTAR_EXTRA acrescenta caminhos
+# à lista em uso, sem substituir a padrão.
+#
+# JANGADA_ISOLAR_PERFIL=verificacao é para código do repositório que não é
+# agente (lintr, .jangada/validar.sh): sem rede, sem D-Bus e sem as
+# credenciais dos provedores, nem em arquivo nem em variável.
+# "verificacao-rede" mantém a rede. Perfil desconhecido é recusado.
 #
 # JANGADA_AGENTE_ISOLAR=0 desliga; já isolado (JANGADA_ISOLADO=1 e a marca
 # que só o bwrap monta), o comando roda direto; sem o bwrap, recusa.
@@ -45,7 +51,7 @@ mostrar=0
 while (($#)); do
   case "$1" in
     --mostrar) mostrar=1; shift ;;
-    -h|--ajuda|--help) sed -n '2,39s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    -h|--ajuda|--help) sed -n '2,45s/^# \{0,1\}//p' "$0"; exit 0 ;;
     --) shift; break ;;
     *) break ;;
   esac
@@ -74,6 +80,12 @@ if ((!mostrar)) && ! command -v bwrap >/dev/null 2>&1; then
   exit 1
 fi
 
+perfil="${JANGADA_ISOLAR_PERFIL:-agente}"
+case "$perfil" in
+  agente | verificacao | verificacao-rede) ;;
+  *) echo "jangada-isolar: perfil desconhecido em JANGADA_ISOLAR_PERFIL: $perfil" >&2; exit 1 ;;
+esac
+
 pasta="$(pwd -P)"
 # /tmp próprio: um rm do agente ali não apaga os temporários do sistema.
 # PID próprio: o agente não mata nem inspeciona os processos da sessão, e
@@ -81,13 +93,15 @@ pasta="$(pwd -P)"
 # dentro no estado; se um dia gravar, o número não vale fora.
 args=(--ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --ro-bind /dev/null "$marca"
       --unshare-pid --die-with-parent)
+[[ "$perfil" == verificacao ]] && args+=(--unshare-net)
 
 gravavel() { [[ -e "$1" ]] && args+=(--bind "$1" "$1"); return 0; }
 somente_leitura() { [[ -e "$1" ]] && args+=(--ro-bind "$1" "$1"); return 0; }
 
 # Casa mínima: a pasta pessoal vira uma pasta vazia em memória, e por cima
 # volta, somente leitura, só o que os agentes e o jangada leem. As montagens
-# seguintes (graváveis, somente leitura, ocultos) valem por cima dela.
+# seguintes (graváveis, somente leitura, ocultos) valem por cima dela. Os
+# arquivos de início do shell ficam de fora: é neles que se exporta token.
 if [[ "${JANGADA_ISOLAR_CASA:-}" == minima ]]; then
   args+=(--tmpfs "$HOME")
   visiveis=("$JANGADA_PATH" "$JANGADA_CONFIG" "$JANGADA_ESTADO")
@@ -96,8 +110,7 @@ if [[ "${JANGADA_ISOLAR_CASA:-}" == minima ]]; then
     [[ "$p" == "$HOME"/?* ]] && visiveis+=("$p")
   done
   for p in .local/bin .local/lib .local/share/claude .local/share/mise .config/mise \
-           .config/git .gitconfig .claude.json .gemini .codex \
-           .zshenv .zprofile .zshrc .bash_profile .bashrc .profile; do
+           .config/git .gitconfig .claude.json .gemini .codex; do
     visiveis+=("$HOME/$p")
   done
   IFS=: read -ra extras <<<"${JANGADA_ISOLAR_CASA_LER:-}"
@@ -150,7 +163,7 @@ dbus_sinc=""
 if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" ]]; then
   args+=(--perms 0700 --tmpfs "$XDG_RUNTIME_DIR")
   pasta_proxy="$XDG_RUNTIME_DIR/jangada-isolar"
-  if ((!mostrar)) && [[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]] \
+  if ((!mostrar)) && [[ "$perfil" == agente && -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]] \
      && command -v xdg-dbus-proxy >/dev/null 2>&1 \
      && { [[ -d "$pasta_proxy" ]] || mkdir -m 0700 "$pasta_proxy" 2>/dev/null; }; then
     sock="$pasta_proxy/bus-$$"
@@ -389,7 +402,15 @@ if gitdir="$(jangada_git_seguro -C "$pasta" rev-parse --path-format=absolute --a
     # ramo ou tag e o git gc falham: eles regravam o packed-refs, que fica na
     # raiz.
     somente_leitura "$comum"
-    for d in objects rr-cache reftable; do
+    # Com reftable, todas as refs moram numa pasta só: liberar a do ramo do
+    # agente liberaria a main, as tags e os ramos das outras sessões.
+    if [[ "$(git config --file "$comum/config" --get extensions.refStorage 2>/dev/null)" == reftable \
+          || -d "$comum/reftable" ]]; then
+      echo "jangada-isolar: $comum guarda as refs em reftable, e o isolamento não separa o ramo do agente das outras refs; recusado." >&2
+      echo "Converta com: git -C ${raiz@Q} refs migrate --ref-format=files" >&2
+      exit 1
+    fi
+    for d in objects rr-cache; do
       gravavel "$comum/$d"
     done
     # Das refs, só a pasta do ramo do worktree e a das cópias do "reverter":
@@ -441,6 +462,12 @@ else
     && { [[ -d "${XDG_CACHE_HOME:-$HOME/.cache}/cliphist" ]] \
          || mkdir -m 0700 "${XDG_CACHE_HOME:-$HOME/.cache}/cliphist" 2>/dev/null || true; }
 fi
+IFS=: read -ra ocultos_extra <<<"${JANGADA_ISOLAR_OCULTAR_EXTRA:-}"
+ocultos+=("${ocultos_extra[@]}")
+# Fora do perfil de agente ninguém fala com provedor: somem os logins do
+# Claude, do Codex e do agy.
+[[ "$perfil" == agente ]] \
+  || ocultos+=("$HOME/.claude" "$HOME/.claude.json" "$codex_casa" "$HOME/.gemini" "$HOME/.config/claude")
 # O token do jangada-painel fica oculto sempre, com ou sem a lista acima: sem
 # ele, o agente alcança a porta do painel mas não abre sessão. A pasta é
 # criada antes, para um token gravado depois não aparecer no isolamento.
@@ -480,6 +507,14 @@ fi
 # As credenciais que os arquivos ocultos guardam também chegam por variável.
 # Sem o ambiente mínimo, o resto é herdado: o que o usuário exportou, o agente lê.
 credenciais=()
+if [[ "$perfil" != agente ]]; then
+  while IFS= read -r v; do
+    case "$v" in
+      CLAUDE_* | ANTHROPIC_* | CODEX_* | OPENAI_* | GEMINI_* | GOOGLE_* | AGY_* | ANTIGRAVITY_*)
+        credenciais+=(--unsetenv "$v") ;;
+    esac
+  done < <(compgen -e)
+fi
 for v in GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN GITLAB_TOKEN AWS_ACCESS_KEY_ID \
          AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AZURE_CLIENT_SECRET RCLONE_CONFIG_PASS \
          VAULT_TOKEN PGPASSWORD MYSQL_PWD OP_SERVICE_ACCOUNT_TOKEN BW_SESSION \

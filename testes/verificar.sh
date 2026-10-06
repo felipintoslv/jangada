@@ -9,6 +9,9 @@ falhas=0
 passo() { printf '\n== %s\n' "$*"; }
 falha() { printf 'XX %s\n' "$*"; falhas=$((falhas + 1)); }
 
+passo "capacidades da máquina"
+testes/capacidades.sh || falha "falta capacidade exigida em JANGADA_TESTES_EXIGIR"
+
 passo "sintaxe bash"
 for f in install.sh install/*.sh bin/* shell/jangada.sh migrations/*.sh; do
   [[ -f "$f" ]] || continue

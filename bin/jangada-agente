@@ -9,6 +9,7 @@
 #   --snapshot        cria um snapshot do sistema antes de iniciar
 #   --agente CMD      usa outro agente (padrão: JANGADA_AGENTE, hoje "claude")
 #   --perfis          lista os perfis disponíveis em JSON
+#   --capacidades-json  agentes que abrem sessão principal (com "instalado") e perfis, em JSON
 #   --perfil NOME     usa o perfil NOME (~/.config/jangada/agentes/NOME.conf ou,
 #                     sem ele, default/agentes/NOME.conf)
 #   --revisor NOME    revisor para jangada-validar (claude, agy, codex, mesmo ou oposto)
@@ -38,16 +39,27 @@ set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
-if [[ "${1:-}" == --perfis ]]; then
+# Quem abre sessão principal. A Central e o --perfis leem daqui: o agy só
+# atende delegação e revisão.
+principais=(claude codex)
+perfis_json() {
+  local perfil
   while read -r perfil; do
     jangada_perfil "$perfil" || continue
-    case "$(basename "${PERFIL_COMANDO%% *}")" in
-      claude|codex) ;;
-      *) continue ;;
-    esac
+    [[ " ${principais[*]} " == *" $(basename "${PERFIL_COMANDO%% *}") "* ]] || continue
     jq -n --arg nome "$perfil" --arg descricao "$PERFIL_DESCRICAO" \
       '{nome:$nome, descricao:$descricao}'
   done < <(jangada_perfis) | jq -s .
+}
+if [[ "${1:-}" == --perfis ]]; then
+  perfis_json
+  exit 0
+fi
+if [[ "${1:-}" == --capacidades-json ]]; then
+  for a in "${principais[@]}"; do
+    command -v "$a" >/dev/null 2>&1 && i=true || i=false
+    jq -n --arg nome "$a" --argjson instalado "$i" '{nome:$nome, instalado:$instalado}'
+  done | jq -s --argjson perfis "$(perfis_json)" '{principais: ., perfis: $perfis}'
   exit 0
 fi
 

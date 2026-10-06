@@ -95,6 +95,7 @@ export JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_INTERFACE JANGADA_TERM
   JANGADA_LOCAL_KEEP_ALIVE JANGADA_LOCAL_ESPERA JANGADA_OLLAMA_URL JANGADA_LOCAL_FATIAS_MAX
 # Só quando definido: ausente e vazio têm sentidos diferentes no jangada-isolar.
 if [[ -n "${JANGADA_ISOLAR_OCULTAR+x}" ]]; then export JANGADA_ISOLAR_OCULTAR; fi
+if [[ -n "${JANGADA_ISOLAR_OCULTAR_EXTRA+x}" ]]; then export JANGADA_ISOLAR_OCULTAR_EXTRA; fi
 
 # Dispositivos DRM com saída de vídeo conectada, um por linha, em caminho
 # estável (/dev/dri/by-path, porque a numeração de /dev/dri/cardN muda entre
@@ -276,13 +277,30 @@ jangada_data_iso() {
 # um objeto JSON com campos a mais, acrescentados depois dos cinco de sempre.
 # Nunca falha: é chamado de dentro dos hooks. Uma linha curta com >> é gravada
 # inteira mesmo com dois hooks ao mesmo tempo.
+# Anexa LINHA a ARQUIVO sob trava. O printf do bash divide uma linha grande em
+# várias escritas, e dois processos anexando juntos misturavam os pedaços. A
+# trava é o próprio arquivo aberto para leitura, que o agente isolado também
+# alcança. Sem a trava em 5 s, a linha é gravada assim mesmo: registro não
+# segura quem chama.
+jangada_anexar_linha() {
+  [[ -e "$1" ]] || : 2>/dev/null >>"$1" || return 1
+  if command -v flock >/dev/null 2>&1; then
+    (
+      flock -w 5 9 || true
+      printf '%s\n' "$2" >>"$1"
+    ) 9<"$1" 2>/dev/null
+  else
+    printf '%s\n' "$2" 2>/dev/null >>"$1"
+  fi
+}
+
 jangada_registrar_evento() {
   local linha
   linha="$(jq -cn --arg d "$(jangada_data_iso)" --arg s "$1" --arg p "$2" --arg a "$3" --arg e "$4" \
     --arg x "${5:-}" '{data: $d, sessao: $s, projeto: $p, agente: $a, estado: $e}
       + (($x | fromjson? | objects) // {})' 2>/dev/null)" || return 0
   [[ -n "$linha" ]] || return 0
-  printf '%s\n' "$linha" 2>/dev/null >>"$JANGADA_ESTADO/eventos-agentes.jsonl" || true
+  jangada_anexar_linha "$JANGADA_ESTADO/eventos-agentes.jsonl" "$linha" || true
   return 0
 }
 
@@ -296,6 +314,19 @@ jangada_git_seguro() {
   local c args=()
   for c in "${_jangada_git_blindagem[@]}"; do args+=(-c "$c"); done
   git "${args[@]}" "$@"
+}
+
+# Espelho do repositório cuja pasta .git comum é COMUM, em revisoes/, que o
+# isolamento oculta. O agente grava em .git/objects e o git não reconfere o
+# hash de um objeto solto ao ler; o que entra no espelho vem por fetch, que
+# recalcula o hash de cada objeto. Imprime o caminho (use com --git-dir).
+jangada_espelho() {
+  local dir
+  dir="$JANGADA_ESTADO/revisoes/espelhos/$(printf '%s' "$1" | sha256sum | cut -c1-16).git"
+  if [[ ! -d "$dir" ]]; then
+    (umask 077; mkdir -p "${dir%/*}" && git init -q --bare -b espelho --template= "$dir") || return 1
+  fi
+  printf '%s\n' "$dir"
 }
 
 # O mesmo para todo git que o script e os filhos rodarem, pelas variáveis
@@ -331,6 +362,16 @@ _jangada_trava_obter() {
   return 1
 }
 
+# Põe ORIGEM no lugar de DESTINO com rename, para ninguém ler o arquivo pela
+# metade nem sobrar arquivo truncado numa interrupção. A pasta do destino pode
+# ser gravável pelo agente isolado: nada é criado nem regravado nela, e o
+# rename (mv -T) troca o próprio link em vez de segui-lo, mesmo que aponte
+# para uma pasta. Sem poder renomear, falha.
+jangada_gravar_atomico() {
+  chmod --reference="$2" "$1" 2>/dev/null || true
+  mv -fT -- "$1" "$2" 2>/dev/null
+}
+
 # O settings.json é do agy e do usuário: a primeira alteração do jangada
 # guarda o original, que nunca é sobrescrito. Roda sob a trava, para não
 # copiar o arquivo no meio de outra regravação.
@@ -352,7 +393,9 @@ jangada_agy_confia() {
 jangada_agy_ajustar_confianca() {
   local modo="$1" caminho="$2"
   local conf_agy="${JANGADA_AGY_SETTINGS:-$HOME/.gemini/antigravity-cli/settings.json}"
-  [[ -f "$conf_agy" && -w "$conf_agy" && -n "$caminho" ]] || return 0
+  # A pasta do arquivo é gravável pelo agente isolado: um link ali levaria
+  # esta escrita, feita também de fora do isolamento, a outro arquivo.
+  [[ -f "$conf_agy" && ! -L "$conf_agy" && -w "$conf_agy" && -n "$caminho" ]] || return 0
 
   mkdir -p "$JANGADA_ESTADO"
   local caminho_real
@@ -374,7 +417,7 @@ jangada_agy_ajustar_confianca() {
       flock -w 5 9 2>/dev/null || exit 1
       _jangada_agy_guardar_original "$conf_agy"
       if jq --arg w "$caminho_real" --arg w_orig "$caminho" "$filtro" "$conf_agy" >"$tmp" 2>/dev/null; then
-        cat "$tmp" > "$conf_agy"
+        jangada_gravar_atomico "$tmp" "$conf_agy" || true
       fi
       rm -f "$tmp"
     ) 9>"$trava" 2>/dev/null || rm -f "$tmp"
@@ -383,7 +426,7 @@ jangada_agy_ajustar_confianca() {
     if _jangada_trava_obter "$trava_d"; then
       _jangada_agy_guardar_original "$conf_agy"
       if jq --arg w "$caminho_real" --arg w_orig "$caminho" "$filtro" "$conf_agy" >"$tmp" 2>/dev/null; then
-        cat "$tmp" > "$conf_agy"
+        jangada_gravar_atomico "$tmp" "$conf_agy" || true
       fi
       rm -f "$tmp"
       rmdir "$trava_d" 2>/dev/null || true

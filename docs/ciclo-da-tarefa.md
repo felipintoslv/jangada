@@ -116,6 +116,18 @@ flowchart TD
   Direto no ramo base, vale o commit `inicio` gravado na abertura. Depois de
   um APROVADO, a próxima chamada é outra entrega: a revisão parte do commit
   aprovado (`validacao-ROTULO.aprovado`) e as rodadas recomeçam.
+- **Foto da entrega.** Antes de qualquer conferência, o worktree é
+  congelado: o commit do agente, os arquivos rastreados e os novos viram
+  árvores do git, e uma cópia temporária é montada a partir delas. O portão
+  local, o diff e o revisor leem só essa cópia, então o que o agente altera
+  durante a revisão fica fora do parecer e da aprovação. Fora do isolamento,
+  os objetos passam por `git fetch` para um espelho em `revisoes/espelhos/`,
+  que recalcula cada hash: o agente grava em `.git/objects`, e o git não
+  reconfere um objeto solto ao ler. O `--integrar` compara os objetos do
+  ramo e da base com os do espelho antes do merge e, depois dele, refaz a
+  mescla no espelho: árvore diferente ou arquivo escrito com conteúdo que não
+  bate com o nome no commit desfaz o merge. Um objeto trocado depois da
+  integração fica fora dessa conferência; quem o acusa é o `git fsck`.
 - **Diff.** Entram os arquivos rastreados e os novos não rastreados. Nome de
   arquivo com quebra de linha reprova na verificação local, porque escaparia
   das listas.
@@ -125,9 +137,12 @@ flowchart TD
   linhas acrescentadas, aviso de `Co-Authored-By` e, por último, o
   `.jangada/validar.sh` do projeto. As regras vêm da base, para a entrega não
   afrouxar o critério que a avalia. O R roda sem o `.Rprofile`, o `.Renviron`
-  e o `.lintr` do worktree, que são código do repositório avaliado. Pelo
-  mesmo motivo, o `.jangada/validar.sh` roda pelo `jangada-isolar`, que numa
-  sessão isolada roda direto e fora dela abre o bwrap.
+  e o `.lintr` do worktree, que são código do repositório avaliado. O
+  `.lintr` da base também é código R, e depois de um APROVADO a base da
+  comparação é um commit do agente: por isso o `lintr` e o
+  `.jangada/validar.sh` rodam pelo `jangada-isolar`, que numa sessão isolada
+  roda direto e fora dela abre o bwrap. Com `.lintr` no projeto, o `lintr`
+  que falha reprova a entrega.
 - **Revisor.** O hook do revisor fica desligado, para o Stop dele não marcar
   a sessão como concluída. Pedido acima de 126.000 bytes leva o diff num
   arquivo que o agy lê. Sem o agente `revisor` instalado, o agy cairia no
@@ -153,9 +168,15 @@ flowchart TD
   estado, que o agente pode alterar. Fora dele (sem `JANGADA_ISOLADO`), vai
   para `revisoes/`, que o `jangada-isolar` oculta, e a base, a tarefa e o
   revisor saem da cópia `revisoes/SESSAO.json` que o `jangada-agente` grava
-  ao abrir a sessão. O `.aprovado` guarda `COMMIT N limpo|sujo`: `sujo`
-  quando o worktree tinha alteração sem commit, e aí o commit sozinho não foi
-  o que o revisor viu.
+  ao abrir a sessão. O `.aprovado` é um JSON que prende a aprovação ao que
+  foi lido: commit e árvore do candidato, ponta da base, revisor, autor e
+  `independent`. Com `limpo` falso (worktree com alteração sem commit), o
+  commit sozinho não foi o que o revisor viu.
+- **Parecer.** Só vale a primeira linha não vazia, e ela tem de ser
+  exatamente `STATUS: APROVADO` ou `STATUS: REVISAR`, em maiúsculas. Outra
+  forma conta como REVISAR. Quando o revisor é o modelo do autor, o veredito
+  registrado é `APROVADO_AUTORREVISAO`, com `independente` falso no
+  `validar.jsonl`.
 
 | Código | Significado |
 |---|---|
