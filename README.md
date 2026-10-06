@@ -610,8 +610,10 @@ e recomeça quando a execução da sessão muda. Sessões que saem da lista deix
 de ser acompanhadas. A coluna Atualização usa a data
 publicada pelo agente, sem tratar uma consulta recente como atividade recente.
 
-**Turno encerrado** corresponde ao estado `concluido` dos hooks.
+**Pronto para conferir** corresponde ao estado `concluido` dos hooks.
 Ele não confirma conclusão da tarefa nem aprovação da entrega.
+Os hooks não registram falha da tarefa nem integração. Por isso, a Central
+não deriva os estados Falhou e Integrada; encerramentos removem a sessão da lista.
 Perguntas e permissões são atendidas pelo botão **Abrir terminal**.
 Sessões interrompidas podem ser retomadas pelo mesmo botão.
 Na tarefa selecionada, **Integrar e encerrar** (`Alt+I`) chama

@@ -22,8 +22,8 @@ from dados import (CORES, LIMITE, NOME, ORDEM, ROTULOS, Sessao,
 # jangada-agente --capacidades-json, que também é quem valida a escolha.
 AGENTES = ("claude", "codex")
 
-GRUPOS = {'aguardando': 'Precisa de você', 'interrompido': 'Interrompidas',
-          'trabalhando': 'Em andamento', 'concluido': 'Turno encerrado'}
+GRUPOS = {'aguardando': 'Precisa da sua resposta', 'interrompido': 'Interrompidas',
+          'trabalhando': 'Em execução', 'concluido': 'Pronto para conferir'}
 
 class NovaTarefa(QDialog):
 
@@ -303,7 +303,7 @@ class Janela(QMainWindow):
         self.encerrar.clicked.connect(lambda: self.finalizar(False))
         direito.addWidget(self.integrar)
         direito.addWidget(self.encerrar)
-        explicacao = QLabel('As ações abrem um terminal para conferir o resultado e atender confirmações. Turno encerrado não confirma a conclusão da tarefa.')
+        explicacao = QLabel('As ações abrem um terminal para conferir o resultado e atender confirmações. Pronto para conferir não confirma a conclusão da tarefa.')
         explicacao.setWordWrap(True)
         direito.addWidget(explicacao)
         divisor.addWidget(detalhes)
@@ -448,9 +448,9 @@ class Janela(QMainWindow):
         self.resumo.setText((f'{len(sessoes)} tarefas acompanhadas · Atualização a cada 2 segundos' if self.real else f'{len(sessoes)} tarefas fictícias · Avance a simulação para acompanhar as mudanças') if sessoes else 'Nenhuma tarefa. Inicie pelo botão Nova tarefa.')
         andando = sum((estado_exibido(s) == 'trabalhando' for s in sessoes.values()))
         encerrados = sum((estado_exibido(s) == 'concluido' for s in sessoes.values()))
-        espera_rotulo = 'precisa de você' if esperando == 1 else 'precisam de você'
-        turno_rotulo = 'turno encerrado' if encerrados == 1 else 'turnos encerrados'
-        self.cartoes.setText(f'{esperando} {espera_rotulo}    ·    {andando} em andamento    ·    {interrompidas} {rotulo}    ·    {encerrados} {turno_rotulo}')
+        espera_rotulo = 'precisa da sua resposta' if esperando == 1 else 'precisam da sua resposta'
+        turno_rotulo = 'pronto para conferir' if encerrados == 1 else 'prontos para conferir'
+        self.cartoes.setText(f'{esperando} {espera_rotulo}    ·    {andando} em execução    ·    {interrompidas} {rotulo}    ·    {encerrados} {turno_rotulo}')
         if anterior and anterior not in sessoes:
             self.status.setText('A sessão selecionada saiu da lista. Selecione outra sessão.')
 

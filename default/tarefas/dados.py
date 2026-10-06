@@ -13,8 +13,8 @@ NOME = re.compile(r"[A-Za-z0-9_.-]+")
 LIMITE = 1024 * 1024
 CORES = {"aguardando": "#f2c66d", "trabalhando": "#85baff",
          "concluido": "#96d6a8", "interrompido": "#f09d93"}
-ROTULOS = {"aguardando": "Precisa de você", "trabalhando": "Em andamento",
-           "concluido": "Turno encerrado", "interrompido": "Interrompida"}
+ROTULOS = {"aguardando": "Precisa da sua resposta", "trabalhando": "Em execução",
+           "concluido": "Pronto para conferir", "interrompido": "Interrompida"}
 ORDEM = {"aguardando": 0, "interrompido": 1, "trabalhando": 2, "concluido": 4}
 
 def estado_exibido(sessao):
@@ -45,10 +45,10 @@ def idade(atualizado, agora=None):
 def resumo_barra(sessoes):
     contagem = {estado: sum((estado_exibido(s) == estado for s in sessoes.values())) for estado in CORES}
     partes = [f'Tarefas {len(sessoes)}']
-    for estado, rotulo in (('trabalhando', 'em andamento'), ('aguardando', 'precisam de você'), ('interrompido', 'interrompidas')):
+    for estado, rotulo in (('trabalhando', 'em execução'), ('aguardando', 'precisam da sua resposta'), ('interrompido', 'interrompidas')):
         if contagem[estado]:
             if estado == 'aguardando' and contagem[estado] == 1:
-                rotulo = 'precisa de você'
+                rotulo = 'precisa da sua resposta'
             if estado == 'interrompido' and contagem[estado] == 1:
                 rotulo = 'interrompida'
             partes.append(f'{contagem[estado]} {rotulo}')

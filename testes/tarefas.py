@@ -78,17 +78,17 @@ class Interface(unittest.TestCase):
             self.assertIn('Central de tarefas', central.windowTitle())
             self.assertEqual([central.abas.tabText(i) for i in range(central.abas.count())], ['Acompanhamento', 'Saída do agente', 'Detalhes'])
             self.assertFalse(hasattr(central, 'resposta'))
-            self.assertIn('1 precisa de você', central.cartoes.text())
+            self.assertIn('1 precisa da sua resposta', central.cartoes.text())
             self.assertIn('<b>Texto puro</b>', central.ultima_atividade.text())
-            self.assertIn('Precisa de você', central.situacao.text())
+            self.assertIn('Precisa da sua resposta', central.situacao.text())
             original = central.linha_tempo.toPlainText()
             central.mostrar(central.sessoes)
             self.assertEqual(central.linha_tempo.toPlainText(), original)
             self.lista.write_text(self.lista.read_text().replace('aguardando', 'concluido'))
             central.atualizar()
             aguardar(lambda: central.consulta.state() == QProcess.ProcessState.NotRunning)
-            self.assertIn('Turno encerrado', central.situacao.text())
-            self.assertIn('Turno encerrado', central.linha_tempo.toPlainText())
+            self.assertIn('Pronto para conferir', central.situacao.text())
+            self.assertIn('Pronto para conferir', central.linha_tempo.toPlainText())
             self.assertEqual(central.selecionada(), 'projeto--um')
             historico = central.linha_tempo.toPlainText()
             atividade = central.ultima_atividade.text()
@@ -462,7 +462,7 @@ class Interface(unittest.TestCase):
         try:
             aguardar(lambda: self.janela.sessoes.get('projeto--um') and
                      self.janela.sessoes['projeto--um'].estado == 'concluido')
-            self.assertIn('Turno encerrado', self.janela.situacao.text())
+            self.assertIn('Pronto para conferir', self.janela.situacao.text())
         finally:
             self.janela.timer.stop()
 
@@ -524,7 +524,7 @@ class Interface(unittest.TestCase):
         self.janela.atualizar()
         self.esperar_consulta()
         grupos = [self.janela.lista.topLevelItem(i) for i in range(3)]
-        self.assertEqual([g.text(0) for g in grupos], ['Precisa de você', 'Interrompidas', 'Em andamento'])
+        self.assertEqual([g.text(0) for g in grupos], ['Precisa da sua resposta', 'Interrompidas', 'Em execução'])
         self.assertEqual(grupos[0].child(0).text(0), 'Responder dúvida')
         self.assertEqual(grupos[0].child(0).text(1), 'z')
         self.janela.selecionar_nome('a--dois')
@@ -684,7 +684,7 @@ class Interface(unittest.TestCase):
         resultado = barra(args)
         self.assertEqual(resultado['class'], 'aguardando')
         self.assertIn('Tarefas 2', resultado['text'])
-        self.assertIn('1 precisa de você', resultado['text'])
+        self.assertIn('1 precisa da sua resposta', resultado['text'])
         self.assertNotIn('<img', resultado['tooltip'])
         self.lista.write_text('')
         self.assertEqual(barra(args)['class'], 'vazio')
