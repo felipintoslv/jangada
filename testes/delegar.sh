@@ -297,6 +297,17 @@ conferir "caso 16: confiança adicionada e removida por caminho" \
 conferir "caso 16: cópia do settings.json de antes da primeira alteração" \
   jqok -e '.trustedWorkspaces == [] and .outra == 1' "$conf_agy.jangada-orig"
 
+# A pasta do settings.json é gravável pelo agente isolado: um link posto ali
+# não pode levar a escrita de fora do isolamento a outro arquivo.
+echo '{"alvo": 1}' >"$tmp/alvo.json"
+mv "$conf_agy" "$conf_agy.guardado"
+ln -s "$tmp/alvo.json" "$conf_agy"
+confianca adicionar "$tmp/projeto"
+conferir "caso 16b: settings.json trocado por link não é seguido" \
+  bash -c '[ -L "$1" ] && [ "$(cat "$2")" = "{\"alvo\": 1}" ]' _ "$conf_agy" "$tmp/alvo.json"
+rm -f "$conf_agy"
+mv "$conf_agy.guardado" "$conf_agy"
+
 # O worktree só herda a confiança do repositório principal: com a raiz fora
 # do trustedWorkspaces, o jangada-worktree-preparar não confia no worktree.
 git init --quiet "$tmp/raiz"

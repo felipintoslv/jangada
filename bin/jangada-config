@@ -363,12 +363,12 @@ _jangada_trava_obter() {
 }
 
 # Troca o conteúdo de DESTINO pelo de ORIGEM com rename, para ninguém ler o
-# arquivo pela metade nem sobrar arquivo truncado numa interrupção. Segue link
-# simbólico e mantém as permissões. Sem poder criar o temporário ao lado ou
-# renomear (arquivo montado sozinho no isolamento), regrava no lugar.
+# arquivo pela metade nem sobrar arquivo truncado numa interrupção. Mantém as
+# permissões e não segue link simbólico: o rename troca o próprio link. Sem
+# poder criar o temporário ao lado ou renomear (arquivo montado sozinho no
+# isolamento), regrava no lugar.
 jangada_gravar_atomico() {
-  local origem="$1" destino novo
-  destino="$(realpath "$2" 2>/dev/null)" || destino="$2"
+  local origem="$1" destino="$2" novo
   if novo="$(mktemp "$destino.jangada-XXXXXX" 2>/dev/null)"; then
     if cat "$origem" >"$novo" && chmod --reference="$destino" "$novo" 2>/dev/null \
       && mv -f "$novo" "$destino" 2>/dev/null; then
@@ -400,7 +400,9 @@ jangada_agy_confia() {
 jangada_agy_ajustar_confianca() {
   local modo="$1" caminho="$2"
   local conf_agy="${JANGADA_AGY_SETTINGS:-$HOME/.gemini/antigravity-cli/settings.json}"
-  [[ -f "$conf_agy" && -w "$conf_agy" && -n "$caminho" ]] || return 0
+  # A pasta do arquivo é gravável pelo agente isolado: um link ali levaria
+  # esta escrita, feita também de fora do isolamento, a outro arquivo.
+  [[ -f "$conf_agy" && ! -L "$conf_agy" && -w "$conf_agy" && -n "$caminho" ]] || return 0
 
   mkdir -p "$JANGADA_ESTADO"
   local caminho_real
