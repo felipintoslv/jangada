@@ -21,7 +21,7 @@ from PyQt6.QtCore import QProcess, Qt
 from PyQt6.QtNetwork import QLocalServer
 from PyQt6.QtGui import QTextDocument, QKeySequence
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QPushButton
+from PyQt6.QtWidgets import QApplication, QLabel, QPushButton
 import janela
 from janela import Janela
 import central
@@ -67,6 +67,26 @@ class Interface(unittest.TestCase):
 
     def esperar_consulta(self):
         aguardar(lambda: self.janela.consulta.state() == QProcess.ProcessState.NotRunning)
+
+    def test_marca_carrega_com_transparencia_e_preserva_titulo_quando_ausente(self):
+        marcas = [rotulo for rotulo in self.janela.findChildren(QLabel)
+                  if rotulo.accessibleName() == 'Jangada']
+        self.assertEqual(len(marcas), 1)
+        imagem = marcas[0].pixmap().toImage()
+        self.assertEqual((imagem.width(), imagem.height()), (192, 192))
+        self.assertEqual(imagem.pixelColor(0, 0).alpha(), 0)
+        self.assertTrue((Path(janela.__file__).resolve().parents[1] / 'logo/jangada-symbolic.svg').is_file())
+        with patch.object(janela, 'QPixmap', return_value=janela.QPixmap()):
+            central_sem_marca = Janela(False, self.raiz, self.estado)
+        try:
+            central_sem_marca.show()
+            APP.processEvents()
+            self.assertFalse(any(rotulo.accessibleName() == 'Jangada'
+                                 for rotulo in central_sem_marca.findChildren(QLabel)))
+            self.assertTrue(any(rotulo.text() == 'Central de tarefas'
+                                for rotulo in central_sem_marca.findChildren(QLabel)))
+        finally:
+            central_sem_marca.close()
 
     def test_central_de_tarefas_acompanha_mudancas_sem_enviar_respostas(self):
         central = Janela(True, self.raiz, self.estado)
