@@ -1,5 +1,6 @@
 # Regressões de ausência, desempenho e filtros sobre dados sintéticos.
 source("default/painel/indicadores.R")
+source("default/painel/hoje.R")
 stopifnot(is.na(soma_medida(c(NA, Inf, -1))), soma_medida(c(NA, 0)) == 0,
           is.na(media_avaliacoes(c(NA, NaN, Inf))), media_avaliacoes(c(NA, 0)) == 0)
 cache <- tempfile("painel-motores-")
@@ -54,14 +55,38 @@ jsonlite::write_json(list(tarefas = list(
   list(projeto = "outro", id = "concluida", estado = "COMPLETED")),
   projetos = list(list(projeto = "teste", chamadas_confirmadas = 2, custo_estimado = NULL)),
   provedores = list(), erros = list()), file.path(cache, "orquestracao.json"), auto_unbox = TRUE, null = "null")
+shiny::testServer(hoje_server, args = list(dados = shiny::reactive(carregar_cache(cache))), {
+  stopifnot(grepl("Sessões aguardando: 0", output$aviso$html),
+            grepl("Sem observações de provedores", output$aviso$html),
+            !grepl("<td", output$sessoes), !grepl("<td", output$revisoes), !grepl("<td", output$paradas))
+})
+d_hoje <- carregar_cache(cache)
+d_hoje$sessoes <- data.frame(sessao = "aguarda", projeto = "teste", agente = "codex",
+  estado = "aguardando", desde = Sys.time() - 4 * 86400, atualizado = Sys.time())
+v_hoje <- as.data.frame(lapply(d_hoje$validacoes, function(x) rep(x[NA_integer_], 3)))
+v_hoje$data <- Sys.time() + c(-3, -2, -1)
+v_hoje$rotulo <- "aguarda"; v_hoje$projeto <- "teste"
+v_hoje$entrega <- c("antiga", "aprovada", "atual")
+v_hoje$resultado <- c("revisar", "aprovado", "revisar")
+v_hoje$rodada <- 1L; v_hoje$mais <- 1L; v_hoje$menos <- 0L
+v_hoje$origem <- "agentes"; v_hoje$autor <- "codex"; v_hoje$revisor <- "claude"
+d_hoje$validacoes <- v_hoje
+d_hoje$orquestracao$tarefas[[1]]$estado <- "REVIEW_REQUIRED"
+d_hoje$orquestracao$provedores <- list(list(id = "ollama", status = "UNKNOWN", motivo = "observação vencida"))
+d_hoje$orquestracao$erros <- list("fonte indisponível")
+shiny::testServer(hoje_server, args = list(dados = shiny::reactive(d_hoje)), {
+  stopifnot(grepl("Sessões aguardando: 1", output$aviso$html),
+            grepl("Coleta incompleta", output$aviso$html),
+            grepl("Revisões pendentes registradas: 2", output$aviso$html), grepl("aguarda", output$sessoes),
+            grepl("espera", output$revisoes), grepl("Desconhecido", output$provedores),
+            nrow(hoje_pendentes()) == 1, !grepl("<td", output$paradas), grepl("ollama", output$consumo))
+})
 aplicacao <- shiny::shinyAppDir("default/painel")
 html <- as.character(environment(aplicacao$serverFuncSource())$ui)
 stopifnot(grepl('class="active">\\s*<a[^>]*data-value="Hoje"', html),
           grepl("Esta fila reúne tarefas planejadas", html),
           grepl("Provedores são os serviços ou executores", html))
 shiny::testServer(aplicacao, {
-  stopifnot(grepl("Sessões aguardando", output$hoje_aviso$html),
-            grepl("Sem observações de provedores", output$hoje_aviso$html))
   session$setInputs(modo = "dark", periodo = c(Sys.Date(), Sys.Date()), executor = "ollama")
   escuro <- jsonlite::fromJSON(output$b_motores_dia, simplifyVector = FALSE)
   vazio_escuro <- plotly::plotly_build(vazio())$x$layout

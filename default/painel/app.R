@@ -8,6 +8,7 @@ library(bslib)
 
 pasta_app <- getwd()
 source(file.path(pasta_app, "indicadores.R"), local = TRUE)
+source(file.path(pasta_app, "hoje.R"), local = TRUE)
 
 estado <- file.path(Sys.getenv("XDG_STATE_HOME", file.path(Sys.getenv("HOME"), ".local/state")), "jangada")
 cache <- getOption("jangada.painel.cache", file.path(estado, "painel"))
@@ -111,13 +112,7 @@ ui <- page_navbar(
   window_title = "Indicadores do jangada", selected = "Hoje",
   sidebar = filtros,
   nav_panel("Hoje", icon = bsicons::bs_icon("calendar-check"),
-    uiOutput("hoje_aviso"),
-    p("Retrato de todos os projetos na última coleta. Consumo apenas de hoje; filtros ficam na área avançada."),
-    cartao("Precisa da sua resposta", tableOutput("hoje_sessoes")),
-    cartao("Revisões pendentes", tableOutput("hoje_revisoes")),
-    cartao("Saúde dos provedores", tableOutput("hoje_provedores")),
-    cartao("Consumo de hoje", tableOutput("hoje_consumo")),
-    cartao("Sessões sem entrega há mais de três dias", tableOutput("hoje_paradas"))
+    hoje_ui("hoje")
   ),
   nav_menu("Avançado",
   nav_panel("Fila e provedores", icon = bsicons::bs_icon("list-task"),
@@ -423,45 +418,7 @@ server <- function(input, output, session) {
     }
     d
   })
-  hoje_entregas <- reactive(entregas(dados()$validacoes))
-  hoje_pendentes <- reactive({
-    e <- hoje_entregas()
-    e[!e$aprovada & e$rotulo %in% dados()$sessoes$sessao, , drop = FALSE]
-  })
-  output$hoje_aviso <- renderUI({
-    d <- dados()
-    esperando <- sum(d$sessoes$estado == "aguardando", na.rm = TRUE)
-    avisos <- unlist(d$orquestracao$erros)
-    fontes <- Filter(function(x) identical(x$estado, "erro"), d$fontes)
-    div(class = "alert alert-info",
-      p(sprintf("Sessões aguardando: %d. Revisões pendentes registradas: %d.",
-        esperando, nrow(hoje_pendentes()))),
-      p("Última coleta: ", d$coleta$data),
-      if (!length(d$orquestracao$provedores)) p("Sem observações de provedores; disponibilidade desconhecida."),
-      if (length(avisos)) p("Coleta incompleta: ", paste(avisos, collapse = "; ")),
-      if (length(fontes)) p("Fontes com erro: ", paste(vapply(fontes, function(x) x$fonte, ""), collapse = ", ")))
-  })
-  output$hoje_sessoes <- renderTable({
-    s <- dados()$sessoes
-    s[s$estado == "aguardando", c("sessao", "projeto", "atualizado"), drop = FALSE]
-  })
-  output$hoje_revisoes <- renderTable({
-    e <- hoje_pendentes()
-    fila <- tabela_lista(dados()$orquestracao$tarefas, c("projeto", "id", "estado"))
-    fila <- fila[fila$estado %in% c("REVIEW_REQUIRED", "REVISION_REQUIRED", "WAITING_REVIEWER"), , drop = FALSE]
-    rbind(data.frame(projeto = e$projeto, tarefa = e$rotulo, origem = rep("Sessão", nrow(e))),
-      data.frame(projeto = fila$projeto, tarefa = fila$id, origem = rep("Fila", nrow(fila))))
-  })
-  output$hoje_provedores <- renderTable({
-    tabela_lista(dados()$orquestracao$provedores, c("id", "status", "motivo", "observado", "valido_ate"))
-  })
-  output$hoje_consumo <- renderTable({
-    d <- dados()$consumo
-    resumo_motores(d[d$dia == as.character(Sys.Date()), , drop = FALSE])
-  }, na = "Sem medida")
-  output$hoje_paradas <- renderTable({
-    sessoes_paradas(dados()$sessoes, hoje_entregas())
-  })
+  hoje_server("hoje", dados)
   estados_fila <- c(QUEUED = "Na fila", RUNNING = "Em execução", COMPLETED = "Concluída",
     REVIEW_REQUIRED = "Aguardando revisão", REVISION_REQUIRED = "Reprovada, corrigir",
     WAITING_PROVIDER = "Aguardando provedor", WAITING_QUOTA = "Aguardando cota",
@@ -534,11 +491,7 @@ server <- function(input, output, session) {
   output$g_provedores <- DT::renderDT({
     d <- tabela_lista(orq()$provedores, c("id", "status", "pausado", "cota", "modelo",
       "atualizado", "valido_ate", "espera_segundos", "motivo"))
-    nomes <- c(AVAILABLE = "Disponível", UNKNOWN = "Desconhecido", UNAVAILABLE = "Indisponível",
-      QUOTA_LOW = "Cota baixa", QUOTA_EXHAUSTED = "Cota esgotada", NETWORK_ERROR = "Falha de rede",
-      RATE_LIMITED = "Limite de chamadas", COOLDOWN = "Em espera", AUTH_ERROR = "Falha de autenticação",
-      DEGRADED = "Disponibilidade reduzida")
-    d$status <- unname(nomes[d$status])
+    d$status <- unname(nomes_provedores[d$status])
     d$pausado <- ifelse(d$pausado == "1", "sim", "não")
     for (campo in c("atualizado", "valido_ate")) {
       instante <- as.numeric(d[[campo]])
