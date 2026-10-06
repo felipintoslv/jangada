@@ -33,10 +33,9 @@ jobs:
         if: matrix.arquivo != ''
         run: echo 'Server = https://archive.archlinux.org/repos/${{ matrix.arquivo }}/$repo/os/$arch' >/etc/pacman.d/mirrorlist
 
-      # R e lintr ficam de fora: compilar o lintr leva minutos, e o caso 12 do
-      # testes/validar.sh se pula sozinho sem eles.
+      # R e lintr ficam no job sandbox-e2e: compilar o lintr leva minutos.
       - name: Dependências
-        run: pacman -Syu --noconfirm --needed git sudo shellcheck lua jq python python-pyqt6 qt6-declarative gitleaks bubblewrap diffutils openssh xdg-dbus-proxy dbus python-dbus python-gobject
+        run: pacman -Syu --noconfirm --needed git sudo shellcheck lua jq python python-pyqt6 qt6-declarative gitleaks bubblewrap diffutils openssh xdg-dbus-proxy dbus python-dbus python-gobject zsh poppler python-pyarrow
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -45,7 +44,8 @@ jobs:
         run: |
           useradd -m testes
           chown -R testes:testes "$GITHUB_WORKSPACE"
-          runuser -u testes -- env GIT_CONFIG_GLOBAL=/tmp/jangada-ci-gitconfig JANGADA_TESTES_EXIGIR_ISOLAMENTO=1 sh -ec '
+          runuser -u testes -- env GIT_CONFIG_GLOBAL=/tmp/jangada-ci-gitconfig JANGADA_TESTES_EXIGIR_ISOLAMENTO=1 \
+            JANGADA_TESTES_EXIGIR="bwrap sem-rede shellcheck jq gitleaks zsh pdftotext pyarrow" sh -ec '
             git config --global user.name ci
             git config --global user.email ci@localhost
             testes/verificar.sh
@@ -69,3 +69,33 @@ jobs:
             echo "a simulação escreveu em $sobras"
             exit 1
           fi
+
+  # O isolamento de verdade com o que o job acima deixa de fora: R e lintr.
+  # Sem eles, o .lintr malicioso e o lintr dentro do bwrap ficam sem teste.
+  sandbox-e2e:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+      options: --privileged
+    steps:
+      - name: Dependências
+        run: pacman -Syu --noconfirm --needed git sudo jq python gitleaks bubblewrap diffutils openssh xdg-dbus-proxy dbus zsh poppler r gcc make gcc-fortran libxml2
+
+      - name: lintr
+        run: Rscript -e 'install.packages("lintr", repos = "https://cloud.r-project.org", Ncpus = 4)'
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Testes do isolamento e da validação
+        run: |
+          useradd -m testes
+          chown -R testes:testes "$GITHUB_WORKSPACE"
+          runuser -u testes -- env GIT_CONFIG_GLOBAL=/tmp/jangada-ci-gitconfig JANGADA_TESTES_EXIGIR_ISOLAMENTO=1 \
+            JANGADA_TESTES_EXIGIR="bwrap sem-rede jq gitleaks zsh R lintr" sh -ec '
+            git config --global user.name ci
+            git config --global user.email ci@localhost
+            testes/capacidades.sh
+            testes/isolar.sh
+            testes/validar.sh
+            testes/fim.sh
+          '
