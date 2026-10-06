@@ -56,10 +56,12 @@ jsonlite::write_json(list(tarefas = list(
   provedores = list(), erros = list()), file.path(cache, "orquestracao.json"), auto_unbox = TRUE, null = "null")
 aplicacao <- shiny::shinyAppDir("default/painel")
 html <- as.character(environment(aplicacao$serverFuncSource())$ui)
-stopifnot(grepl('class="active">\\s*<a[^>]*data-value="Revisão e síntese"', html),
+stopifnot(grepl('class="active">\\s*<a[^>]*data-value="Hoje"', html),
           grepl("Esta fila reúne tarefas planejadas", html),
           grepl("Provedores são os serviços ou executores", html))
 shiny::testServer(aplicacao, {
+  stopifnot(grepl("Sessões aguardando", output$hoje_aviso$html),
+            grepl("Sem observações de provedores", output$hoje_aviso$html))
   session$setInputs(modo = "dark", periodo = c(Sys.Date(), Sys.Date()), executor = "ollama")
   escuro <- jsonlite::fromJSON(output$b_motores_dia, simplifyVector = FALSE)
   vazio_escuro <- plotly::plotly_build(vazio())$x$layout

@@ -760,7 +760,10 @@ Definições:
 As redes cobrem só o Claude Code e mostram no máximo 40 nós por padrão; o
 painel tem controles para afrouxar a poda.
 
-O painel abre em **Revisão e síntese**. **Fila e provedores** explica a
+O painel abre em **Hoje**, com sessões aguardando, revisões pendentes de
+sessões abertas e da fila, provedores, consumo do dia e sessões sem entrega.
+A tela mostra o retrato da última coleta de todos os projetos, sem filtros.
+As sete telas analíticas continuam no menu **Avançado**, com os filtros atuais. **Fila e provedores** explica a
 execução automática e suas ausências de dados, separadas das sessões da Central
 de Tarefas. Os gráficos e redes acompanham o seletor claro/escuro da interface.
 
