@@ -126,8 +126,10 @@ O `jangada-isolar` tem três perfis, escolhidos por `JANGADA_ISOLAR_PERFIL`:
 Fora do perfil `agente` somem `~/.claude`, `~/.claude.json`, `~/.codex`,
 `~/.gemini` e as variáveis `ANTHROPIC_*`, `OPENAI_*`, `GEMINI_*`, `GOOGLE_*`,
 `CLAUDE_*`, `CODEX_*`, `AGY_*` e `ANTIGRAVITY_*`, e o D-Bus não é ligado.
-Perfil desconhecido é recusado. Dentro de uma sessão já isolada o comando
-roda direto, no perfil da sessão.
+Perfil desconhecido é recusado. Dentro de uma sessão já isolada, o perfil
+`agente` roda direto. Os perfis de verificação criam outro isolamento para
+retirar as credenciais e aplicar sua política de rede, mesmo com
+`JANGADA_AGENTE_ISOLAR=0`.
 
 No perfil `agente` não há política de rede nem intermediário de credenciais:
 o agente fala com qualquer destino e lê o login do próprio provedor e dos

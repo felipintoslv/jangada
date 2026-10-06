@@ -501,7 +501,7 @@ if Rscript -e 'quit(status = !requireNamespace("lintr", quietly = TRUE))' >/dev/
   chmod +x "$tmp/semlintr/Rscript"
   echo 'print(1)' >"$tmp/projeto/novo.R"
   sessao_de claude agy
-  PATH="$tmp/semlintr:$PATH" validar 'STATUS: APROVADO'; rc=$?
+  JANGADA_ISOLAR_ESCRITA="$tmp/semlintr" PATH="$tmp/semlintr:$PATH" validar 'STATUS: APROVADO'; rc=$?
   conferir "caso 12e: sem lintr, a etapa é pulada" [ "$rc" = 0 ]
   conferir "caso 12e: sem lintr, nada é dito" bash -c '! grep -q "lintr" "$1"' _ "$tmp/saida.log"
   rm -f "$tmp/projeto/novo.R"
@@ -526,7 +526,7 @@ if Rscript -e 'quit(status = !requireNamespace("lintr", quietly = TRUE))' >/dev/
   chmod +x "$tmp/lintrquebrado/Rscript"
   echo 'h <- 1' >"$tmp/projeto/quebra.R"
   sessao_de claude agy
-  PATH="$tmp/lintrquebrado:$PATH" validar 'STATUS: APROVADO'; rc=$?
+  JANGADA_ISOLAR_ESCRITA="$tmp/lintrquebrado" PATH="$tmp/lintrquebrado:$PATH" validar 'STATUS: APROVADO'; rc=$?
   conferir "caso 12i: com .lintr, falha do lintr reprova" [ "$rc" = 3 ]
   conferir "caso 12i: o parecer diz que os arquivos R não foram conferidos" \
     grep -q "arquivos R não conferidos" "$estado/validacao-s-r1.md"
