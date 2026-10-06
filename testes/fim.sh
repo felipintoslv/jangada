@@ -353,12 +353,19 @@ if [[ " \$* " == *" merge --no-ff "* ]]; then
   python3 -c 'import sys, zlib
 d = b"forjado\n"
 sys.stdout.buffer.write(zlib.compress(b"blob %d\0" % len(d) + d))' >"$objeto"
+  "$git_real" "\$@" || exit \$?
+  indice="\$("$git_real" -C "$proj" rev-parse --git-path index)"
+  python3 -c 'import os, sys, time; t = time.time() + 10; os.utime(sys.argv[1], (t, t))' "\$indice"
+  "$git_real" -C "$proj" update-index --really-refresh &&
+    "$git_real" -C "$proj" diff-index --quiet HEAD -- && touch "$tmp/indice-enganado"
+  exit 0
 fi
 exec "$git_real" "\$@"
 FIM
 chmod +x "$tmp/git-forja/git"
 base_antes="$(git -C "$proj" rev-parse main)"
 PATH="$tmp/git-forja:$PATH" integrar_teste i9 s
+conferir "objeto forjado durante o merge: o índice considera o conteúdo limpo" test -e "$tmp/indice-enganado"
 conferir "objeto forjado durante o merge: recusa ($rc)" test "$rc" -ne 0
 conferir "objeto forjado durante o merge: explica" grep -q "não confere com a mescla refeita no espelho" "$tmp/saida"
 conferir "objeto forjado durante o merge: a base volta e nada fica mesclado" \
