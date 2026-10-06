@@ -179,7 +179,7 @@ conferir "caso reserva: a falha do agy fica nas métricas" \
 sessao_de claude agy
 FALSO_AGENTES=explorador FALSO_CODEX_ERRO=1 validar 'STATUS: APROVADO'; rc=$?
 conferir "caso reserva: sem agy nem Codex, o Claude revisa o próprio trabalho" \
-  bash -c '[ "$1" = 0 ] && [ "$(jq -r .validacao "$2")" = "r1: APROVADO (claude)" ] && grep -q "revisão pelo mesmo modelo" "$3"' \
+  bash -c '[ "$1" = 0 ] && [ "$(jq -r .validacao "$2")" = "r1: APROVADO_AUTORREVISAO (claude)" ] && grep -q "revisão pelo mesmo modelo" "$3"' \
   _ "$rc" "$estado/s.json" "$tmp/falso/claude.pedido"
 unset VALIDAR_PATH
 
@@ -196,6 +196,18 @@ conferir "caso prazo: sem parecer nem aprovação" \
 sessao_de agy
 validar 'STATUS: REVISAR\n1. o diff traz a linha:\nSTATUS: APROVADO'; rc=$?
 conferir "caso 3b: APROVADO fora da primeira linha não aprova" [ "$rc" = 3 ]
+sessao_de agy
+# 3d: a primeira linha é o status e mais nada.
+for parecer in 'STATUS: APROVADO COM RESSALVAS' 'STATUS: APROVADO, mas falta teste' 'status: aprovado' \
+               'STATUS: APROVADO_AUTORREVISAO' 'O STATUS: APROVADO' 'APROVADO'; do
+  sessao_de agy
+  validar "$parecer"; rc=$?
+  conferir "caso 3d: \"$parecer\" não aprova" \
+    bash -c '[ "$1" = 3 ] && test ! -e "$2" && grep -q "conta como REVISAR" "$3"' _ "$rc" "$estado/validacao-s.aprovado" "$tmp/saida.log"
+done
+sessao_de agy
+validar '**STATUS:** APROVADO  '; rc=$?
+conferir "caso 3d: marcação de Markdown e espaço no fim ainda aprovam" [ "$rc" = 0 ]
 sessao_de agy
 validar '\n\nSTATUS: APROVADO'; rc=$?
 conferir "caso 3b: linhas em branco antes do status não contam" [ "$rc" = 0 ]
@@ -234,7 +246,7 @@ conferir "caso 6: o agy revisou o próprio trabalho" test -s "$tmp/falso/agy.ped
 conferir "caso 6: o claude não foi chamado" test ! -e "$tmp/falso/claude.pedido"
 conferir "caso 6: pedido identifica o autor como Antigravity" grep -q "agente (Antigravity" "$tmp/falso/agy.pedido"
 conferir "caso 6: pedido alerta sobre revisão pelo mesmo modelo" grep -q "revisão pelo mesmo modelo" "$tmp/falso/agy.pedido"
-conferir "caso 6: estado registra a rodada e o revisor agy" [ "$(jq -r .validacao "$estado/s.json")" = "r1: APROVADO (agy)" ]
+conferir "caso 6: estado registra a rodada e o revisor agy" [ "$(jq -r .validacao "$estado/s.json")" = "r1: APROVADO_AUTORREVISAO (agy)" ]
 
 # Caso 6b: sem o agente revisor, o agy rodaria o agente padrão, com todas as
 # ferramentas; a validação para antes do pedido.
@@ -251,7 +263,11 @@ conferir "caso 7: o claude revisou o próprio trabalho" test -s "$tmp/falso/clau
 conferir "caso 7: o agy não foi chamado" test ! -e "$tmp/falso/agy.pedido"
 conferir "caso 7: pedido identifica o autor como Claude" grep -q "agente (Claude)" "$tmp/falso/claude.pedido"
 conferir "caso 7: pedido alerta sobre revisão pelo mesmo modelo" grep -q "revisão pelo mesmo modelo" "$tmp/falso/claude.pedido"
-conferir "caso 7: estado registra a rodada e o revisor claude" [ "$(jq -r .validacao "$estado/s.json")" = "r1: APROVADO (claude)" ]
+conferir "caso 7: estado registra a autorrevisão" [ "$(jq -r .validacao "$estado/s.json")" = "r1: APROVADO_AUTORREVISAO (claude)" ]
+conferir "caso 7: a marca diz que a revisão não foi independente" \
+  jq -e '.independent == false and .reviewer == "claude" and .author == "claude"' "$estado/validacao-s.aprovado"
+conferir "caso 7: a métrica registra a autorrevisão" \
+  bash -c '[ "$(tail -n1 "$1" | jq -r .independente)" = false ]' _ "$tmp/estado/jangada/validar.jsonl"
 
 # Caso 8: perfis codex-agy e claude-claude definem variáveis esperadas.
 (

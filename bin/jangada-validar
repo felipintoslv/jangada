@@ -30,6 +30,8 @@
 #
 # Saída: o parecer, que começa por "STATUS: APROVADO" ou "STATUS: REVISAR", e
 # fica gravado em ~/.local/state/jangada/agentes/validacao-SESSAO-rN.md.
+# A revisão lê uma foto da entrega, tirada no início, e não a pasta do agente.
+# Aprovação dada pelo modelo do próprio autor sai como APROVADO_AUTORREVISAO.
 # Código de saída: 0 aprovado, 3 revisar, 4 limite de rodadas, 1 erro.
 # Cada rodada acrescenta uma linha JSON a ~/.local/state/jangada/validar.jsonl.
 #
@@ -55,7 +57,7 @@ while (($#)); do
     --pular-local) pular_local=1; shift ;;
     --reverter-se-limite) reverter_se_limite=1; shift ;;
     --metricas) metricas=1; shift ;;
-    -h|--ajuda|--help) sed -n '2,32s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    -h|--ajuda|--help) sed -n '2,34s/^# \{0,1\}//p' "$0"; exit 0 ;;
     --) shift; break ;;
     -*) echo "opção desconhecida: $1" >&2; exit 1 ;;
     *) break ;;
@@ -119,9 +121,10 @@ registrar() {
     --arg modelo "$modelo" --arg autor "$autor" --argjson arquivos "$(grep -c . <<<"$arquivos" || true)" \
     --argjson mais "${mais:-0}" --argjson menos "${menos:-0}" --argjson itens "${itens:-0}" \
     --argjson segundos "$SECONDS" --arg subagentes "$resumo" --arg subagentes_erro "$resumo_erro" \
+    --argjson auto "${auto_revisao:-0}" \
     '{data: $data, projeto: $projeto, rotulo: $rotulo, rodada: $rodada, resultado: $resultado,
-      etapa: $etapa, revisor: $revisor, modelo: $modelo, autor: $autor, arquivos: $arquivos,
-      mais: $mais, menos: $menos, itens: $itens, segundos: $segundos}
+      etapa: $etapa, revisor: $revisor, modelo: $modelo, autor: $autor, independente: ($auto == 0),
+      arquivos: $arquivos, mais: $mais, menos: $menos, itens: $itens, segundos: $segundos}
      + (if $subagentes != "" then {subagentes: ($subagentes | fromjson)} else {} end)
      + (if $subagentes_erro != "" then {subagentes_erro: $subagentes_erro} else {} end)' \
     2>/dev/null)" || return 0
@@ -1018,20 +1021,27 @@ mv "$saida.tmp" "$saida"
 cat "$saida"
 
 status="REVISAR"
-# Aceita a linha com marcação de Markdown (## STATUS: APROVADO, **STATUS:**).
 # Só a primeira linha com texto vale: um apontamento pode citar do diff uma
-# linha "STATUS: APROVADO".
+# linha "STATUS: APROVADO". Ela precisa ser o status e mais nada, salvo a
+# marcação de Markdown (## STATUS: APROVADO, **STATUS:**): "APROVADO COM
+# RESSALVAS" ou "aprovado, mas" não aprovam.
 primeira="$(grep -m1 -v '^[[:space:]]*$' "$saida" || true)"
-shopt -s nocasematch
-[[ "$primeira" =~ ^[#[:space:]*]*STATUS:[[:space:]*]*APROVADO ]] && status="APROVADO"
-shopt -u nocasematch
+if [[ "$primeira" =~ ^[#[:space:]*]*STATUS:[[:space:]*]*(APROVADO|REVISAR)[[:space:]*]*$ ]]; then
+  status="${BASH_REMATCH[1]}"
+else
+  echo "jangada-validar: a primeira linha do parecer não é \"STATUS: APROVADO\" nem \"STATUS: REVISAR\"; conta como REVISAR" >&2
+fi
+# O mesmo modelo que escreveu tende a concordar consigo: a aprovação dele fica
+# registrada à parte e não vale como revisão independente no --integrar.
+veredito="$status"
+((auto_revisao)) && [[ "$status" == APROVADO ]] && veredito=APROVADO_AUTORREVISAO
 if [[ -n "$arq_estado" ]]; then
   tmp="$(mktemp "$arq_estado.XXXXXX")"
-  jangada_alterar_estado "$arq_estado" "$tmp" --arg v "r$rodada: $status ($revisor)" '.validacao = $v' || true
+  jangada_alterar_estado "$arq_estado" "$tmp" --arg v "r$rodada: $veredito ($revisor)" '.validacao = $v' || true
   rm -f "$tmp"
 fi
 echo >&2
-echo "jangada-validar: $status (parecer em $saida)" >&2
+echo "jangada-validar: $veredito (parecer em $saida)" >&2
 registrar "${status,,}" revisor
 "$JANGADA_PATH/bin/jangada-gancho" pos-validar "$rotulo" "$status" || true
 if [[ "$status" == APROVADO ]]; then
