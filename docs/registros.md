@@ -97,10 +97,14 @@ Pasta `$JANGADA_ESTADO/agentes/`. Em 26/09/2026 havia 41 arquivos.
   título; os dois `avaliacao-*` começam com a mensagem de limite de sessão
   do Claude. Procure o STATUS nas primeiras linhas, não só na primeira, e
   deixe `avaliacao-*` e `revisao-*` fora da contagem de pareceres.
-- **Conteúdo do `.aprovado`:** uma linha `COMMIT N ESTADO`, o commit
-  aprovado, o número do último parecer e `limpo` ou `sujo` (worktree com
-  alteração sem commit na aprovação; desde 28/09/2026). Marca `sujo` não
-  move o ponto de comparação da próxima entrega. Esta pasta é gravável pelo
+- **Conteúdo do `.aprovado`:** um objeto JSON (desde 05/10/2026) com
+  `cabeca` (commit do ramo), `num` (último parecer), `limpo` (falso quando o
+  worktree tinha alteração sem commit), `base`, `base_sha`, `ponto`,
+  `candidate_sha`, `candidate_tree` (o que o revisor leu), `reviewer`,
+  `model`, `author` e `independent` (falso na autorrevisão). Antes era uma
+  linha `COMMIT N limpo|sujo`, que ainda é lida para o ponto de comparação e
+  que o `--integrar` não aceita. Marca com `limpo` falso não move o ponto de
+  comparação da próxima entrega. Esta pasta é gravável pelo
   agente isolado; a marca que o `--integrar` aceita fica na seção 2b.
 - **O que dá para recuperar:**
   - sessão, do nome: `validacao-<rotulo>-rN.md` e `parecer-<sessao>-rN.md`;
