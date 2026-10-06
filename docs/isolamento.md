@@ -113,6 +113,43 @@ valem: `JANGADA_ISOLADO` no ambiente e o ponto de montagem
 arquivo no `/tmp`, mas só quem monta cria um ponto de montagem; por isso a
 variável herdada não basta para pular o isolamento.
 
+## Perfis, rede e credenciais dos provedores
+
+O `jangada-isolar` tem três perfis, escolhidos por `JANGADA_ISOLAR_PERFIL`:
+
+| Perfil | Rede | Login e chaves dos provedores | Quem usa |
+|---|---|---|---|
+| `agente` (padrão) | a da máquina | visíveis | `jangada-agente`, `jangada-delegar`, revisores |
+| `verificacao` | nenhuma (`--unshare-net`) | ocultos | `lintr` e `.jangada/validar.sh` no `jangada-validar` |
+| `verificacao-rede` | a da máquina | ocultos | `.jangada/validar.sh` com `JANGADA_VALIDAR_REDE=1` |
+
+Fora do perfil `agente` somem `~/.claude`, `~/.claude.json`, `~/.codex`,
+`~/.gemini` e as variáveis `ANTHROPIC_*`, `OPENAI_*`, `GEMINI_*`, `GOOGLE_*`,
+`CLAUDE_*`, `CODEX_*`, `AGY_*` e `ANTIGRAVITY_*`, e o D-Bus não é ligado.
+Perfil desconhecido é recusado. Dentro de uma sessão já isolada o comando
+roda direto, no perfil da sessão.
+
+No perfil `agente` não há política de rede nem intermediário de credenciais:
+o agente fala com qualquer destino e lê o login do próprio provedor e dos
+outros, porque delega e revisa por eles. Um agente desviado por injeção de
+prompt consegue enviar para fora o que lê, inclusive esses logins. Um
+intermediário (processo fora do isolamento que guarda as chaves e assina as
+chamadas) fecharia isso, mas depende de cada cliente aceitar um endereço de
+API próprio e fica fora do que o jangada faz hoje. Reduz o dano: usar login
+de assinatura em vez de chave de API com cobrança por uso,
+`JANGADA_ISOLAR_CASA=minima`, `JANGADA_ISOLAR_AMBIENTE=minimo` e
+`JANGADA_ISOLAR_KEYRING_ITEM`.
+
+## Refs do git
+
+Num worktree, o agente grava só na pasta de refs do próprio ramo. Como todas
+as sessões usam `refs/heads/agente/`, uma sessão consegue mover o ramo de
+outra. O git cria o `.lock` ao lado da ref, então liberar um arquivo só não
+funciona. A defesa fica na integração: o `--integrar` só aceita o commit e a
+árvore que a revisão de fora aprovou, e um ramo movido volta a ser revisado.
+Repositório com refs em reftable guarda tudo numa pasta só; ali o
+`jangada-isolar` recusa abrir o worktree e mostra o comando de conversão.
+
 ## Casa mínima
 
 Com `JANGADA_ISOLAR_CASA=minima` no `jangada.conf`, a pasta pessoal vira uma
@@ -122,7 +159,7 @@ somente leitura:
 - as pastas do `PATH` dentro da pasta pessoal, `~/.local/bin`, `~/.local/lib`,
   `~/.local/share/claude`, `~/.local/share/mise` e `~/.config/mise`;
 - a cópia instalada, a configuração e o estado do jangada;
-- `~/.gitconfig`, `~/.config/git` e os arquivos de início do zsh e do bash;
+- `~/.gitconfig` e `~/.config/git`;
 - `~/.claude.json`, `~/.gemini` e `~/.codex`;
 - o que estiver em `JANGADA_ISOLAR_CASA_LER`, separado por `:`.
 
@@ -130,6 +167,10 @@ As regras de graváveis, somente leitura e ocultos valem como antes, por cima.
 Documentos, outros projetos, o histórico do shell e o `~/.Renviron` deixam de
 existir para o agente. O que ele grava solto na pasta pessoal fica em memória
 e some no fim.
+
+Os arquivos de início do shell (`.zshrc`, `.bashrc`, `.profile` e os demais)
+ficam de fora desde 05/10/2026: é neles que se exporta token. Quem precisa
+deles no agente acrescenta em `JANGADA_ISOLAR_CASA_LER`.
 
 O padrão continua sendo a casa inteira legível. A lista cobre o que o jangada
 conhece: bibliotecas de R em `~/R`, `~/.cargo`, `~/.nvm` ou dados que o

@@ -194,7 +194,12 @@ chaveiro inteiro é legível pelo D-Bus filtrado, `~/.claude/projects` e o
 `settings.json` do agy seguem graváveis, e repositórios aninhados no índice
 só ficam protegidos quando o git de fora passa por `jangada_git_seguro`.
 `JANGADA_AGENTE_ISOLAR=0` desliga (no `jangada.conf` ou num perfil), e
-`JANGADA_ISOLAR_OCULTAR` substitui a lista de ocultos. O estado guarda
+`JANGADA_ISOLAR_OCULTAR` substitui a lista de ocultos, e
+`JANGADA_ISOLAR_OCULTAR_EXTRA` acrescenta a ela. `JANGADA_ISOLAR_PERFIL=verificacao`
+(usado pelo `jangada-validar` no `lintr` e no `.jangada/validar.sh`) corta a
+rede e oculta os logins e as chaves dos provedores. Repositório em reftable
+é recusado. O `/sys` é o do host mesmo sem rede: para conferir a rede de
+dentro, leia `/proc/net/dev`. O estado guarda
 `comando` e `isolar` só para consulta: o `--restaurar` recompõe o comando e
 volta isolado, a menos que `JANGADA_AGENTE_ISOLAR=0` esteja no `jangada.conf`
 ou no ambiente (perfil e `--sem-isolar` não contam). Sem o `bwrap`, o
