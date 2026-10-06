@@ -323,7 +323,22 @@ PATH="$tmp/mv-falso:$PATH" confianca adicionar "$tmp/projeto"
 conferir "caso 16c: rename falho com link no lugar não grava no alvo" \
   bash -c '[ "$(cat "$1")" = "{\"alvo\": 1}" ]' _ "$tmp/alvo.json"
 conferir "caso 16c: o temporário fica no estado, fora da pasta do settings.json" \
-  bash -c 'read -r _ origem _ <"$1"; [[ "$origem" == "$2"/* ]]' _ "$tmp/mv.args" "$tmp/estado"
+  bash -c 'read -r _ _ origem _ <"$1"; [[ "$origem" == "$2"/* ]]' _ "$tmp/mv.args" "$tmp/estado"
+rm -f "$conf_agy"
+mv "$conf_agy.guardado" "$conf_agy"
+# O link para uma pasta aparece logo antes do rename (um chmod falso o cria):
+# o mv troca o próprio link, não põe o arquivo dentro da pasta apontada.
+mkdir -p "$tmp/chmod-falso" "$tmp/pasta-alvo"
+cat >"$tmp/chmod-falso/chmod" <<FIM
+#!/bin/sh
+rm -f "$conf_agy"
+ln -s "$tmp/pasta-alvo" "$conf_agy"
+FIM
+chmod +x "$tmp/chmod-falso/chmod"
+cp "$conf_agy" "$conf_agy.guardado"
+PATH="$tmp/chmod-falso:$PATH" confianca adicionar "$tmp/projeto"
+conferir "caso 16d: link para pasta posto antes do rename não recebe o arquivo" \
+  bash -c '[ -z "$(ls -A "$1")" ] && [ ! -L "$2" ]' _ "$tmp/pasta-alvo" "$conf_agy"
 rm -f "$conf_agy"
 mv "$conf_agy.guardado" "$conf_agy"
 

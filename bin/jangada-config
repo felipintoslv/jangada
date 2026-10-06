@@ -365,10 +365,11 @@ _jangada_trava_obter() {
 # Põe ORIGEM no lugar de DESTINO com rename, para ninguém ler o arquivo pela
 # metade nem sobrar arquivo truncado numa interrupção. A pasta do destino pode
 # ser gravável pelo agente isolado: nada é criado nem regravado nela, e o
-# rename troca o próprio link em vez de segui-lo. Sem poder renomear, falha.
+# rename (mv -T) troca o próprio link em vez de segui-lo, mesmo que aponte
+# para uma pasta. Sem poder renomear, falha.
 jangada_gravar_atomico() {
   chmod --reference="$2" "$1" 2>/dev/null || true
-  mv -f "$1" "$2" 2>/dev/null
+  mv -fT -- "$1" "$2" 2>/dev/null
 }
 
 # O settings.json é do agy e do usuário: a primeira alteração do jangada
