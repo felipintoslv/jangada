@@ -519,6 +519,43 @@ if Rscript -e 'quit(status = !requireNamespace("lintr", quietly = TRUE))' >/dev/
     grep -q "sobra.R:2: \[object_usage_linter\]" "$estado/validacao-s-r1.md"
   rm -f "$tmp/projeto/colunas.R" "$tmp/projeto/sobra.R"
   rm -f "$tmp/projeto/metodo.R"
+
+  # 12i: com .lintr no projeto, o lintr que falha reprova em vez de passar.
+  mkdir -p "$tmp/lintrquebrado"
+  printf '#!/usr/bin/env bash\necho quebrou >&2\nexit 1\n' >"$tmp/lintrquebrado/Rscript"
+  chmod +x "$tmp/lintrquebrado/Rscript"
+  echo 'h <- 1' >"$tmp/projeto/quebra.R"
+  sessao_de claude agy
+  PATH="$tmp/lintrquebrado:$PATH" validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 12i: com .lintr, falha do lintr reprova" [ "$rc" = 3 ]
+  conferir "caso 12i: o parecer diz que os arquivos R não foram conferidos" \
+    grep -q "arquivos R não conferidos" "$estado/validacao-s-r1.md"
+
+  # 12h: o .lintr da base é código R avaliado pelo lintr. Fora do isolamento
+  # ele roda no bwrap: confere os arquivos e não grava no host.
+  if command -v bwrap >/dev/null 2>&1 && bwrap --ro-bind / / --dev /dev --proc /proc true 2>/dev/null; then
+    git -C "$tmp/projeto" checkout -q main
+    printf 'linters: {file.create("%s"); linters_with_defaults()}\n' "$tmp/lintr-no-host" >"$tmp/projeto/.lintr"
+    git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qam "lintr que grava"
+    git -C "$tmp/projeto" checkout -q agente/x
+    git -C "$tmp/projeto" -c user.name=t -c user.email=t@t merge -q main -m "traz o .lintr que grava"
+    sessao_de claude agy
+    VALIDAR_FORA=1 validar 'STATUS: APROVADO'; rc=$?
+    conferir "caso 12h: o lintr rodou com o .lintr da base ($rc)" \
+      bash -c '! grep -q "lintr.*falhou" "$1"' _ "$tmp/saida.log"
+    conferir "caso 12h: o .lintr da base não grava no host" test ! -e "$tmp/lintr-no-host"
+    rm -f "$tmp/estado/jangada/revisoes/validar.jsonl" "$tmp/estado/jangada/revisoes/validacao-s"*
+    git -C "$tmp/projeto" checkout -q main
+    cp "$repo_jangada/default/r/lintr" "$tmp/projeto/.lintr"
+    git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qam "lintr de volta"
+    git -C "$tmp/projeto" checkout -q agente/x
+    git -C "$tmp/projeto" -c user.name=t -c user.email=t@t merge -q main -m "traz o .lintr de volta"
+  elif [[ "${JANGADA_TESTES_EXIGIR_ISOLAMENTO:-}" == 1 ]]; then
+    falha "caso 12h: bwrap ausente ou sem namespaces e o isolamento real é exigido"
+  else
+    echo "pulado caso 12h: bwrap ausente ou namespaces indisponíveis"
+  fi
+  rm -f "$tmp/projeto/quebra.R"
 else
   echo "pulado caso 12: R ou lintr não instalado"
 fi
@@ -996,7 +1033,11 @@ conferir "caso 21: sem revisão de fora, a prévia não mostra nenhuma" bash -c 
 git -C "$tmp/projeto" branch -f agente/p-fix HEAD
 jq -n --arg raiz "$tmp/projeto" '{sessao:"p--fix", raiz:$raiz, ramo:"agente/p-fix"}' >"$revisoes/p--fix.json"
 printf 'STATUS: APROVADO\nde fora\n' >"$revisoes/validacao-p--fix-r2.md"
-printf '%s 2 limpo\n' "$(git -C "$tmp/projeto" rev-parse HEAD)" >"$revisoes/validacao-p--fix.aprovado"
+jq -n --arg c "$(git -C "$tmp/projeto" rev-parse HEAD)" \
+  '{cabeca: $c, num: 2, limpo: true, candidate_sha: $c, independent: false}' >"$revisoes/validacao-p--fix.aprovado"
+XDG_STATE_HOME="$tmp/estado" JANGADA_PATH="$repo_jangada" "$repo_jangada/bin/jangada-agentes" --previa p--fix >"$tmp/previa.log" 2>&1
+conferir "caso 21b: a prévia separa a autorrevisão" grep -q "não vale como revisão independente" "$tmp/previa.log"
+jq '.independent = true' "$revisoes/validacao-p--fix.aprovado" >"$tmp/marca.json" && mv "$tmp/marca.json" "$revisoes/validacao-p--fix.aprovado"
 XDG_STATE_HOME="$tmp/estado" JANGADA_PATH="$repo_jangada" "$repo_jangada/bin/jangada-agentes" --previa p--fix >"$tmp/previa.log" 2>&1
 conferir "caso 21b: a prévia mostra a revisão de fora" grep -q "^--- validacao-p--fix-r2.md (fora do isolamento) ---$" "$tmp/previa.log"
 conferir "caso 21b: a aprovação de fora vale para o commit do ramo" grep -q "vale para o commit atual do ramo" "$tmp/previa.log"

@@ -755,12 +755,22 @@ verificar_local() {
       fi
     done
     r_err="$(mktemp)"
-    # Com a pasta em $dir, o R leria o .Rprofile e o .Renviron do worktree, e
-    # o lintr procuraria o .lintr a partir da pasta de cada arquivo. As três
-    # variáveis apontam para arquivos fora dele: o validar também roda fora do
-    # isolamento, e ali seria código do repositório avaliado rodando solto.
-    achados="$(cd "$dir" && R_PROFILE_USER="$HOME/.Rprofile" R_ENVIRON_USER="$HOME/.Renviron" \
-      R_LINTR_LINTER_FILE="$config" Rscript -e "$lintr_r" "$config" "${r_arqs[@]}" 2>"$r_err")" && r_rc=0 || r_rc=$?
+    # O .lintr é código R que o lintr avalia, e depois de um APROVADO ele vem
+    # do commit do agente. Por isso o R roda pelo jangada-isolar, como o
+    # .jangada/validar.sh, numa pasta que só tem a configuração e os arquivos
+    # a conferir: sem o .Rprofile, o .Renviron e o .lintr do worktree. A
+    # configuração fica dentro dela porque o isolamento tem /tmp próprio.
+    local lint_dir
+    lint_dir="$(mktemp -d)"
+    cp -- "$config" "$lint_dir/.jangada-lintr" && r_rc=0 || r_rc=1
+    for arq in "${r_arqs[@]}"; do
+      mkdir -p "$lint_dir/$(dirname -- "$arq")" && cp -- "$dir/$arq" "$lint_dir/$arq" || r_rc=1
+    done
+    achados=""
+    ((r_rc)) || achados="$(cd "$lint_dir" && R_PROFILE_USER="$HOME/.Rprofile" R_ENVIRON_USER="$HOME/.Renviron" \
+      R_LINTR_LINTER_FILE="$lint_dir/.jangada-lintr" "$JANGADA_PATH/bin/jangada-isolar" -- \
+      Rscript -e "$lintr_r" "$lint_dir/.jangada-lintr" "${r_arqs[@]}" 2>"$r_err")" || r_rc=$?
+    rm -rf "$lint_dir"
     if ((r_rc == 0)) && [[ -n "$achados" ]]; then
       # NF >= 2: um arquivo só com linhas apagadas deixa linha vazia em $linhas.
       achados="$(awk -F'\t' 'NR == FNR { if (NF >= 2) ok[$1 FS $2] = 1; next }
@@ -774,8 +784,13 @@ verificar_local() {
         fi
       fi
     elif ((r_rc != 0 && r_rc != 2)); then
-      # 2 é lintr ausente; outro código é erro do próprio lintr, que não reprova.
-      printf 'jangada-validar: lintr falhou, arquivos R não conferidos:\n%s\n' "$(tail -n 5 "$r_err")" >&2
+      # 2 é lintr ausente. Outro código é falha do lintr ou do isolamento: com
+      # .lintr no projeto a regra é obrigatória, e sem conferir a entrega reprova.
+      if ((bloqueia)); then
+        erros+="lintr (.lintr do projeto) falhou, arquivos R não conferidos:"$'\n'"$(tail -n 5 "$r_err")"$'\n'
+      else
+        printf 'jangada-validar: lintr falhou, arquivos R não conferidos:\n%s\n' "$(tail -n 5 "$r_err")" >&2
+      fi
     fi
     rm -f "$r_err"
   fi
