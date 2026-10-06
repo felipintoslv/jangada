@@ -117,6 +117,10 @@ printf 'COMANDO=codex\nDESCRICAO=Meu perfil local\nJANGADA_VALIDAR_REVISOR=agy\n
 printf 'COMANDO=agy\n' >"$XDG_CONFIG_HOME/jangada/agentes/antigo.conf"
 JANGADA_PATH="$repo_jangada" bin/jangada-agente --perfis >"$tmp/perfis.json"
 jq -e 'any(.[]; .nome == "codex" and .descricao == "Meu perfil local") and any(.[]; .nome == "codex-agy") and any(.[]; .nome == "claude-agy") and all(.[]; .nome != "antigo")' "$tmp/perfis.json" >/dev/null
+JANGADA_PATH="$repo_jangada" bin/jangada-agente --capacidades-json >"$tmp/capacidades.json"
+jq -e '([.principais[].nome] == ["claude", "codex"]) and all(.principais[]; .instalado | type == "boolean")
+  and any(.perfis[]; .nome == "codex-agy") and all(.perfis[]; .nome != "antigo")
+  and all(.principais[], .perfis[]; .nome != "agy")' "$tmp/capacidades.json" >/dev/null
 cat >"$tmp/bin/fuzzel" <<'SH'
 #!/bin/sh
 cat >"$MENU_TESTE"

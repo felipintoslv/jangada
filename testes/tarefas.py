@@ -56,7 +56,7 @@ class Interface(unittest.TestCase):
         self.criar_comando = self.bin / 'jangada-agente'
         self.criar_comando.write_text(self.comando.read_text().replace(
             "if sys.argv[1] in ('--lista', '--lista-atualizada'):",
-            "if sys.argv[1] == '--perfis':\n    print((pasta / 'perfis.json').read_text() if (pasta / 'perfis.json').exists() else '[]')\nelif sys.argv[1] in ('--lista', '--lista-atualizada'):"))
+            "if sys.argv[1] == '--capacidades-json':\n    perfis = (pasta / 'perfis.json').read_text() if (pasta / 'perfis.json').exists() else '[]'\n    principais = (pasta / 'principais.json').read_text() if (pasta / 'principais.json').exists() else '[{\"nome\": \"claude\", \"instalado\": true}, {\"nome\": \"codex\", \"instalado\": true}]'\n    print('{\"principais\": ' + principais + ', \"perfis\": ' + perfis + '}')\nelif sys.argv[1] in ('--lista', '--lista-atualizada'):"))
         self.criar_comando.chmod(448)
         self.lista = self.raiz / 'lista'
         self.lista.write_text('aguardando\tprojeto--um\t/tmp/projeto\thoje\tagente/um\tTarefa um\ntrabalhando\tprojeto--dois\t/tmp/projeto\thoje\tagente/dois\tTarefa dois\n')
@@ -642,6 +642,24 @@ class Interface(unittest.TestCase):
         argumentos = json.loads(arquivo.read_text())
         self.assertEqual(argumentos[:3], ['--janela', '--projeto', str(self.raiz)])
         self.assertEqual(argumentos[5:7], ['--perfil', 'codex-agy'])
+
+    def test_catalogo_de_agentes_vem_do_jangada_agente(self):
+        (self.raiz / 'principais.json').write_text(json.dumps([
+            {'nome': 'claude', 'instalado': True}, {'nome': 'codex', 'instalado': False},
+        ]))
+        (self.raiz / 'perfis.json').write_text(json.dumps([{'nome': 'claude-agy', 'descricao': ''}]))
+        self.janela.nova_tarefa()
+        form = self.janela.formulario
+        aguardar(lambda: form.agente.itemText(1) == 'claude-agy')
+        self.assertEqual([form.agente.itemText(i) for i in range(form.agente.count())], ['claude', 'claude-agy'])
+        self.assertNotIn('agy', [form.agente.itemText(i) for i in range(form.agente.count())])
+
+    def test_catalogo_com_agente_fora_do_formato_e_recusado(self):
+        (self.raiz / 'principais.json').write_text(json.dumps([{'nome': 'agy'}]))
+        self.janela.nova_tarefa()
+        form = self.janela.formulario
+        aguardar(lambda: 'Não foi possível consultar' in form.aviso.text())
+        self.assertEqual([form.agente.itemText(i) for i in range(form.agente.count())], ['claude', 'codex'])
 
     def test_falha_de_consulta_preserva_agentes_simples(self):
         (self.raiz / 'perfis.json').write_text('inválido')
