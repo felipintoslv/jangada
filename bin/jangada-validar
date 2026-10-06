@@ -143,16 +143,16 @@ registrar() {
 resumo_subagentes() {
   local desde="" rc=0
   resumo=""; resumo_erro=""
-  [[ -n "${dir:-}" ]] || return 0
+  [[ -n "${origem_dir:-}" ]] || return 0
   command -v python3 >/dev/null 2>&1 || return 0
   if [[ -f "${arq_aprovado:-}" ]]; then
     desde="$(date -r "$arq_aprovado" -Iseconds)"
   elif [[ -n "${criada:-}" ]]; then
     desde="$criada"
   elif [[ -n "${ponto:-}" ]]; then
-    desde="$(git -C "$dir" log -1 --format=%cI "$ponto" 2>/dev/null || true)"
+    desde="$(git -C "$origem_dir" log -1 --format=%cI "$ponto" 2>/dev/null || true)"
   fi
-  resumo="$(timeout 30 "$JANGADA_PATH/bin/jangada-subagentes" --entrega "$dir" ${desde:+--desde "$desde"} 2>/dev/null)" || rc=$?
+  resumo="$(timeout 30 "$JANGADA_PATH/bin/jangada-subagentes" --entrega "$origem_dir" ${desde:+--desde "$desde"} 2>/dev/null)" || rc=$?
   if ((rc == 124)); then
     resumo_erro="tempo esgotado (30 s)"
   elif ((rc)); then
@@ -171,6 +171,8 @@ dir="$(realpath "${1:-$PWD}")"
 git -C "$dir" rev-parse --show-toplevel >/dev/null 2>&1 \
   || { echo "jangada-validar: $dir não é um repositório git" >&2; exit 1; }
 dir="$(git -C "$dir" rev-parse --show-toplevel)"
+# $dir passa a ser a foto da entrega (congelar); a pasta do agente fica aqui.
+origem_dir="$dir"
 # No worktree de um agente, a pasta tem o nome da tarefa; o repositório vem
 # da pasta .git comum.
 projeto="$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir)"
@@ -302,7 +304,13 @@ arq_aprovado="$pareceres_dir/validacao-$rotulo.aprovado"
 # foi aprovado: as rodadas recomeçam, mas a revisão parte do ponto de antes.
 aprovado_commit=""; aprovado_num=0; aprovado_estado=""
 if [[ -f "$arq_aprovado" ]]; then
-  read -r aprovado_commit aprovado_num aprovado_estado <"$arq_aprovado" || true
+  # A marca é um objeto JSON; a de versões anteriores, "COMMIT N ESTADO".
+  if jq -e 'type == "object"' "$arq_aprovado" >/dev/null 2>&1; then
+    IFS=$'\t' read -r aprovado_commit aprovado_num aprovado_estado \
+      < <(jq -r '[.cabeca // "", (.num // 0 | tostring), (if .limpo then "limpo" else "sujo" end)] | @tsv' "$arq_aprovado") || true
+  else
+    read -r aprovado_commit aprovado_num aprovado_estado <"$arq_aprovado" || true
+  fi
   [[ "$aprovado_num" =~ ^[0-9]+$ ]] || aprovado_num=0
   if [[ "$aprovado_estado" != sujo ]] \
      && git -C "$dir" merge-base --is-ancestor "$ponto" "$aprovado_commit" 2>/dev/null \
@@ -310,6 +318,79 @@ if [[ -f "$arq_aprovado" ]]; then
     ponto="$(git -C "$dir" rev-parse "$aprovado_commit")"
   fi
 fi
+
+# A revisão não lê a pasta do agente, que ele altera enquanto o revisor
+# trabalha. A entrega vira um commit candidato (o HEAD, ou um commit sem ramo
+# com as alterações sem commit e os arquivos novos) e é extraída numa foto;
+# diff, portão local e revisor leem só a foto. Fora do isolamento, os objetos
+# passam antes por um fetch para um espelho em revisoes/: o agente grava em
+# .git/objects, o git não reconfere o hash ao ler um objeto solto, e o fetch
+# recalcula o hash de cada objeto que traz.
+foto=""; foto_exec=""
+# shellcheck disable=SC2329  # chamada pelo trap
+limpar_fotos() {
+  [[ -z "$foto" ]] || rm -rf "$foto"
+  [[ -z "$foto_exec" ]] || rm -rf "$foto_exec"
+}
+trap limpar_fotos EXIT
+congelar() {
+  local indice comum chave arvore_rastreados rastreados
+  # Identidade e data fixas: o candidato depende só da árvore e do pai.
+  local -a fixo=(env GIT_AUTHOR_NAME=jangada GIT_AUTHOR_EMAIL=jangada@localhost
+    GIT_COMMITTER_NAME=jangada GIT_COMMITTER_EMAIL=jangada@localhost
+    GIT_AUTHOR_DATE='@0 +0000' GIT_COMMITTER_DATE='@0 +0000')
+  comum="$(git -C "$origem_dir" rev-parse --path-format=absolute --git-common-dir)"
+  indice="$(mktemp -d)"
+  # Parte do índice do agente: o que ele pôs com git add conta como rastreado.
+  cp "$(git -C "$origem_dir" rev-parse --path-format=absolute --git-path index)" "$indice/indice" 2>/dev/null \
+    || GIT_INDEX_FILE="$indice/indice" git -C "$origem_dir" read-tree HEAD || { rm -rf "$indice"; return 1; }
+  arvore_rastreados="$(export GIT_INDEX_FILE="$indice/indice"
+    git -C "$origem_dir" add -u && git -C "$origem_dir" write-tree)" \
+    && arvore_candidato="$(export GIT_INDEX_FILE="$indice/indice"
+    git -C "$origem_dir" add -A && git -C "$origem_dir" write-tree)" \
+    || { rm -rf "$indice"; return 1; }
+  rm -rf "$indice"
+  limpo=sujo; candidato="$cabeca"; rastreados="$cabeca"
+  if [[ "$arvore_candidato" == "$(git -C "$origem_dir" rev-parse "$cabeca^{tree}")" ]]; then
+    limpo=limpo
+  else
+    candidato="$("${fixo[@]}" git -C "$origem_dir" commit-tree "$arvore_candidato" -p "$cabeca" -m "candidato do jangada-validar")" \
+      && rastreados="$("${fixo[@]}" git -C "$origem_dir" commit-tree "$arvore_rastreados" -p "$cabeca" -m "candidato do jangada-validar")" \
+      || return 1
+  fi
+  base_sha=""
+  [[ -z "$base" ]] || base_sha="$(git -C "$origem_dir" rev-parse --verify --quiet "$base^{commit}" || true)"
+
+  local objetos="$comum/objects"
+  if ((fora)); then
+    local espelho
+    espelho="$(jangada_espelho "$comum")" || return 1
+    chave="$(printf '%s' "$rotulo" | sha256sum | cut -c1-16)"
+    git --git-dir="$espelho" fetch -q --no-tags "$comum" \
+      "+$candidato:refs/jangada/$chave/candidato" "+$rastreados:refs/jangada/$chave/rastreados" \
+      ${base_sha:+"+$base_sha:refs/jangada/$chave/base"} \
+      || { echo "jangada-validar: o espelho recusou os objetos da entrega (objeto adulterado ou repositório corrompido)" >&2; return 1; }
+    objetos="$espelho/objects"
+    foto="$(umask 077; mkdir -p "$revisoes_dir/fotos" && mktemp -d "$revisoes_dir/fotos/XXXXXX")" || return 1
+  else
+    foto="$(mktemp -d)" || return 1
+  fi
+  git init -q -b foto --template= "$foto" || return 1
+  mkdir -p "$foto/.git/objects/info"
+  printf '%s\n' "$objetos" >"$foto/.git/objects/info/alternates"
+  # Sai com HEAD no commit do agente, índice nos arquivos rastreados e a
+  # pasta com tudo: o diff contra a base e a lista de arquivos novos saem
+  # como sairiam da pasta do agente.
+  git -C "$foto" read-tree --reset -u "$candidato" \
+    && git -C "$foto" update-ref --no-deref HEAD "$cabeca" \
+    && git -C "$foto" read-tree "$rastreados" \
+    && git -C "$foto" update-index -q --refresh
+}
+if ! congelar; then
+  echo "jangada-validar: não foi possível congelar a entrega para a revisão" >&2
+  exit 1
+fi
+dir="$foto"
 
 diff_conteudo="$(git -C "$dir" diff "$ponto" 2>/dev/null || true)"
 arquivos="$(git -C "$dir" diff --name-status "$ponto" 2>/dev/null || true)"
@@ -387,21 +468,21 @@ rodada=$((num - aprovado_num))
 if ((rodada > rodadas_max && !forcar)); then
   echo "jangada-validar: limite de $rodadas_max rodadas atingido para $rotulo." >&2
   if ((reverter_se_limite)); then
-    ramo_atual="$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    ramo_atual="$(git -C "$origem_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
     base_efetiva="${base:-main}"
     wt_padrao="${JANGADA_WORKTREES:-$HOME/.local/share/jangada-worktrees}"
     dir_valido=0
-    [[ "$dir/" == "$wt_padrao"/* || "$dir" == /tmp/* ]] && dir_valido=1
-    [[ -n "${TMPDIR:-}" && "$dir/" == "${TMPDIR%/}"/* ]] && dir_valido=1
+    [[ "$origem_dir/" == "$wt_padrao"/* || "$origem_dir" == /tmp/* ]] && dir_valido=1
+    [[ -n "${TMPDIR:-}" && "$origem_dir/" == "${TMPDIR%/}"/* ]] && dir_valido=1
 
     if [[ "$ramo_atual" == "$base_efetiva" || "$ramo_atual" == "main" || "$ramo_atual" == "master" ]]; then
       echo "jangada-validar: reversão cancelada para proteção do ramo base ($ramo_atual)." >&2
     elif ((!dir_valido)); then
-      echo "jangada-validar: reversão cancelada: diretório fora de JANGADA_WORKTREES ($dir)." >&2
+      echo "jangada-validar: reversão cancelada: diretório fora de JANGADA_WORKTREES ($origem_dir)." >&2
     else
       echo "jangada-validar: revertendo worktree para o ponto inicial ($ponto)..." >&2
-      git -C "$dir" reset --hard "$ponto" >&2
-      git -C "$dir" clean -fd >&2
+      git -C "$origem_dir" reset --hard "$ponto" >&2
+      git -C "$origem_dir" clean -fd >&2
       echo "jangada-validar: worktree revertido com sucesso." >&2
     fi
   else
@@ -759,14 +840,22 @@ verificar_local() {
   # 6. Validação do projeto se existir e não estiver em recursão. O script é
   # código do repositório avaliado, na versão da entrega: roda pelo
   # jangada-isolar, que numa sessão isolada roda direto e fora dela abre o
-  # bwrap (sem o bwrap, recusa, e a validação falha).
+  # bwrap (sem o bwrap, recusa, e a validação falha). Roda numa cópia da foto:
+  # o que ele gravar não chega ao revisor nem à pasta do agente. A cópia leva
+  # os objetos do commit do agente, sem histórico, porque o espelho fica em
+  # revisoes/, que o isolamento oculta.
   if [[ -z "${JANGADA_VALIDAR_EM_CURSO:-}" ]]; then
     export JANGADA_VALIDAR_EM_CURSO=1
     if [[ -x "$dir/.jangada/validar.sh" ]]; then
       local val_out
-      if ! val_out="$(cd "$dir" && "$JANGADA_PATH/bin/jangada-isolar" -- .jangada/validar.sh 2>&1)"; then
+      foto_exec="$(mktemp -d)"
+      if ! { cp -a "$dir/." "$foto_exec/" && printf '%s\n' "$cabeca" >"$foto_exec/.git/shallow" \
+             && git -C "$foto_exec" repack -a -d -q && rm -f "$foto_exec/.git/objects/info/alternates"; } 2>/dev/null; then
+        erros+="falha ao copiar a entrega para rodar o .jangada/validar.sh"$'\n'
+      elif ! val_out="$(cd "$foto_exec" && "$JANGADA_PATH/bin/jangada-isolar" -- .jangada/validar.sh 2>&1)"; then
         erros+="falha na validação do projeto (.jangada/validar.sh):"$'\n'"$val_out"$'\n'
       fi
+      rm -rf "$foto_exec"
     fi
   fi
 
@@ -946,12 +1035,17 @@ echo "jangada-validar: $status (parecer em $saida)" >&2
 registrar "${status,,}" revisor
 "$JANGADA_PATH/bin/jangada-gancho" pos-validar "$rotulo" "$status" || true
 if [[ "$status" == APROVADO ]]; then
-  # O terceiro campo diz se havia alteração sem commit: o
-  # jangada-agente-fim --integrar só aceita a aprovação do ramo limpo, que é
-  # o que o merge leva.
-  limpo=limpo
-  [[ -z "$(git -C "$dir" status --porcelain --ignore-submodules=all 2>/dev/null)" ]] || limpo=sujo
-  printf '%s %s %s\n' "$cabeca" "$num" "$limpo" >"$arq_aprovado"
+  # A marca diz o que foi revisado, contra qual base e por quem: o
+  # jangada-agente-fim --integrar só aceita a que bate com o que vai mesclar.
+  # Com alteração sem commit, o candidato não é o commit do ramo e não integra.
+  jq -n --arg cabeca "$cabeca" --argjson num "$num" --arg limpo "$limpo" --arg base "$base" \
+    --arg base_sha "$base_sha" --arg ponto "$ponto" --arg candidato "$candidato" \
+    --arg arvore "$arvore_candidato" --arg revisor "$revisor" --arg modelo "$modelo" --arg autor "$autor" \
+    --argjson independente "$((1 - auto_revisao))" \
+    '{cabeca: $cabeca, num: $num, limpo: ($limpo == "limpo"), base: $base, base_sha: $base_sha,
+      ponto: $ponto, candidate_sha: $candidato, candidate_tree: $arvore, reviewer: $revisor,
+      model: $modelo, author: $autor, independent: ($independente == 1)}' >"$arq_aprovado.tmp" \
+    && mv -f "$arq_aprovado.tmp" "$arq_aprovado"
   exit 0
 fi
 exit 3

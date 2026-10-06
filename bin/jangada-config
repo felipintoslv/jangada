@@ -298,6 +298,19 @@ jangada_git_seguro() {
   git "${args[@]}" "$@"
 }
 
+# Espelho do repositório cuja pasta .git comum é COMUM, em revisoes/, que o
+# isolamento oculta. O agente grava em .git/objects e o git não reconfere o
+# hash de um objeto solto ao ler; o que entra no espelho vem por fetch, que
+# recalcula o hash de cada objeto. Imprime o caminho (use com --git-dir).
+jangada_espelho() {
+  local dir
+  dir="$JANGADA_ESTADO/revisoes/espelhos/$(printf '%s' "$1" | sha256sum | cut -c1-16).git"
+  if [[ ! -d "$dir" ]]; then
+    (umask 077; mkdir -p "${dir%/*}" && git init -q --bare -b espelho --template= "$dir") || return 1
+  fi
+  printf '%s\n' "$dir"
+}
+
 # O mesmo para todo git que o script e os filhos rodarem, pelas variáveis
 # GIT_CONFIG_KEY_N/GIT_CONFIG_VALUE_N (valem como -c).
 jangada_git_blindar() {

@@ -35,6 +35,7 @@ cat >"$tmp/bin/agy" <<'EOF'
 if [[ "$1" == agents ]]; then printf '%s\n' ${FALSO_AGENTES-explorador revisor}; exit 0; fi
 printf '%s\n' "$@" >"$FALSO_DIR/agy.args"
 while (($#)); do [[ "$1" == -p ]] && { printf '%s' "$2" >"$FALSO_DIR/agy.pedido"; break; }; shift; done
+[[ -z "${FALSO_COMANDO:-}" ]] || eval "$FALSO_COMANDO"
 jq -n --arg r "$(printf '%b' "$FALSO_RESPOSTA")" '{status:"SUCCESS", response:$r}'
 EOF
 cat >"$tmp/bin/codex" <<'EOF'
@@ -838,15 +839,16 @@ conferir "caso 20: .jangada/validar.sh novo ou alterado vai ao revisor para conf
 if command -v bwrap >/dev/null 2>&1 && bwrap --ro-bind / / --dev /dev --proc /proc true 2>/dev/null; then
   sessao_de claude agy
   printf '#!/usr/bin/env bash
-echo "${JANGADA_ISOLADO:-}" >.jangada/isolado
+: >.jangada/rodou || exit 1
 : >"%s" 2>/dev/null
-exit 0
+git rev-parse --verify --quiet HEAD >/dev/null || exit 1
+[[ "${JANGADA_ISOLADO:-}" == 1 ]]
 ' \
     "$tmp/validar-fora" >"$tmp/projeto/.jangada/validar.sh"
   VALIDAR_FORA=1 validar 'STATUS: APROVADO'; rc=$?
-  conferir "caso 20b: o .jangada/validar.sh isolado passa" [ "$rc" = 0 ]
-  conferir "caso 20b: o .jangada/validar.sh roda no isolamento" \
-    [ "$(cat "$tmp/projeto/.jangada/isolado" 2>/dev/null)" = 1 ]
+  conferir "caso 20b: o .jangada/validar.sh roda no isolamento, com git, e passa" [ "$rc" = 0 ]
+  conferir "caso 20b: o .jangada/validar.sh grava na cópia, não na pasta do agente" \
+    test ! -e "$tmp/projeto/.jangada/rodou"
   conferir "caso 20b: o .jangada/validar.sh não grava fora do projeto" test ! -e "$tmp/validar-fora"
 else
   if [[ "${JANGADA_TESTES_EXIGIR_ISOLAMENTO:-}" == 1 ]]; then
@@ -894,15 +896,70 @@ conferir "caso 20d: a tarefa vem da cópia" grep -q "tarefa da copia" "$tmp/fals
 conferir "caso 20d: a marca forjada em agentes/ não encurta o diff" grep -q "^+linha-20d$" "$tmp/falso/agy.pedido"
 conferir "caso 20d: o parecer vai para revisoes/" test -s "$revisoes/validacao-s-r1.md"
 conferir "caso 20d: nenhum parecer novo em agentes/" test ! -e "$estado/validacao-s-r1.md"
-conferir "caso 20d: a marca em revisoes/ traz o HEAD e o estado do worktree" \
-  bash -c 'read -r c n l <"$1" && [ "$c" = "$(git -C "$2" rev-parse HEAD)" ] && [ "$n" = 1 ] && [[ "$l" =~ ^(limpo|sujo)$ ]]' \
-  _ "$revisoes/validacao-s.aprovado" "$tmp/projeto"
+conferir "caso 20d: a marca em revisoes/ diz o que foi revisado, contra qual base e por quem" \
+  jq -e --arg c "$(git -C "$tmp/projeto" rev-parse HEAD)" --arg b "$(git -C "$tmp/projeto" rev-parse main)" \
+    '.cabeca == $c and .num == 1 and (.limpo | type) == "boolean" and .base_sha == $b
+     and (.candidate_sha | test("^[0-9a-f]{40}$")) and (.candidate_tree | test("^[0-9a-f]{40}$"))
+     and .reviewer == "agy" and .author == "claude" and .independent == true' \
+  "$revisoes/validacao-s.aprovado"
 conferir "caso 20d: a métrica vai para revisoes/validar.jsonl" \
   bash -c '[ "$(wc -l <"$1")" = "$2" ] && [ "$(jq -r .resultado "$3")" = aprovado ]' \
   _ "$tmp/estado/jangada/validar.jsonl" "$metricas_antes" "$revisoes/validar.jsonl"
 env XDG_STATE_HOME="$tmp/estado" JANGADA_PATH="$repo_jangada" "$repo_jangada/bin/jangada-validar" --metricas >"$tmp/metricas.log" 2>&1
 conferir "caso 20d: --metricas conta a aprovação de fora à parte" grep -q "1 aprovada(s) fora do isolamento" "$tmp/metricas.log"
 rm -f "$revisoes/s.json"
+
+# Caso 22: a pasta do agente muda enquanto o revisor trabalha. O revisor lê a
+# foto tirada no início, e a marca descreve a foto, não o que a pasta virou.
+sessao_de claude agy
+echo benigno >"$tmp/projeto/alvo.txt"
+git -C "$tmp/projeto" add alvo.txt
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "caso 22"
+arvore_22="$(git -C "$tmp/projeto" rev-parse 'HEAD^{tree}')"
+PROJ="$tmp/projeto" FALSO_COMANDO='echo malicioso >"$PROJ/alvo.txt"; pwd >"$FALSO_DIR/agy.pasta"; cat alvo.txt >"$FALSO_DIR/agy.visto"' \
+  validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 22: aprovado" [ "$rc" = 0 ]
+conferir "caso 22: o revisor não trabalha na pasta do agente" \
+  bash -c '[ -s "$1" ] && [ "$(cat "$1")" != "$2" ]' _ "$tmp/falso/agy.pasta" "$tmp/projeto"
+conferir "caso 22: o revisor lê o conteúdo de antes da troca" [ "$(cat "$tmp/falso/agy.visto" 2>/dev/null)" = benigno ]
+conferir "caso 22: a marca traz a árvore da foto e o commit do ramo" \
+  jq -e --arg t "$arvore_22" --arg c "$(git -C "$tmp/projeto" rev-parse HEAD)" \
+    '.candidate_tree == $t and .candidate_sha == $c and .limpo == true' "$estado/validacao-s.aprovado"
+conferir "caso 22: a foto some no fim" bash -c 'test ! -e "$(cat "$1")"' _ "$tmp/falso/agy.pasta"
+git -C "$tmp/projeto" checkout -q -- alvo.txt
+
+# Caso 22b: alteração sem commit desfeita durante a revisão. O candidato
+# aprovado não é o commit do ramo, e a marca diz isso.
+sessao_de claude agy
+echo "sem commit" >>"$tmp/projeto/alvo.txt"
+PROJ="$tmp/projeto" FALSO_COMANDO='git -C "$PROJ" checkout -q -- alvo.txt' validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 22b: aprovado" [ "$rc" = 0 ]
+conferir "caso 22b: o pedido traz a alteração sem commit" grep -q "^+sem commit$" "$tmp/falso/agy.pedido"
+conferir "caso 22b: a marca não vale para o commit do ramo" \
+  jq -e '.limpo == false and .candidate_sha != .cabeca' "$estado/validacao-s.aprovado"
+
+# Caso 22c: objeto solto trocado em .git/objects, que o agente grava. O git
+# entregaria o conteúdo forjado sem conferir o hash; o espelho recusa.
+sessao_de claude agy
+echo "conteudo honesto" >"$tmp/projeto/forjado.txt"
+git -C "$tmp/projeto" add forjado.txt
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "caso 22c"
+blob_22="$(git -C "$tmp/projeto" rev-parse HEAD:forjado.txt)"
+objeto_22="$tmp/projeto/.git/objects/${blob_22:0:2}/${blob_22:2}"
+chmod u+w "$objeto_22"
+python3 -c 'import sys, zlib
+d = b"conteudo forjado\n"
+sys.stdout.buffer.write(zlib.compress(b"blob %d\0" % len(d) + d))' >"$objeto_22"
+conferir "caso 22c: o git lê o objeto forjado sem reclamar" \
+  [ "$(git -C "$tmp/projeto" cat-file -p "$blob_22")" = "conteudo forjado" ]
+rm -f "$revisoes/validacao-s.aprovado"
+VALIDAR_FORA=1 validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 22c: objeto forjado barra a revisão" [ "$rc" = 1 ]
+conferir "caso 22c: a mensagem diz que o espelho recusou" grep -q "o espelho recusou os objetos" "$tmp/saida.log"
+conferir "caso 22c: o revisor não é chamado e nada é aprovado" \
+  bash -c 'test ! -e "$1" && test ! -e "$2"' _ "$tmp/falso/agy.pedido" "$revisoes/validacao-s.aprovado"
+rm -f "$objeto_22"
+git -C "$tmp/projeto" reset -q --hard HEAD~1
 VALIDAR_FORA=1 validar 'STATUS: REVISAR\n1. x'
 conferir "caso 20d: sem a cópia da sessão, avisa que os metadados vêm do estado gravável" \
   grep -q "sem cópia da sessão" "$tmp/saida.log"
