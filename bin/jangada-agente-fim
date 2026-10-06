@@ -260,6 +260,21 @@ objetos_integros() {
   return "$rc"
 }
 
+# O merge lê objetos que o agente ainda grava, depois de objetos_integros. O
+# espelho refaz a mescla só com objetos protegidos: a árvore tem de ser a
+# mesma, e cada arquivo escrito tem de ter o conteúdo do nome que leva no
+# commit (o update-index relê os arquivos em vez de confiar no stat).
+mescla_integra() {
+  local espelho arvore
+  espelho="$(jangada_espelho "$(dir_comum "$raiz")")" || return 1
+  arvore="$(jangada_git_seguro --git-dir="$espelho" merge-tree --write-tree "$ponta_base" "$cabeca" 2>/dev/null)" || return 1
+  [[ -n "$arvore" && "$arvore" == "$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet 'HEAD^{tree}')" ]] || return 1
+  jangada_git_seguro -C "$raiz" update-index -q --really-refresh >/dev/null 2>&1 || true
+  # diff-index compara nomes: o git diff compararia o conteúdo com o do objeto
+  # forjado e não veria diferença.
+  jangada_git_seguro -C "$raiz" diff-index --quiet --ignore-submodules=all HEAD
+}
+
 # Roda sob a trava do repositório: entre a conferência e o merge o usuário
 # decide sem prazo, e nesse meio outra sessão pode ter sido integrada. Aqui o
 # ramo e a base têm de estar onde estavam quando foram listados e conferidos.
@@ -280,6 +295,12 @@ mesclar_sob_trava() {
   if ! jangada_git_seguro -C "$raiz" merge --no-ff -m "Integra $ramo" "$cabeca"; then
     echo "o merge falhou; resolva em $raiz (git merge --abort desfaz). A sessão foi mantida." >&2
     return 12
+  fi
+  if ! mescla_integra; then
+    jangada_git_seguro -C "$raiz" reset -q --hard "$ponta_base" \
+      || echo "não consegui desfazer o merge: confira $raiz (git reset --hard ${ponta_base:0:12})." >&2
+    echo "o que o merge escreveu em $raiz não confere com a mescla refeita no espelho (objeto adulterado durante o merge); o merge foi desfeito." >&2
+    return 11
   fi
 }
 

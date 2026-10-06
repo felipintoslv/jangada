@@ -123,7 +123,11 @@ flowchart TD
   durante a revisão fica fora do parecer e da aprovação. Fora do isolamento,
   os objetos passam por `git fetch` para um espelho em `revisoes/espelhos/`,
   que recalcula cada hash: o agente grava em `.git/objects`, e o git não
-  reconfere um objeto solto ao ler.
+  reconfere um objeto solto ao ler. O `--integrar` compara os objetos do
+  ramo e da base com os do espelho antes do merge e, depois dele, refaz a
+  mescla no espelho: árvore diferente ou arquivo escrito com conteúdo que não
+  bate com o nome no commit desfaz o merge. Um objeto trocado depois da
+  integração fica fora dessa conferência; quem o acusa é o `git fsck`.
 - **Diff.** Entram os arquivos rastreados e os novos não rastreados. Nome de
   arquivo com quebra de linha reprova na verificação local, porque escaparia
   das listas.

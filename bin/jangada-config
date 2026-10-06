@@ -362,21 +362,13 @@ _jangada_trava_obter() {
   return 1
 }
 
-# Troca o conteúdo de DESTINO pelo de ORIGEM com rename, para ninguém ler o
-# arquivo pela metade nem sobrar arquivo truncado numa interrupção. Mantém as
-# permissões e não segue link simbólico: o rename troca o próprio link. Sem
-# poder criar o temporário ao lado ou renomear (arquivo montado sozinho no
-# isolamento), regrava no lugar.
+# Põe ORIGEM no lugar de DESTINO com rename, para ninguém ler o arquivo pela
+# metade nem sobrar arquivo truncado numa interrupção. A pasta do destino pode
+# ser gravável pelo agente isolado: nada é criado nem regravado nela, e o
+# rename troca o próprio link em vez de segui-lo. Sem poder renomear, falha.
 jangada_gravar_atomico() {
-  local origem="$1" destino="$2" novo
-  if novo="$(mktemp "$destino.jangada-XXXXXX" 2>/dev/null)"; then
-    if cat "$origem" >"$novo" && chmod --reference="$destino" "$novo" 2>/dev/null \
-      && mv -f "$novo" "$destino" 2>/dev/null; then
-      return 0
-    fi
-    rm -f "$novo"
-  fi
-  cat "$origem" >"$destino"
+  chmod --reference="$2" "$1" 2>/dev/null || true
+  mv -f "$1" "$2" 2>/dev/null
 }
 
 # O settings.json é do agy e do usuário: a primeira alteração do jangada
@@ -424,7 +416,7 @@ jangada_agy_ajustar_confianca() {
       flock -w 5 9 2>/dev/null || exit 1
       _jangada_agy_guardar_original "$conf_agy"
       if jq --arg w "$caminho_real" --arg w_orig "$caminho" "$filtro" "$conf_agy" >"$tmp" 2>/dev/null; then
-        jangada_gravar_atomico "$tmp" "$conf_agy"
+        jangada_gravar_atomico "$tmp" "$conf_agy" || true
       fi
       rm -f "$tmp"
     ) 9>"$trava" 2>/dev/null || rm -f "$tmp"
@@ -433,7 +425,7 @@ jangada_agy_ajustar_confianca() {
     if _jangada_trava_obter "$trava_d"; then
       _jangada_agy_guardar_original "$conf_agy"
       if jq --arg w "$caminho_real" --arg w_orig "$caminho" "$filtro" "$conf_agy" >"$tmp" 2>/dev/null; then
-        jangada_gravar_atomico "$tmp" "$conf_agy"
+        jangada_gravar_atomico "$tmp" "$conf_agy" || true
       fi
       rm -f "$tmp"
       rmdir "$trava_d" 2>/dev/null || true
