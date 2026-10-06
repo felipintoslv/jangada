@@ -95,3 +95,11 @@ Depois de trocar cores ou papel de parede, rode `jangada-sddm aplicar`.
   só vale na simulação e quando a consulta falha. `QComboBox.clear()` dispara
   `currentTextChanged`: ao trocar a lista depois da resposta, bloqueie os
   sinais, ou o formulário reabre o envio de um pedido que já saiu.
+
+## Central de tarefas
+
+- `QComboBox.clear()` emite sinais. Troque o catálogo com `blockSignals`
+  para preservar o pedido já enviado e o modo escolhido.
+- Ao simular a resposta de uma prévia nos testes, aguarde a consulta real
+  terminar. Seu sinal `finished` pode substituir o texto simulado e mover
+  a rolagem depois da asserção.

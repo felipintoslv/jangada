@@ -55,12 +55,35 @@ class NovaTarefa(QDialog):
         formulario.addRow('Projeto', linha)
         self.agente = QComboBox()
         self.agente.addItems(AGENTES)
-        formulario.addRow('Agente ou perfil', self.agente)
         layout.addLayout(formulario)
-        layout.addWidget(QLabel('O que você quer que o agente faça?'))
+        layout.addWidget(QLabel('O que precisa ser feito?'))
         self.pedido = QPlainTextEdit()
         self.pedido.setPlaceholderText('Descreva a tarefa, o resultado esperado e as restrições.')
         layout.addWidget(self.pedido)
+        self.recomendado = None if janela.real else AGENTES[0]
+        self.modo = QComboBox()
+        self.modo.addItems(['Recomendado', 'Personalizado'])
+        modo_linha = QFormLayout()
+        modo_linha.addRow('Modo', self.modo)
+        layout.addLayout(modo_linha)
+        self.avancadas = QPushButton('Opções avançadas')
+        self.avancadas.setCheckable(True)
+        layout.addWidget(self.avancadas)
+        self.opcoes = QWidget()
+        opcoes = QFormLayout(self.opcoes)
+        opcoes.addRow('Executor ou perfil', self.agente)
+        self.revisor = QComboBox()
+        self.revisor.addItems(['Padrão configurado', 'oposto', 'claude', 'codex', 'agy', 'mesmo'])
+        opcoes.addRow('Revisor', self.revisor)
+        self.seguranca = QComboBox()
+        self.seguranca.addItems(['Padrão configurado', 'Sem isolamento'])
+        opcoes.addRow('Segurança', self.seguranca)
+        self.delegacao = QComboBox()
+        self.delegacao.addItems(['Padrão configurado', 'local', 'agy', 'claude'])
+        opcoes.addRow('Delegação', self.delegacao)
+        layout.addWidget(self.opcoes)
+        self.opcoes.hide()
+        self.avancadas.toggled.connect(self.opcoes.setVisible)
         self.aviso = QLabel('Em projetos Git, a tarefa usa um worktree próprio.' if janela.real else 'Simulação: a tarefa aparece na lista sem executar agentes.')
         self.aviso.setTextFormat(Qt.TextFormat.PlainText)
         self.aviso.setWordWrap(True)
@@ -76,7 +99,9 @@ class NovaTarefa(QDialog):
         self.enviar.clicked.connect(self.criar)
         self.projeto.textChanged.connect(self.reeditar)
         self.pedido.textChanged.connect(self.reeditar)
-        self.agente.currentTextChanged.connect(self.reeditar)
+        self.modo.currentTextChanged.connect(self.reeditar)
+        for controle in (self.agente, self.revisor, self.seguranca, self.delegacao):
+            controle.currentTextChanged.connect(self.personalizar)
         botoes.addWidget(fechar)
         botoes.addStretch()
         botoes.addWidget(self.enviar)
@@ -124,6 +149,9 @@ class NovaTarefa(QDialog):
         if self.agente.findText(escolhido) >= 0:
             self.agente.setCurrentIndex(self.agente.findText(escolhido))
         self.agente.blockSignals(False)
+        self.recomendado = next((a['nome'] for a in principais if a['instalado']), None)
+        if self.recomendado:
+            self.aviso.setText(f'Recomendado: {self.recomendado}, primeiro executor instalado no catálogo. Revisor, segurança e delegação seguem os padrões configurados.')
         if not self.agente.count():
             self.aviso.setText('Nenhum agente instalado: instale o claude ou o codex.')
             self.enviar.setEnabled(False)
@@ -169,6 +197,11 @@ class NovaTarefa(QDialog):
         projeto = Path(pasta).expanduser().resolve()
         agente = self.agente.currentText()
         perfil = self.agente.currentData()
+        if self.modo.currentText() == 'Recomendado':
+            if not self.recomendado:
+                self.erro.setText('Nenhum executor recomendado disponível. Confira o catálogo ou escolha nas opções avançadas.')
+                return
+            agente, perfil = self.recomendado, None
         nome = 'tarefa-' + uuid.uuid4().hex[:12]
         if not self.janela.real:
             sessao = Sessao(nome, 'trabalhando', str(projeto), datetime.now().isoformat(), 'agente/' + nome, pedido, agente, projeto.name, 'Tarefa simulada. Nenhum agente foi executado.')
@@ -178,13 +211,26 @@ class NovaTarefa(QDialog):
             self.erro.setText('Tarefa simulada criada. Você pode acompanhar na lista.')
         else:
             processo = QProcess(self)
-            self.janela.preparar(processo, ['--janela', '--projeto', str(projeto), '--nome', nome, '--perfil' if perfil else '--agente', perfil or agente, '--prompt', pedido], 'jangada-agente')
+            argumentos = ['--janela', '--projeto', str(projeto), '--nome', nome,
+                          '--perfil' if perfil else '--agente', perfil or agente, '--prompt', pedido]
+            personalizado = self.modo.currentText() == 'Personalizado'
+            if personalizado and self.revisor.currentIndex():
+                argumentos += ['--revisor', self.revisor.currentText()]
+            if personalizado and self.seguranca.currentIndex():
+                argumentos += ['--sem-isolar']
+            if personalizado and self.delegacao.currentIndex():
+                argumentos += ['--delegacao', self.delegacao.currentText()]
+            self.janela.preparar(processo, argumentos, 'jangada-agente')
             iniciado, _ = processo.startDetached()
             if not iniciado:
                 self.erro.setText('Não foi possível iniciar jangada-agente. Confira --jangada.')
                 return
             self.erro.setText('Abertura solicitada. Se o agente falhar ao iniciar, o erro aparece no terminal. Confira se a tarefa entrou na lista. Seu pedido foi preservado.')
         self.enviar.setEnabled(False)
+
+    def personalizar(self, *_):
+        self.modo.setCurrentText('Personalizado')
+        self.reeditar()
 
     def reeditar(self, *_):
         self.enviar.setEnabled(True)

@@ -635,7 +635,13 @@ A central não encerra agentes ao fechar. A consulta da janela apenas lê os
 registros; o contador da barra mantém a limpeza automática de estados órfãos
 e o registro persistente das interrupções, pelo mecanismo anterior.
 
-**Nova tarefa** escolhe projeto, agente e pedido, usando `jangada-agente`.
+**Nova tarefa** pede projeto e pedido, com modo **Recomendado**.
+Esse modo escolhe o primeiro executor instalado na ordem de
+`jangada-agente --capacidades-json`, atualmente Claude e depois Codex.
+Revisor, segurança e delegação seguem os padrões configurados do lançador.
+As opções avançadas ficam recolhidas e preservam agente e perfil; também
+permitem escolher revisor, delegação e desativar o isolamento.
+Alterar um controle seleciona o modo Personalizado; recolher a área preserva as escolhas.
 **Nova pasta**, no formulário, cria a pasta de um projeto novo em
 `JANGADA_PROJETOS` e a deixa selecionada; a pasta nasce sem repositório Git.
 **Painel de indicadores** e **Conversa de Pescador** abrem os aplicativos

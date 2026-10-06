@@ -444,6 +444,21 @@ class Interface(unittest.TestCase):
         self.assertEqual(self.janela.linha_tempo.toPlainText(), historico)
         self.assertTrue(self.janela.abrir.isEnabled())
 
+    def test_modo_recomendado_e_opcoes_recolhidas(self):
+        self.janela.nova_tarefa()
+        form = self.janela.formulario
+        aguardar(lambda: form.perfis.state() == QProcess.ProcessState.NotRunning)
+        self.assertEqual(form.modo.currentText(), 'Recomendado')
+        self.assertTrue(form.opcoes.isHidden())
+        self.assertEqual(form.recomendado, 'claude')
+        form.avancadas.click()
+        self.assertFalse(form.opcoes.isHidden())
+        form.agente.setCurrentText('codex')
+        self.assertEqual(form.modo.currentText(), 'Personalizado')
+        form.avancadas.click()
+        self.assertTrue(form.opcoes.isHidden())
+        self.assertEqual(form.agente.currentText(), 'codex')
+
     def test_nova_tarefa_sugere_raiz_em_vez_de_worktree(self):
         registro = self.estado / 'projeto--um.json'
         dados = json.loads(registro.read_text())
@@ -672,6 +687,7 @@ class Interface(unittest.TestCase):
         self.criar_comando.unlink()
         self.janela.nova_tarefa()
         form = self.janela.formulario
+        form.modo.setCurrentText('Personalizado')
         form.projeto.setText(str(self.raiz))
         form.pedido.setPlainText('Pedido preservado')
         form.criar()
@@ -761,6 +777,7 @@ class Interface(unittest.TestCase):
         self.assertEqual(self.janela.atividade.toPlainText(), 'Atividade da segunda sessão')
 
     def test_previa_mostra_opcoes_no_fim_sem_perder_leitura_anterior(self):
+        aguardar(lambda: self.janela.previa.state() == QProcess.ProcessState.NotRunning)
         self.janela.show()
         APP.processEvents()
         conteudo = '\n'.join([f'Etapa {i}' for i in range(60)] + ['Como continuar?', '1. Ajustar contador', '2. Ajustar janela'])
