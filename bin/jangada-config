@@ -277,13 +277,30 @@ jangada_data_iso() {
 # um objeto JSON com campos a mais, acrescentados depois dos cinco de sempre.
 # Nunca falha: é chamado de dentro dos hooks. Uma linha curta com >> é gravada
 # inteira mesmo com dois hooks ao mesmo tempo.
+# Anexa LINHA a ARQUIVO sob trava. O printf do bash divide uma linha grande em
+# várias escritas, e dois processos anexando juntos misturavam os pedaços. A
+# trava é o próprio arquivo aberto para leitura, que o agente isolado também
+# alcança. Sem a trava em 5 s, a linha é gravada assim mesmo: registro não
+# segura quem chama.
+jangada_anexar_linha() {
+  [[ -e "$1" ]] || : 2>/dev/null >>"$1" || return 1
+  if command -v flock >/dev/null 2>&1; then
+    (
+      flock -w 5 9 || true
+      printf '%s\n' "$2" >>"$1"
+    ) 9<"$1" 2>/dev/null
+  else
+    printf '%s\n' "$2" 2>/dev/null >>"$1"
+  fi
+}
+
 jangada_registrar_evento() {
   local linha
   linha="$(jq -cn --arg d "$(jangada_data_iso)" --arg s "$1" --arg p "$2" --arg a "$3" --arg e "$4" \
     --arg x "${5:-}" '{data: $d, sessao: $s, projeto: $p, agente: $a, estado: $e}
       + (($x | fromjson? | objects) // {})' 2>/dev/null)" || return 0
   [[ -n "$linha" ]] || return 0
-  printf '%s\n' "$linha" 2>/dev/null >>"$JANGADA_ESTADO/eventos-agentes.jsonl" || true
+  jangada_anexar_linha "$JANGADA_ESTADO/eventos-agentes.jsonl" "$linha" || true
   return 0
 }
 

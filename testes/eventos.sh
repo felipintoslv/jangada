@@ -96,6 +96,20 @@ printf '{}' | rodar JANGADA_SESSAO=outro "$repo_jangada/bin/jangada-hook-agy" tr
 conferir "caso 5: nem o do agy, que segue respondendo {}" \
   bash -c '[ "$1" = 0 ] && [ "$(cat "$2")" = "{}" ]' _ "$rc" "$tmp/saida"
 
+# Escritas simultâneas de linhas grandes: cada linha tem de sair inteira.
+grande="$tmp/grande.json"
+printf '{"x": "%s"}\n' "$(head -c 300000 /dev/zero | tr '\0' x)" >"$grande"
+: >"$tmp/concorrente.jsonl"
+for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+  rodar bash -c 'source "$1/bin/jangada-config"
+    for j in 1 2 3 4 5 6 7 8; do jangada_anexar_linha "$2" "$(jq -c --arg i "$3" --arg j "$j" ". + {i: \$i, j: \$j}" "$4")"; done' \
+    _ "$repo_jangada" "$tmp/concorrente.jsonl" "$i" "$grande" &
+done
+wait
+conferir "anexação concorrente: 96 linhas inteiras" \
+  bash -c '[ "$(jq -c "select((.x | length) == 300000) | [.i, .j]" "$1" 2>/dev/null | sort -u | wc -l)" = 96 ] && [ "$(wc -l <"$1")" = 96 ]' \
+  _ "$tmp/concorrente.jsonl"
+
 if ((falhas)); then
   echo "$falhas falha(s); saídas em $tmp (mantido)"
   trap - EXIT

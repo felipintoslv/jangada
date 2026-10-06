@@ -213,7 +213,7 @@ registrar() {
       cota_antes: ($antes | num), cota_depois: ($depois | num),
       recusa: ($motivo != ""), motivo: $motivo, conversa: $conversa,
       sem_fonte: ($sem_fonte | num)}')"
-  printf '%s\n' "$registro" >>"$JANGADA_ESTADO/delegacoes.jsonl" 2>/dev/null || true
+  jangada_anexar_linha "$JANGADA_ESTADO/delegacoes.jsonl" "$registro" || true
   if ((modo_json)); then
     jq -nc --argjson registro "$registro" --arg relatorio "${impresso:-$texto}" '$registro + {relatorio: $relatorio}'
   fi
