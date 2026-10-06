@@ -128,10 +128,13 @@ conferir "ambiente mínimo: o valor não aparece nos argumentos" bash -c '! grep
 
 # Casa mínima: a pasta pessoal some e volta só o que está na lista.
 conferir "caso 1: sem a opção, a pasta pessoal não é esvaziada" bash -c '! grep -A1 -xF -- --tmpfs "$1" | grep -qxF "$2"' _ "$tmp/args" "$casa"
+: >"$casa/.zshrc"; : >"$casa/.bashrc"
 mostrar JANGADA_ISOLAR_CASA=minima JANGADA_ISOLAR_CASA_LER="$casa/extra"
 conferir "casa mínima: a pasta pessoal vira pasta vazia" seguidos --tmpfs "$casa" ""
 conferir "casa mínima: o .claude.json volta somente leitura" seguidos --ro-bind "$casa/.claude.json" "$casa/.claude.json"
 conferir "casa mínima: JANGADA_ISOLAR_CASA_LER volta somente leitura" seguidos --ro-bind "$casa/extra" "$casa/extra"
+conferir "casa mínima: os arquivos de início do shell não voltam" \
+  bash -c '! grep -qxF "$2/.zshrc" "$1" && ! grep -qxF "$2/.bashrc" "$1"' _ "$tmp/args" "$casa"
 conferir "casa mínima: a pasta vazia vem antes das outras montagens" \
   bash -c '[ "$(grep -n -xF -- "$2" "$1" | head -n1 | cut -d: -f1)" -lt "$(grep -n -xF -- "$3" "$1" | head -n1 | cut -d: -f1)" ]' \
   _ "$tmp/args" "$casa" "$tmp/wt"
@@ -158,6 +161,41 @@ conferir "caso 1: JANGADA_ISOLAR_OCULTAR vazio ainda oculta o token do painel" \
   seguidos --tmpfs "$casa/.local/state/jangada/painel-chave" ""
 conferir "caso 1: JANGADA_ISOLAR_OCULTAR vazio ainda oculta as revisões" \
   seguidos --tmpfs "$casa/.local/state/jangada/revisoes" ""
+mostrar JANGADA_ISOLAR_OCULTAR_EXTRA="extra:$casa/.zshrc"
+conferir "caso 1: JANGADA_ISOLAR_OCULTAR_EXTRA mantém a lista padrão" seguidos --tmpfs "$casa/.ssh" ""
+conferir "caso 1: JANGADA_ISOLAR_OCULTAR_EXTRA oculta a pasta a mais" seguidos --tmpfs "$casa/extra" ""
+conferir "caso 1: JANGADA_ISOLAR_OCULTAR_EXTRA oculta o arquivo a mais" seguidos --ro-bind /dev/null "$casa/.zshrc"
+
+# Perfil de verificação: código do repositório que não é agente roda sem rede
+# e sem as credenciais dos provedores.
+conferir "caso 1: o perfil de agente mantém a rede" bash -c '! grep -qxF -- --unshare-net "$1"' _ "$tmp/args"
+mostrar JANGADA_ISOLAR_PERFIL=verificacao ANTHROPIC_API_KEY=chave OPENAI_API_KEY=chave GEMINI_API_KEY=chave
+conferir "verificação: sem rede" grep -qxF -- --unshare-net "$tmp/args"
+conferir "verificação: a pasta do Claude some" seguidos --tmpfs "$casa/.claude" ""
+conferir "verificação: o .claude.json some" seguidos --ro-bind /dev/null "$casa/.claude.json"
+for v in ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY; do
+  conferir "verificação: $v não entra" retirada "$v"
+done
+conferir "verificação: a lista padrão de ocultos continua" seguidos --tmpfs "$casa/.ssh" ""
+mostrar JANGADA_ISOLAR_PERFIL=verificacao-rede ANTHROPIC_API_KEY=chave
+conferir "verificação com rede: a rede fica" bash -c '! grep -qxF -- --unshare-net "$1"' _ "$tmp/args"
+conferir "verificação com rede: a chave do provedor não entra" retirada ANTHROPIC_API_KEY
+rc=0
+isolar "$tmp/wt" JANGADA_ISOLAR_PERFIL=qualquer "$repo_jangada/bin/jangada-isolar" --mostrar -- true >/dev/null 2>&1 || rc=$?
+conferir "perfil desconhecido é recusado" [ "$rc" -ne 0 ]
+
+# Com reftable, as refs não se separam por pasta: o isolamento recusa.
+if git init -q --ref-format=reftable "$tmp/repo-reftable" 2>/dev/null; then
+  git -C "$tmp/repo-reftable" -c user.name=t -c user.email=t@t commit -q --allow-empty -m inicio
+  git -C "$tmp/repo-reftable" worktree add -q -b agente/rt "$tmp/wt-reftable"
+  rc=0
+  isolar "$tmp/wt-reftable" "$repo_jangada/bin/jangada-isolar" --mostrar -- true >"$tmp/args-reftable" 2>"$tmp/erro-reftable" || rc=$?
+  conferir "reftable: o isolamento recusa o worktree" [ "$rc" -ne 0 ]
+  conferir "reftable: nenhuma chamada ao bwrap é montada" test ! -s "$tmp/args-reftable"
+  conferir "reftable: a recusa diz o motivo" grep -q "reftable" "$tmp/erro-reftable"
+else
+  echo "pulado reftable: o git instalado não cria repositório em reftable"
+fi
 
 # Caso 1b: repositório principal (--direto).
 isolar "$tmp/repo" "$repo_jangada/bin/jangada-isolar" --mostrar -- true >"$tmp/args"
@@ -278,6 +316,13 @@ EOF
   conferir "caso 3: variável de credencial não chega ao agente" \
     isolar "$tmp/wt" GH_TOKEN=segredo ANTHROPIC_API_KEY=chave "$repo_jangada/bin/jangada-isolar" -- \
     bash -c '[[ -z "${GH_TOKEN:-}" && "$ANTHROPIC_API_KEY" == chave ]]'
+  conferir "verificação: chave e login de provedor não chegam ao comando" \
+    isolar "$tmp/wt" JANGADA_ISOLAR_PERFIL=verificacao ANTHROPIC_API_KEY=chave OPENAI_API_KEY=chave \
+    "$repo_jangada/bin/jangada-isolar" -- \
+    bash -c '[[ -z "${ANTHROPIC_API_KEY:-}${OPENAI_API_KEY:-}" && -c "$HOME/.claude.json" && -z "$(ls -A "$HOME/.claude")" ]]'
+  conferir "verificação: só a interface de loopback existe" \
+    isolar "$tmp/wt" JANGADA_ISOLAR_PERFIL=verificacao "$repo_jangada/bin/jangada-isolar" -- \
+    bash -c '[[ "$(awk -F: "NR > 2 { gsub(/ /, \"\", \$1); print \$1 }" /proc/net/dev | tr "\n" " ")" == "lo " ]]'
   conferir "ambiente mínimo: variável fora da lista não chega ao agente" \
     isolar "$tmp/wt" JANGADA_ISOLAR_AMBIENTE=minimo JANGADA_ISOLAR_AMBIENTE_MANTER=FICA \
     SENHA_DO_BANCO=segredo FICA=sim ANTHROPIC_API_KEY=chave "$repo_jangada/bin/jangada-isolar" -- \

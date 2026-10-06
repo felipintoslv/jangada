@@ -768,7 +768,8 @@ verificar_local() {
     done
     achados=""
     ((r_rc)) || achados="$(cd "$lint_dir" && R_PROFILE_USER="$HOME/.Rprofile" R_ENVIRON_USER="$HOME/.Renviron" \
-      R_LINTR_LINTER_FILE="$lint_dir/.jangada-lintr" "$JANGADA_PATH/bin/jangada-isolar" -- \
+      R_LINTR_LINTER_FILE="$lint_dir/.jangada-lintr" JANGADA_ISOLAR_PERFIL=verificacao \
+      "$JANGADA_PATH/bin/jangada-isolar" -- \
       Rscript -e "$lintr_r" "$lint_dir/.jangada-lintr" "${r_arqs[@]}" 2>"$r_err")" || r_rc=$?
     rm -rf "$lint_dir"
     if ((r_rc == 0)) && [[ -n "$achados" ]]; then
@@ -858,19 +859,22 @@ verificar_local() {
   # 6. Validação do projeto se existir e não estiver em recursão. O script é
   # código do repositório avaliado, na versão da entrega: roda pelo
   # jangada-isolar, que numa sessão isolada roda direto e fora dela abre o
-  # bwrap (sem o bwrap, recusa, e a validação falha). Roda numa cópia da foto:
+  # bwrap (sem o bwrap, recusa, e a validação falha), no perfil de verificação:
+  # sem as credenciais dos provedores e sem rede, salvo JANGADA_VALIDAR_REDE=1
+  # no jangada.conf. Roda numa cópia da foto:
   # o que ele gravar não chega ao revisor nem à pasta do agente. A cópia leva
   # os objetos do commit do agente, sem histórico, porque o espelho fica em
   # revisoes/, que o isolamento oculta.
   if [[ -z "${JANGADA_VALIDAR_EM_CURSO:-}" ]]; then
     export JANGADA_VALIDAR_EM_CURSO=1
     if [[ -x "$dir/.jangada/validar.sh" ]]; then
-      local val_out
+      local val_out perfil_exec=verificacao
+      [[ "${JANGADA_VALIDAR_REDE:-0}" == 1 ]] && perfil_exec=verificacao-rede
       foto_exec="$(mktemp -d)"
       if ! { cp -a "$dir/." "$foto_exec/" && printf '%s\n' "$cabeca" >"$foto_exec/.git/shallow" \
              && git -C "$foto_exec" repack -a -d -q && rm -f "$foto_exec/.git/objects/info/alternates"; } 2>/dev/null; then
         erros+="falha ao copiar a entrega para rodar o .jangada/validar.sh"$'\n'
-      elif ! val_out="$(cd "$foto_exec" && "$JANGADA_PATH/bin/jangada-isolar" -- .jangada/validar.sh 2>&1)"; then
+      elif ! val_out="$(cd "$foto_exec" && JANGADA_ISOLAR_PERFIL="$perfil_exec" "$JANGADA_PATH/bin/jangada-isolar" -- .jangada/validar.sh 2>&1)"; then
         erros+="falha na validação do projeto (.jangada/validar.sh):"$'\n'"$val_out"$'\n'
       fi
       rm -rf "$foto_exec"
