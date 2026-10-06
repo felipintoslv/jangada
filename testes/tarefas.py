@@ -471,6 +471,20 @@ class Interface(unittest.TestCase):
         sem_raiz = ler_lista('ativo\tsem-raiz\t/tmp/worktree\t\t\tTarefa\n', self.estado)
         self.assertEqual(sem_raiz['sem-raiz'].raiz, '/tmp/worktree')
 
+    def test_observador_acompanha_substituicao_atomica(self):
+        self.assertEqual(self.janela.timer.interval(), 30000)
+        registro = self.estado / 'projeto--um.json'
+        dados = json.loads(registro.read_text())
+        dados['mensagem'] = 'Aviso recebido por evento'
+        novo = registro.with_suffix('.tmp')
+        novo.write_text(json.dumps(dados))
+        novo.replace(registro)
+        aguardar(lambda: 'Aviso recebido por evento' in self.janela.ultima_atividade.text())
+        dados['mensagem'] = 'Segunda substituição'
+        novo.write_text(json.dumps(dados))
+        novo.replace(registro)
+        aguardar(lambda: 'Segunda substituição' in self.janela.ultima_atividade.text())
+
     def test_timer_atualiza_sem_intervencao(self):
         self.lista.write_text(self.lista.read_text().replace('aguardando', 'concluido'))
         self.janela.timer.start()

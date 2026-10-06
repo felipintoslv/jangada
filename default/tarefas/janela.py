@@ -9,7 +9,7 @@ from pathlib import Path
 import time
 import uuid
 
-from PyQt6.QtCore import QProcess, QProcessEnvironment, QTimer, Qt
+from PyQt6.QtCore import QFileSystemWatcher, QProcess, QProcessEnvironment, QTimer, Qt
 from PyQt6.QtGui import QColor, QKeySequence
 from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout,
                             QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow,
@@ -382,9 +382,18 @@ class Janela(QMainWindow):
         self.tempo_finalizacao.setInterval(500)
         self.tempo_finalizacao.timeout.connect(self.conferir_finalizacoes)
         self.timer = QTimer(self)
-        self.timer.setInterval(2000)
+        self.timer.setInterval(30000)
         self.timer.timeout.connect(self.atualizar)
+        self.observador = QFileSystemWatcher(self)
+        self.observador.directoryChanged.connect(self.mudanca_estado)
+        self.observador.fileChanged.connect(self.mudanca_estado)
+        self.evento_estado = QTimer(self)
+        self.evento_estado.setSingleShot(True)
+        self.evento_estado.setInterval(200)
+        self.evento_estado.timeout.connect(self.atualizar)
+        self.atualizacao_pendente = False
         if real:
+            self.observar_estado()
             self.timer.start()
         self.atualizar()
 
@@ -491,7 +500,7 @@ class Janela(QMainWindow):
         esperando = sum((estado_exibido(s) == 'aguardando' for s in sessoes.values()))
         interrompidas = sum((estado_exibido(s) == 'interrompido' for s in sessoes.values()))
         rotulo = 'interrompida' if interrompidas == 1 else 'interrompidas'
-        self.resumo.setText((f'{len(sessoes)} tarefas acompanhadas · Atualização a cada 2 segundos' if self.real else f'{len(sessoes)} tarefas fictícias · Avance a simulação para acompanhar as mudanças') if sessoes else 'Nenhuma tarefa. Inicie pelo botão Nova tarefa.')
+        self.resumo.setText((f'{len(sessoes)} tarefas acompanhadas · Atualização por eventos; reserva a cada 30 segundos' if self.real else f'{len(sessoes)} tarefas fictícias · Avance a simulação para acompanhar as mudanças') if sessoes else 'Nenhuma tarefa. Inicie pelo botão Nova tarefa.')
         andando = sum((estado_exibido(s) == 'trabalhando' for s in sessoes.values()))
         encerrados = sum((estado_exibido(s) == 'concluido' for s in sessoes.values()))
         espera_rotulo = 'precisa da sua resposta' if esperando == 1 else 'precisam da sua resposta'
@@ -584,6 +593,27 @@ class Janela(QMainWindow):
         self.preparar(processo, argumentos)
         processo.start()
 
+    def observar_estado(self):
+        caminhos = set()
+        for pasta in (self.estado_dir, self.estado_dir.parent / 'revisoes'):
+            if pasta.is_dir():
+                caminhos.add(str(pasta))
+                caminhos.update(str(p) for p in pasta.glob('*.json') if p.is_file())
+            else:
+                while not pasta.is_dir() and pasta != pasta.parent:
+                    pasta = pasta.parent
+                caminhos.add(str(pasta))
+        atuais = set(self.observador.directories() + self.observador.files())
+        if atuais - caminhos:
+            self.observador.removePaths(sorted(atuais - caminhos))
+        if caminhos - atuais:
+            self.observador.addPaths(sorted(caminhos - atuais))
+
+    def mudanca_estado(self, *_):
+        self.atualizacao_pendente = True
+        if not self.evento_estado.isActive():
+            self.evento_estado.start()
+
     def avancar(self):
         self.passo += 1
         self.atualizar()
@@ -598,11 +628,15 @@ class Janela(QMainWindow):
                     sessoes[nome] = replace(s, atualizado=anterior.atualizado)
             self.mostrar(sessoes)
         elif self.consulta.state() == QProcess.ProcessState.NotRunning:
+            self.atualizacao_pendente = False
+            self.observar_estado()
             self.iniciar(self.consulta, ['--lista'])
             self.espera.start(10000)
 
     def consulta_fim(self, codigo, tipo):
         self.espera.stop()
+        if self.atualizacao_pendente and not self.fechando:
+            self.evento_estado.start()
         if self.fechando:
             return
         saida = bytes(self.consulta.readAllStandardOutput())
@@ -812,7 +846,7 @@ exit "$resultado"
 
     def closeEvent(self, evento):
         self.fechando = True
-        for timer in (self.timer, self.espera, self.tempo_acao, self.tempo_previa, self.tempo_finalizacao):
+        for timer in (self.timer, self.evento_estado, self.espera, self.tempo_acao, self.tempo_previa, self.tempo_finalizacao):
             timer.stop()
         for processo in (self.consulta, self.acao, self.previa):
             if processo.state() != QProcess.ProcessState.NotRunning:

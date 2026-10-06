@@ -631,7 +631,9 @@ o bloqueio permanece até encerrar a sessão gráfica. Registros inconsistentes
 (como duas tentativas na mesma pasta) também mantêm esse bloqueio.
 Isso evita uma segunda integração durante uma operação sem acompanhamento.
 No formulário Nova tarefa, `Ctrl+X` continua recortando texto.
-A central não encerra agentes ao fechar. A consulta da janela apenas lê os
+A central não encerra agentes ao fechar. A janela observa substituições dos arquivos de estado e consulta a cada
+30 segundos como reserva. Eventos próximos são agrupados por 200 ms.
+A consulta da janela apenas lê os
 registros; o contador da barra mantém a limpeza automática de estados órfãos
 e o registro persistente das interrupções, pelo mecanismo anterior.
 
