@@ -362,6 +362,23 @@ _jangada_trava_obter() {
   return 1
 }
 
+# Troca o conteúdo de DESTINO pelo de ORIGEM com rename, para ninguém ler o
+# arquivo pela metade nem sobrar arquivo truncado numa interrupção. Segue link
+# simbólico e mantém as permissões. Sem poder criar o temporário ao lado ou
+# renomear (arquivo montado sozinho no isolamento), regrava no lugar.
+jangada_gravar_atomico() {
+  local origem="$1" destino novo
+  destino="$(realpath "$2" 2>/dev/null)" || destino="$2"
+  if novo="$(mktemp "$destino.jangada-XXXXXX" 2>/dev/null)"; then
+    if cat "$origem" >"$novo" && chmod --reference="$destino" "$novo" 2>/dev/null \
+      && mv -f "$novo" "$destino" 2>/dev/null; then
+      return 0
+    fi
+    rm -f "$novo"
+  fi
+  cat "$origem" >"$destino"
+}
+
 # O settings.json é do agy e do usuário: a primeira alteração do jangada
 # guarda o original, que nunca é sobrescrito. Roda sob a trava, para não
 # copiar o arquivo no meio de outra regravação.
@@ -405,7 +422,7 @@ jangada_agy_ajustar_confianca() {
       flock -w 5 9 2>/dev/null || exit 1
       _jangada_agy_guardar_original "$conf_agy"
       if jq --arg w "$caminho_real" --arg w_orig "$caminho" "$filtro" "$conf_agy" >"$tmp" 2>/dev/null; then
-        cat "$tmp" > "$conf_agy"
+        jangada_gravar_atomico "$tmp" "$conf_agy"
       fi
       rm -f "$tmp"
     ) 9>"$trava" 2>/dev/null || rm -f "$tmp"
@@ -414,7 +431,7 @@ jangada_agy_ajustar_confianca() {
     if _jangada_trava_obter "$trava_d"; then
       _jangada_agy_guardar_original "$conf_agy"
       if jq --arg w "$caminho_real" --arg w_orig "$caminho" "$filtro" "$conf_agy" >"$tmp" 2>/dev/null; then
-        cat "$tmp" > "$conf_agy"
+        jangada_gravar_atomico "$tmp" "$conf_agy"
       fi
       rm -f "$tmp"
       rmdir "$trava_d" 2>/dev/null || true

@@ -69,6 +69,39 @@ conferir "a mescla avisa e não grava" \
   bash -c 'grep -q "não consegui ler" "$1" && [ "$(cat "$2")" = "{\"jangada\": " ]' _ "$tmp/saida" "$agy_cfg"
 conferir "verificar aponta o arquivo inválido" bash -c '[[ "$1" == *"hooks.json vazio ou inválido"* ]]' _ "$(secao "hooks do Antigravity")"
 
+echo "== escrita atômica do settings.json"
+# Quem abriu o arquivo antes da mescla continua lendo o conteúdo antigo
+# inteiro: a troca é por rename, não por truncar e regravar.
+printf '{"antigo": 1}\n' >"$claude_cfg"
+chmod 600 "$claude_cfg"
+exec 7<"$claude_cfg"
+mesclar mesclar_hooks_claude
+conferir "leitor aberto antes da mescla vê o arquivo antigo inteiro" \
+  bash -c '[ "$(cat <&7)" = "{\"antigo\": 1}" ]'
+exec 7<&-
+conferir "arquivo novo é JSON com os hooks e o que já havia" jq -e '.antigo == 1 and (.hooks | length > 0)' "$claude_cfg"
+conferir "permissões mantidas" bash -c '[ "$(stat -c %a "$1")" = 600 ]' _ "$claude_cfg"
+conferir "sem temporário ao lado" bash -c '! ls "$1".jangada-?????? >/dev/null 2>&1' _ "$claude_cfg"
+
+# Interrupção no meio da troca: um mv falso mata a mescla com SIGKILL.
+printf '{"antigo": 2}\n' >"$claude_cfg"
+mkdir -p "$tmp/mata"
+printf '#!/bin/sh\nkill -KILL "$PPID"\n' >"$tmp/mata/mv"
+chmod +x "$tmp/mata/mv"
+PATH="$tmp/mata:$PATH" bash -c 'source install/lib.sh && mesclar_hooks_claude' >/dev/null 2>&1
+conferir "interrompida, a mescla deixa o arquivo antigo inteiro" \
+  bash -c '[ "$(cat "$1")" = "{\"antigo\": 2}" ]' _ "$claude_cfg"
+rm -f "$claude_cfg".jangada-*
+
+# Arquivo que é link simbólico: o link fica, o alvo é trocado.
+mkdir -p "$tmp/dot"
+printf '{"antigo": 3}\n' >"$tmp/dot/settings.json"
+rm -f "$claude_cfg"
+ln -s "$tmp/dot/settings.json" "$claude_cfg"
+mesclar mesclar_hooks_claude
+conferir "link simbólico preservado e alvo atualizado" \
+  bash -c '[ -L "$1" ] && jq -e ".antigo == 3 and (.hooks | length > 0)" "$2" >/dev/null' _ "$claude_cfg" "$tmp/dot/settings.json"
+
 if ((falhas)); then
   echo "$falhas teste(s) dos hooks falharam"
   exit 1

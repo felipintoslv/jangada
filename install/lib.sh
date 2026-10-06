@@ -72,6 +72,23 @@ copia_seguranca() {
   info "cópia de segurança: $destino"
 }
 
+# Troca o conteúdo de DESTINO pelo de ORIGEM com rename: uma interrupção deixa
+# o arquivo antigo inteiro, nunca truncado. Segue link simbólico e mantém as
+# permissões; sem poder renomear, regrava no lugar. Igual a
+# jangada_gravar_atomico (bin/jangada-config), que esta lib não carrega.
+gravar_atomico() {
+  local origem="$1" destino novo
+  destino="$(realpath "$2" 2>/dev/null)" || destino="$2"
+  if novo="$(mktemp "$destino.jangada-XXXXXX" 2>/dev/null)"; then
+    if cat "$origem" >"$novo" && chmod --reference="$destino" "$novo" 2>/dev/null \
+      && mv -f "$novo" "$destino" 2>/dev/null; then
+      return 0
+    fi
+    rm -f "$novo"
+  fi
+  cat "$origem" >"$destino"
+}
+
 # Copia um arquivo modelo para o destino apenas se o destino ainda não existe.
 copiar_se_ausente() {
   local origem="$1" destino="$2"
@@ -249,7 +266,7 @@ mesclar_agentes_agy() {
     return 0
   fi
   ((existia)) && copia_seguranca "$cfg"
-  cat "$tmp" >"$cfg" && rm -f "$tmp"
+  gravar_atomico "$tmp" "$cfg" && rm -f "$tmp"
   ok "subagentes do agy registrados em $cfg"
 }
 
@@ -281,7 +298,7 @@ mesclar_hooks_agy() {
   fi
   # Arquivo criado agora não precisa de cópia de segurança.
   ((existia)) && copia_seguranca "$cfg"
-  cat "$tmp" >"$cfg" && rm -f "$tmp"
+  gravar_atomico "$tmp" "$cfg" && rm -f "$tmp"
   ok "hooks do agy instalados em $cfg"
 }
 
@@ -328,6 +345,6 @@ mesclar_hooks_claude() {
     return 0
   fi
   copia_seguranca "$cfg"
-  cat "$tmp" >"$cfg" && rm -f "$tmp"
+  gravar_atomico "$tmp" "$cfg" && rm -f "$tmp"
   ok "hooks do Claude Code mesclados em $cfg"
 }
