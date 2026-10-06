@@ -750,11 +750,14 @@ class Janela(QMainWindow):
 
     def confirmar_entrega(self, dados):
         marca = dados.get('marca') or {}
+        independencia = ('Sim' if marca['independent'] else 'Não') if isinstance(marca.get('independent'), bool) else 'Não informado'
+        correspondencia = ('Sim' if dados['marca_atual'] else 'Não') if isinstance(dados.get('marca_atual'), bool) else 'Não informado'
         texto = (f"Base: {dados['base_sha']}\nCandidato: {dados['candidate_sha']}\n\n"
                  f"Arquivos e linhas (+/-)\n{dados['arquivos']}\n\n"
                  f"Validação local: {dados['validacao_local']}\n"
-                 f"Revisor: {marca.get('reviewer', 'Não informado')}\n"
-                 f"Independente: {marca.get('independent', 'Não informado')}\n"
+                 f"Revisor da marca: {marca.get('reviewer', 'Não informado')}\n"
+                 f"Independência declarada na marca: {independencia}\n"
+                 f"Marca corresponde aos SHA exibidos: {correspondencia}\n"
                  f"Base da aprovação: {marca.get('base_sha', 'Sem marca')}\n"
                  f"Candidato aprovado: {marca.get('candidate_sha', 'Sem marca')}\n\n"
                  f"Parecer\n{dados['parecer'] or 'Sem parecer externo'}")

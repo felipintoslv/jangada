@@ -553,24 +553,37 @@ previa() {
 previa_integracao() {
   local s="$1" meta="$JANGADA_ESTADO/revisoes/$1.json"
   [[ "$s" =~ ^[A-Za-z0-9_.-]+$ && "$s" != . && "$s" != .. ]] || return 1
-  local raiz ramo base candidato base_sha resumo="" marca="{}" parecer="" local_estado="não informado"
+  local raiz ramo base candidato base_sha resumo="" marca="{}" parecer="" local_estado="não informado" marca_atual=false
   raiz="$(jq -er '.raiz' "$meta")" && ramo="$(jq -er '.ramo' "$meta")" \
     && base="$(jq -er '.base' "$meta")" || return 1
   [[ "$raiz" == /* && "$ramo" =~ ^agente/[a-z0-9_][a-z0-9_-]*$ ]] || return 1
   jangada_git_seguro check-ref-format --branch "$base" >/dev/null || return 1
   candidato="$(jangada_git_seguro -C "$raiz" rev-parse --verify "$ramo^{commit}")" \
     && base_sha="$(jangada_git_seguro -C "$raiz" rev-parse --verify "$base^{commit}")" || return 1
-  resumo="$(jangada_git_seguro -C "$raiz" diff --stat "$base_sha" "$candidato")" || return 1
+  resumo="$(jangada_git_seguro -c core.quotePath=false -C "$raiz" diff --no-renames --numstat "$base_sha" "$candidato" \
+    | while IFS=$'\t' read -r adicoes remocoes caminho; do
+        if [[ "$adicoes" == - ]]; then
+          printf '[binário] %s\n' "$caminho"
+        else
+          printf '+%s -%s %s\n' "$adicoes" "$remocoes" "$caminho"
+        fi
+      done)" || return 1
   [[ ! -f "$JANGADA_ESTADO/revisoes/validacao-$s.aprovado" ]] \
     || marca="$(jq -c 'objects' "$JANGADA_ESTADO/revisoes/validacao-$s.aprovado")" || return 1
   parecer="$(mais_recente "$JANGADA_ESTADO/revisoes/validacao-$s-r")"
   [[ -z "$parecer" ]] || parecer="$(head -c 12000 "$parecer")"
-  local_estado="$(jq -r 'if .local_verified == true then "passou na foto da entrega"
-    elif .local_verified == false then "não executada" else "não informado na marca" end' <<<"$marca")"
+  if jq -e --arg b "$base_sha" --arg c "$candidato" \
+      '.base_sha == $b and .candidate_sha == $c and .limpo == true' <<<"$marca" >/dev/null; then
+    marca_atual=true
+    local_estado="$(jq -r 'if .local_verified == true then "passou na foto da entrega"
+      elif .local_verified == false then "não executada" else "não informado na marca" end' <<<"$marca")"
+  elif [[ "$marca" != '{}' ]]; then
+    local_estado="marca de outra entrega; validação atual desconhecida"
+  fi
   jq -n --arg sessao "$s" --arg base_sha "$base_sha" --arg candidate_sha "$candidato" \
-    --arg arquivos "$resumo" --arg parecer "$parecer" --arg local_estado "$local_estado" --argjson marca "$marca" \
+    --arg arquivos "$resumo" --arg parecer "$parecer" --arg local_estado "$local_estado" --argjson marca "$marca" --argjson marca_atual "$marca_atual" \
     '{sessao: $sessao, base_sha: $base_sha, candidate_sha: $candidate_sha,
-      arquivos: $arquivos, validacao_local: $local_estado, marca: $marca, parecer: $parecer}'
+      arquivos: $arquivos, validacao_local: $local_estado, marca: $marca, marca_atual: $marca_atual, parecer: $parecer}'
 }
 
 # Arquivo PREFIXO<n>.md de maior n. Glob em vez de ls: sem correspondência o

@@ -83,6 +83,39 @@ jq -n --arg raiz "$tmp/projeto" '{raiz:$raiz, ramo:"agente/previa", base:"main"}
   >"$XDG_STATE_HOME/jangada/revisoes/previa.json"
 bin/jangada-agentes --integracao-json previa >"$tmp/previa.json"
 jq -e '.candidate_sha != .base_sha and (.arquivos | contains("proposta.txt")) and .marca == {}' "$tmp/previa.json" >/dev/null
+# Caminhos longos e contagem exata por arquivo não podem desaparecer na tela.
+nome_longo="$(printf 'caminho%.0s' {1..18}).txt"
+echo linha >"$tmp/projeto/$nome_longo"
+git -C "$tmp/projeto" add "$nome_longo"
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm longo
+bin/jangada-agentes --integracao-json previa >"$tmp/previa.json"
+jq -e --arg nome "$nome_longo" '.arquivos | contains("+1 -0 " + $nome)' "$tmp/previa.json" >/dev/null
+b_previa="$(git -C "$tmp/projeto" rev-parse main)"
+c_previa="$(git -C "$tmp/projeto" rev-parse agente/previa)"
+jq -n --arg b "$b_previa" --arg c "$c_previa" \
+  '{base_sha:$b, candidate_sha:$c, reviewer:"codex", local_verified:true, independent:false, limpo:true}' \
+  >"$XDG_STATE_HOME/jangada/revisoes/validacao-previa.aprovado"
+bin/jangada-agentes --integracao-json previa >"$tmp/previa.json"
+jq -e '.marca_atual and (.validacao_local | contains("passou")) and .marca.independent == false and .marca.reviewer == "codex"' "$tmp/previa.json" >/dev/null
+jq '.independent = true' "$XDG_STATE_HOME/jangada/revisoes/validacao-previa.aprovado" >"$tmp/marca"
+mv "$tmp/marca" "$XDG_STATE_HOME/jangada/revisoes/validacao-previa.aprovado"
+bin/jangada-agentes --integracao-json previa >"$tmp/previa.json"
+jq -e '.marca_atual and .marca.independent' "$tmp/previa.json" >/dev/null
+# Candidato diferente mantém os metadados identificados como outra entrega.
+echo depois >>"$tmp/projeto/proposta.txt"
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qam depois
+bin/jangada-agentes --integracao-json previa >"$tmp/previa.json"
+jq -e '(.marca_atual | not) and (.validacao_local | contains("outra entrega"))' "$tmp/previa.json" >/dev/null
+# Base diferente também invalida a indicação da prévia.
+git -C "$tmp/projeto" checkout -q main
+echo base >"$tmp/projeto/base.txt"
+git -C "$tmp/projeto" add base.txt
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm base
+jq --arg c "$(git -C "$tmp/projeto" rev-parse agente/previa)" '.candidate_sha = $c' \
+  "$XDG_STATE_HOME/jangada/revisoes/validacao-previa.aprovado" >"$tmp/marca"
+mv "$tmp/marca" "$XDG_STATE_HOME/jangada/revisoes/validacao-previa.aprovado"
+bin/jangada-agentes --integracao-json previa >"$tmp/previa.json"
+jq -e '(.marca_atual | not) and (.validacao_local | contains("outra entrega"))' "$tmp/previa.json" >/dev/null
 # Estado gravável não muda a origem da prévia.
 jq -n '{raiz:"/inexistente", ramo:"agente/outro"}' >"$XDG_STATE_HOME/jangada/agentes/previa.json"
 bin/jangada-agentes --integracao-json previa >"$tmp/previa2.json"

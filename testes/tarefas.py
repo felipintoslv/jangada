@@ -171,6 +171,18 @@ class Interface(unittest.TestCase):
         with patch.object(janela.QMessageBox, 'exec', return_value=janela.QMessageBox.StandardButton.Yes):
             self.assertTrue(self.janela.confirmar_entrega(dados))
 
+    def test_previa_identifica_revisor_e_independencia_como_dados_da_marca(self):
+        dados = dict(base_sha='a' * 40, candidate_sha='b' * 40, arquivos='+1 -0 inteiro.py',
+                     marca={'reviewer': 'codex', 'independent': True, 'base_sha': 'c' * 40},
+                     marca_atual=False, parecer='STATUS: APROVADO',
+                     validacao_local='marca de outra entrega; validação atual desconhecida')
+        with patch.object(janela.QMessageBox, 'exec', return_value=janela.QMessageBox.StandardButton.No):
+            self.janela.confirmar_entrega(dados)
+        texto = self.janela.entrega.toPlainText()
+        self.assertIn('Revisor da marca: codex', texto)
+        self.assertIn('Marca corresponde aos SHA exibidos: Não', texto)
+        self.assertIn('outra entrega', texto)
+
     def test_integracao_grafica_envia_so_a_entrega_confirmada(self):
         dados = dict(base_sha='a' * 40, candidate_sha='b' * 40, arquivos='teste.py | +2 -1',
                      marca={}, parecer='Sem revisão', validacao_local='Não certificada')
