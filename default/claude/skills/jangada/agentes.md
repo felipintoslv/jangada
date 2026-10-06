@@ -392,9 +392,12 @@ porta de entrada. O que se aprendeu com ele vale para o revisor agy:
   o `cat-file --batch` dos dois lados antes do merge.
   O merge ainda lê os objetos depois dessa comparação, então o `--integrar`
   refaz a mescla no espelho (`git merge-tree --write-tree`), exige a mesma
-  árvore e relê os arquivos escritos (`update-index --really-refresh` e
-  `diff-index`); diferença desfaz o merge. Não serve `git diff --quiet HEAD`:
-  ele compara o arquivo com o conteúdo do objeto forjado e não vê diferença.
+  árvore e recalcula o hash de cada arquivo mudado (`git hash-object`) contra
+  o nome na árvore do espelho; diferença desfaz o merge. Não servem `git diff
+  --quiet HEAD` (compara o arquivo com o conteúdo do objeto forjado e não vê
+  diferença) nem `update-index --really-refresh` com `diff-index` (o
+  `--really-refresh` só ignora o assume-unchanged: com o stat igual ao do
+  índice, o arquivo não é relido).
   O que isso não cobre: o agente segue gravando em `.git/objects` depois da
   integração, e um objeto trocado mais tarde só aparece no `git fsck`.
 - Uma marca `.aprovado` que não vale para o merge (base andou, árvore

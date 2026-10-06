@@ -262,17 +262,23 @@ objetos_integros() {
 
 # O merge lê objetos que o agente ainda grava, depois de objetos_integros. O
 # espelho refaz a mescla só com objetos protegidos: a árvore tem de ser a
-# mesma, e cada arquivo escrito tem de ter o conteúdo do nome que leva no
-# commit (o update-index relê os arquivos em vez de confiar no stat).
+# mesma, e cada arquivo que a mescla mudou tem de ter, no disco, o conteúdo
+# do nome que leva na árvore do espelho. O hash é recalculado do arquivo: o
+# índice e o stat não entram, porque quem os gravou foi o merge conferido.
 mescla_integra() {
-  local espelho arvore
+  local espelho arvore meta caminho modo nome atual
   espelho="$(jangada_espelho "$(dir_comum "$raiz")")" || return 1
   arvore="$(jangada_git_seguro --git-dir="$espelho" merge-tree --write-tree "$ponta_base" "$cabeca" 2>/dev/null)" || return 1
   [[ -n "$arvore" && "$arvore" == "$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet 'HEAD^{tree}')" ]] || return 1
-  jangada_git_seguro -C "$raiz" update-index -q --really-refresh >/dev/null 2>&1 || true
-  # diff-index compara nomes: o git diff compararia o conteúdo com o do objeto
-  # forjado e não veria diferença.
-  jangada_git_seguro -C "$raiz" diff-index --quiet --ignore-submodules=all HEAD
+  while IFS= read -r -d '' meta && IFS= read -r -d '' caminho; do
+    read -r _ modo _ nome _ <<<"$meta"
+    case "$modo" in
+      000000 | 160000) continue ;;
+      120000) atual="$(readlink -n -- "$raiz/$caminho" | jangada_git_seguro hash-object --stdin)" ;;
+      *) atual="$(cd "$raiz" && jangada_git_seguro hash-object -- "$caminho" 2>/dev/null)" ;;
+    esac
+    [[ "$atual" == "$nome" ]] || return 1
+  done < <(jangada_git_seguro --git-dir="$espelho" diff-tree -r -z --no-renames "$ponta_base" "$arvore")
 }
 
 # Roda sob a trava do repositório: entre a conferência e o merge o usuário
