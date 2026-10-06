@@ -33,6 +33,13 @@ jobs:
         if: matrix.arquivo != ''
         run: echo 'Server = https://archive.archlinux.org/repos/${{ matrix.arquivo }}/$repo/os/$arch' >/etc/pacman.d/mirrorlist
 
+      # O runner Ubuntu barra pelo AppArmor o namespace de usuário sem
+      # privilégio, e o bwrap do usuário de teste precisa dele.
+      - name: Namespaces de usuário
+        run: |
+          f=/proc/sys/kernel/apparmor_restrict_unprivileged_userns
+          [ ! -e "$f" ] || echo 0 >"$f"
+
       # R e lintr ficam no job sandbox-e2e: compilar o lintr leva minutos.
       - name: Dependências
         run: pacman -Syu --noconfirm --needed git sudo shellcheck lua jq python python-pyqt6 qt6-declarative gitleaks bubblewrap diffutils openssh xdg-dbus-proxy dbus python-dbus python-gobject zsh poppler python-pyarrow
@@ -78,6 +85,13 @@ jobs:
       image: archlinux:latest
       options: --privileged
     steps:
+      # O runner Ubuntu barra pelo AppArmor o namespace de usuário sem
+      # privilégio, e o bwrap do usuário de teste precisa dele.
+      - name: Namespaces de usuário
+        run: |
+          f=/proc/sys/kernel/apparmor_restrict_unprivileged_userns
+          [ ! -e "$f" ] || echo 0 >"$f"
+
       - name: Dependências
         run: pacman -Syu --noconfirm --needed git sudo jq python gitleaks bubblewrap diffutils openssh xdg-dbus-proxy dbus zsh poppler r gcc make gcc-fortran libxml2
 

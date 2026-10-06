@@ -88,6 +88,7 @@ gravar p "{\"raiz\": \"$proj\", \"estado\": \"trabalhando\", \"pid\": $vitima}"
 fim p
 conferir "sessão direta encerra ($rc)" test "$rc" -eq 0
 conferir "o pid gravado não é morto" kill -0 "$vitima"
+kill "$vitima" 2>/dev/null; wait "$vitima" 2>/dev/null; vitima=""
 : >"$tmp/mortas"
 
 echo "== ramo inválido"
