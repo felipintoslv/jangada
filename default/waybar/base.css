@@ -114,7 +114,13 @@ window#waybar {
 
 #custom-menu {
   color: @primaria;
-  font-size: 15px;
+  font-size: 0;
+  min-width: 20px;
+  min-height: 20px;
+  background-image: -gtk-recolor(url("../logo/jangada-symbolic.svg"));
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 20px 20px;
 }
 
 #custom-menu:hover {
