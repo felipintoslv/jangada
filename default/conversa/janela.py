@@ -63,7 +63,7 @@ class Conversa(QWidget):
         # padrão do destino local já é conhecido; os outros entram ao vazar.
         self.sempre_pensam = {'qwen3:4b'}
         self.rede = QNetworkAccessManager(self)
-        self.setWindowTitle('Conversa local')
+        self.setWindowTitle('Conversa de Pescador')
         self.resize(900, 720)
         layout = QVBoxLayout(self)
         topo = QHBoxLayout()

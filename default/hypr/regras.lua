@@ -13,7 +13,7 @@ hl.window_rule({
   no_focus = true,
 })
 
--- Conversa local com o Ollama: janela flutuante no centro.
+-- Conversa de Pescador (conversa local com o Ollama): janela flutuante no centro.
 hl.window_rule({
   name = "conversa-local",
   match = { class = "^org\\.jangada\\.conversa$" },

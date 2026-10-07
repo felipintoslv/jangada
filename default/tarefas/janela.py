@@ -288,7 +288,7 @@ class Janela(QMainWindow):
         self.nova = QPushButton('Nova tarefa')
         self.nova.clicked.connect(self.nova_tarefa)
         topo.addWidget(self.nova)
-        for rotulo, comando in (('Conversa local', 'jangada-conversa'), ('Painel de indicadores', 'jangada-painel')):
+        for rotulo, comando in (('Conversa de Pescador', 'jangada-conversa'), ('Painel de indicadores', 'jangada-painel')):
             botao = QPushButton(rotulo)
             botao.clicked.connect(lambda _, c=comando: self.abrir_ferramenta(c))
             topo.addWidget(botao)
