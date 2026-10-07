@@ -30,8 +30,9 @@
 # (padrão 5) para economizar tempo.
 #
 # No destino local: o script lê os arquivos e envia texto puro ao Ollama, sem
-# ferramentas. ARQUIVO:INI-FIM envia só essas linhas, com a numeração do
-# arquivo; não vale para PDF nem com --capacidade. Atende apenas leitor e redator, com trava exclusiva e
+# ferramentas; o leitor roda com temperatura zero. ARQUIVO:INI-FIM envia só
+# essas linhas, com a numeração do arquivo; não vale para PDF nem com
+# --capacidade. Atende apenas leitor e redator, com trava exclusiva e
 # proteção de jogos e memória de vídeo. Em caso de falha, nunca desvia para a
 # nuvem nas chamadas sem capacidade: recusa conforme o agente da sessão.
 #
@@ -664,11 +665,13 @@ if [[ "$destino" == local ]]; then
       --arg ka "$keep_alive" \
       --arg capacidade "$capacidade" \
       --argjson formato "$esquema_extracao" \
+      --arg papel "$papel" \
       --argjson ctx "$ctx" \
       '{model: $m, messages: [{role: "system", content: $sys}, {role: "user", content: $usr}],
         stream: false, keep_alive: $ka, options: {num_ctx: $ctx}}
         | if $capacidade != "" then .think = false | .options.num_predict = 1024 else . end
-        | if $formato != null then .format = $formato else . end')"
+        | if $formato != null then .format = $formato else . end
+        | if $papel == "leitor" then .options.temperature = 0 else . end')"
     resp="$(curl -s -S --max-time "$tempo" \
       -H "Content-Type: application/json" \
       -d "$payload" \

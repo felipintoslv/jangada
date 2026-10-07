@@ -533,6 +533,7 @@ OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia
 conferir "caso 27: código 0 no destino local" [ "$(codigo)" = 0 ]
 conferir "caso 27: imprime o relatório retornado" grep -q "doc1.txt:1:" "$tmp/saida"
 conferir "caso 27: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
+conferir "caso 27: leitor envia temperatura zero" jqok -se 'last | .options.temperature == 0' "$ollama_reqs"
 conferir "caso 27: registro com destino local e tokens Ollama" \
   jqok -se 'last | .destino == "local" and .codigo_saida == 0 and .tokens_local_entrada == 120 and .tokens_local_saida == 45 and .sem_fonte == 0 and .modelo == "qwen3:4b"' "$reg"
 
@@ -541,6 +542,8 @@ printf '%s\n' "doc1.txt:1: remover termo de enchimento." >"$ollama_resp"
 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local redator "revise este trecho" --arquivos "$tmp/projeto/doc1.txt"
 conferir "caso 28: redator no destino local código 0" [ "$(codigo)" = 0 ]
 conferir "caso 28: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
+conferir "caso 28: redator mantém a temperatura do modelo" \
+  jqok -se 'last | .options | has("temperature") | not' "$ollama_reqs"
 
 # 11. Afirmações sem fonte
 printf '%s\n' "Esta frase possui mais de vinte e cinco caracteres mas nao tem fonte." >"$ollama_resp"
