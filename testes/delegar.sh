@@ -615,6 +615,34 @@ LOCAL_CTX=2100 LOCAL_FATIAS_MAX=10 OLLAMA_URL="http://127.0.0.1:$porta_ollama" d
 conferir "caso 37: linha única gigante é fatiada com sucesso" [ "$(codigo)" = 0 ]
 conferir "caso 37: pedaços seguintes da linha gigante mantêm prefixo" grep -q "doc_linha_gigante.txt:1: a" "$ollama_reqs"
 
+# 19a. Faixa de linhas em --arquivos preserva a numeração do arquivo
+: >"$ollama_reqs"
+printf '%s\n' "doc_grande.txt:3: trecho da faixa." >"$ollama_resp"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia a faixa" \
+  --arquivos "$doc_grande:3-4" "$doc_grande:7-7"
+conferir "caso 48: faixa de linhas termina com código 0" [ "$(codigo)" = 0 ]
+conferir "caso 48: envia as linhas pedidas com o número original" \
+  bash -c 'for i in 3 4 7; do grep -q "doc_grande\.txt:$i: Linha 0$i" "$1" || exit 1; done' _ "$ollama_reqs"
+conferir "caso 48: não envia linhas fora das faixas" \
+  bash -c 'for i in 1 2 5 6 8; do ! grep -q "doc_grande\.txt:$i: Linha 0$i" "$1" || exit 1; done' _ "$ollama_reqs"
+
+: >"$ollama_reqs"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia a faixa" --arquivos "$doc_grande:7-9"
+conferir "caso 49: faixa além do fim do arquivo recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 49: erro indica a faixa e o total de linhas" grep -q "faixa fora do arquivo: .*:7-9 (8 linhas)" "$tmp/erro"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia a faixa" --arquivos "$doc_grande:5-2"
+conferir "caso 49: faixa invertida recusa com código 4" [ "$(codigo)" = 4 ]
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia a faixa" --arquivos "$tmp/projeto/inexistente.txt:1-2"
+conferir "caso 49: faixa de arquivo inexistente recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 49: nenhuma faixa inválida chega ao Ollama" [ ! -s "$ollama_reqs" ]
+
+doc_dois_pontos="$tmp/projeto/nota:1-2"
+printf 'primeira\nsegunda\nterceira\n' >"$doc_dois_pontos"
+: >"$ollama_reqs"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia tudo" --arquivos "$doc_dois_pontos"
+conferir "caso 50: arquivo existente terminado em :1-2 é lido inteiro" \
+  bash -c '[ "$1" = 0 ] && grep -q "nota:1-2:3: terceira" "$2"' _ "$(codigo)" "$ollama_reqs"
+
 # 19b. Caminho longo com prefixo grande e contexto pequeno
 pasta_longa="$tmp/projeto/caminho_$(printf 'longo_%.0s' {1..12})"
 mkdir -p "$pasta_longa"

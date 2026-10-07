@@ -330,6 +330,18 @@ exclusivamente os papéis `leitor` e `redator`. O script lê e extrai os
 arquivos indicados (`--arquivos`), numerando linhas ou páginas, e envia texto
 puro ao modelo. O modelo não possui ferramentas de terminal.
 
+Um argumento `ARQUIVO:INI-FIM` envia só essas linhas, com a numeração do
+arquivo, e pode se repetir para o mesmo arquivo:
+
+```bash
+jangada-delegar leitor "onde num_ctx é enviado?" --destino local \
+  --arquivos bin/jangada-delegar:600-640 testes/delegar.sh:296-360
+```
+
+O argumento que existe como arquivo vale inteiro, o que cobre nomes com
+dois-pontos. Faixa invertida ou além do fim do arquivo é recusada. A faixa
+não vale para PDF nem com `--capacidade`.
+
 ### Medições e escolha do modelo
 
 Observação pontual realizada em 29/09/2026 numa NVIDIA GeForce RTX 4060 (8 GB de memória de vídeo, driver proprietário 580.126.09, área de trabalho Hyprland ocupando ~2,4 GB e ~5,6 GB disponíveis para o Ollama):
