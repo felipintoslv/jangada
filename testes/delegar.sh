@@ -533,6 +533,9 @@ OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia
 conferir "caso 27: código 0 no destino local" [ "$(codigo)" = 0 ]
 conferir "caso 27: imprime o relatório retornado" grep -q "doc1.txt:1:" "$tmp/saida"
 conferir "caso 27: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
+conferir "caso 27: leitor envia temperatura zero" jqok -se 'last | .options.temperature == 0' "$ollama_reqs"
+conferir "caso 27: pedido termina com a regra de citação e um prefixo real" jqok -se \
+  'last | .messages[1].content | test("Regras da resposta: .* como em [^ ]*doc1\\.txt:1\\. .*não está nele\\.$")' "$ollama_reqs"
 conferir "caso 27: registro com destino local e tokens Ollama" \
   jqok -se 'last | .destino == "local" and .codigo_saida == 0 and .tokens_local_entrada == 120 and .tokens_local_saida == 45 and .sem_fonte == 0 and .modelo == "qwen3:4b"' "$reg"
 
@@ -541,6 +544,10 @@ printf '%s\n' "doc1.txt:1: remover termo de enchimento." >"$ollama_resp"
 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local redator "revise este trecho" --arquivos "$tmp/projeto/doc1.txt"
 conferir "caso 28: redator no destino local código 0" [ "$(codigo)" = 0 ]
 conferir "caso 28: agy não é chamado" [ ! -e "$tmp/falso/agy.args" ]
+conferir "caso 28: redator mantém a temperatura do modelo" \
+  jqok -se 'last | .options | has("temperature") | not' "$ollama_reqs"
+conferir "caso 28: redator não recebe a regra de citação" \
+  jqok -se 'last | .messages[1].content | contains("Regras da resposta") | not' "$ollama_reqs"
 
 # 11. Afirmações sem fonte
 printf '%s\n' "Esta frase possui mais de vinte e cinco caracteres mas nao tem fonte." >"$ollama_resp"
@@ -615,6 +622,34 @@ LOCAL_CTX=2100 LOCAL_FATIAS_MAX=10 OLLAMA_URL="http://127.0.0.1:$porta_ollama" d
 conferir "caso 37: linha única gigante é fatiada com sucesso" [ "$(codigo)" = 0 ]
 conferir "caso 37: pedaços seguintes da linha gigante mantêm prefixo" grep -q "doc_linha_gigante.txt:1: a" "$ollama_reqs"
 
+# 19a. Faixa de linhas em --arquivos preserva a numeração do arquivo
+: >"$ollama_reqs"
+printf '%s\n' "doc_grande.txt:3: trecho da faixa." >"$ollama_resp"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia a faixa" \
+  --arquivos "$doc_grande:3-4" "$doc_grande:7-7"
+conferir "caso 48: faixa de linhas termina com código 0" [ "$(codigo)" = 0 ]
+conferir "caso 48: envia as linhas pedidas com o número original" \
+  bash -c 'for i in 3 4 7; do grep -q "doc_grande\.txt:$i: Linha 0$i" "$1" || exit 1; done' _ "$ollama_reqs"
+conferir "caso 48: não envia linhas fora das faixas" \
+  bash -c 'for i in 1 2 5 6 8; do ! grep -q "doc_grande\.txt:$i: Linha 0$i" "$1" || exit 1; done' _ "$ollama_reqs"
+
+: >"$ollama_reqs"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia a faixa" --arquivos "$doc_grande:7-9"
+conferir "caso 49: faixa além do fim do arquivo recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 49: erro indica a faixa e o total de linhas" grep -q "faixa fora do arquivo: .*:7-9 (8 linhas)" "$tmp/erro"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia a faixa" --arquivos "$doc_grande:5-2"
+conferir "caso 49: faixa invertida recusa com código 4" [ "$(codigo)" = 4 ]
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia a faixa" --arquivos "$tmp/projeto/inexistente.txt:1-2"
+conferir "caso 49: faixa de arquivo inexistente recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 49: nenhuma faixa inválida chega ao Ollama" [ ! -s "$ollama_reqs" ]
+
+doc_dois_pontos="$tmp/projeto/nota:1-2"
+printf 'primeira\nsegunda\nterceira\n' >"$doc_dois_pontos"
+: >"$ollama_reqs"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia tudo" --arquivos "$doc_dois_pontos"
+conferir "caso 50: arquivo existente terminado em :1-2 é lido inteiro" \
+  bash -c '[ "$1" = 0 ] && grep -q "nota:1-2:3: terceira" "$2"' _ "$(codigo)" "$ollama_reqs"
+
 # 19b. Caminho longo com prefixo grande e contexto pequeno
 pasta_longa="$tmp/projeto/caminho_$(printf 'longo_%.0s' {1..12})"
 mkdir -p "$pasta_longa"
@@ -642,6 +677,18 @@ touch "$tmp/projeto/documento.pdf"
 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia o pdf" --arquivos "$tmp/projeto/documento.pdf"
 conferir "caso 39: PDF extraído com pdftotext tem código 0" [ "$(codigo)" = 0 ]
 conferir "caso 39: texto enviado traz numeracao de paginas" grep -q "p\. 1:" "$ollama_reqs"
+
+# 21a. Faixa de linhas não vale para PDF, por extensão ou por tipo MIME
+printf 'um\ndois\ntres\n' >"$tmp/projeto/faixa.pdf"
+printf '%%PDF-1.4\num\ndois\n' >"$tmp/projeto/faixa_mime"
+: >"$ollama_reqs"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia o pdf" --arquivos "$tmp/projeto/faixa.pdf:1-2"
+conferir "caso 51: faixa em PDF pela extensão recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 51: erro indica que a faixa não vale para PDF" grep -q "faixa de linhas não vale para PDF: .*faixa\.pdf" "$tmp/erro"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia o pdf" --arquivos "$tmp/projeto/faixa_mime:1-2"
+conferir "caso 51: faixa em PDF pelo tipo MIME recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 51: erro indica o PDF sem extensão" grep -q "faixa de linhas não vale para PDF: .*faixa_mime" "$tmp/erro"
+conferir "caso 51: nenhuma faixa de PDF chega ao Ollama" [ ! -s "$ollama_reqs" ]
 
 # 22. Perfil nativo recusa mesmo com --destino explícito
 DELEGAR=nativo delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"

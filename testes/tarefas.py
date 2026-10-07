@@ -131,15 +131,15 @@ class Interface(unittest.TestCase):
             central.mostrar({nome: replace(s, inicio='segunda', estado='trabalhando')})
             self.assertNotIn('Interrompida', central.linha_tempo.toPlainText())
             self.assertEqual(len(central.eventos[nome]), 1)
-            central.abrir_ferramenta('jangada-pescador')
+            central.abrir_ferramenta('jangada-conversa')
             self.assertIn('Nenhum comando', central.status.text())
         finally:
             central.close()
 
-    def test_lancadores_do_painel_e_pescador(self):
+    def test_lancadores_do_painel_e_da_conversa(self):
         with patch.object(QProcess, 'startDetached', return_value=(True, 123)) as iniciar, patch.object(self.janela, 'preparar') as preparar:
-            self.janela.abrir_ferramenta('jangada-pescador')
-            self.assertEqual(preparar.call_args.args[1:], (['--janela'], 'jangada-pescador'))
+            self.janela.abrir_ferramenta('jangada-conversa')
+            self.assertEqual(preparar.call_args.args[1:], ([], 'jangada-conversa'))
             self.janela.abrir_ferramenta('jangada-painel')
             self.assertEqual(preparar.call_args.args[1:], ([], 'jangada-painel'))
             self.janela.abrir_ferramenta('outro-comando')

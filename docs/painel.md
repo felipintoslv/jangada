@@ -133,10 +133,6 @@ em zero. O gráfico do Ollama mostra tokens por segundo de geração e o número
 de chamadas com medida. A tabela mantém média ponderada, mediana e percentil
 95. Esses gráficos não demonstram economia causal.
 
-Pesquisas do Conversa de Pescador respeitam o período e o par selecionados.
-Notas ausentes não interrompem a coleta. A média exibida é a dos pareceres
-numéricos disponíveis, sem tratá-la como probabilidade de acerto.
-
 ## bin/jangada-painel
 
 ```mermaid
@@ -225,7 +221,7 @@ Toda gravação é num temporário na mesma pasta, seguido de troca de nome.
 
 - `indicadores.R` tem as funções puras (carregar o cache, calcular cada
   indicador), testáveis sem subir o app; `app.R` monta a interface.
-- Narrativa em 6 abas:
+- Narrativa em 5 abas:
   1. **Revisão e síntese**: diagnóstico operacional dinâmico do dia, taxa de
      aprovação direta na 1ª rodada, tempo de revisão cruzada e entregas no
      limite de rodadas.
@@ -239,9 +235,6 @@ Toda gravação é num temporário na mesma pasta, seguido de troca de nome.
   5. **Autonomia de agentes**: síntese de delegação ao agy, recusas do
      jangada-delegar, métricas de conformidade (desvios zero) e árvore de
      delegações.
-  6. **Veracidade e pesquisas**: histórico do Conversa de Pescador,
-     termômetro médio de veracidade com auditoria cética, nuvem ponderada de
-     tópicos e termos mais frequentes.
 - Cada seção apresenta tarjas de diagnóstico contextual (micro-narrativas em
   R) que orientam a tomada de ação antes das tabelas e gráficos.
 - `origem_local` só abre sessão com `Host` `127.0.0.1` ou `localhost` e

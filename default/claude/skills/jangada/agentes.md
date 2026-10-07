@@ -574,6 +574,35 @@ Testes de 29/09/2026, Ollama 0.34.4:
   já truncou a entrada), a proteção efetiva depende da checagem prévia do
   tamanho estimado do texto antes do envio.
 
+Testes de 07/10/2026, `qwen2.5-coder:7b`, 10 tarefas de localização:
+
+- **Regra de citação depois do documento**: o modelo respondia certo sem
+  citar a linha, mesmo com o pedido de citação antes do texto. A regra ao fim
+  do pedido, depois do documento, levou os acertos exatos de 17 para 21 em 30.
+- **Exemplo com prefixo real**: com um modelo de formato genérico
+  (`caminho:linha: trecho`), o modelo escreveu a palavra `caminho` no lugar
+  do arquivo. O exemplo precisa ser um prefixo real do documento enviado.
+- **Alternativa de "não encontrado"**: oferecer uma resposta pronta como
+  `NAO_ENCONTRADO` fez o modelo desistir de respostas presentes no trecho
+  (4 de 10 tarefas). A regra pede a busca no documento inteiro e não dá
+  marcador de desistência.
+- **Temperatura zero**: torna a resposta repetível (9 de 10 textos idênticos
+  entre chamadas), mas não mudou a precisão medida.
+- **Fatiamento e consolidação**: perguntas de localização sobre arquivo
+  fatiado acertaram 2 a 3 em 10. Envie uma faixa que caiba em uma fatia
+  (`--arquivos ARQUIVO:INI-FIM`).
+
+Conversa aberta (`jangada-conversa`), Ollama 0.35.1, medida em 07/10/2026:
+
+- **`think: false` no `qwen3:4b`**: o modelo raciocina do mesmo jeito e
+  escreve o raciocínio em inglês dentro de `message.content`, fechado por
+  `</think>`. O `/no_think` na mensagem não muda isso. Com `think: true` o
+  raciocínio vai para `message.thinking` e a resposta sai limpa, em 18 s para
+  duas frases. A janela já pede `think: true` a esse modelo; em outro que
+  vaze, corta o que vem antes de `</think>` e muda o pedido seguinte.
+- **Modelos que respondem rápido**: `qwen3:8b` obedece a `think: false`
+  (5 s na mesma pergunta) e `qwen2.5-coder:7b` não raciocina (4 s).
+
 ## Perfis e ganchos
 
 - Perfil: `~/.config/jangada/agentes/NOME.conf` com `COMANDO=`, `ARGS=`,
@@ -586,9 +615,9 @@ Testes de 29/09/2026, Ollama 0.34.4:
   `EVENTO.d/`. Eventos: `pos-tema`, `pos-agente-fim` (sessão, raiz, integrado),
   `pos-validar`, `pos-update`. Falha de gancho gera só aviso.
 
-## Executor do Conversa de Pescador
+## Agente sem ferramentas e resposta progressiva
 
-O agy aceita nomes desconhecidos em `--agent` e pode usar o agente padrão, com ferramentas. O executor confere `agy agents` antes de usar `pescador`, definido sem ferramentas e sem MCP. Claude fornece eventos parciais com `--output-format stream-json --verbose --include-partial-messages`; eventos `assistant` e `result` repetem o texto e não devem ser concatenados aos trechos recebidos. O pedido entra por stdin. `jangada-pescador-modelo` exige a marca real do bubblewrap, mesmo quando o isolamento geral está desligado.
+O agy aceita nomes desconhecidos em `--agent` e pode usar o agente padrão, com ferramentas. Confira `agy agents` antes de chamar um agente que deve rodar sem ferramentas. Claude fornece eventos parciais com `--output-format stream-json --verbose --include-partial-messages`; eventos `assistant` e `result` repetem o texto e não devem ser concatenados aos trechos recebidos.
 
 - Função Bash definida dentro de outra não captura suas variáveis locais.
   A conferência da marca declara o caminho na própria função, pois também

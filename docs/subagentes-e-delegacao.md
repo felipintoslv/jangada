@@ -27,9 +27,8 @@ São nove papéis, e cada um existe no Claude e no agy, com o mesmo nome: no Cla
 No agy, o `jangada-delegar` roda todo papel no primeiro modelo de
 `JANGADA_DELEGAR_MODELOS` com cota (padrão `gemini-3.8-flash-high`).
 
-O agy tem mais dois agentes, fora da delegação: o `revisor`, usado só pelo
-`jangada-validar`, com ferramentas de leitura, e o `pescador`, da Conversa
-de Pescador.
+O agy tem mais um agente, fora da delegação: o `revisor`, usado só pelo
+`jangada-validar`, com ferramentas de leitura.
 
 Só o leitor e o verificador têm terminal (Bash no Claude, `run_command` no
 agy). O leitor lê documentos de fora, que podem trazer injeção de prompt: no
@@ -328,7 +327,23 @@ e mantém os dados locais.
 Para evitar alucinações e desperdício de contexto, o destino local atende
 exclusivamente os papéis `leitor` e `redator`. O script lê e extrai os
 arquivos indicados (`--arquivos`), numerando linhas ou páginas, e envia texto
-puro ao modelo. O modelo não possui ferramentas de terminal.
+puro ao modelo. O modelo não possui ferramentas de terminal. O `leitor` roda com
+temperatura zero, para que a mesma entrada dê a mesma resposta; o `redator`
+mantém a temperatura padrão do modelo. Quando o conteúdo cabe em uma fatia, o
+pedido do `leitor` termina com uma regra que exige a citação de cada
+afirmação, com um prefixo real do documento como exemplo.
+
+Um argumento `ARQUIVO:INI-FIM` envia só essas linhas, com a numeração do
+arquivo, e pode se repetir para o mesmo arquivo:
+
+```bash
+jangada-delegar leitor "onde num_ctx é enviado?" --destino local \
+  --arquivos bin/jangada-delegar:600-640 testes/delegar.sh:296-360
+```
+
+O argumento que existe como arquivo vale inteiro, o que cobre nomes com
+dois-pontos. Faixa invertida ou além do fim do arquivo é recusada. A faixa
+não vale para PDF nem com `--capacidade`.
 
 ### Medições e escolha do modelo
 

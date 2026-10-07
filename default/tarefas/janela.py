@@ -288,7 +288,7 @@ class Janela(QMainWindow):
         self.nova = QPushButton('Nova tarefa')
         self.nova.clicked.connect(self.nova_tarefa)
         topo.addWidget(self.nova)
-        for rotulo, comando in (('Conversa de Pescador', 'jangada-pescador'), ('Painel de indicadores', 'jangada-painel')):
+        for rotulo, comando in (('Conversa de Pescador', 'jangada-conversa'), ('Painel de indicadores', 'jangada-painel')):
             botao = QPushButton(rotulo)
             botao.clicked.connect(lambda _, c=comando: self.abrir_ferramenta(c))
             topo.addWidget(botao)
@@ -425,13 +425,13 @@ class Janela(QMainWindow):
         return item.data(0, Qt.ItemDataRole.UserRole) if item else None
 
     def abrir_ferramenta(self, comando):
-        if comando not in ('jangada-pescador', 'jangada-painel'):
+        if comando not in ('jangada-conversa', 'jangada-painel'):
             return
         if not self.real:
             self.status.setText(f'Simulação: abriria {comando}. Nenhum comando foi executado.')
             return
         processo = QProcess(self)
-        self.preparar(processo, ['--janela'] if comando == 'jangada-pescador' else [], comando)
+        self.preparar(processo, [], comando)
         iniciado, _ = processo.startDetached()
         self.status.setText('Abertura solicitada.' if iniciado else f'Não foi possível abrir {comando}. Confira --jangada.')
 

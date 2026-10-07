@@ -35,7 +35,6 @@ JANGADA_PAINEL_RETENCAO.
 
 import datetime as dt
 import glob
-import hashlib
 import json
 import math
 import os
@@ -229,14 +228,6 @@ ESQ_SESSOES = pa.schema([
 ESQ_EVENTOS = pa.schema([
     ("data", TS), ("dia", pa.string()), ("sessao", pa.string()), ("projeto", pa.string()),
     ("agente", pa.string()), ("estado", pa.string()),
-])
-ESQ_PESQUISAS = pa.schema([
-    ("id", pa.string()), ("estado", pa.string()), ("modo", pa.string()),
-    ("par", pa.string()), ("autor", pa.string()), ("revisor", pa.string()),
-    ("origem", pa.string()),
-    ("data", TS), ("dia", pa.string()), ("sessao", pa.string()),
-    ("pergunta", pa.string()), ("grau_fato", pa.int64()), ("grau_pescador", pa.int64()),
-    ("veredito", pa.string()), ("fontes_qtd", pa.int64()), ("segundos", pa.float64()),
 ])
 BASE_METRICAS = [("id", pa.string()), ("data", TS)] + [
     (c, pa.string()) for c in ("dia", "fonte", "origem", "executor", "provedor", "modelo",
@@ -667,78 +658,6 @@ def sessoes():
     return linhas
 
 
-def nota_pesquisa(registro, aud):
-    if registro.get("estado") in ("nao_verificado", "cancelado", "erro", "indisponivel"):
-        return None
-    texto = str(aud.get("veredito_resumo", "")).lower()
-    if "sem auditoria" in texto or "indisponível" in texto:
-        return None
-    nota = aud.get("grau_fato")
-    return int(nota) if type(nota) in (int, float) and math.isfinite(nota) and 0 <= nota <= 100 else None
-
-
-def pesquisas_pescador():
-    """Lê o histórico do Conversa de Pescador e monta a lista de pesquisas."""
-    caminhos = [
-        os.path.join(ESTADO, "pescador", "historico.jsonl"),
-        os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "jangada-pescador", "historico.jsonl")
-    ]
-    linhas = []
-    vistos = {}
-    for arq in caminhos:
-        if not os.path.exists(arq):
-            continue
-        try:
-            with open(arq, encoding="utf-8") as f:
-                for l in f:
-                    if not l.strip():
-                        continue
-                    try:
-                        d = json.loads(l)
-                        dt_obj = data_de(d.get("data"))
-                        if not dt_obj:
-                            continue
-                        if not isinstance(d, dict):
-                            continue
-                        chave = d.get("id")
-                        if not isinstance(chave, str) or not chave:
-                            legado = json.dumps([d.get("data"), d.get("pergunta")], ensure_ascii=False)
-                            chave = "legado-" + hashlib.sha256(legado.encode()).hexdigest()
-                        if chave in vistos:
-                            linhas[vistos[chave]] = None
-                        vistos[chave] = len(linhas)
-                        aud = d.get("auditoria")
-                        aud = aud if isinstance(aud, dict) else {}
-                        nota = nota_pesquisa(d, aud)
-                        par = str(d.get("par") or "")
-                        membros = par.split("-")
-                        autor, revisor = membros if len(membros) == 2 else ("", "")
-                        segundos = d.get("tempo_segundos")
-                        segundos = segundos if type(segundos) in (int, float) and math.isfinite(segundos) and segundos >= 0 else None
-                        referencias = aud.get("referencias")
-                        linhas.append({
-                            "id": chave, "estado": str(d.get("estado") or "legado"),
-                            "modo": str(d.get("modo") or ""), "par": par,
-                            "autor": str(d.get("autor") or autor),
-                            "revisor": str(d.get("revisor") or revisor),
-                            "origem": "pescador",
-                            "data": dt_obj,
-                            "dia": dia_de(dt_obj),
-                            "sessao": str(d.get("sessao") or "avulsa"),
-                            "pergunta": str(d.get("pergunta") or "")[:200],
-                            "grau_fato": nota,
-                            "grau_pescador": 100 - nota if nota is not None else None,
-                            "veredito": str(aud.get("veredito_resumo") or "")[:300],
-                            "fontes_qtd": len(referencias) if isinstance(referencias, list) else 0,
-                            "segundos": segundos,
-                        })
-                    except Exception:
-                        continue
-        except OSError:
-            pass
-    return [linha for linha in linhas if linha is not None]
-
-
 # Indicadores do dia
 
 def segundos_aguardando(evs, ini, fim, agora):
@@ -765,7 +684,7 @@ def segundos_aguardando(evs, ini, fim, agora):
     return total
 
 
-def indicadores_do_dia(cache, vals, evs, agora, pesqs=None):
+def indicadores_do_dia(cache, vals, evs, agora):
     hoje = dia_de(agora)
     ini = dt.datetime.combine(agora.astimezone(FUSO).date(), dt.time(), FUSO).astimezone(UTC)
     fim = ini + dt.timedelta(days=1)
@@ -804,13 +723,6 @@ def indicadores_do_dia(cache, vals, evs, agora, pesqs=None):
         "aguardando_segundos": round(segundos_aguardando(evs_dia, ini, fim, agora)),
         "eventos_desde": dia_de(primeiro_evento),
     }
-    pesqs_dia = [p for p in (pesqs or []) if p["dia"] == hoje]
-    notas = [p["grau_fato"] for p in pesqs_dia
-             if type(p.get("grau_fato")) in (int, float)
-             and math.isfinite(p["grau_fato"]) and 0 <= p["grau_fato"] <= 100]
-    indicadores["pesquisas_hoje"] = len(pesqs_dia)
-    indicadores["pesquisas_avaliadas_hoje"] = len(notas)
-    indicadores["grau_fato_medio"] = round(sum(notas) / len(notas)) if notas else None
     return indicadores
 
 
@@ -897,14 +809,12 @@ def main():
     agregados, tirados = podar(cache, agora, carimbo, retencao())
     vals = validacoes()
     evs = eventos()
-    pesqs = pesquisas_pescador()
     gravar_tabela(os.path.join(cache, "validacoes.parquet"), vals, ESQ_VALIDACOES)
     gravar_tabela(os.path.join(cache, "eventos.parquet"), evs, ESQ_EVENTOS)
     gravar_tabela(os.path.join(cache, "sessoes.parquet"), sessoes(), ESQ_SESSOES)
     gravar_tabela(os.path.join(cache, "apontamentos.parquet"), apontamentos(), ESQ_APONTAMENTOS)
-    gravar_tabela(os.path.join(cache, "pesquisas.parquet"), pesqs, ESQ_PESQUISAS)
     consumo, cobertura = metricas_unificadas(cache, agora)
-    indicadores = indicadores_do_dia(cache, vals, evs, agora, pesqs)
+    indicadores = indicadores_do_dia(cache, vals, evs, agora)
     indicadores["motores"] = resumo_motores(consumo, indicadores["dia"])
     indicadores["cobertura"] = cobertura
     gravar_json(os.path.join(cache, "hoje.json"), indicadores)
