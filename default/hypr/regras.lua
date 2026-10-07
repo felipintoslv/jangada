@@ -22,6 +22,15 @@ hl.window_rule({
   center = true,
 })
 
+-- Conversa local com o Ollama: janela flutuante no centro.
+hl.window_rule({
+  name = "conversa-local",
+  match = { class = "^org\\.jangada\\.conversa$" },
+  float = true,
+  size = "900 720",
+  center = true,
+})
+
 -- Monitor de sistema (btop/htop): janela flutuante no centro.
 hl.window_rule({
   name = "monitor-sistema",

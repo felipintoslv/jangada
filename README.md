@@ -127,6 +127,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-agente` | escolhe o agente (Claude ou Codex; o agy fica só de suporte), o projeto e cria um worktree, e abre o agente numa sessão tmux, isolado pelo `jangada-isolar` (`--prompt`, `--prompt-arquivo`, `--perfil`, `--sem-isolar`) |
 | `jangada-isolar` | roda um comando no bubblewrap, com o sistema somente leitura e a pasta atual gravável; `--mostrar` imprime a chamada ao `bwrap` |
 | `jangada-delegar PAPEL "pedido"` | delega ao Ollama (`--destino local --arquivos ARQUIVOS`, só leitor e redator) ou ao agy (`--destino agy`, modelos de `JANGADA_DELEGAR_MODELOS`); `--capacidade` permite seleção documental para leitor, com autorização remota explícita e referências verificadas; `--json` explica a decisão (ver [delegação](docs/subagentes-e-delegacao.md)) |
+| `jangada-conversa` | janela de conversa direta com o modelo local do Ollama: resposta progressiva, escolha do modelo e parada; sem histórico, ferramentas ou verificação, e com a trava e as proteções de jogo e memória de vídeo do destino local |
 | `jangada-avaliar-ollama` | repete três casos de leitura com fontes sintéticas, compara fatos e referências com um gabarito e registra recusas, tempo e variação; não promove o modelo nem chama provedores remotos |
 | `jangada-fila` | mostra a fila persistente do projeto; `--importar PLANO.json` acrescenta tarefas, `--json` detalha o estado, `--revisao` lista o que aguarda revisão e `--metricas` resume consumo, revisões e custo estimado pelos preços de `precos.json` (ver [fila](docs/subagentes-e-delegacao.md#fila-persistente-de-projetos)) |
 | `jangada-executar` | executa tarefas elegíveis da fila pelo `jangada-delegar`, sem aprovar o conteúdo (`--limite`, `--perfil balanced\|quality\|offline`, `--permitir-remoto`, `--permitir-codex`, `--supervisionar`, `--amostrar`, `--paralelo`); `--acompanhar` mantém a fila em primeiro plano até o prazo |
@@ -880,6 +881,7 @@ e não mexe na instalada. Para testar a cópia de trabalho sem instalar, rode
 | `testes/eventos.sh` | histórico de estados dos agentes gravado pelos hooks e pela troca de foco |
 | `testes/barra.sh` | módulo `custom/indicadores`, barra em pé do `jangada-barra` e a migração que o acrescenta |
 | `testes/painel.sh` | coletor do painel sobre registros de exemplo e, com os pacotes R, o app no ar |
+| `testes/conversa.py` | janela de conversa local com Ollama falso: resposta progressiva, parada, raciocínio vazado, recusa, trava e proteções |
 | `testes/pescador.py` | pareceres, auditorias paralelas, sessões, resposta progressiva, cancelamento e janela Qt com executor falso |
 | `testes/pescador-modelo.sh` | modelos sem ferramentas e isolamento obrigatório do Pescador, mesmo com a preferência geral desligada |
 | `testes/subagentes.sh`, `testes/delegar.sh` | papéis de subagente e a instalação deles; `jangada-delegar` com agy falso, cota por grupo e troca de modelo |

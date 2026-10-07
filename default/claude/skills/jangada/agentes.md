@@ -592,6 +592,17 @@ Testes de 07/10/2026, `qwen2.5-coder:7b`, 10 tarefas de localização:
   fatiado acertaram 2 a 3 em 10. Envie uma faixa que caiba em uma fatia
   (`--arquivos ARQUIVO:INI-FIM`).
 
+Conversa aberta (`jangada-conversa`), Ollama 0.35.1, medida em 07/10/2026:
+
+- **`think: false` no `qwen3:4b`**: o modelo raciocina do mesmo jeito e
+  escreve o raciocínio em inglês dentro de `message.content`, fechado por
+  `</think>`. O `/no_think` na mensagem não muda isso. Com `think: true` o
+  raciocínio vai para `message.thinking` e a resposta sai limpa, em 18 s para
+  duas frases. A janela corta o que vem antes de `</think>` e passa a pedir
+  `think: true` a esse modelo.
+- **Modelos que respondem rápido**: `qwen3:8b` obedece a `think: false`
+  (5 s na mesma pergunta) e `qwen2.5-coder:7b` não raciocina (4 s).
+
 ## Perfis e ganchos
 
 - Perfil: `~/.config/jangada/agentes/NOME.conf` com `COMANDO=`, `ARGS=`,
