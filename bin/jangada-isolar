@@ -77,7 +77,6 @@ esac
 codex_comando=0
 [[ "$(basename -- "$1")" == jangada-codex ]] && codex_comando=1
 isolamento_obrigatorio="$codex_comando"
-[[ "$(basename -- "$1")" == jangada-pescador-modelo ]] && isolamento_obrigatorio=1
 if [[ "$perfil" == agente ]] && { { [[ "$JANGADA_AGENTE_ISOLAR" == 0 ]] && ((!isolamento_obrigatorio)); } || ja_isolado; }; then
   exec "$@"
 fi

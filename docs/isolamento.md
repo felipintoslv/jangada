@@ -73,7 +73,7 @@ da sessão é só para consulta.
 flowchart TD
     A[jangada-isolar -- COMANDO] --> B{ja_isolado?}
     B -- sim --> X[exec COMANDO direto]
-    B -- não --> O{adaptador Codex ou<br>executor do Pescador?}
+    B -- não --> O{adaptador Codex?}
     O -- sim --> C{bwrap instalado?}
     O -- não --> P{JANGADA_AGENTE_ISOLAR = 0?}
     P -- sim --> X
@@ -228,8 +228,8 @@ eles exportam volta, a menos que a casa mínima os deixe de fora.
 ## Falhas
 
 - Sem `bwrap`: o `jangada-isolar` recusa com código 1. Claude e agy podem
-  abrir com `--sem-isolar` ou `JANGADA_AGENTE_ISOLAR=0`; Codex e o executor
-  do Conversa de Pescador continuam exigindo isolamento.
+  abrir com `--sem-isolar` ou `JANGADA_AGENTE_ISOLAR=0`; o Codex continua
+  exigindo isolamento.
 - Sem proxy do D-Bus (programa ausente ou sem resposta em 5 segundos): o
   agente abre sem D-Bus, e o agy não acha o login.
 - Apagar ramo ou tag e o `git gc` falham dentro de um worktree, porque

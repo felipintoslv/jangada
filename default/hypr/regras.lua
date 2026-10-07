@@ -13,15 +13,6 @@ hl.window_rule({
   no_focus = true,
 })
 
--- Conversa de Pescador e Histórico: janela flutuante no centro.
-hl.window_rule({
-  name = "pescador",
-  match = { class = "^org\\.jangada\\.pescador.*$" },
-  float = true,
-  size = "1150 720",
-  center = true,
-})
-
 -- Conversa local com o Ollama: janela flutuante no centro.
 hl.window_rule({
   name = "conversa-local",

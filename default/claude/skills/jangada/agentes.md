@@ -615,9 +615,9 @@ Conversa aberta (`jangada-conversa`), Ollama 0.35.1, medida em 07/10/2026:
   `EVENTO.d/`. Eventos: `pos-tema`, `pos-agente-fim` (sessão, raiz, integrado),
   `pos-validar`, `pos-update`. Falha de gancho gera só aviso.
 
-## Executor do Conversa de Pescador
+## Agente sem ferramentas e resposta progressiva
 
-O agy aceita nomes desconhecidos em `--agent` e pode usar o agente padrão, com ferramentas. O executor confere `agy agents` antes de usar `pescador`, definido sem ferramentas e sem MCP. Claude fornece eventos parciais com `--output-format stream-json --verbose --include-partial-messages`; eventos `assistant` e `result` repetem o texto e não devem ser concatenados aos trechos recebidos. O pedido entra por stdin. `jangada-pescador-modelo` exige a marca real do bubblewrap, mesmo quando o isolamento geral está desligado.
+O agy aceita nomes desconhecidos em `--agent` e pode usar o agente padrão, com ferramentas. Confira `agy agents` antes de chamar um agente que deve rodar sem ferramentas. Claude fornece eventos parciais com `--output-format stream-json --verbose --include-partial-messages`; eventos `assistant` e `result` repetem o texto e não devem ser concatenados aos trechos recebidos.
 
 - Função Bash definida dentro de outra não captura suas variáveis locais.
   A conferência da marca declara o caminho na própria função, pois também

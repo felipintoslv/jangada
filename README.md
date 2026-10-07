@@ -46,7 +46,6 @@ arquivo e função, falhas e os testes que o cobrem:
 | [docs/atualizacao-e-migracoes.md](docs/atualizacao-e-migracoes.md) | instalação, `jangada-update` e `jangada-migrar` |
 | [docs/painel.md](docs/painel.md) | coletor, cache, app e módulo da barra |
 | [docs/registros.md](docs/registros.md) | campos de cada registro usado pelo painel |
-| [docs/conversa-de-pescador.md](docs/conversa-de-pescador.md) | janela de conversa progressiva, pesquisa com fontes e auditoria paralela |
 | [docs/boas-praticas.md](docs/boas-praticas.md) | regras de código, testes, textos e commits |
 | [docs/analise-painel-20260930.md](docs/analise-painel-20260930.md) | leitura do painel com os dados de 30/09/2026 |
 | [docs/proposta-atualizacao-painel.md](docs/proposta-atualizacao-painel.md) | proposta de atualização do painel, com implementação parcial |
@@ -401,8 +400,7 @@ Fluxogramas em
 Nove papéis, com o mesmo nome e o mesmo texto no Claude Code
 (`default/claude/agents/`, ligados em `~/.claude/agents/`) e no agy
 (`default/agy/agents/`, registrados em `~/.gemini/config/agents.json`). O agy
-tem mais dois, fora da delegação: `revisor`, do `jangada-validar`, e
-`pescador`, da Conversa de Pescador. Nenhum
+tem mais um, fora da delegação: `revisor`, do `jangada-validar`. Nenhum
 edita arquivos, e todos citam caminho e linha, página, célula ou URL em cada
 afirmação. O explorador, o pesquisador, o auditor, o arquiteto, o otimizador e o
 redator não têm terminal; o leitor e o verificador têm, e o "só leitura" deles
@@ -585,8 +583,7 @@ vazia, não oculta nada. Para acrescentar sem perder a lista padrão, use
 `JANGADA_ISOLAR_OCULTAR_EXTRA`. A pasta do token do `jangada-painel` fica oculta
 sempre. Para o Claude, `jangada-agente --sem-isolar` desliga o isolamento
 numa sessão; `JANGADA_AGENTE_ISOLAR=0` desliga num perfil ou no `jangada.conf`.
-O Codex e o executor do Conversa de Pescador exigem isolamento mesmo com
-essas opções.
+O Codex exige isolamento mesmo com essas opções.
 O estado guarda o comando e o campo `isolar` só para consulta: a restauração
 ignora os dois e volta sempre isolada, a menos que `JANGADA_AGENTE_ISOLAR=0`
 esteja no `jangada.conf` ou no ambiente, para Claude e agy. O Codex sempre
@@ -594,7 +591,7 @@ volta isolado. Uma sessão aberta com `--sem-isolar` ou com um perfil que
 desliga o isolamento volta isolada se a configuração global o mantiver ligado.
 Sem o pacote `bubblewrap`, o `jangada-isolar` recusa e o agente não abre; a
 mensagem fica no terminal da sessão. As opções para desligar não liberam o
-Codex nem o executor do Conversa de Pescador.
+Codex.
 
 ## Central de tarefas v0.1
 
@@ -653,8 +650,8 @@ permitem escolher revisor, delegação e desativar o isolamento.
 Alterar um controle seleciona o modo Personalizado; recolher a área preserva as escolhas.
 **Nova pasta**, no formulário, cria a pasta de um projeto novo em
 `JANGADA_PROJETOS` e a deixa selecionada; a pasta nasce sem repositório Git.
-**Painel de indicadores** e **Conversa de Pescador** abrem os aplicativos
-existentes. O Pescador recebe sua janela geral, sem a conversa selecionada.
+**Painel de indicadores** e **Conversa local** abrem os aplicativos
+existentes.
 Aprovações nativas e envio de respostas ficam fora desta versão.
 
 Na Waybar, `custom/agentes` passa a contar tarefas, andamento, pendências e
@@ -882,8 +879,6 @@ e não mexe na instalada. Para testar a cópia de trabalho sem instalar, rode
 | `testes/barra.sh` | módulo `custom/indicadores`, barra em pé do `jangada-barra` e a migração que o acrescenta |
 | `testes/painel.sh` | coletor do painel sobre registros de exemplo e, com os pacotes R, o app no ar |
 | `testes/conversa.py` | janela de conversa local com Ollama falso: resposta progressiva, parada, raciocínio vazado, recusa, trava e proteções |
-| `testes/pescador.py` | pareceres, auditorias paralelas, sessões, resposta progressiva, cancelamento e janela Qt com executor falso |
-| `testes/pescador-modelo.sh` | modelos sem ferramentas e isolamento obrigatório do Pescador, mesmo com a preferência geral desligada |
 | `testes/subagentes.sh`, `testes/delegar.sh` | papéis de subagente e a instalação deles; `jangada-delegar` com agy falso, cota por grupo e troca de modelo |
 | `testes/agente-seletor.py` | seletor do `jangada-agente` num terminal falso, sem executar modelos nem criar sessões |
 | `testes/interface.sh` | identificação da interface sem abrir janelas nem tocar em outras sessões |

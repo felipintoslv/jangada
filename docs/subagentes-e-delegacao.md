@@ -27,9 +27,8 @@ São nove papéis, e cada um existe no Claude e no agy, com o mesmo nome: no Cla
 No agy, o `jangada-delegar` roda todo papel no primeiro modelo de
 `JANGADA_DELEGAR_MODELOS` com cota (padrão `gemini-3.8-flash-high`).
 
-O agy tem mais dois agentes, fora da delegação: o `revisor`, usado só pelo
-`jangada-validar`, com ferramentas de leitura, e o `pescador`, da Conversa
-de Pescador.
+O agy tem mais um agente, fora da delegação: o `revisor`, usado só pelo
+`jangada-validar`, com ferramentas de leitura.
 
 Só o leitor e o verificador têm terminal (Bash no Claude, `run_command` no
 agy). O leitor lê documentos de fora, que podem trazer injeção de prompt: no
