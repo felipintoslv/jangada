@@ -45,7 +45,7 @@ class OllamaFalso(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == '/api/tags':
-            self.responder(200, [{'models': [{'name': 'modelo-b'}, {'name': 'modelo-a'}]}])
+            self.responder(200, [{'models': [{'name': 'modelo-b'}, {'name': 'qwen3:4b'}, {'name': 'modelo-a'}]}])
         else:
             self.responder(200, [{'models': [{'name': 'modelo-a', 'size_vram': 3000 * 2**20}]}])
 
@@ -114,7 +114,7 @@ class ConversaTest(unittest.TestCase):
         return True
 
     def test_modelos_e_padrao(self):
-        self.assertEqual([self.janela.modelo.itemText(i) for i in range(2)], ['modelo-a', 'modelo-b'])
+        self.assertEqual([self.janela.modelo.itemText(i) for i in range(3)], ['modelo-a', 'modelo-b', 'qwen3:4b'])
         self.assertEqual(self.janela.modelo.currentText(), 'modelo-b')
         self.assertFalse(self.janela.parar.isEnabled())
 
@@ -153,6 +153,12 @@ class ConversaTest(unittest.TestCase):
         self.perguntar('oi')
         self.esperar(lambda: self.janela.chamada is None)
         self.assertEqual([p['think'] for p in PEDIDOS], [False, True])
+
+    def test_modelo_que_sempre_raciocina_ja_comeca_separando_o_raciocinio(self):
+        self.janela.modelo.setCurrentText('qwen3:4b')
+        self.perguntar('oi')
+        self.esperar(lambda: self.janela.chamada is None)
+        self.assertEqual((PEDIDOS[0]['model'], PEDIDOS[0]['think']), ('qwen3:4b', True))
 
     def test_recusa_do_ollama_aparece_no_estado(self):
         self.perguntar('recusa')

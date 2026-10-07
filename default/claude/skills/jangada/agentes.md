@@ -598,8 +598,8 @@ Conversa aberta (`jangada-conversa`), Ollama 0.35.1, medida em 07/10/2026:
   escreve o raciocínio em inglês dentro de `message.content`, fechado por
   `</think>`. O `/no_think` na mensagem não muda isso. Com `think: true` o
   raciocínio vai para `message.thinking` e a resposta sai limpa, em 18 s para
-  duas frases. A janela corta o que vem antes de `</think>` e passa a pedir
-  `think: true` a esse modelo.
+  duas frases. A janela já pede `think: true` a esse modelo; em outro que
+  vaze, corta o que vem antes de `</think>` e muda o pedido seguinte.
 - **Modelos que respondem rápido**: `qwen3:8b` obedece a `think: false`
   (5 s na mesma pergunta) e `qwen2.5-coder:7b` não raciocina (4 s).
 

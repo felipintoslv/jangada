@@ -59,8 +59,9 @@ class Conversa(QWidget):
         self.pendente = b''
         self.final = {}
         self.sujo = False
-        # Modelos que ignoram think=false e despejam o raciocínio na resposta.
-        self.sempre_pensam = set()
+        # Modelos que ignoram think=false e despejam o raciocínio na resposta. O
+        # padrão do destino local já é conhecido; os outros entram ao vazar.
+        self.sempre_pensam = {'qwen3:4b'}
         self.rede = QNetworkAccessManager(self)
         self.setWindowTitle('Conversa local')
         self.resize(900, 720)
