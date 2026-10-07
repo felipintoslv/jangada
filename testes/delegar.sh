@@ -671,6 +671,18 @@ OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia
 conferir "caso 39: PDF extraído com pdftotext tem código 0" [ "$(codigo)" = 0 ]
 conferir "caso 39: texto enviado traz numeracao de paginas" grep -q "p\. 1:" "$ollama_reqs"
 
+# 21a. Faixa de linhas não vale para PDF, por extensão ou por tipo MIME
+printf 'um\ndois\ntres\n' >"$tmp/projeto/faixa.pdf"
+printf '%%PDF-1.4\num\ndois\n' >"$tmp/projeto/faixa_mime"
+: >"$ollama_reqs"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia o pdf" --arquivos "$tmp/projeto/faixa.pdf:1-2"
+conferir "caso 51: faixa em PDF pela extensão recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 51: erro indica que a faixa não vale para PDF" grep -q "faixa de linhas não vale para PDF: .*faixa\.pdf" "$tmp/erro"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor "leia o pdf" --arquivos "$tmp/projeto/faixa_mime:1-2"
+conferir "caso 51: faixa em PDF pelo tipo MIME recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "caso 51: erro indica o PDF sem extensão" grep -q "faixa de linhas não vale para PDF: .*faixa_mime" "$tmp/erro"
+conferir "caso 51: nenhuma faixa de PDF chega ao Ollama" [ ! -s "$ollama_reqs" ]
+
 # 22. Perfil nativo recusa mesmo com --destino explícito
 DELEGAR=nativo delegar --destino local leitor "leia" --arquivos "$tmp/projeto/doc1.txt"
 conferir "caso 40: DELEGAR=nativo recusa --destino local" [ "$(codigo)" = 4 ]
