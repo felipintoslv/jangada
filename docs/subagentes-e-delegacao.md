@@ -330,7 +330,9 @@ exclusivamente os papéis `leitor` e `redator`. O script lê e extrai os
 arquivos indicados (`--arquivos`), numerando linhas ou páginas, e envia texto
 puro ao modelo. O modelo não possui ferramentas de terminal. O `leitor` roda com
 temperatura zero, para que a mesma entrada dê a mesma resposta; o `redator`
-mantém a temperatura padrão do modelo.
+mantém a temperatura padrão do modelo. Quando o conteúdo cabe em uma fatia, o
+pedido do `leitor` termina com uma regra que exige a citação de cada
+afirmação, com um prefixo real do documento como exemplo.
 
 Um argumento `ARQUIVO:INI-FIM` envia só essas linhas, com a numeração do
 arquivo, e pode se repetir para o mesmo arquivo:

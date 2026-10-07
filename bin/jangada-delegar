@@ -728,8 +728,15 @@ if [[ "$destino" == local ]]; then
     fi
   }
 
+  # O modelo local obedece melhor à regra que vem depois do documento. O exemplo
+  # usa um prefixo real porque ele copia marcadores genéricos ao pé da letra, e
+  # oferecer uma saída de "não encontrado" o faz desistir de respostas presentes.
+  regra_citacao=""
+  if [[ "$papel" == leitor && -z "$capacidade" && -n "${fatias[0]:-}" ]]; then
+    regra_citacao=$'\n\n'"Regras da resposta: toda afirmação deve trazer a citação da linha de onde foi tirada, copiada do início dessa linha no documento, como em ${fatias[0]%%: *}. Transcreva também o valor pedido. Procure em todo o documento antes de dizer que algo não está nele."
+  fi
   if ((${#fatias[@]} <= 1)); then
-    chamar_ollama "$prompt_sistema" "$pedido"$'\n\nDocumentos:\n'"${fatias[0]:-}" documento 1 "${fatias[0]:-}"
+    chamar_ollama "$prompt_sistema" "$pedido"$'\n\nDocumentos:\n'"${fatias[0]:-}$regra_citacao" documento 1 "${fatias[0]:-}"
     texto="$res_chamada"
   else
     resumos_parciais=""
