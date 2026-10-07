@@ -1,8 +1,7 @@
 # Regressões de ausência, desempenho e filtros sobre dados sintéticos.
 source("default/painel/indicadores.R")
 source("default/painel/hoje.R")
-stopifnot(is.na(soma_medida(c(NA, Inf, -1))), soma_medida(c(NA, 0)) == 0,
-          is.na(media_avaliacoes(c(NA, NaN, Inf))), media_avaliacoes(c(NA, 0)) == 0)
+stopifnot(is.na(soma_medida(c(NA, Inf, -1))), soma_medida(c(NA, 0)) == 0)
 cache <- tempfile("painel-motores-")
 dir.create(cache)
 jsonlite::write_json(list(), file.path(cache, "coleta.json"))
@@ -35,13 +34,6 @@ stopifnot(sum(diario$saida, na.rm = TRUE) == 100,
 r$tempo_geracao_ms <- NA_real_
 stopifnot(is.na(desempenho_local(r)$tokens_s))
 arrow::write_parquet(r, file.path(cache, "consumo.parquet"))
-p <- carregar_cache(cache)$pesquisas
-p <- as.data.frame(lapply(p, function(x) rep(x[NA_integer_], 2)))
-p$id <- c("sem-nota", "zero")
-p$data <- r$data[1:2]; p$dia <- r$dia[1:2]
-p$estado <- "sem_auditoria"; p$autor <- "teste"; p$par <- "teste"
-p$grau_fato <- c(NA_integer_, 0L); p$pergunta <- "Consulta sintética"
-arrow::write_parquet(p, file.path(cache, "pesquisas.parquet"))
 options(jangada.painel.cache = cache)
 carimbo <- format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z")
 ontem <- format(Sys.time() - 86400, "%Y-%m-%dT%H:%M:%S%z")
@@ -111,15 +103,12 @@ shiny::testServer(aplicacao, {
             rede_escura$options$edges$color$color != aparencia()$grade,
             rede_escura$options$edges$color$color != rede_clara$options$edges$color$color)
   session$setInputs(periodo = c(Sys.Date(), Sys.Date()), executor = "ollama")
-  stopifnot(nrow(motores()) == 1, nrow(pesqs()) == 1,
-            identical(output$f_fato, "Sem avaliação"),
-            !grepl("NA%", output$f_tabela),
-            !grepl("NaN", output$manchete_dia))
+  stopifnot(nrow(motores()) == 1)
   session$setInputs(executor = NULL, origem_consumo = "interface_externa")
   stopifnot(nrow(motores()) == 1, motores()$executor == "codex")
   session$setInputs(periodo = c(Sys.Date() - 1, Sys.Date()), origem_consumo = NULL,
                     modelo_consumo = "qwen")
-  stopifnot(nrow(motores()) == 2, nrow(pesqs()) == 2)
+  stopifnot(nrow(motores()) == 2)
   invisible(output$b_motores); invisible(output$b_local)
   invisible(output$b_fontes); invisible(output$b_ferramentas)
   stopifnot(grepl("com erro", output$situacao_fontes$html),

@@ -299,20 +299,6 @@ ui <- page_navbar(
         nav_panel("Sem fonte", DT::DTOutput("e_fonte")))
     )
   ),
-  nav_panel("Veracidade e pesquisas", icon = bsicons::bs_icon("search"),
-    uiOutput("insight_pesquisas"),
-    layout_column_wrap(width = 1 / 3, fill = FALSE,
-      value_box("Total de pesquisas", textOutput("f_total"), showcase = bsicons::bs_icon("chat-dots")),
-      value_box("Avaliação dos auditores", textOutput("f_fato"), showcase = bsicons::bs_icon("shield-check"),
-                p("média de fatos comprovados")),
-      value_box("Consultas hoje", textOutput("f_hoje"), showcase = bsicons::bs_icon("calendar-check"))
-    ),
-    layout_column_wrap(width = 1 / 2, fill = FALSE,
-      cartao("Nuvem de tópicos e palavras-chave", uiOutput("f_nuvem")),
-      cartao("Termos mais frequentes", plotly::plotlyOutput("f_grafico_termos", height = "280px"))
-    ),
-    cartao("Consultas realizadas e veredito da bancada", DT::DTOutput("f_tabela"))
-  ),
   ),
   nav_spacer(),
   nav_item(input_dark_mode(id = "modo", mode = "dark"))
@@ -386,11 +372,6 @@ server <- function(input, output, session) {
     checkFunc = function() file.mtime(file.path(cache, "coleta.json")),
     valueFunc = function() carregar_cache(cache))
 
-  pesqs <- reactive({
-    p <- filtrar(no_periodo(dados()$pesquisas), agente = "autor")
-    if (length(input$par)) p <- p[p$par %in% input$par, , drop = FALSE]
-    p
-  })
   sub <- reactive({
     req(input$periodo)
     if (!is.null(dados()$subagentes$erro)) return(dados()$subagentes)
@@ -511,23 +492,11 @@ server <- function(input, output, session) {
     n_hoje <- nrow(e_hoje)
     taxa_1a <- if (nrow(e_ap) > 0) round(100 * mean(e_ap$primeira)) else NA
 
-    p <- dados()$pesquisas
-    p_hoje <- p[p$dia == hoje_str, , drop = FALSE]
-    n_p_hoje <- nrow(p_hoje)
-    med_fato_hoje <- media_avaliacoes(p_hoje$grau_fato)
-
     t_ent <- if (n_hoje > 0) {
       if (!is.na(taxa_1a)) sprintf("%d entrega(s) concluída(s) hoje com %d%% de aprovação na 1ª rodada.", n_hoje, taxa_1a)
       else sprintf("%d entrega(s) em andamento hoje.", n_hoje)
     } else {
       "Sem entregas finalizadas hoje até o momento."
-    }
-
-    t_pesq <- if (n_p_hoje > 0) {
-      paste0(sprintf("O Conversa de Pescador registrou %d consulta(s) hoje. ", n_p_hoje),
-              if (is.na(med_fato_hoje)) "Sem avaliação numérica disponível." else sprintf("Média dos pareceres disponíveis: %d%%.", med_fato_hoje))
-    } else {
-      "Nenhuma consulta registrada no Pescador hoje."
     }
 
     div(class = "alert alert-primary mb-3 shadow-sm border-0",
@@ -536,7 +505,7 @@ server <- function(input, output, session) {
             bsicons::bs_icon("speedometer2", class = "fs-3 text-primary me-3 flex-shrink-0"),
             div(
               h6(class = "mb-1 fw-bold", "Diagnóstico Operacional do Dia"),
-              p(class = "mb-0 text-body", paste(t_ent, t_pesq))
+              p(class = "mb-0 text-body", t_ent)
             )
         )
     )
@@ -1089,134 +1058,6 @@ server <- function(input, output, session) {
       x <- fontes[[nome]]
       data.frame(origem = nome, relatorios = num_ou_na(x$n), sem_fonte = num_ou_na(x$total), mediana = num_ou_na(x$mediana))
     })))
-  })
-
-  # F. Pesquisas (Conversa de Pescador)
-  output$insight_pesquisas <- renderUI({
-    p <- pesqs()
-    if (!nrow(p)) return(NULL)
-    n_tot <- nrow(p)
-    avaliadas <- sum(is.finite(p$grau_fato) & p$grau_fato >= 0 & p$grau_fato <= 100)
-    med_fato <- if (avaliadas) paste0(media_avaliacoes(p$grau_fato), "%") else "indisponível"
-    div(class = "alert alert-secondary py-2 px-3 mb-3",
-        sprintf("Pesquisas: %d consultas, %d com avaliação numérica registrada. Média dos pareceres: %s. Essa avaliação não é uma probabilidade de acerto.",
-                n_tot, avaliadas, med_fato))
-  })
-  output$f_total <- renderText({
-    p <- pesqs()
-    if (nrow(p) == 0) "0" else as.character(nrow(p))
-  })
-  output$f_fato <- renderText({
-    p <- pesqs()
-    if (is.na(media_avaliacoes(p$grau_fato))) "Sem avaliação" else paste0(media_avaliacoes(p$grau_fato), "% nos pareceres")
-  })
-  output$f_hoje <- renderText({
-    p <- pesqs()
-    if (nrow(p) == 0) "0" else as.character(sum(p$dia == as.character(Sys.Date()), na.rm = TRUE))
-  })
-  # Frequência de termos e palavras das pesquisas
-  termos_pesquisas <- reactive({
-    p <- pesqs()
-    if (nrow(p) == 0) return(data.frame(termo = character(), n = integer()))
-
-    texto <- paste(p$pergunta, collapse = " ")
-    palavras <- unlist(strsplit(tolower(texto), "[^[:alnum:]áéíóúâêîôûãõàèìòùäëïöüçñ]+"))
-    palavras <- palavras[nchar(palavras) >= 3]
-
-    sw_extras <- c("qual", "quais", "como", "sobre", "pode", "dar", "uma", "uns", "mais",
-                   "menos", "você", "para", "com", "por", "que", "pra", "ter", "ser",
-                   "isso", "esse", "essa", "esta", "este", "dos", "das", "the", "and", "for", "with")
-    sw <- if (requireNamespace("stopwords", quietly = TRUE)) {
-      unique(c(stopwords::stopwords("pt"), stopwords::stopwords("en"), sw_extras))
-    } else {
-      sw_extras
-    }
-
-    palavras_limpas <- palavras[!palavras %in% sw]
-    if (length(palavras_limpas) == 0) return(data.frame(termo = character(), n = integer()))
-
-    tb <- sort(table(palavras_limpas), decreasing = TRUE)
-    data.frame(termo = names(tb), n = as.integer(tb), stringsAsFactors = FALSE)
-  })
-
-  # Nuvem de palavras responsiva e esteticamente harmonizada ao matugen
-  output$f_nuvem <- renderUI({
-    df <- termos_pesquisas()
-    if (nrow(df) == 0) {
-      return(div(class = "text-muted p-4 text-center", "Nenhum termo registrado para exibição na nuvem."))
-    }
-
-    df <- head(df, 35)
-    max_n <- max(df$n)
-    min_n <- min(df$n)
-
-    tags_list <- lapply(seq_len(nrow(df)), function(i) {
-      termo <- df$termo[i]
-      qtd <- df$n[i]
-
-      tam <- if (max_n == min_n) 1.15 else 0.85 + ((qtd - min_n) / max(1, (max_n - min_n))) * 1.35
-      opac <- 0.70 + (qtd / max_n) * 0.30
-
-      tags$span(
-        title = paste0(termo, " (", qtd, " ocorrência(s))"),
-        class = "badge rounded-pill me-1 mb-2",
-        style = sprintf(
-          "font-size: %.2frem; padding: 0.35em 0.65em; font-weight: 500; opacity: %.2f; background-color: var(--bs-secondary-bg); color: var(--bs-body-color); border: 1px solid var(--bs-border-color); display: inline-block;",
-          tam, opac
-        ),
-        termo,
-        tags$small(class = "ms-1 text-muted", paste0("(", qtd, ")"))
-      )
-    })
-
-    div(style = "line-height: 2.2; text-align: center; padding: 8px;", tags_list)
-  })
-
-  # Título: Termos mais frequentes nas consultas
-  # Fonte: pesquisas.parquet, no período e projeto selecionados.
-  output$f_grafico_termos <- plotly::renderPlotly({
-    df <- termos_pesquisas()
-    if (nrow(df) == 0) {
-      return(vazio())
-    }
-    top_df <- head(df, 10)
-    top_df <- top_df[order(top_df$n), ]
-    top_df$termo <- factor(top_df$termo, levels = top_df$termo)
-
-    p <- plotly::plot_ly(
-      data = top_df,
-      x = ~n,
-      y = ~termo,
-      type = "bar",
-      orientation = "h",
-      marker = list(color = paleta()[["claude"]]),
-      hoverinfo = "text",
-      text = ~paste0(termo, ": ", n, " consulta(s)")
-    )
-    pl(p, "consultas", "") |>
-      plotly::layout(xaxis = list(rangemode = "tozero", dtick = max(1, ceiling(max(top_df$n) / 7))),
-        yaxis = list(showgrid = FALSE), margin = list(l = 80, r = 20, t = 10, b = 35))
-  })
-
-  output$f_tabela <- DT::renderDT({
-    p <- pesqs()
-    if (nrow(p) == 0) {
-      return(tabela(data.frame(aviso = "Nenhuma pesquisa registrada no Pescador.")))
-    }
-    ord <- order(p$data, decreasing = TRUE)
-    df <- data.frame(
-      data = format(p$data[ord], "%d/%m %H:%M"),
-      sessao = p$sessao[ord],
-      estado = p$estado[ord],
-      par = p$par[ord],
-      pergunta = p$pergunta[ord],
-      termo = ifelse(is.finite(p$grau_fato[ord]), paste0(p$grau_fato[ord], "%"), "Sem avaliação"),
-      veredito = p$veredito[ord],
-      fontes = p$fontes_qtd[ord],
-      segundos = sprintf("%.1fs", p$segundos[ord]),
-      stringsAsFactors = FALSE
-    )
-    tabela(setNames(df, c("data", "sessão", "estado", "par", "pergunta", "avaliação (%)", "diagnóstico do auditor", "fontes", "tempo")))
   })
 }
 

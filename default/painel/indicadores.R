@@ -82,11 +82,6 @@ carregar_cache <- function(cache) {
     sessoes = ler("sessoes.parquet", data.frame(
       sessao = character(), projeto = character(), agente = character(), estado = character(),
       desde = ts, atualizado = ts)),
-    pesquisas = ler("pesquisas.parquet", data.frame(
-      id = character(), data = ts, dia = character(), sessao = character(), estado = character(),
-      par = character(), modo = character(), autor = character(), revisor = character(),
-      pergunta = character(), grau_fato = integer(), grau_pescador = integer(),
-      veredito = character(), fontes_qtd = integer(), segundos = numeric())),
     consumo = ler("consumo.parquet", data.frame(
       id = character(), data = ts, dia = character(), origem = character(), executor = character(),
       provedor = character(), modelo = character(), sessao = character(), projeto = character(),
@@ -110,11 +105,6 @@ carregar_cache <- function(cache) {
 soma_medida <- function(x) {
   x <- x[is.finite(x) & x >= 0]
   if (length(x)) sum(x) else NA_real_
-}
-
-media_avaliacoes <- function(x) {
-  x <- x[is.finite(x) & x >= 0 & x <= 100]
-  if (length(x)) round(mean(x)) else NA_real_
 }
 
 resumo_motores <- function(d) {
