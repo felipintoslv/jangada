@@ -64,8 +64,6 @@ JANGADA_LOCAL_KEEP_ALIVE="${JANGADA_LOCAL_KEEP_ALIVE:-2m}"
 JANGADA_LOCAL_ESPERA="${JANGADA_LOCAL_ESPERA:-30}"
 JANGADA_OLLAMA_URL="${JANGADA_OLLAMA_URL:-http://localhost:11434}"
 JANGADA_LOCAL_FATIAS_MAX="${JANGADA_LOCAL_FATIAS_MAX:-5}"
-# Contexto da Conversa de Pescador; sem valor próprio, segue o da delegação.
-JANGADA_CONVERSA_CTX="${JANGADA_CONVERSA_CTX:-$JANGADA_LOCAL_CTX}"
 
 if [[ -f "$JANGADA_CONFIG/jangada.conf" ]]; then
   # Lê só linhas CHAVE=valor com chaves JANGADA_*, sem executar o arquivo.
@@ -77,6 +75,9 @@ if [[ -f "$JANGADA_CONFIG/jangada.conf" ]]; then
   done < <(sed -e 's/^[[:space:]]*#.*//' -e 's/[[:space:]]*$//' "$JANGADA_CONFIG/jangada.conf")
   unset _chave _valor
 fi
+# Contexto da Conversa de Pescador; sem valor próprio, segue o da delegação.
+# Fica depois do arquivo, de onde o JANGADA_LOCAL_CTX pode vir.
+JANGADA_CONVERSA_CTX="${JANGADA_CONVERSA_CTX:-$JANGADA_LOCAL_CTX}"
 if [[ -z "$JANGADA_REPO" && -d "$JANGADA_PROJETOS/jangada/.git" ]]; then
   JANGADA_REPO="$JANGADA_PROJETOS/jangada"
 fi
