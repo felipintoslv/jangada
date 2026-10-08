@@ -88,14 +88,16 @@ def consultar(raiz, projeto=None):
         resultado['erros'].append('estado operacional com ligação simbólica')
         return resultado
     for pasta in sorted(pastas.glob('*')):
+        if filtro and pasta.name != chave(filtro):
+            continue
         if not pasta.is_dir():
             continue
         try:
             if pasta.is_symlink():
                 raise ValueError('pasta do projeto com ligação simbólica')
             dados = ler_projeto(pasta)
-            if filtro and (dados['caminho'] != filtro if dados else pasta.name != chave(filtro)):
-                continue
+            if filtro and dados and dados['caminho'] != filtro:
+                raise ValueError('registro pertence a outro caminho')
             dados = dados or dict(id=pasta.name, caminho=filtro, nome='projeto-' + pasta.name[:12], politica={})
             resultado['projetos'].append(dados)
             banco = pasta / 'tarefas.sqlite'
@@ -156,7 +158,8 @@ def consultar(raiz, projeto=None):
                                          'estado_persistido': dados.get('estado'),
                                          'estado': SESSOES.get(dados.get('estado'), 'Bloqueada')})
         except (OSError, ValueError, KeyError, TypeError) as erro:
-            resultado['erros'].append(f'{arquivo.name}: {erro}')
+            if filtro is None:
+                resultado['erros'].append(f'{arquivo.name}: {erro}')
     for atividade in resultado['atividades']:
         estados = [t['estado'] for t in resultado['tarefas'] if t['projeto'] == atividade['projeto']
                    and t['atividade'] == atividade['id']]

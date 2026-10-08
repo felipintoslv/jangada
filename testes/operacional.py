@@ -159,6 +159,39 @@ class Operacional(unittest.TestCase):
         self.assertIn('tarefa inexistente', resposta.stderr)
         self.assertFalse(raiz.exists())
 
+    def test_corrupcao_alheia_nao_impede_conferencia_e_roteamento(self):
+        cadastrar(self.estado, self.projeto)
+        self.estado.importar([self.tarefa()])
+        outra = self.raiz / 'outro-projeto'
+        outra.mkdir()
+        pasta = self.estado_raiz / 'agentes/projetos' / chave(outra)
+        pasta.mkdir()
+        (pasta / 'projeto.json').write_text('{inválido')
+        (self.estado_raiz / 'agentes/alheia.json').write_text('{inválido')
+        antes = {str(p): (p.read_bytes(), p.stat().st_mtime_ns)
+                 for p in self.estado_raiz.rglob('*') if p.is_file()}
+        consulta = consultar(self.estado_raiz, self.projeto)
+        self.assertFalse(consulta['erros'])
+        self.assertEqual([t['id'] for t in consulta['tarefas']], ['T1'])
+        global_ = consultar(self.estado_raiz)
+        self.assertEqual(len(global_['erros']), 2)
+        ambiente = dict(os.environ, JANGADA_ESTADO=str(self.estado_raiz), JANGADA_PATH=str(RAIZ),
+                        JANGADA_CONFIG=str(self.config), PYTHONPATH=str(RAIZ / 'default'))
+        comando = [sys.executable, str(RAIZ / 'default/nucleo/cli.py'), '--projeto', str(self.projeto),
+                   'sessao-conferir', 'nova', '--executor', 'codex', '--tarefa-id', 'T1']
+        resposta = subprocess.run(comando, env=ambiente, capture_output=True, text=True)
+        self.assertEqual(resposta.returncode, 0, resposta.stderr)
+        with patch.dict(os.environ, {'JANGADA_DELEGAR': 'local'}):
+            rota = decidir(self.estado_raiz, self.projeto, RAIZ, self.config, 'T1', 'manual', 'local')
+        self.assertEqual(rota['executor'], 'local')
+        self.assertEqual(antes, {str(p): (p.read_bytes(), p.stat().st_mtime_ns)
+                                 for p in self.estado_raiz.rglob('*') if p.is_file()})
+        (self.pasta / 'projeto.json').write_text('{inválido')
+        resposta = subprocess.run(comando, env=ambiente, capture_output=True, text=True)
+        self.assertNotEqual(resposta.returncode, 0)
+        with self.assertRaises(ValueError):
+            decidir(self.estado_raiz, self.projeto, RAIZ, self.config, 'T1', 'manual', 'local')
+
     def test_conferencia_previa_preserva_banco_legado_e_recusa_politica_sem_gravar(self):
         self.estado.importar([self.tarefa()])
         ambiente = dict(os.environ, JANGADA_ESTADO=str(self.estado_raiz), JANGADA_PATH=str(RAIZ),
