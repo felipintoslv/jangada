@@ -21,6 +21,75 @@ op_tabela <- function(registros, campos) {
   as.data.frame(colunas, check.names = FALSE)
 }
 
+op_valor <- function(x) {
+  if (is.null(x) || !length(x)) return("não definido")
+  if (is.atomic(x)) {
+    return(paste(vapply(as.list(x), function(v) {
+      if (is.na(v) || !nzchar(trimws(as.character(v)))) "não definido" else as.character(v)
+    }, character(1)), collapse = "; "))
+  }
+  paste(vapply(x, op_valor, character(1)), collapse = "; ")
+}
+
+op_campos <- function(registro) {
+  linhas <- lapply(names(registro), function(campo) {
+    valor <- registro[[campo]]
+    if (is.list(valor) && length(names(valor))) {
+      d <- op_campos(valor)
+      d$Campo <- paste(campo, d$Campo, sep = ".")
+      return(d)
+    }
+    data.frame(Campo = campo, Valor = op_valor(valor))
+  })
+  if (!length(linhas)) return(data.frame(Campo = character(), Valor = character()))
+  do.call(rbind, linhas)
+}
+
+op_grade <- function(d) {
+  if (!nrow(d)) return(p("nenhum"))
+  tags$div(class = "table-responsive op-detalhe", tags$table(class = "table table-striped",
+    tags$thead(tags$tr(lapply(names(d), tags$th))),
+    tags$tbody(lapply(seq_len(nrow(d)), function(i) {
+      tags$tr(lapply(d[i, , drop = FALSE], function(v) tags$td(op_valor(v))))
+    }))))
+}
+
+op_lista <- function(registros) {
+  if (!length(registros)) return(p("nenhum"))
+  linhas <- lapply(registros, function(r) {
+    if (is.list(r)) op_campos(r) else data.frame(Campo = "Valor", Valor = op_valor(r))
+  })
+  campos <- unique(unlist(lapply(linhas, function(d) d$Campo)))
+  d <- as.data.frame(stats::setNames(lapply(campos, function(campo) {
+    vapply(linhas, function(r) op_valor(r$Valor[r$Campo == campo]), character(1))
+  }), campos), check.names = FALSE)
+  op_grade(d)
+}
+
+op_registro <- function(registro) {
+  listas <- vapply(registro, is.list, logical(1))
+  tagList(op_grade(op_campos(registro[!listas])),
+    lapply(names(registro)[listas], function(campo) {
+      valor <- registro[[campo]]
+      tagList(h5(campo), if (length(names(valor))) op_registro(valor) else op_lista(valor))
+    }))
+}
+
+op_bruto <- function(registro) {
+  tags$details(tags$summary("Ver registro bruto"), tags$pre(
+    as.character(jsonlite::toJSON(registro, auto_unbox = TRUE, pretty = TRUE, null = "null"))))
+}
+
+op_numero <- function(x, casas = 0) {
+  if (is.null(x) || !length(x) || !is.finite(x)) return("não registrado")
+  format(round(x, casas), nsmall = casas, big.mark = ".", decimal.mark = ",", scientific = FALSE, trim = TRUE)
+}
+
+op_memoria <- function(usada, total, unidade, divisor = 1, casas = 0) {
+  if (is.null(usada) || is.null(total)) return("não registrado")
+  paste(op_numero(usada / divisor, casas), "de", op_numero(total / divisor, casas), unidade)
+}
+
 op_estado <- function(estado) {
   icones <- c(Planejada = "○", Pronta = "●", Executando = "↻", `Em revisão` = "⌕",
               Concluída = "✓", Bloqueada = "Ⅱ", Falhou = "×", Cancelada = "−")
@@ -62,10 +131,12 @@ operacional_server <- function(input, output, session, dados) {
   })
   output$op_projetos <- DT::renderDT(com_busca(op_tabela(nucleo()$projetos,
     c(Projeto = "nome", Identificador = "id", Caminho = "caminho", Política = "politica"))))
-  output$op_projeto_detalhe <- renderText({
+  output$op_projeto_detalhe <- renderUI({
     p <- Filter(function(p) identical(p$id, input$op_p_detalhe), nucleo()$projetos)
     atividades <- Filter(function(a) identical(a$projeto, input$op_p_detalhe), nucleo()$atividades)
-    as.character(jsonlite::toJSON(list(projeto = p, atividades = atividades), auto_unbox = TRUE, pretty = TRUE, null = "null"))
+    if (!length(p)) return(tags$p("Selecione um projeto."))
+    tagList(op_registro(p[[1]]), h4("Atividades"), op_lista(atividades),
+      op_bruto(list(projeto = p, atividades = atividades)))
   })
   atividades <- reactive({
     n <- nucleo()
@@ -108,15 +179,17 @@ operacional_server <- function(input, output, session, dados) {
       Atividade = "atividade", Agente = "agente", Modelo = "modelo", Prioridade = "prioridade", Atualizado = "atualizado"))))
   output$op_por_projeto <- DT::renderDT(com_busca(op_tabela(rotular(nucleo()$atividades),
     c(Estado = "estado_rotulo", Projeto = "nome_projeto", Atividade = "titulo", Objetivo = "objetivo", Critérios = "criterios"))))
-  output$op_detalhes <- renderText({
+  output$op_detalhes <- renderUI({
     r <- Filter(function(t) identical(t$chave, input$op_detalhe), atividades())
-    if (!length(r)) return("Selecione uma tarefa ou sessão.")
+    if (!length(r)) return(p("Selecione uma tarefa ou sessão."))
     t <- r[[1]]
     vinculos <- lapply(c("execucoes", "revisoes", "eventos"), function(campo) Filter(function(e) {
       identical(e$projeto, t$projeto) && (identical(e$tarefa, t$id) || identical(e$sessao, t$id))
     }, nucleo()[[campo]]))
     names(vinculos) <- c("execucoes", "revisoes", "eventos")
-    as.character(jsonlite::toJSON(c(list(item = t), vinculos), auto_unbox = TRUE, pretty = TRUE, null = "null"))
+    tagList(op_registro(t), lapply(names(vinculos), function(campo) {
+      tagList(h4(campo), op_lista(vinculos[[campo]]))
+    }), op_bruto(c(list(item = t), vinculos)))
   })
   output$op_comandos <- renderText({
     r <- Filter(function(t) identical(t$chave, input$op_detalhe), atividades())
@@ -160,19 +233,24 @@ operacional_server <- function(input, output, session, dados) {
   })
   output$op_historico <- DT::renderDT(com_busca(op_tabela(rotular(nucleo()$eventos),
     c(Projeto = "nome_projeto", Tarefa = "tarefa", Data = "data", Evento = "evento", Dados = "dados"))))
-  output$op_configuracao <- renderText(as.character(jsonlite::toJSON(nucleo()$configuracao,
-    auto_unbox = TRUE, pretty = TRUE, null = "null")))
+  output$op_configuracao <- renderUI({
+    c <- nucleo()$configuracao
+    if (is.null(c)) return(p("Configurações indisponíveis."))
+    d <- data.frame(Chave = vapply(c$valores, function(v) op_valor(v$chave), character(1)),
+      Valor = vapply(c$valores, function(v) op_valor(v$valor), character(1)))
+    card(card_header(op_valor(c$arquivo)), op_grade(d))
+  })
   cpu_anterior <- reactiveVal(NULL)
-  output$op_monitoramento <- renderText({
-    req(identical(input$secao, "Monitoramento"))
+  output$op_monitoramento <- renderUI({
+    req(identical(input$painel, "Operacional"), identical(input$secao_operacional, "Monitoramento"))
     invalidateLater(5000, session)
     programa <- file.path(pasta_app, "../nucleo/monitoramento.py")
     resposta <- tryCatch(system2("python3", shQuote(programa), stdout = TRUE, stderr = FALSE),
                          error = function(e) character())
-    if (!length(resposta) || !is.null(attr(resposta, "status"))) return("Medições indisponíveis.")
+    if (!length(resposta) || !is.null(attr(resposta, "status"))) return(p("Medições indisponíveis."))
     m <- tryCatch(jsonlite::fromJSON(paste(resposta, collapse = "\n"), simplifyVector = FALSE),
                   error = function(e) NULL)
-    if (is.null(m)) return("Medições inválidas.")
+    if (is.null(m)) return(p("Medições inválidas."))
     anterior <- isolate(cpu_anterior())
     cpu_anterior(m$cpu_ticks)
     m["cpu_percentual_medido"] <- list(NULL)
@@ -182,6 +260,17 @@ operacional_server <- function(input, output, session, dados) {
       if (total > 0 && ocioso >= 0 && ocioso <= total) m$cpu_percentual_medido <- 100 * (1 - ocioso / total)
     }
     m$cpu_ticks <- NULL
-    as.character(jsonlite::toJSON(m, auto_unbox = TRUE, pretty = TRUE, null = "null"))
+    tagList(p("Medidas instantâneas: ", op_texto(m$data)),
+      layout_column_wrap(width = 1 / 3, fill = FALSE,
+        value_box("CPU", if (is.null(m$cpu_percentual_medido)) "não registrado" else
+          paste0(op_numero(m$cpu_percentual_medido, 1), "%")),
+        value_box("Memória", op_memoria(m$memoria_bytes$usada, m$memoria_bytes$total, "GiB", 1024^3, 1)),
+        if (!length(m$gpu)) value_box("GPU", "não registrado") else
+          lapply(m$gpu, function(g) value_box(paste("GPU", g$indice),
+            paste0(op_numero(g$uso_percentual_medido), "%"),
+            p(op_memoria(g$memoria_usada_mib, g$memoria_total_mib, "MiB"))))),
+      h4("Modelos carregados"),
+      if (is.null(m$modelos_carregados)) p("não registrado") else op_lista(m$modelos_carregados),
+      h4("Erros"), op_lista(m$erros))
   })
 }

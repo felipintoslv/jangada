@@ -49,6 +49,7 @@ tema <- bs_theme(
     .bslib-value-box .value-box-title { font-size: 14px; }
     .bslib-value-box.default .value-box-showcase > svg.bi { fill: var(--bs-primary) !important; }
     .dataTables_wrapper { font-size: 14px; }
+    .op-detalhe td { overflow-wrap: anywhere; white-space: pre-wrap; }
     .marca-jangada { width: 24px; height: 24px; fill: currentColor; margin-right: 8px; }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -120,15 +121,16 @@ marca <- gsub('fill="#000000"', 'fill="currentColor"', marca, fixed = TRUE)
 marca <- sub('<svg ', '<svg class="marca-jangada" aria-hidden="true" ', marca, fixed = TRUE)
 
 ui <- page_navbar(
-  title = tagList(HTML(marca), "Jangada"), theme = tema, fillable = FALSE, id = "secao",
-  window_title = "Indicadores do jangada", selected = "Visão Geral",
-  sidebar = filtros,
+  title = tagList(HTML(marca), "Jangada"), theme = tema, fillable = FALSE, id = "painel",
+  window_title = "Painel do jangada", selected = "Operacional",
+  nav_panel("Operacional",
+  navset_bar(id = "secao_operacional", selected = "Visão Geral",
   nav_panel("Visão Geral", icon = bsicons::bs_icon("calendar-check"),
     uiOutput("op_resumo"), hoje_ui("hoje")
   ),
   nav_panel("Projetos", DT::DTOutput("op_projetos"),
     selectInput("op_p_detalhe", "Projeto para consultar", choices = NULL),
-    verbatimTextOutput("op_projeto_detalhe")),
+    uiOutput("op_projeto_detalhe")),
   nav_panel("Central de Atividades",
     p("Tarefas da fila e sessões de agentes. As ações ficam na Central Qt e no terminal."),
     fluidRow(column(4, selectInput("op_projeto", "Projeto", choices = c("Todos" = ""))),
@@ -140,7 +142,7 @@ ui <- page_navbar(
     DT::DTOutput("op_atividades"),
     tags$details(tags$summary("Atividades por projeto"), DT::DTOutput("op_por_projeto")),
     selectInput("op_detalhe", "Detalhe da tarefa ou sessão", choices = NULL),
-    verbatimTextOutput("op_detalhes"), h4("Comandos no terminal"), verbatimTextOutput("op_comandos")),
+    uiOutput("op_detalhes"), h4("Comandos no terminal"), verbatimTextOutput("op_comandos")),
   nav_panel("Central de Agentes", p("Perfis configurados. Modelo ausente permanece não registrado."),
     DT::DTOutput("op_agentes"), h4("Execuções e consumo medido"), DT::DTOutput("op_execucoes")),
   nav_panel("Modelos e Provedores",
@@ -152,12 +154,15 @@ ui <- page_navbar(
     h4("Validações registradas de sessões"), DT::DTOutput("op_validacoes"),
     p("A origem distingue registros protegidos de dados graváveis pelo agente. A integração confere a aprovação no backend.")),
   nav_panel("Monitoramento", p("Recursos medidos somente enquanto esta aba estiver aberta."),
-    verbatimTextOutput("op_monitoramento")),
+    uiOutput("op_monitoramento")),
   nav_panel("Histórico e Artefatos", p("Eventos e hashes dos artefatos. Os registros são selecionáveis e têm busca."),
     DT::DTOutput("op_historico")),
   nav_panel("Configurações", p("Valores públicos validados. Edite o arquivo indicado pelo terminal ou editor."),
-    verbatimTextOutput("op_configuracao")),
-  nav_menu("Indicadores",
+    uiOutput("op_configuracao")),
+  )),
+  nav_panel("Indicadores",
+  layout_sidebar(sidebar = filtros,
+  navset_bar(id = "secao_indicadores", selected = "Revisão e síntese",
   nav_panel("Fila e provedores", icon = bsicons::bs_icon("list-task"),
     h3("Execução automática de tarefas"),
     p("Esta fila reúne tarefas planejadas para execução automática. As sessões da Central de Tarefas são acompanhadas separadamente."),
@@ -342,7 +347,7 @@ ui <- page_navbar(
         nav_panel("Sem fonte", DT::DTOutput("e_fonte")))
     )
   ),
-  ),
+  ))),
   nav_spacer(),
   nav_item(input_dark_mode(id = "modo", mode = "dark"))
 )

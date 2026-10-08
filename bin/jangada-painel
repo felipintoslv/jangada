@@ -107,7 +107,7 @@ subir() {
     [[ -s "$errof" ]] && erro "$(cat "$errof")"
     # A página passa do tamanho do cano: com grep -q, o grep sai no título e
     # o curl falha ao escrever o resto, o que o pipefail conta como falha.
-    if [[ "$(curl -s --max-time 1 "$url" 2>/dev/null)" == *"Indicadores do jangada"* ]]; then
+    if [[ "$(curl -s --max-time 1 "$url" 2>/dev/null)" == *"Painel do jangada"* ]]; then
       avisar_barra
       return 0
     fi
@@ -121,7 +121,7 @@ abrir() {
   if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
     local end
     end="$(hyprctl clients -j 2>/dev/null \
-      | jq -r 'first(.[] | select((.title // "") | test("Indicadores do jangada")) | .address) // empty' 2>/dev/null || true)"
+      | jq -r 'first(.[] | select((.title // "") | test("Painel do jangada")) | .address) // empty' 2>/dev/null || true)"
     if [[ -n "$end" ]]; then
       hyprctl dispatch "hl.dsp.focus({ window = \"address:$end\" })" >/dev/null 2>&1 || true
       return 0
