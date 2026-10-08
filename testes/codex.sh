@@ -402,6 +402,11 @@ PY
 printf '{"orcamento":{"chamadas":1}}\n' >"$tmp/politica.json"
 rodar "$repo_jangada/bin/jangada-projeto" --projeto "$tmp/pasta-anexar" \
   cadastrar --politica "$tmp/politica.json" >/dev/null
+rodar "$repo_jangada/bin/jangada-agente" --agente codex \
+  --projeto "$tmp/pasta-anexar" --direto >"$tmp/recusa-orcamento" 2>&1
+conferir "orçamento recusa nova sessão interativa" [ "$?" != 0 ]
+conferir "recusa orienta conferir política e usar fila controlada" \
+  grep -q 'confira a política e o orçamento. Use a fila' "$tmp/recusa-orcamento"
 FALSO_TMUX_EXISTENTE=1 rodar "$repo_jangada/bin/jangada-agente" --agente codex \
   --projeto "$tmp/pasta-anexar" --direto >"$tmp/anexar" 2>&1
 conferir "sessão existente reanexa sem conferir orçamento de nova sessão" [ "$?" = 0 ]

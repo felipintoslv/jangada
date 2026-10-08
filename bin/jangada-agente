@@ -270,8 +270,11 @@ nome="$(slug "$nome")"
 sessao_previa="$repo"
 [[ -z "$nome" ]] || sessao_previa+="--$nome"
 if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao_previa" 2>/dev/null; then
-  "$JANGADA_PATH/bin/jangada-projeto" --projeto "$raiz" sessao-conferir "preparacao-$$" \
-    --executor "$(basename "${agente%% *}")" "${vinculos[@]}" >/dev/null
+  if ! "$JANGADA_PATH/bin/jangada-projeto" --projeto "$raiz" sessao-conferir "preparacao-$$" \
+    --executor "$(basename "${agente%% *}")" "${vinculos[@]}" >/dev/null; then
+    echo "jangada-agente: o projeto não permite abrir esta sessão interativa; confira a política e o orçamento. Use a fila para execução controlada, respeitando essas restrições." >&2
+    exit 1
+  fi
 fi
 
 dir="$raiz"; worktree=""; ramo=""; base=""; worktree_novo=0
