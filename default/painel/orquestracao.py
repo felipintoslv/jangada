@@ -18,6 +18,9 @@ class Consulta(Estado):
         self.db.row_factory = sqlite3.Row
         self.db.execute('PRAGMA query_only=ON')
 
+    def fechar(self):
+        self.db.close()
+
 
 def coletar(raiz, projetos, projeto_de):
     raiz = Path(raiz).resolve()

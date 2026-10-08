@@ -50,7 +50,7 @@ def contexto_principal(estado, identificador, projeto):
     mapa = {t['id']: t for t in estado.listar()}
     if identificador not in mapa:
         raise ValueError('tarefa inexistente')
-    tarefa = mapa[identificador]['especificacao']
+    tarefa = estado.atual(mapa[identificador]['especificacao'])
     conferir_fontes(tarefa, projeto)
     dependencias = []
     for dep in tarefa.get('dependencias', []):
@@ -66,7 +66,9 @@ def contexto_principal(estado, identificador, projeto):
 def assumir_principal(estado, identificador, projeto, executor, modelo=None):
     tarefa, dependencias = contexto_principal(estado, identificador, projeto)
     _, dono, prazo = estado.reservar_principal(identificador, executor, modelo)
+    execucao = estado.db.execute('SELECT id FROM execucoes WHERE dono=?', (dono,)).fetchone()['id']
     return {'tarefa': tarefa, 'dependencias': dependencias, 'dono': dono, 'prazo': prazo,
+            'execucao': execucao,
             'executor_declarado': executor, 'modelo_declarado': modelo,
             'modo': 'sessao_principal', 'status': 'RUNNING',
             'formato': 'relatório UTF-8; cite os caminhos fornecidos com :linha ou , p. página; requisitos usam ## Título',
@@ -98,6 +100,7 @@ def entregar_principal(estado, identificador, dono, projeto, raiz, arquivo):
         estado.evento(identificador, 'relatorio_recusado', {'arquivo': str(caminho), 'motivo': 'relatório deve ser UTF-8 válido'})
         raise ValueError('relatório deve ser UTF-8 válido; reserva mantida para corrigir o arquivo') from erro
     resultado = {'executor': reserva['executor'], 'modo': 'sessao_principal',
+                 'execucao': reserva.get('execucao'),
                  'modelo_declarado': reserva.get('modelo'), 'execucao_iniciada': True,
                  'metricas': {'chamadas': None}}
     status, motivo = 'REVIEW_REQUIRED', 'formato conferido; conteúdo principal aguarda revisão separada'
@@ -121,9 +124,15 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir
     if reserva is None:
         return None
     tarefa, dono = reserva
+    tarefa = estado.atual(tarefa)
     identificador = tarefa['id']
     consumo = estado.consumo(identificador)
+    execucao = estado.db.execute('SELECT id,limite_chamadas FROM execucoes WHERE dono=?', (dono,)).fetchone()
+    if tarefa['capacidade'] != CAPACIDADE_DETERMINISTICA:
+        tarefa = {**tarefa, 'max_chamadas': min(tarefa.get('max_chamadas', 8),
+                  (consumo['chamadas'] or 0) + execucao['limite_chamadas'])}
     resultado = {'perfil': perfil, 'execucao_iniciada': False,
+                 'execucao': execucao['id'],
                  'metricas': {'chamadas': 0, 'segundos': 0}}
     texto = None
 
@@ -154,7 +163,8 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir
             resultado['metricas']['segundos'] = math.ceil(time.monotonic() - inicio)
             if resultado['metricas']['segundos'] > tempo:
                 return encerrar('FAILED', 'conferência excedeu o tempo da tarefa')
-            return encerrar('COMPLETED', 'JSON conferido automaticamente: ' + criterio(tarefa), texto)
+            return encerrar('REVIEW_REQUIRED' if tarefa.get('criterios_aceite') else 'COMPLETED',
+                            'JSON conferido automaticamente: ' + criterio(tarefa), texto)
         except KeyboardInterrupt:
             resultado['metricas']['segundos'] = math.ceil(time.monotonic() - inicio)
             encerrar('REVISION_REQUIRED', 'conferência local interrompida; conferir antes de repetir')
@@ -186,7 +196,11 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir
             estado.db.execute('UPDATE tarefas SET prazo=? WHERE id=? AND dono=?',
                               (time.time() + tempo + 60, identificador, dono))
         argumentos = [str(raiz / 'bin/jangada-delegar'), '--json', '--capacidade', tarefa['capacidade']]
-        if perfil == 'offline':
+        selecao = getattr(estado, 'selecao', None)
+        if selecao is not None:
+            argumentos += ['--destino', selecao['executor']]
+            resultado['roteamento'] = selecao
+        elif perfil == 'offline':
             argumentos += ['--destino', 'local']
         elif perfil == 'quality':
             argumentos += ['--destino', 'agy']
@@ -204,9 +218,9 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir
                       'JANGADA_DELEGAR_CACHE_PREFIXO'):
             ambiente.pop(chave, None)
         ambiente.update(JANGADA_PATH=str(raiz), JANGADA_DELEGAR_TEMPO_TOTAL=str(tempo),
-                        JANGADA_DELEGAR_CHAMADAS_MAX=str(saldo))
-        if saude is not None:
-            ambiente['JANGADA_DELEGAR_IMPEDIMENTOS'] = json.dumps(saude.impedimentos())
+                        JANGADA_DELEGAR_CHAMADAS_MAX=str(saldo), JANGADA_EXECUCAO=execucao['id'])
+        ambiente['JANGADA_DELEGAR_IMPEDIMENTOS'] = json.dumps(
+            (saude.impedimentos() if saude is not None else []) + estado.impedimentos_politica())
         with tempfile.TemporaryDirectory(prefix='execucao-', dir=estado.pasta) as pasta:
             saida = pathlib.Path(pasta) / 'relatorio.md'
             argumentos[1:1] = ['--arquivo', str(saida)]
@@ -267,7 +281,7 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir
             spec.loader.exec_module(verificador)
             verificador.verificar(texto, fontes, tarefa.get('requisitos', []))
             resultado['verificacao'] = 'referencias_e_requisitos_validos'
-            if amostrar and amostravel(tarefa):
+            if amostrar and amostravel(tarefa) and not tarefa.get('criterios_aceite'):
                 resultado['amostragem'] = amostragem(estado, tarefa, resultado, texto)
                 if not resultado['amostragem']['selecionada']:
                     try:
@@ -304,7 +318,7 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir
                 conferir_fontes(tarefa, projeto)
                 for dependencia in tarefa.get('dependencias', []):
                     estado.ler_artefato(mapa[dependencia]['artefato'])
-                if revisao['decisao'] == 'APPROVED' and usadas is not None:
+                if revisao['decisao'] == 'APPROVED' and usadas is not None and not tarefa.get('criterios_aceite'):
                     return encerrar('COMPLETED', 'relatório intermediário aprovado por supervisor independente', texto)
                 if revisao['decisao'] == 'REVISE':
                     return encerrar('REVISION_REQUIRED', 'supervisor identificou erro no relatório', texto)
@@ -344,9 +358,11 @@ def retomar_supervisao(estado, projeto, raiz, perfil, permitir_remoto, saude, pe
             item, dono, tempo, saldo = estado.reservar_supervisao(item['id'])
         except ValueError:
             continue
-        tarefa = item['especificacao']
+        tarefa = estado.atual(item['especificacao'])
+        execucao = estado.db.execute('SELECT id,limite_chamadas FROM execucoes WHERE dono=?', (dono,)).fetchone()
+        saldo = min(saldo, execucao['limite_chamadas'])
         texto = None
-        resultado = {'perfil': perfil, 'fase': 'supervisao', 'execucao_iniciada': False,
+        resultado = {'perfil': perfil, 'fase': 'supervisao', 'execucao_iniciada': False, 'execucao': execucao['id'],
                      'delegacao': {'destino': anterior.get('destino'), 'modelo': anterior.get('modelo'), 'tentativas': []},
                      'metricas': {'chamadas': 0, 'segundos': 0}}
         inicio = time.monotonic()
@@ -368,9 +384,9 @@ def retomar_supervisao(estado, projeto, raiz, perfil, permitir_remoto, saude, pe
             for chave in ('JANGADA_DELEGAR_ROTEAMENTO_ID', 'JANGADA_DELEGAR_TENTATIVAS',
                           'JANGADA_DELEGAR_CHAMADAS_RESTANTES', 'JANGADA_DELEGAR_DECISAO', 'JANGADA_DELEGAR_CACHE_PREFIXO'):
                 ambiente.pop(chave, None)
-            ambiente['JANGADA_PATH'] = str(raiz)
-            if saude is not None:
-                ambiente['JANGADA_DELEGAR_IMPEDIMENTOS'] = json.dumps(saude.impedimentos())
+            ambiente.update(JANGADA_PATH=str(raiz), JANGADA_EXECUCAO=execucao['id'])
+            ambiente['JANGADA_DELEGAR_IMPEDIMENTOS'] = json.dumps(
+                (saude.impedimentos() if saude is not None else []) + estado.impedimentos_politica())
             with tempfile.TemporaryDirectory(prefix='supervisao-', dir=estado.pasta) as pasta:
                 arquivo = pathlib.Path(pasta) / 'relatorio.md'
                 arquivo.write_text(texto, encoding='utf-8')
@@ -391,7 +407,7 @@ def retomar_supervisao(estado, projeto, raiz, perfil, permitir_remoto, saude, pe
             conferir_fontes(tarefa, projeto)
             for dep in tarefa.get('dependencias', []):
                 estado.ler_artefato(mapa[dep]['artefato'])
-            if revisao['decisao'] == 'APPROVED':
+            if revisao['decisao'] == 'APPROVED' and not tarefa.get('criterios_aceite'):
                 status, motivo = 'COMPLETED', 'relatório preservado aprovado pelo supervisor independente'
             elif revisao['decisao'] == 'REVISE':
                 status, motivo = 'REVISION_REQUIRED', 'supervisor identificou erro no relatório preservado'

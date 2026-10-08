@@ -18,6 +18,10 @@ from acompanhamento import acompanhar
 from metricas_projeto import identidade, ler_precos, resumir
 from saude import Saude, retomar
 from principal import executar_principal
+from projetos import cadastrar, chave
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+from nucleo.roteamento import decidir, MODOS
 
 
 def especificacoes(caminho, projeto):
@@ -38,8 +42,15 @@ def especificacoes(caminho, projeto):
                 raise ValueError(f'fonte ausente ou fora do projeto: {nome}')
             return str(fonte), hashlib.sha256(fonte.read_bytes()).hexdigest()
 
-        fontes = [resolver(nome) for nome in tarefa['fontes']]
+        contexto = tarefa.get('contexto', [])
+        if not isinstance(contexto, list):
+            raise ValueError('contexto deve ser lista de caminhos')
+        if any(not isinstance(nome, str) for nome in [*tarefa['fontes'], *contexto]):
+            raise ValueError('fontes e contexto devem conter caminhos em texto')
+        fontes = [resolver(nome) for nome in dict.fromkeys([*tarefa['fontes'], *contexto])]
         tarefa['fontes'] = [nome for nome, _ in fontes]
+        if contexto:
+            tarefa['contexto'] = [resolver(nome)[0] for nome in contexto]
         tarefa['hashes_fontes'] = dict(fontes)
         if 'esquema' in tarefa:
             tarefa['esquema'], tarefa['hash_esquema'] = resolver(tarefa['esquema'])
@@ -106,6 +117,10 @@ def main():
     execucao.add_argument('--supervisionar', action='store_true')
     execucao.add_argument('--amostrar', action='store_true')
     execucao.add_argument('--paralelo', type=int, default=1)
+    execucao.add_argument('--tarefa')
+    execucao.add_argument('--modo', choices=MODOS)
+    execucao.add_argument('--executor', choices=['local', 'agy', 'codex-economico'])
+    execucao.add_argument('--confirmar', action='store_true')
     retomada = comandos.add_parser('retomar', help='retoma esperas com provedor disponível')
     retomada.add_argument('--projeto', type=pathlib.Path)
     retomada.add_argument('--perfil', choices=['balanced', 'quality', 'offline'], default='balanced')
@@ -133,6 +148,11 @@ def main():
     tarefa.add_argument('--dono')
     tarefa.add_argument('--arquivo', type=pathlib.Path)
     tarefa.add_argument('--parecer')
+    tarefa.add_argument('--revisor', choices=['humano', 'claude', 'codex', 'agy'], default='humano')
+    tarefa.add_argument('--modelo-revisor')
+    tarefa.add_argument('--contexto-revisao', choices=['diff', 'repositorio'], default='repositorio')
+    tarefa.add_argument('--modo', choices=['manual', 'assistido'], default='manual')
+    tarefa.add_argument('--confirmar', action='store_true')
     tarefa.add_argument('--permitir-remoto', action='store_true')
     tarefa.add_argument('--permitir-codex', action='store_true')
     decisao = tarefa.add_mutually_exclusive_group()
@@ -140,6 +160,10 @@ def main():
     decisao.add_argument('--reprovar', action='store_true')
     args = parser.parse_args()
     if args.comando == 'task':
+        if args.acao != 'revisar' and (args.revisor != 'humano' or args.modelo_revisor or args.contexto_revisao != 'repositorio'):
+            parser.error('identidade de revisão exige revisar')
+        if args.acao != 'assumir' and (args.modo != 'manual' or args.confirmar):
+            parser.error('modo e confirmação exigem assumir')
         if args.acao != 'executar-principal' and (args.permitir_remoto or args.permitir_codex):
             parser.error('autorizações remotas exigem executar-principal')
         if args.acao == 'executar-principal':
@@ -155,6 +179,13 @@ def main():
         elif args.executor or args.modelo or args.dono or args.arquivo:
             parser.error('opções da sessão principal exigem assumir ou entregar')
     if args.comando == 'executar':
+        if (args.modo or args.executor or args.confirmar or args.tarefa) and (not args.modo or not args.tarefa
+                or args.acompanhar or args.paralelo != 1 or args.limite not in (None, 1)):
+            parser.error('roteamento explícito exige --modo e --tarefa, limite 1, sem acompanhar ou paralelo')
+        if args.modo == 'automatico_supervisionado' and (args.executor or args.confirmar):
+            parser.error('modo automático não recebe escolha manual')
+        if args.modo in {'manual', 'assistido'} and not args.executor:
+            parser.error('modo manual ou assistido exige --executor')
         if not args.acompanhar and (args.intervalo is not None or args.duracao is not None):
             parser.error('--intervalo e --duracao exigem --acompanhar')
         args.limite = args.limite if args.limite is not None else (100 if args.acompanhar else 1)
@@ -190,10 +221,17 @@ def main():
         projeto = pathlib.Path(git.stdout.strip()).resolve() if git.returncode == 0 else pathlib.Path.cwd().resolve()
     if not projeto.is_dir():
         raise ValueError('projeto não existe')
-    chave = hashlib.sha256(str(projeto).encode()).hexdigest()
-    pasta = pathlib.Path(os.environ['JANGADA_ESTADO']) / 'agentes/projetos' / chave
+    pasta = pathlib.Path(os.environ['JANGADA_ESTADO']) / 'agentes/projetos' / chave(projeto)
     estado = Estado(pasta, raiz=os.environ['JANGADA_ESTADO'])
     try:
+        if args.comando != 'fila' or args.importar:
+            cadastrar(estado, projeto)
+        if args.comando == 'executar' and args.modo:
+            estado.selecao = decidir(raiz_estado, projeto, raiz, os.environ['JANGADA_CONFIG'], args.tarefa,
+                                    args.modo, args.executor, args.confirmar, args.perfil,
+                                    args.permitir_remoto, args.permitir_codex)
+            if estado.selecao['executor'] is None:
+                raise ValueError('nenhum executor elegível para a escolha solicitada')
         if args.comando == 'fila':
             if args.metricas:
                 config = os.environ.get('JANGADA_CONFIG')
@@ -271,6 +309,9 @@ def main():
                     global_estado.fechar()
                 return
             elif args.acao == 'assumir':
+                if args.modo == 'assistido':
+                    decidir(raiz_estado, projeto, raiz, os.environ['JANGADA_CONFIG'], args.id,
+                            args.modo, args.executor, args.confirmar)
                 print(json.dumps(assumir_principal(estado, args.id, projeto, args.executor, args.modelo), ensure_ascii=False))
                 return
             elif args.acao == 'entregar':
@@ -280,7 +321,8 @@ def main():
             elif args.acao == 'revisar':
                 if not args.parecer or not (args.aprovar or args.reprovar):
                     raise ValueError('revisar exige --parecer e --aprovar ou --reprovar')
-                estado.revisar_lote(args.id.split(','), args.parecer, args.aprovar)
+                estado.revisar_lote(args.id.split(','), args.parecer, args.aprovar,
+                                   args.revisor, args.modelo_revisor, args.contexto_revisao)
             else:
                 if args.parecer or args.aprovar or args.reprovar:
                     raise ValueError('parecer e decisão só são usados na revisão')

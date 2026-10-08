@@ -64,6 +64,7 @@ def executar_principal(estado, identificador, projeto, raiz, saude, permitir_rem
         dono = reserva['dono']
         tempo = max(1, math.floor(reserva['prazo'] - time.time()))
         resultado = {'executor': 'codex-principal', 'modo': 'principal_automatico', 'modelo': modelo,
+                     'execucao': reserva['execucao'],
                      'execucao_iniciada': False, 'metricas': {'chamadas': 0, 'segundos': 0}}
         texto = None
         inicio = time.monotonic()
@@ -86,7 +87,8 @@ def executar_principal(estado, identificador, projeto, raiz, saude, permitir_rem
                 pedido += '\nUse os títulos Markdown abaixo, com explicação e referência em cada seção:\n'
                 pedido += '\n'.join('## ' + r for r in tarefa['requisitos'])
             ambiente = os.environ.copy()
-            ambiente.update(JANGADA_PATH=str(raiz), JANGADA_DELEGAR_DONO_PID=str(os.getpid()))
+            ambiente.update(JANGADA_PATH=str(raiz), JANGADA_DELEGAR_DONO_PID=str(os.getpid()),
+                            JANGADA_EXECUCAO=reserva['execucao'])
             argumentos = [sys.executable, str(raiz / 'default/delegacao/codex.py'), '--pasta', str(estado.pasta),
                           '--papel', 'principal', '--tempo', str(tempo), *fontes]
             processo = subprocess.Popen(argumentos, cwd=projeto, env=ambiente, stdin=subprocess.PIPE,
