@@ -278,6 +278,38 @@ depois desses testes adicionais e do registro documental.
 Após registrar o resultado gráfico fornecido pelo usuário e as capturas,
 a suíte passou outra vez, código zero, em 209 s.
 
+## Revisão externa da integração
+
+A tentativa de integração fornecida pelo usuário recebeu `REVISAR`, rodada
+2 de 3, para o conjunto desde `main`. O diff de 255.082 bytes foi cortado
+em 150.000; o revisor declarou não ter lido todos os arquivos. Os pareceres
+anteriores aprovam suas entregas parciais, não substituem essa revisão externa.
+
+Resposta aos quatro apontamentos:
+
+1. Corrigido o desfazimento da expiração por recusa de orçamento. `reservar`
+   registra a tarefa impedida em `WAITING_QUOTA` e continua a seleção.
+   Consumo de reserva expirada permanece desconhecido, com orientação para
+   aguardar o fim da janela do orçamento. Não é convertido em zero.
+   O teste com orçamento confere expiração persistida, outra tarefa
+   determinística reservada, cadastro recusado na janela e retomada depois dela.
+2. O lançador mantém a causa do backend e orienta conferir política e
+   orçamento, usando a fila controlada. O teste confere a recusa e a mensagem.
+3. Mantida a simulação integral do tema. `install/40-interface.sh` chama
+   o tema por `executar`, que já não o executa na instalação simulada.
+   Nenhuma dependência de execução real foi identificada nos testes;
+   `test_tema_simulado_nao_grava_nem_recarrega` confere ausência de gravações.
+4. Reforçado `test_consulta_com_wal_ativo_nao_escreve_na_origem`: o banco
+   aberto com `immutable=1` não contém a tarefa confirmada, que está no WAL.
+   O teste confere ausência de SHM na cópia antes da conexão, leitura da
+   tarefa confirmada, exclusão da alteração pendente e origem intacta.
+
+Os 29 contratos de `testes/operacional.py` passaram. `testes/codex.sh`
+também passou, incluindo as duas verificações da mensagem de recusa.
+A suíte completa `testes/verificar.sh` passou, código zero, em 209 s,
+após as correções do parecer externo.
+A revisão externa do commit atualizado continua necessária antes da mescla.
+
 ## Como continuar
 
 Uma sessão nova não tem a conversa anterior. O que ela precisa está aqui:
