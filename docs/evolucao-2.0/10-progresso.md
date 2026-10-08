@@ -11,11 +11,16 @@
 - Fase 4: aprovada pelo `jangada-validar` em 08/10/2026, HEAD `0d43dce`.
 - Fases 5 a 7: concluídas e aprovadas pelo `jangada-validar`, HEAD `3bff4b9`.
 - Fases 4 a 7: autorizadas com autonomia em 08/10/2026.
+- Correções posteriores: aprovação da sessão em `4332014`, rodada 11,
+  Claude Sonnet. A revisão externa para integração não está comprovada aqui.
 - Sessão da Fase 3: ramo `agente/tarefa-ab47cef8d325`, sobre `9dcb640`.
   HEAD da aprovação informado pelo usuário: `3018fb9`.
 
 O ramo e os commits acima identificam a sessão anterior. Nesta continuação,
-o ponto de partida é `bd7b9fe`, que integra aquela entrega.
+o ponto de partida foi `bd7b9fe`, que integra aquela entrega. O worktree
+`agente/revisao-final` incorporou `agente/tarefa-ddeff1c4d2f2` por
+`git merge --ff-only`, até `4332014`, sem integrar na base nem alterar
+a cópia instalada.
 
 ## Matriz dos doze critérios da Fase 1
 
@@ -343,8 +348,15 @@ A revisão local pediu cadastro independente da seleção, retirada da exceção
 inalcançável de supervisão e limite de adiamento durante eventos contínuos.
 Os três ajustes estão no commit `2561cf4`. Passaram 33 contratos operacionais
 e 67 testes da Central, incluindo eventos a cada 40 ms. A suíte completa
-passou novamente, código zero, em 209 s. A aprovação desta correção e a
-revisão externa para integração continuam pendentes.
+passou novamente, código zero, em 209 s. A aprovação desta correção veio
+na rodada 11 da sessão, em `4332014`. O parecer
+`agentes/validacao-jangada--tarefa-ddeff1c4d2f2-r11.md` registra
+`STATUS: APROVADO`; a marca `.aprovado` identifica o mesmo commit e a árvore
+`92af64e26b5989aa8dd6a7d28fd66290da98537d`, conferidos no Git. O ponto
+inicial desse parecer é `51bf310`, segundo a marca: a aprovação cobre
+as correções posteriores, sem comprovar revisão integral desde `main`.
+Esses registros são graváveis pela sessão. A aprovação externa para
+integração, em `revisoes/`, não foi conferida neste worktree.
 A revisão manual externa deve informar `JANGADA_SESSAO` com o identificador
 completo, para usar o mesmo rótulo e a mesma marca procurada pela integração.
 
