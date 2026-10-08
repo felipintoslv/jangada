@@ -54,7 +54,10 @@ operacional_server <- function(input, output, session, dados) {
     escolhas <- stats::setNames(ids, nomes)
     updateSelectInput(session, "op_projeto", choices = c("Todos" = "", escolhas), selected = isolate(input$op_projeto))
     updateSelectInput(session, "op_p_detalhe", choices = escolhas, selected = isolate(input$op_p_detalhe))
-    agentes <- unique(vapply(n$execucoes, function(e) op_texto(e$agente), character(1)))
+    agentes <- unique(c(
+      vapply(n$tarefas, function(t) op_texto(t$resultado$delegacao$destino), character(1)),
+      vapply(n$sessoes, function(s) op_texto(s$agente), character(1))
+    ))
     updateSelectInput(session, "op_agente", choices = c("Todos" = "", agentes), selected = isolate(input$op_agente))
   })
   output$op_projetos <- DT::renderDT(com_busca(op_tabela(nucleo()$projetos,
@@ -69,7 +72,7 @@ operacional_server <- function(input, output, session, dados) {
     tarefas <- lapply(n$tarefas, function(t) {
       t$tipo <- "Tarefa"
       t$titulo <- t$especificacao$pedido
-      t$agente <- t$resultado$delegacao$destino
+      t$agente <- op_texto(t$resultado$delegacao$destino)
       t$modelo <- t$resultado$delegacao$modelo
       t$prioridade <- t$especificacao$prioridade
       t$chave <- paste("tarefa", t$projeto, t$id, sep = "|")
@@ -77,6 +80,7 @@ operacional_server <- function(input, output, session, dados) {
     })
     sessoes <- lapply(n$sessoes, function(s) {
       s$tipo <- "Sessão"
+      s$agente <- op_texto(s$agente)
       s$id <- s$sessao
       s$titulo <- s$tarefa
       s$chave <- paste("sessao", s$projeto, s$id, sep = "|")

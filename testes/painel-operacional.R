@@ -7,7 +7,10 @@ tarefas <- lapply(seq_along(ids), function(i) list(id = "T1", projeto = ids[i], 
   atualizado = as.numeric(Sys.time()), especificacao = list(pedido = paste("Fonte", LETTERS[i]), dependencias = list())))
 tarefas <- c(tarefas, list(list(id = "T3", projeto = ids[1], especificacao = list()),
   list(id = "T4", projeto = ids[1], estado = "Em revisão", especificacao = list(criterios_aceite = "Critério pendente"))))
-n <- list(projetos = projetos, atividades = list(), tarefas = tarefas, sessoes = list(), execucoes = list(),
+tarefas[[1]]$resultado <- list(delegacao = list(destino = "codex-economico"))
+sessoes <- list(list(sessao = "sessao-codex", projeto = ids[1], estado = "Executando",
+                     agente = "codex --model modelo", tarefa = "Pedido da sessão"))
+n <- list(projetos = projetos, atividades = list(), tarefas = tarefas, sessoes = sessoes, execucoes = list(list(agente = "codex")),
   revisoes = list(), eventos = list(), provedores = list(), perfis = list(), erros = list(), data = "2026-10-08T10:00:00Z")
 jsonlite::write_json(n, file.path(cache_teste, "nucleo.json"), auto_unbox = TRUE)
 jsonlite::write_json(list(), file.path(cache_teste, "coleta.json"))
@@ -23,6 +26,10 @@ secoes <- c("Visão Geral", "Projetos", "Central de Atividades", "Central de Age
 stopifnot(all(vapply(secoes, function(s) grepl(s, html, fixed = TRUE), logical(1))))
 chamadas <- new.env()
 chamadas$n <- 0L
+ambiente$updateSelectInput <- function(session, inputId, ...) {
+  if (identical(inputId, "op_agente")) chamadas$agentes <- list(...)$choices
+  shiny::updateSelectInput(session, inputId, ...)
+}
 tabela_original <- ambiente$tabela
 ambiente$tabela <- function(d, ...) {
   if (identical(names(d), c("Projeto", "Tarefa", "Critérios", "Motivo", "Artefato"))) chamadas$pendentes <- d
@@ -45,6 +52,15 @@ shiny::testServer(aplicacao, {
   stopifnot(identical(chamadas$pendentes$Tarefa, "T4"))
   session$setInputs(op_projeto = ids[2], op_detalhe = paste("tarefa", ids[2], "T1", sep = "|"))
   stopifnot(grepl("Fonte B", output$op_detalhes), !grepl("Fonte A", output$op_detalhes))
+  stopifnot(all(c("codex-economico", "codex --model modelo") %in% chamadas$agentes))
+  stopifnot(!"codex" %in% chamadas$agentes)
+  session$setInputs(op_projeto = ids[1], op_agente = "codex-economico",
+                    op_detalhe = paste("tarefa", ids[1], "T1", sep = "|"))
+  stopifnot(grepl("Fonte A", output$op_detalhes))
+  session$setInputs(op_agente = "codex --model modelo",
+                    op_detalhe = paste("sessao", ids[1], "sessao-codex", sep = "|"))
+  stopifnot(grepl("Pedido da sessão", output$op_detalhes))
+  session$setInputs(op_agente = "")
   session$setInputs(secao = "Monitoramento")
   primeira <- jsonlite::fromJSON(output$op_monitoramento)
   stopifnot(chamadas$n == 1L, is.null(primeira$cpu_percentual_medido))
