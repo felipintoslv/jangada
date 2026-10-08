@@ -54,6 +54,18 @@ class Monitoramento(unittest.TestCase):
         self.assertEqual(self.pedidos, ['/api/ps'])
         json.dumps(dados, allow_nan=False)
 
+    def test_endereco_de_escuta_consulta_apenas_loopback(self):
+        for host in ('0.0.0.0', 'http://0.0.0.0',
+                     '0.0.0.0:' + str(self.servidor.server_port)):
+            with self.subTest(host=host), patch.dict(os.environ, {'OLLAMA_HOST': host}), \
+                    patch.object(monitoramento.shutil, 'which', return_value=None), \
+                    patch.object(monitoramento.urllib.request, 'build_opener') as construir:
+                construir.return_value.open.return_value.__enter__.return_value.read.return_value = self.corpo
+                dados = monitoramento.coletar()
+            porta = self.servidor.server_port if ':' in host.removeprefix('http://') else 11434
+            construir.return_value.open.assert_called_once_with(f'http://127.0.0.1:{porta}/api/ps', timeout=2)
+            self.assertEqual(dados['modelos_carregados'], [])
+
     def test_sem_redirecionamento_e_sem_confundir_erro_com_zero(self):
         self.redirecionar = True
         dados = self.coletar()
@@ -64,7 +76,8 @@ class Monitoramento(unittest.TestCase):
         self.assertIsNone(self.coletar()['modelos_carregados'])
 
     def test_endereco_remoto_e_malformado_nao_faz_pedido(self):
-        for host in ('https://externo.example', 'http://[inválido'):
+        for host in ('https://externo.example', 'http://[inválido', 'http://usuario@0.0.0.0',
+                     'http://0.0.0.0:0', 'http://0.0.0.0:65536'):
             with patch.dict(os.environ, {'OLLAMA_HOST': host}), patch.object(monitoramento.shutil, 'which', return_value=None):
                 dados = monitoramento.coletar()
             self.assertIsNone(dados['modelos_carregados'])

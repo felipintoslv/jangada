@@ -65,6 +65,8 @@ def coletar():
     except ValueError:
         resultado['erros'].append('endereço do Ollama inválido; consulta recusada')
         return resultado
+    if url.hostname == '0.0.0.0' and not url.username and not url.password:
+        url = url._replace(netloc='127.0.0.1' + (f':{url.port}' if url.port else ':11434'))
     if url.scheme != 'http' or url.hostname not in {'127.0.0.1', 'localhost', '::1'} or url.username or url.password:
         resultado['erros'].append('endereço do Ollama não é local; consulta recusada')
         return resultado
