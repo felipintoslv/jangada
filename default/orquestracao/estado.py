@@ -275,11 +275,13 @@ class Estado:
             usadas += quantidade
         for execucao in self.db.execute("SELECT limite_chamadas FROM execucoes WHERE status='RUNNING'"):
             if execucao['limite_chamadas'] is None:
-                raise ValueError('reserva com consumo desconhecido no projeto')
+                raise ValueError('reserva com consumo desconhecido no projeto; para encerrar registro de sessão órfã, '
+                                 'use jangada-projeto --projeto PASTA sessao-encerrar NOME fora do isolamento')
             usadas += execucao['limite_chamadas']
         for execucao in self.db.execute("SELECT chamadas FROM execucoes WHERE (sessao IS NOT NULL OR funcao='revisao') AND status!='RUNNING' AND (inicio>=? OR fim>=?)", (desde, desde)):
             if execucao['chamadas'] is None:
-                raise ValueError('consumo de sessão ou revisão desconhecido; execução bloqueada')
+                raise ValueError('consumo de sessão ou revisão desconhecido; execução bloqueada; aguarde o fim da janela '
+                                 f"do orçamento ({orcamento.get('periodo_segundos', 86400)} segundos)")
             usadas += execucao['chamadas']
         return usadas
 

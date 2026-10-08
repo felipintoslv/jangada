@@ -10,6 +10,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -144,6 +145,36 @@ class Operacional(unittest.TestCase):
         linhas = {r['id']: r['status'] for r in self.estado.db.execute('SELECT id,status FROM execucoes')}
         self.assertEqual(linhas, {primeira: 'CANCELLED', segunda: 'COMPLETED'})
         self.assertEqual(self.estado.listar()[0]['status'], 'QUEUED')
+
+    def test_sessao_orfa_encerra_por_nome_e_orcamento_recupera_apos_janela(self):
+        cadastrar(self.estado, self.projeto)
+        self.estado.importar([self.tarefa()])
+        ambiente = dict(os.environ, JANGADA_ESTADO=str(self.estado_raiz), JANGADA_PATH=str(RAIZ),
+                        JANGADA_CONFIG=str(self.config), PYTHONPATH=str(RAIZ / 'default'), JANGADA_ISOLADO='')
+        comando = [sys.executable, str(RAIZ / 'default/nucleo/cli.py'), '--projeto', str(self.projeto)]
+        resposta = subprocess.run([*comando, 'sessao-iniciar', 'orfã', '--executor', 'codex'],
+                                  env=ambiente, capture_output=True, text=True)
+        self.assertEqual(resposta.returncode, 0, resposta.stderr)
+        orcamento = {'chamadas': 3, 'periodo_segundos': 60}
+        with self.assertRaisesRegex(ValueError, 'sessao-encerrar'):
+            cadastrar(self.estado, self.projeto, {'orcamento': orcamento})
+        with self.assertRaisesRegex(ValueError, 'sessao-encerrar'):
+            self.estado.chamadas_usadas(orcamento)
+        resposta = subprocess.run([*comando, 'sessao-encerrar', 'orfã'],
+                                  env=ambiente, capture_output=True, text=True)
+        self.assertEqual(resposta.returncode, 0, resposta.stderr)
+        execucao = self.estado.db.execute("SELECT status,fim,chamadas FROM execucoes WHERE sessao='orfã'").fetchone()
+        self.assertEqual(execucao['status'], 'CANCELLED')
+        self.assertIsNotNone(execucao['fim'])
+        self.assertIsNone(execucao['chamadas'])
+        self.assertEqual(self.estado.listar()[0]['status'], 'QUEUED')
+        with self.assertRaisesRegex(ValueError, 'aguarde o fim da janela'):
+            cadastrar(self.estado, self.projeto, {'orcamento': orcamento})
+        self.assertEqual(ler_projeto(self.pasta)['politica'], {})
+        with patch('estado.time.time', return_value=time.time() + 61):
+            cadastrar(self.estado, self.projeto, {'orcamento': orcamento})
+            self.assertEqual(self.estado.limite_projeto(self.tarefa()), 3)
+            self.assertIsNotNone(self.estado.reservar())
 
     def test_conferencia_previa_nao_cria_estado_e_recusa_vinculo_ausente(self):
         raiz = self.raiz / 'sem-estado'

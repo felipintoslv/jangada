@@ -120,7 +120,8 @@ def cadastrar(estado, caminho, politica=None):
             return dados
         if politica is not None:
             if estado.db.execute("SELECT 1 FROM execucoes WHERE status='RUNNING'").fetchone():
-                raise ValueError('política não pode mudar durante execução')
+                raise ValueError('política não pode mudar durante execução; para encerrar registro de sessão órfã, '
+                                 'use jangada-projeto --projeto PASTA sessao-encerrar NOME fora do isolamento')
             if 'chamadas' in politica.get('orcamento', {}):
                 estado.chamadas_usadas(politica['orcamento'])
             dados['politica'] = politica

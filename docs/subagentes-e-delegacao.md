@@ -444,6 +444,20 @@ Consumo desconhecido bloqueia nova execução automática. Sessões interativas
 não garantem teto de consumo e são recusadas quando há orçamento de projeto.
 Cadastrar teto de chamadas também recusa consumo desconhecido no período;
 a política anterior permanece. Consumo desconhecido nunca é convertido em zero.
+Se a sessão do tmux desaparecer sem passar pelo encerramento, sua execução
+pode continuar `RUNNING` no registro. Para encerrar esse registro por nome,
+rode fora do isolamento:
+
+```sh
+jangada-projeto --projeto /caminho/do/projeto sessao-encerrar NOME
+```
+
+O comando marca as execuções `RUNNING` desse nome como `CANCELLED`, sem
+concluir tarefas da fila. O consumo permanece desconhecido. O cadastro de
+orçamento e novas reservas continuam bloqueados até o fim da janela contada
+do encerramento: `periodo_segundos`, ou 86.400 segundos quando omitido.
+As mensagens de recusa indicam o comando e a espera necessária.
+
 Quando a política exige revisão independente, o parecer identifica provedor
 e modelo diferentes do autor. Parecer humano sem identidade registra
 independência desconhecida e não atende essa exigência.
