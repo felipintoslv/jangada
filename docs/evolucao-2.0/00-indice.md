@@ -17,7 +17,9 @@ Os números 05 a 08 estão reservados para as fases seguintes e ainda não
 existem.
 
 Situação: Fase 3 entregue (registro de provedores; ver `10-progresso.md` e
-`docs/provedores.md`). Fase 4 aprovada, HEAD `0d43dce`.
-Fases 5 a 7 concluídas e aprovadas, HEAD `3bff4b9`. Correções posteriores
-aprovadas na sessão em `4332014`; a aprovação externa para integração não
-está comprovada. Evidências e limites em `10-progresso.md`.
+`docs/provedores.md`). As entregas anteriores da Fase 4 e das Fases 5 a 7
+receberam aprovações em `0d43dce` e `3bff4b9`, respectivamente. Correções
+posteriores receberam aprovação incremental na sessão em `4332014`.
+O parecer externo r3 fornecido pelo usuário registra `REVISAR`; a integração
+ainda exige aprovação externa do conjunto atualizado. Evidências e limites
+em `10-progresso.md`.

@@ -378,8 +378,13 @@ Uma sessão nova não tem a conversa anterior. O que ela precisa está aqui:
    - O executor não aprova o próprio resultado.
    - A interface não contorna regras do backend.
    - Sem ranking arbitrário de modelos e sem entidades redundantes.
-3. Fases 4 a 7 concluídas e aprovadas. Os limites dos testes estão acima;
-   as ressalvas históricas da Fase 1 continuam registradas na matriz.
+3. As entregas anteriores das Fases 4 a 7 receberam aprovações em
+   `0d43dce` e `3bff4b9`. Correções posteriores receberam aprovação
+   incremental na sessão em `4332014`, conforme os registros acima.
+   O parecer externo r3, fornecido pelo usuário, registra `REVISAR`
+   com três apontamentos. A aprovação externa do conjunto atualizado
+   continua necessária antes da integração. Os limites dos testes e
+   as ressalvas históricas da Fase 1 continuam registrados acima.
    O desenho está em `02-arquitetura.md` e `04-interface.md`.
 4. Para fechar o caso pulado, rode `bash testes/verificar.sh` num terminal
    fora da sessão.
