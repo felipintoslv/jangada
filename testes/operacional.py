@@ -91,6 +91,58 @@ class Operacional(unittest.TestCase):
             self.estado.finalizar('T1', 'errado', 'REVIEW_REQUIRED', {}, 'texto')
         self.assertIsNone(self.estado.db.execute('SELECT fim FROM execucoes').fetchone()[0])
 
+    def test_sessao_vinculada_nao_recebe_finalizacao_da_fila(self):
+        self.estado.importar([self.tarefa()])
+        self.estado.db.execute("INSERT INTO execucoes(id,sessao,tarefa,funcao,inicio,status) VALUES('sessao-exe','sessao','T1','execucao',0,'RUNNING')")
+        _, dono = self.estado.reservar()
+        self.estado.finalizar('T1', dono, 'REVIEW_REQUIRED', {'metricas': {'chamadas': 1}}, 'texto')
+        linhas = {r['id']: dict(r) for r in self.estado.db.execute('SELECT * FROM execucoes')}
+        self.assertEqual(linhas['sessao-exe']['status'], 'RUNNING')
+        self.assertIsNone(linhas['sessao-exe']['fim'])
+        fila = next(r for r in linhas.values() if r['dono'] == dono)
+        self.assertEqual(fila['status'], 'REVIEW_REQUIRED')
+        self.assertEqual(fila['chamadas'], 1)
+
+    def test_cadastro_recusa_orcamento_com_consumo_desconhecido(self):
+        cadastrar(self.estado, self.projeto)
+        self.entregar()
+        self.estado.db.execute("UPDATE eventos SET dados='{}' WHERE evento='execucao_encerrada'")
+        with self.assertRaisesRegex(ValueError, 'consumo.*desconhecido'):
+            cadastrar(self.estado, self.projeto, {'orcamento': {'chamadas': 3}})
+        self.assertEqual(ler_projeto(self.pasta)['politica'], {})
+
+    def test_politica_de_revisao_exige_identidade_e_nao_inventa_independencia(self):
+        cadastrar(self.estado, self.projeto, {'revisao_minima': {'1': {'independente': True}}})
+        self.entregar()
+        with patch.dict(os.environ, {'JANGADA_ISOLADO': ''}):
+            with self.assertRaisesRegex(ValueError, 'identificados'):
+                self.estado.revisar('T1', 'parecer', True)
+            cadastrar(self.estado, self.projeto, {})
+            self.estado.revisar('T1', 'parecer', True)
+        registro = json.loads(self.estado.db.execute("SELECT dados FROM eventos WHERE evento='revisada'").fetchone()[0])
+        self.assertIsNone(registro['independente'])
+
+    def test_cli_sessao_confere_aborta_e_encerra_sem_concluir_tarefa(self):
+        self.estado.importar([self.tarefa()])
+        ambiente = dict(os.environ, JANGADA_ESTADO=str(self.estado_raiz), JANGADA_PATH=str(RAIZ),
+                        JANGADA_CONFIG=str(self.config), JANGADA_ISOLADO='')
+        comando = [sys.executable, str(RAIZ / 'default/nucleo/cli.py'), '--projeto', str(self.projeto)]
+        ambiente['PYTHONPATH'] = str(RAIZ / 'default')
+
+        def chamar(*args):
+            resposta = subprocess.run([*comando, *args], env=ambiente, capture_output=True, text=True)
+            self.assertEqual(resposta.returncode, 0, resposta.stderr)
+            return json.loads(resposta.stdout)
+
+        chamar('sessao-conferir', 'sessao', '--executor', 'codex', '--tarefa-id', 'T1')
+        primeira = chamar('sessao-iniciar', 'sessao', '--executor', 'codex', '--tarefa-id', 'T1')['execucao']
+        chamar('sessao-abortar', 'sessao', '--execucao', primeira)
+        segunda = chamar('sessao-iniciar', 'sessao', '--executor', 'codex', '--tarefa-id', 'T1')['execucao']
+        chamar('sessao-encerrar', 'sessao', '--integrada')
+        linhas = {r['id']: r['status'] for r in self.estado.db.execute('SELECT id,status FROM execucoes')}
+        self.assertEqual(linhas, {primeira: 'CANCELLED', segunda: 'COMPLETED'})
+        self.assertEqual(self.estado.listar()[0]['status'], 'QUEUED')
+
     def test_revisao_recusa_isolamento_e_alias_do_autor(self):
         self.entregar()
         with patch.dict(os.environ, {'JANGADA_ISOLADO': '1'}), self.assertRaises(ValueError):

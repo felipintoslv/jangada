@@ -198,7 +198,8 @@ class Estado:
                 provedor_de(dados.get('executor')), dados.get('modelo'), time.time(), 'RUNNING',
                 self.limite_projeto(spec), serializar(dados.get('roteamento'))))
         elif evento in {'execucao_encerrada', 'reserva_expirada'}:
-            execucao = self.db.execute("SELECT * FROM execucoes WHERE tarefa=? AND status='RUNNING'", (tarefa,)).fetchone()
+            execucao = self.db.execute("SELECT * FROM execucoes WHERE tarefa=? AND dono=? AND status='RUNNING'",
+                                      (tarefa, dados.get('dono'))).fetchone()
             if execucao:
                 dados['execucao'] = execucao['id']
                 resultado = dados.get('resultado', {})
@@ -263,6 +264,10 @@ class Estado:
         limite = tarefa.get('max_chamadas', 8)
         if 'chamadas' not in orcamento:
             return limite
+        usadas = self.chamadas_usadas(orcamento)
+        return max(0, min(limite, orcamento['chamadas'] - usadas))
+
+    def chamadas_usadas(self, orcamento):
         desde = time.time() - orcamento.get('periodo_segundos', 86400)
         usadas = 0
         for evento in self.db.execute("SELECT dados FROM eventos WHERE data>=? AND evento IN ('execucao_encerrada','reserva_expirada')", (desde,)):
@@ -275,11 +280,11 @@ class Estado:
             if execucao['limite_chamadas'] is None:
                 raise ValueError('reserva com consumo desconhecido no projeto')
             usadas += execucao['limite_chamadas']
-        for execucao in self.db.execute("SELECT chamadas FROM execucoes WHERE sessao IS NOT NULL AND status!='RUNNING' AND (inicio>=? OR fim>=?)", (desde, desde)):
+        for execucao in self.db.execute("SELECT chamadas FROM execucoes WHERE (sessao IS NOT NULL OR funcao='revisao') AND status!='RUNNING' AND (inicio>=? OR fim>=?)", (desde, desde)):
             if execucao['chamadas'] is None:
-                raise ValueError('consumo de sessão do projeto desconhecido; execução bloqueada')
+                raise ValueError('consumo de sessão ou revisão desconhecido; execução bloqueada')
             usadas += execucao['chamadas']
-        return max(0, min(limite, orcamento['chamadas'] - usadas))
+        return usadas
 
     def importar(self, tarefas):
         if not isinstance(tarefas, list) or not tarefas:
@@ -521,7 +526,7 @@ class Estado:
                              time.time(), identificador))
             if resultado.get('execucao_iniciada') is False:
                 self.db.execute('UPDATE tarefas SET tentativas=tentativas-1 WHERE id=?', (identificador,))
-            self.evento(identificador, 'execucao_encerrada', {'status': status, 'resultado': resultado, 'artefato': hash_artefato})
+            self.evento(identificador, 'execucao_encerrada', {'dono': dono, 'status': status, 'resultado': resultado, 'artefato': hash_artefato})
 
     def fora_da_amostra(self, spec, artefato, resultado):
         sorteio = resultado.get('amostragem')
@@ -561,6 +566,8 @@ class Estado:
                     raise ValueError('revisão exige autor e revisor independentes e identificados')
                 projeto = ler_projeto(self.pasta)
                 regra = (projeto or {}).get('politica', {}).get('revisao_minima', {}).get(str(spec['risco']), {})
+                if regra.get('independente') and revisor == 'humano':
+                    raise ValueError('política exige revisor independente com provedor e modelo identificados')
                 if regra.get('contexto') == 'repositorio' and contexto != 'repositorio':
                     raise ValueError('política exige revisão com contexto do repositório')
                 criterios = spec.get('criterios_aceite', [])
@@ -581,12 +588,13 @@ class Estado:
                 execucao = 'exe-' + uuid.uuid4().hex[:16]
                 agora = time.time()
                 self.db.execute('''INSERT INTO execucoes
-                    (id,tarefa,atividade,funcao,agente,provedor,modelo,inicio,fim,status,artefato)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?)''', (execucao, identificador, spec.get('atividade'), 'revisao',
-                    revisor, revisor, modelo, agora, agora, status, tarefa['hash_artefato']))
+                    (id,tarefa,atividade,funcao,agente,provedor,modelo,inicio,fim,status,artefato,chamadas)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''', (execucao, identificador, spec.get('atividade'), 'revisao',
+                    revisor, revisor, modelo, agora, agora, status, tarefa['hash_artefato'],
+                    0 if revisor == 'humano' else None))
                 self.evento(identificador, 'revisada', {'status': status, 'parecer': parecer, 'execucao': execucao,
                             'autor': autor, 'modelo_autor': modelo_autor, 'revisor': revisor, 'modelo': modelo,
-                            'independente': True, 'contexto': contexto,
+                            'independente': True if revisor != 'humano' else None, 'contexto': contexto,
                             'artefato_sha256': tarefa['hash_artefato'], 'criterios_aceite': criterios})
 
     def ler_artefato(self, resumo):

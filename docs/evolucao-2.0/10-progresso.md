@@ -138,8 +138,10 @@ instalada. Sem essa pasta o `jangada-agente` não abre sessão.
 ## Fase 4
 
 O escopo foi apresentado e confirmado antes de alterar código. O usuário
-autorizou depois todas as fases restantes e o uso de subagentes do Codex
-para análise. Três subagentes analisaram persistência, revisão e núcleo;
+autorizou em 08/10/2026 todas as fases restantes com a mensagem: "Eu vou dormir
+e deixo autorizado fazer todas as etapas, com total autonomia". Autorizou
+também o uso de subagentes do Codex para análise. Três subagentes analisaram
+persistência, revisão e núcleo;
 não editaram arquivos nem revisaram a entrega. O agy foi tentado e recusado
 por `JANGADA_DELEGAR=local`; esse limite não foi alterado.
 
@@ -158,7 +160,7 @@ Implementado:
 - Modos manual, assistido e automático supervisionado, preservando os
   perfis atuais da fila e a delegação local.
 
-Os 20 testes novos de `testes/operacional.py` passaram. Incluem WAL ativo,
+Os 24 testes de `testes/operacional.py` passaram. Incluem WAL ativo,
 transação pendente, banco antigo, reassociação determinística, isolamento
 da revisão, orçamento concorrente e execução direta com provedor falso.
 A suíte `testes/verificar.sh` passou em 08/10/2026, código zero, em 196 s.

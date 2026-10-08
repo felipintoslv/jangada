@@ -229,8 +229,6 @@ repo="$(slug "$(basename "$raiz")")"
 vinculos=()
 [[ -z "$atividade" ]] || vinculos+=(--atividade "$atividade")
 [[ -z "$tarefa_id" ]] || vinculos+=(--tarefa-id "$tarefa_id")
-"$JANGADA_PATH/bin/jangada-projeto" --projeto "$raiz" sessao-conferir "preparacao-$$" \
-  --executor "$(basename "${agente%% *}")" "${vinculos[@]}" >/dev/null
 [[ -n "$repo" ]] || repo="projeto-$(printf '%s' "$raiz" | md5sum | cut -c1-8)"
 
 if ((eh_git)) && ((!direto)) && [[ -z "$nome" ]]; then
@@ -255,6 +253,12 @@ fi
 nome="$(slug "$nome")"
 [[ -z "$nome" ]] && { ((nome_dado)) || { [[ -n "$prompt" ]] && ((!direto)); }; } \
   && nome="tarefa-$(date +%Y%m%d-%H%M%S)"
+sessao_previa="$repo"
+[[ -z "$nome" ]] || sessao_previa+="--$nome"
+if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao_previa" 2>/dev/null; then
+  "$JANGADA_PATH/bin/jangada-projeto" --projeto "$raiz" sessao-conferir "preparacao-$$" \
+    --executor "$(basename "${agente%% *}")" "${vinculos[@]}" >/dev/null
+fi
 
 dir="$raiz"; worktree=""; ramo=""; base=""; worktree_novo=0
 if ((eh_git)) && [[ -n "$nome" ]]; then
@@ -390,8 +394,6 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
     cmd_base="$cmd_agente"
   fi
   revisor_efetivo="$(jangada_revisor "$agente" "$revisor")"
-  execucao="$("$JANGADA_PATH/bin/jangada-projeto" --projeto "$raiz" sessao-iniciar "$sessao" \
-    --executor "$base_agente" "${vinculos[@]}" | jq -er .execucao)"
 
   protocolo="$JANGADA_PATH/default/agentes/protocolo.md"
   [[ "${JANGADA_AGENTE_PROTOCOLO:-1}" != 0 && -r "$protocolo" ]] || protocolo=""
@@ -451,9 +453,16 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
     amb+=(-e "$_v")
   done
   amb+=(-e "JANGADA_DELEGAR=$delegar")
+  execucao="$("$JANGADA_PATH/bin/jangada-projeto" --projeto "$raiz" sessao-iniciar "$sessao" \
+    --executor "$base_agente" "${vinculos[@]}" | jq -er .execucao)"
   amb+=(-e "JANGADA_EXECUCAO=$execucao")
   [[ -n "$revisor_efetivo" ]] && amb+=(-e "JANGADA_VALIDAR_REVISOR=$revisor_efetivo")
-  "${JANGADA_TMUX[@]}" new-session -d -s "$sessao" -c "$dir" "${amb[@]}"
+  if ! "${JANGADA_TMUX[@]}" new-session -d -s "$sessao" -c "$dir" "${amb[@]}"; then
+    "$JANGADA_PATH/bin/jangada-projeto" --projeto "$raiz" sessao-abortar "$sessao" \
+      --execucao "$execucao" >/dev/null
+    echo "jangada-agente: não foi possível criar a sessão $sessao" >&2
+    exit 1
+  fi
 
   rm -f "$estado_dir/$sessao.json"
   jq -n --arg sessao "$sessao" --arg dir "$dir" --arg raiz "$raiz" --arg worktree "$worktree" \

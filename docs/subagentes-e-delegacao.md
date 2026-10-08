@@ -442,6 +442,11 @@ Uma política pode conter:
 As reservas comprometem o saldo de chamadas na mesma transação SQLite.
 Consumo desconhecido bloqueia nova execução automática. Sessões interativas
 não garantem teto de consumo e são recusadas quando há orçamento de projeto.
+Cadastrar teto de chamadas também recusa consumo desconhecido no período;
+a política anterior permanece. Consumo desconhecido nunca é convertido em zero.
+Quando a política exige revisão independente, o parecer identifica provedor
+e modelo diferentes do autor. Parecer humano sem identidade registra
+independência desconhecida e não atende essa exigência.
 Um teto `custo_estimado` também recusa execuções de modelos: os executores
 atuais não fornecem limite de consumo comprovável antes da chamada.
 Conferências determinísticas locais continuam possíveis, sem consumir chamadas.

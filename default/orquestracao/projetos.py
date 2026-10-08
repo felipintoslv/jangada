@@ -121,6 +121,8 @@ def cadastrar(estado, caminho, politica=None):
         if politica is not None:
             if estado.db.execute("SELECT 1 FROM execucoes WHERE status='RUNNING'").fetchone():
                 raise ValueError('política não pode mudar durante execução')
+            if 'chamadas' in politica.get('orcamento', {}):
+                estado.chamadas_usadas(politica['orcamento'])
             dados['politica'] = politica
         gravar_json(estado.pasta / 'projeto.json', dados)
     return dados

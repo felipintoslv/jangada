@@ -64,6 +64,7 @@ entrar aqui do mesmo jeito.
 | `~/.cache/cliphist` | `jangada-isolar` | pasta criada com 0700 para poder ocultá-la do agente |
 | `$XDG_RUNTIME_DIR/jangada-tarefas` | `default/tarefas/central.py`, `default/tarefas/janela.py` | soquete privado para reutilizar a janela e avisos privados para acompanhar ações, fora do runtime visível ao agente isolado |
 | `$XDG_RUNTIME_DIR/jangada-isolar` | `jangada-isolar` | soquetes do proxy do D-Bus |
+| `$TMPDIR/jangada-consulta-*` (ou `/tmp/jangada-consulta-*`) | `default/nucleo/consultas.py` | cópia privada temporária do SQLite e WAL, removida ao fechar a consulta; evita gravar arquivos auxiliares na origem |
 | `~/Imagens/Capturas` ou `~/Pictures/Screenshots` | `jangada-captura` | capturas de tela |
 | `/usr/share/wayland-sessions/jangada.desktop` | `install/40-interface.sh` | sessão no gerenciador de login |
 | `/etc/snapper/configs/root`, `/.snapshots` | `install/20-snapshots.sh`, `jangada-snapshot` | configuração do snapper e snapshots |

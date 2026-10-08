@@ -32,8 +32,8 @@ EOF
 cat >"$tmp/bin/tmux" <<'EOF'
 #!/usr/bin/env bash
 case " $* " in
-  *" has-session "*) exit 1 ;;
-  *" new-session "*) printf '%s\n' "$@" >"$FALSO_DIR/tmux.ambiente" ;;
+  *" has-session "*) [[ "${FALSO_TMUX_EXISTENTE:-0}" == 1 ]] ;;
+  *" new-session "*) [[ "${FALSO_TMUX_FALHAR:-0}" == 1 ]] && exit 1; printf '%s\n' "$@" >"$FALSO_DIR/tmux.ambiente" ;;
   *" send-keys "*) printf '%s' "${*: -2:1}" >"$FALSO_DIR/tmux.comando" ;;
 esac
 EOF
@@ -385,4 +385,24 @@ conferir "JSON inválido não altera o estado" [ "$(sha256sum "$tmp/state/jangad
 rm -f "$tmp/state/jangada/agentes/projeto--tarefa.json"
 hook inicio '{}'
 conferir "hook não recria sessão encerrada" test ! -e "$tmp/state/jangada/agentes/projeto--tarefa.json"
+mkdir -p "$tmp/pasta-falha" "$tmp/pasta-anexar"
+FALSO_TMUX_FALHAR=1 rodar "$repo_jangada/bin/jangada-agente" --agente codex \
+  --projeto "$tmp/pasta-falha" --direto >"$tmp/falha-sessao" 2>&1
+conferir "falha do tmux recusa lançamento" [ "$?" != 0 ]
+conferir "falha cancela a execução criada" python3 - "$tmp/state/jangada" <<'PY'
+from pathlib import Path
+import sqlite3
+import sys
+linhas = []
+for p in Path(sys.argv[1]).glob('agentes/projetos/*/tarefas.sqlite'):
+    with sqlite3.connect(p) as db:
+        linhas += db.execute("SELECT status FROM execucoes WHERE sessao='pasta-falha'").fetchall()
+assert linhas == [('CANCELLED',)], linhas
+PY
+printf '{"orcamento":{"chamadas":1}}\n' >"$tmp/politica.json"
+rodar "$repo_jangada/bin/jangada-projeto" --projeto "$tmp/pasta-anexar" \
+  cadastrar --politica "$tmp/politica.json" >/dev/null
+FALSO_TMUX_EXISTENTE=1 rodar "$repo_jangada/bin/jangada-agente" --agente codex \
+  --projeto "$tmp/pasta-anexar" --direto >"$tmp/anexar" 2>&1
+conferir "sessão existente reanexa sem conferir orçamento de nova sessão" [ "$?" = 0 ]
 ((falhas == 0))

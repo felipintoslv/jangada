@@ -47,6 +47,9 @@ def main():
     fim = comandos.add_parser('sessao-encerrar')
     fim.add_argument('nome')
     fim.add_argument('--integrada', action='store_true')
+    aborto = comandos.add_parser('sessao-abortar')
+    aborto.add_argument('nome')
+    aborto.add_argument('--execucao', required=True)
     args = parser.parse_args()
     raiz = Path(os.environ['JANGADA_ESTADO'])
     projeto = args.projeto.resolve()
@@ -92,6 +95,11 @@ def main():
                         VALUES(?,?,?,?,?,?,?,?,?)''', (identificador, args.nome, args.tarefa_id, args.atividade,
                         'execucao', args.executor, args.executor, time.time(), 'RUNNING'))
                     resultado = {'execucao': identificador}
+            elif args.acao == 'sessao-abortar':
+                with estado.transacao():
+                    estado.db.execute("UPDATE execucoes SET fim=?,status='CANCELLED' WHERE sessao=? AND id=? AND status='RUNNING'",
+                                      (time.time(), args.nome, args.execucao))
+                resultado = {'sessao': args.nome, 'execucao': args.execucao, 'status': 'CANCELLED'}
             elif args.acao == 'sessao-encerrar':
                 if os.environ.get('JANGADA_ISOLADO'):
                     raise ValueError('encerramento da sessão exige execução fora do isolamento')
