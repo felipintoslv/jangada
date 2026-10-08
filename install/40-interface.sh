@@ -21,6 +21,7 @@ if [[ ! -e "$JANGADA_CONFIG/waybar/style.css" ]]; then
 fi
 
 # Cores iniciais, até que um papel de parede seja escolhido com jangada-tema.
+copiar_se_ausente "$JANGADA_PATH/default/visual/padrao.json" "$JANGADA_CONFIG/fichas.json"
 if [[ ! -e "$JANGADA_CONFIG/hypr/cores.lua" ]]; then
   executar "$JANGADA_PATH/bin/jangada-tema" --cor "#4f8fba" || aviso "não foi possível gerar as cores iniciais"
 fi

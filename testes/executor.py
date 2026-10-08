@@ -521,6 +521,7 @@ class Execucao(unittest.TestCase):
 
     def test_cli_executa_plano_sem_interpretar_pedido(self):
         shutil.copytree(RAIZ / 'default/orquestracao', self.raiz / 'default/orquestracao')
+        shutil.copytree(RAIZ / 'default/nucleo', self.raiz / 'default/nucleo')
         plano = self.projeto / 'plano.json'
         plano.write_text(json.dumps([self.tarefa(pedido='$(touch invasao); --opcao')]), encoding='utf-8')
         ambiente = os.environ.copy()
@@ -537,6 +538,7 @@ class Execucao(unittest.TestCase):
 
     def test_cli_lista_revisao_e_revisa_em_lote(self):
         shutil.copytree(RAIZ / 'default/orquestracao', self.raiz / 'default/orquestracao')
+        shutil.copytree(RAIZ / 'default/nucleo', self.raiz / 'default/nucleo')
         plano = self.projeto / 'plano.json'
         plano.write_text(json.dumps([self.tarefa(), self.tarefa('T2'), self.tarefa('T3')]), encoding='utf-8')
         ambiente = os.environ.copy()
@@ -565,6 +567,7 @@ class Execucao(unittest.TestCase):
 
     def test_cli_paralelo_executa_tarefas_distintas_ao_mesmo_tempo(self):
         shutil.copytree(RAIZ / 'default/orquestracao', self.raiz / 'default/orquestracao')
+        shutil.copytree(RAIZ / 'default/nucleo', self.raiz / 'default/nucleo')
         shutil.copyfile(RAIZ / 'default/delegacao/roteamento.json', self.raiz / 'default/delegacao/roteamento.json')
         plano = self.projeto / 'plano.json'
         plano.write_text(json.dumps([self.tarefa(f'T{i}', permitir_remoto=True) for i in range(5)]), encoding='utf-8')
@@ -599,6 +602,7 @@ class Execucao(unittest.TestCase):
 
     def test_cli_paralelo_encerrado_interrompe_os_processos_filhos(self):
         shutil.copytree(RAIZ / 'default/orquestracao', self.raiz / 'default/orquestracao')
+        shutil.copytree(RAIZ / 'default/nucleo', self.raiz / 'default/nucleo')
         shutil.copyfile(RAIZ / 'default/delegacao/roteamento.json', self.raiz / 'default/delegacao/roteamento.json')
         plano = self.projeto / 'plano.json'
         plano.write_text(json.dumps([self.tarefa(f'T{i}', permitir_remoto=True) for i in range(4)]), encoding='utf-8')
@@ -629,6 +633,7 @@ class Execucao(unittest.TestCase):
 
     def test_cli_retomada_repassa_a_amostragem(self):
         shutil.copytree(RAIZ / 'default/orquestracao', self.raiz / 'default/orquestracao')
+        shutil.copytree(RAIZ / 'default/nucleo', self.raiz / 'default/nucleo')
         shutil.copyfile(RAIZ / 'default/delegacao/roteamento.json', self.raiz / 'default/delegacao/roteamento.json')
         plano = self.projeto / 'plano.json'
         plano.write_text(json.dumps([self.tarefa(intermediaria=True, amostragem=True)]), encoding='utf-8')
@@ -646,6 +651,7 @@ class Execucao(unittest.TestCase):
 
     def test_cli_paralelo_informa_falha_de_um_processo(self):
         shutil.copytree(RAIZ / 'default/orquestracao', self.raiz / 'default/orquestracao')
+        shutil.copytree(RAIZ / 'default/nucleo', self.raiz / 'default/nucleo')
         shutil.copyfile(RAIZ / 'default/delegacao/roteamento.json', self.raiz / 'default/delegacao/roteamento.json')
         (self.raiz / 'default/orquestracao/executor.py').write_text(
             (RAIZ / 'default/orquestracao/executor.py').read_text(encoding='utf-8')
@@ -667,6 +673,7 @@ class Execucao(unittest.TestCase):
 
     def test_cli_retomada_executa_com_provedor_verificado(self):
         shutil.copytree(RAIZ / 'default/orquestracao', self.raiz / 'default/orquestracao')
+        shutil.copytree(RAIZ / 'default/nucleo', self.raiz / 'default/nucleo')
         shutil.copyfile(RAIZ / 'default/delegacao/roteamento.json', self.raiz / 'default/delegacao/roteamento.json')
         plano = self.projeto / 'plano.json'
         plano.write_text(json.dumps([self.tarefa()]), encoding='utf-8')

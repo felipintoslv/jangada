@@ -34,3 +34,7 @@ output_path = "~/.config/jangada/ghostty/cores"
 [templates.sddm]
 input_path = "./modelos/sddm.conf"
 output_path = "~/.config/jangada/sddm/theme.conf.user"
+
+[templates.fichas]
+input_path = "./modelos/fichas.json"
+output_path = "~/.config/jangada/fichas.json"

@@ -81,6 +81,8 @@ diff <(cores_do_tema default/claude/skills/graficos/tema_dv.R) <(cores_do_tema d
   || falha "skill graficos: esperadas 5 tintas e 6 cores em tema_dv.R"
 
 passo "TOML"
+python3 testes/fichas.py || falha "fichas visuais"
+python3 testes/monitoramento.py || falha "monitoramento sob demanda"
 if python3 -c 'import tomllib' 2>/dev/null; then
   python3 -c 'import tomllib,sys; tomllib.load(open(sys.argv[1],"rb"))' default/matugen/config.toml || falha "matugen/config.toml"
 else
@@ -161,6 +163,7 @@ python3 testes/painel-local.py || falha "testes/painel-local.py"
 python3 testes/painel-orquestracao.py || falha "testes/painel-orquestracao.py"
 if command -v Rscript >/dev/null && Rscript -e 'quit(status = if (requireNamespace("arrow", quietly = TRUE) && requireNamespace("shiny", quietly = TRUE)) 0 else 1)' 2>/dev/null; then
   Rscript testes/painel-motores.R || falha "testes/painel-motores.R"
+  Rscript testes/painel-operacional.R || falha "testes/painel-operacional.R"
 fi
 testes/painel.sh || falha "testes/painel.sh"
 
@@ -172,6 +175,7 @@ python3 testes/avaliar-ollama.py || falha "testes/avaliar-ollama.py"
 python3 testes/extracao.py || falha "testes/extracao.py"
 python3 testes/orquestracao.py || falha "testes/orquestracao.py"
 python3 testes/executor.py || falha "testes/executor.py"
+python3 testes/operacional.py || falha "testes/operacional.py"
 python3 testes/supervisao.py || falha "testes/supervisao.py"
 python3 testes/acompanhamento.py || falha "testes/acompanhamento.py"
 python3 testes/deterministico.py || falha "testes/deterministico.py"

@@ -1,6 +1,6 @@
 # Progresso
 
-## Estado em 07/10/2026
+## Estado em 08/10/2026
 
 - Fase 1 (diagnóstico): concluída com ressalvas. Sete dos doze critérios
   do pedido estão parciais; ver a matriz abaixo.
@@ -8,9 +8,19 @@
   autorizou a Fase 3 em seguida.
 - Fase 3 (registro de provedores): concluída e aprovada pelo
   `jangada-validar` (Codex, rodada 4, forçada pelo usuário).
-- Fase 4: não iniciada; depende de autorização.
-- Ramo: `agente/tarefa-ab47cef8d325`, sobre `9dcb640`. Último commit de
-  código: `3018fb9`.
+- Fase 4: aprovada pelo `jangada-validar` em 08/10/2026, HEAD `0d43dce`.
+- Fases 5 a 7: concluídas e aprovadas pelo `jangada-validar`, HEAD `3bff4b9`.
+- Fases 4 a 7: autorizadas com autonomia em 08/10/2026.
+- Correções posteriores: aprovação da sessão em `4332014`, rodada 11,
+  Claude Sonnet. A revisão externa para integração não está comprovada aqui.
+- Sessão da Fase 3: ramo `agente/tarefa-ab47cef8d325`, sobre `9dcb640`.
+  HEAD da aprovação informado pelo usuário: `3018fb9`.
+
+O ramo e os commits acima identificam a sessão anterior. Nesta continuação,
+o ponto de partida foi `bd7b9fe`, que integra aquela entrega. O worktree
+`agente/revisao-final` incorporou `agente/tarefa-ddeff1c4d2f2` por
+`git merge --ff-only`, até `4332014`, sem integrar na base nem alterar
+a cópia instalada.
 
 ## Matriz dos doze critérios da Fase 1
 
@@ -50,7 +60,7 @@ sem avaliação.
 - Leitura de `testes/verificar.sh` e de `.github/workflows/verificar.yml`.
 - Leitura de `~/Downloads/desac.md`, fora do repositório.
 
-## Testes executados
+## Testes executados na Fase 1
 
 `testes/verificar.sh` rodou uma vez, de dentro da sessão isolada, sobre o
 código sem alteração:
@@ -60,11 +70,11 @@ código sem alteração:
   `testes/isolar.sh`. É limite do isolamento da sessão.
 - Nenhuma etapa foi ignorada por falta de ferramenta.
 
-O resultado vale para o código atual. Não diz nada sobre a proposta, que não
-tem código. Para fechar o caso pulado, rode `bash testes/verificar.sh` num
-terminal fora da sessão.
+O resultado vale para o código conferido na Fase 1. Não comprova as mudanças
+das fases seguintes. Para fechar o caso pulado, rode
+`bash testes/verificar.sh` num terminal fora da sessão.
 
-## O que não foi feito
+## O que não foi feito na Fase 1
 
 - `jangada-validar` não rodou: a fase proíbe commits e sem commit não há
   entrega para revisar.
@@ -117,12 +127,238 @@ Fica fora, com as listas próprias: fila (`estado.py:280`, `cli.py:131`),
 saúde (`saude.py`), destinos do `jangada-delegar` e o catálogo de reserva da
 Central (`janela.py:24`). Revisor novo ainda exige função `revisar_NOME`.
 
-Depois da entrega, o `jangada-agente` passou a parar com erro quando nenhum
-provedor tem a função `principal` (`3018fb9`). Antes abria a sessão sem o
-protocolo, sem aviso.
+A aprovação da Fase 3 pelo `jangada-validar` ocorreu em 07/10/2026, com
+HEAD em `3018fb9` (informação do usuário nesta continuação). O registro
+anterior identifica Codex, rodada 4, forçada pelo usuário.
+
+O commit `3018fb9` (`fix(provedores): jangada-agente para quando o registro
+vem vazio`) faz o lançador parar com erro quando nenhum provedor tem a função
+`principal`. Antes abria a sessão sem o protocolo, sem aviso. O commit e a
+recusa foram conferidos no histórico Git e em `bin/jangada-agente:45-50`.
+O histórico atual contém também alterações posteriores a esse HEAD; esta
+nota não estende a aprovação de `3018fb9` a elas.
 
 Não conferido: como a atualização leva `default/provedores/` à cópia
 instalada. Sem essa pasta o `jangada-agente` não abre sessão.
+
+## Fase 4
+
+O escopo foi apresentado e confirmado antes de alterar código. O usuário
+autorizou em 08/10/2026 todas as fases restantes com a mensagem: "Eu vou dormir
+e deixo autorizado fazer todas as etapas, com total autonomia". Autorizou
+também o uso de subagentes do Codex para análise. Três subagentes analisaram
+persistência, revisão e núcleo;
+não editaram arquivos nem revisaram a entrega. O agy foi tentado e recusado
+por `JANGADA_DELEGAR=local`; esse limite não foi alterado.
+
+Implementado:
+
+- Cadastro e política em `projeto.json`; reassociação preservando
+  especificações e hashes, com resolução transitória de caminhos.
+- Tabelas adicionais `atividades` e `execucoes`, sem migrar registros antigos.
+- Critérios, contexto e vínculos opcionais de tarefas e sessões.
+- Revisão identificada fora do isolamento, com hash e critérios; nomes
+  alternativos do Codex não permitem autoraprovação.
+- Orçamento de chamadas reservado entre conexões; consumo desconhecido e
+  teto de custo sem limite comprovável recusam execução de modelos.
+- Consulta conjunta em `default/nucleo/`, sem alterar banco ou arquivos
+  auxiliares na origem. Ações encaminhadas aos comandos existentes.
+- Modos manual, assistido e automático supervisionado, preservando os
+  perfis atuais da fila e a delegação local.
+
+Os 24 testes de `testes/operacional.py` passaram. Incluem WAL ativo,
+transação pendente, banco antigo, reassociação determinística, isolamento
+da revisão, orçamento concorrente e execução direta com provedor falso.
+A suíte `testes/verificar.sh` passou em 08/10/2026, código zero, em 196 s.
+A revisão técnica aprovou a fase em 08/10/2026, HEAD `0d43dce`, na segunda
+rodada desta entrega. O parecer é `validacao-jangada--tarefa-ddeff1c4d2f2-r3.md`.
+O revisor conferiu as sete respostas; declarou não ter executado testes.
+A suíte local foi executada nesta sessão. A integração de interfaces e
+recursos pertence às fases seguintes.
+
+## Fases 5 a 7
+
+Implementação autorizada pela mesma mensagem de 08/10/2026. As interfaces
+e a ligação ao núcleo foram desenvolvidas em conjunto, mantendo a separação
+entre consultas Shiny e ações Qt/terminal. A revisão técnica aprovou esta
+entrega em 08/10/2026, HEAD `3bff4b9`, na segunda rodada, com Claude Sonnet.
+O parecer é `validacao-jangada--tarefa-ddeff1c4d2f2-r5.md`; contém somente
+`STATUS: APROVADO`, sem declaração de testes executados pelo revisor.
+
+Implementado e conferido no código:
+
+- Paletas clara e escura no mesmo modelo matugen, validadas em Python e
+  consumidas pelas duas interfaces. Migração repetível e simulada preserva
+  personalizações. Inter entra na lista de pacotes, sem instalação nesta sessão.
+- Dez seções Shiny, filtros por identificador de projeto e detalhes com
+  critérios, dependências, execuções, revisões, eventos e hashes de artefatos.
+- Cadastro, atividades, importação e transições da fila na Central Qt,
+  sempre pelos comandos existentes. Identidades incluem tipo, projeto e ID.
+- Configuração pública com campos permitidos; cadastro separado de instalação
+  e observações de saúde. Ausências permanecem explícitas.
+- `nucleo.json` no coletor e vínculo opcional de execução nas validações.
+  A leitura legada também usa cópia SQLite/WAL; não grava auxiliares na origem.
+- CPU e memória por `/proc`, GPU por `nvidia-smi` quando disponível, e
+  listagem local de modelos por `/api/ps`. Sem redirecionamento ou geração.
+  Monitoramento só depois de autenticação, na aba ativa, a cada 5 s.
+
+Verificações observadas até aqui:
+
+- `testes/fichas.py`: cinco testes passaram, incluindo três PNGs sintéticos
+  e os dois esquemas, contraste, recuperação de JSON inválido e simulação.
+  A migração preserva o arquivo existente.
+- `testes/monitoramento.py`: quatro testes passaram, com `/proc` real, API
+  local sintética e comando `--json`. Falha e indisponibilidade não viram zero.
+- `testes/tarefas.py`: 64 testes passaram; seleção de T1 em dois projetos,
+  recusa de cancelamento, dados parciais, foco e modos incluídos.
+- `testes/painel-operacional.R` passou: filtros, cache intacto, sessão sem
+  token encerrada, primeira medida de CPU ausente e coleta suspensa fora da aba.
+- `testes/painel.sh` passou com o app real, autenticação e coleta; os
+  testes de indicadores e os 28 contratos operacionais também passaram.
+- `testes/verificar.sh` passou em 08/10/2026, código zero, em 206 s,
+  depois das correções e dos contratos adicionais pedidos na revisão.
+- A Central Qt foi aberta sem servidor gráfico nos dois modos, com quatro
+  tarefas sintéticas. As imagens foram inspecionadas; não foi uma sessão Hyprland.
+
+O primeiro parecer técnico desta entrega pediu revisão. Foram corrigidos
+o tratamento de paleta inválida, o filtro com estado ausente, a simulação
+do tema e o alinhamento da lista de pacotes. Os testes foram ampliados
+para catálogos com falha, configurações públicas inválidas, isolamento do
+Codex, comando de monitoramento e eventos da consulta.
+A alegação de sessão sem projeto não se confirmou: `consultar` cria um
+projeto transitório, conferido por um teste sem cadastro e sem gravação.
+A cópia da paleta foi mantida e documentada conforme a regra 3 de `AGENTS.md`.
+
+Não houve instalação, atualização da cópia instalada ou envio de commits.
+Na entrega anterior, os contratos usaram executores sintéticos, sem modelos
+remotos reais. A revisão independente usa o revisor configurado.
+As imagens de contraste são sintéticas, e a fonte de reserva é usada nesta
+máquina enquanto Inter não estiver instalada.
+
+## Testes finais adicionais em 08/10/2026
+
+O usuário autorizou testes em sessão Hyprland e execuções reais de modelos
+remotos. Foram feitas duas consultas com a mesma fonte sintética de quatro
+linhas. O contrato exigiu fatos numéricos e referências exatas em JSON,
+comparados deterministicamente com o gabarito; não aprova a implementação.
+
+- Claude: CLI real, alias `sonnet`; o retorno identificou `claude-sonnet-5-5`.
+  Código zero, 3,20 s, um turno, 83 tokens de saída. O contrato passou.
+  Entrada registrada: 2 tokens, 2.042 de criação de cache e 531 lidos do cache.
+- Codex: adaptador `jangada-codex --revisar`, com o modelo configurado
+  `gpt-6.1-sol` solicitado explicitamente. Código zero, 5,56 s, 11.157
+  tokens de entrada e 57 de saída. O contrato passou.
+
+Ferramentas foram desativadas. As execuções usaram montagens que permitem
+gravar apenas na pasta temporária do teste, com autenticação somente para
+leitura. Não houve login, alteração de configuração externa ou chave de API.
+A primeira tentativa do Codex falhou na inicialização porque seus dados
+estavam somente para leitura. A repetição montou dados próprios do teste,
+preservando `CODEX_HOME`. O retorno avisou que o modo de código estava
+desativado; a resposta sem ferramentas e o consumo foram recebidos.
+Esses testes conferem geração e formato, não o ciclo completo de sessão,
+fila, revisão e integração com executores reais.
+
+Hyprland instalado: 0.56.2. `testes/aninhado.sh --sem-usuario` retornou
+"pulado", pois esta sessão isolada não tem `WAYLAND_DISPLAY` nem soquete
+Wayland visível. Essa execução não conta como aprovação do teste gráfico.
+
+Depois, o usuário executou o mesmo comando em um terminal comum e
+forneceu a saída: "sem erros de configuração", "65 atalhos registrados"
+e "configuração carregada sem erros no Hyprland aninhado". O resultado
+foi informado pelo usuário, não executado por esta sessão isolada.
+O teste aninhado exclui a inicialização que alteraria o ambiente da
+sessão e não testa DRM ou escolha de GPU.
+
+As capturas `Imagem colada (4).png` e `Imagem colada (5).png`, fornecidas
+pelo usuário em `~/Downloads`, foram abertas e inspecionadas nesta sessão.
+Mostram a Central no cenário 4 da simulação, nos modos escuro e claro,
+com logo, abas, seleção e foco visíveis. Alguns textos da lista ficam
+truncados. Isso confere a apresentação mostrada; não comprova todas as
+ações, a aba Projetos e fila ou o painel Shiny na sessão gráfica.
+As imagens não foram copiadas para o repositório.
+
+A suíte `testes/verificar.sh` passou novamente, código zero, em 207 s,
+depois desses testes adicionais e do registro documental.
+Após registrar o resultado gráfico fornecido pelo usuário e as capturas,
+a suíte passou outra vez, código zero, em 209 s.
+
+## Revisão externa da integração
+
+A tentativa de integração fornecida pelo usuário recebeu `REVISAR`, rodada
+2 de 3, para o conjunto desde `main`. O diff de 255.082 bytes foi cortado
+em 150.000; o revisor declarou não ter lido todos os arquivos. Os pareceres
+anteriores aprovam suas entregas parciais, não substituem essa revisão externa.
+
+Resposta aos quatro apontamentos:
+
+1. Corrigido o desfazimento da expiração por recusa de orçamento. `reservar`
+   registra a tarefa impedida em `WAITING_QUOTA` e continua a seleção.
+   Consumo de reserva expirada permanece desconhecido, com orientação para
+   aguardar o fim da janela do orçamento. Não é convertido em zero.
+   O teste com orçamento confere expiração persistida, outra tarefa
+   determinística reservada, cadastro recusado na janela e retomada depois dela.
+2. O lançador mantém a causa do backend e orienta conferir política e
+   orçamento, usando a fila controlada. O teste confere a recusa e a mensagem.
+3. Mantida a simulação integral do tema. `install/40-interface.sh` chama
+   o tema por `executar`, que já não o executa na instalação simulada.
+   Nenhuma dependência de execução real foi identificada nos testes;
+   `test_tema_simulado_nao_grava_nem_recarrega` confere ausência de gravações.
+4. Reforçado `test_consulta_com_wal_ativo_nao_escreve_na_origem`: o banco
+   aberto com `immutable=1` não contém a tarefa confirmada, que está no WAL.
+   O teste confere ausência de SHM na cópia antes da conexão, leitura da
+   tarefa confirmada, exclusão da alteração pendente e origem intacta.
+
+Os 29 contratos de `testes/operacional.py` passaram. `testes/codex.sh`
+também passou, incluindo as duas verificações da mensagem de recusa.
+A suíte completa `testes/verificar.sh` passou, código zero, em 209 s,
+após as correções do parecer externo.
+A revisão externa do commit atualizado continua necessária antes da mescla.
+
+O usuário forneceu depois `validacao-tarefa-ddeff1c4d2f2-r1.md`, com
+cinco novos apontamentos. Foram tratados assim:
+
+1. Projetos sem caminho ficam somente para consulta na Central. Os botões
+   de tarefas, atividades e importação recusam ações; o cadastro de outra
+   pasta permanece disponível porque não usa o projeto selecionado.
+   Argumentos inválidos mostram mensagem
+   no estado da janela, sem exceção escapando do método chamado pelo Qt.
+2. Atualizada a descrição da ligação do painel e da Central ao núcleo em
+   `docs/subagentes-e-delegacao.md`.
+3. `sessao-conferir` consulta o estado sem criar cadastro ou banco.
+   A política vazia permite executor sem cadastro; vínculos ausentes são
+   recusados. A mesma regra de provedor é usada na consulta e na escrita.
+   Os testes conferem arquivos e datas intactos tanto na permissão quanto
+   na recusa de fila antiga ou de projeto com política.
+4. A Central usa `consultar --todos --sem-catalogos`. Os catálogos
+   continuam disponíveis na consulta completa usada pelo painel.
+   Cada evento reinicia a espera de 200 ms, com limite de adiamento de 1 s;
+   a consulta periódica de 30 s continua como reserva. Os testes conferem
+   agrupamento, atualização durante fluxo contínuo de eventos e
+   consulta independente dos executáveis dos catálogos.
+5. A reserva principal aplica a exceção de orçamento para `validacao_json`
+   e foi exercitada com limite de zero chamadas. A alteração de supervisão
+   foi retirada: tarefas determinísticas já são inelegíveis e recusadas
+   antes desse ponto. O teste confere essa recusa, sem habilitar esse fluxo.
+
+Passaram 33 contratos operacionais e 66 testes da Central com esses cenários.
+A suíte completa passou, código zero, em 207 s após essas correções.
+
+A revisão local pediu cadastro independente da seleção, retirada da exceção
+inalcançável de supervisão e limite de adiamento durante eventos contínuos.
+Os três ajustes estão no commit `2561cf4`. Passaram 33 contratos operacionais
+e 67 testes da Central, incluindo eventos a cada 40 ms. A suíte completa
+passou novamente, código zero, em 209 s. A aprovação desta correção veio
+na rodada 11 da sessão, em `4332014`. O parecer
+`agentes/validacao-jangada--tarefa-ddeff1c4d2f2-r11.md` registra
+`STATUS: APROVADO`; a marca `.aprovado` identifica o mesmo commit e a árvore
+`92af64e26b5989aa8dd6a7d28fd66290da98537d`, conferidos no Git. O ponto
+inicial desse parecer é `51bf310`, segundo a marca: a aprovação cobre
+as correções posteriores, sem comprovar revisão integral desde `main`.
+Esses registros são graváveis pela sessão. A aprovação externa para
+integração, em `revisoes/`, não foi conferida neste worktree.
+A revisão manual externa deve informar `JANGADA_SESSAO` com o identificador
+completo, para usar o mesmo rótulo e a mesma marca procurada pela integração.
 
 ## Como continuar
 
@@ -142,9 +378,13 @@ Uma sessão nova não tem a conversa anterior. O que ela precisa está aqui:
    - O executor não aprova o próprio resultado.
    - A interface não contorna regras do backend.
    - Sem ranking arbitrário de modelos e sem entidades redundantes.
-3. Fases que faltam: 4 (modelo operacional de projetos, tarefas e
-   revisões), 5 (reformulação visual), 6 (integração e monitoramento) e
-   7 (testes e validação). O desenho está em `02-arquitetura.md` e
-   `04-interface.md`.
+3. As entregas anteriores das Fases 4 a 7 receberam aprovações em
+   `0d43dce` e `3bff4b9`. Correções posteriores receberam aprovação
+   incremental na sessão em `4332014`, conforme os registros acima.
+   O parecer externo r3, fornecido pelo usuário, registra `REVISAR`
+   com três apontamentos. A aprovação externa do conjunto atualizado
+   continua necessária antes da integração. Os limites dos testes e
+   as ressalvas históricas da Fase 1 continuam registrados acima.
+   O desenho está em `02-arquitetura.md` e `04-interface.md`.
 4. Para fechar o caso pulado, rode `bash testes/verificar.sh` num terminal
    fora da sessão.

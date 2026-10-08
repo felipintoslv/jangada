@@ -75,7 +75,7 @@ shiny::testServer(hoje_server, args = list(dados = shiny::reactive(d_hoje)), {
 })
 aplicacao <- shiny::shinyAppDir("default/painel")
 html <- as.character(environment(aplicacao$serverFuncSource())$ui)
-stopifnot(grepl('class="active">\\s*<a[^>]*data-value="Hoje"', html),
+stopifnot(grepl('class="active">\\s*<a[^>]*data-value="Visão Geral"', html),
           grepl("Esta fila reúne tarefas planejadas", html),
           grepl("Provedores são os serviços ou executores", html))
 shiny::testServer(aplicacao, {
@@ -87,8 +87,9 @@ shiny::testServer(aplicacao, {
             vazio_escuro$font$color == aparencia()$texto)
   session$setInputs(modo = "light")
   claro <- jsonlite::fromJSON(output$b_motores_dia, simplifyVector = FALSE)
-  stopifnot(claro$x$layout$paper_bgcolor == "#FFFFFF",
-            claro$x$layout$font$color == "#1A1A1A",
+  stopifnot(claro$x$layout$paper_bgcolor == aparencia()$fundo,
+            claro$x$layout$font$color == aparencia()$texto,
+            claro$x$layout$paper_bgcolor != escuro$x$layout$paper_bgcolor,
             claro$x$data[[1]]$marker$color != escuro$x$data[[1]]$marker$color)
   rede <- list(nos = data.frame(id = 1:2, label = c("Leitura", "Teste"), group = c("leitura e busca", "teste")),
                arestas = data.frame(from = 1L, to = 2L))
@@ -98,7 +99,7 @@ shiny::testServer(aplicacao, {
   session$setInputs(modo = "dark")
   rede_escura <- grafo(rede)$x
   stopifnot(rede_escura$options$nodes$font$color == aparencia()$texto,
-            rede_clara$options$nodes$font$color == "#1A1A1A",
+            rede_clara$options$nodes$font$color == claro$x$layout$font$color,
             rede_escura$options$edges$color$color == "#999999",
             rede_escura$options$edges$color$color != aparencia()$grade,
             rede_escura$options$edges$color$color != rede_clara$options$edges$color$color)

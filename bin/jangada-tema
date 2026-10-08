@@ -11,6 +11,13 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 # shellcheck source=bin/jangada-interface-processos
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-interface-processos"
+# shellcheck source=install/lib.sh
+source "$JANGADA_PATH/install/lib.sh"
+
+if simulando; then
+  executar "$0" "$@"
+  exit 0
+fi
 
 matugen_cfg="$JANGADA_PATH/default/matugen/config.toml"
 conf_usuario="$JANGADA_CONFIG/jangada.conf"
@@ -212,7 +219,10 @@ case "${1:-}" in
     aplicar_papel
     ;;
   --cor)
+    # A regra 3 preserva também ajustes manuais antes de regenerar o arquivo.
+    copia_seguranca "$JANGADA_CONFIG/fichas.json"
     matugen color hex "${2:?informe a cor, ex.: #4f8fba}" -c "$matugen_cfg" -m dark -t "$JANGADA_TEMA_ESQUEMA"
+    python3 "$JANGADA_PATH/default/visual/fichas.py" "$JANGADA_CONFIG/fichas.json"
     # Sem imagem, o matugen escreve "path = Null" no hyprlock.conf; o hyprlock
     # tentaria abrir um arquivo chamado Null. Sem a linha, ele usa a cor.
     sed -i '/^[[:space:]]*path = Null$/d' "$JANGADA_CONFIG/hyprlock/hyprlock.conf" 2>/dev/null || true
@@ -235,7 +245,9 @@ case "${1:-}" in
     # o "prefer" do config.toml. O índice 0 é só a primeira da lista do
     # matugen: no cordel era o preto azulado do fundo, e as bordas saíam num
     # azul que não existe na imagem.
+    copia_seguranca "$JANGADA_CONFIG/fichas.json"
     matugen image "$img" -c "$matugen_cfg" -m dark -t "$JANGADA_TEMA_ESQUEMA"
+    python3 "$JANGADA_PATH/default/visual/fichas.py" "$JANGADA_CONFIG/fichas.json"
     salvar_papel "$img"
     aplicar_papel "$img"
     recarregar

@@ -17,4 +17,9 @@ Os números 05 a 08 estão reservados para as fases seguintes e ainda não
 existem.
 
 Situação: Fase 3 entregue (registro de provedores; ver `10-progresso.md` e
-`docs/provedores.md`). A Fase 4 não foi iniciada.
+`docs/provedores.md`). As entregas anteriores da Fase 4 e das Fases 5 a 7
+receberam aprovações em `0d43dce` e `3bff4b9`, respectivamente. Correções
+posteriores receberam aprovação incremental na sessão em `4332014`.
+O parecer externo r3 fornecido pelo usuário registra `REVISAR`; a integração
+ainda exige aprovação externa do conjunto atualizado. Evidências e limites
+em `10-progresso.md`.

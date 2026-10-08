@@ -29,6 +29,7 @@ class Economico(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.pasta = pathlib.Path(self.tmp.name)
         self.raiz = self.pasta / 'jangada'
+        shutil.copytree(RAIZ / 'default/nucleo', self.raiz / 'default/nucleo')
         for nome in ('bin', 'default/delegacao', 'default/orquestracao'):
             (self.raiz / nome).mkdir(parents=True)
         for nome in ('bin/jangada-config', 'bin/jangada-delegar', 'default/delegacao/validar.py',
@@ -37,7 +38,8 @@ class Economico(unittest.TestCase):
                      'default/orquestracao/estado.py', 'default/orquestracao/executor.py',
                      'default/orquestracao/saude.py', 'default/orquestracao/acompanhamento.py',
                      'default/orquestracao/deterministico.py', 'default/orquestracao/metricas_projeto.py',
-                     'default/orquestracao/supervisao.py', 'default/orquestracao/principal.py'):
+                     'default/orquestracao/supervisao.py', 'default/orquestracao/principal.py',
+                     'default/orquestracao/projetos.py'):
             shutil.copy2(RAIZ / nome, self.raiz / nome)
         self.audit = self.pasta / 'execucao.json'
         self.fonte = self.pasta / 'fonte.md'

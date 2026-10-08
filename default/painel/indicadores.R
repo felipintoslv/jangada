@@ -58,7 +58,7 @@ carregar_cache <- function(cache) {
       rodada = integer(), resultado = character(), etapa = character(), revisor = character(),
       modelo = character(), autor = character(), arquivos = integer(), mais = integer(),
       menos = integer(), itens = integer(), segundos = integer(), entrega = character(),
-      origem = character())),
+      origem = character(), execucao = character())),
     mensagens_dias = ler("mensagens-dias.parquet", data.frame(
       dia = character(), projeto = character(), modelo = character(), respostas = numeric(),
       entrada = numeric(), saida = numeric(), cache_criado = numeric(), cache_lido = numeric(),
@@ -96,6 +96,12 @@ carregar_cache <- function(cache) {
     fontes = tryCatch(jsonlite::read_json(file.path(cache, "cobertura.json")), error = function(e) list()),
     coleta = tryCatch(jsonlite::read_json(file.path(cache, "coleta.json")), error = function(e) list()),
     subagentes = tryCatch(suppressWarnings(jsonlite::read_json(file.path(cache, "subagentes.json"))), error = function(e) list()),
+    nucleo = tryCatch({
+      n <- suppressWarnings(jsonlite::read_json(file.path(cache, "nucleo.json")))
+      campos <- c("projetos", "atividades", "tarefas", "sessoes", "execucoes", "revisoes", "eventos", "erros")
+      if (!is.list(n) || any(!vapply(campos, function(c) is.list(n[[c]]), logical(1)))) stop("cache do núcleo inválido")
+      n
+    }, error = function(e) list(erros = "núcleo indisponível; atualize a coleta")),
     orquestracao = tryCatch(suppressWarnings(jsonlite::read_json(file.path(cache, "orquestracao.json"))),
                           error = function(e) list(erros = "atualize a coleta para carregar a orquestração"))
   )

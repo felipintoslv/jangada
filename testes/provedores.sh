@@ -80,6 +80,35 @@ conferir "o catálogo de agentes principais vem do registro" \
   jq -e '[.principais[].nome] == ["claude", "codex", "novo"]
     and (.principais[] | select(.nome == "novo") | .instalado) == true' "$tmp/cap.json" >/dev/null
 
+mkdir -p "$tmp/config/jangada/agentes"
+printf 'COMANDO=%s/codex\nJANGADA_AGENTE_ISOLAR=0\nJANGADA_DELEGAR=local\n' "$tmp" \
+  >"$tmp/config/jangada/agentes/codex-isolado.conf"
+"$repo_jangada/bin/jangada-agente" --capacidades-json >"$tmp/perfis.json"
+conferir "Codex com caminho absoluto continua isolado no catálogo público" \
+  jq -e '.perfis[] | select(.nome == "codex-isolado") | .executor == "codex" and .permissoes.isolado == true' \
+  "$tmp/perfis.json" >/dev/null
+
+cat >"$tmp/config/jangada/jangada.conf" <<'CONF'
+JANGADA_INTERFACE=invalida
+JANGADA_AGENTE=desconhecido
+JANGADA_DELEGAR=externo
+JANGADA_VALIDAR_REVISOR=desconhecido
+JANGADA_TEMA_ESQUEMA=esquema-invalido
+JANGADA_PAINEL_PORTA=99999
+JANGADA_AGENTE_ARGS=segredo-sintetico
+CONF
+"$repo_jangada/bin/jangada-config" --publico-json >"$tmp/publico.json"
+conferir "valores públicos inválidos viram null" \
+  jq -e '.valores | length == 6 and all(.[]; .valor == null)' "$tmp/publico.json" >/dev/null
+conferir "argumentos livres não aparecem na configuração pública" \
+  bash -c '! grep -q segredo-sintetico "$1"' _ "$tmp/publico.json"
+printf 'JANGADA_INTERFACE=noctalia\nJANGADA_PAINEL_PORTA=65535\n' >"$tmp/config/jangada/jangada.conf"
+"$repo_jangada/bin/jangada-config" --publico-json >"$tmp/publico.json"
+conferir "interface e porta válidas permanecem públicas" \
+  jq -e '(.valores | map({key:.chave, value:.valor}) | from_entries)
+    | .JANGADA_INTERFACE == "noctalia" and .JANGADA_PAINEL_PORTA == "65535"' "$tmp/publico.json" >/dev/null
+rm "$tmp/config/jangada/jangada.conf"
+
 mkdir -p "$tmp/vazio"
 if XDG_CONFIG_HOME="$tmp/vazio" JANGADA_PATH="$tmp/vazio" "$repo_jangada/bin/jangada-agente" --capacidades-json >"$tmp/vazio.out" 2>"$tmp/vazio.err"; then
   falha "registro vazio foi aceito pelo jangada-agente"

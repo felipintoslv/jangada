@@ -351,9 +351,12 @@ jangada_anexar_linha() {
 }
 
 jangada_registrar_evento() {
-  local linha
+  local linha execucao
+  execucao="$(jq -r '.execucao // ""' "$JANGADA_ESTADO/agentes/$1.json" 2>/dev/null || true)"
+  [[ "$execucao" =~ ^exe-[0-9a-f]{16}$ ]] || execucao=""
   linha="$(jq -cn --arg d "$(jangada_data_iso)" --arg s "$1" --arg p "$2" --arg a "$3" --arg e "$4" \
-    --arg x "${5:-}" '{data: $d, sessao: $s, projeto: $p, agente: $a, estado: $e}
+    --arg execucao "$execucao" --arg x "${5:-}" '{data: $d, sessao: $s, projeto: $p, agente: $a, estado: $e,
+      execucao: (if $execucao == "" then null else $execucao end)}
       + (($x | fromjson? | objects) // {})' 2>/dev/null)" || return 0
   [[ -n "$linha" ]] || return 0
   jangada_anexar_linha "$JANGADA_ESTADO/eventos-agentes.jsonl" "$linha" || true
@@ -561,6 +564,40 @@ jangada_focar_classe() {
 JANGADA_TMUX=(tmux -L jangada -f "$JANGADA_PATH/default/tmux/agentes.conf")
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  if [[ "${1:-}" == --publico-json ]]; then
+    for _v in JANGADA_INTERFACE JANGADA_AGENTE JANGADA_DELEGAR JANGADA_VALIDAR_REVISOR \
+      JANGADA_TEMA_ESQUEMA JANGADA_PAINEL_PORTA; do
+      _valor="${!_v}"; _valido=0
+      case "$_v:$_valor" in
+        JANGADA_INTERFACE:componentes|JANGADA_INTERFACE:noctalia) _valido=1 ;;
+        JANGADA_DELEGAR:agy|JANGADA_DELEGAR:local|JANGADA_DELEGAR:claude|JANGADA_DELEGAR:nativo) _valido=1 ;;
+        JANGADA_VALIDAR_REVISOR:mesmo|JANGADA_VALIDAR_REVISOR:oposto|JANGADA_VALIDAR_REVISOR:) _valido=1 ;;
+        JANGADA_AGENTE:*|JANGADA_VALIDAR_REVISOR:*) jangada_provedor "$_valor" && _valido=1 ;;
+        JANGADA_TEMA_ESQUEMA:*)
+          [[ "$_valor" =~ ^scheme-(content|expressive|fidelity|fruit-salad|monochrome|neutral|rainbow|tonal-spot|vibrant|smart)$ ]] && _valido=1 ;;
+        JANGADA_PAINEL_PORTA:*)
+          [[ "$_valor" =~ ^[0-9]{1,5}$ ]] && ((10#$_valor >= 1 && 10#$_valor <= 65535)) && _valido=1 ;;
+      esac
+      if ((_valido)); then
+        jq -nc --arg chave "$_v" --arg valor "${!_v}" '{chave:$chave, valor:$valor}'
+      else
+        jq -nc --arg chave "$_v" '{chave:$chave, valor:null}'
+      fi
+    done | jq -s --arg arquivo "$JANGADA_CONFIG/jangada.conf" '{arquivo:$arquivo, valores:.}'
+    exit 0
+  fi
+  if [[ "${1:-}" == --provedores-json ]]; then
+    while read -r _n; do
+      jangada_provedor "$_n" || continue
+      jq -nc --arg id "$_n" --arg nome "$PROVEDOR_NOME" --arg tipo "$PROVEDOR_TIPO" \
+        --arg funcoes "$PROVEDOR_FUNCOES" --arg modelo "$PROVEDOR_MODELO_REVISOR" \
+        --argjson instalado "$(command -v "$PROVEDOR_COMANDO" >/dev/null 2>&1 && echo true || echo false)" \
+        --arg protocolo "$PROVEDOR_PROTOCOLO_ARG" \
+        '{id:$id, nome:$nome, tipo:$tipo, instalado:$instalado, funcoes:($funcoes | split(" ") | map(select(. != ""))),
+          modelo_revisor:(if $modelo == "" then null else $modelo end), protocolo_arg:$protocolo}'
+    done < <(jangada_provedores "") | jq -s .
+    exit 0
+  fi
   for _v in JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_INTERFACE JANGADA_TERMINAL \
     JANGADA_AGENTE JANGADA_AGENTE_ARGS JANGADA_VALIDAR_REVISOR JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL \
     JANGADA_PAPEL_AJUSTE JANGADA_TEMA_ESQUEMA JANGADA_BARRA_POSICAO JANGADA_GPU \

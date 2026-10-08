@@ -5,6 +5,9 @@
 set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+if [[ "${1:-}" == --json ]]; then
+  exec python3 "$JANGADA_PATH/default/nucleo/monitoramento.py"
+fi
 
 mon="htop"
 if command -v btop >/dev/null 2>&1; then

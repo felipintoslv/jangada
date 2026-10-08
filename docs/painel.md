@@ -2,7 +2,8 @@
 
 O `jangada-painel` junta os registros dos agentes num cache e serve um app
 Shiny em `127.0.0.1:8765` (`JANGADA_PAINEL_PORTA`). São três peças, e cada
-uma só conversa com a seguinte pelo cache em `~/.local/state/jangada/painel`:
+uma usa o cache em `~/.local/state/jangada/painel`. O monitoramento de
+recursos consulta fontes locais apenas enquanto sua aba estiver ativa:
 
 ```mermaid
 flowchart LR
@@ -17,11 +18,15 @@ indicadores", e os campos de cada registro em [registros](registros.md).
 
 ## Fila, provedores e autonomia
 
-O painel abre em **Revisão e síntese**. A aba **Fila e provedores** acompanha
-a execução automática de tarefas planejadas, separada das sessões da Central
-de Tarefas. Ela lê `orquestracao.json`, produzido pelo coletor.
-Os bancos SQLite da fila e dos provedores são abertos em modo somente de
-leitura. A coleta não cria filas, inicia tarefas ou consulta serviços.
+O painel abre em **Visão Geral** e tem dez seções da evolução 2.0.
+**Central de Atividades** reúne fila e sessões a partir de `nucleo.json`.
+Filtros operacionais usam identificador de projeto, estado, agente e data.
+Detalhes mostram critérios, dependências, execuções, eventos e hashes.
+**Indicadores** conserva as análises anteriores, incluindo **Fila e provedores**,
+que lê `orquestracao.json`, produzido pelo coletor.
+Os bancos SQLite são consultados sobre cópias estáveis com o WAL. A leitura
+não grava banco ou arquivos auxiliares na origem, mesmo com escritor ativo.
+A coleta não cria filas, inicia tarefas ou consulta serviços de modelos.
 Uma dependência ainda não concluída aparece como bloqueio da tarefa na fila.
 Sem tarefas, a tela explica a ausência de cadastro ou de resultados no filtro
 de projeto. Sem observações de provedores, informa que a disponibilidade
@@ -52,10 +57,10 @@ destino, no resumo e na tabela de relatórios sem fonte.
 Os gráficos acompanham o seletor claro/escuro do painel. Fundo, textos,
 eixos, grades, dicas e cores das séries mudam ao alternar o modo, sem
 recarregar a página. No escuro, o fundo e o texto seguem a paleta do matugen;
-no claro, usam branco e texto escuro. As redes também adaptam rótulos,
-arestas e legendas ao modo selecionado. A variante escura tem contraste mínimo
-de 6,07:1 sobre o fundo padrão `#141311`, conferido com
-`colorspace::contrast_ratio`; outros fundos do matugen podem mudar esse valor.
+no claro, usam as fichas claras da mesma imagem. As redes também adaptam
+rótulos, arestas e legendas ao modo selecionado. As fichas compartilhadas
+têm verificação de contraste e reserva em `default/visual/`; os testes
+medem texto e estados em três imagens sintéticas, nos dois modos.
 A separação das cores sob simulação de daltonismo não foi validada.
 A evolução diária usa
 linhas, preserva lacunas sem medida e passa a pequenos múltiplos acima de

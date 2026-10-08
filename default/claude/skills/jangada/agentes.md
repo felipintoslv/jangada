@@ -1,5 +1,13 @@
 # Camada de agentes
 
+## Consulta da fila
+
+SQLite em `mode=ro` ainda pode criar arquivos WAL/SHM na origem.
+O núcleo consulta uma cópia temporária estável do banco e do WAL.
+Não omita o WAL: ele pode conter transações confirmadas que ainda não
+chegaram ao banco principal. Mudanças durante a cópia exigem nova tentativa
+ou erro explícito, sem apresentar uma consulta incompleta como sucesso.
+
 ## Codex
 
 O `account/rateLimits/read` separa limites por grupo de consumo. Para a cota
@@ -121,6 +129,17 @@ conferência de processo zumbi e o prazo; outros erros continuam sendo falhas.
 | `jangada-consumo` | tokens do Claude no bloco de 5 horas, lidos de `~/.claude/projects` |
 | `jangada-painel` | indicadores num app Shiny em 127.0.0.1; `default/painel/coletor.py` grava o cache em Parquet (`~/.local/state/jangada/painel`), `default/painel/app.R` só lê o cache |
 | `jangada-gancho` | roda os ganchos do usuário em `~/.config/jangada/ganchos/` |
+
+## Revisão incremental e integração
+
+Uma aprovação anterior pode mover o início do diff para o commit aprovado,
+mesmo com `--base main`. Confira a quantidade de arquivos anunciada:
+aprovar as correções não comprova que o revisor leu toda a entrega acumulada.
+
+Na revisão manual fora do isolamento, use `JANGADA_SESSAO` com o nome
+completo registrado da sessão. Sem ele, o rótulo vem do nome da pasta;
+a marca recebe outro nome e não é a que `jangada-agente-fim` procura.
+Isso não dispensa as conferências de commit, árvore, base e independência.
 
 ## Isolamento (`jangada-isolar`)
 

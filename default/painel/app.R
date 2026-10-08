@@ -9,43 +9,50 @@ library(bslib)
 pasta_app <- getwd()
 source(file.path(pasta_app, "indicadores.R"), local = TRUE)
 source(file.path(pasta_app, "hoje.R"), local = TRUE)
+source(file.path(pasta_app, "operacional.R"), local = TRUE)
 
 estado <- file.path(Sys.getenv("XDG_STATE_HOME", file.path(Sys.getenv("HOME"), ".local/state")), "jangada")
 cache <- getOption("jangada.painel.cache", file.path(estado, "painel"))
 chave <- getOption("jangada.painel.chave", file.path(estado, "painel-chave", "token"))
 
-# Cores do matugen, as mesmas da barra. O arquivo traz a paleta escura; no
-# modo claro, a cor de destaque é a do texto sobre a primária.
-cores <- local({
-  padrao <- c(superficie = "#141311", texto = "#e6e2de", texto_suave = "#cdc6ba",
-              primaria = "#e6d9be", texto_primario = "#37301d", atencao = "#dbd8e9")
-  arq <- file.path(Sys.getenv("XDG_CONFIG_HOME", file.path(Sys.getenv("HOME"), ".config")),
-                   "jangada/waybar/cores.css")
-  if (file.exists(arq)) {
-    l <- regmatches(readLines(arq, warn = FALSE),
-                    regexec("^@define-color ([a-z_]+) (#[0-9a-fA-F]{6})", readLines(arq, warn = FALSE)))
-    for (x in l) if (length(x) == 3) padrao[x[2]] <- x[3]
-  }
-  padrao
-})
+source(file.path(pasta_app, "fichas.R"), local = TRUE)
+fichas <- carregar_fichas()
+cores <- unlist(fichas$dark)
+
+regras_fichas <- function(modo) {
+  c <- fichas[[modo]]
+  sprintf("[data-bs-theme=%s] {
+    --bs-body-bg: %s; --bs-body-color: %s; --bs-secondary-color: %s;
+    --bs-primary: %s; --bs-primary-rgb: %s; --bs-link-color: %s;
+    --bs-tertiary-bg: %s; --bs-emphasis-color: %s;
+    --bs-border-color: %s; --jangada-elevada: %s; }
+    [data-bs-theme=%s] .card { background-color: var(--jangada-elevada); }
+    [data-bs-theme=%s] .nav-link.active { background: %s; color: %s; }",
+    modo, c$superficie, c$texto, c$texto_suave, c$primaria,
+    paste(grDevices::col2rgb(c$primaria), collapse = ","), c$primaria,
+    c$superficie_elevada, c$texto, c$texto_suave, c$superficie_elevada,
+    modo, modo, c$primaria, c$texto_primario)
+}
 
 tema <- bs_theme(
-  version = 5, primary = cores[["texto_primario"]],
+  version = 5, primary = fichas$light$primaria,
   base_font = font_collection("Inter", "system-ui", "sans-serif"),
   code_font = font_collection("JetBrains Mono", "monospace")
 ) |>
-  bs_add_rules(sprintf("
-    [data-bs-theme=dark] {
-      --bs-body-bg: %s; --bs-body-color: %s; --bs-secondary-color: %s;
-      --bs-primary: %s; --bs-primary-rgb: %s; --bs-link-color: %s;
-    }
-    .aviso-pouco { color: var(--bs-warning); font-weight: 600; }
-    .cobertura { font-size: .8rem; color: var(--bs-secondary-color); }
-    .bslib-value-box .value-box-title { font-size: .85rem; }
+  bs_add_rules(paste(regras_fichas("dark"), regras_fichas("light"), "
+    body { font-size: 14px; }
+    .card { border-radius: 8px; }
+    pre, code { font-family: 'JetBrains Mono', monospace; }
+    :focus-visible { outline: 3px solid var(--bs-primary); outline-offset: 4px; }
+    .aviso-pouco { color: var(--bs-body-color); font-weight: 600; }
+    .cobertura { font-size: 13px; color: var(--bs-secondary-color); }
+    .bslib-value-box .value-box-title { font-size: 14px; }
     .bslib-value-box.default .value-box-showcase > svg.bi { fill: var(--bs-primary) !important; }
-    .dataTables_wrapper { font-size: .85rem; }",
-    cores[["superficie"]], cores[["texto"]], cores[["texto_suave"]], cores[["primaria"]],
-    paste(grDevices::col2rgb(cores[["primaria"]]), collapse = ","), cores[["primaria"]]))
+    .dataTables_wrapper { font-size: 14px; }
+    .marca-jangada { width: 24px; height: 24px; fill: currentColor; margin-right: 8px; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }"))
 
 paleta_clara <- c(claude = "#0072B2", codex = "#D55E00", ollama = "#009E73",
                   agy = "#AA4499", deterministico = "#B8860B", desconhecido = "#3C93C2")
@@ -54,12 +61,13 @@ paleta_escura <- c(claude = "#56B4E9", codex = "#E69F00", ollama = "#5DD39E",
 
 # Paginação e contagem só quando a tabela passa de uma página. Sem dado, uma
 # coluna vazia leva o aviso "sem dado".
-tabela <- function(d, ...) {
+tabela <- function(d, busca = FALSE, ...) {
   if (!ncol(d)) d <- data.frame(` ` = character(), check.names = FALSE)
   dom <- if (nrow(d) > 10) "tip" else "t"
+  if (busca) dom <- paste0("f", dom)
   DT::datatable(d, rownames = FALSE, options = list(pageLength = 10, dom = dom, scrollX = TRUE,
     language = list(info = "_START_ a _END_ de _TOTAL_", infoEmpty = "nada", emptyTable = "sem dado",
-                    paginate = list(previous = "anterior", `next` = "próxima"))), ...)
+                    search = "Buscar:", paginate = list(previous = "anterior", `next` = "próxima"))), ...)
 }
 
 cobertura_ui <- function(cob) {
@@ -107,14 +115,49 @@ filtros <- sidebar(
   uiOutput("coleta")
 )
 
+marca <- paste(readLines(file.path(pasta_app, "../logo/jangada-symbolic.svg"), warn = FALSE), collapse = "")
+marca <- gsub('fill="#000000"', 'fill="currentColor"', marca, fixed = TRUE)
+marca <- sub('<svg ', '<svg class="marca-jangada" aria-hidden="true" ', marca, fixed = TRUE)
+
 ui <- page_navbar(
-  title = "Indicadores do jangada", theme = tema, fillable = FALSE,
-  window_title = "Indicadores do jangada", selected = "Hoje",
+  title = tagList(HTML(marca), "Jangada"), theme = tema, fillable = FALSE, id = "secao",
+  window_title = "Indicadores do jangada", selected = "Visão Geral",
   sidebar = filtros,
-  nav_panel("Hoje", icon = bsicons::bs_icon("calendar-check"),
-    hoje_ui("hoje")
+  nav_panel("Visão Geral", icon = bsicons::bs_icon("calendar-check"),
+    uiOutput("op_resumo"), hoje_ui("hoje")
   ),
-  nav_menu("Avançado",
+  nav_panel("Projetos", DT::DTOutput("op_projetos"),
+    selectInput("op_p_detalhe", "Projeto para consultar", choices = NULL),
+    verbatimTextOutput("op_projeto_detalhe")),
+  nav_panel("Central de Atividades",
+    p("Tarefas da fila e sessões de agentes. As ações ficam na Central Qt e no terminal."),
+    fluidRow(column(4, selectInput("op_projeto", "Projeto", choices = c("Todos" = ""))),
+      column(4, selectInput("op_estado", "Estado", choices = c("Todos" = "", "Planejada", "Pronta", "Executando",
+        "Em revisão", "Concluída", "Bloqueada", "Falhou", "Cancelada"))),
+      column(4, selectInput("op_agente", "Agente", choices = c("Todos" = "")))),
+    checkboxInput("op_filtrar_periodo", "Filtrar por data de atualização", FALSE),
+    dateRangeInput("op_periodo", "Atualização", start = Sys.Date() - 30, end = Sys.Date(), language = "pt-BR"),
+    DT::DTOutput("op_atividades"),
+    tags$details(tags$summary("Atividades por projeto"), DT::DTOutput("op_por_projeto")),
+    selectInput("op_detalhe", "Detalhe da tarefa ou sessão", choices = NULL),
+    verbatimTextOutput("op_detalhes"), h4("Comandos no terminal"), verbatimTextOutput("op_comandos")),
+  nav_panel("Central de Agentes", p("Perfis configurados. Modelo ausente permanece não registrado."),
+    DT::DTOutput("op_agentes"), h4("Execuções e consumo medido"), DT::DTOutput("op_execucoes")),
+  nav_panel("Modelos e Provedores",
+    p("Cadastro não comprova autenticação, contrato, modelo ou cota. A observação mostra o último resultado registrado."),
+    p("CLI usa a autenticação do próprio programa. Credencial não observada não significa ausente."),
+    DT::DTOutput("op_provedores")),
+  nav_panel("Central de Revisão", p("Aguardar revisão não aprova a entrega. Use jangada-validar ou revisão da fila fora do isolamento."),
+    h4("Tarefas à espera"), DT::DTOutput("op_pendentes"), h4("Pareceres da fila"), DT::DTOutput("op_revisoes"),
+    h4("Validações registradas de sessões"), DT::DTOutput("op_validacoes"),
+    p("A origem distingue registros protegidos de dados graváveis pelo agente. A integração confere a aprovação no backend.")),
+  nav_panel("Monitoramento", p("Recursos medidos somente enquanto esta aba estiver aberta."),
+    verbatimTextOutput("op_monitoramento")),
+  nav_panel("Histórico e Artefatos", p("Eventos e hashes dos artefatos. Os registros são selecionáveis e têm busca."),
+    DT::DTOutput("op_historico")),
+  nav_panel("Configurações", p("Valores públicos validados. Edite o arquivo indicado pelo terminal ou editor."),
+    verbatimTextOutput("op_configuracao")),
+  nav_menu("Indicadores",
   nav_panel("Fila e provedores", icon = bsicons::bs_icon("list-task"),
     h3("Execução automática de tarefas"),
     p("Esta fila reúne tarefas planejadas para execução automática. As sessões da Central de Tarefas são acompanhadas separadamente."),
@@ -313,11 +356,11 @@ server <- function(input, output, session) {
   aparencia <- reactive({
     escuro <- is.null(input$modo) || identical(input$modo, "dark")
     if (escuro) {
-      list(fundo = cores[["superficie"]], texto = cores[["texto"]], grade = "#53575B",
+      list(fundo = cores[["superficie"]], texto = cores[["texto"]], grade = "#6B7075",
            aresta = "#999999", destaque = cores[["primaria"]], neutra = "#B3B3B3", raciocinio = "#D7AD88")
     } else {
-      list(fundo = "#FFFFFF", texto = "#1A1A1A", grade = "#D9D9D9",
-           aresta = "#888888", destaque = cores[["texto_primario"]], neutra = "#4D4D4D", raciocinio = "#B08968")
+      list(fundo = fichas$light$superficie, texto = fichas$light$texto, grade = "#858A90",
+           aresta = "#888888", destaque = fichas$light$primaria, neutra = "#4D4D4D", raciocinio = "#B08968")
     }
   })
   paleta <- reactive({
@@ -326,7 +369,7 @@ server <- function(input, output, session) {
   pl <- function(p, x = "", y = "") {
     p |>
       plotly::layout(paper_bgcolor = aparencia()$fundo, plot_bgcolor = aparencia()$fundo,
-                     font = list(color = aparencia()$texto, family = "Noto Sans, sans-serif"),
+                     font = list(color = aparencia()$texto, family = "Inter, sans-serif"),
                      xaxis = list(title = list(text = x), showgrid = FALSE,
                                   zerolinecolor = aparencia()$grade),
                      yaxis = list(title = list(text = y), rangemode = "tozero",
@@ -361,6 +404,12 @@ server <- function(input, output, session) {
       visNetwork::visInteraction(hover = TRUE, tooltipDelay = 100)
     for (g in grupos) {
       cor <- if (g %in% names(cores_grupos)) cores_grupos[[g]] else alerta
+      if (!is.null(input$modo) && identical(input$modo, "light")) {
+        if (cor == cores[["primaria"]]) cor <- fichas$light$primaria
+        if (cor == cores[["atencao"]]) cor <- fichas$light$atencao
+        if (cor == alerta) cor <- "#A44835"
+        if (cor == "#b08968") cor <- "#805900"
+      }
       v <- visNetwork::visGroups(v, groupname = g, color = list(background = cor, border = aparencia()$aresta,
                                  highlight = list(background = cor, border = aparencia()$texto)),
                                 font = list(color = aparencia()$texto))
@@ -400,6 +449,7 @@ server <- function(input, output, session) {
     d
   })
   hoje_server("hoje", dados)
+  operacional_server(input, output, session, dados)
   estados_fila <- c(QUEUED = "Na fila", RUNNING = "Em execução", COMPLETED = "Concluída",
     REVIEW_REQUIRED = "Aguardando revisão", REVISION_REQUIRED = "Reprovada, corrigir",
     WAITING_PROVIDER = "Aguardando provedor", WAITING_QUOTA = "Aguardando cota",

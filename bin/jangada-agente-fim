@@ -453,6 +453,12 @@ limpar() {
   elif [[ -n "$ramo" && -n "$worktree" ]]; then
     echo "ramo mantido: $ramo (apague com: git -C $raiz branch -d $ramo)"
   fi
+  if jq -e '.execucao | strings | test("^exe-[0-9a-f]{16}$")' "$arq" >/dev/null 2>&1; then
+    local resultado_sessao=()
+    ((integrado)) && resultado_sessao+=(--integrada)
+    "$JANGADA_PATH/bin/jangada-projeto" --projeto "$raiz" sessao-encerrar "$s" "${resultado_sessao[@]}" >/dev/null \
+      || echo "aviso: execução da sessão ficou sem registro de encerramento" >&2
+  fi
   rm -f "$arq"
   # Os pareceres do jangada-validar contam as rodadas: uma sessão nova com o
   # mesmo nome começa da primeira. Só -rN.md, para não levar os de proj--fix-rotas

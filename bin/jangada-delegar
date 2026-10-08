@@ -181,7 +181,7 @@ registrar() {
     --arg conversa "$conversa" --arg sem_fonte "$sem_fonte" \
     --arg tokens_local_entrada "$tokens_local_entrada" --arg tokens_local_saida "$tokens_local_saida" \
     --arg tokens_codex_entrada "$tokens_codex_entrada" --arg tokens_codex_saida "$tokens_codex_saida" \
-    --arg id "$delegacao_id" --argjson chamadas "$chamadas_local" \
+    --arg id "$delegacao_id" --arg execucao "${JANGADA_EXECUCAO:-}" --argjson chamadas "$chamadas_local" \
     --arg documento_chars "$documento_chars" --arg retorno_chars "$retorno_chars" --arg contexto "$ctx" \
     --arg capacidade "$capacidade" --arg motivo_codigo "$motivo_codigo" --arg verificacao "$verificacao" \
     --argjson requisitos "$(jq -nc --args '$ARGS.positional' "${requisitos[@]}")" \
@@ -198,7 +198,7 @@ registrar() {
       tokens_local_saida: ($tokens_local_saida | num),
       tokens_codex_entrada: ($tokens_codex_entrada | num),
       tokens_codex_saida: ($tokens_codex_saida | num),
-      versao_registro: 3, delegacao_id: $id, roteamento_id: $roteamento_id,
+      versao_registro: 3, delegacao_id: $id, roteamento_id: $roteamento_id, execucao: (if $execucao == "" then null else $execucao end),
       capacidade: $capacidade, motivo_codigo: $motivo_codigo, verificacao: $verificacao,
       requisitos: $requisitos,
       campos_extracao: $campos_extracao, consolidacao: $consolidacao,

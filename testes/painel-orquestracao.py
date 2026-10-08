@@ -32,6 +32,11 @@ class Painel(unittest.TestCase):
             saude.observar('codex', 'AVAILABLE', 'observado', validade=1, cota=80)
             runtime.db.execute("UPDATE provedores SET valido_ate=1 WHERE id='codex'")
             bancos = [estado, runtime]
+            estado.db.execute('PRAGMA wal_autocheckpoint=0')
+            estado.db.execute('BEGIN IMMEDIATE')
+            estado.db.execute("UPDATE tarefas SET status='FAILED' WHERE id='leitura'")
+            arquivos_antes = {str(p): (p.read_bytes(), p.stat().st_mtime_ns)
+                              for p in raiz.rglob('*') if p.is_file()}
             antes = [e.db.total_changes for e in bancos]
             with patch.object(orquestracao.Estado, '__init__', side_effect=AssertionError('escrita')), \
                     patch.object(orquestracao.Saude, '__init__', side_effect=AssertionError('consulta remota')), \
@@ -50,6 +55,9 @@ class Painel(unittest.TestCase):
             self.assertEqual(codex['status'], 'UNKNOWN')
             self.assertIsNone(codex['cota'])
             self.assertEqual([e.db.total_changes for e in bancos], antes)
+            self.assertEqual(arquivos_antes, {str(p): (p.read_bytes(), p.stat().st_mtime_ns)
+                                             for p in raiz.rglob('*') if p.is_file()})
+            estado.db.execute('ROLLBACK')
             consulta = orquestracao.Consulta(estado.pasta / 'tarefas.sqlite')
             with self.assertRaises(sqlite3.OperationalError):
                 consulta.db.execute('DELETE FROM tarefas')

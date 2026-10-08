@@ -49,12 +49,26 @@ if ((${#principais[@]} == 0)); then
   exit 1
 fi
 perfis_json() {
-  local perfil
+  local perfil ambiente delegacao isolado revisao
   while read -r perfil; do
     jangada_perfil "$perfil" || continue
     [[ " ${principais[*]} " == *" $(basename "${PERFIL_COMANDO%% *}") "* ]] || continue
+    delegacao="${JANGADA_DELEGAR:-}"; isolado="${JANGADA_AGENTE_ISOLAR:-1}"; revisao="$JANGADA_VALIDAR_REVISOR"
+    for ambiente in "${PERFIL_AMBIENTE[@]}"; do
+      case "$ambiente" in
+        JANGADA_DELEGAR=*) delegacao="${ambiente#*=}" ;;
+        JANGADA_AGENTE_ISOLAR=*) isolado="${ambiente#*=}" ;;
+        JANGADA_VALIDAR_REVISOR=*) revisao="${ambiente#*=}" ;;
+      esac
+    done
+    [[ "$(basename "${PERFIL_COMANDO%% *}")" != codex ]] || isolado=1
     jq -n --arg nome "$perfil" --arg descricao "$PERFIL_DESCRICAO" \
-      '{nome:$nome, descricao:$descricao}'
+      --arg executor "$(basename "${PERFIL_COMANDO%% *}")" \
+      --arg delegacao "$(jangada_delegacao "$PERFIL_COMANDO" "$delegacao")" \
+      --arg revisor "$(jangada_revisor "$PERFIL_COMANDO" "$revisao")" \
+      --argjson isolado "$([[ "$isolado" != 0 ]] && echo true || echo false)" \
+      '{nome:$nome, descricao:$descricao, executor:$executor, funcao:"principal", modelo:null,
+        permissoes:{delegacao:$delegacao, isolado:$isolado, revisor:$revisor}}'
   done < <(jangada_perfis) | jq -s .
 }
 if [[ "${1:-}" == --perfis ]]; then
@@ -72,7 +86,7 @@ fi
 janela=0; projeto=""; nome=""; nome_dado=0; direto=0; snapshot=0
 agente="$JANGADA_AGENTE"; extras=(); prompt=""; perfil=""; agente_dado=0
 revisor="${JANGADA_VALIDAR_REVISOR:-}"; revisor_dado=0
-isolar="$JANGADA_AGENTE_ISOLAR"; isolar_dado=0; delegacao_dada=""
+isolar="$JANGADA_AGENTE_ISOLAR"; isolar_dado=0; delegacao_dada=""; atividade=""; tarefa_id=""
 PERFIL_AMBIENTE=()
 while (($#)); do
   case "$1" in
@@ -84,6 +98,8 @@ while (($#)); do
     --agente) agente="$2"; agente_dado=1; shift 2 ;;
     --perfil) perfil="$2"; shift 2 ;;
     --delegacao) delegacao_dada="$2"; shift 2 ;;
+    --atividade) atividade="$2"; shift 2 ;;
+    --tarefa-id) tarefa_id="$2"; shift 2 ;;
     --revisor) revisor="$2"; revisor_dado=1; shift 2 ;;
     --sem-isolar) isolar=0; isolar_dado=1; shift ;;
     --prompt) prompt="$2"; shift 2 ;;
@@ -224,6 +240,9 @@ if git -C "$projeto" rev-parse --show-toplevel >/dev/null 2>&1; then
   raiz="$(git -C "$projeto" rev-parse --show-toplevel)"
 fi
 repo="$(slug "$(basename "$raiz")")"
+vinculos=()
+[[ -z "$atividade" ]] || vinculos+=(--atividade "$atividade")
+[[ -z "$tarefa_id" ]] || vinculos+=(--tarefa-id "$tarefa_id")
 [[ -n "$repo" ]] || repo="projeto-$(printf '%s' "$raiz" | md5sum | cut -c1-8)"
 
 if ((eh_git)) && ((!direto)) && [[ -z "$nome" ]]; then
@@ -248,8 +267,17 @@ fi
 nome="$(slug "$nome")"
 [[ -z "$nome" ]] && { ((nome_dado)) || { [[ -n "$prompt" ]] && ((!direto)); }; } \
   && nome="tarefa-$(date +%Y%m%d-%H%M%S)"
+sessao_previa="$repo"
+[[ -z "$nome" ]] || sessao_previa+="--$nome"
+if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao_previa" 2>/dev/null; then
+  if ! "$JANGADA_PATH/bin/jangada-projeto" --projeto "$raiz" sessao-conferir "preparacao-$$" \
+    --executor "$(basename "${agente%% *}")" "${vinculos[@]}" >/dev/null; then
+    echo "jangada-agente: o projeto não permite abrir esta sessão interativa; confira a política e o orçamento. Use a fila para execução controlada, respeitando essas restrições." >&2
+    exit 1
+  fi
+fi
 
-dir="$raiz"; worktree=""; ramo=""; base=""; worktree_novo=0
+dir="$raiz"; worktree=""; ramo=""; base=""; worktree_novo=0; ramo_novo=0
 if ((eh_git)) && [[ -n "$nome" ]]; then
   worktree="$JANGADA_WORKTREES/$repo/$nome"
   ramo="agente/$nome"
@@ -293,6 +321,7 @@ if ((eh_git)) && [[ -n "$nome" ]]; then
             echo "criando novo ramo desambiguado: $ramo"
             worktree_novo=1
             git -C "$raiz" worktree add -b "$ramo" "$worktree" HEAD
+            ramo_novo=1
             ;;
           *)
             echo "operação cancelada." >&2
@@ -312,11 +341,13 @@ if ((eh_git)) && [[ -n "$nome" ]]; then
         worktree="$JANGADA_WORKTREES/$repo/$nome"
         worktree_novo=1
         git -C "$raiz" worktree add -b "$ramo" "$worktree" HEAD
+        ramo_novo=1
       fi
     fi
   else
     worktree_novo=1
     git -C "$raiz" worktree add -b "$ramo" "$worktree" HEAD
+    ramo_novo=1
   fi
   # Só num worktree recém-criado: o reaproveitado já tem o que precisa, e o
   # que o agente mudou ali não pode ser sobrescrito.
@@ -442,8 +473,22 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
     amb+=(-e "$_v")
   done
   amb+=(-e "JANGADA_DELEGAR=$delegar")
+  if ! execucao="$("$JANGADA_PATH/bin/jangada-projeto" --projeto "$raiz" sessao-iniciar "$sessao" \
+    --executor "$base_agente" "${vinculos[@]}" | jq -er .execucao)"; then
+    echo "jangada-agente: não foi possível registrar a execução da sessão $sessao" >&2
+    if ((worktree_novo)) && git -C "$raiz" worktree remove "$worktree"; then
+      ((ramo_novo)) && git -C "$raiz" branch -d "$ramo"
+    fi
+    exit 1
+  fi
+  amb+=(-e "JANGADA_EXECUCAO=$execucao")
   [[ -n "$revisor_efetivo" ]] && amb+=(-e "JANGADA_VALIDAR_REVISOR=$revisor_efetivo")
-  "${JANGADA_TMUX[@]}" new-session -d -s "$sessao" -c "$dir" "${amb[@]}"
+  if ! "${JANGADA_TMUX[@]}" new-session -d -s "$sessao" -c "$dir" "${amb[@]}"; then
+    "$JANGADA_PATH/bin/jangada-projeto" --projeto "$raiz" sessao-abortar "$sessao" \
+      --execucao "$execucao" >/dev/null
+    echo "jangada-agente: não foi possível criar a sessão $sessao" >&2
+    exit 1
+  fi
 
   rm -f "$estado_dir/$sessao.json"
   jq -n --arg sessao "$sessao" --arg dir "$dir" --arg raiz "$raiz" --arg worktree "$worktree" \
@@ -451,11 +496,15 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
     --arg agora "$(jangada_data_iso)" \
     --arg inicio "$( ((eh_git)) && git -C "$dir" rev-parse HEAD 2>/dev/null || true)" \
     --arg tarefa "$prompt" --arg perfil "$perfil" --arg comando "$cmd_base" \
+    --arg atividade "$atividade" --arg tarefa_id "$tarefa_id" --arg execucao "$execucao" \
     --arg revisor "$revisor_efetivo" --arg delegar "$delegar" --argjson isolar "$([[ "$isolar" != 0 ]] && echo true || echo false)" \
     '{sessao:$sessao, dir:$dir, raiz:$raiz, worktree:$worktree, ramo:$ramo, base:$base,
       agente:$agente, comando:$comando, isolar:$isolar, estado:"iniciado", mensagem:"", desde:$agora, atualizado:$agora}
      + (if $tarefa != "" then {tarefa:$tarefa} else {} end)
      + (if $perfil != "" then {perfil:$perfil} else {} end)
+     + (if $atividade != "" then {atividade:$atividade} else {} end)
+     + (if $tarefa_id != "" then {tarefa_id:$tarefa_id} else {} end)
+     + {execucao:$execucao}
      + (if $inicio != "" then {inicio:$inicio} else {} end)
      + (if $revisor != "" then {revisor:$revisor} else {} end)
      + {delegar:$delegar}' \
@@ -466,7 +515,7 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
   # isolamento, a cópia cairia na pasta que some no fim.
   if [[ -z "${JANGADA_ISOLADO:-}" ]]; then
     (umask 077; mkdir -p "$JANGADA_ESTADO/revisoes") \
-      && jq '{sessao, raiz, worktree, ramo, base, agente, desde, tarefa, inicio, revisor}
+      && jq '{sessao, raiz, worktree, ramo, base, agente, desde, tarefa, inicio, revisor, execucao, atividade, tarefa_id}
              | with_entries(select(.value != null))' "$estado_dir/$sessao.json" \
            >"$JANGADA_ESTADO/revisoes/$sessao.json" \
       || echo "aviso: não gravei a cópia da sessão em $JANGADA_ESTADO/revisoes" >&2

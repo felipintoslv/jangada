@@ -32,8 +32,8 @@ EOF
 cat >"$tmp/bin/tmux" <<'EOF'
 #!/usr/bin/env bash
 case " $* " in
-  *" has-session "*) exit 1 ;;
-  *" new-session "*) printf '%s\n' "$@" >"$FALSO_DIR/tmux.ambiente" ;;
+  *" has-session "*) [[ "${FALSO_TMUX_EXISTENTE:-0}" == 1 ]] ;;
+  *" new-session "*) [[ "${FALSO_TMUX_FALHAR:-0}" == 1 ]] && exit 1; printf '%s\n' "$@" >"$FALSO_DIR/tmux.ambiente" ;;
   *" send-keys "*) printf '%s' "${*: -2:1}" >"$FALSO_DIR/tmux.comando" ;;
 esac
 EOF
@@ -385,4 +385,51 @@ conferir "JSON inválido não altera o estado" [ "$(sha256sum "$tmp/state/jangad
 rm -f "$tmp/state/jangada/agentes/projeto--tarefa.json"
 hook inicio '{}'
 conferir "hook não recria sessão encerrada" test ! -e "$tmp/state/jangada/agentes/projeto--tarefa.json"
+mkdir -p "$tmp/pasta-falha" "$tmp/pasta-anexar"
+FALSO_TMUX_FALHAR=1 rodar "$repo_jangada/bin/jangada-agente" --agente codex \
+  --projeto "$tmp/pasta-falha" --direto >"$tmp/falha-sessao" 2>&1
+conferir "falha do tmux recusa lançamento" [ "$?" != 0 ]
+conferir "falha cancela a execução criada" python3 - "$tmp/state/jangada" <<'PY'
+from pathlib import Path
+import sqlite3
+import sys
+linhas = []
+for p in Path(sys.argv[1]).glob('agentes/projetos/*/tarefas.sqlite'):
+    with sqlite3.connect(p) as db:
+        linhas += db.execute("SELECT status FROM execucoes WHERE sessao='pasta-falha'").fetchall()
+assert linhas == [('CANCELLED',)], linhas
+PY
+mkdir -p "$tmp/recusa-bin"
+cat >"$tmp/recusa-bin/python3" <<'EOF'
+#!/usr/bin/env bash
+if [[ " $* " == *"/nucleo/cli.py "* && " $* " == *" sessao-iniciar "* ]]; then
+  echo "política alterada depois da conferência" >&2
+  exit 2
+fi
+exec "$PYTHON_REAL" "$@"
+EOF
+chmod +x "$tmp/recusa-bin/python3"
+for nome_recusa in recusa-nova tarefa; do
+  rodar PATH="$tmp/recusa-bin:$tmp/bin:$PATH" PYTHON_REAL="$(command -v python3)" \
+    "$repo_jangada/bin/jangada-agente" --agente codex --projeto "$tmp/projeto" \
+    --nome "$nome_recusa" >"$tmp/recusa-registro" 2>&1
+  conferir "falha de registro recusa lançamento ($nome_recusa)" [ "$?" != 0 ]
+  conferir "falha de registro preserva causa ($nome_recusa)" grep -q 'política alterada' "$tmp/recusa-registro"
+  conferir "falha de registro explica recusa ($nome_recusa)" grep -q 'não foi possível registrar' "$tmp/recusa-registro"
+done
+conferir "falha remove worktree novo" test ! -e "$tmp/worktrees/projeto/recusa-nova"
+conferir "falha remove ramo novo" test -z "$(git -C "$tmp/projeto" branch --list agente/recusa-nova)"
+conferir "falha preserva worktree reaproveitado" test -f "$tmp/worktrees/projeto/tarefa/.git"
+conferir "falha preserva ramo reaproveitado" git -C "$tmp/projeto" show-ref --verify --quiet refs/heads/agente/tarefa
+printf '{"orcamento":{"chamadas":1}}\n' >"$tmp/politica.json"
+rodar "$repo_jangada/bin/jangada-projeto" --projeto "$tmp/pasta-anexar" \
+  cadastrar --politica "$tmp/politica.json" >/dev/null
+rodar "$repo_jangada/bin/jangada-agente" --agente codex \
+  --projeto "$tmp/pasta-anexar" --direto >"$tmp/recusa-orcamento" 2>&1
+conferir "orçamento recusa nova sessão interativa" [ "$?" != 0 ]
+conferir "recusa orienta conferir política e usar fila controlada" \
+  grep -q 'confira a política e o orçamento. Use a fila' "$tmp/recusa-orcamento"
+FALSO_TMUX_EXISTENTE=1 rodar "$repo_jangada/bin/jangada-agente" --agente codex \
+  --projeto "$tmp/pasta-anexar" --direto >"$tmp/anexar" 2>&1
+conferir "sessão existente reanexa sem conferir orçamento de nova sessão" [ "$?" = 0 ]
 ((falhas == 0))
