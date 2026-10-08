@@ -141,6 +141,7 @@ def consultar(raiz, projeto=None):
         except (OSError, ValueError, KeyError, TypeError, sqlite3.Error) as erro:
             resultado['erros'].append(f'{pasta.name}: {erro}')
     for arquivo in sorted((raiz / 'agentes').glob('*.json')):
+        pertence = False
         try:
             dados = ler_json(arquivo)
             if not isinstance(dados, dict) or not isinstance(dados.get('sessao'), str):
@@ -148,7 +149,8 @@ def consultar(raiz, projeto=None):
             caminho = dados.get('raiz')
             if not isinstance(caminho, str) or not Path(caminho).is_absolute():
                 raise ValueError('sessão sem raiz válida')
-            if filtro and str(Path(caminho).resolve()) != filtro:
+            pertence = filtro is not None and str(Path(caminho).resolve()) == filtro
+            if filtro and not pertence:
                 continue
             p = next((p for p in resultado['projetos'] if p['caminho'] == caminho or p['id'] == chave(caminho)), None)
             if p is None:
@@ -158,7 +160,7 @@ def consultar(raiz, projeto=None):
                                          'estado_persistido': dados.get('estado'),
                                          'estado': SESSOES.get(dados.get('estado'), 'Bloqueada')})
         except (OSError, ValueError, KeyError, TypeError) as erro:
-            if filtro is None:
+            if filtro is None or pertence:
                 resultado['erros'].append(f'{arquivo.name}: {erro}')
     for atividade in resultado['atividades']:
         estados = [t['estado'] for t in resultado['tarefas'] if t['projeto'] == atividade['projeto']

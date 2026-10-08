@@ -168,13 +168,14 @@ class Operacional(unittest.TestCase):
         pasta.mkdir()
         (pasta / 'projeto.json').write_text('{inválido')
         (self.estado_raiz / 'agentes/alheia.json').write_text('{inválido')
+        (self.estado_raiz / 'agentes/sem-raiz.json').write_text(json.dumps({'sessao': 'sem-raiz'}))
         antes = {str(p): (p.read_bytes(), p.stat().st_mtime_ns)
                  for p in self.estado_raiz.rglob('*') if p.is_file()}
         consulta = consultar(self.estado_raiz, self.projeto)
         self.assertFalse(consulta['erros'])
         self.assertEqual([t['id'] for t in consulta['tarefas']], ['T1'])
         global_ = consultar(self.estado_raiz)
-        self.assertEqual(len(global_['erros']), 2)
+        self.assertEqual(len(global_['erros']), 3)
         ambiente = dict(os.environ, JANGADA_ESTADO=str(self.estado_raiz), JANGADA_PATH=str(RAIZ),
                         JANGADA_CONFIG=str(self.config), PYTHONPATH=str(RAIZ / 'default'))
         comando = [sys.executable, str(RAIZ / 'default/nucleo/cli.py'), '--projeto', str(self.projeto),
@@ -186,6 +187,15 @@ class Operacional(unittest.TestCase):
         self.assertEqual(rota['executor'], 'local')
         self.assertEqual(antes, {str(p): (p.read_bytes(), p.stat().st_mtime_ns)
                                  for p in self.estado_raiz.rglob('*') if p.is_file()})
+        sessao = self.estado_raiz / 'agentes/propria.json'
+        sessao.write_text(json.dumps(dict(sessao='propria', raiz=str(self.projeto), estado=[])))
+        consulta = consultar(self.estado_raiz, self.projeto)
+        self.assertEqual(len(consulta['erros']), 1)
+        self.assertIn('propria.json', consulta['erros'][0])
+        resposta = subprocess.run(comando, env=ambiente, capture_output=True, text=True)
+        self.assertNotEqual(resposta.returncode, 0)
+        self.assertIn('propria.json', resposta.stderr)
+        sessao.unlink()
         (self.pasta / 'projeto.json').write_text('{inválido')
         resposta = subprocess.run(comando, env=ambiente, capture_output=True, text=True)
         self.assertNotEqual(resposta.returncode, 0)
