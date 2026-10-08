@@ -273,7 +273,7 @@ jangada_provedor() {
   [[ "$1" =~ ^[A-Za-z0-9_-]+$ ]] || return 1
   [[ -r "$_arq" ]] || _arq="$JANGADA_PATH/default/provedores/$1.conf"
   [[ -r "$_arq" ]] || return 1
-  while IFS='=' read -r _chave _valor; do
+  while IFS='=' read -r _chave _valor || [[ -n "$_chave" ]]; do
     case "$_chave" in
       NOME) PROVEDOR_NOME="$_valor" ;;
       TIPO) PROVEDOR_TIPO="$_valor" ;;

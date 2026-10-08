@@ -47,6 +47,10 @@ conferir "chave desconhecida não vira variável" test -z "${SEGREDO:-}"
 conferir "nada do registro é exportado" \
   bash -c 'source "$1/bin/jangada-config"; jangada_provedor novo; ! env | grep -q "^PROVEDOR_\|^SEGREDO="' _ "$repo_jangada"
 
+printf 'TIPO=cli\nFUNCOES=principal\nPROTOCOLO_ARG=--fim' >"$usuario/semfim.conf"
+conferir "arquivo sem quebra de linha no fim é lido inteiro" test "$(campos semfim)" = "semfim|cli|semfim|principal|--fim||"
+rm "$usuario/semfim.conf"
+
 printf 'NOME=Outro\nTIPO=cli\nFUNCOES=revisor\n' >"$usuario/claude.conf"
 conferir "arquivo do usuário tem precedência" test "$(campos claude)" = "Outro|cli|claude|revisor|||"
 conferir "e muda a lista de principais" test "$(lista principal)" = "codex novo"
