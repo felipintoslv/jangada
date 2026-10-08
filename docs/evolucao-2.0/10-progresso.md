@@ -256,13 +256,27 @@ fila, revisão e integração com executores reais.
 
 Hyprland instalado: 0.56.2. `testes/aninhado.sh --sem-usuario` retornou
 "pulado", pois esta sessão isolada não tem `WAYLAND_DISPLAY` nem soquete
-Wayland visível. Não conta como aprovação do teste gráfico. Continua
-necessário executar o teste em um terminal comum da sessão Hyprland e
-conferir as interfaces na tela. O teste aninhado exclui a inicialização
-que alteraria o ambiente da sessão e não testa DRM ou escolha de GPU.
+Wayland visível. Essa execução não conta como aprovação do teste gráfico.
+
+Depois, o usuário executou o mesmo comando em um terminal comum e
+forneceu a saída: "sem erros de configuração", "65 atalhos registrados"
+e "configuração carregada sem erros no Hyprland aninhado". O resultado
+foi informado pelo usuário, não executado por esta sessão isolada.
+O teste aninhado exclui a inicialização que alteraria o ambiente da
+sessão e não testa DRM ou escolha de GPU.
+
+As capturas `Imagem colada (4).png` e `Imagem colada (5).png`, fornecidas
+pelo usuário em `~/Downloads`, foram abertas e inspecionadas nesta sessão.
+Mostram a Central no cenário 4 da simulação, nos modos escuro e claro,
+com logo, abas, seleção e foco visíveis. Alguns textos da lista ficam
+truncados. Isso confere a apresentação mostrada; não comprova todas as
+ações, a aba Projetos e fila ou o painel Shiny na sessão gráfica.
+As imagens não foram copiadas para o repositório.
 
 A suíte `testes/verificar.sh` passou novamente, código zero, em 207 s,
 depois desses testes adicionais e do registro documental.
+Após registrar o resultado gráfico fornecido pelo usuário e as capturas,
+a suíte passou outra vez, código zero, em 209 s.
 
 ## Como continuar
 
