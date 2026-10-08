@@ -399,6 +399,28 @@ for p in Path(sys.argv[1]).glob('agentes/projetos/*/tarefas.sqlite'):
         linhas += db.execute("SELECT status FROM execucoes WHERE sessao='pasta-falha'").fetchall()
 assert linhas == [('CANCELLED',)], linhas
 PY
+mkdir -p "$tmp/recusa-bin"
+cat >"$tmp/recusa-bin/python3" <<'EOF'
+#!/usr/bin/env bash
+if [[ " $* " == *"/nucleo/cli.py "* && " $* " == *" sessao-iniciar "* ]]; then
+  echo "política alterada depois da conferência" >&2
+  exit 2
+fi
+exec "$PYTHON_REAL" "$@"
+EOF
+chmod +x "$tmp/recusa-bin/python3"
+for nome_recusa in recusa-nova tarefa; do
+  rodar PATH="$tmp/recusa-bin:$tmp/bin:$PATH" PYTHON_REAL="$(command -v python3)" \
+    "$repo_jangada/bin/jangada-agente" --agente codex --projeto "$tmp/projeto" \
+    --nome "$nome_recusa" >"$tmp/recusa-registro" 2>&1
+  conferir "falha de registro recusa lançamento ($nome_recusa)" [ "$?" != 0 ]
+  conferir "falha de registro preserva causa ($nome_recusa)" grep -q 'política alterada' "$tmp/recusa-registro"
+  conferir "falha de registro explica recusa ($nome_recusa)" grep -q 'não foi possível registrar' "$tmp/recusa-registro"
+done
+conferir "falha remove worktree novo" test ! -e "$tmp/worktrees/projeto/recusa-nova"
+conferir "falha remove ramo novo" test -z "$(git -C "$tmp/projeto" branch --list agente/recusa-nova)"
+conferir "falha preserva worktree reaproveitado" test -f "$tmp/worktrees/projeto/tarefa/.git"
+conferir "falha preserva ramo reaproveitado" git -C "$tmp/projeto" show-ref --verify --quiet refs/heads/agente/tarefa
 printf '{"orcamento":{"chamadas":1}}\n' >"$tmp/politica.json"
 rodar "$repo_jangada/bin/jangada-projeto" --projeto "$tmp/pasta-anexar" \
   cadastrar --politica "$tmp/politica.json" >/dev/null

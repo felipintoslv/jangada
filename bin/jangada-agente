@@ -277,7 +277,7 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao_previa" 2>/dev/null; then
   fi
 fi
 
-dir="$raiz"; worktree=""; ramo=""; base=""; worktree_novo=0
+dir="$raiz"; worktree=""; ramo=""; base=""; worktree_novo=0; ramo_novo=0
 if ((eh_git)) && [[ -n "$nome" ]]; then
   worktree="$JANGADA_WORKTREES/$repo/$nome"
   ramo="agente/$nome"
@@ -321,6 +321,7 @@ if ((eh_git)) && [[ -n "$nome" ]]; then
             echo "criando novo ramo desambiguado: $ramo"
             worktree_novo=1
             git -C "$raiz" worktree add -b "$ramo" "$worktree" HEAD
+            ramo_novo=1
             ;;
           *)
             echo "operação cancelada." >&2
@@ -340,11 +341,13 @@ if ((eh_git)) && [[ -n "$nome" ]]; then
         worktree="$JANGADA_WORKTREES/$repo/$nome"
         worktree_novo=1
         git -C "$raiz" worktree add -b "$ramo" "$worktree" HEAD
+        ramo_novo=1
       fi
     fi
   else
     worktree_novo=1
     git -C "$raiz" worktree add -b "$ramo" "$worktree" HEAD
+    ramo_novo=1
   fi
   # Só num worktree recém-criado: o reaproveitado já tem o que precisa, e o
   # que o agente mudou ali não pode ser sobrescrito.
@@ -470,8 +473,14 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
     amb+=(-e "$_v")
   done
   amb+=(-e "JANGADA_DELEGAR=$delegar")
-  execucao="$("$JANGADA_PATH/bin/jangada-projeto" --projeto "$raiz" sessao-iniciar "$sessao" \
-    --executor "$base_agente" "${vinculos[@]}" | jq -er .execucao)"
+  if ! execucao="$("$JANGADA_PATH/bin/jangada-projeto" --projeto "$raiz" sessao-iniciar "$sessao" \
+    --executor "$base_agente" "${vinculos[@]}" | jq -er .execucao)"; then
+    echo "jangada-agente: não foi possível registrar a execução da sessão $sessao" >&2
+    if ((worktree_novo)) && git -C "$raiz" worktree remove "$worktree"; then
+      ((ramo_novo)) && git -C "$raiz" branch -d "$ramo"
+    fi
+    exit 1
+  fi
   amb+=(-e "JANGADA_EXECUCAO=$execucao")
   [[ -n "$revisor_efetivo" ]] && amb+=(-e "JANGADA_VALIDAR_REVISOR=$revisor_efetivo")
   if ! "${JANGADA_TMUX[@]}" new-session -d -s "$sessao" -c "$dir" "${amb[@]}"; then
