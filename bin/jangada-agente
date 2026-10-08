@@ -61,7 +61,7 @@ perfis_json() {
         JANGADA_VALIDAR_REVISOR=*) revisao="${ambiente#*=}" ;;
       esac
     done
-    [[ "${PERFIL_COMANDO%% *}" != codex ]] || isolado=1
+    [[ "$(basename "${PERFIL_COMANDO%% *}")" != codex ]] || isolado=1
     jq -n --arg nome "$perfil" --arg descricao "$PERFIL_DESCRICAO" \
       --arg executor "$(basename "${PERFIL_COMANDO%% *}")" \
       --arg delegacao "$(jangada_delegacao "$PERFIL_COMANDO" "$delegacao")" \
