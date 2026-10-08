@@ -258,6 +258,56 @@ jangada_perfis() {
   return 0
 }
 
+# Registro de provedores: um arquivo CHAVE=valor por provedor, em
+# ~/.config/jangada/provedores (tem precedência) ou em default/provedores. O
+# arquivo é lido, não executado, e nada dele vai para o ambiente do agente.
+# Preenche PROVEDOR_NOME, PROVEDOR_TIPO, PROVEDOR_COMANDO, PROVEDOR_FUNCOES,
+# PROVEDOR_PROTOCOLO_ARG, PROVEDOR_MODELO_REVISOR e PROVEDOR_RESERVA; falha se
+# o provedor não existir ou tiver chave inválida. PROTOCOLO_ARG entra numa
+# linha de comando, por isso só aceita o formato de uma opção.
+# shellcheck disable=SC2034  # PROVEDOR_* são lidas por quem carrega este arquivo
+jangada_provedor() {
+  local _arq="$JANGADA_CONFIG/provedores/$1.conf" _chave _valor
+  PROVEDOR_NOME=""; PROVEDOR_TIPO=""; PROVEDOR_COMANDO=""; PROVEDOR_FUNCOES=""
+  PROVEDOR_PROTOCOLO_ARG=""; PROVEDOR_MODELO_REVISOR=""; PROVEDOR_RESERVA=""
+  [[ "$1" =~ ^[A-Za-z0-9_-]+$ ]] || return 1
+  [[ -r "$_arq" ]] || _arq="$JANGADA_PATH/default/provedores/$1.conf"
+  [[ -r "$_arq" ]] || return 1
+  while IFS='=' read -r _chave _valor; do
+    case "$_chave" in
+      NOME) PROVEDOR_NOME="$_valor" ;;
+      TIPO) PROVEDOR_TIPO="$_valor" ;;
+      COMANDO) PROVEDOR_COMANDO="$_valor" ;;
+      FUNCOES) PROVEDOR_FUNCOES="$_valor" ;;
+      PROTOCOLO_ARG) PROVEDOR_PROTOCOLO_ARG="$_valor" ;;
+      MODELO_REVISOR) PROVEDOR_MODELO_REVISOR="$_valor" ;;
+      RESERVA) PROVEDOR_RESERVA="$_valor" ;;
+    esac
+  done < <(sed -e 's/^[[:space:]]*#.*//' -e 's/[[:space:]]*$//' "$_arq")
+  case "$PROVEDOR_TIPO" in
+    cli) [[ "$PROVEDOR_COMANDO" =~ ^[A-Za-z0-9_.-]+$ ]] || return 1 ;;
+    ollama) [[ -z "$PROVEDOR_COMANDO" ]] || return 1 ;;
+    *) return 1 ;;
+  esac
+  [[ "$PROVEDOR_FUNCOES" =~ ^((principal|revisor|delegacao)( |$))+$ ]] || return 1
+  [[ "$PROVEDOR_PROTOCOLO_ARG" =~ ^(--?[a-z][a-z0-9-]*)?$ ]] || return 1
+  [[ "$PROVEDOR_MODELO_REVISOR" =~ ^[A-Za-z0-9_.:-]*$ ]] || return 1
+  [[ "$PROVEDOR_RESERVA" =~ ^[0-9]*$ ]] || return 1
+  [[ -n "$PROVEDOR_NOME" ]] || PROVEDOR_NOME="$1"
+}
+
+# Nomes dos provedores válidos do registro; com FUNCAO, só os que a declaram.
+jangada_provedores() {
+  local _a _n
+  for _a in "$JANGADA_CONFIG"/provedores/*.conf "$JANGADA_PATH"/default/provedores/*.conf; do
+    [[ -e "$_a" ]] && basename "$_a" .conf
+  done | sort -u | while read -r _n; do
+    jangada_provedor "$_n" || continue
+    [[ -n "${1:-}" && " $PROVEDOR_FUNCOES " != *" $1 "* ]] || echo "$_n"
+  done
+  return 0
+}
+
 # Gera carimbo de data ISO 8601 consistente e universal.
 jangada_data_iso() {
   if date -Is >/dev/null 2>&1; then

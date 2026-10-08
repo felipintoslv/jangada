@@ -64,13 +64,32 @@ Não feito na Fase 2:
 - Nenhuma consulta à rede: os formatos das APIs de provedores remotos estão
   marcados como não verificados.
 
+## Fase 3
+
+Autorizada pelo usuário em 07/10/2026 ("Vamos para a fase 3"). Com as
+decisões T9 a T13, o escopo é o registro de provedores com os quatro
+atuais.
+
+Feito:
+
+- `default/provedores/` com `claude`, `agy`, `codex` e `ollama`.
+- `jangada_provedor` e `jangada_provedores` em `bin/jangada-config`.
+- `bin/jangada-agente`: a lista de agentes principais e a opção que entrega
+  o protocolo vêm do registro.
+- `bin/jangada-validar`: revisores aceitos, nome, modelo padrão e ordem de
+  reserva vêm do registro.
+- `testes/provedores.sh`, incluído em `testes/verificar.sh`.
+- `docs/provedores.md`.
+
+Verificação: `testes/verificar.sh` com código 0 e "tudo certo", 49 etapas,
+de dentro da sessão isolada. Segue pulado o caso "casa mínima (leitura)".
+
+Fica fora, com as listas próprias: fila (`estado.py:280`, `cli.py:131`),
+saúde (`saude.py`), destinos do `jangada-delegar` e o catálogo de reserva da
+Central (`janela.py:24`). Revisor novo ainda exige função `revisar_NOME`.
+
 ## Como continuar
 
-1. Todas as perguntas foram respondidas (T9 a T13 em `09-decisoes.md`):
-   Ollama como está, só Shiny, testes com os provedores atuais, provedores
-   por API adiados, `desac.md` fora do repositório. D3, D6 e D7 seguem como
-   propostas, sem objeção.
-2. Aprovada a Fase 2, a Fase 3 começa pelo registro de provedores com os
-   quatro provedores padrão reproduzindo o comportamento atual, antes de
-   qualquer adaptador novo. A Fase 3 altera código: volta a valer o ciclo
-   de commits, `testes/verificar.sh` e `jangada-validar`, se você liberar.
+1. A Fase 4 (modelo operacional) depende de autorização.
+2. Para fechar o caso pulado, rode `bash testes/verificar.sh` num terminal
+   fora da sessão.

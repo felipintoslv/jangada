@@ -16,5 +16,5 @@ agentes com vários modelos e provedores.
 Os números 05 a 08 estão reservados para as fases seguintes e ainda não
 existem.
 
-Situação: Fase 2 entregue, à espera de aprovação. A Fase 3 não foi iniciada
-e nenhum código foi alterado.
+Situação: Fase 3 entregue (registro de provedores; ver `10-progresso.md` e
+`docs/provedores.md`). A Fase 4 não foi iniciada.
