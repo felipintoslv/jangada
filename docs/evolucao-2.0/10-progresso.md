@@ -2,11 +2,12 @@
 
 ## Estado em 07/10/2026
 
-- Fase 1 (diagnóstico): aprovada pelo usuário ("vamos para a fase 2").
-- Fase 2 (proposta arquitetural e decisão de interface): entregue, à espera
-  de aprovação.
-- Ramo: `agente/tarefa-ab47cef8d325`, commit `9dcb640`, sem commit novo.
-- `git status --short` ao final: só `?? docs/evolucao-2.0/`.
+- Fases 1 e 2: concluídas (diagnóstico, arquitetura e decisão de interface).
+- Fase 3 (registro de provedores): concluída e aprovada pelo
+  `jangada-validar` (Codex, rodada 4, forçada pelo usuário).
+- Fase 4: não iniciada; depende de autorização.
+- Ramo: `agente/tarefa-ab47cef8d325`, sobre `9dcb640`. Último commit de
+  código: `3018fb9`.
 
 ## O que foi feito
 
@@ -88,8 +89,34 @@ Fica fora, com as listas próprias: fila (`estado.py:280`, `cli.py:131`),
 saúde (`saude.py`), destinos do `jangada-delegar` e o catálogo de reserva da
 Central (`janela.py:24`). Revisor novo ainda exige função `revisar_NOME`.
 
+Depois da entrega, o `jangada-agente` passou a parar com erro quando nenhum
+provedor tem a função `principal` (`3018fb9`). Antes abria a sessão sem o
+protocolo, sem aviso.
+
+Não conferido: como a atualização leva `default/provedores/` à cópia
+instalada. Sem essa pasta o `jangada-agente` não abre sessão.
+
 ## Como continuar
 
-1. A Fase 4 (modelo operacional) depende de autorização.
-2. Para fechar o caso pulado, rode `bash testes/verificar.sh` num terminal
+Uma sessão nova não tem a conversa anterior. O que ela precisa está aqui:
+
+1. Ler `AGENTS.md`, este arquivo, `09-decisoes.md` e `docs/provedores.md`.
+   As decisões T1 a T13 estão tomadas.
+2. Regras do pedido que valem em todas as fases:
+   - Não avançar de fase sem autorização explícita do usuário.
+   - Não tratar documentação como prova de implementação; conferir no
+     código.
+   - Não inventar funcionalidades, resultados de testes, custos,
+     capacidades ou caminhos de arquivos.
+   - Preservar alterações preexistentes e arquivos do usuário.
+   - Credenciais fora de registros e de arquivos versionados; nenhum dado
+     sensível vai a serviço externo sem consentimento.
+   - O executor não aprova o próprio resultado.
+   - A interface não contorna regras do backend.
+   - Sem ranking arbitrário de modelos e sem entidades redundantes.
+3. Fases que faltam: 4 (modelo operacional de projetos, tarefas e
+   revisões), 5 (reformulação visual), 6 (integração e monitoramento) e
+   7 (testes e validação). O desenho está em `02-arquitetura.md` e
+   `04-interface.md`.
+4. Para fechar o caso pulado, rode `bash testes/verificar.sh` num terminal
    fora da sessão.

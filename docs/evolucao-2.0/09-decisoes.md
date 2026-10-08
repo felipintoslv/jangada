@@ -27,7 +27,7 @@
 
 A Fase 2 foi iniciada sem resposta às perguntas D1 a D8. As propostas abaixo
 são as recomendações levadas adiante nos documentos. D5 foi respondida
-(T9). Qualquer uma pode ser trocada antes da Fase 3.
+(T9). D3 foi adotada na Fase 3; D6 e D7 podem ser trocadas antes das fases que afetam.
 
 | Nº | Pergunta | Proposta | Onde está detalhada | Efeito de trocar |
 |---|---|---|---|---|
@@ -37,7 +37,7 @@ são as recomendações levadas adiante nos documentos. D5 foi respondida
 
 ## Abertas
 
-Nenhuma. Falta só a autorização para a Fase 3.
+Nenhuma. A Fase 3 foi autorizada e concluída; falta a autorização para a Fase 4.
 
 ## Divergência entre o pedido e o protocolo da sessão
 
