@@ -66,10 +66,13 @@ def coletar():
         resultado['erros'].append('endereço do Ollama inválido; consulta recusada')
         return resultado
     if url.hostname == '0.0.0.0' and not url.username and not url.password:
-        url = url._replace(netloc='127.0.0.1' + (f':{url.port}' if url.port else ':11434'))
+        url = url._replace(netloc='127.0.0.1' + (f':{url.port}' if url.port else ''))
     if url.scheme != 'http' or url.hostname not in {'127.0.0.1', 'localhost', '::1'} or url.username or url.password:
         resultado['erros'].append('endereço do Ollama não é local; consulta recusada')
         return resultado
+    if url.port is None:
+        host_local = '[::1]' if url.hostname == '::1' else url.hostname
+        url = url._replace(netloc=host_local + ':11434')
     try:
         abertura = urllib.request.build_opener(urllib.request.ProxyHandler({}), SemRedirecionar())
         with abertura.open(urllib.parse.urlunsplit((url.scheme, url.netloc, '/api/ps', '', '')), timeout=2) as resposta:

@@ -66,6 +66,18 @@ class Monitoramento(unittest.TestCase):
             construir.return_value.open.assert_called_once_with(f'http://127.0.0.1:{porta}/api/ps', timeout=2)
             self.assertEqual(dados['modelos_carregados'], [])
 
+    def test_enderecos_locais_sem_porta_usam_padrao_ollama(self):
+        for host, esperado in (('127.0.0.1', '127.0.0.1'), ('http://127.0.0.1', '127.0.0.1'),
+                               ('localhost', 'localhost'), ('http://localhost', 'localhost'),
+                               ('[::1]', '[::1]'), ('http://[::1]', '[::1]')):
+            with self.subTest(host=host), patch.dict(os.environ, {'OLLAMA_HOST': host}), \
+                    patch.object(monitoramento.shutil, 'which', return_value=None), \
+                    patch.object(monitoramento.urllib.request, 'build_opener') as construir:
+                construir.return_value.open.return_value.__enter__.return_value.read.return_value = self.corpo
+                dados = monitoramento.coletar()
+            construir.return_value.open.assert_called_once_with(f'http://{esperado}:11434/api/ps', timeout=2)
+            self.assertEqual(dados['modelos_carregados'], [])
+
     def test_sem_redirecionamento_e_sem_confundir_erro_com_zero(self):
         self.redirecionar = True
         dados = self.coletar()
