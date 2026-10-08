@@ -2,12 +2,40 @@
 
 ## Estado em 07/10/2026
 
-- Fases 1 e 2: concluídas (diagnóstico, arquitetura e decisão de interface).
+- Fase 1 (diagnóstico): concluída com ressalvas. Sete dos doze critérios
+  do pedido estão parciais; ver a matriz abaixo.
+- Fase 2 (arquitetura e decisão de interface): entregue; o usuário
+  autorizou a Fase 3 em seguida.
 - Fase 3 (registro de provedores): concluída e aprovada pelo
   `jangada-validar` (Codex, rodada 4, forçada pelo usuário).
 - Fase 4: não iniciada; depende de autorização.
 - Ramo: `agente/tarefa-ab47cef8d325`, sobre `9dcb640`. Último commit de
   código: `3018fb9`.
+
+## Matriz dos doze critérios da Fase 1
+
+O pedido exige os doze critérios aprovados para a conclusão integral. Com
+critérios parciais, a fase fica **concluída com ressalvas**. As seções
+citadas são de `01-diagnostico.md`, salvo indicação.
+
+| Nº | Critério | Situação | Evidência | Pendência |
+|---|---|---|---|---|
+| 1 | Inventário | PARCIAL | Seção 1.1 lista os doze diretórios de primeiro nível e a raiz do commit `9dcb640`; seção 1.2 lista os pontos de entrada | `install/`, `migrations/`, `shell/` e os hooks do agy e do Codex foram só listados; seis módulos Python foram lidos só em estrutura (seção 14) |
+| 2 | Arquitetura | APROVADO | Seção 2.1, com 17 componentes e estado implementado, parcial, ausente ou não verificável; seção 2.2 com os limites fixos; seção 4 com as entidades ausentes | Nenhuma |
+| 3 | Evidências | PARCIAL | Convenção fato, inferência e não verificado no início do documento; tabelas com caminho e linha | Não houve conferência de que todas as conclusões críticas têm marca; a tabela de riscos da seção 12 não cita evidência |
+| 4 | Painel | PARCIAL | Seções 2.1 e 8: tecnologia, abas, origem dos dados e lacunas, com linhas de `app.R` | Painel não foi aberto em tela; a descrição vem do código |
+| 5 | Atividades | PARCIAL | Seção 3 (fluxos da sessão e da fila) e seção 6 (mapa de estados) | Central Qt não foi aberta em tela; retomada e falha não foram executadas |
+| 6 | Agentes e provedores | PARCIAL | Seções 2.1 e 2.2: CLI para `claude`, `codex` e `agy`; HTTP só na API do Ollama; busca sem ocorrência de API de terceiros | Os perfis `claude-agy`, `claude-claude`, `codex-agy`, `codex-codex` e `exemplo` de `default/agentes/` não foram classificados um a um |
+| 7 | Identidade | APROVADO | `03-identidade-visual.md`, seção 1: logo, cores, tipografia, ícones e medidas localizados | Nenhuma para o critério; as pendências de contraste estão na seção 3 daquele arquivo |
+| 8 | Desacoplamento | APROVADO | Seção 7 classifica os requisitos de `desac.md`, lido em `~/Downloads/desac.md` | O arquivo está fora do repositório (T2, T13); a classificação não pode ser refeita só com o repositório |
+| 9 | Testes | APROVADO | Seção 10 inventaria a suíte; `testes/verificar.sh` foi executado, com código 0 e 44 etapas (seção "Testes executados" abaixo) | Um caso pulado pelo isolamento: "casa mínima (leitura)" |
+| 10 | Riscos | PARCIAL | Seção 12: onze riscos com prioridade e mitigação | A tabela não tem colunas de evidência e de impacto |
+| 11 | Documentação | APROVADO | `00-indice.md`, `01-diagnostico.md`, `03-identidade-visual.md`, `09-decisoes.md` e este arquivo, em `docs/evolucao-2.0/` | Nenhuma |
+| 12 | Integridade | PARCIAL | O commit `9976e2a`, filho direto de `9dcb640`, só contém os sete arquivos de `docs/evolucao-2.0/` (`git diff --stat 9dcb640 9976e2a`). O `git status --short` ao fim das Fases 1 e 2 mostrava só `?? docs/evolucao-2.0/` | A saída do `git status` do início da fase não foi guardada, então a comparação entre início e fim não está comprovada. O worktree foi criado a partir de `9dcb640`; alterações preexistentes fora dele não foram conferidas |
+
+Resultado: cinco aprovados (2, 7, 8, 9 e 11), o 8 com a ressalva da fonte
+externa, e sete parciais (1, 3, 4, 5, 6, 10 e 12). Nenhum bloqueado nem
+sem avaliação.
 
 ## O que foi feito
 
