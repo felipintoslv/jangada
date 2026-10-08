@@ -197,20 +197,30 @@ Implementado e conferido no código:
 
 Verificações observadas até aqui:
 
-- `testes/fichas.py`: três testes passaram, incluindo três PNGs sintéticos
-  e os dois esquemas, contraste de texto/estados e migração preservando arquivo.
-- `testes/monitoramento.py`: três testes passaram, com `/proc` real e API
-  local sintética. Falha e indisponibilidade não viram zero.
+- `testes/fichas.py`: cinco testes passaram, incluindo três PNGs sintéticos
+  e os dois esquemas, contraste, recuperação de JSON inválido e simulação.
+  A migração preserva o arquivo existente.
+- `testes/monitoramento.py`: quatro testes passaram, com `/proc` real, API
+  local sintética e comando `--json`. Falha e indisponibilidade não viram zero.
 - `testes/tarefas.py`: 64 testes passaram; seleção de T1 em dois projetos,
   recusa de cancelamento, dados parciais, foco e modos incluídos.
 - `testes/painel-operacional.R` passou: filtros, cache intacto, sessão sem
   token encerrada, primeira medida de CPU ausente e coleta suspensa fora da aba.
 - `testes/painel.sh` passou com o app real, autenticação e coleta; os
-  testes de indicadores e os 25 contratos operacionais também passaram.
-- `testes/verificar.sh` passou em 08/10/2026, código zero, em 205 s,
-  depois dos ajustes finais de leitura legada, dados inválidos e dependências.
+  testes de indicadores e os 28 contratos operacionais também passaram.
+- `testes/verificar.sh` passou em 08/10/2026, código zero, em 206 s,
+  depois das correções e dos contratos adicionais pedidos na revisão.
 - A Central Qt foi aberta sem servidor gráfico nos dois modos, com quatro
   tarefas sintéticas. As imagens foram inspecionadas; não foi uma sessão Hyprland.
+
+O primeiro parecer técnico desta entrega pediu revisão. Foram corrigidos
+o tratamento de paleta inválida, o filtro com estado ausente, a simulação
+do tema e o alinhamento da lista de pacotes. Os testes foram ampliados
+para catálogos com falha, configurações públicas inválidas, isolamento do
+Codex, comando de monitoramento e eventos da consulta.
+A alegação de sessão sem projeto não se confirmou: `consultar` cria um
+projeto transitório, conferido por um teste sem cadastro e sem gravação.
+A cópia da paleta foi mantida e documentada conforme a regra 3 de `AGENTS.md`.
 
 Não houve instalação, atualização da cópia instalada ou envio de commits.
 Não foram exercitados modelos remotos reais nos contratos; os testes usam
