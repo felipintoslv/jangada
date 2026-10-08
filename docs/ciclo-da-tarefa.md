@@ -2,7 +2,9 @@
 
 Uma tarefa passa por três comandos: `jangada-agente` abre a sessão,
 `jangada-validar` manda a entrega ao revisor configurado e
-`jangada-agente-fim` integra e limpa. O estado de cada sessão fica em
+`jangada-agente-fim` encerra e limpa. Na baseline 2026-10, `--integrar`
+está bloqueado: a revisão continua, mas a integração é manual supervisionada.
+Veja [segurança operacional](estabilizacao/SEGURANCA_OPERACIONAL.md). O estado de cada sessão fica em
 `~/.local/state/jangada/agentes/SESSAO.json`, com o contrato descrito em
 `default/claude/skills/jangada/agentes.md`.
 
@@ -17,7 +19,7 @@ flowchart LR
     C -- REVISAR --> B
     C -- APROVADO --> E{mais uma entrega?}
     E -- sim --> B
-    E -- não --> F[jangada-agente-fim<br>--integrar]
+    E -- não --> F[integração manual supervisionada<br>e encerramento após conferência]
     C -- limite --> G[usuário decide:<br>--forcar ou reverter]
 ```
 
@@ -92,7 +94,7 @@ flowchart TD
     D -- não --> X1[código 1: nada a revisar]
     D -- sim --> E{rodada > JANGADA_VALIDAR_RODADAS<br>e sem --forcar?}
     E -- sim --> R{--reverter-se-limite?}
-    R -- sim --> R1[reset e clean no worktree,<br>nunca no ramo base]
+    R -- sim --> R1[reversão automática bloqueada,<br>preserva arquivos e commits]
     R -- não --> R2[pede para parar e<br>descrever o pendente]
     R1 --> X4[registra limite, código 4]
     R2 --> X4
@@ -108,14 +110,18 @@ flowchart TD
     J --> L[lê STATUS da primeira linha]
     K --> L
     O --> L
-    L -- APROVADO --> M[grava .aprovado<br>registra, código 0]
+    L -- APROVADO --> P{verificação local completa<br>e revisão independente?}
+    P -- sim --> M[grava .aprovado<br>registra, código 0]
+    P -- não --> N
     L -- REVISAR --> N[registra, código 3]
 ```
 
 - **Ponto de comparação.** Parte do `merge-base` entre a base e o `HEAD`.
   Direto no ramo base, vale o commit `inicio` gravado na abertura. Depois de
   um APROVADO, a próxima chamada é outra entrega: a revisão parte do commit
-  aprovado (`validacao-ROTULO.aprovado`) e as rodadas recomeçam.
+  aprovado (`validacao-ROTULO.aprovado`) e as rodadas recomeçam, somente
+  com marca protegida, validação local completa, independência, árvore e base
+  conferidas. Marcas graváveis pelo agente não encurtam o diff.
 - **Foto da entrega.** Antes de qualquer conferência, o worktree é
   congelado: o commit do agente, os arquivos rastreados e os novos viram
   árvores do git, e uma cópia temporária é montada a partir delas. O portão
@@ -123,11 +129,9 @@ flowchart TD
   durante a revisão fica fora do parecer e da aprovação. Fora do isolamento,
   os objetos passam por `git fetch` para um espelho em `revisoes/espelhos/`,
   que recalcula cada hash: o agente grava em `.git/objects`, e o git não
-  reconfere um objeto solto ao ler. O `--integrar` compara os objetos do
-  ramo e da base com os do espelho antes do merge e, depois dele, refaz a
-  mescla no espelho: árvore diferente ou arquivo escrito com conteúdo que não
-  bate com o nome no commit desfaz o merge. Um objeto trocado depois da
-  integração fica fora dessa conferência; quem o acusa é o `git fsck`.
+  reconfere um objeto solto ao ler. A integração automática está bloqueada:
+  uma conferência posterior ao merge não autoriza rollback destrutivo no
+  worktree principal. A trava do Jangada não impede alterações do editor.
 - **Diff.** Entram os arquivos rastreados e os novos não rastreados. Nome de
   arquivo com quebra de linha reprova na verificação local, porque escaparia
   das listas.
@@ -142,7 +146,11 @@ flowchart TD
   comparação é um commit do agente: por isso o `lintr` e o
   `.jangada/validar.sh` rodam pelo `jangada-isolar`, que numa sessão isolada
   roda direto e fora dela abre o bwrap. Com `.lintr` no projeto, o `lintr`
-  que falha reprova a entrega.
+  que falha ou está ausente reprova a entrega. Sem configuração própria,
+  achados do padrão continuam como aviso, mas a execução é obrigatória.
+  ShellCheck e luac ausentes também reprovam arquivos aos quais se aplicam.
+  O estado das verificações acompanha o parecer em `.verificacoes.tsv`.
+  `.jangada/validar.sh` tem prazo de 300 segundos; lintr, 120 segundos.
 - **Revisor.** O hook do revisor fica desligado, para o Stop dele não marcar
   a sessão como concluída. Pedido acima de 126.000 bytes leva o diff num
   arquivo que o agy lê. Sem o agente `revisor` instalado, o agy cairia no
@@ -174,9 +182,9 @@ flowchart TD
   commit sozinho não foi o que o revisor viu.
 - **Parecer.** Só vale a primeira linha não vazia, e ela tem de ser
   exatamente `STATUS: APROVADO` ou `STATUS: REVISAR`, em maiúsculas. Outra
-  forma conta como REVISAR. Quando o revisor é o modelo do autor, o veredito
-  registrado é `APROVADO_AUTORREVISAO`, com `independente` falso no
-  `validar.jsonl`.
+  forma conta como REVISAR. Parecer aprovado sem verificação local completa
+  ou produzido pelo autor vira REVISAR e não gera marca de aprovação. Fora
+  do isolamento, autoria sem cópia protegida da sessão também não aprova.
 
 | Código | Significado |
 |---|---|
@@ -187,58 +195,30 @@ flowchart TD
 
 ## Fim da sessão
 
-```mermaid
-flowchart TD
-    A[jangada-agente-fim SESSAO] --> B[conferir_estado]
-    B -- adulterado --> X[recusa sem mexer em nada]
-    B -- ok --> C[avisa se a raiz é o<br>próprio jangada: rodar jangada-update]
-    C --> D{--integrar?}
-    D -- sim --> E{repositório principal<br>sem alteração pendente?}
-    E -- não --> X2[recusa, código 1]
-    E -- sim --> R{aprovação em revisoes/<br>do commit do ramo, limpa?}
-    R -- não --> V[jangada-validar fora<br>do isolamento]
-    V --> Q{aprovou?}
-    Q -- não --> C2{confirma mesclar<br>sem aprovação?}
-    C2 -- não --> X4[nada foi feito, código 1]
-    C2 -- sim --> F
-    Q -- sim --> F
-    R -- sim --> F[merge --no-ff na base]
-    F --> G
-    D -- não --> G{alterações pendentes<br>no worktree?}
-    G -- sim --> H{confirma?}
-    H -- não --> X3[nada foi feito, código 1]
-    H -- sim --> I
-    G -- não --> I[limpar]
-    I --> J[fecha o tmux, remove o worktree,<br>apaga o ramo se integrado,<br>o estado e os pareceres;<br>no jangada, com allowed_signers,<br>chama o jangada-assinar]
-```
+O `conferir_estado` recusa caracteres de controle, caminhos relativos, ramo
+fora de `agente/NOME`, worktree fora de `JANGADA_WORKTREES` e worktree de
+outro repositório. O estado gravável pelo agente não autoriza operação fora
+da sessão.
 
-- `conferir_estado` recusa caracteres de controle, caminhos relativos, ramo
-  fora de `agente/NOME`, worktree fora de `JANGADA_WORKTREES` e worktree de
-  outro repositório. O estado é gravável de dentro do isolamento, então nada
-  dele é aceito sem conferência.
-- O parecer que a sessão grava em `agentes/` não conta para o `--integrar`:
-  o agente pode escrevê-lo. Vale só a marca em `revisoes/` para o commit
-  atual do ramo, com o worktree limpo. Sem ela, o `--integrar` roda o
-  `jangada-validar` fora do isolamento e, se não sair APROVADO, pede
-  confirmação para mesclar assim mesmo. `--sem-revisao` pula essa revisão e
-  vai direto à confirmação. Dentro do isolamento a revisão não roda, porque
-  não valeria como aprovação.
-- O commit do ramo é resolvido uma vez, antes da lista de commits: a revisão
-  vale para ele e o merge leva esse commit, não o nome do ramo. Se o ramo
-  mudar durante a revisão ou a confirmação, o `--integrar` recusa sem mesclar,
-  porque a sessão do agente só fecha na limpeza.
-- `--integrar` mescla no repositório de trabalho e nunca na cópia instalada;
-  ela só avança pelo `jangada-update` ([atualização](atualizacao-e-migracoes.md)).
-- Chamado de dentro da própria sessão, o `limpar` roda em segundo plano,
-  porque fechar o tmux mataria o próprio comando.
-- Sem `--integrar`, o ramo `agente/NOME` fica; apague com `git branch -d`.
+Com `--integrar`, uma sessão com ramo próprio recebe recusa explícita sob a
+trava do repositório. Confirmação gráfica, marca aprovada e `--sem-revisao`
+não liberam a publicação. Não se executa merge, recuperação ou limpeza.
+A sessão, os arquivos, o índice, HEAD, worktree e ramo ficam disponíveis
+para revisão e integração manual supervisionada.
+
+Sem `--integrar`, o encerramento conserva a conferência de alterações
+pendentes e a confirmação humana antes de remover a worktree. O ramo fica.
+Uma confirmação de descarte perde arquivos sem commit: faça cópia antes.
+Chamado de dentro da própria sessão, o `limpar` roda em segundo plano, com
+registro, porque fechar o tmux encerraria o próprio comando.
 
 ## Testes
 
 | Arquivo | O que cobre |
 |---|---|
 | `testes/validar.sh` | veredito, rodadas, limite, ponto de comparação, verificação local, pareceres e métricas, com claude e agy falsos |
-| `testes/fim.sh` | recusa de estado adulterado (ramo, worktree, raiz, base), aprovação de fora no `--integrar` (marca forjada em `agentes/`, marca `sujo`, `--sem-revisao`, ramo que avança durante a revisão, chamada de dentro do isolamento) e `--limpar-concluidos` |
-| `testes/update.sh` | `--integrar` não mexe na cópia instalada nem roda ganchos do repositório do agente |
+| `testes/fim.sh` | estado adulterado, bloqueio da integração e preservação de arquivos, índice, HEAD, sessão e worktree, inclusive chamadas simultâneas |
+| `testes/baseline.py` | reprodução do rollback antigo, conflito, repetição após publicação manual, interrupção da trava, ferramentas ausentes, marcas inválidas e recuperação sintética |
+| `testes/update.sh` | bloqueio não mexe na cópia instalada nem roda ganchos; atualização e assinatura continuam ensaiadas com Git sintético |
 | `testes/eventos.sh` | histórico de estados gravado pelos hooks e pela troca de foco |
 | `testes/restaurar.sh` | volta de uma sessão interrompida |
