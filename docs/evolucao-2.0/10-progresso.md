@@ -1,6 +1,6 @@
 # Progresso
 
-## Estado em 07/10/2026
+## Estado em 08/10/2026
 
 - Fase 1 (diagnóstico): concluída com ressalvas. Sete dos doze critérios
   do pedido estão parciais; ver a matriz abaixo.
@@ -8,9 +8,13 @@
   autorizou a Fase 3 em seguida.
 - Fase 3 (registro de provedores): concluída e aprovada pelo
   `jangada-validar` (Codex, rodada 4, forçada pelo usuário).
-- Fase 4: não iniciada; depende de autorização.
-- Ramo: `agente/tarefa-ab47cef8d325`, sobre `9dcb640`. Último commit de
-  código: `3018fb9`.
+- Fase 4: autorizada em 08/10/2026; implementação não iniciada. O usuário
+  pediu apresentação do escopo e confirmação antes de alterar código.
+- Sessão da Fase 3: ramo `agente/tarefa-ab47cef8d325`, sobre `9dcb640`.
+  HEAD da aprovação informado pelo usuário: `3018fb9`.
+
+O ramo e os commits acima identificam a sessão anterior. Nesta continuação,
+o ponto de partida é `bd7b9fe`, que integra aquela entrega.
 
 ## Matriz dos doze critérios da Fase 1
 
@@ -50,7 +54,7 @@ sem avaliação.
 - Leitura de `testes/verificar.sh` e de `.github/workflows/verificar.yml`.
 - Leitura de `~/Downloads/desac.md`, fora do repositório.
 
-## Testes executados
+## Testes executados na Fase 1
 
 `testes/verificar.sh` rodou uma vez, de dentro da sessão isolada, sobre o
 código sem alteração:
@@ -60,11 +64,11 @@ código sem alteração:
   `testes/isolar.sh`. É limite do isolamento da sessão.
 - Nenhuma etapa foi ignorada por falta de ferramenta.
 
-O resultado vale para o código atual. Não diz nada sobre a proposta, que não
-tem código. Para fechar o caso pulado, rode `bash testes/verificar.sh` num
-terminal fora da sessão.
+O resultado vale para o código conferido na Fase 1. Não comprova as mudanças
+das fases seguintes. Para fechar o caso pulado, rode
+`bash testes/verificar.sh` num terminal fora da sessão.
 
-## O que não foi feito
+## O que não foi feito na Fase 1
 
 - `jangada-validar` não rodou: a fase proíbe commits e sem commit não há
   entrega para revisar.
@@ -117,9 +121,16 @@ Fica fora, com as listas próprias: fila (`estado.py:280`, `cli.py:131`),
 saúde (`saude.py`), destinos do `jangada-delegar` e o catálogo de reserva da
 Central (`janela.py:24`). Revisor novo ainda exige função `revisar_NOME`.
 
-Depois da entrega, o `jangada-agente` passou a parar com erro quando nenhum
-provedor tem a função `principal` (`3018fb9`). Antes abria a sessão sem o
-protocolo, sem aviso.
+A aprovação da Fase 3 pelo `jangada-validar` ocorreu em 07/10/2026, com
+HEAD em `3018fb9` (informação do usuário nesta continuação). O registro
+anterior identifica Codex, rodada 4, forçada pelo usuário.
+
+O commit `3018fb9` (`fix(provedores): jangada-agente para quando o registro
+vem vazio`) faz o lançador parar com erro quando nenhum provedor tem a função
+`principal`. Antes abria a sessão sem o protocolo, sem aviso. O commit e a
+recusa foram conferidos no histórico Git e em `bin/jangada-agente:45-50`.
+O histórico atual contém também alterações posteriores a esse HEAD; esta
+nota não estende a aprovação de `3018fb9` a elas.
 
 Não conferido: como a atualização leva `default/provedores/` à cópia
 instalada. Sem essa pasta o `jangada-agente` não abre sessão.
