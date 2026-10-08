@@ -5,6 +5,8 @@ ids <- c(strrep("a", 64), strrep("b", 64))
 projetos <- lapply(ids, function(id) list(id = id, nome = "Mesmo nome", caminho = paste0("/", id), politica = list()))
 tarefas <- lapply(seq_along(ids), function(i) list(id = "T1", projeto = ids[i], estado = "Pronta", status = "QUEUED",
   atualizado = as.numeric(Sys.time()), especificacao = list(pedido = paste("Fonte", LETTERS[i]), dependencias = list())))
+tarefas <- c(tarefas, list(list(id = "T3", projeto = ids[1], especificacao = list()),
+  list(id = "T4", projeto = ids[1], estado = "Em revisão", especificacao = list(criterios_aceite = "Critério pendente"))))
 n <- list(projetos = projetos, atividades = list(), tarefas = tarefas, sessoes = list(), execucoes = list(),
   revisoes = list(), eventos = list(), provedores = list(), perfis = list(), erros = list(), data = "2026-10-08T10:00:00Z")
 jsonlite::write_json(n, file.path(cache_teste, "nucleo.json"), auto_unbox = TRUE)
@@ -21,6 +23,11 @@ secoes <- c("Visão Geral", "Projetos", "Central de Atividades", "Central de Age
 stopifnot(all(vapply(secoes, function(s) grepl(s, html, fixed = TRUE), logical(1))))
 chamadas <- new.env()
 chamadas$n <- 0L
+tabela_original <- ambiente$tabela
+ambiente$tabela <- function(d, ...) {
+  if (identical(names(d), c("Projeto", "Tarefa", "Critérios", "Motivo", "Artefato"))) chamadas$pendentes <- d
+  tabela_original(d, ...)
+}
 ambiente$system2 <- function(...) {
   chamadas$n <- chamadas$n + 1L
   jsonlite::toJSON(list(data = "2026-10-08T10:00:00Z", cpu_ticks = list(total = chamadas$n * 100, ocioso = chamadas$n * 20),
@@ -34,6 +41,8 @@ shiny::testServer(aplicacao, {
   stopifnot(grepl("Fonte A", output$op_detalhes), !grepl("Fonte B", output$op_detalhes))
   stopifnot(grepl("f", jsonlite::fromJSON(output$op_historico)$x$options$dom, fixed = TRUE))
   stopifnot(grepl(ids[1], output$op_detalhes, fixed = TRUE))
+  invisible(output$op_pendentes)
+  stopifnot(identical(chamadas$pendentes$Tarefa, "T4"))
   session$setInputs(op_projeto = ids[2], op_detalhe = paste("tarefa", ids[2], "T1", sep = "|"))
   stopifnot(grepl("Fonte B", output$op_detalhes), !grepl("Fonte A", output$op_detalhes))
   session$setInputs(secao = "Monitoramento")

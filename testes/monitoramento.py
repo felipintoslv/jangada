@@ -4,6 +4,7 @@ import http.server
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import threading
 import unittest
@@ -68,6 +69,17 @@ class Monitoramento(unittest.TestCase):
                 dados = monitoramento.coletar()
             self.assertIsNone(dados['modelos_carregados'])
         self.assertEqual(self.pedidos, [])
+
+    def test_comando_json_nao_abre_terminal(self):
+        raiz = Path(__file__).resolve().parents[1]
+        ambiente = dict(os.environ, JANGADA_PATH=str(raiz), OLLAMA_HOST='http://127.0.0.1:' + str(self.servidor.server_port))
+        resposta = subprocess.run([str(raiz / 'bin/jangada-monitor'), '--json'], env=ambiente,
+                                  capture_output=True, text=True, timeout=15)
+        self.assertEqual(resposta.returncode, 0, resposta.stderr)
+        dados = json.loads(resposta.stdout)
+        self.assertGreater(dados['cpu_ticks']['total'], 0)
+        self.assertEqual(dados['modelos_carregados'], [])
+        self.assertEqual(self.pedidos, ['/api/ps'])
 
 
 if __name__ == '__main__':

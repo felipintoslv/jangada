@@ -150,6 +150,10 @@ trocar pelo par padrão quando ficar abaixo da meta.
 
 ## 4. Implementação em 08/10/2026
 
+O tema guarda uma cópia de `fichas.json` antes de regenerá-lo, conforme a
+regra 3 de `AGENTS.md`. Isso preserva ajustes manuais; a regeneração os
+substitui pelas cores da nova imagem. `JANGADA_SIMULAR=1` não grava nem recarrega.
+
 `default/matugen/modelos/fichas.json` gera sete fichas nos modos claro e
 escuro em uma chamada do matugen 4.2.0. A sintaxe foi conferida com o
 programa instalado. `default/visual/fichas.py` valida formato e contraste;

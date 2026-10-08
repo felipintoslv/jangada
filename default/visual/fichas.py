@@ -58,8 +58,11 @@ if __name__ == '__main__':
         print(json.dumps(carregar()))
         sys.exit(0)
     caminho = Path(sys.argv[1])
-    originais = json.loads(caminho.read_text())
+    try:
+        originais = json.loads(caminho.read_text())
+    except (OSError, ValueError):
+        originais = {}
     dados = validar(originais)
     if dados != originais:
         caminho.write_text(json.dumps(dados, ensure_ascii=False, indent=2) + '\n')
-        print('jangada-tema: contraste insuficiente; usada paleta de reserva.', file=sys.stderr)
+        print('jangada-tema: paleta inválida ou contraste insuficiente; usada paleta de reserva.', file=sys.stderr)

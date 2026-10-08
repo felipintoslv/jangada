@@ -146,7 +146,7 @@ operacional_server <- function(input, output, session, dados) {
   output$op_revisoes <- DT::renderDT(com_busca(op_tabela(rotular(nucleo()$revisoes),
     c(Projeto = "nome_projeto", Tarefa = "tarefa", Decisão = "status", Revisor = "revisor",
       Modelo = "modelo", Independência = "independente", Critérios = "criterios_aceite", Artefato = "artefato_sha256", Parecer = "parecer"))))
-  output$op_pendentes <- DT::renderDT(com_busca(op_tabela(rotular(Filter(function(t) t$estado == "Em revisão", nucleo()$tarefas)),
+  output$op_pendentes <- DT::renderDT(com_busca(op_tabela(rotular(Filter(function(t) identical(t$estado, "Em revisão"), nucleo()$tarefas)),
     c(Projeto = "nome_projeto", Tarefa = "id", Critérios = "especificacao.criterios_aceite", Motivo = "motivo", Artefato = "hash_artefato"))))
   output$op_validacoes <- DT::renderDT({
     v <- dados()$validacoes

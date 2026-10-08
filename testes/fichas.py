@@ -34,6 +34,31 @@ class Fichas(unittest.TestCase):
         self.assertEqual(validar(ruim), PADRAO)
         self.assertEqual(validar({'dark': {'texto': 'url(externo)'}}), PADRAO)
 
+    def test_gravacao_recupera_arquivo_ausente_e_json_invalido(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            destino = Path(tmp) / 'fichas.json'
+            for conteudo in (None, '{inválido'):
+                if conteudo is not None:
+                    destino.write_text(conteudo)
+                resposta = subprocess.run([sys.executable, str(RAIZ / 'default/visual/fichas.py'), str(destino)],
+                                          capture_output=True, text=True, timeout=10)
+                self.assertEqual(resposta.returncode, 0, resposta.stderr)
+                self.assertEqual(json.loads(destino.read_text()), PADRAO)
+                self.assertIn('paleta de reserva', resposta.stderr)
+                self.assertNotIn('Traceback', resposta.stderr)
+
+    def test_tema_simulado_nao_grava_nem_recarrega(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pasta = Path(tmp)
+            ambiente = dict(os.environ, JANGADA_PATH=str(RAIZ), XDG_CONFIG_HOME=str(pasta / 'config'),
+                            XDG_STATE_HOME=str(pasta / 'estado'), JANGADA_SIMULAR='1')
+            for argumentos in (['--cor', '#4f8fba'], [str(pasta / 'ausente.png')]):
+                resposta = subprocess.run([str(RAIZ / 'bin/jangada-tema'), *argumentos], env=ambiente,
+                                          capture_output=True, text=True, timeout=10)
+                self.assertEqual(resposta.returncode, 0, resposta.stderr)
+                self.assertIn('[simulação]', resposta.stdout)
+                self.assertEqual(list(pasta.iterdir()), [])
+
     @unittest.skipUnless(shutil.which('matugen'), 'matugen ausente')
     def test_tres_imagens_dois_modos_com_matugen_real(self):
         with tempfile.TemporaryDirectory() as tmp:

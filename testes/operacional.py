@@ -18,7 +18,7 @@ sys.path.insert(0, str(RAIZ / 'default/orquestracao'))
 from estado import Estado
 from projetos import cadastrar, chave, ler_projeto, reassociar
 from executor import contexto_principal, executar_uma
-from nucleo.consultas import consultar
+from nucleo.consultas import consultar, catalogos
 from nucleo.acoes import executar as acao
 from nucleo.roteamento import decidir
 from saude import Saude
@@ -297,6 +297,45 @@ class Operacional(unittest.TestCase):
         resultado = consultar(self.estado_raiz, self.projeto)
         self.assertEqual(resultado['tarefas'], [])
         self.assertTrue(resultado['erros'])
+
+    def test_sessao_sem_cadastro_recebe_projeto_transitorio(self):
+        agentes = self.estado_raiz / 'agentes'
+        caminho = str(self.raiz / 'worktree-sem-cadastro')
+        (agentes / 'avulsa.json').write_text(json.dumps(dict(sessao='avulsa', raiz=caminho, estado='ativo')))
+        antes = {str(p): p.read_bytes() for p in self.estado_raiz.rglob('*') if p.is_file()}
+        resultado = consultar(self.estado_raiz)
+        self.assertFalse(resultado['erros'])
+        sessao = resultado['sessoes'][0]
+        projeto = next(p for p in resultado['projetos'] if p['id'] == sessao['projeto'])
+        self.assertEqual(projeto['caminho'], caminho)
+        self.assertEqual(projeto['id'], chave(caminho))
+        self.assertEqual(antes, {str(p): p.read_bytes() for p in self.estado_raiz.rglob('*') if p.is_file()})
+
+    def test_consulta_eventos_preserva_identidade_e_dados(self):
+        cadastrar(self.estado, self.projeto)
+        self.estado.importar([self.tarefa()])
+        _, dono = self.estado.reservar()
+        self.estado.finalizar('T1', dono, 'REVIEW_REQUIRED', {'metricas': {'chamadas': 1}}, 'texto')
+        esperados = [dict(r) for r in self.estado.db.execute('SELECT seq,tarefa,data,evento,dados FROM eventos ORDER BY seq')]
+        for r in esperados:
+            r.update(projeto=chave(self.projeto), dados=json.loads(r['dados']))
+        resultado = consultar(self.estado_raiz, self.projeto)
+        self.assertFalse(resultado['erros'])
+        self.assertEqual(resultado['eventos'], esperados)
+
+    def test_catalogos_retem_sucessos_e_identifica_falhas(self):
+        capacidades = subprocess.CompletedProcess([], 0, json.dumps({'perfis': [{'nome': 'codex-local'}], 'principais': []}))
+        for falha in (subprocess.CalledProcessError(1, ['jangada-config']),
+                      subprocess.CompletedProcess([], 0, '{inválido'),
+                      subprocess.TimeoutExpired(['jangada-config'], 10)):
+            with self.subTest(falha=type(falha).__name__), patch('nucleo.consultas.subprocess.run',
+                    side_effect=[falha, subprocess.CompletedProcess([], 0, '{"valores": []}'), capacidades]) as rodar:
+                resultado = catalogos(RAIZ)
+            self.assertEqual(resultado['provedores'], [])
+            self.assertEqual(resultado['perfis'], [{'nome': 'codex-local'}])
+            self.assertEqual(resultado['configuracao'], {'valores': []})
+            self.assertEqual(resultado['erros'], ['catálogo indisponível: provedores'])
+            self.assertTrue(all(c.kwargs['timeout'] == 10 for c in rodar.call_args_list))
 
     def test_atividade_calculada_nao_grava_estado(self):
         cadastrar(self.estado, self.projeto)

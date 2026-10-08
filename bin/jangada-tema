@@ -14,6 +14,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/jangada-interface-processos"
 # shellcheck source=install/lib.sh
 source "$JANGADA_PATH/install/lib.sh"
 
+if simulando; then
+  executar "$0" "$@"
+  exit 0
+fi
+
 matugen_cfg="$JANGADA_PATH/default/matugen/config.toml"
 conf_usuario="$JANGADA_CONFIG/jangada.conf"
 
@@ -214,6 +219,7 @@ case "${1:-}" in
     aplicar_papel
     ;;
   --cor)
+    # A regra 3 preserva também ajustes manuais antes de regenerar o arquivo.
     copia_seguranca "$JANGADA_CONFIG/fichas.json"
     matugen color hex "${2:?informe a cor, ex.: #4f8fba}" -c "$matugen_cfg" -m dark -t "$JANGADA_TEMA_ESQUEMA"
     python3 "$JANGADA_PATH/default/visual/fichas.py" "$JANGADA_CONFIG/fichas.json"
