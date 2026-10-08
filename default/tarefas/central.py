@@ -144,8 +144,8 @@ def main():
             janela.nova_tarefa()
         sys.exit(app.exec())
     except ImportError as erro:
-        if (erro.name or '').startswith('PyQt6'):
-            parser.exit(1, 'Central de tarefas: instale python-pyqt6.\n')
+        if (erro.name or '').startswith('PyQt6') or 'Qt6Svg' in str(erro):
+            parser.exit(1, 'Central de tarefas: instale python-pyqt6 e qt6-svg.\n')
         parser.exit(1, f'Central de tarefas: falha ao importar {erro.name}: {erro}\n')
     except (OSError, ValueError) as erro:
         parser.exit(1, f'Central de tarefas: {erro}\n')
