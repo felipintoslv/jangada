@@ -310,6 +310,33 @@ A suíte completa `testes/verificar.sh` passou, código zero, em 209 s,
 após as correções do parecer externo.
 A revisão externa do commit atualizado continua necessária antes da mescla.
 
+O usuário forneceu depois `validacao-tarefa-ddeff1c4d2f2-r1.md`, com
+cinco novos apontamentos. Foram tratados assim:
+
+1. Projetos sem caminho ficam somente para consulta na Central. Os botões
+   e seus métodos recusam ações; argumentos inválidos mostram mensagem
+   no estado da janela, sem exceção escapando do método chamado pelo Qt.
+2. Atualizada a descrição da ligação do painel e da Central ao núcleo em
+   `docs/subagentes-e-delegacao.md`.
+3. `sessao-conferir` consulta o estado sem criar cadastro ou banco.
+   A política vazia permite executor sem cadastro; vínculos ausentes são
+   recusados. A mesma regra de provedor é usada na consulta e na escrita.
+   Os testes conferem arquivos e datas intactos tanto na permissão quanto
+   na recusa de fila antiga ou de projeto com política.
+4. A Central usa `consultar --todos --sem-catalogos`. Os catálogos
+   continuam disponíveis na consulta completa usada pelo painel.
+   Cada evento reinicia a espera de 200 ms; a consulta periódica de 30 s
+   continua como reserva. Os testes conferem agrupamento dos eventos e
+   consulta independente dos executáveis dos catálogos.
+5. Reservas principal e de supervisão aplicam a exceção de orçamento
+   para `validacao_json`. A reserva principal foi exercitada com limite
+   de zero chamadas; as regras de elegibilidade da supervisão permanecem.
+
+Passaram 33 contratos operacionais e 66 testes da Central com esses cenários.
+A suíte completa passou, código zero, em 207 s após essas correções.
+A revisão manual externa deve informar `JANGADA_SESSAO` com o identificador
+completo, para usar o mesmo rótulo e a mesma marca procurada pela integração.
+
 ## Como continuar
 
 Uma sessão nova não tem a conversa anterior. O que ela precisa está aqui:

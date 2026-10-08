@@ -130,6 +130,17 @@ conferência de processo zumbi e o prazo; outros erros continuam sendo falhas.
 | `jangada-painel` | indicadores num app Shiny em 127.0.0.1; `default/painel/coletor.py` grava o cache em Parquet (`~/.local/state/jangada/painel`), `default/painel/app.R` só lê o cache |
 | `jangada-gancho` | roda os ganchos do usuário em `~/.config/jangada/ganchos/` |
 
+## Revisão incremental e integração
+
+Uma aprovação anterior pode mover o início do diff para o commit aprovado,
+mesmo com `--base main`. Confira a quantidade de arquivos anunciada:
+aprovar as correções não comprova que o revisor leu toda a entrega acumulada.
+
+Na revisão manual fora do isolamento, use `JANGADA_SESSAO` com o nome
+completo registrado da sessão. Sem ele, o rótulo vem do nome da pasta;
+a marca recebe outro nome e não é a que `jangada-agente-fim` procura.
+Isso não dispensa as conferências de commit, árvore, base e independência.
+
 ## Isolamento (`jangada-isolar`)
 
 O agente aberto pelo `jangada-agente` roda no bubblewrap, com
