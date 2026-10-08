@@ -73,7 +73,7 @@ class Interface(unittest.TestCase):
                   if rotulo.accessibleName() == 'Jangada']
         self.assertEqual(len(marcas), 1)
         imagem = marcas[0].pixmap().toImage()
-        self.assertEqual((imagem.width(), imagem.height()), (192, 192))
+        self.assertEqual((imagem.width(), imagem.height()), (24, 24))
         self.assertEqual(imagem.pixelColor(0, 0).alpha(), 0)
         self.assertTrue((Path(janela.__file__).resolve().parents[1] / 'logo/jangada-symbolic.svg').is_file())
         with patch.object(janela, 'QPixmap', return_value=janela.QPixmap()):
@@ -87,6 +87,57 @@ class Interface(unittest.TestCase):
                                 for rotulo in central_sem_marca.findChildren(QLabel)))
         finally:
             central_sem_marca.close()
+
+    def carregar_operacional(self):
+        projetos = [dict(id='a' * 64, nome='Mesmo nome', caminho='/projeto-a'),
+                    dict(id='b' * 64, nome='Mesmo nome', caminho='/projeto-b')]
+        dados = dict(projetos=projetos, atividades=[], sessoes=[], execucoes=[], revisoes=[], eventos=[], erros=[],
+                     tarefas=[dict(id='T1', projeto=p['id'], status='QUEUED', estado='Pronta',
+                                   especificacao={'pedido': '<b>Texto como dado</b>'}) for p in projetos])
+        self.janela.operacional.mostrar(dados)
+        return self.janela.operacional
+
+    def test_operacional_identifica_tarefa_por_projeto_e_preserva_alvo(self):
+        op = self.carregar_operacional()
+        primeiro = op.lista.topLevelItem(0).child(0)
+        segundo = op.lista.topLevelItem(1).child(0)
+        op.lista.setCurrentItem(primeiro)
+        self.assertIn('<b>Texto como dado</b>', op.detalhes.toPlainText())
+        op.busca.setText('Texto como dado')
+        op.buscar()
+        self.assertEqual(op.detalhes.textCursor().selectedText(), 'Texto como dado')
+        self.assertTrue(op.botoes['pausar'].isEnabled())
+        with patch.object(op, 'executar') as executar:
+            op.agir('pausar')
+            self.assertEqual(executar.call_args.args[1], ['--projeto', '/projeto-a', 'T1', 'pausar'])
+        op.lista.setCurrentItem(segundo)
+        with patch.object(op, 'executar') as executar:
+            op.agir('pausar')
+            self.assertEqual(executar.call_args.args[1], ['--projeto', '/projeto-b', 'T1', 'pausar'])
+        self.assertFalse(op.sessao.isEnabled())
+        op.mostrar(dict(op.dados, tarefas=[]))
+        self.assertFalse(op.botoes['pausar'].isEnabled())
+
+    def test_operacional_recusa_cancelamento_e_dados_parciais(self):
+        op = self.carregar_operacional()
+        op.lista.setCurrentItem(op.lista.topLevelItem(0).child(0))
+        with patch.object(janela.Operacional, 'executar') as executar, \
+             patch('operacional.QMessageBox.exec', return_value=janela.QMessageBox.StandardButton.No.value):
+            op.agir('cancelar')
+            executar.assert_not_called()
+        op.falhar('Consulta parcial')
+        self.assertFalse(op.botoes['cancelar'].isEnabled())
+        self.assertIn('Texto como dado', op.detalhes.toPlainText())
+
+    def test_modos_da_central_e_navegacao_por_teclado(self):
+        self.janela.show()
+        self.janela.modo.setCurrentText('Claro')
+        self.assertIn(self.janela.fichas['light']['superficie'], self.janela.styleSheet())
+        self.janela.modo.setFocus()
+        QTest.keyClick(self.janela.modo, Qt.Key.Key_Tab)
+        self.assertIsNot(APP.focusWidget(), self.janela.modo)
+        self.janela.modo.setCurrentText('Escuro')
+        self.assertIn(self.janela.fichas['dark']['superficie'], self.janela.styleSheet())
 
     def test_central_de_tarefas_acompanha_mudancas_sem_enviar_respostas(self):
         central = Janela(True, self.raiz, self.estado)
