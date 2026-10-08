@@ -291,6 +291,13 @@ class Operacional(unittest.TestCase):
         (self.pasta / 'projeto.json').symlink_to(self.fonte)
         self.assertTrue(consultar(self.estado_raiz)['erros'])
 
+    def test_especificacao_corrompida_vira_erro_de_consulta(self):
+        self.estado.importar([self.tarefa()])
+        self.estado.db.execute("UPDATE tarefas SET especificacao='[]'")
+        resultado = consultar(self.estado_raiz, self.projeto)
+        self.assertEqual(resultado['tarefas'], [])
+        self.assertTrue(resultado['erros'])
+
     def test_atividade_calculada_nao_grava_estado(self):
         cadastrar(self.estado, self.projeto)
         atividade = self.estado.criar_atividade('Leitura', 'Conferir', ['Fidelidade'])

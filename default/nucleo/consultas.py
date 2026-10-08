@@ -109,8 +109,12 @@ def consultar(raiz, projeto=None):
                 estados = {t['id']: t['status'] for t in tarefas}
                 for tarefa in tarefas:
                     spec = json.loads(tarefa['especificacao'])
+                    if not isinstance(spec, dict):
+                        raise ValueError('especificação de tarefa inválida')
                     tarefa['especificacao'] = spec
                     tarefa['resultado'] = json.loads(tarefa['resultado']) if tarefa['resultado'] else None
+                    if tarefa['resultado'] is not None and not isinstance(tarefa['resultado'], dict):
+                        raise ValueError('resultado de tarefa inválido')
                     bloqueada = tarefa['status'] == 'QUEUED' and any(estados.get(d) != 'COMPLETED' for d in spec.get('dependencias', []))
                     tarefa.update(projeto=dados['id'], atividade=spec.get('atividade'),
                                   estado='Bloqueada' if bloqueada else ESTADOS.get(tarefa['status'], 'Bloqueada'))
