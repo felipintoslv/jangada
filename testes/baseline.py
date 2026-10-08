@@ -128,6 +128,14 @@ class Baseline(unittest.TestCase):
         self.assertEqual(resultado.returncode, 3)
         self.assertFalse(self.marca().exists())
 
+    def test_autoria_sem_metadados_protegidos_nao_aprova(self):
+        self.mudar()
+        (self.estado / 'revisoes/teste.json').unlink()
+        resultado = self.validar()
+        self.assertEqual(resultado.returncode, 3)
+        self.assertFalse(self.marca().exists())
+        self.assertIn('independência comprovada', resultado.stdout)
+
     def test_ferramentas_ausentes_nao_aprovam(self):
         for nome, texto, ferramentas in (
                 ('codigo.sh', '#!/bin/bash\necho teste\n', {'shellcheck'}),

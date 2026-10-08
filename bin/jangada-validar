@@ -121,7 +121,7 @@ registrar() {
     --arg modelo "$modelo" --arg autor "$autor" --argjson arquivos "$(grep -c . <<<"$arquivos" || true)" \
     --argjson mais "${mais:-0}" --argjson menos "${menos:-0}" --argjson itens "${itens:-0}" \
     --argjson segundos "$SECONDS" --arg subagentes "$resumo" --arg subagentes_erro "$resumo_erro" \
-    --argjson auto "${auto_revisao:-0}" --arg execucao "${execucao:-}" \
+    --argjson auto "$(( ${auto_revisao:-0} || !${autoria_confiavel:-0} ))" --arg execucao "${execucao:-}" \
     '{data: $data, projeto: $projeto, rotulo: $rotulo, rodada: $rodada, resultado: $resultado,
       etapa: $etapa, revisor: $revisor, modelo: $modelo, autor: $autor, independente: ($auto == 0),
       execucao: (if $execucao == "" then null else $execucao end),
@@ -239,6 +239,12 @@ if [[ -n "$arq_meta" ]]; then
 fi
 [[ -n "$revisor" ]] || revisor="${JANGADA_VALIDAR_REVISOR:-}"
 
+autoria_confiavel=1
+# Fora do isolamento, autoria gravável pela sessão não comprova independência.
+[[ -n "$autor" ]] || autoria_confiavel=0
+if ((fora)) && [[ -n "$sessao" && "$arq_meta" != "$revisoes_dir/$sessao.json" ]]; then
+  autoria_confiavel=0
+fi
 auto_revisao=0
 if [[ "$revisor" == "mesmo" ]]; then
   auto_revisao=1
@@ -1145,9 +1151,9 @@ if [[ "$status" == APROVADO && -n "$fora_do_pedido" ]]; then
     fi
   done <<<"$fora_do_pedido"
 fi
-if [[ "$status" == APROVADO ]] && { [[ "$local_verificado" != true ]] || ((auto_revisao)); }; then
+if [[ "$status" == APROVADO ]] && { [[ "$local_verificado" != true ]] || ((auto_revisao || !autoria_confiavel)); }; then
   status=REVISAR
-  { printf 'STATUS: REVISAR\n\nValidação local incompleta ou revisão não independente.\n\nParecer recebido:\n'; cat "$saida"; } >"$saida.incompleto"
+  { printf 'STATUS: REVISAR\n\nValidação local incompleta ou revisão sem independência comprovada.\n\nParecer recebido:\n'; cat "$saida"; } >"$saida.incompleto"
   mv "$saida.incompleto" "$saida"
 fi
 cat "$saida"
