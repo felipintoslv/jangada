@@ -2,9 +2,11 @@
 """Contratos operacionais com estado temporário, sem chamar provedores."""
 
 import hashlib
+import contextlib
 import json
 import os
 from pathlib import Path
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -210,11 +212,40 @@ class Operacional(unittest.TestCase):
         self.entregar()
         self.estado.db.execute("UPDATE eventos SET dados='{}' WHERE evento='execucao_encerrada'")
         self.estado.importar([self.tarefa('T2')])
-        with self.assertRaises(ValueError):
-            self.estado.reservar()
+        self.assertIsNone(self.estado.reservar())
+        self.assertEqual(self.estado.listar()[1]['status'], 'WAITING_QUOTA')
         cadastrar(self.estado, self.projeto, {'orcamento': {'custo_estimado': 10}})
-        with self.assertRaises(ValueError):
-            self.estado.reservar()
+        self.estado.alterar('T2', 'retomar')
+        self.assertIsNone(self.estado.reservar())
+        self.assertIn('teto de custo', self.estado.listar()[1]['motivo'])
+
+    def test_orcamento_com_reserva_expirada_preserva_estado_e_tarefa_deterministica(self):
+        politica = {'orcamento': {'chamadas': 3, 'periodo_segundos': 60}}
+        cadastrar(self.estado, self.projeto, politica)
+        self.estado.importar([self.tarefa()])
+        self.estado.reservar()
+        self.estado.db.execute("UPDATE tarefas SET prazo=0 WHERE id='T1'")
+        self.estado.importar([self.tarefa('T2'), self.tarefa('T3', papel='verificador',
+                             capacidade='validacao_json', risco=0)])
+        spec, dono = self.estado.reservar()
+        self.assertEqual(spec['id'], 'T3')
+        linhas = {t['id']: t for t in self.estado.listar()}
+        self.assertEqual(linhas['T1']['status'], 'REVISION_REQUIRED')
+        self.assertEqual(linhas['T2']['status'], 'WAITING_QUOTA')
+        self.assertIn('aguarde o fim da janela', linhas['T2']['motivo'])
+        vencida = self.estado.db.execute("SELECT * FROM execucoes WHERE tarefa='T1'").fetchone()
+        self.assertEqual(vencida['status'], 'REVISION_REQUIRED')
+        self.assertIsNone(vencida['chamadas'])
+        self.assertEqual(self.estado.db.execute("SELECT COUNT(*) FROM eventos WHERE evento='reserva_expirada'").fetchone()[0], 1)
+        self.assertIsNone(self.estado.reservar())
+        self.estado.finalizar('T3', dono, 'REVIEW_REQUIRED',
+                             {'metricas': {'chamadas': 0, 'segundos': 0}}, 'conferência pendente')
+        with self.assertRaisesRegex(ValueError, 'reserva expirada'):
+            cadastrar(self.estado, self.projeto, politica)
+        self.estado.db.execute('UPDATE eventos SET data=data-61')
+        cadastrar(self.estado, self.projeto, politica)
+        self.estado.alterar('T2', 'retomar')
+        self.assertEqual(self.estado.reservar()[0]['id'], 'T2')
 
     def test_reassociacao_preserva_spec_e_verifica_fontes_atuais(self):
         cadastrar(self.estado, self.projeto)
@@ -256,11 +287,22 @@ class Operacional(unittest.TestCase):
     def test_consulta_com_wal_ativo_nao_escreve_na_origem(self):
         cadastrar(self.estado, self.projeto)
         self.estado.db.execute('PRAGMA wal_autocheckpoint=0')
+        self.estado.db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
         self.estado.importar([self.tarefa()])
+        with contextlib.closing(sqlite3.connect((self.pasta / 'tarefas.sqlite').as_uri() + '?immutable=1', uri=True)) as disco:
+            self.assertEqual(disco.execute('SELECT COUNT(*) FROM tarefas').fetchone()[0], 0)
         self.estado.db.execute('BEGIN IMMEDIATE')
         self.estado.db.execute("UPDATE tarefas SET status='CANCELLED'")
         antes = {str(p): (p.read_bytes(), p.stat().st_mtime_ns) for p in self.estado_raiz.rglob('*') if p.is_file()}
-        consulta = consultar(self.estado_raiz, self.projeto)
+        conectar = sqlite3.connect
+        def sem_shm(endereco, **opcoes):
+            from urllib.parse import unquote, urlparse
+            copia = Path(unquote(urlparse(endereco).path))
+            self.assertFalse(Path(str(copia) + '-shm').exists())
+            self.assertTrue(Path(str(copia) + '-wal').exists())
+            return conectar(endereco, **opcoes)
+        with patch('nucleo.consultas.sqlite3.connect', side_effect=sem_shm):
+            consulta = consultar(self.estado_raiz, self.projeto)
         depois = {str(p): (p.read_bytes(), p.stat().st_mtime_ns) for p in self.estado_raiz.rglob('*') if p.is_file()}
         self.estado.db.execute('ROLLBACK')
         self.assertEqual(antes, depois)

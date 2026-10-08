@@ -270,7 +270,10 @@ class Estado:
     def chamadas_usadas(self, orcamento):
         desde = time.time() - orcamento.get('periodo_segundos', 86400)
         usadas = 0
-        for evento in self.db.execute("SELECT dados FROM eventos WHERE data>=? AND evento IN ('execucao_encerrada','reserva_expirada')", (desde,)):
+        for evento in self.db.execute("SELECT evento,dados FROM eventos WHERE data>=? AND evento IN ('execucao_encerrada','reserva_expirada')", (desde,)):
+            if evento['evento'] == 'reserva_expirada':
+                raise ValueError('reserva expirada com consumo desconhecido; aguarde o fim da janela '
+                                 f"do orçamento ({orcamento.get('periodo_segundos', 86400)} segundos)")
             dados = json.loads(evento['dados'])
             quantidade = dados.get('resultado', {}).get('metricas', {}).get('chamadas')
             if type(quantidade) is not int or quantidade < 0:
@@ -400,7 +403,15 @@ class Estado:
                 spec = tarefa['especificacao']
                 if estados[tarefa['id']] != 'QUEUED' or any(estados[dep] != 'COMPLETED' for dep in spec.get('dependencias', [])):
                     continue
-                if self.limite_projeto(spec) == 0 and spec['capacidade'] != 'validacao_json':
+                try:
+                    limite = self.limite_projeto(spec)
+                except ValueError as erro:
+                    self.db.execute('UPDATE tarefas SET status=?,motivo=?,atualizado=? WHERE id=?',
+                                    ('WAITING_QUOTA', str(erro), agora, tarefa['id']))
+                    estados[tarefa['id']] = 'WAITING_QUOTA'
+                    self.evento(tarefa['id'], 'orcamento_impedido', {'motivo': str(erro)})
+                    continue
+                if limite == 0 and spec['capacidade'] != 'validacao_json':
                     continue
                 dono = str(uuid.uuid4())
                 self.db.execute('UPDATE tarefas SET status=?,tentativas=tentativas+1,dono=?,prazo=?,atualizado=? WHERE id=?',
