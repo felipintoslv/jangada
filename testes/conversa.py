@@ -17,7 +17,8 @@ TEMP = tempfile.TemporaryDirectory()
 os.environ['JANGADA_ESTADO'] = TEMP.name
 os.environ['JANGADA_CONFIG'] = TEMP.name
 os.environ['JANGADA_LOCAL_MODELO'] = 'modelo-b'
-os.environ['JANGADA_LOCAL_CTX'] = '4096'
+os.environ['JANGADA_LOCAL_CTX'] = '2048'
+os.environ['JANGADA_CONVERSA_CTX'] = '4096'
 os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 sys.path.insert(0, str(RAIZ/'default/conversa'))
 
