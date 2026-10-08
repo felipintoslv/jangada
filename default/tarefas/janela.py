@@ -6,18 +6,25 @@ import html
 import json
 import os
 import re
+import sys
 from pathlib import Path
 import time
 import uuid
 
 from PyQt6.QtCore import QFileSystemWatcher, QProcess, QProcessEnvironment, QTimer, Qt
-from PyQt6.QtGui import QColor, QKeySequence, QPixmap
+from PyQt6.QtGui import QColor, QGuiApplication, QKeySequence, QPainter, QPixmap
+from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout,
                             QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow, QMessageBox,
                             QPlainTextEdit, QPushButton, QSplitter, QTabWidget,
                             QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
-from dados import (CORES, LIMITE, NOME, ORDEM, ROTULOS, Sessao,
+from dados import (LIMITE, NOME, ORDEM, ROTULOS, Sessao,
                    estado_exibido, idade, ler_lista, simuladas)
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from visual.fichas import carregar as carregar_fichas, ESTADOS
+from operacional import Operacional
 
 # Só para a janela simulada e para quando a consulta falha: o catálogo vem do
 # jangada-agente --capacidades-json, que também é quem valida a escolha.
@@ -270,18 +277,21 @@ class Janela(QMainWindow):
         layout.setContentsMargins(24, 22, 24, 18)
         topo = QHBoxLayout()
         topo.setSpacing(8)
-        imagem_marca = QPixmap(str(Path(__file__).resolve().parents[1] / 'logo/jangada.png'))
-        if not imagem_marca.isNull():
-            marca = QLabel()
-            marca.setAccessibleName('Jangada')
-            marca.setPixmap(imagem_marca)
-            marca.setFixedSize(24, 24)
-            marca.setScaledContents(True)
-            topo.addWidget(marca)
+        self.fichas = carregar_fichas()
+        self.marca = QLabel()
+        self.marca.setAccessibleName('Jangada')
+        self.marca.setFixedSize(24, 24)
+        topo.addWidget(self.marca)
         titulo = QLabel(nome_central)
         titulo.setStyleSheet('font-size: 24px; font-weight: 600;')
         topo.addWidget(titulo)
         topo.addStretch()
+        self.modo = QComboBox()
+        self.modo.addItems(['Escuro', 'Claro'])
+        self.modo.setAccessibleName('Modo de cor')
+        self.modo.setCurrentIndex(1 if QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Light else 0)
+        self.modo.currentIndexChanged.connect(self.aplicar_tema)
+        topo.addWidget(self.modo)
         self.atualizar_botao = QPushButton('Atualizar' if real else 'Avançar simulação')
         self.atualizar_botao.clicked.connect(self.avancar)
         topo.addWidget(self.atualizar_botao)
@@ -298,7 +308,7 @@ class Janela(QMainWindow):
         layout.addWidget(self.resumo)
         self.cartoes = QLabel()
         self.cartoes.setTextFormat(Qt.TextFormat.PlainText)
-        self.cartoes.setStyleSheet('background: #23313b; padding: 14px; font-size: 16px;')
+        self.cartoes.setObjectName('cartoes')
         layout.addWidget(self.cartoes)
         divisor = QSplitter()
         self.lista = QTreeWidget()
@@ -319,7 +329,7 @@ class Janela(QMainWindow):
         self.situacao = QLabel()
         self.situacao.setTextFormat(Qt.TextFormat.PlainText)
         self.situacao.setWordWrap(True)
-        self.situacao.setStyleSheet('background: #23313b; padding: 12px;')
+        self.situacao.setObjectName('situacao')
         direito.addWidget(self.situacao)
         self.detalhes = QPlainTextEdit()
         self.detalhes.setReadOnly(True)
@@ -371,12 +381,18 @@ class Janela(QMainWindow):
         direito.addWidget(explicacao)
         divisor.addWidget(detalhes)
         divisor.setSizes([650, 400])
-        layout.addWidget(divisor, 1)
+        self.centrais = QTabWidget()
+        sessoes = QWidget()
+        QVBoxLayout(sessoes).addWidget(divisor)
+        self.centrais.addTab(sessoes, 'Sessões')
+        self.operacional = Operacional(self)
+        self.centrais.addTab(self.operacional, 'Projetos e fila')
+        layout.addWidget(self.centrais, 1)
         self.status = QLabel()
         self.status.setTextFormat(Qt.TextFormat.PlainText)
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
-        self.setStyleSheet('\n            QWidget { background: #182128; color: #e1e9ec; font-size: 13px; }\n            QTreeWidget, QPlainTextEdit, QLineEdit, QComboBox { background: #11191f; border: 1px solid #35454f;\n                border-radius: 6px; padding: 8px; }\n            QTreeWidget::item { padding: 8px 3px; }\n            QTreeWidget::item:selected { background: #2d4956; }\n            QHeaderView::section { background: #23313b; border: none; padding: 8px; }\n            QPushButton { background: #294551; border: 1px solid #48616b;\n                border-radius: 6px; padding: 10px 16px; }\n            QPushButton:hover { background: #365b69; }\n            QPushButton#integrar:enabled { background: #345647; border-color: #628574; }\n            QPushButton#encerrar:enabled { background: #182128; }\n            QPushButton:disabled { color: #74838a; background: #202c33; }\n        ')
+        self.aplicar_tema()
         self.integracao = QProcess(self)
         self.integracao.finished.connect(self.integracao_fim)
         self.integracao.errorOccurred.connect(self.integracao_erro)
@@ -511,7 +527,7 @@ class Janela(QMainWindow):
             dica = '<qt>' + html.escape(s.tarefa or s.nome).replace('\n', '<br>') + '</qt>'
             if item.toolTip(0) != dica:
                 item.setToolTip(0, dica)
-            item.setForeground(2, QColor(CORES.get(estado_exibido(s), '#b7c6cd')))
+            item.setForeground(2, QColor(self.cores_estado.get(estado_exibido(s), self.fichas['dark']['texto'])))
         escolhido = itens.get(anterior)
         if primeira_carga and itens:
             prioridade = min(sessoes.values(), key=lambda s: (ORDEM.get(estado_exibido(s), 3), s.nome))
@@ -605,6 +621,55 @@ class Janela(QMainWindow):
             if self.previa_alvo and self.selecionada() == self.previa_alvo[0]:
                 self.exibir_atividade('Não foi possível consultar a atividade da sessão.', self.previa_alvo[0])
 
+    def aplicar_tema(self):
+        modo = 'light' if self.modo.currentIndex() == 1 else 'dark'
+        c = self.fichas[modo]
+        self.cores_estado = {'aguardando': ESTADOS[modo]['Bloqueada'],
+                            'trabalhando': ESTADOS[modo]['Executando'],
+                            'concluido': ESTADOS[modo]['Em revisão'],
+                            'interrompido': ESTADOS[modo]['Falhou']}
+        self.setStyleSheet(f"""
+            QWidget {{ background: {c['superficie']}; color: {c['texto']};
+                font-family: Inter; font-size: 14px; }}
+            QTreeWidget, QPlainTextEdit, QLineEdit, QComboBox {{ background: {c['superficie_elevada']};
+                border: 1px solid {c['texto_suave']}; border-radius: 8px; padding: 8px; }}
+            QPlainTextEdit {{ font-family: 'JetBrains Mono'; }}
+            QTreeWidget::item {{ padding: 8px 4px; }}
+            QTreeWidget::item:selected {{ background: {c['primaria']}; color: {c['texto_primario']}; }}
+            QHeaderView::section, QLabel#cartoes, QLabel#situacao {{
+                background: {c['superficie_elevada']}; padding: 12px; }}
+            QPushButton {{ background: {c['superficie_elevada']}; border: 1px solid {c['texto_suave']};
+                border-radius: 8px; padding: 8px 16px; }}
+            QPushButton:hover {{ border: 2px solid {c['primaria']}; }}
+            QPushButton:focus, QComboBox:focus, QLineEdit:focus, QTreeWidget:focus,
+            QPlainTextEdit:focus {{ border: 2px solid {c['primaria']}; }}
+            QPushButton:disabled {{ color: {c['texto_suave']}; }}
+        """)
+        for nome, item in self.itens.items():
+            sessao = self.sessoes.get(nome)
+            if sessao:
+                item.setForeground(2, QColor(self.cores_estado.get(estado_exibido(sessao), c['texto'])))
+
+        try:
+            svg = (Path(__file__).resolve().parents[1] / 'logo/jangada-symbolic.svg').read_bytes()
+        except OSError:
+            self.marca.setAccessibleName('')
+            self.marca.hide()
+            return
+        renderer = QSvgRenderer(svg.replace(b'#000000', c['primaria'].encode()))
+        imagem = QPixmap(24, 24)
+        if imagem.isNull() or not renderer.isValid():
+            self.marca.setAccessibleName('')
+            self.marca.hide()
+            return
+        imagem.fill(Qt.GlobalColor.transparent)
+        pincel = QPainter(imagem)
+        renderer.render(pincel)
+        pincel.end()
+        self.marca.setPixmap(imagem)
+        self.marca.setAccessibleName('Jangada')
+        self.marca.show()
+
     def preparar(self, processo, argumentos, comando='jangada-agentes'):
         ambiente = QProcessEnvironment.systemEnvironment()
         ambiente.insert('JANGADA_PATH', str(self.jangada))
@@ -619,10 +684,13 @@ class Janela(QMainWindow):
 
     def observar_estado(self):
         caminhos = set()
-        for pasta in (self.estado_dir, self.estado_dir.parent / 'revisoes'):
+        pastas = [self.estado_dir, self.estado_dir.parent / 'revisoes', self.estado_dir / 'projetos']
+        pastas.extend(p for p in (self.estado_dir / 'projetos').glob('*') if p.is_dir() and not p.is_symlink())
+        for pasta in pastas:
             if pasta.is_dir():
                 caminhos.add(str(pasta))
                 caminhos.update(str(p) for p in pasta.glob('*.json') if p.is_file())
+                caminhos.update(str(p) for p in pasta.glob('tarefas.sqlite*') if p.is_file() and not p.is_symlink())
             else:
                 while not pasta.is_dir() and pasta != pasta.parent:
                     pasta = pasta.parent
@@ -643,6 +711,7 @@ class Janela(QMainWindow):
         self.atualizar()
 
     def atualizar(self):
+        self.operacional.atualizar()
         if not self.real:
             self.status.setText(f'Simulação · cenário {self.passo % 4 + 1} de 4')
             sessoes = simuladas(self.passo) | self.criadas
@@ -981,6 +1050,7 @@ exit "$resultado"
             evento.ignore()
             return
         self.fechando = True
+        self.operacional.fechar()
         for timer in (self.timer, self.evento_estado, self.espera, self.tempo_acao, self.tempo_previa, self.tempo_finalizacao):
             timer.stop()
         for processo in (self.consulta, self.acao, self.previa, self.integracao):
