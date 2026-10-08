@@ -106,3 +106,14 @@ Depois de trocar cores ou papel de parede, rode `jangada-sddm aplicar`.
 
 - `QFileSystemWatcher` perde a observação do arquivo após substituição atômica.
   Observe também a pasta e reponha os caminhos após cada consulta.
+
+- `jangada-painel` reconhece a prontidão e a janela pelo título
+  `Indicadores do jangada`. Trocar só `window_title` no Shiny faz o lançador
+  anunciar indisponibilidade mesmo com o servidor respondendo. Preserve o
+  título ou ajuste os dois pontos junto com os testes.
+- Matugen 4.2.0 aceita `colors.surface.dark.hex`, `.light.hex` e
+  `colors.surface_container.dark.hex` no mesmo modelo. A chamada com
+  `-m dark` ainda gera os dois esquemas quando o modelo os pede explicitamente.
+- Ao herdar `shiny::MockShinySession` nos testes, confira `portable` e
+  `lock_objects` do gerador. No Shiny instalado ambos são `FALSE`; o
+  ambiente pai precisa ser o namespace do Shiny para resolver `ReactiveValues`.

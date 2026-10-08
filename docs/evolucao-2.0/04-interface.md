@@ -143,3 +143,29 @@ resultado.
 
 As abas novas são arquivos R novos mais entradas na navegação de `app.R`.
 Removê-las devolve o painel ao estado atual.
+
+## 8. Implementação em 08/10/2026
+
+As dez seções existem em `app.R`; as análises anteriores estão em
+Indicadores. `operacional.R` lê `nucleo.json`, produzido pelo coletor a
+partir das consultas de `default/nucleo/`. A identidade usa o hash do
+projeto; projetos com o mesmo nome não compartilham seleção.
+
+Central Qt tem as abas Sessões e Projetos e fila. Cadastro de projeto,
+atividade, importação e transições da fila chamam os comandos existentes.
+Acompanhamento de sessão reutiliza a seleção e a integração por SHA.
+Revisão da fila continua no terminal; a Central mostra instruções e critérios.
+Dados parciais ou consulta inválida bloqueiam as ações operacionais.
+
+Monitoramento só consulta recursos depois de autenticação, com a aba
+ativa e intervalo de 5 s. CPU usa diferença entre contadores; a primeira
+medida fica ausente. GPU usa `nvidia-smi` quando disponível; outros
+fabricantes permanecem sem medida. Modelos carregados vêm apenas de
+`GET /api/ps` local, sem redirecionamento ou geração de modelos.
+
+Cadastro, instalação do executável e observações de saúde aparecem
+separados. Autenticação, contrato, modelos e cota não são inferidos do
+cadastro. Configurações públicas têm campos permitidos e validação; não
+incluem argumentos livres nem variáveis de credencial.
+
+Os testes e a revisão técnica ficam registrados em `10-progresso.md`.

@@ -1,7 +1,8 @@
 # Proposta de arquitetura
 
-Fase 2. Proposta para aprovação; nada aqui está implementado. Parte do
-diagnóstico em `01-diagnostico.md` e usa a mesma marcação: **F** fato lido no
+Documento produzido na Fase 2. O estado da implementação e suas verificações
+está em `10-progresso.md`; as partes de API adiadas seguem como referência.
+Parte do diagnóstico em `01-diagnostico.md` e usa a mesma marcação: **F** fato lido no
 código, **I** inferência, **N** não verificado.
 
 ## 1. Princípios

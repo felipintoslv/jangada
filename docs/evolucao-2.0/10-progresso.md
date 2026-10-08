@@ -8,7 +8,8 @@
   autorizou a Fase 3 em seguida.
 - Fase 3 (registro de provedores): concluída e aprovada pelo
   `jangada-validar` (Codex, rodada 4, forçada pelo usuário).
-- Fase 4: escopo confirmado e implementação em verificação.
+- Fase 4: aprovada pelo `jangada-validar` em 08/10/2026, HEAD `0d43dce`.
+- Fases 5 a 7: implementadas, com testes locais concluídos; revisão técnica pendente.
 - Fases 4 a 7: autorizadas com autonomia em 08/10/2026.
 - Sessão da Fase 3: ramo `agente/tarefa-ab47cef8d325`, sobre `9dcb640`.
   HEAD da aprovação informado pelo usuário: `3018fb9`.
@@ -164,8 +165,58 @@ Os 24 testes de `testes/operacional.py` passaram. Incluem WAL ativo,
 transação pendente, banco antigo, reassociação determinística, isolamento
 da revisão, orçamento concorrente e execução direta com provedor falso.
 A suíte `testes/verificar.sh` passou em 08/10/2026, código zero, em 196 s.
-A revisão técnica ainda precisa terminar para aprovar esta fase. A integração
-de interfaces e recursos pertence às fases seguintes.
+A revisão técnica aprovou a fase em 08/10/2026, HEAD `0d43dce`, na segunda
+rodada desta entrega. O parecer é `validacao-jangada--tarefa-ddeff1c4d2f2-r3.md`.
+O revisor conferiu as sete respostas; declarou não ter executado testes.
+A suíte local foi executada nesta sessão. A integração de interfaces e
+recursos pertence às fases seguintes.
+
+## Fases 5 a 7
+
+Implementação autorizada pela mesma mensagem de 08/10/2026. As interfaces
+e a ligação ao núcleo foram desenvolvidas em conjunto, mantendo a separação
+entre consultas Shiny e ações Qt/terminal. A revisão técnica desta entrega
+ainda está pendente.
+
+Implementado e conferido no código:
+
+- Paletas clara e escura no mesmo modelo matugen, validadas em Python e
+  consumidas pelas duas interfaces. Migração repetível e simulada preserva
+  personalizações. Inter entra na lista de pacotes, sem instalação nesta sessão.
+- Dez seções Shiny, filtros por identificador de projeto e detalhes com
+  critérios, dependências, execuções, revisões, eventos e hashes de artefatos.
+- Cadastro, atividades, importação e transições da fila na Central Qt,
+  sempre pelos comandos existentes. Identidades incluem tipo, projeto e ID.
+- Configuração pública com campos permitidos; cadastro separado de instalação
+  e observações de saúde. Ausências permanecem explícitas.
+- `nucleo.json` no coletor e vínculo opcional de execução nas validações.
+  A leitura legada também usa cópia SQLite/WAL; não grava auxiliares na origem.
+- CPU e memória por `/proc`, GPU por `nvidia-smi` quando disponível, e
+  listagem local de modelos por `/api/ps`. Sem redirecionamento ou geração.
+  Monitoramento só depois de autenticação, na aba ativa, a cada 5 s.
+
+Verificações observadas até aqui:
+
+- `testes/fichas.py`: três testes passaram, incluindo três PNGs sintéticos
+  e os dois esquemas, contraste de texto/estados e migração preservando arquivo.
+- `testes/monitoramento.py`: três testes passaram, com `/proc` real e API
+  local sintética. Falha e indisponibilidade não viram zero.
+- `testes/tarefas.py`: 64 testes passaram; seleção de T1 em dois projetos,
+  recusa de cancelamento, dados parciais, foco e modos incluídos.
+- `testes/painel-operacional.R` passou: filtros, cache intacto, sessão sem
+  token encerrada, primeira medida de CPU ausente e coleta suspensa fora da aba.
+- `testes/painel.sh` passou com o app real, autenticação e coleta; os
+  testes de indicadores e os 25 contratos operacionais também passaram.
+- `testes/verificar.sh` passou em 08/10/2026, código zero, em 205 s,
+  depois dos ajustes finais de leitura legada, dados inválidos e dependências.
+- A Central Qt foi aberta sem servidor gráfico nos dois modos, com quatro
+  tarefas sintéticas. As imagens foram inspecionadas; não foi uma sessão Hyprland.
+
+Não houve instalação, atualização da cópia instalada ou envio de commits.
+Não foram exercitados modelos remotos reais nos contratos; os testes usam
+executores sintéticos. A revisão independente usa o revisor configurado.
+As imagens de contraste são sintéticas, e a fonte de reserva é usada nesta
+máquina enquanto Inter não estiver instalada.
 
 ## Como continuar
 
@@ -185,9 +236,8 @@ Uma sessão nova não tem a conversa anterior. O que ela precisa está aqui:
    - O executor não aprova o próprio resultado.
    - A interface não contorna regras do backend.
    - Sem ranking arbitrário de modelos e sem entidades redundantes.
-3. Fases que faltam: 4 (modelo operacional de projetos, tarefas e
-   revisões), 5 (reformulação visual), 6 (integração e monitoramento) e
-   7 (testes e validação). O desenho está em `02-arquitetura.md` e
-   `04-interface.md`.
+3. Fase 4 aprovada. Fases 5 (reformulação visual), 6 (integração e
+   monitoramento) e 7 (testes e validação) implementadas, aguardando
+   revisão técnica. O desenho está em `02-arquitetura.md` e `04-interface.md`.
 4. Para fechar o caso pulado, rode `bash testes/verificar.sh` num terminal
    fora da sessão.

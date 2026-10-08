@@ -1,7 +1,8 @@
 # Identidade visual
 
 Levantamento do que existe e proposta de sistema visual para o painel 2.0.
-A proposta é para discussão; nada foi alterado.
+O levantamento inicial precede a implementação. A situação em 08/10/2026
+está registrada na seção 4; os caminhos e linhas anteriores são daquele levantamento.
 
 ## 1. O que existe
 
@@ -140,9 +141,33 @@ Risco: como a paleta depende da imagem, um papel de parede pode gerar par de
 cores com contraste baixo. Mitigação: conferir o contraste ao gerar o tema e
 trocar pelo par padrão quando ficar abaixo da meta.
 
-## 3. Pendências
+## 3. Pendências do levantamento inicial
 
 - Medir contraste da paleta padrão e das cores de estado.
 - Confirmar se o matugen instalado gera os dois esquemas num modelo só.
 - Decidir se a Central Qt adota as fichas (decisão D7 em `09-decisoes.md`).
 - Conferir painel e Central em tela; esta análise veio só do código.
+
+## 4. Implementação em 08/10/2026
+
+`default/matugen/modelos/fichas.json` gera sete fichas nos modos claro e
+escuro em uma chamada do matugen 4.2.0. A sintaxe foi conferida com o
+programa instalado. `default/visual/fichas.py` valida formato e contraste;
+um esquema insuficiente usa a reserva de `default/visual/padrao.json`.
+Painel e Central Qt leem essa mesma validação. A migração copia a reserva
+só quando ausente; a próxima aplicação do tema gera as cores da imagem.
+
+`testes/fichas.py` mediu texto e estados em ambos os modos, sobre fundo e
+cartões, em três imagens sintéticas: azul, vermelha e cinza. Exige 4,5:1.
+Também confere a reserva e a preservação de personalização na migração.
+Não representa ensaio com todos os papéis de parede possíveis.
+
+A logo simbólica foi aplicada sem alterar os três arquivos oficiais.
+Texto usa Inter e dados usam JetBrains Mono; `inter-font` foi acrescentado
+à lista da instalação. No ambiente desta sessão Inter ainda não está
+instalada, e a conferência visual usa a fonte de reserva do sistema.
+Raio de 8 px, corpo de 14 px, foco visível e modo claro foram aplicados à
+Central. O painel respeita preferência por menos movimento em sua folha
+de estilo. Estados combinam rótulo e símbolo.
+
+A aprovação técnica e a situação das verificações ficam em `10-progresso.md`.

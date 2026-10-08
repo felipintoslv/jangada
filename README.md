@@ -144,7 +144,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir, integrar ou encerrar (`--proximo`, `--anterior`, `--restaurar`) |
 | `jangada-agente-fim` | encerra uma sessão e remove o worktree, com conferência de alterações pendentes; `--integrar` revisa fora do isolamento, faz o merge na base e apaga o ramo; no repositório do jangada, chama o `jangada-assinar` quando há `allowed_signers` e avisa para rodar `jangada-update`, que atualiza a cópia instalada |
 | `jangada-consumo` | tokens do Claude Code no bloco de 5 horas em andamento (também na dica da barra) |
-| `jangada-painel` | painel de indicadores do uso de IA num app Shiny local; `--json` imprime os do dia, `--parar` encerra o app, `--conferir` lista o que falta |
+| `jangada-painel` | painel Shiny local com dez seções, indicadores e consulta do núcleo; `--json` imprime os do dia, `--parar` encerra o app, `--conferir` lista o que falta |
 | `jangada-gancho` | roda os ganchos do usuário de um evento (chamado pelos outros comandos) |
 | `jangada-importar` | converte a configuração do niri em arquivos `.importado` |
 | `jangada-atalhos` | mostra todos os atalhos ativos, lidos do próprio Hyprland (`--lista` para o terminal) |
