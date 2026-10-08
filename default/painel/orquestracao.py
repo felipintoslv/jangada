@@ -7,6 +7,9 @@ import sqlite3
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'orquestracao'))
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from nucleo.consultas import banco_leitura  # noqa: E402
 from estado import Estado  # noqa: E402
 from metricas_projeto import calcular, ler_precos  # noqa: E402
 from saude import Saude  # noqa: E402
@@ -14,12 +17,11 @@ from saude import Saude  # noqa: E402
 
 class Consulta(Estado):
     def __init__(self, caminho):
-        self.db = sqlite3.connect(caminho.as_uri() + '?mode=ro', uri=True, isolation_level=None, timeout=5)
-        self.db.row_factory = sqlite3.Row
-        self.db.execute('PRAGMA query_only=ON')
+        self.leitura = banco_leitura(caminho)
+        self.db = self.leitura.__enter__()
 
     def fechar(self):
-        self.db.close()
+        self.leitura.__exit__(None, None, None)
 
 
 def coletar(raiz, projetos, projeto_de):
@@ -41,7 +43,6 @@ def coletar(raiz, projetos, projeto_de):
         consulta = None
         try:
             consulta = Consulta(arquivo)
-            consulta.db.execute('BEGIN')
             tarefas = consulta.listar()
             estados = {t['id']: t['status'] for t in tarefas}
             for tarefa in tarefas:
@@ -62,7 +63,6 @@ def coletar(raiz, projetos, projeto_de):
                     saldo_chamadas=max(0, spec.get('max_chamadas', 8) - chamadas) if chamadas is not None else None,
                     saldo_segundos=max(0, spec.get('tempo_total', 600) - segundos) if segundos is not None else None))
             resultado['projetos'].append(dict(projeto=projeto, **calcular(consulta, precos)))
-            consulta.db.execute('ROLLBACK')
         except (sqlite3.Error, OSError, ValueError, KeyError, TypeError, AttributeError) as erro:
             resultado['tarefas'] = [t for t in resultado['tarefas'] if t['projeto'] != projeto]
             resultado['erros'].append(f'{projeto}: {type(erro).__name__}')
@@ -78,7 +78,7 @@ def coletar(raiz, projetos, projeto_de):
             saude = Saude.__new__(Saude)
             saude.db = consulta.db
             resultado['provedores'] = saude.listar()
-        except sqlite3.Error as erro:
+        except (sqlite3.Error, OSError, ValueError, KeyError, TypeError) as erro:
             resultado['erros'].append(f'provedores: {type(erro).__name__}')
         finally:
             if consulta is not None:

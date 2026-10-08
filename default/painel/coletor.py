@@ -52,6 +52,9 @@ import pyarrow.parquet as pq
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import subagentes  # noqa: E402
 import orquestracao  # noqa: E402
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from nucleo.consultas import consultar, catalogos  # noqa: E402
 
 INICIO = time.monotonic()
 CASA = os.path.expanduser("~")
@@ -215,7 +218,7 @@ ESQ_VALIDACOES = pa.schema([
     ("revisor", pa.string()), ("modelo", pa.string()), ("autor", pa.string()),
     ("arquivos", pa.int64()), ("mais", pa.int64()), ("menos", pa.int64()),
     ("itens", pa.int64()), ("segundos", pa.int64()), ("entrega", pa.string()),
-    ("origem", pa.string()),
+    ("origem", pa.string()), ("execucao", pa.string()),
 ])
 ESQ_APONTAMENTOS = pa.schema([
     ("data", TS), ("dia", pa.string()), ("projeto", pa.string()), ("rotulo", pa.string()),
@@ -518,6 +521,8 @@ def validacoes():
             "autor": str(d.get("autor") or ""), "arquivos": num("arquivos"), "mais": num("mais"),
             "menos": num("menos"), "itens": num("itens"), "segundos": num("segundos"),
             "origem": origem,
+            "execucao": d.get('execucao') if isinstance(d.get('execucao'), str)
+                and re.fullmatch(r'exe-[0-9a-f]{16}', d['execucao']) else None,
         })
     # Pareceres antigos: a validação grava o parecer no mesmo segundo da linha
     # do validar.jsonl; um parecer só entra se não houver linha do mesmo rótulo
@@ -845,6 +850,12 @@ def main():
     projetos += [os.environ['JANGADA_REPO']] if os.environ.get('JANGADA_REPO') else []
     retrato = orquestracao.coletar(ESTADO, [Path(p) for p in projetos], projeto_de)
     gravar_json(os.path.join(cache, 'orquestracao.json'), retrato)
+    operacional = consultar(ESTADO)
+    publico = catalogos(Path(__file__).resolve().parents[2])
+    operacional['erros'].extend(publico.pop('erros'))
+    operacional.update(publico)
+    operacional['data'] = agora.astimezone(FUSO).isoformat(timespec='seconds')
+    gravar_json(os.path.join(cache, 'nucleo.json'), operacional)
     resumo.update({"mensagens_novas": len(mens), "ferramentas_novas": len(ferr),
                    "resultados_novos": len(res), "dias_agregados": agregados, "linhas_podadas": tirados,
                    "validacoes": len(vals), "eventos": len(evs),

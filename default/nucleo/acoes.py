@@ -4,7 +4,7 @@ from pathlib import Path
 import subprocess
 
 
-def executar(raiz, acao, argumentos, confirmar=False):
+def comando(raiz, acao, argumentos, confirmar=False):
     comandos = {'iniciar': 'jangada-agente', 'importar': 'jangada-fila', 'tarefa': 'jangada-task',
                 'executar': 'jangada-executar', 'provedor': 'jangada-provedor',
                 'integrar': 'jangada-agente-fim', 'encerrar': 'jangada-agente-fim',
@@ -17,4 +17,8 @@ def executar(raiz, acao, argumentos, confirmar=False):
         if '--confirmacao' not in argumentos:
             raise ValueError('integração exige os SHA completos confirmados')
         argumentos = ['--integrar', *argumentos]
-    return subprocess.run([str(Path(raiz) / 'bin' / comandos[acao]), *argumentos], check=False)
+    return [str(Path(raiz) / 'bin' / comandos[acao]), *argumentos]
+
+
+def executar(raiz, acao, argumentos, confirmar=False):
+    return subprocess.run(comando(raiz, acao, argumentos, confirmar), check=False)

@@ -49,12 +49,26 @@ if ((${#principais[@]} == 0)); then
   exit 1
 fi
 perfis_json() {
-  local perfil
+  local perfil ambiente delegacao isolado revisao
   while read -r perfil; do
     jangada_perfil "$perfil" || continue
     [[ " ${principais[*]} " == *" $(basename "${PERFIL_COMANDO%% *}") "* ]] || continue
+    delegacao="${JANGADA_DELEGAR:-}"; isolado="${JANGADA_AGENTE_ISOLAR:-1}"; revisao="$JANGADA_VALIDAR_REVISOR"
+    for ambiente in "${PERFIL_AMBIENTE[@]}"; do
+      case "$ambiente" in
+        JANGADA_DELEGAR=*) delegacao="${ambiente#*=}" ;;
+        JANGADA_AGENTE_ISOLAR=*) isolado="${ambiente#*=}" ;;
+        JANGADA_VALIDAR_REVISOR=*) revisao="${ambiente#*=}" ;;
+      esac
+    done
+    [[ "${PERFIL_COMANDO%% *}" != codex ]] || isolado=1
     jq -n --arg nome "$perfil" --arg descricao "$PERFIL_DESCRICAO" \
-      '{nome:$nome, descricao:$descricao}'
+      --arg executor "$(basename "${PERFIL_COMANDO%% *}")" \
+      --arg delegacao "$(jangada_delegacao "$PERFIL_COMANDO" "$delegacao")" \
+      --arg revisor "$(jangada_revisor "$PERFIL_COMANDO" "$revisao")" \
+      --argjson isolado "$([[ "$isolado" != 0 ]] && echo true || echo false)" \
+      '{nome:$nome, descricao:$descricao, executor:$executor, funcao:"principal", modelo:null,
+        permissoes:{delegacao:$delegacao, isolado:$isolado, revisor:$revisor}}'
   done < <(jangada_perfis) | jq -s .
 }
 if [[ "${1:-}" == --perfis ]]; then

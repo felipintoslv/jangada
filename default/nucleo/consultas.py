@@ -82,7 +82,7 @@ def agregado(estados):
 def consultar(raiz, projeto=None):
     raiz = Path(raiz).resolve()
     filtro = str(Path(projeto).resolve()) if projeto is not None else None
-    resultado = dict(projetos=[], atividades=[], tarefas=[], sessoes=[], execucoes=[], revisoes=[], erros=[])
+    resultado = dict(projetos=[], atividades=[], tarefas=[], sessoes=[], execucoes=[], revisoes=[], eventos=[], erros=[])
     pastas = raiz / 'agentes/projetos'
     if pastas.is_symlink() or (raiz / 'agentes').is_symlink():
         resultado['erros'].append('estado operacional com ligação simbólica')
@@ -129,6 +129,9 @@ def consultar(raiz, projeto=None):
                 for r in db.execute("SELECT tarefa,data,dados FROM eventos WHERE evento='revisada' ORDER BY seq"):
                     resultado['revisoes'].append(dict(projeto=dados['id'], tarefa=r['tarefa'], data=r['data'],
                                                       **json.loads(r['dados'])))
+                for r in db.execute('SELECT seq,tarefa,data,evento,dados FROM eventos ORDER BY seq'):
+                    resultado['eventos'].append(dict(projeto=dados['id'], seq=r['seq'], tarefa=r['tarefa'],
+                                                     data=r['data'], evento=r['evento'], dados=json.loads(r['dados'])))
         except (OSError, ValueError, KeyError, TypeError, sqlite3.Error) as erro:
             resultado['erros'].append(f'{pasta.name}: {erro}')
     for arquivo in sorted((raiz / 'agentes').glob('*.json')):
@@ -165,4 +168,24 @@ def registro_provedores(raiz):
     dados = json.loads(resposta.stdout)
     if not isinstance(dados, list) or any(not isinstance(p, dict) or not isinstance(p.get('id'), str) for p in dados):
         raise ValueError('registro de provedores inválido')
+    return dados
+
+
+def catalogos(raiz):
+    raiz = Path(raiz)
+    dados = {'provedores': [], 'perfis': [], 'principais': [], 'configuracao': None, 'erros': []}
+    for comando, campo in [(['jangada-config', '--provedores-json'], 'provedores'),
+                           (['jangada-config', '--publico-json'], 'configuracao'),
+                           (['jangada-agente', '--capacidades-json'], 'capacidades')]:
+        try:
+            resposta = subprocess.run([str(raiz / 'bin' / comando[0]), *comando[1:]],
+                                      capture_output=True, text=True, timeout=10, check=True)
+            valor = json.loads(resposta.stdout)
+            if campo == 'capacidades':
+                dados['perfis'] = valor['perfis']
+                dados['principais'] = valor['principais']
+            else:
+                dados[campo] = valor
+        except (OSError, ValueError, KeyError, subprocess.SubprocessError):
+            dados['erros'].append('catálogo indisponível: ' + campo)
     return dados

@@ -10,7 +10,7 @@ import time
 import uuid
 
 sys.dont_write_bytecode = True
-from consultas import consultar, registro_provedores
+from consultas import consultar, catalogos
 from estado import Estado
 from projetos import cadastrar, chave, ler_json, ler_projeto, reassociar
 from roteamento import decidir, MODOS
@@ -55,7 +55,9 @@ def main():
     projeto = args.projeto.resolve()
     if args.acao == 'consultar':
         resultado = consultar(raiz, None if args.todos else projeto)
-        resultado['provedores'] = registro_provedores(os.environ['JANGADA_PATH'])
+        publico = catalogos(os.environ['JANGADA_PATH'])
+        resultado['erros'].extend(publico.pop('erros'))
+        resultado.update(publico)
     elif args.acao == 'rotear':
         resultado = decidir(raiz, projeto, os.environ['JANGADA_PATH'], os.environ['JANGADA_CONFIG'],
                             args.tarefa, args.modo, args.executor, args.confirmar, args.perfil,
