@@ -42,7 +42,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
 # Quem abre sessão principal. A Central e o --perfis leem daqui: o agy só
 # atende delegação e revisão.
-principais=(claude codex)
+mapfile -t principais < <(jangada_provedores principal)
+# Sem registro legível a sessão abriria sem o protocolo e sem aviso.
+if ((${#principais[@]} == 0)); then
+  echo "jangada-agente: nenhum provedor com a função principal em $JANGADA_CONFIG/provedores nem em $JANGADA_PATH/default/provedores" >&2
+  exit 1
+fi
 perfis_json() {
   local perfil
   while read -r perfil; do
@@ -58,7 +63,7 @@ if [[ "${1:-}" == --perfis ]]; then
 fi
 if [[ "${1:-}" == --capacidades-json ]]; then
   for a in "${principais[@]}"; do
-    command -v "$a" >/dev/null 2>&1 && i=true || i=false
+    jangada_provedor "$a" && command -v "$PROVEDOR_COMANDO" >/dev/null 2>&1 && i=true || i=false
     jq -n --arg nome "$a" --argjson instalado "$i" '{nome:$nome, instalado:$instalado}'
   done | jq -s --argjson perfis "$(perfis_json)" '{principais: ., perfis: $perfis}'
   exit 0
@@ -418,8 +423,8 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
       cmd_agente+=" \"\$(cat $(printf '%q' "$arq_prompt"))\""
     fi
   else
-    if [[ "$base_agente" == claude && -n "$protocolo" ]]; then
-      cmd_agente+=" --append-system-prompt \"\$(cat $(printf '%q' "$protocolo"))\""
+    if [[ -n "$protocolo" ]] && jangada_provedor "$base_agente" && [[ -n "$PROVEDOR_PROTOCOLO_ARG" ]]; then
+      cmd_agente+=" $PROVEDOR_PROTOCOLO_ARG \"\$(cat $(printf '%q' "$protocolo"))\""
       cmd_base="$cmd_agente"
     fi
     if [[ -n "$prompt" ]]; then

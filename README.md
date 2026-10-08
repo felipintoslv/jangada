@@ -388,6 +388,8 @@ Detalhes que valem para o dia a dia:
 Perfis de agente (outra conta, outro modelo, outro programa) ficam em
 `~/.config/jangada/agentes/NOME.conf`; veja `default/agentes/exemplo.conf`.
 O seletor calcula a descrição a partir do comando, revisor e delegação efetivos.
+Quem pode abrir sessão principal e quem pode revisar vem do registro de
+provedores; veja `docs/provedores.md`.
 Ganchos do usuário ficam em `~/.config/jangada/ganchos/EVENTO` ou
 `EVENTO.d/`, para os eventos `pos-update`, `pos-tema`, `pos-agente-fim`
 (recebe sessão, raiz e se houve integração) e `pos-validar` (sessão e status). Um exemplo útil: `pos-tema` rodando `jangada-sddm aplicar`.

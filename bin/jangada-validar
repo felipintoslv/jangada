@@ -251,15 +251,11 @@ if [[ -z "$revisor" ]]; then
   revisor="$(jangada_revisor "$autor")"
 fi
 nomear_revisor() {
-  case "$revisor" in
-    claude) nome_revisor="Claude"; modelo="${modelo:-sonnet}" ;;
-    agy) nome_revisor="Antigravity" ;;
-    codex) nome_revisor="Codex" ;;
-    *) return 1 ;;
-  esac
+  jangada_provedor "$revisor" && [[ " $PROVEDOR_FUNCOES " == *" revisor "* ]] || return 1
+  nome_revisor="$PROVEDOR_NOME"; modelo="${modelo:-$PROVEDOR_MODELO_REVISOR}"
 }
 nomear_revisor \
-  || { echo "jangada-validar: revisor desconhecido: $revisor (use claude, agy, codex ou mesmo)" >&2; exit 1; }
+  || { echo "jangada-validar: revisor desconhecido: $revisor (use $(jangada_provedores revisor | paste -sd' ') ou mesmo)" >&2; exit 1; }
 
 if [[ -n "$autor" && "$revisor" == "$autor" ]]; then
   auto_revisao=1
@@ -991,13 +987,20 @@ revisar_agy() {
 # espera à de quem chamou.
 revisar() {
   local reserva falhou="$revisor"
-  local -a ordem=()
+  local -a ordem=() reservas=()
+  # O registro declara quem revisa; a chamada de cada um é uma função daqui.
+  declare -F "revisar_$revisor" >/dev/null \
+    || { echo "jangada-validar: o provedor $revisor não tem revisão implementada" >&2; return 1; }
   "revisar_$revisor" && return 0
   ((revisor_dado)) && return 1
-  for reserva in claude agy codex; do
+  mapfile -t reservas < <(while read -r reserva; do
+    jangada_provedor "$reserva" && [[ -n "$PROVEDOR_RESERVA" ]] && declare -F "revisar_$reserva" >/dev/null \
+      && printf '%s %s\n' "$PROVEDOR_RESERVA" "$reserva"
+  done < <(jangada_provedores revisor) | sort -n | cut -d' ' -f2)
+  for reserva in "${reservas[@]}"; do
     [[ "$reserva" == "$autor" ]] || ordem+=("$reserva")
   done
-  case "$autor" in claude|agy|codex) ordem+=("$autor") ;; esac
+  [[ " ${reservas[*]} " == *" $autor "* ]] && ordem+=("$autor")
   for reserva in "${ordem[@]}"; do
     ((prazo_vencido)) && return 1
     [[ "$reserva" != "$falhou" ]] || continue

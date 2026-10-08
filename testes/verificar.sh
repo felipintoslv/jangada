@@ -124,6 +124,13 @@ for c in $(grep -ho '`jangada-[a-z-]*' default/agentes/protocolo*.md | tr -d '`'
   [[ -x "bin/$c" ]] || falha "bin/$c citado no protocolo mas ausente"
 done
 
+passo "registro de provedores"
+if command -v jq >/dev/null; then
+  testes/provedores.sh || falha "testes/provedores.sh"
+else
+  echo "  jq ausente, etapa ignorada"
+fi
+
 passo "jangada-validar com claude e agy falsos"
 python3 testes/agente-seletor.py || falha "testes/agente-seletor.py"
 if command -v git >/dev/null && command -v jq >/dev/null; then
