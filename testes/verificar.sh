@@ -141,6 +141,9 @@ else
   echo "git ou jq ausente; etapa ignorada"
 fi
 
+passo "baseline: preservação, aprovação e recuperação sintética"
+python3 testes/baseline.py || falha "testes/baseline.py"
+
 passo "isolamento dos agentes"
 testes/isolar.sh || falha "testes/isolar.sh"
 testes/restaurar.sh || falha "testes/restaurar.sh"

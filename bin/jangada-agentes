@@ -513,7 +513,7 @@ previa() {
 
   # Último parecer feito fora do isolamento (revisoes/, oculta para o agente),
   # com a marca de aprovação conferida contra o commit atual do ramo.
-  local revisoes="$JANGADA_ESTADO/revisoes" validacao fora ramo_s raiz_s cabeca c="" l="" i=""
+  local revisoes="$JANGADA_ESTADO/revisoes" validacao fora ramo_s raiz_s cabeca base_s v="" t="" b="" c="" l="" i=""
   fora="$(mais_recente "$revisoes/validacao-$s-r")"
   if [[ -n "$fora" ]]; then
     echo ""
@@ -522,16 +522,21 @@ previa() {
     # estado, que o agente grava.
     ramo_s="$(jq -r '.ramo // "" | tostring' "$revisoes/$s.json" 2>/dev/null || true)"
     raiz_s="$(jq -r '.raiz // "" | tostring' "$revisoes/$s.json" 2>/dev/null || true)"
+    base_s="$(jq -r '.base // "" | tostring' "$revisoes/$s.json" 2>/dev/null || true)"
     cabeca=""
     [[ "$ramo_s" =~ ^agente/[a-z0-9_][a-z0-9_-]*$ && "$raiz_s" == /* && -d "$raiz_s" ]] \
       && cabeca="$(jangada_git_seguro -C "$raiz_s" rev-parse --verify --quiet "$ramo_s^{commit}" 2>/dev/null || true)"
     [[ -f "$revisoes/validacao-$s.aprovado" ]] \
-      && IFS=$'\t' read -r c l i < <(jq -r 'objects | [.candidate_sha, .limpo, .independent] | map(tostring) | @tsv' \
+      && IFS=$'\t' read -r c l i v t b < <(jq -r 'objects | [.candidate_sha, .limpo, .independent, .local_verified, .candidate_tree, .base_sha] | map(tostring) | @tsv' \
         "$revisoes/validacao-$s.aprovado" 2>/dev/null)
-    if [[ -n "$c" && "$c" == "$cabeca" && "$l" == true && "$i" != true ]]; then
+    if [[ -n "$c" && "$c" == "$cabeca" ]] && { [[ "$v" != true ]] \
+       || [[ "$t" != "$(jangada_git_seguro -C "$raiz_s" rev-parse --verify --quiet "$cabeca^{tree}" 2>/dev/null || true)" ]] \
+       || [[ -z "$base_s" || "$b" != "$(jangada_git_seguro -C "$raiz_s" rev-parse --verify --quiet "$base_s^{commit}" 2>/dev/null || true)" ]]; }; then
+      echo "(aprovação incompleta ou inválida para a árvore e a base atuais)"
+    elif [[ -n "$c" && "$c" == "$cabeca" && "$l" == true && "$i" != true ]]; then
       echo "(autorrevisão do commit atual do ramo, ${c:0:12}: não vale como revisão independente)"
     elif [[ -n "$c" && "$c" == "$cabeca" && "$l" == true ]]; then
-      echo "(aprovação vale para o commit atual do ramo, ${c:0:12}; o --integrar confere a base)"
+      echo "(aprovação vale para o commit atual do ramo, ${c:0:12}; integração automática bloqueada na baseline)"
     elif [[ -n "$c" ]]; then
       echo "(a última aprovação, ${c:0:12}, não é do commit atual do ramo)"
     fi
