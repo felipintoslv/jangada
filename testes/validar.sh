@@ -1134,6 +1134,16 @@ sessao_de claude agy
 validar 'STATUS: APROVADO' --revisor novo; rc=$?
 conferir "caso 13h: revisor do registro sem função de revisão é recusado" \
   bash -c '[ "$1" != 0 ] && grep -q "o provedor novo não tem revisão implementada" "$2"' _ "$rc" "$tmp/saida.log"
+sessao_de claude novo
+validar 'STATUS: APROVADO'; rc=$?
+conferir "caso 13h: o revisor da sessão também passa pelo registro" \
+  bash -c '[ "$1" != 0 ] && grep -q "o provedor novo não tem revisão implementada" "$2"' _ "$rc" "$tmp/saida.log"
+sessao_de claude
+env -u JANGADA_ISOLADO JANGADA_ISOLADO=1 JANGADA_VALIDAR_REVISOR=novo PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" \
+  FALSO_RESPOSTA='STATUS: APROVADO' JANGADA_SESSAO=s XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" \
+  JANGADA_PATH="$repo_jangada" "$repo_jangada/bin/jangada-validar" "$tmp/projeto" >"$tmp/saida.log" 2>&1; rc=$?
+conferir "caso 13h: JANGADA_VALIDAR_REVISOR também passa pelo registro" \
+  bash -c '[ "$1" != 0 ] && grep -q "o provedor novo não tem revisão implementada" "$2"' _ "$rc" "$tmp/saida.log"
 printf 'TIPO=cli\nFUNCOES=delegacao\n' >"$tmp/config/jangada/provedores/agy.conf"
 validar 'STATUS: APROVADO' --revisor agy; rc=$?
 conferir "caso 13h: provedor sem a função revisor não é aceito em --revisor" \
