@@ -8,8 +8,8 @@
   autorizou a Fase 3 em seguida.
 - Fase 3 (registro de provedores): concluída e aprovada pelo
   `jangada-validar` (Codex, rodada 4, forçada pelo usuário).
-- Fase 4: autorizada em 08/10/2026; implementação não iniciada. O usuário
-  pediu apresentação do escopo e confirmação antes de alterar código.
+- Fase 4: escopo confirmado e implementação em verificação.
+- Fases 4 a 7: autorizadas com autonomia em 08/10/2026.
 - Sessão da Fase 3: ramo `agente/tarefa-ab47cef8d325`, sobre `9dcb640`.
   HEAD da aprovação informado pelo usuário: `3018fb9`.
 
@@ -134,6 +134,36 @@ nota não estende a aprovação de `3018fb9` a elas.
 
 Não conferido: como a atualização leva `default/provedores/` à cópia
 instalada. Sem essa pasta o `jangada-agente` não abre sessão.
+
+## Fase 4
+
+O escopo foi apresentado e confirmado antes de alterar código. O usuário
+autorizou depois todas as fases restantes e o uso de subagentes do Codex
+para análise. Três subagentes analisaram persistência, revisão e núcleo;
+não editaram arquivos nem revisaram a entrega. O agy foi tentado e recusado
+por `JANGADA_DELEGAR=local`; esse limite não foi alterado.
+
+Implementado:
+
+- Cadastro e política em `projeto.json`; reassociação preservando
+  especificações e hashes, com resolução transitória de caminhos.
+- Tabelas adicionais `atividades` e `execucoes`, sem migrar registros antigos.
+- Critérios, contexto e vínculos opcionais de tarefas e sessões.
+- Revisão identificada fora do isolamento, com hash e critérios; nomes
+  alternativos do Codex não permitem autoraprovação.
+- Orçamento de chamadas reservado entre conexões; consumo desconhecido e
+  teto de custo sem limite comprovável recusam execução de modelos.
+- Consulta conjunta em `default/nucleo/`, sem alterar banco ou arquivos
+  auxiliares na origem. Ações encaminhadas aos comandos existentes.
+- Modos manual, assistido e automático supervisionado, preservando os
+  perfis atuais da fila e a delegação local.
+
+Os 20 testes novos de `testes/operacional.py` passaram. Incluem WAL ativo,
+transação pendente, banco antigo, reassociação determinística, isolamento
+da revisão, orçamento concorrente e execução direta com provedor falso.
+A suíte `testes/verificar.sh` passou em 08/10/2026, código zero, em 196 s.
+A revisão técnica ainda precisa terminar para aprovar esta fase. A integração
+de interfaces e recursos pertence às fases seguintes.
 
 ## Como continuar
 

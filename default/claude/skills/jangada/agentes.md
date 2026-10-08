@@ -1,5 +1,13 @@
 # Camada de agentes
 
+## Consulta da fila
+
+SQLite em `mode=ro` ainda pode criar arquivos WAL/SHM na origem.
+O núcleo consulta uma cópia temporária estável do banco e do WAL.
+Não omita o WAL: ele pode conter transações confirmadas que ainda não
+chegaram ao banco principal. Mudanças durante a cópia exigem nova tentativa
+ou erro explícito, sem apresentar uma consulta incompleta como sucesso.
+
 ## Codex
 
 O `account/rateLimits/read` separa limites por grupo de consumo. Para a cota

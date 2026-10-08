@@ -17,4 +17,4 @@ Os números 05 a 08 estão reservados para as fases seguintes e ainda não
 existem.
 
 Situação: Fase 3 entregue (registro de provedores; ver `10-progresso.md` e
-`docs/provedores.md`). A Fase 4 não foi iniciada.
+`docs/provedores.md`). Fase 4 em verificação; Fases 4 a 7 autorizadas.

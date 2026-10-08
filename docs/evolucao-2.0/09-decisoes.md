@@ -37,7 +37,9 @@ são as recomendações levadas adiante nos documentos. D5 foi respondida
 
 ## Abertas
 
-Nenhuma. A Fase 3 foi autorizada e concluída; falta a autorização para a Fase 4.
+Nenhuma. O usuário confirmou o escopo da Fase 4 e, em 08/10/2026,
+autorizou as Fases 4 a 7 com autonomia. A análise pode usar subagentes
+do próprio Codex; o agy permanece condicionado ao perfil da sessão.
 
 ## Divergência entre o pedido e o protocolo da sessão
 

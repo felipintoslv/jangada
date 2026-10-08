@@ -16,6 +16,14 @@ Caminhos usados abaixo:
 
 ## 1. validar.jsonl
 
+Desde a Fase 4 da evolução 2.0, `execucao` é opcional nos eventos de sessão,
+delegações e validações. Identifica a reserva da fila ou a execução da
+sessão; registros antigos permanecem sem vínculo. `projeto.json`,
+`atividades` e `execucoes` ficam no estado do projeto. As revisões da fila
+registram hash do artefato, identidades e critérios no evento `revisada`.
+Campos não medidos são nulos. Esses registros são observações; não
+substituem a marca protegida que autoriza integração.
+
 - **Caminho:** `$JANGADA_ESTADO/validar.jsonl`.
 - **Quem escreve:** `bin/jangada-validar`, função `registrar` (linhas 80 a
   103). Chamada em quatro pontos: limite de rodadas (linha 346), reprovação

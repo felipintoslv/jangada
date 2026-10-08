@@ -406,6 +406,88 @@ e preservou cerca de 2,0 GB de folga, atendendo a margem mínima de 1,5 GB.
   da sessão orienta o agente a consultar o usuário antes de recorrer ao Claude em
   documentos confidenciais.
 
+## Modelo operacional de projetos
+
+`jangada-projeto --projeto PASTA cadastrar` cria o registro do projeto.
+Com `--politica ARQUIVO.json`, aplica restrições de dados, provedores,
+orçamento e contexto mínimo da revisão. Sem política, permanecem as
+autorizações atuais; nenhum destino novo é liberado.
+
+```sh
+jangada-projeto --projeto "$PWD" atividade --titulo "Auditoria" \
+  --objetivo "Conferir a configuração" --criterio "Fontes conferidas"
+jangada-projeto --projeto "$PWD" consultar
+jangada-projeto consultar --todos
+```
+
+A atividade devolve `atv-…`. O plano pode usar esse valor em `atividade` e
+acrescentar `criterios_aceite`, `entradas`, `saidas` e `contexto`, como listas
+de textos. `contexto` contém caminhos de arquivos do projeto; eles passam
+pela mesma conferência e são enviados com as fontes. Tarefas importadas
+continuam imutáveis. `jangada-agente --atividade ID --tarefa-id ID` registra
+vínculos opcionais; não reserva nem conclui a tarefa da fila.
+
+Cada reserva cria `exe-…`, inclusive quando termina sem chamada ao modelo.
+Expiração encerra a execução com consumo desconhecido. Eventos, delegações
+e validações podem apontar para a execução; esse vínculo não é aprovação.
+
+Uma política pode conter:
+
+```json
+{"dados":"local","provedores":["ollama"],
+ "orcamento":{"chamadas":8,"periodo_segundos":86400},
+ "revisao_minima":{"3":{"independente":true,"contexto":"repositorio"}}}
+```
+
+As reservas comprometem o saldo de chamadas na mesma transação SQLite.
+Consumo desconhecido bloqueia nova execução automática. Sessões interativas
+não garantem teto de consumo e são recusadas quando há orçamento de projeto.
+Um teto `custo_estimado` também recusa execuções de modelos: os executores
+atuais não fornecem limite de consumo comprovável antes da chamada.
+Conferências determinísticas locais continuam possíveis, sem consumir chamadas.
+
+`rotear ID --modo manual|assistido|automatico_supervisionado` consulta
+candidatos e motivos sem chamar provedores. Manual recebe `--executor`;
+assistido exige também `--confirmar`. Automático exige disponibilidade
+verificada e mantém os limites atuais de risco e qualidade.
+Os modos são independentes dos perfis `balanced`, `quality` e `offline`.
+Para executar uma escolha na fila:
+
+```sh
+jangada-executar --tarefa T1 --modo assistido --executor local --confirmar
+```
+
+Revisões da fila exigem execução fora do isolamento. Chamadas antigas
+continuam como revisão humana explícita. `--revisor`, `--modelo-revisor` e
+`--contexto-revisao` identificam um parecer externo; o backend recusa autor
+e revisor iguais, inclusive os nomes alternativos do Codex, e identidades
+de modelo desconhecidas. Isso não executa um modelo nem substitui
+`jangada-validar` para entrega de código.
+
+Tarefas com critérios exigem `--parecer` em JSON, vinculando tarefa e artefato:
+
+```json
+{"tarefa":"T1","artefato_sha256":"SHA_COMPLETO",
+ "criterios":[{"criterio":"Fontes conferidas","resultado":"APROVADO",
+               "justificativa":"O conteúdo foi comparado às fontes."}]}
+```
+
+Cada critério precisa aparecer na ordem declarada, com resultado `APROVADO`
+ou `REVISAR` e justificativa. Aprovação exige todos aprovados; a revisão
+registra identidades, critérios e o hash do artefato conferido.
+
+Depois de renomear a pasta, use
+`jangada-projeto --projeto CAMINHO_ANTIGO reassociar CAMINHO_NOVO`.
+O comando exige sessões encerradas, nenhuma reserva ativa e destino sem
+estado. Preserva identidade, especificações e hashes; fontes são resolvidas
+para a raiz atual em memória e reconferidas antes da execução.
+
+O núcleo em `default/nucleo/` consulta cópias estáveis do banco e WAL,
+sem criar arquivos na origem. Estados da 2.0 e da atividade são calculados.
+As ações chamam `bin/`; integração conserva a confirmação dos SHA e a
+revisão protegida do backend. O painel e a Central ainda serão ligados ao
+núcleo na Fase 6.
+
 ## Fila persistente de projetos
 
 `jangada-fila --importar plano.json` importa tarefas sem executar os dados
