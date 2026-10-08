@@ -123,6 +123,7 @@ cmp "$tmp/previa.json" "$tmp/previa2.json"
 
 mkdir -p "$tmp/jangada/bin" "$tmp/jangada/default/tarefas"
 cp bin/jangada-tarefas bin/jangada-config "$tmp/jangada/bin/"
+cp -r default/provedores "$tmp/jangada/default/"
 cat >"$tmp/jangada/default/tarefas/central.py" <<'PYTHON'
 import sys
 print('\n'.join(sys.argv[1:]))

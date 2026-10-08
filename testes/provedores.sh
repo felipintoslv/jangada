@@ -78,6 +78,15 @@ conferir "o catálogo de agentes principais vem do registro" \
   jq -e '[.principais[].nome] == ["claude", "codex", "novo"]
     and (.principais[] | select(.nome == "novo") | .instalado) == true' "$tmp/cap.json" >/dev/null
 
+mkdir -p "$tmp/vazio"
+if XDG_CONFIG_HOME="$tmp/vazio" JANGADA_PATH="$tmp/vazio" "$repo_jangada/bin/jangada-agente" --capacidades-json >"$tmp/vazio.out" 2>"$tmp/vazio.err"; then
+  falha "registro vazio foi aceito pelo jangada-agente"
+else
+  ok "registro vazio faz o jangada-agente parar"
+fi
+conferir "e o erro diz onde o registro foi procurado" grep -q "default/provedores" "$tmp/vazio.err"
+conferir "sem imprimir catálogo" test ! -s "$tmp/vazio.out"
+
 if ((falhas)); then
   printf '\n%d falha(s)\n' "$falhas"
   exit 1

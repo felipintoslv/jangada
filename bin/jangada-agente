@@ -43,6 +43,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 # Quem abre sessão principal. A Central e o --perfis leem daqui: o agy só
 # atende delegação e revisão.
 mapfile -t principais < <(jangada_provedores principal)
+# Sem registro legível a sessão abriria sem o protocolo e sem aviso.
+if ((${#principais[@]} == 0)); then
+  echo "jangada-agente: nenhum provedor com a função principal em $JANGADA_CONFIG/provedores nem em $JANGADA_PATH/default/provedores" >&2
+  exit 1
+fi
 perfis_json() {
   local perfil
   while read -r perfil; do
