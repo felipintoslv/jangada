@@ -145,6 +145,55 @@ class Operacional(unittest.TestCase):
         self.assertEqual(linhas, {primeira: 'CANCELLED', segunda: 'COMPLETED'})
         self.assertEqual(self.estado.listar()[0]['status'], 'QUEUED')
 
+    def test_conferencia_previa_nao_cria_estado_e_recusa_vinculo_ausente(self):
+        raiz = self.raiz / 'sem-estado'
+        ambiente = dict(os.environ, JANGADA_ESTADO=str(raiz), JANGADA_PATH=str(RAIZ),
+                        JANGADA_CONFIG=str(self.config), PYTHONPATH=str(RAIZ / 'default'))
+        comando = [sys.executable, str(RAIZ / 'default/nucleo/cli.py'), '--projeto', str(self.projeto),
+                   'sessao-conferir', 'nova', '--executor', 'codex']
+        resposta = subprocess.run(comando, env=ambiente, capture_output=True, text=True)
+        self.assertEqual(resposta.returncode, 0, resposta.stderr)
+        self.assertEqual(json.loads(resposta.stdout), {'permitida': True})
+        resposta = subprocess.run([*comando, '--tarefa-id', 'T1'], env=ambiente, capture_output=True, text=True)
+        self.assertNotEqual(resposta.returncode, 0)
+        self.assertIn('tarefa inexistente', resposta.stderr)
+        self.assertFalse(raiz.exists())
+
+    def test_conferencia_previa_preserva_banco_legado_e_recusa_politica_sem_gravar(self):
+        self.estado.importar([self.tarefa()])
+        ambiente = dict(os.environ, JANGADA_ESTADO=str(self.estado_raiz), JANGADA_PATH=str(RAIZ),
+                        JANGADA_CONFIG=str(self.config), PYTHONPATH=str(RAIZ / 'default'))
+        comando = [sys.executable, str(RAIZ / 'default/nucleo/cli.py'), '--projeto', str(self.projeto),
+                   'sessao-conferir', 'nova', '--executor', 'codex', '--tarefa-id', 'T1']
+        for politica in (None, {'dados': 'local'}, {'orcamento': {'chamadas': 3}}):
+            if politica is not None:
+                cadastrar(self.estado, self.projeto, politica)
+            antes = {str(p): (p.read_bytes(), p.stat().st_mtime_ns) for p in self.estado_raiz.rglob('*') if p.is_file()}
+            resposta = subprocess.run(comando, env=ambiente, capture_output=True, text=True)
+            self.assertEqual(resposta.returncode == 0, politica is None, resposta.stderr)
+            self.assertEqual(antes, {str(p): (p.read_bytes(), p.stat().st_mtime_ns)
+                                     for p in self.estado_raiz.rglob('*') if p.is_file()})
+
+    def test_consulta_sem_catalogos_nao_depende_dos_executaveis(self):
+        ambiente = dict(os.environ, JANGADA_ESTADO=str(self.estado_raiz), JANGADA_PATH=str(self.raiz),
+                        JANGADA_CONFIG=str(self.config), PYTHONPATH=str(RAIZ / 'default'))
+        comando = [sys.executable, str(RAIZ / 'default/nucleo/cli.py'), 'consultar', '--todos', '--sem-catalogos']
+        resposta = subprocess.run(comando, env=ambiente, capture_output=True, text=True)
+        self.assertEqual(resposta.returncode, 0, resposta.stderr)
+        dados = json.loads(resposta.stdout)
+        self.assertFalse(dados['erros'])
+        self.assertNotIn('perfis', dados)
+        self.assertNotIn('provedores', dados)
+
+    def test_reserva_principal_deterministica_nao_confunde_zero_com_esgotamento(self):
+        cadastrar(self.estado, self.projeto, {'orcamento': {'chamadas': 1}})
+        self.estado.importar([self.tarefa(papel='verificador', capacidade='validacao_json', risco=0, qualidade='high')])
+        spec, _, _ = self.estado.reservar_principal('T1', 'codex')
+        self.assertEqual(spec['capacidade'], 'validacao_json')
+        self.assertEqual(self.estado.db.execute('SELECT limite_chamadas FROM execucoes').fetchone()[0], 0)
+        with self.assertRaisesRegex(ValueError, 'não aguarda supervisão'):
+            self.estado.reservar_supervisao('T1')
+
     def test_revisao_recusa_isolamento_e_alias_do_autor(self):
         self.entregar()
         with patch.dict(os.environ, {'JANGADA_ISOLADO': '1'}), self.assertRaises(ValueError):

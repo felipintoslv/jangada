@@ -12,7 +12,7 @@ import uuid
 sys.dont_write_bytecode = True
 from consultas import consultar, catalogos
 from estado import Estado
-from projetos import cadastrar, chave, ler_json, ler_projeto, reassociar
+from projetos import cadastrar, chave, ler_json, ler_projeto, reassociar, executor_permitido
 from roteamento import decidir, MODOS
 
 
@@ -22,6 +22,7 @@ def main():
     comandos = parser.add_subparsers(dest='acao', required=True)
     consulta = comandos.add_parser('consultar')
     consulta.add_argument('--todos', action='store_true')
+    consulta.add_argument('--sem-catalogos', action='store_true')
     cadastro = comandos.add_parser('cadastrar')
     cadastro.add_argument('--politica', type=Path)
     mover = comandos.add_parser('reassociar')
@@ -55,9 +56,26 @@ def main():
     projeto = args.projeto.resolve()
     if args.acao == 'consultar':
         resultado = consultar(raiz, None if args.todos else projeto)
-        publico = catalogos(os.environ['JANGADA_PATH'])
-        resultado['erros'].extend(publico.pop('erros'))
-        resultado.update(publico)
+        if not args.sem_catalogos:
+            publico = catalogos(os.environ['JANGADA_PATH'])
+            resultado['erros'].extend(publico.pop('erros'))
+            resultado.update(publico)
+    elif args.acao == 'sessao-conferir':
+        if not projeto.is_dir():
+            raise ValueError('projeto não existe')
+        dados = consultar(raiz, projeto)
+        if dados['erros']:
+            raise ValueError('; '.join(dados['erros']))
+        cadastro = dados['projetos'][0] if dados['projetos'] else None
+        if not executor_permitido(cadastro, args.executor):
+            raise ValueError('política do projeto impede este executor')
+        if cadastro and cadastro['politica'].get('orcamento'):
+            raise ValueError('sessão interativa não garante teto de chamadas ou custo; use a fila')
+        if args.atividade and not any(a['id'] == args.atividade for a in dados['atividades']):
+            raise ValueError('atividade inexistente')
+        if args.tarefa_id and not any(t['id'] == args.tarefa_id for t in dados['tarefas']):
+            raise ValueError('tarefa inexistente')
+        resultado = {'permitida': True}
     elif args.acao == 'rotear':
         resultado = decidir(raiz, projeto, os.environ['JANGADA_PATH'], os.environ['JANGADA_CONFIG'],
                             args.tarefa, args.modo, args.executor, args.confirmar, args.perfil,
@@ -72,7 +90,7 @@ def main():
             resultado = cadastrar(estado, projeto, ler_json(args.politica) if args.acao == 'cadastrar' and args.politica else None)
             if args.acao == 'atividade':
                 resultado = {'atividade': estado.criar_atividade(args.titulo, args.objetivo, args.criterio)}
-            elif args.acao in {'sessao-iniciar', 'sessao-conferir'}:
+            elif args.acao == 'sessao-iniciar':
                 if not estado.permite_executor(args.executor):
                     raise ValueError('política do projeto impede este executor')
                 if args.atividade and not estado.db.execute('SELECT 1 FROM atividades WHERE id=?', (args.atividade,)).fetchone():
@@ -85,10 +103,6 @@ def main():
                     politica = ler_projeto(estado.pasta)['politica']
                     if politica.get('orcamento'):
                         raise ValueError('sessão interativa não garante teto de chamadas ou custo; use a fila')
-                    if args.acao == 'sessao-conferir':
-                        resultado = {'permitida': True}
-                        print(json.dumps(resultado, ensure_ascii=False))
-                        return
                     estado.db.execute("UPDATE execucoes SET fim=?,status='REVISION_REQUIRED' WHERE sessao=? AND status='RUNNING'",
                                       (time.time(), args.nome))
                     identificador = 'exe-' + uuid.uuid4().hex[:16]

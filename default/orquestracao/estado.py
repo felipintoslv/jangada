@@ -14,7 +14,7 @@ import uuid
 
 from deterministico import conferir as conferir_deterministica
 from metricas_projeto import amostragem, identidade
-from projetos import ler_projeto, especificacao_atual, provedor_de, trava_projetos
+from projetos import ler_projeto, especificacao_atual, provedor_de, trava_projetos, executor_permitido
 from supervisao import amostravel, aprovacao_valida, elegivel as elegivel_supervisao, pendente as supervisao_pendente
 
 ESTADOS = {
@@ -240,13 +240,7 @@ class Estado:
         return especificacao_atual(tarefa, ler_projeto(self.pasta))
 
     def permite_executor(self, executor):
-        projeto = ler_projeto(self.pasta)
-        if projeto is None or executor == 'deterministico':
-            return True
-        politica = projeto['politica']
-        provedor = provedor_de(executor)
-        return (('provedores' not in politica or provedor in politica['provedores'])
-                and (politica.get('dados') != 'local' or provedor == 'ollama'))
+        return executor_permitido(ler_projeto(self.pasta), executor)
 
     def impedimentos_politica(self):
         return [dict(destino=d, motivo='política do projeto impede este provedor', motivo_codigo='provedor_pausado')
@@ -441,7 +435,7 @@ class Estado:
             if any(mapa[dep]['status'] != 'COMPLETED' for dep in spec.get('dependencias', [])):
                 raise ValueError('dependências ainda não concluídas')
             consumo = self.consumo(identificador)
-            if self.limite_projeto(spec) == 0:
+            if self.limite_projeto(spec) == 0 and spec['capacidade'] != 'validacao_json':
                 raise ValueError('orçamento do projeto esgotado')
             tempo = spec.get('tempo_total', 600) - consumo['segundos']
             if (consumo['chamadas'] is None or consumo['chamadas'] >= spec.get('max_chamadas', 8)
@@ -461,7 +455,7 @@ class Estado:
                 raise ValueError('tarefa não aguarda supervisão automática')
             spec = item['especificacao']
             consumo = self.consumo(identificador)
-            if self.limite_projeto(spec) == 0:
+            if self.limite_projeto(spec) == 0 and spec['capacidade'] != 'validacao_json':
                 raise ValueError('orçamento do projeto esgotado')
             restante = spec.get('tempo_total', 600) - consumo['segundos']
             if (consumo['chamadas'] is None or consumo['chamadas'] >= spec.get('max_chamadas', 8)

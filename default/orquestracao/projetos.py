@@ -155,6 +155,15 @@ def provedor_de(executor):
     return {'local': 'ollama', 'codex-economico': 'codex', 'codex-principal': 'codex'}.get(executor, executor)
 
 
+def executor_permitido(projeto, executor):
+    if projeto is None or executor == 'deterministico':
+        return True
+    politica = projeto['politica']
+    provedor = provedor_de(executor)
+    return (('provedores' not in politica or provedor in politica['provedores'])
+            and (politica.get('dados') != 'local' or provedor == 'ollama'))
+
+
 def reassociar(raiz, antigo, novo):
     raiz = Path(raiz).resolve()
     antigo, novo = Path(antigo).resolve(), Path(novo).resolve(strict=True)
