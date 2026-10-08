@@ -93,10 +93,14 @@ jobs:
           [ ! -e "$f" ] || echo 0 >"$f"
 
       - name: Dependências
-        run: pacman -Syu --noconfirm --needed git sudo jq python gitleaks bubblewrap diffutils openssh xdg-dbus-proxy dbus zsh poppler r gcc make gcc-fortran libxml2
+        run: pacman -Syu --noconfirm --needed git sudo jq python gitleaks bubblewrap diffutils openssh xdg-dbus-proxy dbus zsh poppler r gcc make gcc-fortran libxml2 pkgconf
 
       - name: lintr
-        run: Rscript -e 'install.packages("lintr", repos = "https://cloud.r-project.org", Ncpus = 4)'
+        # O xml2 precisa do pkg-config para localizar os cabeçalhos do libxml2.
+        # install.packages pode apenas avisar da falha e terminar com código 0.
+        run: |
+          pkg-config --cflags --libs libxml-2.0
+          Rscript -e 'install.packages("lintr", repos = "https://cloud.r-project.org", Ncpus = 4); library(lintr)'
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 

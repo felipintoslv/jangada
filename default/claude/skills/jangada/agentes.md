@@ -362,6 +362,15 @@ memória não verificável no isolamento; essa recusa não avalia o modelo.
 
 ## Revisão cruzada (`jangada-validar`)
 
+Na CI do Arch, o `sandbox-e2e` instala R e `lintr`. O pacote R `xml2`,
+dependência do `lintr`, precisa de `libxml2` e de `pkgconf`, que fornece
+`pkg-config` para localizar os cabeçalhos em `include/libxml2`. Instalar
+apenas `libxml2` pode produzir a mensagem de biblioteca ausente mesmo com
+os cabeçalhos presentes. Confira com `pkg-config --cflags --libs libxml-2.0`.
+O `install.packages()` pode terminar com código 0 após falhas de compilação;
+carregue `library(lintr)` na mesma etapa para a falha aparecer na instalação,
+antes dos testes de capacidades.
+
 O `jangada-par` (Claude implementando em lote, agy revisando) saiu em
 22/09/2026: o agente interativo com o protocolo faz o mesmo sem uma segunda
 porta de entrada. O que se aprendeu com ele vale para o revisor agy:

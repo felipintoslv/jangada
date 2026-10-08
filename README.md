@@ -903,8 +903,9 @@ e não mexe na instalada. Para testar a cópia de trabalho sem instalar, rode
 
 A cada push, o GitHub Actions (`.github/workflows/verificar.yml`) roda o
 `testes/verificar.sh` num contêiner Arch e simula a instalação como usuário
-sem sudo, conferindo que nada foi escrito. R e `lintr` ficam de fora da CI, e
-o caso do `lintr` só roda na máquina local.
+sem sudo, conferindo que nada foi escrito. R e `lintr` rodam na tarefa separada
+`sandbox-e2e`, que instala `libxml2` e `pkgconf` para compilar o pacote R
+`xml2` e confere o carregamento do `lintr` antes dos testes de isolamento.
 
 A CI roda em dois ambientes: `fixo`, com a imagem do Arch por digest e os
 pacotes do Arch Linux Archive na mesma data, e `atual`, com `archlinux:latest`.
