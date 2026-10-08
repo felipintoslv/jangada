@@ -80,7 +80,12 @@ ausência de `node` ainda não tinham sido conferidas.
 
 ## 4. Navegação
 
-Abas do Shiny. A coluna "Ação" diz onde se age, já que o painel só lê.
+Um processo R serve duas páginas, selecionadas no topo: **Operacional** e
+**Indicadores**. Compartilham porta, PID e token. Operacional tem nove abas
+sem barra lateral. Indicadores tem seis abas analíticas visíveis na barra,
+com os filtros de período, projeto e consumo na barra lateral.
+
+Abas de Operacional. A coluna "Ação" diz onde se age, já que o painel só lê.
 
 | Seção | Conteúdo | Reaproveita | Ação |
 |---|---|---|---|
@@ -93,7 +98,10 @@ Abas do Shiny. A coluna "Ação" diz onde se age, já que o painel só lê.
 | Monitoramento | CPU, memória, GPU, modelos carregados, erros | `jangada-monitor`, `/api/ps` | Nenhuma |
 | Histórico e Artefatos | Linha do tempo por tarefa, artefatos por `sha256` | Tabelas `eventos`, `artefatos/` | Nenhuma |
 | Configurações | Leitura validada de `jangada.conf`, perfis e provedores, com o arquivo a editar | `jangada-config` | Editor de texto |
-| Indicadores | Abas analíticas atuais | Sem mudança | Nenhuma |
+
+Indicadores reúne Fila e provedores, Revisão e síntese, Consumo de modelos,
+Tempo e atenção, Gargalos e redes e Autonomia de agentes. Fila e provedores
+mantém o retrato da última coleta; o período não altera esse retrato.
 
 ### 4.1 Central de Atividades
 
@@ -129,8 +137,8 @@ resultado.
 
 ## 6. Critérios para a Fase 5 aceitar a interface
 
-1. As dez seções existem como abas e mostram dados reais, sem inventar
-   valor ausente.
+1. As duas páginas mostram nove abas operacionais e seis analíticas, com
+   dados reais e sem inventar valor ausente.
 2. O painel não grava em nenhum arquivo de estado, com teste automático.
 3. Acompanhar e integrar uma tarefa pela Central Qt, sem terminal, continua
    possível.
@@ -146,8 +154,8 @@ Removê-las devolve o painel ao estado atual.
 
 ## 8. Implementação em 08/10/2026
 
-As dez seções existem em `app.R`; as análises anteriores estão em
-Indicadores. `operacional.R` lê `nucleo.json`, produzido pelo coletor a
+As páginas Operacional e Indicadores existem em `app.R`, no mesmo processo.
+`operacional.R` lê `nucleo.json`, produzido pelo coletor a
 partir das consultas de `default/nucleo/`. A identidade usa o hash do
 projeto; projetos com o mesmo nome não compartilham seleção.
 
@@ -157,7 +165,15 @@ Acompanhamento de sessão reutiliza a seleção e a integração por SHA.
 Revisão da fila continua no terminal; a Central mostra instruções e critérios.
 Dados parciais ou consulta inválida bloqueiam as ações operacionais.
 
-Monitoramento só consulta recursos depois de autenticação, com a aba
+Configurações apresenta chave e valor, com o caminho do arquivo no
+cabeçalho; valores vazios ou nulos aparecem como "não definido". Detalhes de
+projeto e tarefa apresentam atributos, listas e vínculos em tabelas. O
+registro bruto fica recolhido. Monitoramento apresenta fichas com unidades
+legíveis e tabelas para modelos carregados e erros; listas vazias mostram
+"nenhum".
+
+Monitoramento só consulta recursos depois de autenticação, com a página
+Operacional e a aba
 ativa e intervalo de 5 s. CPU usa diferença entre contadores; a primeira
 medida fica ausente. GPU usa `nvidia-smi` quando disponível; outros
 fabricantes permanecem sem medida. Modelos carregados vêm apenas de

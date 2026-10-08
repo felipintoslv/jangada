@@ -426,7 +426,7 @@ print(json.dumps(coletor.validacoes(), default=str))' | Rscript -e '
   if painel >/dev/null 2>"$tmp/erro4"; then
     ok "caso 5: o app sobe"
     conferir "caso 5: a página tem o título do painel" \
-      grep -q "Indicadores do jangada" <(curl -s --max-time 5 "http://127.0.0.1:$porta")
+      grep -q "Painel do jangada" <(curl -s --max-time 5 "http://127.0.0.1:$porta")
     conferir "caso 5: --waybar vê o app no ar" jq_ok '.class == "no-ar"' <(painel --waybar)
     chave="$estado/painel-chave/token"
     conferir "caso 5: o token tem 64 dígitos hexadecimais" grep -qxE '[0-9a-f]{64}' "$chave"

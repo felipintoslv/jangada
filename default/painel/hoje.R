@@ -3,7 +3,7 @@ hoje_ui <- function(id) {
   ns <- shiny::NS(id)
   bslib::layout_column_wrap(width = 1, fill = FALSE,
     shiny::uiOutput(ns("aviso")),
-    p("Retrato de todos os projetos na última coleta. Consumo apenas de hoje; filtros ficam na área avançada."),
+    p("Retrato de todos os projetos na última coleta. Consumo apenas de hoje; filtros ficam em Indicadores."),
     bslib::card(bslib::card_header("Precisa da sua resposta"), shiny::tableOutput(ns("sessoes"))),
     bslib::card(bslib::card_header("Revisões pendentes"), shiny::tableOutput(ns("revisoes"))),
     bslib::card(bslib::card_header("Saúde dos provedores"), shiny::tableOutput(ns("provedores"))),

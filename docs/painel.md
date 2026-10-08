@@ -18,7 +18,8 @@ indicadores", e os campos de cada registro em [registros](registros.md).
 
 ## Fila, provedores e autonomia
 
-O painel abre em **Visão Geral** e tem dez seções da evolução 2.0.
+O painel abre em **Operacional**, na aba **Visão Geral**. O seletor no topo
+permite abrir **Indicadores**, no mesmo processo e com filtros próprios.
 **Central de Atividades** reúne fila e sessões a partir de `nucleo.json`.
 Filtros operacionais usam identificador de projeto, estado, agente e data.
 Detalhes mostram critérios, dependências, execuções, eventos e hashes.
@@ -226,7 +227,23 @@ Toda gravação é num temporário na mesma pasta, seguido de troca de nome.
 
 - `indicadores.R` tem as funções puras (carregar o cache, calcular cada
   indicador), testáveis sem subir o app; `app.R` monta a interface.
-- Narrativa em 5 abas:
+- Um processo R serve **Operacional** e **Indicadores**, com seletor no topo,
+  a mesma porta e o mesmo token. Cada página tem sua própria barra de abas.
+- **Operacional** abre em Visão Geral e reúne Projetos, Central de Atividades,
+  Central de Agentes, Modelos e Provedores, Central de Revisão, Monitoramento,
+  Histórico e Artefatos e Configurações. Não tem barra lateral de filtros.
+- Configurações mostra chave e valor, com o arquivo no cabeçalho. Valor vazio
+  ou nulo aparece como "não definido".
+- Monitoramento mostra fichas de CPU, memória em GiB e GPU com memória em
+  MiB. Modelos carregados e erros ficam em tabelas; listas vazias mostram
+  "nenhum". Medição ausente permanece "não registrado".
+- Detalhes de projeto, tarefa e sessão mostram atributos em tabelas de campo
+  e valor, com tabelas próprias para listas e vínculos. O JSON completo fica
+  recolhido em **Ver registro bruto**.
+- **Indicadores** tem seis abas, visíveis na barra. Os filtros de período,
+  projeto, agente, revisão e consumo ficam na barra lateral desta página.
+  **Fila e provedores** mantém o retrato da coleta, filtrado apenas por projeto.
+  As outras cinco abas são:
   1. **Revisão e síntese**: diagnóstico operacional dinâmico do dia, taxa de
      aprovação direta na 1ª rodada, tempo de revisão cruzada e entregas no
      limite de rodadas.
