@@ -66,6 +66,8 @@ recusa "tipo de API" TIPO=openai-compat FUNCOES=revisor
 recusa "tipo ausente" FUNCOES=revisor
 recusa "função desconhecida" TIPO=cli FUNCOES=supervisor
 recusa "sem função" TIPO=cli
+recusa "ollama como principal" TIPO=ollama FUNCOES=principal
+recusa "ollama como principal e delegação" TIPO=ollama "FUNCOES=delegacao principal"
 recusa "argumento de protocolo com comando embutido" TIPO=cli FUNCOES=principal 'PROTOCOLO_ARG=--a $(id)'
 recusa "argumento de protocolo com espaço" TIPO=cli FUNCOES=principal 'PROTOCOLO_ARG=--a b'
 recusa "reserva não numérica" TIPO=cli FUNCOES=revisor RESERVA=primeiro

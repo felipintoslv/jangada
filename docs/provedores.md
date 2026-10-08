@@ -29,7 +29,7 @@ provedor fora das listas.
 
 - `principal`: o provedor aparece em `jangada-agente --capacidades-json` e
   os perfis que usam o comando dele aparecem em `--perfis`. A Central lê as
-  duas listas.
+  duas listas. Só vale com `TIPO=cli`; em outro tipo o arquivo é recusado.
 - `revisor`: o nome é aceito em `--revisor` e em `JANGADA_VALIDAR_REVISOR`.
 - `delegacao`: só descreve. Os destinos do `jangada-delegar` não mudaram.
 
