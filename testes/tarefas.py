@@ -129,6 +129,39 @@ class Interface(unittest.TestCase):
         self.assertFalse(op.botoes['cancelar'].isEnabled())
         self.assertIn('Texto como dado', op.detalhes.toPlainText())
 
+    def test_projeto_sem_caminho_fica_somente_leitura(self):
+        op = self.carregar_operacional()
+        op.dados['projetos'][0]['caminho'] = None
+        op.mostrar(op.dados)
+        op.lista.setCurrentItem(op.lista.topLevelItem(0).child(0))
+        self.assertIn('Texto como dado', op.detalhes.toPlainText())
+        self.assertTrue(all(not b.isEnabled() for b in op.botoes.values()))
+        for titulo in ('Cadastrar projeto', 'Nova atividade', 'Importar plano'):
+            self.assertFalse(op.botoes_projeto[titulo].isEnabled())
+        with patch.object(op, 'executar') as executar:
+            op.agir('pausar')
+            op.atividade()
+            op.importar()
+            op.cadastrar()
+            executar.assert_not_called()
+        op.executar('tarefa', ['--projeto', None, 'T1', 'pausar'])
+        self.assertIn('Ação recusada', op.status.text())
+        self.assertEqual(op.acao.state(), QProcess.ProcessState.NotRunning)
+
+    def test_eventos_reiniciam_espera_e_consulta_operacional_dispensa_catalogos(self):
+        op = self.janela.operacional
+        aguardar(lambda: op.consulta.state() == QProcess.ProcessState.NotRunning)
+        with patch.object(self.janela, 'preparar') as preparar:
+            op.atualizar()
+            self.assertEqual(preparar.call_args.args[1], ['consultar', '--todos', '--sem-catalogos'])
+        aguardar(lambda: op.consulta.state() == QProcess.ProcessState.NotRunning)
+        self.janela.evento_estado.stop()
+        with patch.object(op, 'atualizar') as atualizar:
+            for _ in range(20):
+                self.janela.mudanca_estado()
+            self.assertEqual(atualizar.call_count, 0)
+            aguardar(lambda: atualizar.call_count == 1)
+
     def test_modos_da_central_e_navegacao_por_teclado(self):
         self.janela.show()
         self.janela.modo.setCurrentText('Claro')

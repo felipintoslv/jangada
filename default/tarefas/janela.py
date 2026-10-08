@@ -703,8 +703,7 @@ class Janela(QMainWindow):
 
     def mudanca_estado(self, *_):
         self.atualizacao_pendente = True
-        if not self.evento_estado.isActive():
-            self.evento_estado.start()
+        self.evento_estado.start()
 
     def avancar(self):
         self.passo += 1

@@ -21,10 +21,12 @@ class Operacional(QWidget):
         self.fechando = False
         layout = QVBoxLayout(self)
         topo = QHBoxLayout()
+        self.botoes_projeto = {}
         for titulo, metodo in [('Cadastrar projeto', self.cadastrar), ('Nova atividade', self.atividade),
                                ('Importar plano', self.importar), ('Atualizar', self.atualizar)]:
             botao = QPushButton(titulo)
             botao.clicked.connect(metodo)
+            self.botoes_projeto[titulo] = botao
             topo.addWidget(botao)
         layout.addLayout(topo)
         divisor = QSplitter()
@@ -82,7 +84,7 @@ class Operacional(QWidget):
     def atualizar(self):
         if self.fechando or not self.janela.real or self.consulta.state() != QProcess.ProcessState.NotRunning:
             return
-        self.janela.preparar(self.consulta, ['consultar', '--todos'], 'jangada-projeto')
+        self.janela.preparar(self.consulta, ['consultar', '--todos', '--sem-catalogos'], 'jangada-projeto')
         self.consulta.start()
         self.prazo.start(10000)
 
@@ -159,7 +161,14 @@ class Operacional(QWidget):
         chave = self.chave()
         r = self.registros.get(chave)
         ocupado = self.acao.state() != QProcess.ProcessState.NotRunning if hasattr(self, 'acao') else False
-        permitido = self.janela.real and self.validos and not ocupado and chave is not None
+        projeto = self.projeto()
+        caminho_valido = bool(projeto and isinstance(projeto.get('caminho'), str)
+                              and projeto['caminho'].strip() and Path(projeto['caminho']).is_absolute())
+        permitido = self.janela.real and self.validos and not ocupado and chave is not None and caminho_valido
+        self.botoes_projeto['Cadastrar projeto'].setEnabled(bool(self.janela.real and not ocupado
+                                                          and (chave is None or caminho_valido)))
+        for titulo in ('Nova atividade', 'Importar plano'):
+            self.botoes_projeto[titulo].setEnabled(bool(permitido))
         status = r.get('status') if r else None
         for acao, botao in self.botoes.items():
             estados = {'pausar': {'QUEUED', 'WAITING_PROVIDER', 'WAITING_QUOTA', 'WAITING_REVIEWER'},
@@ -195,7 +204,11 @@ class Operacional(QWidget):
     def executar(self, acao, argumentos, confirmar=False):
         if self.fechando or not self.janela.real or self.acao.state() != QProcess.ProcessState.NotRunning:
             return
-        vetor = comando(self.janela.jangada, acao, argumentos, confirmar)
+        try:
+            vetor = comando(self.janela.jangada, acao, argumentos, confirmar)
+        except ValueError as erro:
+            self.status.setText('Ação recusada: ' + str(erro))
+            return
         self.janela.preparar(self.acao, vetor[1:], Path(vetor[0]).name)
         self.acao.start()
         self.prazo_acao.start(30000)
@@ -218,7 +231,7 @@ class Operacional(QWidget):
             self.executar('tarefa', ['--projeto', projeto['caminho'], chave[2], acao], confirmar=acao == 'cancelar')
 
     def cadastrar(self):
-        if not self.janela.real:
+        if not self.botoes_projeto['Cadastrar projeto'].isEnabled():
             return
         pasta = QFileDialog.getExistingDirectory(self, 'Pasta do projeto')
         if pasta:
@@ -226,7 +239,7 @@ class Operacional(QWidget):
 
     def atividade(self):
         projeto = self.projeto()
-        if not projeto or not self.validos or not self.janela.real:
+        if not self.botoes_projeto['Nova atividade'].isEnabled():
             return
         titulo, ok = QInputDialog.getText(self, 'Nova atividade', 'Título')
         if not ok or not titulo.strip():
@@ -244,7 +257,7 @@ class Operacional(QWidget):
 
     def importar(self):
         projeto = self.projeto()
-        if not projeto or not self.validos or not self.janela.real:
+        if not self.botoes_projeto['Importar plano'].isEnabled():
             return
         arquivo, _ = QFileDialog.getOpenFileName(self, 'Plano de tarefas', '', 'JSON (*.json)')
         if arquivo:

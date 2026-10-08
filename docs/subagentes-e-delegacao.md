@@ -490,8 +490,8 @@ para a raiz atual em memória e reconferidas antes da execução.
 O núcleo em `default/nucleo/` consulta cópias estáveis do banco e WAL,
 sem criar arquivos na origem. Estados da 2.0 e da atividade são calculados.
 As ações chamam `bin/`; integração conserva a confirmação dos SHA e a
-revisão protegida do backend. O painel e a Central ainda serão ligados ao
-núcleo na Fase 6.
+revisão protegida do backend. O painel lê a coleta do núcleo em `nucleo.json`;
+a Central consulta projetos e fila diretamente, sem carregar os catálogos.
 
 ## Fila persistente de projetos
 
