@@ -48,7 +48,7 @@ class Conversa(QWidget):
     def __init__(self):
         super().__init__()
         self.url = os.environ.get('JANGADA_OLLAMA_URL', 'http://localhost:11434')
-        self.contexto = int(os.environ.get('JANGADA_LOCAL_CTX', 8192))
+        self.contexto = int(os.environ.get('JANGADA_CONVERSA_CTX', 8192))
         estado = os.environ.get('JANGADA_ESTADO', Path.home()/'.local/state/jangada')
         self.arquivo_trava = Path(estado)/'local.lock'
         self.mensagens = []

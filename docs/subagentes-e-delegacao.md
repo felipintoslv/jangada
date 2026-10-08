@@ -378,6 +378,8 @@ e preservou cerca de 2,0 GB de folga, atendendo a margem mínima de 1,5 GB.
   liberar memória de vídeo aos jogos).
 - `JANGADA_LOCAL_ESPERA`: `30` (segundos de espera pela trava de concorrência).
 - `JANGADA_LOCAL_FATIAS_MAX`: `5` (limite de fatias para documentos que excedem o contexto).
+- `JANGADA_CONVERSA_CTX`: o valor de `JANGADA_LOCAL_CTX` (contexto da Conversa de
+  Pescador, `jangada-conversa`; a delegação local não o lê).
 - `JANGADA_OLLAMA_URL`: `http://localhost:11434` (endereço da API do Ollama).
 - Concorrência e modelo de ameaça: uma vaga exclusiva por chamada controlada por trava
   exclusiva (`flock`) em `$JANGADA_ESTADO/local.lock`, obtida antes das checagens de

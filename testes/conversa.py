@@ -5,6 +5,7 @@ import http.server
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import threading
@@ -17,7 +18,8 @@ TEMP = tempfile.TemporaryDirectory()
 os.environ['JANGADA_ESTADO'] = TEMP.name
 os.environ['JANGADA_CONFIG'] = TEMP.name
 os.environ['JANGADA_LOCAL_MODELO'] = 'modelo-b'
-os.environ['JANGADA_LOCAL_CTX'] = '4096'
+os.environ['JANGADA_LOCAL_CTX'] = '2048'
+os.environ['JANGADA_CONVERSA_CTX'] = '4096'
 os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 sys.path.insert(0, str(RAIZ/'default/conversa'))
 
@@ -200,6 +202,24 @@ class ConversaTest(unittest.TestCase):
         fora.enviar()
         self.assertIsNone(fora.chamada)
         fora.close()
+
+
+class ContextoDaConfiguracao(unittest.TestCase):
+    def contexto(self, conf):
+        with tempfile.TemporaryDirectory() as pasta:
+            (Path(pasta)/'jangada').mkdir()
+            (Path(pasta)/'jangada/jangada.conf').write_text(conf)
+            ambiente = {k: v for k, v in os.environ.items() if k not in ('JANGADA_LOCAL_CTX', 'JANGADA_CONVERSA_CTX')}
+            ambiente['XDG_CONFIG_HOME'] = pasta
+            return subprocess.run(
+                ['bash', '-c', 'source "$1" && echo "$JANGADA_LOCAL_CTX $JANGADA_CONVERSA_CTX"', '_', str(RAIZ/'bin/jangada-config')],
+                env=ambiente, capture_output=True, text=True, check=True).stdout.strip()
+
+    def test_sem_valor_proprio_segue_a_delegacao(self):
+        self.assertEqual(self.contexto('JANGADA_LOCAL_CTX=3000\n'), '3000 3000')
+
+    def test_valor_proprio_nao_muda_a_delegacao(self):
+        self.assertEqual(self.contexto('JANGADA_LOCAL_CTX=3000\nJANGADA_CONVERSA_CTX=16384\n'), '3000 16384')
 
 
 if __name__ == '__main__':
