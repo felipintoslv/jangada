@@ -52,6 +52,10 @@ def main():
     aborto.add_argument('nome')
     aborto.add_argument('--execucao', required=True)
     args = parser.parse_args()
+    if os.environ.get('JANGADA_ISOLADO') and (args.acao in {
+            'reassociar', 'sessao-iniciar', 'sessao-abortar', 'sessao-encerrar'}
+            or args.acao == 'cadastrar' and args.politica):
+        raise ValueError('operação exige execução fora do isolamento')
     raiz = Path(os.environ['JANGADA_ESTADO'])
     projeto = args.projeto.resolve()
     if args.acao == 'consultar':
@@ -117,8 +121,6 @@ def main():
                                       (time.time(), args.nome, args.execucao))
                 resultado = {'sessao': args.nome, 'execucao': args.execucao, 'status': 'CANCELLED'}
             elif args.acao == 'sessao-encerrar':
-                if os.environ.get('JANGADA_ISOLADO'):
-                    raise ValueError('encerramento da sessão exige execução fora do isolamento')
                 with estado.transacao():
                     estado.db.execute("UPDATE execucoes SET fim=?,status=? WHERE sessao=? AND status='RUNNING'",
                                       (time.time(), 'COMPLETED' if args.integrada else 'CANCELLED', args.nome))

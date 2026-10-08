@@ -508,6 +508,27 @@ class Operacional(unittest.TestCase):
             with self.assertRaises(ValueError):
                 acao(RAIZ, 'tarefa', ['T1', 'cancelar'])
 
+    def test_cli_isolado_recusa_politica_reassociacao_e_ciclo_de_sessao(self):
+        cadastrar(self.estado, self.projeto, {'dados': 'local'})
+        politica = self.raiz / 'politica.json'
+        politica.write_text('{}')
+        ambiente = dict(os.environ, JANGADA_ESTADO=str(self.estado_raiz), JANGADA_PATH=str(RAIZ),
+                        JANGADA_CONFIG=str(self.config), PYTHONPATH=str(RAIZ / 'default'), JANGADA_ISOLADO='1')
+        comando = [sys.executable, str(RAIZ / 'default/nucleo/cli.py'), '--projeto', str(self.projeto)]
+        antes = {str(p): (p.read_bytes(), p.stat().st_mtime_ns)
+                 for p in self.estado_raiz.rglob('*') if p.is_file()}
+        for argumentos in (['cadastrar', '--politica', str(politica)],
+                           ['reassociar', str(self.raiz / 'novo')],
+                           ['sessao-iniciar', 'nova', '--executor', 'codex'],
+                           ['sessao-abortar', 'nova', '--execucao', 'exe-inexistente'],
+                           ['sessao-encerrar', 'nova', '--integrada']):
+            with self.subTest(argumentos=argumentos):
+                resposta = subprocess.run([*comando, *argumentos], env=ambiente, capture_output=True, text=True)
+                self.assertNotEqual(resposta.returncode, 0)
+                self.assertIn('fora do isolamento', resposta.stderr)
+                self.assertEqual(antes, {str(p): (p.read_bytes(), p.stat().st_mtime_ns)
+                                         for p in self.estado_raiz.rglob('*') if p.is_file()})
+
     def test_cli_cadastro_atividade_consulta_sem_provedor(self):
         ambiente = dict(os.environ, JANGADA_PATH=str(RAIZ), XDG_CONFIG_HOME=str(self.config),
                         XDG_STATE_HOME=str(self.estado_raiz.parent), JANGADA_ISOLADO='')
