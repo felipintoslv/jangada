@@ -121,9 +121,10 @@ registrar() {
     --arg modelo "$modelo" --arg autor "$autor" --argjson arquivos "$(grep -c . <<<"$arquivos" || true)" \
     --argjson mais "${mais:-0}" --argjson menos "${menos:-0}" --argjson itens "${itens:-0}" \
     --argjson segundos "$SECONDS" --arg subagentes "$resumo" --arg subagentes_erro "$resumo_erro" \
-    --argjson auto "${auto_revisao:-0}" \
+    --argjson auto "${auto_revisao:-0}" --arg execucao "${execucao:-}" \
     '{data: $data, projeto: $projeto, rotulo: $rotulo, rodada: $rodada, resultado: $resultado,
       etapa: $etapa, revisor: $revisor, modelo: $modelo, autor: $autor, independente: ($auto == 0),
+      execucao: (if $execucao == "" then null else $execucao end),
       arquivos: $arquivos, mais: $mais, menos: $menos, itens: $itens, segundos: $segundos}
      + (if $subagentes != "" then {subagentes: ($subagentes | fromjson)} else {} end)
      + (if $subagentes_erro != "" then {subagentes_erro: $subagentes_erro} else {} end)' \
@@ -222,7 +223,7 @@ fi
 rotulo="${sessao:-$(basename "$dir")}"
 rotulo="${rotulo//[^A-Za-z0-9_.-]/-}"
 
-tarefa=""; inicio=""; autor=""; criada=""
+tarefa=""; inicio=""; autor=""; criada=""; execucao=""
 if [[ -n "$arq_meta" ]]; then
   [[ -n "$base" ]] || base="$(jq -r '.base // ""' "$arq_meta")"
   tarefa="$(jq -r '.tarefa // ""' "$arq_meta")"
@@ -230,6 +231,7 @@ if [[ -n "$arq_meta" ]]; then
   # .inicio é o commit de partida; a data de criação da sessão é .desde.
   criada="$(jq -r '.desde // ""' "$arq_meta")"
   autor="$(jq -r '.agente // ""' "$arq_meta")"
+  execucao="$(jq -r '.execucao // ""' "$arq_meta")"
   autor="$(basename "${autor%% *}")"
   if ((!revisor_dado)); then
     revisor="$(jq -r '.revisor // ""' "$arq_meta")"

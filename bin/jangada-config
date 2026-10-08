@@ -351,9 +351,12 @@ jangada_anexar_linha() {
 }
 
 jangada_registrar_evento() {
-  local linha
+  local linha execucao
+  execucao="$(jq -r '.execucao // ""' "$JANGADA_ESTADO/agentes/$1.json" 2>/dev/null || true)"
+  [[ "$execucao" =~ ^exe-[0-9a-f]{16}$ ]] || execucao=""
   linha="$(jq -cn --arg d "$(jangada_data_iso)" --arg s "$1" --arg p "$2" --arg a "$3" --arg e "$4" \
-    --arg x "${5:-}" '{data: $d, sessao: $s, projeto: $p, agente: $a, estado: $e}
+    --arg execucao "$execucao" --arg x "${5:-}" '{data: $d, sessao: $s, projeto: $p, agente: $a, estado: $e,
+      execucao: (if $execucao == "" then null else $execucao end)}
       + (($x | fromjson? | objects) // {})' 2>/dev/null)" || return 0
   [[ -n "$linha" ]] || return 0
   jangada_anexar_linha "$JANGADA_ESTADO/eventos-agentes.jsonl" "$linha" || true
@@ -561,6 +564,17 @@ jangada_focar_classe() {
 JANGADA_TMUX=(tmux -L jangada -f "$JANGADA_PATH/default/tmux/agentes.conf")
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  if [[ "${1:-}" == --provedores-json ]]; then
+    while read -r _n; do
+      jangada_provedor "$_n" || continue
+      jq -nc --arg id "$_n" --arg nome "$PROVEDOR_NOME" --arg tipo "$PROVEDOR_TIPO" \
+        --arg funcoes "$PROVEDOR_FUNCOES" --arg modelo "$PROVEDOR_MODELO_REVISOR" \
+        --arg protocolo "$PROVEDOR_PROTOCOLO_ARG" \
+        '{id:$id, nome:$nome, tipo:$tipo, funcoes:($funcoes | split(" ") | map(select(. != ""))),
+          modelo_revisor:(if $modelo == "" then null else $modelo end), protocolo_arg:$protocolo}'
+    done < <(jangada_provedores "") | jq -s .
+    exit 0
+  fi
   for _v in JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_INTERFACE JANGADA_TERMINAL \
     JANGADA_AGENTE JANGADA_AGENTE_ARGS JANGADA_VALIDAR_REVISOR JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL \
     JANGADA_PAPEL_AJUSTE JANGADA_TEMA_ESQUEMA JANGADA_BARRA_POSICAO JANGADA_GPU \
