@@ -225,10 +225,44 @@ projeto transitório, conferido por um teste sem cadastro e sem gravação.
 A cópia da paleta foi mantida e documentada conforme a regra 3 de `AGENTS.md`.
 
 Não houve instalação, atualização da cópia instalada ou envio de commits.
-Não foram exercitados modelos remotos reais nos contratos; os testes usam
-executores sintéticos. A revisão independente usa o revisor configurado.
+Na entrega anterior, os contratos usaram executores sintéticos, sem modelos
+remotos reais. A revisão independente usa o revisor configurado.
 As imagens de contraste são sintéticas, e a fonte de reserva é usada nesta
 máquina enquanto Inter não estiver instalada.
+
+## Testes finais adicionais em 08/10/2026
+
+O usuário autorizou testes em sessão Hyprland e execuções reais de modelos
+remotos. Foram feitas duas consultas com a mesma fonte sintética de quatro
+linhas. O contrato exigiu fatos numéricos e referências exatas em JSON,
+comparados deterministicamente com o gabarito; não aprova a implementação.
+
+- Claude: CLI real, alias `sonnet`; o retorno identificou `claude-sonnet-5-5`.
+  Código zero, 3,20 s, um turno, 83 tokens de saída. O contrato passou.
+  Entrada registrada: 2 tokens, 2.042 de criação de cache e 531 lidos do cache.
+- Codex: adaptador `jangada-codex --revisar`, com o modelo configurado
+  `gpt-6.1-sol` solicitado explicitamente. Código zero, 5,56 s, 11.157
+  tokens de entrada e 57 de saída. O contrato passou.
+
+Ferramentas foram desativadas. As execuções usaram montagens que permitem
+gravar apenas na pasta temporária do teste, com autenticação somente para
+leitura. Não houve login, alteração de configuração externa ou chave de API.
+A primeira tentativa do Codex falhou na inicialização porque seus dados
+estavam somente para leitura. A repetição montou dados próprios do teste,
+preservando `CODEX_HOME`. O retorno avisou que o modo de código estava
+desativado; a resposta sem ferramentas e o consumo foram recebidos.
+Esses testes conferem geração e formato, não o ciclo completo de sessão,
+fila, revisão e integração com executores reais.
+
+Hyprland instalado: 0.56.2. `testes/aninhado.sh --sem-usuario` retornou
+"pulado", pois esta sessão isolada não tem `WAYLAND_DISPLAY` nem soquete
+Wayland visível. Não conta como aprovação do teste gráfico. Continua
+necessário executar o teste em um terminal comum da sessão Hyprland e
+conferir as interfaces na tela. O teste aninhado exclui a inicialização
+que alteraria o ambiente da sessão e não testa DRM ou escolha de GPU.
+
+A suíte `testes/verificar.sh` passou novamente, código zero, em 207 s,
+depois desses testes adicionais e do registro documental.
 
 ## Como continuar
 
