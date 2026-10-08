@@ -47,6 +47,15 @@ class Fichas(unittest.TestCase):
                 self.assertIn('paleta de reserva', resposta.stderr)
                 self.assertNotIn('Traceback', resposta.stderr)
 
+    def test_uso_invalido_sem_traceback(self):
+        for argumentos in ([], ['um', 'dois']):
+            with self.subTest(argumentos=argumentos):
+                resposta = subprocess.run([sys.executable, str(RAIZ / 'default/visual/fichas.py'), *argumentos],
+                                          capture_output=True, text=True, timeout=10)
+                self.assertNotEqual(resposta.returncode, 0)
+                self.assertIn('uso:', resposta.stderr)
+                self.assertNotIn('Traceback', resposta.stderr)
+
     def test_tema_simulado_nao_grava_nem_recarrega(self):
         with tempfile.TemporaryDirectory() as tmp:
             pasta = Path(tmp)

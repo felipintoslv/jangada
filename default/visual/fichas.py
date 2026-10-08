@@ -54,6 +54,8 @@ def carregar(caminho=None):
 
 
 if __name__ == '__main__':
+    if len(sys.argv) != 2:
+        sys.exit('uso: fichas.py ARQUIVO | --json')
     if sys.argv[1:] == ['--json']:
         print(json.dumps(carregar()))
         sys.exit(0)
