@@ -314,7 +314,9 @@ O usuário forneceu depois `validacao-tarefa-ddeff1c4d2f2-r1.md`, com
 cinco novos apontamentos. Foram tratados assim:
 
 1. Projetos sem caminho ficam somente para consulta na Central. Os botões
-   e seus métodos recusam ações; argumentos inválidos mostram mensagem
+   de tarefas, atividades e importação recusam ações; o cadastro de outra
+   pasta permanece disponível porque não usa o projeto selecionado.
+   Argumentos inválidos mostram mensagem
    no estado da janela, sem exceção escapando do método chamado pelo Qt.
 2. Atualizada a descrição da ligação do painel e da Central ao núcleo em
    `docs/subagentes-e-delegacao.md`.
@@ -325,15 +327,24 @@ cinco novos apontamentos. Foram tratados assim:
    na recusa de fila antiga ou de projeto com política.
 4. A Central usa `consultar --todos --sem-catalogos`. Os catálogos
    continuam disponíveis na consulta completa usada pelo painel.
-   Cada evento reinicia a espera de 200 ms; a consulta periódica de 30 s
-   continua como reserva. Os testes conferem agrupamento dos eventos e
+   Cada evento reinicia a espera de 200 ms, com limite de adiamento de 1 s;
+   a consulta periódica de 30 s continua como reserva. Os testes conferem
+   agrupamento, atualização durante fluxo contínuo de eventos e
    consulta independente dos executáveis dos catálogos.
-5. Reservas principal e de supervisão aplicam a exceção de orçamento
-   para `validacao_json`. A reserva principal foi exercitada com limite
-   de zero chamadas; as regras de elegibilidade da supervisão permanecem.
+5. A reserva principal aplica a exceção de orçamento para `validacao_json`
+   e foi exercitada com limite de zero chamadas. A alteração de supervisão
+   foi retirada: tarefas determinísticas já são inelegíveis e recusadas
+   antes desse ponto. O teste confere essa recusa, sem habilitar esse fluxo.
 
 Passaram 33 contratos operacionais e 66 testes da Central com esses cenários.
 A suíte completa passou, código zero, em 207 s após essas correções.
+
+A revisão local pediu cadastro independente da seleção, retirada da exceção
+inalcançável de supervisão e limite de adiamento durante eventos contínuos.
+Os três ajustes estão no commit `2561cf4`. Passaram 33 contratos operacionais
+e 67 testes da Central, incluindo eventos a cada 40 ms. A suíte completa
+passou novamente, código zero, em 209 s. A aprovação desta correção e a
+revisão externa para integração continuam pendentes.
 A revisão manual externa deve informar `JANGADA_SESSAO` com o identificador
 completo, para usar o mesmo rótulo e a mesma marca procurada pela integração.
 
