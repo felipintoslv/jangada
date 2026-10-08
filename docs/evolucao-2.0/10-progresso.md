@@ -81,7 +81,7 @@ Feito:
 - `testes/provedores.sh`, incluído em `testes/verificar.sh`.
 - `docs/provedores.md`.
 
-Verificação: `testes/verificar.sh` com código 0 e "tudo certo", 49 etapas,
+Verificação: `testes/verificar.sh` com código 0 e "tudo certo", 45 etapas,
 de dentro da sessão isolada. Segue pulado o caso "casa mínima (leitura)".
 
 Fica fora, com as listas próprias: fila (`estado.py:280`, `cli.py:131`),
