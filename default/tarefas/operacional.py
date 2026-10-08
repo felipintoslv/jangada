@@ -165,8 +165,7 @@ class Operacional(QWidget):
         caminho_valido = bool(projeto and isinstance(projeto.get('caminho'), str)
                               and projeto['caminho'].strip() and Path(projeto['caminho']).is_absolute())
         permitido = self.janela.real and self.validos and not ocupado and chave is not None and caminho_valido
-        self.botoes_projeto['Cadastrar projeto'].setEnabled(bool(self.janela.real and not ocupado
-                                                          and (chave is None or caminho_valido)))
+        self.botoes_projeto['Cadastrar projeto'].setEnabled(bool(self.janela.real and not ocupado))
         for titulo in ('Nova atividade', 'Importar plano'):
             self.botoes_projeto[titulo].setEnabled(bool(permitido))
         status = r.get('status') if r else None

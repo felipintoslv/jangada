@@ -17,7 +17,7 @@ import time
 import unittest
 import uuid
 from unittest.mock import patch
-from PyQt6.QtCore import QProcess, Qt
+from PyQt6.QtCore import QProcess, QTimer, Qt
 from PyQt6.QtNetwork import QLocalServer
 from PyQt6.QtGui import QTextDocument, QKeySequence
 from PyQt6.QtTest import QTest
@@ -136,13 +136,16 @@ class Interface(unittest.TestCase):
         op.lista.setCurrentItem(op.lista.topLevelItem(0).child(0))
         self.assertIn('Texto como dado', op.detalhes.toPlainText())
         self.assertTrue(all(not b.isEnabled() for b in op.botoes.values()))
-        for titulo in ('Cadastrar projeto', 'Nova atividade', 'Importar plano'):
+        for titulo in ('Nova atividade', 'Importar plano'):
             self.assertFalse(op.botoes_projeto[titulo].isEnabled())
+        self.assertTrue(op.botoes_projeto['Cadastrar projeto'].isEnabled())
         with patch.object(op, 'executar') as executar:
             op.agir('pausar')
             op.atividade()
             op.importar()
-            op.cadastrar()
+            with patch('operacional.QFileDialog.getExistingDirectory', return_value='') as escolher:
+                op.cadastrar()
+                escolher.assert_called_once()
             executar.assert_not_called()
         op.executar('tarefa', ['--projeto', None, 'T1', 'pausar'])
         self.assertIn('Ação recusada', op.status.text())
@@ -161,6 +164,23 @@ class Interface(unittest.TestCase):
                 self.janela.mudanca_estado()
             self.assertEqual(atualizar.call_count, 0)
             aguardar(lambda: atualizar.call_count == 1)
+
+    def test_eventos_continuos_nao_adiam_atualizacao_indefinidamente(self):
+        self.janela.evento_estado.stop()
+        self.janela.limite_evento.stop()
+        produtor = QTimer(self.janela)
+        produtor.setInterval(40)
+        produtor.timeout.connect(self.janela.mudanca_estado)
+        chamadas = []
+        inicio = time.monotonic()
+        try:
+            with patch.object(self.janela.operacional, 'atualizar', side_effect=lambda: chamadas.append(time.monotonic())):
+                produtor.start()
+                QTest.qWait(1400)
+                self.assertTrue(chamadas)
+                self.assertLess(chamadas[0] - inicio, 1.4)
+        finally:
+            produtor.stop()
 
     def test_modos_da_central_e_navegacao_por_teclado(self):
         self.janela.show()

@@ -455,7 +455,7 @@ class Estado:
                 raise ValueError('tarefa não aguarda supervisão automática')
             spec = item['especificacao']
             consumo = self.consumo(identificador)
-            if self.limite_projeto(spec) == 0 and spec['capacidade'] != 'validacao_json':
+            if self.limite_projeto(spec) == 0:
                 raise ValueError('orçamento do projeto esgotado')
             restante = spec.get('tempo_total', 600) - consumo['segundos']
             if (consumo['chamadas'] is None or consumo['chamadas'] >= spec.get('max_chamadas', 8)

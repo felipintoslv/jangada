@@ -430,6 +430,10 @@ class Janela(QMainWindow):
         self.evento_estado.setSingleShot(True)
         self.evento_estado.setInterval(200)
         self.evento_estado.timeout.connect(self.atualizar)
+        self.limite_evento = QTimer(self)
+        self.limite_evento.setSingleShot(True)
+        self.limite_evento.setInterval(1000)
+        self.limite_evento.timeout.connect(self.atualizar)
         self.atualizacao_pendente = False
         if real:
             self.observar_estado()
@@ -703,6 +707,8 @@ class Janela(QMainWindow):
 
     def mudanca_estado(self, *_):
         self.atualizacao_pendente = True
+        if not self.limite_evento.isActive():
+            self.limite_evento.start()
         self.evento_estado.start()
 
     def avancar(self):
@@ -710,6 +716,8 @@ class Janela(QMainWindow):
         self.atualizar()
 
     def atualizar(self):
+        self.evento_estado.stop()
+        self.limite_evento.stop()
         self.operacional.atualizar()
         if not self.real:
             self.status.setText(f'Simulação · cenário {self.passo % 4 + 1} de 4')
@@ -1050,7 +1058,8 @@ exit "$resultado"
             return
         self.fechando = True
         self.operacional.fechar()
-        for timer in (self.timer, self.evento_estado, self.espera, self.tempo_acao, self.tempo_previa, self.tempo_finalizacao):
+        for timer in (self.timer, self.evento_estado, self.limite_evento, self.espera,
+                      self.tempo_acao, self.tempo_previa, self.tempo_finalizacao):
             timer.stop()
         for processo in (self.consulta, self.acao, self.previa, self.integracao):
             if processo.state() != QProcess.ProcessState.NotRunning:
