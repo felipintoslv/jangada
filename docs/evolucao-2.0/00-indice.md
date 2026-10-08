@@ -18,4 +18,4 @@ existem.
 
 Situação: Fase 3 entregue (registro de provedores; ver `10-progresso.md` e
 `docs/provedores.md`). Fase 4 aprovada, HEAD `0d43dce`.
-Fases 5 a 7 implementadas, em verificação conjunta; autorização em `10-progresso.md`.
+Fases 5 a 7 concluídas e aprovadas, HEAD `3bff4b9`; evidências em `10-progresso.md`.

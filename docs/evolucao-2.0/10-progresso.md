@@ -9,7 +9,7 @@
 - Fase 3 (registro de provedores): concluída e aprovada pelo
   `jangada-validar` (Codex, rodada 4, forçada pelo usuário).
 - Fase 4: aprovada pelo `jangada-validar` em 08/10/2026, HEAD `0d43dce`.
-- Fases 5 a 7: implementadas, com testes locais concluídos; revisão técnica pendente.
+- Fases 5 a 7: concluídas e aprovadas pelo `jangada-validar`, HEAD `3bff4b9`.
 - Fases 4 a 7: autorizadas com autonomia em 08/10/2026.
 - Sessão da Fase 3: ramo `agente/tarefa-ab47cef8d325`, sobre `9dcb640`.
   HEAD da aprovação informado pelo usuário: `3018fb9`.
@@ -175,8 +175,10 @@ recursos pertence às fases seguintes.
 
 Implementação autorizada pela mesma mensagem de 08/10/2026. As interfaces
 e a ligação ao núcleo foram desenvolvidas em conjunto, mantendo a separação
-entre consultas Shiny e ações Qt/terminal. A revisão técnica desta entrega
-ainda está pendente.
+entre consultas Shiny e ações Qt/terminal. A revisão técnica aprovou esta
+entrega em 08/10/2026, HEAD `3bff4b9`, na segunda rodada, com Claude Sonnet.
+O parecer é `validacao-jangada--tarefa-ddeff1c4d2f2-r5.md`; contém somente
+`STATUS: APROVADO`, sem declaração de testes executados pelo revisor.
 
 Implementado e conferido no código:
 
@@ -246,8 +248,8 @@ Uma sessão nova não tem a conversa anterior. O que ela precisa está aqui:
    - O executor não aprova o próprio resultado.
    - A interface não contorna regras do backend.
    - Sem ranking arbitrário de modelos e sem entidades redundantes.
-3. Fase 4 aprovada. Fases 5 (reformulação visual), 6 (integração e
-   monitoramento) e 7 (testes e validação) implementadas, aguardando
-   revisão técnica. O desenho está em `02-arquitetura.md` e `04-interface.md`.
+3. Fases 4 a 7 concluídas e aprovadas. Os limites dos testes estão acima;
+   as ressalvas históricas da Fase 1 continuam registradas na matriz.
+   O desenho está em `02-arquitetura.md` e `04-interface.md`.
 4. Para fechar o caso pulado, rode `bash testes/verificar.sh` num terminal
    fora da sessão.
