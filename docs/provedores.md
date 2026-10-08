@@ -19,8 +19,7 @@ provedor fora das listas.
 | Chave | Valores | Uso |
 |---|---|---|
 | `NOME` | Texto | Nome mostrado nas mensagens. Sem ela, vale o nome do arquivo |
-| `TIPO` | `cli` ou `ollama` | Obrigatória. Outros tipos são recusados |
-| `COMANDO` | Nome do executável | Obrigatória em `cli`, proibida em `ollama` |
+| `TIPO` | `cli` ou `ollama` | Obrigatória. Outros tipos são recusados. Em `cli`, o executável é o nome do arquivo |
 | `FUNCOES` | `principal`, `revisor`, `delegacao`, separadas por espaço | Obrigatória |
 | `PROTOCOLO_ARG` | Uma opção, como `--append-system-prompt` | Opção que recebe o protocolo da sessão. Sem ela, o agente abre sem protocolo |
 | `MODELO_REVISOR` | Nome de modelo | Modelo da revisão quando `--modelo` não é dado |

@@ -40,14 +40,14 @@ conferir "ollama só é descrito, sem comando" test "$(campos ollama)" = "Ollama
 if jangada_provedor nenhum; then falha "provedor ausente foi aceito"; else ok "provedor ausente é recusado"; fi
 if jangada_provedor ../claude; then falha "nome com barra foi aceito"; else ok "nome com barra é recusado"; fi
 
-printf 'TIPO=cli\nCOMANDO=novo\nFUNCOES=principal\nPROTOCOLO_ARG=--system\nSEGREDO=x\n' >"$usuario/novo.conf"
+printf 'TIPO=cli\nCOMANDO=outro\nFUNCOES=principal\nPROTOCOLO_ARG=--system\nSEGREDO=x\n' >"$usuario/novo.conf"
 conferir "provedor do usuário entra na lista" test "$(lista principal)" = "claude codex novo"
-conferir "sem NOME, vale o nome do arquivo" test "$(campos novo)" = "novo|cli|novo|principal|--system||"
+conferir "sem NOME, vale o nome do arquivo, que também é o executável" test "$(campos novo)" = "novo|cli|novo|principal|--system||"
 conferir "chave desconhecida não vira variável" test -z "${SEGREDO:-}"
 conferir "nada do registro é exportado" \
   bash -c 'source "$1/bin/jangada-config"; jangada_provedor novo; ! env | grep -q "^PROVEDOR_\|^SEGREDO="' _ "$repo_jangada"
 
-printf 'NOME=Outro\nTIPO=cli\nCOMANDO=claude\nFUNCOES=revisor\n' >"$usuario/claude.conf"
+printf 'NOME=Outro\nTIPO=cli\nFUNCOES=revisor\n' >"$usuario/claude.conf"
 conferir "arquivo do usuário tem precedência" test "$(campos claude)" = "Outro|cli|claude|revisor|||"
 conferir "e muda a lista de principais" test "$(lista principal)" = "codex novo"
 rm "$usuario/claude.conf"
@@ -59,16 +59,13 @@ recusa() {
   [[ " $(lista) " != *" ruim "* ]] || falha "$d aparece na lista"
 }
 recusa "tipo de API" TIPO=openai-compat FUNCOES=revisor
-recusa "tipo ausente" COMANDO=x FUNCOES=revisor
-recusa "cli sem comando" TIPO=cli FUNCOES=revisor
-recusa "comando com espaço" TIPO=cli "COMANDO=x --perigo" FUNCOES=revisor
-recusa "ollama com comando" TIPO=ollama COMANDO=ollama FUNCOES=delegacao
-recusa "função desconhecida" TIPO=cli COMANDO=x FUNCOES=supervisor
-recusa "sem função" TIPO=cli COMANDO=x
-recusa "argumento de protocolo com comando embutido" TIPO=cli COMANDO=x FUNCOES=principal 'PROTOCOLO_ARG=--a $(id)'
-recusa "argumento de protocolo com espaço" TIPO=cli COMANDO=x FUNCOES=principal 'PROTOCOLO_ARG=--a b'
-recusa "reserva não numérica" TIPO=cli COMANDO=x FUNCOES=revisor RESERVA=primeiro
-recusa "modelo com espaço" TIPO=cli COMANDO=x FUNCOES=revisor 'MODELO_REVISOR=a b'
+recusa "tipo ausente" FUNCOES=revisor
+recusa "função desconhecida" TIPO=cli FUNCOES=supervisor
+recusa "sem função" TIPO=cli
+recusa "argumento de protocolo com comando embutido" TIPO=cli FUNCOES=principal 'PROTOCOLO_ARG=--a $(id)'
+recusa "argumento de protocolo com espaço" TIPO=cli FUNCOES=principal 'PROTOCOLO_ARG=--a b'
+recusa "reserva não numérica" TIPO=cli FUNCOES=revisor RESERVA=primeiro
+recusa "modelo com espaço" TIPO=cli FUNCOES=revisor 'MODELO_REVISOR=a b'
 rm "$usuario/ruim.conf"
 
 printf '#!/bin/sh\n' >"$tmp/novo"; chmod +x "$tmp/novo"

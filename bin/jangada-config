@@ -277,16 +277,17 @@ jangada_provedor() {
     case "$_chave" in
       NOME) PROVEDOR_NOME="$_valor" ;;
       TIPO) PROVEDOR_TIPO="$_valor" ;;
-      COMANDO) PROVEDOR_COMANDO="$_valor" ;;
       FUNCOES) PROVEDOR_FUNCOES="$_valor" ;;
       PROTOCOLO_ARG) PROVEDOR_PROTOCOLO_ARG="$_valor" ;;
       MODELO_REVISOR) PROVEDOR_MODELO_REVISOR="$_valor" ;;
       RESERVA) PROVEDOR_RESERVA="$_valor" ;;
     esac
   done < <(sed -e 's/^[[:space:]]*#.*//' -e 's/[[:space:]]*$//' "$_arq")
+  # Em cli o executável é o nome do provedor: a sessão e a revisão chamam o
+  # programa por esse nome, e uma chave à parte poderia divergir dele.
   case "$PROVEDOR_TIPO" in
-    cli) [[ "$PROVEDOR_COMANDO" =~ ^[A-Za-z0-9_.-]+$ ]] || return 1 ;;
-    ollama) [[ -z "$PROVEDOR_COMANDO" ]] || return 1 ;;
+    cli) PROVEDOR_COMANDO="$1" ;;
+    ollama) ;;
     *) return 1 ;;
   esac
   [[ "$PROVEDOR_FUNCOES" =~ ^((principal|revisor|delegacao)( |$))+$ ]] || return 1
