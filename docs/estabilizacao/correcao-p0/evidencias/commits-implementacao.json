@@ -1,0 +1,14 @@
+[
+  {
+    "commit": "390e8c7efc8ad224252a23f45783e3d2a394da47",
+    "titulo": "fix(testes): verificar ataques à autoridade e recuperação do histórico"
+  },
+  {
+    "commit": "f9e92b82a974fe32a272026650dbc28b35103e96",
+    "titulo": "fix(revisao): preservar evidências antes de encerrar sessões"
+  },
+  {
+    "commit": "54d8edc53f2fdf0c1c22b028b1f9c9ad80b6b4e7",
+    "titulo": "fix(confianca): proteger a fila e verificar decisões de conclusão"
+  }
+]

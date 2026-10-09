@@ -1,0 +1,38 @@
+{
+  "resultado": "PASSOU",
+  "documentos": {
+    "agentes/prompt-teste.md": {
+      "bytes": 26,
+      "sha256": "31e10b71df92d192e81a16b55a9431e8dc5411a9e47c397317a1b45c7786c17d"
+    },
+    "agentes/protocolo-teste.md": {
+      "bytes": 26,
+      "sha256": "31e10b71df92d192e81a16b55a9431e8dc5411a9e47c397317a1b45c7786c17d"
+    },
+    "agentes/teste.json": {
+      "bytes": 161,
+      "sha256": "26441d06f3355c17e6d133dec14990b5156b1de68abb44575af649274441eba5"
+    },
+    "revisoes/teste.json": {
+      "bytes": 110,
+      "sha256": "05bbe7af5d9739b1596049192b01d98f92b077e1c0e77e6ce3c6789f456e2a15"
+    },
+    "revisoes/validacao-teste-r1.contexto.json": {
+      "bytes": 3042,
+      "sha256": "22218c62cf18b2a04a6a40dadaf45fb26c537587696c796844d2a0f791c29c9d"
+    },
+    "revisoes/validacao-teste-r1.md": {
+      "bytes": 44,
+      "sha256": "5f18cc09fb956e8a89ce1d0df148c06a696c7b23a6d20981474340fa6c8efa8c"
+    },
+    "revisoes/validacao-teste-r1.verificacoes.tsv": {
+      "bytes": 155,
+      "sha256": "c590907a5591238734b886e56b0729dc157faffaebda298636bedae576482025"
+    },
+    "revisoes/validacao-teste.aprovado": {
+      "bytes": 461,
+      "sha256": "b67a999aaa804a896bda283d8665afb18f824f3bb506fda954a5361ecdb22db0"
+    }
+  },
+  "origem_sha256": "286f87f2b84cdc5bdd5d88e5a142071c8eccd31e8c9fccc2ae9aa4cfe409489e"
+}

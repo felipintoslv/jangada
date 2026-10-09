@@ -1,0 +1,75 @@
+{
+  "suites_python_diretas": [
+    {
+      "suite": "orquestracao",
+      "cenarios": 30,
+      "codigo": 0
+    },
+    {
+      "suite": "executor",
+      "cenarios": 42,
+      "codigo": 0
+    },
+    {
+      "suite": "supervisao",
+      "cenarios": 26,
+      "codigo": 0
+    },
+    {
+      "suite": "operacional",
+      "cenarios": 36,
+      "codigo": 0
+    },
+    {
+      "suite": "deterministico",
+      "cenarios": 26,
+      "codigo": 0
+    },
+    {
+      "suite": "delegacao",
+      "cenarios": 8,
+      "codigo": 0
+    },
+    {
+      "suite": "acompanhamento",
+      "cenarios": 12,
+      "codigo": 0
+    },
+    {
+      "suite": "metricas-projeto",
+      "cenarios": 20,
+      "codigo": 0
+    },
+    {
+      "suite": "painel-orquestracao",
+      "cenarios": 3,
+      "codigo": 0
+    },
+    {
+      "suite": "tarefas",
+      "cenarios": 67,
+      "codigo": 1
+    },
+    {
+      "suite": "confianca-p0",
+      "cenarios": 32,
+      "codigo": 0
+    },
+    {
+      "suite": "baseline-segura",
+      "cenarios": 10,
+      "codigo": 0
+    }
+  ],
+  "total_cenarios_python": 312,
+  "passaram": 308,
+  "falhas_cruas_de_socket": 4,
+  "cenarios_p0": 32,
+  "p0_passaram": 32,
+  "p0_ignorados": 0,
+  "assercoes_shell_fim": 92,
+  "assercoes_shell_restaurar": 30,
+  "provedores_reais": 0,
+  "tentativas_isolamento_registradas": 14,
+  "observacao": "Sem somar repeticoes do agregado; tres tentativas recusadas antes do processo alvo. Modelo simulado nao e modelo real."
+}

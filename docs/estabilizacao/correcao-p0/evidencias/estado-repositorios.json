@@ -1,0 +1,14 @@
+{
+  "principal": {
+    "head": "bf7a5f1e7b11c7156d94de42c7869ed98940c20d",
+    "branch": "main",
+    "estado": "",
+    "diff_rastreado": ""
+  },
+  "baseline": {
+    "head": "1fa3d9cc16edaa9bba620b5f9cb81394dcecbb0d",
+    "branch": "estabilizacao/baseline-2026-10",
+    "estado": "?? docs/estabilizacao/auditoria-funcional/",
+    "diff_rastreado": ""
+  }
+}

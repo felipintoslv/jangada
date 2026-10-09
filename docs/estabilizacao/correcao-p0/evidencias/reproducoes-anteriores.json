@@ -1,0 +1,10 @@
+{
+  "commit": "1fa3d9cc16edaa9bba620b5f9cb81394dcecbb0d",
+  "arquivos": {
+    "baseline-adulteracao-fila.json": "f7dd5bb14abb6eb500e43d8efd7aed3c80f736565899169d4c70e129babc8bb2",
+    "baseline-encerramento.json": "cb0532a9cfd3456d708bbc7e3e7f307ed8b4a1fd85a1e261e9978113345cf0d9",
+    "original-adulteracao-fila.json": "0a06bdae143148d62b1d9e27f697d38e5c8d8941e9326aa49b508b1b8d94f121",
+    "original-encerramento.json": "cdcfeea41b66b0755700262895b19d010f79101a7c22bbed0d2410bfa9e29495"
+  },
+  "origem": "auditoria-funcional/evidencias/MANIFESTO.json"
+}

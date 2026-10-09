@@ -1,0 +1,182 @@
+[
+  {
+    "nome": "orquestracao",
+    "comando": [
+      "/usr/bin/python3",
+      "testes/orquestracao.py"
+    ],
+    "codigo": 0,
+    "segundos": 1.155,
+    "classificacao": "PASSOU"
+  },
+  {
+    "nome": "executor",
+    "comando": [
+      "/usr/bin/python3",
+      "testes/executor.py"
+    ],
+    "codigo": 0,
+    "segundos": 9.162,
+    "classificacao": "PASSOU"
+  },
+  {
+    "nome": "supervisao",
+    "comando": [
+      "/usr/bin/python3",
+      "testes/supervisao.py"
+    ],
+    "codigo": 0,
+    "segundos": 13.671,
+    "classificacao": "PASSOU"
+  },
+  {
+    "nome": "operacional",
+    "comando": [
+      "/usr/bin/python3",
+      "testes/operacional.py"
+    ],
+    "codigo": 0,
+    "segundos": 1.892,
+    "classificacao": "PASSOU"
+  },
+  {
+    "nome": "deterministico",
+    "comando": [
+      "/usr/bin/python3",
+      "testes/deterministico.py"
+    ],
+    "codigo": 0,
+    "segundos": 0.488,
+    "classificacao": "PASSOU"
+  },
+  {
+    "nome": "delegacao",
+    "comando": [
+      "/usr/bin/python3",
+      "testes/delegacao.py"
+    ],
+    "codigo": 0,
+    "segundos": 0.129,
+    "classificacao": "PASSOU"
+  },
+  {
+    "nome": "acompanhamento",
+    "comando": [
+      "/usr/bin/python3",
+      "testes/acompanhamento.py"
+    ],
+    "codigo": 0,
+    "segundos": 0.29,
+    "classificacao": "PASSOU"
+  },
+  {
+    "nome": "metricas-projeto",
+    "comando": [
+      "/usr/bin/python3",
+      "testes/metricas-projeto.py"
+    ],
+    "codigo": 0,
+    "segundos": 0.758,
+    "classificacao": "PASSOU"
+  },
+  {
+    "nome": "painel-orquestracao",
+    "comando": [
+      "/usr/bin/python3",
+      "testes/painel-orquestracao.py"
+    ],
+    "codigo": 0,
+    "segundos": 0.09,
+    "classificacao": "PASSOU"
+  },
+  {
+    "nome": "tarefas",
+    "comando": [
+      "/usr/bin/python3",
+      "testes/tarefas.py"
+    ],
+    "codigo": 1,
+    "segundos": 10.361,
+    "classificacao": "FALHOU"
+  },
+  {
+    "nome": "fim",
+    "comando": [
+      "/usr/bin/bash",
+      "testes/fim.sh"
+    ],
+    "codigo": 0,
+    "segundos": 1.333,
+    "classificacao": "PASSOU"
+  },
+  {
+    "nome": "restaurar",
+    "comando": [
+      "/usr/bin/bash",
+      "testes/restaurar.sh"
+    ],
+    "codigo": 0,
+    "segundos": 2.309,
+    "classificacao": "PASSOU"
+  },
+  {
+    "nome": "verificar-com-limites",
+    "comando": [
+      "/usr/bin/bash",
+      "testes/verificar.sh"
+    ],
+    "codigo": 124,
+    "segundos": 90.007,
+    "classificacao": "BLOQUEADO"
+  },
+  {
+    "nome": "confianca-p0",
+    "comando": [
+      "/usr/bin/python3",
+      "testes/confianca-p0.py"
+    ],
+    "codigo": 0,
+    "segundos": 12.937,
+    "classificacao": "PASSOU"
+  },
+  {
+    "nome": "baseline-segura",
+    "comando": [
+      "/usr/bin/python3",
+      "-B",
+      "-c",
+      "import importlib.util,unittest\ns=importlib.util.spec_from_file_location('baseline','testes/baseline.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\nnomes=[n for n in unittest.defaultTestLoader.getTestCaseNames(m.Baseline) if n not in ('test_rollback_antigo_perde_edicao_concorrente','test_bloqueio_preserva_conflito_e_publicacao_anterior')]\nr=unittest.TextTestRunner(verbosity=2).run(unittest.TestSuite(m.Baseline(n) for n in nomes));raise SystemExit(not r.wasSuccessful())"
+    ],
+    "codigo": 0,
+    "segundos": 6.447,
+    "classificacao": "PASSOU"
+  },
+  {
+    "nome": "shellcheck-alterados",
+    "comando": [
+      "shellcheck",
+      "-S",
+      "warning",
+      "bin/jangada-isolar",
+      "bin/jangada-validar",
+      "bin/jangada-agente-fim",
+      "bin/jangada-agente",
+      "bin/jangada-agentes",
+      "bin/jangada-delegar"
+    ],
+    "codigo": 0,
+    "segundos": 3.293,
+    "classificacao": "PASSOU"
+  },
+  {
+    "nome": "diff-check",
+    "comando": [
+      "/usr/bin/git",
+      "diff",
+      "--check"
+    ],
+    "codigo": 0,
+    "segundos": 0.005,
+    "classificacao": "PASSOU"
+  }
+]

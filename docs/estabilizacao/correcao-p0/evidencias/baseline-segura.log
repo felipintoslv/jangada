@@ -1,0 +1,15 @@
+test_autoria_sem_metadados_protegidos_nao_aprova (baseline.Baseline.test_autoria_sem_metadados_protegidos_nao_aprova) ... ok
+test_autorrevisao_nao_aprova (baseline.Baseline.test_autorrevisao_nao_aprova) ... ok
+test_backup_e_recuperacao_sinteticos (baseline.Baseline.test_backup_e_recuperacao_sinteticos) ... ok
+test_copia_completa_preserva_arquivos_e_metadados (baseline.Baseline.test_copia_completa_preserva_arquivos_e_metadados) ... ok
+test_entrega_identificada_e_verificacoes_executadas (baseline.Baseline.test_entrega_identificada_e_verificacoes_executadas) ... ok
+test_ferramentas_ausentes_nao_aprovam (baseline.Baseline.test_ferramentas_ausentes_nao_aprovam) ... ok
+test_marca_com_arvore_invalida_nao_encurta_revisao (baseline.Baseline.test_marca_com_arvore_invalida_nao_encurta_revisao) ... ok
+test_previa_nao_declara_aprovacao_incompleta (baseline.Baseline.test_previa_nao_declara_aprovacao_incompleta) ... ok
+test_trava_liberada_apos_interrupcao (baseline.Baseline.test_trava_liberada_apos_interrupcao) ... ok
+test_verificacao_pulada_nao_aprova (baseline.Baseline.test_verificacao_pulada_nao_aprova) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 6.402s
+
+OK

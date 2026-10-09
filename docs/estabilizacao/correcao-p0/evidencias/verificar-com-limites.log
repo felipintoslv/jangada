@@ -1,0 +1,713 @@
+
+== capacidades da máquina
+bwrap      sim
+sem-rede   não (os testes que dependem dele se pulam)
+shellcheck sim
+jq         sim
+gitleaks   sim
+zsh        sim
+pdftotext  sim
+pyarrow    sim
+R          sim
+lintr      sim
+
+== sintaxe bash
+
+== shellcheck
+
+== sintaxe Lua
+
+== execução da configuração Lua com API imitada
+ok: 65 atalhos, 8 regras, 2 blocos de config, 11 variáveis, 1 eventos
+ok: 65 atalhos, 8 regras, 2 blocos de config, 11 variáveis, 1 eventos
+
+== JSON
+
+== skills do Claude Code
+
+== TOML
+XX monitoramento sob demanda
+
+== modelos do matugen referenciados existem
+
+== tema de login (QML)
+
+== comandos citados na configuração do Hyprland existem em bin/
+
+== escritas fora das pastas do jangada estão nas exceções da regra 1
+ok    caso 1: todo caminho de fora está nas exceções ou nas leituras
+ok    caso 2: escrita nova em ~/.novo é apontada
+ok    caso 3: ~/.claude/output-styles vem da linha do ~/.claude
+ok    caso 4: "$HOME"/.novo também é apontado
+todos os testes da regra 1 passaram
+
+== comandos citados nos protocolos dos agentes existem em bin/
+
+== registro de provedores
+ok    os quatro provedores do repositório
+ok    sessão principal: claude e codex
+ok    revisão: agy, claude e codex
+ok    delegação: agy e ollama
+ok    claude reproduz o protocolo, o modelo e a reserva
+ok    agy
+ok    codex
+ok    ollama só é descrito, sem comando
+ok    provedor ausente é recusado
+ok    nome com barra é recusado
+ok    provedor do usuário entra na lista
+ok    sem NOME, vale o nome do arquivo, que também é o executável
+ok    chave desconhecida não vira variável
+ok    nada do registro é exportado
+ok    arquivo sem quebra de linha no fim é lido inteiro
+ok    arquivo do usuário tem precedência
+ok    e muda a lista de principais
+ok    tipo de API é recusado
+ok    tipo ausente é recusado
+ok    função desconhecida é recusado
+ok    sem função é recusado
+ok    ollama como principal é recusado
+ok    ollama como principal e delegação é recusado
+ok    argumento de protocolo com comando embutido é recusado
+ok    argumento de protocolo com espaço é recusado
+ok    reserva não numérica é recusado
+ok    modelo com espaço é recusado
+ok    argumentos livres não aparecem na configuração pública
+ok    registro vazio faz o jangada-agente parar
+ok    e o erro diz onde o registro foi procurado
+ok    sem imprimir catálogo
+
+tudo certo
+
+== jangada-validar com claude e agy falsos
+XX testes/validar.sh
+
+== baseline: preservação, aprovação e recuperação sintética
+XX testes/baseline.py
+
+== isolamento dos agentes
+XX testes/isolar.sh
+ok    caso 1: o Claude abre isolado na pasta do projeto
+ok    caso 1: retoma a conversa e recebe o protocolo
+ok    caso 1: o estado passa a iniciado
+ok    caso 2: o comando gravado no estado não roda
+ok    caso 2: a sessão abre com o comando recomposto
+ok    caso 3: isolar:false no estado é ignorado
+ok    caso 4: JANGADA_AGENTE_ISOLAR=0 mantém isolamento obrigatório
+ok    caso 5: agente com comando anexado é recusado
+ok    caso 5: agente fora da lista é recusado
+ok    caso 5: id de conversa inválido é recusado
+ok    caso 5: a recusa diz o motivo
+ok    caso 5: pasta fora dos projetos e sem git é recusada
+ok    caso 5: a instalação do jangada é recusada, mesmo sendo repositório git
+ok    caso 5: .. no caminho não escapa da conferência
+ok    caso 5: perfil com caminho é recusado
+ok    caso 5: revisor fora da lista é recusado
+ok    caso 6: o perfil não desliga o isolamento na restauração
+ok    caso 6: o resto do ambiente do perfil vale
+ok    caso 7: a sessão antiga do agy volta na mesma conversa
+ok    caso 7: o perfil agy retirado é recusado com o motivo
+ok    caso 7: a recusa não roda nada
+ok    caso 8: worktree sem id retoma com --continue
+ok    caso 9: repositório git fora de JANGADA_PROJETOS restaura
+ok    caso 10: o protocolo é refeito das fontes
+ok    caso 11: Codex retoma isolado com UUID e revisor Codex
+ok    caso 11: protocolo de delegação do Codex refeito
+ok    caso 12: Codex sem UUID no worktree retoma por pasta
+ok    caso 13: Codex direto sem UUID abre conversa nova
+ok    caso 14: sem revisor, restauração preserva o protocolo
+ok    caso 14: sem revisor, restauração avisa
+todos os testes da restauração passaram
+== pid do estado
+ok    sessão direta encerra (0)
+ok    o pid gravado não é morto
+== ramo inválido
+ok    ramo main: recusado (1)
+ok    ramo main: explica
+ok    ramo main: estado mantido
+ok    ramo main: tmux intocado
+ok    ramo main: worktree mantido
+== worktree fora de JANGADA_WORKTREES
+ok    worktree fora: recusado (1)
+ok    worktree fora: explica
+ok    worktree fora: estado mantido
+ok    worktree fora: tmux intocado
+ok    worktree fora: mantido
+ok    worktree com ..: recusado (1)
+ok    worktree com ..: explica
+ok    worktree com ..: estado mantido
+ok    worktree com ..: tmux intocado
+== worktree por link simbólico
+ok    link simbólico: recusado (1)
+ok    link simbólico: explica
+ok    link simbólico: estado mantido
+ok    link simbólico: tmux intocado
+ok    link simbólico: worktree mantido
+== raiz de outro repositório
+ok    raiz trocada: recusado (1)
+ok    raiz trocada: explica
+ok    raiz trocada: estado mantido
+ok    raiz trocada: tmux intocado
+ok    raiz trocada: ramo do outro repositório mantido
+ok    raiz trocada com --integrar: recusado (1)
+ok    raiz trocada sem worktree: recusado (1)
+ok    raiz trocada sem worktree: explica
+ok    raiz trocada sem worktree: estado mantido
+ok    raiz trocada sem worktree: tmux intocado
+== pasta que não é worktree registrado
+ok    worktree igual à raiz: recusado (1)
+ok    worktree igual à raiz: explica
+ok    worktree igual à raiz: estado mantido
+ok    worktree igual à raiz: tmux intocado
+ok    pasta de outro repositório: recusado (1)
+ok    pasta de outro repositório: explica
+ok    pasta de outro repositório: estado mantido
+ok    pasta de outro repositório: tmux intocado
+ok    pasta sem registro: recusado (1)
+ok    pasta sem registro: explica
+ok    pasta sem registro: estado mantido
+ok    pasta sem registro: tmux intocado
+ok    pasta sem registro: motivo
+== base que vira opção do git
+ok    base --output: recusado (1)
+ok    base --output: explica
+ok    base --output: estado mantido
+ok    base --output: tmux intocado
+ok    base --output: nada gravado
+== estado válido
+ok    pareceres da sessão apagados
+ok    parecer da sessão vizinha mantido
+ok    encerra (0)
+ok    worktree removido
+ok    estado apagado
+ok    ramo mantido
+== --integrar e a revisão fora do isolamento
+ok    terminal: integração bloqueada
+ok    terminal: motivo explícito
+ok    terminal: HEAD preservado
+ok    terminal: arquivo novo preservado
+ok    terminal: índice preservado
+ok    terminal: trabalho preservado
+ok    terminal: sessão mantida
+ok    terminal: worktree mantido
+ok    sem-revisao: integração bloqueada
+ok    sem-revisao: motivo explícito
+ok    sem-revisao: HEAD preservado
+ok    sem-revisao: arquivo novo preservado
+ok    sem-revisao: índice preservado
+ok    sem-revisao: trabalho preservado
+ok    sem-revisao: sessão mantida
+ok    sem-revisao: worktree mantido
+ok    grafica: integração bloqueada
+ok    grafica: motivo explícito
+ok    grafica: HEAD preservado
+ok    grafica: arquivo novo preservado
+ok    grafica: índice preservado
+ok    grafica: trabalho preservado
+ok    grafica: sessão mantida
+ok    grafica: worktree mantido
+ok    concorrência 1: recusada
+ok    concorrência 2: recusada
+ok    concorrência: HEAD preservado
+ok    backend sem rollback destrutivo
+== --limpar-concluidos
+ok    resposta n: termina sem erro (0)
+ok    resposta n: lista a sessão
+ok    resposta n: sessão não encerrada
+ok    resposta n: worktree mantido
+ok    sem terminal: sessão não encerrada
+ok    sem terminal: estado mantido
+ok    resposta s: encerra (0)
+ok    resposta s: sessão encerrada
+ok    resposta s: worktree removido
+tudo certo
+
+== histórico de estados dos agentes
+ok    caso 1: uma linha por mudança de estado
+ok    caso 1: o projeto vem da raiz, não do worktree
+ok    caso 1: agente e data em toda linha
+ok    caso 2: agy grava só a mudança
+ok    caso 2: agy com agente e projeto
+ok    caso 3: sem JANGADA_SESSAO, nada muda
+ok    caso 4: foco registrado
+ok    caso 4b: início e fim do subagente registrados
+ok    caso 4b: estado da sessão não muda
+ok    caso 4b: linhas antigas sem campos novos
+ok    caso 5: histórico ilegível não derruba o hook do Claude
+ok    caso 5: nem o do agy, que segue respondendo {}
+ok    anexação concorrente: 96 linhas inteiras
+todos os testes do histórico de estados passaram
+ok    perfil codex-codex cria a sessão
+ok    worktree próprio
+true
+ok    revisor e delegação no estado
+ok    protocolo compatível com Codex
+ok    lançamento isolado pelo adaptador
+true
+ok    metadados externos para revisão
+ok    perfil codex-agy cria a sessão
+true
+ok    Codex com revisor e delegação agy
+ok    revisor Flash explícito no ambiente
+ok    adaptador sem isolamento recusa antes de chamar CLI
+ok    recusa não executa Codex
+ok    adaptador executa Codex
+ok    TOML, protocolo, permissões e hooks válidos
+ok    retoma pelo UUID
+ok    retomada sem UUID usa filtro da pasta
+ok    versão sem execução própria é recusada
+ok    versão recusada não abre sessão
+ok    UUID inválido é recusado
+ok    UUID inválido não executa
+ok    confiança exige confirmação, persiste por pasta e preserva configuração global
+ok    aprovação de hooks: recusa, persistência, mudança, externos e hashes no Codex real
+ok    Codex real reconhece confiança com pontos, espaços e aspas sem gravar configuração
+ok    pedido de permissão mantém saída vazia
+true
+ok    permissão registra aguardando
+true
+ok    subagente não conclui a sessão
+true
+ok    conversa registrada
+true
+ok    eventos sem repetição
+ok    JSON inválido não altera o estado
+ok    hook não recria sessão encerrada
+ok    falha do tmux recusa lançamento
+ok    falha cancela a execução criada
+ok    falha de registro recusa lançamento (recusa-nova)
+ok    falha de registro preserva causa (recusa-nova)
+ok    falha de registro explica recusa (recusa-nova)
+ok    falha de registro recusa lançamento (tarefa)
+ok    falha de registro preserva causa (tarefa)
+ok    falha de registro explica recusa (tarefa)
+ok    falha remove worktree novo
+ok    falha remove ramo novo
+ok    falha preserva worktree reaproveitado
+ok    falha preserva ramo reaproveitado
+ok    orçamento recusa nova sessão interativa
+ok    recusa orienta conferir política e usar fila controlada
+ok    sessão existente reanexa sem conferir orçamento de nova sessão
+
+== barra (módulos e migração)
+ok    caso 1: custom/indicadores logo depois do custom/agentes
+ok    caso 1: exec só lê o cache, JSON, sinal 9 e intervalo longo
+ok    caso 1: clique solto e botão direito encerra
+ok    caso 1: o sinal 9 é só do custom/indicadores
+ok    caso 1: nenhum outro comando manda RTMIN+9
+ok    caso 2: base.css estiliza .parado
+ok    caso 2: base.css estiliza .no-ar
+ok    caso 2: base.css estiliza .atualizando
+ok    caso 2: base.css estiliza .erro
+ok    caso 2: base.css troca a folga na barra em pé
+ok    caso 3: borda.jsonc é JSON
+ok    caso 3: barra em pé com custom/indicadores depois do custom/agentes
+ok    caso 4: a barra de antes não tem o módulo
+ok    caso 4: simulação não altera o arquivo
+ok    caso 4: migração roda sem erro
+ok    caso 4: resultado com o mesmo módulo do padrão
+ok    caso 4: deixa uma cópia de segurança
+ok    caso 4: segunda passada roda sem erro
+ok    caso 4: segunda passada não muda nada
+ok    caso 5: migração roda sem erro
+ok    caso 5: módulo entra no fim da lista em várias linhas
+ok    caso 6: sem custom/agentes, sai sem erro
+ok    caso 6: sem custom/agentes, não altera o arquivo
+ok    caso 7: sem cópia própria, sai sem erro
+ok    caso 7: sem cópia própria, não cria o arquivo
+ok    caso 8: nenhum clique que abre janela sem setsid -f ()
+ok    caso 9: a barra de antes tem clique preso
+ok    caso 9: simulação não altera o arquivo
+ok    caso 9: migração roda sem erro
+ok    caso 9: resultado igual ao padrão
+ok    caso 9: deixa uma cópia de segurança
+ok    caso 9: segunda passada roda sem erro
+ok    caso 9: segunda passada não muda nada
+ok    caso 9: segunda passada não faz outra cópia
+ok    caso 10: microfone controla a fonte e mostra seu volume
+ok    caso 10: simulação preserva a barra
+ok    caso 10: migra a configuração anterior
+ok    caso 10: configurações novas iguais ao padrão
+ok    caso 10: migração repetível
+ok    caso 10: segunda passada não muda nada
+ok    caso 10: migração aceita configuração personalizada
+ok    caso 10: controles pessoais preservados
+ok    caso 10: migra JSONC com comentários e vírgula final
+ok    caso 10: preserva comentário de linha
+ok    caso 10: preserva comentário de bloco
+ok    caso 10: comentário não impede corrigir a dica
+ok    caso 10: comentário não impede corrigir a rolagem
+ok    caso 10: JSONC comentado também é repetível
+ok    caso 10: comentários mantidos na segunda passada
+todos os testes da barra passaram
+XX testes/interface.sh
+XX testes/tarefas.py
+   [simulação] cp -a /tmp/tmp.wWARUJNbcj/config/jangada/waybar/config.jsonc /tmp/tmp.wWARUJNbcj/config/jangada/waybar/config.jsonc.jangada-20261008-211616.bak
+==> cópia de segurança: /tmp/tmp.wWARUJNbcj/config/jangada/waybar/config.jsonc.jangada-20261008-211616.bak
+==> [simulação] atualizaria a central de tarefas em /tmp/tmp.wWARUJNbcj/config/jangada/waybar/config.jsonc
+ ok central de tarefas configurada: /tmp/tmp.wWARUJNbcj/config/jangada/waybar/config.jsonc
+==> cópia de segurança: /tmp/tmp.wWARUJNbcj/config/jangada/waybar/config.jsonc.jangada-20261008-211616.bak
+ ok central de tarefas configurada: /tmp/tmp.wWARUJNbcj/config/jangada/waybar/config.jsonc
+ ok central já atualizada ou personalizada
+ ok central já atualizada ou personalizada
+==> cópia de segurança: /tmp/tmp.wWARUJNbcj/config/jangada/waybar/config.jsonc.jangada-20261008-211616.bak
+ ok central de tarefas configurada: /tmp/tmp.wWARUJNbcj/config/jangada/waybar/config.jsonc
+ ok sem cópia própria da barra; usa o padrão atualizado
+migração, central única e leitura das interrupções passaram
+contador funciona sem Qt
+XX testes/conversa.py
+
+== painel de indicadores
+ok    caso 1: coleta sem erro
+ok    caso 1: lê as 10 linhas da conversa
+ok    caso 1: resposta repetida conta uma vez, com a saída final
+ok    caso 1: falha de teste é erro; recusa do usuário não
+ok    caso 1: rodadas, entregas, pareceres antigos e slug do projeto
+ok    caso 1: arquivos citados nos itens do parecer REVISAR
+ok    caso 1: indicadores do dia
+ok    caso 2: segunda coleta incremental
+ok    caso 2: só as linhas novas, sem duplicar a resposta já contada
+ok    caso 3: --waybar com o app parado
+ok    caso 3: --waybar durante a coleta
+ok    caso 3: --waybar com erro
+ok    caso 3: --conferir com o R quebrado lista os pacotes R
+ok    caso 4: rodada 1 barrada na verificação local abre outra entrega
+ok    caso 4: revisão de fora forma entrega própria e tem apontamentos
+ok    caso 4: sessão esquecida em aguardando conta no máximo 12 horas
+ok    caso 4: parcial de coleta interrompida e compactação sem repetidos
+ok    caso 4: retenção do cache, com o consumo dos dias antigos somado
+ok    caso 4: o JANGADA_PAINEL_RETENCAO do jangada.conf chega ao coletor
+ok    caso 4: delegação com tipos errados não derruba os indicadores
+ok    caso 4: erro nos indicadores de subagentes vai para o subagentes.json
+ok    caso 5: indicadores em R sobre o cache
+ok    caso 5: entrega revisada fora do isolamento marcada
+ok    caso 5: o consumo junta o detalhe e os dias somados pela retenção
+ok    caso 5: redes sobre o cache (retrabalho, transições, pontos quentes)
+ok    caso 5: pontos quentes contam os itens REVISAR do mesmo arquivo
+ok    caso 5: espaço de capacidades (RCA, proximidade e típico)
+ok    caso 5: sessão parada sem nenhuma entrega aprovada
+ok    caso 5: o servidor do app calcula os cartões
+ok    caso 5: a aba de subagentes calcula os cartões e o grafo
+ok    caso 5: a aba de subagentes sem subagentes.json
+ok    caso 5: a leitura descarta linha repetida de compactação interrompida
+ok    caso 5: a árvore de delegação escapa o HTML dos títulos
+ok    caso 5: só Host e Origin locais abrem sessão
+ok    caso 5: a sessão só abre com o token do arquivo na URL
+ok    caso 5: --conferir com tudo instalado
+......
+----------------------------------------------------------------------
+Ran 6 tests in 0.120s
+
+OK
+EEEEEE
+======================================================================
+ERROR: test_comando_json_nao_abre_terminal (__main__.Monitoramento.test_comando_json_nao_abre_terminal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/felipinto/Projetos/jangada-confianca-p0/testes/monitoramento.py", line 37, in setUp
+    self.servidor = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socketserver.py", line 453, in __init__
+    self.socket = socket.socket(self.address_family,
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+                                self.socket_type)
+                                ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socket.py", line 236, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+======================================================================
+ERROR: test_endereco_de_escuta_consulta_apenas_loopback (__main__.Monitoramento.test_endereco_de_escuta_consulta_apenas_loopback)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/felipinto/Projetos/jangada-confianca-p0/testes/monitoramento.py", line 37, in setUp
+    self.servidor = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socketserver.py", line 453, in __init__
+    self.socket = socket.socket(self.address_family,
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+                                self.socket_type)
+                                ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socket.py", line 236, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+======================================================================
+ERROR: test_endereco_remoto_e_malformado_nao_faz_pedido (__main__.Monitoramento.test_endereco_remoto_e_malformado_nao_faz_pedido)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/felipinto/Projetos/jangada-confianca-p0/testes/monitoramento.py", line 37, in setUp
+    self.servidor = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socketserver.py", line 453, in __init__
+    self.socket = socket.socket(self.address_family,
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+                                self.socket_type)
+                                ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socket.py", line 236, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+======================================================================
+ERROR: test_enderecos_locais_sem_porta_usam_padrao_ollama (__main__.Monitoramento.test_enderecos_locais_sem_porta_usam_padrao_ollama)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/felipinto/Projetos/jangada-confianca-p0/testes/monitoramento.py", line 37, in setUp
+    self.servidor = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socketserver.py", line 453, in __init__
+    self.socket = socket.socket(self.address_family,
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+                                self.socket_type)
+                                ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socket.py", line 236, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+======================================================================
+ERROR: test_leitura_real_de_proc_e_somente_listagem_local (__main__.Monitoramento.test_leitura_real_de_proc_e_somente_listagem_local)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/felipinto/Projetos/jangada-confianca-p0/testes/monitoramento.py", line 37, in setUp
+    self.servidor = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socketserver.py", line 453, in __init__
+    self.socket = socket.socket(self.address_family,
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+                                self.socket_type)
+                                ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socket.py", line 236, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+======================================================================
+ERROR: test_sem_redirecionamento_e_sem_confundir_erro_com_zero (__main__.Monitoramento.test_sem_redirecionamento_e_sem_confundir_erro_com_zero)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/felipinto/Projetos/jangada-confianca-p0/testes/monitoramento.py", line 37, in setUp
+    self.servidor = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socketserver.py", line 453, in __init__
+    self.socket = socket.socket(self.address_family,
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+                                self.socket_type)
+                                ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socket.py", line 236, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.002s
+
+FAILED (errors=6)
+..........
+----------------------------------------------------------------------
+Ran 10 tests in 1.069s
+
+OK
+BLOQUEADO pela missão P0: grupo contém limpeza fixa, merge, reset, rebase ou tag
+BLOQUEADO pela missão P0: baseline integral contém merge e reset
+BLOQUEADO pela missão P0: grupo contém limpeza fixa, merge, reset, rebase ou tag
+test_atencao_antes_de_projeto (__main__.Interface.test_atencao_antes_de_projeto) ... ok
+test_atualizacao_sem_mudanca_de_ordem_preserva_itens_e_grupos (__main__.Interface.test_atualizacao_sem_mudanca_de_ordem_preserva_itens_e_grupos) ... ok
+test_aviso_de_runtime_nao_sobrescreve_erro_de_consulta (__main__.Interface.test_aviso_de_runtime_nao_sobrescreve_erro_de_consulta) ... ok
+test_botoes_acionam_a_tarefa_selecionada (__main__.Interface.test_botoes_acionam_a_tarefa_selecionada) ... ok
+test_catalogo_com_agente_fora_do_formato_e_recusado (__main__.Interface.test_catalogo_com_agente_fora_do_formato_e_recusado) ... ok
+test_catalogo_de_agentes_vem_do_jangada_agente (__main__.Interface.test_catalogo_de_agentes_vem_do_jangada_agente) ... ok
+test_central_de_tarefas_acompanha_mudancas_sem_enviar_respostas (__main__.Interface.test_central_de_tarefas_acompanha_mudancas_sem_enviar_respostas) ... ok
+test_cli_reutiliza_processo_existente (__main__.Interface.test_cli_reutiliza_processo_existente) ... FAIL
+test_cli_waybar_sem_display (__main__.Interface.test_cli_waybar_sem_display) ... ok
+test_comando_ausente (__main__.Interface.test_comando_ausente) ... ok
+test_confirmacao_grafica_mostra_sha_e_recusa_padrao (__main__.Interface.test_confirmacao_grafica_mostra_sha_e_recusa_padrao) ... ok
+test_criar_comando_ausente_permite_tentar_novamente (__main__.Interface.test_criar_comando_ausente_permite_tentar_novamente) ... ok
+test_criar_real_argumentos_e_pedido_preservados (__main__.Interface.test_criar_real_argumentos_e_pedido_preservados) ... ok
+test_criar_simulada_persiste_entre_cenarios (__main__.Interface.test_criar_simulada_persiste_entre_cenarios) ... ok
+test_ctrl_x_no_pedido_nao_encerra_sessao (__main__.Interface.test_ctrl_x_no_pedido_nao_encerra_sessao) ... ok
+test_erro_preserva_selecao_e_historico_sem_permitir_acao (__main__.Interface.test_erro_preserva_selecao_e_historico_sem_permitir_acao) ... ok
+test_eventos_continuos_nao_adiam_atualizacao_indefinidamente (__main__.Interface.test_eventos_continuos_nao_adiam_atualizacao_indefinidamente) ... ok
+test_eventos_reiniciam_espera_e_consulta_operacional_dispensa_catalogos (__main__.Interface.test_eventos_reiniciam_espera_e_consulta_operacional_dispensa_catalogos) ... ok
+test_falha_ao_criar_tentativa_remove_raiz_sem_tocar_acao_existente (__main__.Interface.test_falha_ao_criar_tentativa_remove_raiz_sem_tocar_acao_existente) ... ok
+test_falha_de_consulta_preserva_agentes_simples (__main__.Interface.test_falha_de_consulta_preserva_agentes_simples) ... ok
+test_falha_de_gravacao_remove_preparacao_incompleta (__main__.Interface.test_falha_de_gravacao_remove_preparacao_incompleta) ... ok
+test_falha_na_abertura_do_terminal_nao_anuncia_encerramento (__main__.Interface.test_falha_na_abertura_do_terminal_nao_anuncia_encerramento) ... ok
+test_finalizacao_bloqueada_durante_abertura (__main__.Interface.test_finalizacao_bloqueada_durante_abertura) ... ok
+test_finalizacao_bloqueada_sem_dados_e_na_simulacao (__main__.Interface.test_finalizacao_bloqueada_sem_dados_e_na_simulacao) ... ok
+test_finalizacao_impede_pedidos_simultaneos_e_permite_nova_tentativa (__main__.Interface.test_finalizacao_impede_pedidos_simultaneos_e_permite_nova_tentativa) ... ok
+test_finalizacao_recusa_nome_interpretavel_como_opcao (__main__.Interface.test_finalizacao_recusa_nome_interpretavel_como_opcao) ... ok
+test_foco_argumentos_separados (__main__.Interface.test_foco_argumentos_separados) ... ok
+test_formulario_preserva_rascunho_e_valida (__main__.Interface.test_formulario_preserva_rascunho_e_valida) ... ok
+test_idade_de_atualizacao_aceita_fuso_e_rejeita_horario_invalido (__main__.Interface.test_idade_de_atualizacao_aceita_fuso_e_rejeita_horario_invalido) ... ok
+test_importacao_interna_informa_causa_sem_pedir_qt (__main__.Interface.test_importacao_interna_informa_causa_sem_pedir_qt) ... FAIL
+test_integracao_grafica_envia_so_a_entrega_confirmada (__main__.Interface.test_integracao_grafica_envia_so_a_entrega_confirmada) ... ok
+test_lancadores_do_painel_e_da_conversa (__main__.Interface.test_lancadores_do_painel_e_da_conversa) ... ok
+test_lista_vazia (__main__.Interface.test_lista_vazia) ... ok
+test_marca_carrega_com_transparencia_e_preserva_titulo_quando_ausente (__main__.Interface.test_marca_carrega_com_transparencia_e_preserva_titulo_quando_ausente) ... ok
+test_modo_recomendado_e_opcoes_recolhidas (__main__.Interface.test_modo_recomendado_e_opcoes_recolhidas) ... ok
+test_modos_da_central_e_navegacao_por_teclado (__main__.Interface.test_modos_da_central_e_navegacao_por_teclado) ... ok
+test_nova_pasta_cria_o_projeto_e_preenche_o_campo (__main__.Interface.test_nova_pasta_cria_o_projeto_e_preenche_o_campo) ... ok
+test_nova_pasta_desligada_na_simulacao (__main__.Interface.test_nova_pasta_desligada_na_simulacao) ... ok
+test_nova_tarefa_sugere_raiz_em_vez_de_worktree (__main__.Interface.test_nova_tarefa_sugere_raiz_em_vez_de_worktree) ... ok
+test_observador_acompanha_substituicao_atomica (__main__.Interface.test_observador_acompanha_substituicao_atomica) ... ok
+test_opcoes_avancadas_preservam_controles_explicitos (__main__.Interface.test_opcoes_avancadas_preservam_controles_explicitos) ... ok
+test_operacional_identifica_tarefa_por_projeto_e_preserva_alvo (__main__.Interface.test_operacional_identifica_tarefa_por_projeto_e_preserva_alvo) ... ok
+test_operacional_recusa_cancelamento_e_dados_parciais (__main__.Interface.test_operacional_recusa_cancelamento_e_dados_parciais) ... ok
+test_pasta_do_soquete_rejeita_link_e_permissao_aberta (__main__.Interface.test_pasta_do_soquete_rejeita_link_e_permissao_aberta) ... ok
+test_perfil_preserva_escolha_de_revisor_e_delegacao_no_lancamento (__main__.Interface.test_perfil_preserva_escolha_de_revisor_e_delegacao_no_lancamento) ... ok
+test_previa_da_selecao_antiga_nao_substitui_a_atual (__main__.Interface.test_previa_da_selecao_antiga_nao_substitui_a_atual) ... ok
+test_previa_identifica_revisor_e_independencia_como_dados_da_marca (__main__.Interface.test_previa_identifica_revisor_e_independencia_como_dados_da_marca) ... ok
+test_previa_mostra_opcoes_no_fim_sem_perder_leitura_anterior (__main__.Interface.test_previa_mostra_opcoes_no_fim_sem_perder_leitura_anterior) ... ok
+test_projeto_sem_caminho_fica_somente_leitura (__main__.Interface.test_projeto_sem_caminho_fica_somente_leitura) ... ok
+test_raiz_vazia_nao_bloqueia_a_sessao (__main__.Interface.test_raiz_vazia_nao_bloqueia_a_sessao) ... ok
+test_reabrir_central_preserva_bloqueio_da_acao (__main__.Interface.test_reabrir_central_preserva_bloqueio_da_acao) ... ok
+test_registro_invalido_e_link (__main__.Interface.test_registro_invalido_e_link) ... ok
+test_registros_ambiguos_preservam_bloqueio_de_seguranca (__main__.Interface.test_registros_ambiguos_preservam_bloqueio_de_seguranca) ... ok
+test_runtime_invalido_bloqueia_acoes_sem_abortar_a_janela (__main__.Interface.test_runtime_invalido_bloqueia_acoes_sem_abortar_a_janela) ... ok
+test_segundo_clique_reutiliza_janela_e_abre_formulario (__main__.Interface.test_segundo_clique_reutiliza_janela_e_abre_formulario) ... FAIL
+test_selecao_detalhes_e_desaparecimento (__main__.Interface.test_selecao_detalhes_e_desaparecimento) ... ok
+test_simulacao_nao_executa (__main__.Interface.test_simulacao_nao_executa) ... ok
+test_soquete_sem_confirmacao_nao_indica_sucesso (__main__.Interface.test_soquete_sem_confirmacao_nao_indica_sucesso) ... FAIL
+test_tarefa_reiniciada_nao_herda_eventos_da_execucao_anterior (__main__.Interface.test_tarefa_reiniciada_nao_herda_eventos_da_execucao_anterior) ... ok
+test_terminal_atrasado_nao_usa_pasta_da_nova_tentativa (__main__.Interface.test_terminal_atrasado_nao_usa_pasta_da_nova_tentativa) ... ok
+test_terminal_desacoplado_nao_libera_acao_que_ja_comecou (__main__.Interface.test_terminal_desacoplado_nao_libera_acao_que_ja_comecou) ... ok
+test_terminal_morto_antes_da_acao_libera_nova_tentativa (__main__.Interface.test_terminal_morto_antes_da_acao_libera_nova_tentativa) ... ok
+test_terminal_preserva_argumentos_confirmacao_e_resultado (__main__.Interface.test_terminal_preserva_argumentos_confirmacao_e_resultado) ... ok
+test_timer_atualiza_sem_intervencao (__main__.Interface.test_timer_atualiza_sem_intervencao) ... ok
+test_tooltip_renderiza_html_da_tarefa_como_texto (__main__.Interface.test_tooltip_renderiza_html_da_tarefa_como_texto) ... ok
+test_trava_de_execucao_impede_segunda_acao_no_terminal (__main__.Interface.test_trava_de_execucao_impede_segunda_acao_no_terminal) ... ok
+test_waybar_estados_erro_e_texto_escapado (__main__.Interface.test_waybar_estados_erro_e_texto_escapado) ... ok
+
+======================================================================
+FAIL: test_cli_reutiliza_processo_existente (__main__.Interface.test_cli_reutiliza_processo_existente)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/felipinto/Projetos/jangada-confianca-p0/testes/tarefas.py", line 1011, in test_cli_reutiliza_processo_existente
+    aguardar(pronta.exists)
+    ~~~~~~~~^^^^^^^^^^^^^^^
+  File "/home/felipinto/Projetos/jangada-confianca-p0/testes/tarefas.py", line 40, in aguardar
+    raise AssertionError('O processo não terminou no prazo da verificação')
+AssertionError: O processo não terminou no prazo da verificação
+
+======================================================================
+FAIL: test_importacao_interna_informa_causa_sem_pedir_qt (__main__.Interface.test_importacao_interna_informa_causa_sem_pedir_qt)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/felipinto/Projetos/jangada-confianca-p0/testes/tarefas.py", line 968, in test_importacao_interna_informa_causa_sem_pedir_qt
+    self.assertIn('falha ao importar janela', resultado.stderr)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'falha ao importar janela' not found in 'Central de tarefas: Não foi possível abrir o soquete da central.\n'
+
+======================================================================
+FAIL: test_segundo_clique_reutiliza_janela_e_abre_formulario (__main__.Interface.test_segundo_clique_reutiliza_janela_e_abre_formulario)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/felipinto/Projetos/jangada-confianca-p0/testes/tarefas.py", line 921, in test_segundo_clique_reutiliza_janela_e_abre_formulario
+    self.assertTrue(servidor.listen(nome))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_soquete_sem_confirmacao_nao_indica_sucesso (__main__.Interface.test_soquete_sem_confirmacao_nao_indica_sucesso)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/felipinto/Projetos/jangada-confianca-p0/testes/tarefas.py", line 940, in test_soquete_sem_confirmacao_nao_indica_sucesso
+    self.assertTrue(servidor.listen(nome))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 67 tests in 10.213s
+
+FAILED (failures=4)
+..E
+======================================================================
+ERROR: setUpClass (__main__.ConversaTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/felipinto/Projetos/jangada-confianca-p0/testes/conversa.py", line 79, in setUpClass
+    cls.servidor = http.server.ThreadingHTTPServer(('127.0.0.1', 0), OllamaFalso)
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socketserver.py", line 453, in __init__
+    self.socket = socket.socket(self.address_family,
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+                                self.socket_type)
+                                ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socket.py", line 236, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.007s
+
+FAILED (errors=1)
+............metricas: OSError
+...........
+----------------------------------------------------------------------
+Ran 23 tests in 0.150s
+
+OK
+.........
+----------------------------------------------------------------------
+Ran 9 tests in 0.944s
+
+OK
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.005s
+
+OK
+Loading required package: shiny
+
+Attaching package: ‘bslib’
+
+The following object is masked from ‘package:utils’:
+
+    page
+
+Warning messages:
+1: In (function (value)  :
+  session$request doesn't currently simulate a realistic request on MockShinySession
+2: In (function (value)  :
+  session$request doesn't currently simulate a realistic request on MockShinySession
+Warning messages:
+1: In (function (value)  :
+  session$request doesn't currently simulate a realistic request on MockShinySession
+2: In (function (value)  :
+  session$request doesn't currently simulate a realistic request on MockShinySession
+Warning messages:
+1: In (function (value)  :
+  session$request doesn't currently simulate a realistic request on MockShinySession
+2: In (function (value)  :
+  session$request doesn't currently simulate a realistic request on MockShinySession
+Warning messages:
+1: In (function (value)  :
+  session$request doesn't currently simulate a realistic request on MockShinySession
+2: In (function (value)  :
+  session$request doesn't currently simulate a realistic request on MockShinySession
+Indicadores e filtros de motores: testes passaram
+Loading required package: shiny
+
+Attaching package: ‘bslib’
+
+The following object is masked from ‘package:utils’:
+
+    page
+
+Warning message:
+In open.connection(con, "rb") :
+  cannot open file '/tmp/Rtmps4rryY/painel-operacional-44d055cc15e5/cobertura.json': No such file or directory
+Warning messages:
+1: In (function (value)  :
+  session$request doesn't currently simulate a realistic request on MockShinySession
+2: In (function (value)  :
+  session$request doesn't currently simulate a realistic request on MockShinySession
+3: In open.connection(con, "rb") :
+  cannot open file '/tmp/Rtmps4rryY/painel-operacional-44d055cc15e5/cobertura.json': No such file or directory
+Painel operacional: identidade, ausência, autenticação, leitura e monitoramento conferidos
+
+BLOQUEADO por prazo do ensaio; grupo encerrado
