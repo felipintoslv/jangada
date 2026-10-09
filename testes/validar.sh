@@ -84,7 +84,7 @@ sessao_de() {
 validar() {
   local isolado=(JANGADA_ISOLADO=1)
   [[ "${VALIDAR_FORA:-0}" == 1 ]] && isolado=()
-  env -u JANGADA_VALIDAR_REVISOR -u JANGADA_ISOLADO "${isolado[@]}" PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" FALSO_RESPOSTA="$1" JANGADA_SESSAO=s \
+  env -u JANGADA_VALIDAR_REVISOR -u JANGADA_ISOLADO "${isolado[@]}" PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso" JANGADA_ISOLAR_ESCRITA="$tmp/falso" FALSO_RESPOSTA="$1" JANGADA_SESSAO=s \
     XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="${VALIDAR_PATH:-$repo_jangada}" \
     "$repo_jangada/bin/jangada-validar" "${@:2}" "$tmp/projeto" >"$tmp/saida.log" 2>&1
 }
@@ -237,7 +237,7 @@ git -C "$tmp/projeto" add grande.txt
 validar 'STATUS: APROVADO'; rc=$?
 conferir "caso 5: aprovado mesmo com diff grande" [ "$rc" = 0 ]
 conferir "caso 5: pedido cabe no argumento" [ "$(LC_ALL=C wc -c <"$tmp/falso/agy.pedido")" -lt 131072 ]
-conferir "caso 5: pedido aponta o arquivo do diff" grep -q "leia o arquivo .*validacao-s-r1.md.diff" "$tmp/falso/agy.pedido"
+conferir "caso 5: pedido aponta o arquivo do diff" grep -q "leia o arquivo .*/\.jangada-revisao\.diff" "$tmp/falso/agy.pedido"
 git -C "$tmp/projeto" rm -qf grande.txt
 
 # Caso 6: auto-revisão do agy (revisor agy gravado no estado).
@@ -912,6 +912,9 @@ conferir "caso 20: .jangada/validar.sh novo ou alterado vai ao revisor para conf
 # pelo jangada-isolar: grava no projeto, mas não fora dele.
 if command -v bwrap >/dev/null 2>&1 && bwrap --ro-bind / / --dev /dev --proc /proc true 2>/dev/null; then
   sessao_de claude agy
+  # Fora do isolamento a aprovação exige a cópia protegida da sessão.
+  mkdir -p "$tmp/estado/jangada/revisoes"
+  cp "$estado/s.json" "$tmp/estado/jangada/revisoes/s.json"
   printf '#!/usr/bin/env bash
 : >.jangada/rodou || exit 1
 : >"%s" 2>/dev/null
