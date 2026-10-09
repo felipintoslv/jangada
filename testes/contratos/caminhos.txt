@@ -1,0 +1,26 @@
+# Contrato K2: caminhos que arquivos do usuário e do sistema guardam por
+# extenso. Cada um continua existindo, como arquivo ou como link relativo.
+shell/jangada.sh
+shell/jangada-shell.sh
+bin/jangada-sessao
+bin/jangada-hook-claude
+bin/jangada-hook-agy
+bin/jangada-hook-codex
+bin/jangada-hook-leitor
+default/hypr/bootstrap.lua
+default/hypr/jangada.lua
+default/hypr/ajudantes.lua
+default/hypr/ambiente.lua
+default/hypr/aparencia.lua
+default/hypr/entrada.lua
+default/hypr/regras.lua
+default/hypr/atalhos.lua
+default/hypr/inicio.lua
+default/waybar/base.css
+default/waybar/config.jsonc
+default/logo/jangada.txt
+default/claude/skills
+default/claude/agents
+default/agy/agents
+default/agy/hooks.json
+default/claude/hooks.json

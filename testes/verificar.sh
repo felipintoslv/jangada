@@ -121,6 +121,14 @@ done
 passo "escritas fora das pastas do jangada estão nas exceções da regra 1"
 testes/regra1.sh || falha "testes/regra1.sh"
 
+passo "contratos entre módulos"
+for t in testes/contratos-*; do
+  case "$t" in
+    *.py) python3 "$t" ;;
+    *) "$t" ;;
+  esac || falha "$t"
+done
+
 passo "comandos citados nos protocolos dos agentes existem em bin/"
 for c in $(grep -ho '`jangada-[a-z-]*' default/agentes/protocolo*.md | tr -d '`' | sort -u); do
   [[ -x "bin/$c" ]] || falha "bin/$c citado no protocolo mas ausente"

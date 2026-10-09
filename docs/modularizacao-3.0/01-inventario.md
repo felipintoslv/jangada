@@ -56,6 +56,10 @@ Observações:
   Shell e chama só comandos públicos.
 - `jangada-tarefas` e `jangada-conversa` abrem janelas Qt. Ver decisão D3.
 - `jangada-tema` e `jangada-sddm` carregam `install/lib.sh`.
+- `jangada-interface-processos` não é comando: é biblioteca sem permissão de
+  execução (modo 644), carregada por `source` em `jangada-barra`,
+  `jangada-tema` e `testes/interface.sh`. Dos 59 nomes de `bin/`, 58 são
+  executáveis; o teste de K1 o marca como `carregado` na lista congelada.
 - `jangada-sessao` monta o `PATH` da sessão gráfica (linha 6) e é o `Exec`
   de `/usr/share/wayland-sessions/jangada.desktop`. O caminho
   `bin/jangada-sessao` não pode deixar de existir.
@@ -161,16 +165,39 @@ tem funções de agente nas linhas 173 a 350.
 ## 1.6 Testes
 
 Os testes ficam em `testes/`. A tabela dá o módulo responsável pela revisão.
-A classificação foi feita pelo nome e pelo alvo de cada arquivo e precisa
-ser confirmada na tarefa M3-01, porque o relatório transversal veio com
-erros neste ponto.
+A tarefa M3-01 conferiu arquivo a arquivo pelo alvo de cada teste (comandos
+chamados, pacotes importados e arquivos de `default/` lidos) e corrigiu
+quatro classificações:
+
+- `operacional.py` saiu do Shell para o Core: importa `estado`, `projetos`,
+  `executor` e `nucleo.*` e chama `default/nucleo/cli.py`.
+- `restaurar.sh` saiu de Compartilhado para o Core: testa
+  `jangada-agentes --restaurar`.
+- `subagentes.sh` saiu do Monitor para o Core: as linhas 1 a 168 testam os
+  papéis de subagente, o `jangada-hook-leitor` e a instalação por
+  `install/lib.sh`; só as linhas 170 a 270 testam `jangada-subagentes`, que é
+  do Monitor.
+- `fichas.py` saiu do Shell para Compartilhado: três dos seis casos testam
+  `default/visual/fichas.py` e um testa uma migração; os outros dois testam
+  `jangada-tema` e o modelo do matugen, do Shell.
+
+Arquivos de apoio, sem teste próprio: `falso-codex-hooks.py` (Codex falso de
+`codex.sh`, `isolar.sh` e `restaurar.sh`) e `amostras-subagentes.py`
+(registros de exemplo para `painel.sh`, `subagentes.sh` e `validar.sh`).
+`tarefas.sh` é misto: confere a Central de Tarefas e também
+`jangada-agentes --lista` e `--integracao-json`.
 
 | Módulo | Arquivos |
 |---|---|
-| Core | `acompanhamento.py`, `agente-seletor.py`, `avaliar-ollama.py`, `baseline.py`, `codex-economico.py`, `codex.sh`, `confianca-p0.py`, `contexto-revisao.py`, `cota-codex.py`, `delegacao.py`, `delegar.sh`, `deterministico.py`, `eventos.sh`, `executor.py`, `extracao.py`, `falso-codex-hooks.py`, `fim.sh`, `hooks.sh`, `isolar.sh`, `metricas-projeto.py`, `orquestracao.py`, `provedores.sh`, `saude.py`, `supervisao.py`, `validar.sh` |
-| Shell | `aninhado.sh`, `barra.sh`, `bluetooth.sh`, `calendario.sh`, `conversa.py`, `fichas.py`, `importar.sh`, `interface.sh`, `mapear.sh`, `operacional.py`, `rede.sh`, `reverter.sh`, `simular-hypr.lua`, `snapshot.sh`, `tarefas.py`, `tarefas.sh` |
-| Monitor | `amostras-subagentes.py`, `diagnostico.sh`, `metricas.py`, `monitoramento.py`, `painel-local.py`, `painel-motores.R`, `painel-operacional.R`, `painel-orquestracao.py`, `painel.sh`, `subagentes.sh` |
-| Compartilhado | `capacidades.sh`, `regra1.sh`, `restaurar.sh`, `update-codigo.py`, `update.sh`, `versao.sh`, `verificar.sh` |
+| Core (28) | `acompanhamento.py`, `agente-seletor.py`, `avaliar-ollama.py`, `baseline.py`, `codex-economico.py`, `codex.sh`, `confianca-p0.py`, `contexto-revisao.py`, `cota-codex.py`, `delegacao.py`, `delegar.sh`, `deterministico.py`, `eventos.sh`, `executor.py`, `extracao.py`, `falso-codex-hooks.py`, `fim.sh`, `hooks.sh`, `isolar.sh`, `metricas-projeto.py`, `operacional.py`, `orquestracao.py`, `provedores.sh`, `restaurar.sh`, `saude.py`, `subagentes.sh`, `supervisao.py`, `validar.sh` |
+| Shell (14) | `aninhado.sh`, `barra.sh`, `bluetooth.sh`, `calendario.sh`, `conversa.py`, `importar.sh`, `interface.sh`, `mapear.sh`, `rede.sh`, `reverter.sh`, `simular-hypr.lua`, `snapshot.sh`, `tarefas.py`, `tarefas.sh` |
+| Monitor (9) | `amostras-subagentes.py`, `diagnostico.sh`, `metricas.py`, `monitoramento.py`, `painel-local.py`, `painel-motores.R`, `painel-operacional.R`, `painel-orquestracao.py`, `painel.sh` |
+| Compartilhado (9) | `capacidades.sh`, `contratos-caminhos.sh`, `contratos-fachada.sh`, `fichas.py`, `regra1.sh`, `update-codigo.py`, `update.sh`, `versao.sh`, `verificar.sh` |
+
+Os 58 arquivos da base mais os dois testes de contrato da M3-01 somam 60.
+As listas congeladas dos contratos ficam em `testes/contratos/`
+(`comandos.txt` e `caminhos.txt`), e o `verificar.sh` roda todo
+`testes/contratos-*` por padrão de nome.
 
 ## 1.7 Caminhos gravados fora do repositório
 
