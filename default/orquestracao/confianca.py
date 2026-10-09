@@ -37,6 +37,11 @@ def codificar(valor):
                       allow_nan=False).encode('utf-8')
 
 
+# Um registro guardado é relido inteiro para conferência; o limite vale para
+# o JSON serializado, com o conteúdo em base64.
+LIMITE_REGISTRO = 64 * 1024 * 1024
+
+
 def ler_regular(caminho):
     caminho = Path(caminho)
     if caminho.parent.resolve() != caminho.parent.absolute():
@@ -46,9 +51,9 @@ def ler_regular(caminho):
         antes = os.fstat(arquivo.fileno())
         if not stat.S_ISREG(antes.st_mode) or antes.st_nlink != 1:
             raise ValueError('evidência exige arquivo regular sem ligações adicionais')
-        if antes.st_size > 64 * 1024 * 1024:
+        if antes.st_size > LIMITE_REGISTRO:
             raise ValueError('evidência excede 64 MiB; preservar originais e arquivar sob supervisão')
-        conteudo = arquivo.read(64 * 1024 * 1024 + 1)
+        conteudo = arquivo.read(LIMITE_REGISTRO + 1)
         depois = os.fstat(arquivo.fileno())
     if (antes.st_size, antes.st_mtime_ns, antes.st_ctime_ns) != (
             depois.st_size, depois.st_mtime_ns, depois.st_ctime_ns):
@@ -68,6 +73,8 @@ def guardar(pasta, documento):
     if pasta.resolve() != pasta.absolute():
         raise ValueError('arquivo protegido não pode atravessar ligação simbólica')
     conteudo = codificar(documento)
+    if len(conteudo) > LIMITE_REGISTRO:
+        raise ValueError('registro excede 64 MiB; preservar originais e arquivar sob supervisão')
     resumo = hashlib.sha256(conteudo).hexdigest()
     destino = pasta / (resumo + '.json')
     if destino.exists() or destino.is_symlink():
@@ -204,9 +211,9 @@ def arquivar(estado, sessao):
             if not caminho.exists() and not caminho.is_symlink():
                 continue
             conteudo = ler_regular(caminho)
-            tamanho += len(conteudo)
-            if tamanho > 256 * 1024 * 1024:
-                raise ValueError('sessão excede 256 MiB; preservar originais e arquivar sob supervisão')
+            tamanho += 4 * ((len(conteudo) + 2) // 3)
+            if tamanho > LIMITE_REGISTRO:
+                raise ValueError('sessão excede 64 MiB em base64; preservar originais e arquivar sob supervisão')
             documentos[str(caminho.relative_to(estado))] = {
                 'sha256': hashlib.sha256(conteudo).hexdigest(),
                 'conteudo_base64': base64.b64encode(conteudo).decode('ascii'),

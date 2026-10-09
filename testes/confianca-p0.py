@@ -409,6 +409,19 @@ else:
         self.assertNotEqual(self.encerrar().returncode, 0)
         self.assertEqual(len(list(primeiro.parent.glob('*.json'))), 1)
 
+    def test_I_sessao_acima_do_limite_recusa_antes_de_gravar(self):
+        originais = self.documentos()
+        # Cada documento cabe no limite; em base64, o maior deles já não cabe.
+        limite = max(len(conteudo) for conteudo in originais.values())
+        with patch('confianca.LIMITE_REGISTRO', limite):
+            with self.assertRaisesRegex(ValueError, 'sessão excede'):
+                arquivar(self.estado, 'teste')
+            with self.assertRaisesRegex(ValueError, 'registro excede'):
+                guardar(self.estado / 'revisoes/arquivo', {'conteudo': 'x' * limite})
+        self.assertEqual(list((self.estado / 'revisoes/arquivo').glob('*')), [])
+        for nome, conteudo in originais.items():
+            self.assertEqual((self.estado / nome).read_bytes(), conteudo)
+
     def test_J_isolamento_nao_altera_outro_projeto(self):
         outra = self.estado / 'agentes/projetos/outro'
         outro = Estado(outra, raiz=self.estado)
