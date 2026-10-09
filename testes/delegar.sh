@@ -21,6 +21,9 @@ limpar() {
 }
 trap limpar EXIT
 mkdir -p "$tmp/bin" "$tmp/home/.gemini/antigravity-cli/log" "$tmp/falso" "$tmp/projeto"
+# O agy roda pelo jangada-isolar, que troca o /tmp por um vazio: a pasta em
+# que o falso registra cada chamada entra como gravável a mais.
+export JANGADA_ISOLAR_ESCRITA="$tmp/falso"
 
 # O agy falso responde ao /usage com a cota de $FALSO_COTA (fração) e ao
 # pedido com $FALSO_RESPOSTA. Grava os argumentos de cada chamada.
@@ -56,15 +59,12 @@ for a in "$@"; do
   fi
 done
 printf '%s\n' "${TMPDIR:-/tmp}" >"$FALSO_DIR/temporario"
-printf '%s\n' "$$" >"$FALSO_DIR/agy.pid"
 if [[ "${FALSO_IGNORAR_TERM:-0}" == 1 ]]; then
   trap '' TERM
 fi
 if [[ -n "${FALSO_ESPERA:-}" ]]; then
   sleep "$FALSO_ESPERA" &
-  espera_pid=$!
-  printf '%s\n' "$espera_pid" >"$FALSO_DIR/filho.pid"
-  wait "$espera_pid"
+  wait "$!"
 fi
 printf '%s\n' "${JANGADA_AGY_PAPEL:-}" >"$FALSO_DIR/agy.papel"
 pwd >"$FALSO_DIR/agy.pasta"
@@ -1028,14 +1028,17 @@ TEMPO_TOTAL=1 ESPERA_AGY=5 IGNORAR_TERM=1 RESPOSTA='Relatório em doc1.txt:1' de
 conferir "encerramento forçado: recusa estruturada" jqok -e '.motivo_codigo == "limite_tempo"' "$tmp/saida"
 conferir "encerramento forçado: diretório dos temporários removido" \
   test ! -d "$(cat "$tmp/falso/temporario")"
-processo_encerrado() {
-  local estado
-  estado="$(ps -o stat= -p "$1" 2>/dev/null || true)"
-  estado="${estado//[[:space:]]/}"
-  [[ -z "$estado" || "$estado" == Z* ]]
+# O agy roda em namespace de PID próprio, e o número que ele vê não vale fora.
+# Os processos da chamada se reconhecem pelo ambiente que herdaram dela.
+restam_do_falso() {
+  grep -lsaF "FALSO_DIR=$tmp/falso" /proc/[0-9]*/environ | xargs -r grep -lsaF "FALSO_IGNORAR_TERM=$1" | grep -q .
 }
-conferir "encerramento forçado: agy não continua executando" processo_encerrado "$(cat "$tmp/falso/agy.pid")"
-conferir "encerramento forçado: filho do agy não continua executando" processo_encerrado "$(cat "$tmp/falso/filho.pid")"
+nao() { ! "$@"; }
+FALSO_DIR="$tmp/falso" FALSO_IGNORAR_TERM=sonda sleep 5 &
+sonda_pid=$!
+conferir "encerramento forçado: a busca enxerga um processo vivo" restam_do_falso sonda
+kill "$sonda_pid" 2>/dev/null; wait "$sonda_pid" 2>/dev/null
+conferir "encerramento forçado: agy e filho não continuam executando" nao restam_do_falso 1
 rm -f "$cache_cota"
 TEMPO_TOTAL=1 ESPERA_USAGE=5 delegar leitor "compare" --capacidade analise_documental \
   --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
