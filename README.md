@@ -127,7 +127,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-snapshot "descrição"` | cria um snapshot manual do sistema; com `--agente`, o do `jangada-agente --snapshot`, fora da limpeza do snapper e limitado aos `JANGADA_SNAPSHOTS_AGENTE` mais recentes |
 | `jangada-tema [imagem]` | gera as cores a partir de um papel de parede e recarrega a interface |
 | `jangada-tarefas` | central gráfica de tarefas (`--nova`, `--waybar`, `--simular`) |
-| `jangada-agente` | escolhe o agente (Claude ou Codex; o agy fica só de suporte), o projeto e cria um worktree, e abre o agente numa sessão tmux, isolado pelo `jangada-isolar` (`--prompt`, `--prompt-arquivo`, `--perfil`, `--sem-isolar`) |
+| `jangada-agente` | escolhe o agente (Claude ou Codex; o agy fica só de suporte), o projeto e cria um worktree, e abre o agente numa sessão tmux, isolado pelo `jangada-isolar` (`--prompt`, `--prompt-arquivo`, `--perfil`) |
 | `jangada-isolar` | roda um comando no bubblewrap, com o sistema somente leitura e a pasta atual gravável; `--mostrar` imprime a chamada ao `bwrap` |
 | `jangada-delegar PAPEL "pedido"` | delega ao Ollama (`--destino local --arquivos ARQUIVOS`, só leitor e redator) ou ao agy (`--destino agy`, modelos de `JANGADA_DELEGAR_MODELOS`); `--capacidade` permite seleção documental para leitor, com autorização remota explícita e referências verificadas; `--json` explica a decisão (ver [delegação](docs/subagentes-e-delegacao.md)) |
 | `jangada-conversa` | Conversa de Pescador, a janela de conversa direta com o modelo local do Ollama: resposta progressiva, escolha do modelo e parada; sem histórico, ferramentas ou verificação, e com a trava e as proteções de jogo e memória de vídeo do destino local |
@@ -588,17 +588,13 @@ separadas por `:` (`~/dados:~/R`). `JANGADA_ISOLAR_OCULTAR` substitui a lista
 de ocultos, com caminhos relativos à pasta pessoal ou absolutos; definida
 vazia, não oculta nada. Para acrescentar sem perder a lista padrão, use
 `JANGADA_ISOLAR_OCULTAR_EXTRA`. A pasta do token do `jangada-painel` fica oculta
-sempre. Para o Claude, `jangada-agente --sem-isolar` desliga o isolamento
-numa sessão; `JANGADA_AGENTE_ISOLAR=0` desliga num perfil ou no `jangada.conf`.
-O Codex exige isolamento mesmo com essas opções.
+sempre. O isolamento é obrigatório para todos os agentes:
+`jangada-agente --sem-isolar` e `JANGADA_AGENTE_ISOLAR=0` (perfil, ambiente ou
+`jangada.conf`) são opções antigas, ignoradas com aviso.
 O estado guarda o comando e o campo `isolar` só para consulta: a restauração
-ignora os dois e volta sempre isolada, a menos que `JANGADA_AGENTE_ISOLAR=0`
-esteja no `jangada.conf` ou no ambiente, para Claude e agy. O Codex sempre
-volta isolado. Uma sessão aberta com `--sem-isolar` ou com um perfil que
-desliga o isolamento volta isolada se a configuração global o mantiver ligado.
+ignora os dois e volta sempre isolada.
 Sem o pacote `bubblewrap`, o `jangada-isolar` recusa e o agente não abre; a
-mensagem fica no terminal da sessão. As opções para desligar não liberam o
-Codex.
+mensagem fica no terminal da sessão.
 
 ## Central de tarefas v0.1
 

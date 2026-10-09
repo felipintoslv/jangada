@@ -10,7 +10,7 @@ Há evidência positiva dos ensaios de preservação, aprovação, encerramento,
 
 Disponíveis na worktree de engenharia: comandos de projetos e tarefas, fila e persistência; execução em worktree e isolamento existente; revisão congelada; validação com recusa conservadora; encerramento após conferência; atualização e assinatura; componentes da Central e do painel. A aplicação cotidiana desses fluxos depende das verificações de ambiente pendentes.
 
-Bloqueados no backend: integração automática com ramo próprio e reversão automática da validação. Restritos por falta de evidência: ponta a ponta gráfico, comunicação completa de serviços locais e validação sem rede neste sandbox. Os modos manuais de trabalho direto, execução sem isolamento e descarte ainda existem; não compõem o plano de 30 dias.
+Bloqueados no backend: integração automática com ramo próprio e reversão automática da validação. Restritos por falta de evidência: ponta a ponta gráfico, comunicação completa de serviços locais e validação sem rede neste sandbox. A execução sem isolamento também foi bloqueada: `--sem-isolar` e `JANGADA_AGENTE_ISOLAR=0` são ignorados com aviso. Os modos manuais de trabalho direto e descarte ainda existem; não compõem o plano de 30 dias.
 
 ## Condições para congelar
 

@@ -206,8 +206,8 @@ O agente aberto pelo `jangada-agente` roda no bubblewrap, com
   `/tmp/isolar-teste`, remova esse arquivo antes: ele falseia o teste do
   `/tmp` próprio.
 - Se a tarefa precisa gravar fora dessas pastas, pare e peça ao usuário:
-  acrescentar a pasta em `JANGADA_ISOLAR_ESCRITA` no `jangada.conf` ou reabrir
-  com `jangada-agente --sem-isolar`. Não contorne o isolamento.
+  acrescentar a pasta em `JANGADA_ISOLAR_ESCRITA` no `jangada.conf`. Não há
+  abertura sem isolamento. Não contorne o isolamento.
 
 O isolamento fecha os caminhos conhecidos para rodar código fora do bwrap
 (estado executado na restauração, configuração do git, hooks do Claude,
@@ -215,19 +215,16 @@ sockets do Hyprland e do sistema), mas não é uma barreira completa: o
 chaveiro inteiro é legível pelo D-Bus filtrado, `~/.claude/projects` e o
 `settings.json` do agy seguem graváveis, e repositórios aninhados no índice
 só ficam protegidos quando o git de fora passa por `jangada_git_seguro`.
-`JANGADA_AGENTE_ISOLAR=0` desliga (no `jangada.conf` ou num perfil), e
-`JANGADA_ISOLAR_OCULTAR` substitui a lista de ocultos, e
+`JANGADA_AGENTE_ISOLAR=0` e `--sem-isolar` não desligam mais: geram aviso e
+a sessão abre isolada. `JANGADA_ISOLAR_OCULTAR` substitui a lista de ocultos, e
 `JANGADA_ISOLAR_OCULTAR_EXTRA` acrescenta a ela. `JANGADA_ISOLAR_PERFIL=verificacao`
 (usado pelo `jangada-validar` no `lintr` e no `.jangada/validar.sh`) corta a
 rede e oculta os logins e as chaves dos provedores. Repositório em reftable
 é recusado. O `/sys` é o do host mesmo sem rede: para conferir a rede de
 dentro, leia `/proc/net/dev`. O estado guarda
 `comando` e `isolar` só para consulta: o `--restaurar` recompõe o comando e
-volta isolado, a menos que `JANGADA_AGENTE_ISOLAR=0` esteja no `jangada.conf`
-ou no ambiente (perfil e `--sem-isolar` não contam). Sem o `bwrap`, o
-`jangada-isolar` sai com erro e o agente não abre: reabrir com
-`jangada-agente --sem-isolar` ou pôr `JANGADA_AGENTE_ISOLAR=0` no
-`jangada.conf`.
+volta isolado. Sem o `bwrap`, o `jangada-isolar` sai com erro e o agente não
+abre: instale o pacote `bubblewrap`.
 
 ## Contrato de estado
 

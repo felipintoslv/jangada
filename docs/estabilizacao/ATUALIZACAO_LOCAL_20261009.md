@@ -125,3 +125,22 @@ Não misture bancos normalizados com WAL antigos. Não remova o histórico produ
 Na restauração definitiva, preserve os caminhos dos worktrees ou confira um reparo Git supervisionado.
 Retome processos apenas depois da conferência. Não é necessário reiniciar o sistema para estas alterações de código.
 O encerramento dos executores antigos e a reabertura com o runtime conferido são necessários antes de usá-lo.
+
+## Segunda sessão, ramo `agente/tarefa-ae233e9b0edf`
+
+O ramo parte do candidato `a598b43` por avanço direto e acrescenta correções de testes, do limite do arquivo histórico e da documentação.
+A pasta privada `mapeamento/atualizacao-segura-20261009/` continua na worktree `tarefa-772f05785b35`, sem alteração.
+
+Estado da suíte, com `env -u JANGADA_ISOLADO ... bash testes/verificar.sh </dev/null`: restam 17 falhas em `testes/validar.sh` e `testes/isolar.sh`.
+Todas têm a mesma causa: `bin/jangada-isolar` chama `preparar-isolamento` também na verificação aninhada, e `exigir_controlador` recusa.
+Com o candidato instalado, o `jangada-validar` chamado de dentro de uma sessão reprova todo projeto com arquivos R ou `.jangada/validar.sh`.
+O revisor externo apontou o mesmo defeito. A correção altera o código do isolamento e ficou para decisão do usuário.
+
+Achados para a aplicação:
+
+- Nenhum dos commits entre `9e72e9d` e o candidato tem assinatura, e `~/.config/jangada/allowed_signers` existe.
+  O atualizador novo recusa até que `jangada-assinar` os assine no terminal externo. A assinatura troca os SHA, não o conteúdo.
+- A árvore de `git merge-tree --write-tree 6f2f8ac 17178de` é igual à da mescla `40d7d5c`; o `jangada-assinar` deve refazer a mescla sem divergência.
+- O `jangada-isolar` novo recusa abrir quando a entrada, a saída ou o erro padrão é um socket.
+  Terminal e tmux não são afetados. Um controlador que chame `jangada-validar` ou `jangada-delegar` com saída ligada a socket recebe
+  `descritor padrão expõe estado protegido ou socket`. Nos testes, use `</dev/null` e saída em arquivo ou pipe.

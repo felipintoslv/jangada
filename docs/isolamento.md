@@ -43,6 +43,11 @@ o agente só conheça os dados do projeto:
 
 ## Decisão de isolar
 
+Desde a correção P0 o isolamento é obrigatório para todos os agentes:
+`--sem-isolar` e `JANGADA_AGENTE_ISOLAR=0` são ignorados com aviso. Os
+fluxogramas e a precedência abaixo descrevem o comportamento anterior, nos
+ramos que desligam o isolamento.
+
 ```mermaid
 flowchart TD
     A[jangada-agente] --> O{agente Codex?}
@@ -227,9 +232,8 @@ eles exportam volta, a menos que a casa mínima os deixe de fora.
 
 ## Falhas
 
-- Sem `bwrap`: o `jangada-isolar` recusa com código 1. Claude e agy podem
-  abrir com `--sem-isolar` ou `JANGADA_AGENTE_ISOLAR=0`; o Codex continua
-  exigindo isolamento.
+- Sem `bwrap`: o `jangada-isolar` recusa com código 1 e nenhum agente abre;
+  instale o pacote `bubblewrap`.
 - Sem proxy do D-Bus (programa ausente ou sem resposta em 5 segundos): o
   agente abre sem D-Bus, e o agy não acha o login.
 - Apagar ramo ou tag e o `git gc` falham dentro de um worktree, porque
