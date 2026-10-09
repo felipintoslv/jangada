@@ -284,7 +284,10 @@ atualizar_marcas_host() {
 
 mkdir -p "$JANGADA_ESTADO/agentes" 2>/dev/null || true
 # Recusa aliases, canais locais e descritores que contornariam a montagem.
-python3 "$JANGADA_PATH/default/orquestracao/confianca.py" preparar-isolamento "$JANGADA_ESTADO"
+aninhado=0
+ja_isolado && aninhado=1
+((aninhado)) || env -u JANGADA_ISOLADO \
+  python3 "$JANGADA_PATH/default/orquestracao/confianca.py" preparar-isolamento "$JANGADA_ESTADO"
 for p in validar.jsonl eventos-agentes.jsonl delegacoes.jsonl local.lock; do
   [[ -e "$JANGADA_ESTADO/$p" ]] || : 2>/dev/null >>"$JANGADA_ESTADO/$p" || true
 done
@@ -645,8 +648,9 @@ while :; do
   wait "$bwrap_pid" 2>/dev/null || codigo=$?
   kill -0 "$bwrap_pid" 2>/dev/null || break
 done
-if ((codigo)); then
-  python3 "$JANGADA_PATH/default/orquestracao/confianca.py" registrar-falha "$JANGADA_ESTADO" "$codigo" \
+if ((codigo && !aninhado)); then
+  env -u JANGADA_ISOLADO \
+    python3 "$JANGADA_PATH/default/orquestracao/confianca.py" registrar-falha "$JANGADA_ESTADO" "$codigo" \
     || echo "falha ao registrar execução isolada malsucedida" >&2
 fi
 exit "$codigo"
