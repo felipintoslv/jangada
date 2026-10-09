@@ -33,13 +33,13 @@ class Economico(unittest.TestCase):
         for nome in ('bin', 'default/delegacao', 'default/orquestracao'):
             (self.raiz / nome).mkdir(parents=True)
         for nome in ('bin/jangada-config', 'bin/jangada-delegar', 'default/delegacao/validar.py',
-                     'bin/jangada-retomar', 'bin/jangada-router', 'default/delegacao/codex.py',
+                     'bin/jangada-retomar', 'bin/jangada-router', 'bin/jangada-isolar', 'default/delegacao/codex.py',
                      'default/orquestracao/cota_codex.py', 'default/orquestracao/cli.py',
                      'default/orquestracao/estado.py', 'default/orquestracao/executor.py',
                      'default/orquestracao/saude.py', 'default/orquestracao/acompanhamento.py',
                      'default/orquestracao/deterministico.py', 'default/orquestracao/metricas_projeto.py',
                      'default/orquestracao/supervisao.py', 'default/orquestracao/principal.py',
-                     'default/orquestracao/projetos.py'):
+                     'default/orquestracao/projetos.py', 'default/orquestracao/confianca.py'):
             shutil.copy2(RAIZ / nome, self.raiz / nome)
         self.audit = self.pasta / 'execucao.json'
         self.fonte = self.pasta / 'fonte.md'
@@ -310,7 +310,7 @@ if modo == 'duplicado':
         self.stub_worker('mudou_dependencia',modelo='modelo-principal-teste')
         resultado=self.principal(estado,Saude(estado))
         self.assertEqual(resultado['status'],'REVISION_REQUIRED')
-        self.assertIn('dependências alteradas',resultado['motivo'])
+        self.assertIn('artefato adulterado',resultado['motivo'])
         self.assertTrue(next(t for t in estado.listar() if t['id']=='P1')['artefato'])
 
     def test_principal_requisito_ausente_preserva_saida_reprovada(self):
