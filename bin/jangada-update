@@ -12,6 +12,48 @@ set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
+somente_codigo=0
+case "${1:-}" in
+  "") ;;
+  --somente-codigo) somente_codigo=1; shift ;;
+  --ajuda|--help|-h)
+    printf '%s\n' 'Uso: jangada-update [--somente-codigo]' \
+      '--somente-codigo atualiza apenas o Git instalado, sem pacotes, migrações, recarga ou ganchos.'
+    exit 0 ;;
+  *) echo "opção desconhecida: $1" >&2; exit 1 ;;
+esac
+(($# == 0)) || { echo "argumentos excedentes" >&2; exit 1; }
+[[ "${JANGADA_SIMULAR:-0}" != 1 ]] || {
+  echo "jangada-update não oferece simulação; use JANGADA_SIMULAR=1 jangada-migrar para conferir migrações" >&2
+  exit 1
+}
+
+if ((somente_codigo)); then
+  if [[ -n "${JANGADA_ISOLADO:-}" ]] || mountpoint -q /tmp/.jangada-isolado \
+      || mountpoint -q /tmp/.jangada-sem-autoridade; then
+    echo "atualização exige terminal externo ao agente isolado" >&2
+    exit 1
+  fi
+  if ! sessoes="$("${JANGADA_TMUX[@]}" list-sessions -F '#{session_name}' 2>&1)"; then
+    case "$sessoes" in
+      'no server running on '*|'error connecting to '*' (No such file or directory)'|'no sessions') sessoes="" ;;
+      *) echo "não foi possível conferir as sessões; nada atualizado" >&2; exit 1 ;;
+    esac
+  fi
+  if [[ -n "$sessoes" ]]; then
+    echo "interrompa as sessões de agentes antes de atualizar; nada atualizado" >&2
+    printf '%s\n' "$sessoes" | tr -d '\000-\010\013-\037\177' >&2
+    exit 1
+  fi
+  processos="$(ps -eo pid=,args= | awk -v pasta="$JANGADA_PATH/" '
+    index($0, pasta "default/") ||
+    (index($0, pasta "bin/jangada-") && !index($0, pasta "bin/jangada-update")) {print $1}')"
+  if [[ -n "$processos" ]]; then
+    echo "há processos usando a instalação (PID: $processos); interrompa-os antes de atualizar" >&2
+    exit 1
+  fi
+fi
+
 # Pacotes do conjunto Hyprland. Atualizar só parte deles causa quebras
 # (bibliotecas com versões incompatíveis), por isso o jangada não os fixa com
 # IgnorePkg: avisa e deixa você decidir antes de atualizar tudo junto.
@@ -66,12 +108,20 @@ confirmar_novidades() {
 # commit em assinaturas_ok; o --verify-signatures do merge só olharia o último.
 opcoes_merge=(--ff-only --quiet)
 
+codigo_ok=1
 echo "==> repositório jangada (canal $JANGADA_CANAL)"
 if estado="$(g status --porcelain --ignore-submodules=all 2>&1)" && [[ -z "$estado" ]]; then
   # Só busca: nada chega à cópia instalada antes da confirmação abaixo.
-  g fetch --quiet origin || echo "!! não consegui buscar o repositório de origem"
+  if ! g fetch --quiet origin; then
+    echo "!! não consegui buscar o repositório de origem"
+    ((somente_codigo)) && exit 1
+  fi
   ramo_atual="$(g rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
   if [[ "$ramo_atual" != "$JANGADA_CANAL" ]]; then
+    if ((somente_codigo)); then
+      echo "modo somente código exige a instalação no canal $JANGADA_CANAL; nada aplicado" >&2
+      exit 1
+    fi
     if g show-ref --verify --quiet "refs/heads/$JANGADA_CANAL"; then
       g switch --quiet "$JANGADA_CANAL"
     elif g show-ref --verify --quiet "refs/remotes/origin/$JANGADA_CANAL"; then
@@ -88,16 +138,21 @@ if estado="$(g status --porcelain --ignore-submodules=all 2>&1)" && [[ -z "$esta
   antes="$(g rev-parse HEAD)"
   novo="$(g rev-parse --verify --quiet '@{upstream}^{commit}' 2>/dev/null || true)"
   if [[ -z "$novo" ]]; then
+    codigo_ok=0
     echo "!! o ramo $(g rev-parse --abbrev-ref HEAD 2>/dev/null || echo "$ramo_atual") não acompanha um ramo da origem; nada a aplicar"
   elif [[ "$novo" == "$antes" ]] || g merge-base --is-ancestor "$novo" "$antes"; then
     echo "jangada já atualizado"
   elif ! g merge-base --is-ancestor "$antes" "$novo"; then
-    echo "!! a origem não avança em linha reta a partir da cópia instalada; nada aplicado (siga com o sistema)"
+    codigo_ok=0
+    echo "!! a origem não avança em linha reta a partir da cópia instalada; nada aplicado"
   elif confirmar_novidades "$antes" "$novo"; then
-    g merge "${opcoes_merge[@]}" "$novo" \
-      || echo "!! não foi possível atualizar o repositório (siga com o sistema)"
+    if ! g merge "${opcoes_merge[@]}" "$novo"; then
+      codigo_ok=0
+      echo "!! não foi possível atualizar o repositório"
+    fi
   else
-    echo "!! mudanças do jangada não aplicadas; o sistema é atualizado com a versão atual e sem migrações novas"
+    codigo_ok=0
+    echo "!! mudanças do jangada não aplicadas"
   fi
   # O que chegou, nos grupos do CHANGELOG.md.
   if [[ "$(g rev-parse HEAD)" != "$antes" ]]; then
@@ -106,12 +161,20 @@ if estado="$(g status --porcelain --ignore-submodules=all 2>&1)" && [[ -z "$esta
       | tr -d '\000-\010\013-\037\177' | sed 's/^/   /' || true
   fi
 else
+  codigo_ok=0
   if [[ -n "${estado:-}" ]]; then
     echo "!! o repositório em $JANGADA_PATH não está limpo ou reportou erro; a cópia instalada não foi atualizada:"
     printf '%s\n' "$estado" | sed 's/^/   /'
   else
     echo "!! há alterações locais em $JANGADA_PATH; a cópia instalada não foi atualizada"
   fi
+fi
+
+if ((somente_codigo)); then
+  ((codigo_ok)) || exit 1
+  echo "código instalado em $(g rev-parse HEAD)"
+  echo "confira as migrações com JANGADA_SIMULAR=1 jangada-migrar antes de aplicá-las"
+  exit 0
 fi
 
 echo "==> atualizações disponíveis"

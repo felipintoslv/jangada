@@ -143,6 +143,8 @@ fi
 
 passo "baseline: preservação, aprovação e recuperação sintética"
 python3 testes/baseline.py || falha "testes/baseline.py"
+python3 testes/contexto-revisao.py || falha "testes/contexto-revisao.py"
+python3 testes/update-codigo.py || falha "testes/update-codigo.py"
 
 passo "isolamento dos agentes"
 testes/isolar.sh || falha "testes/isolar.sh"

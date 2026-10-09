@@ -15,7 +15,8 @@ A avaliação P1 continua inconclusiva.
 
 A combinação preserva a ancestralidade da baseline e da P0.
 Os relatórios P0, P1 e `ACHADOS_ATUAIS.md` mantêm os bytes do commit documental.
-Os componentes críticos do candidato correspondem aos bytes da P0.
+Os componentes críticos iniciais correspondiam aos bytes da P0.
+A preparação seguinte corrigiu o limite de argumentos do validador e acrescentou atualização de somente código.
 A integração automática permanece bloqueada em `bin/jangada-agente-fim`.
 O módulo `default/orquestracao/confianca.py` existe no candidato e falta na instalação ativa.
 
@@ -32,9 +33,10 @@ Isso não certifica ausência de outras sessões no host.
 `jangada-update` busca `origin`, que aponta para `/home/felipinto/Projetos/jangada`.
 Portanto, publicação remota não é necessária.
 Entretanto, o comando também executa `sudo pacman -Syu` e atualização AUR.
-Não oferece seleção de somente código nem simulação dessas operações.
-`JANGADA_SIMULAR=1` não neutraliza esse atualizador.
-Ele não foi executado sobre a instalação ativa, pois contrariaria os limites desta tarefa.
+A versão instalada não oferece seleção de somente código nem simulação dessas operações.
+A versão preparada acrescenta `--somente-codigo`, sem pacotes, migrações, recarga ou ganchos.
+Ela recusa simulação, isolamento e processos ou sessões ativos.
+O atualizador não foi executado sobre a instalação ativa.
 Não houve substituição manual de executáveis.
 
 Há `allowed_signers` na configuração visível.
@@ -82,7 +84,9 @@ Links foram preservados; seus destinos externos não foram copiados automaticame
 O teste P0 cobre cadastro, fila, execução isolada, provedores simulados, decisão protegida,
 encerramento e recuperação integral de evidências em projetos descartáveis.
 Não comprova esses caminhos na instalação ativa nem uma avaliação com modelos reais.
-A validação final desta entrega fica registrada em `testes/validar-entrega.log` nas evidências privadas.
+As validações da primeira preparação e da correção ficam nas evidências privadas.
+O erro inicial de `jq --arg pedido` foi corrigido usando entrada padrão; o ensaio preservou integralmente um pedido acima de 128 KiB.
+Os dez ensaios de atualização de somente código passaram em clones descartáveis.
 Uma revisão da própria sessão não equivale à aprovação protegida pelo controlador.
 
 Os quatro grupos com falhas são `testes/validar.sh`, `testes/isolar.sh`,
@@ -96,7 +100,8 @@ Duas cópias sintéticas omitem `confianca.py` e falham na importação.
 Outro cenário omite `jangada-isolar` e não alcança a conclusão esperada.
 Esses defeitos do ambiente sintético não demonstram falha da instalação, mas impedem aprovar a suíte.
 O primeiro ensaio de ambiente limpo também omitiu HOME; foi corrigido no comando, sem alterar o teste.
-Nenhum teste foi editado nesta preparação para obter aprovação.
+Nenhuma expectativa dos testes preexistentes foi enfraquecida.
+Foram acrescentados ensaios de contexto grande e atualização de somente código.
 
 ## Continuação e recuperação no terminal externo
 
@@ -108,8 +113,9 @@ Nenhum teste foi editado nesta preparação para obter aprovação.
    históricos, configurações de provedores, worktrees e Git comum. Confira destinos de links e os bancos com seus WAL.
 5. Resolva as falhas dos testes e obtenha revisão externa independente. Confira novamente main e todas as alterações concorrentes.
    Integre manualmente o ramo da tarefa em main, preservando o commit documental; não use `--integrar`, que permanece bloqueado.
-6. Confira assinaturas conforme `docs/atualizacao-e-migracoes.md`. Resolva primeiro a ausência de atualização nativa de somente código.
-   Não rode o atualizador atual mantendo a proibição de atualização de pacotes; não substitua arquivos manualmente como alternativa.
+6. Confira assinaturas e use o programa novo com `--somente-codigo`, conforme `docs/atualizacao-e-migracoes.md`.
+   Não passe a opção à versão antiga instalada: ela não a reconhece e pode atualizar os pacotes.
+   Sessões de tmux preservadas também bloqueiam o novo modo; guarde sua saída antes de encerrá-las pelo terminal.
 7. Após um fluxo autorizado de aplicação, confira versão, SHA e hashes contra o candidato exato, e repita o ciclo descartável usando a instalação.
 
 Para recuperar, mantenha os executores parados e preserve a instalação e o estado posteriores em cópias separadas.

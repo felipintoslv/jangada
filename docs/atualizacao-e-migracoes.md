@@ -130,6 +130,46 @@ flowchart TD
   `jangada_git_seguro`, sem fsmonitor nem ganchos da configuração do
   repositório.
 
+## Atualizar somente o código
+
+`jangada-update --somente-codigo` atualiza apenas o Git da cópia instalada.
+Mantém confirmação dos commits, conferência de assinaturas e avanço rápido.
+Não executa pacotes, migrações, recarga, serviços ou ganchos do usuário.
+Falha ou recusa devolve código diferente de zero, preservando a instalação.
+
+O modo recusa agentes isolados, sessões no tmux do Jangada e processos que usam o código instalado.
+Interrompa os executores, preserve os registros e feche os aplicativos antes de atualizar.
+Faça o backup integral no terminal externo conforme `docs/estabilizacao/BACKUP_RECUPERACAO.md`.
+Não use o encerrador antigo para limpar evidências que ainda precisam de preservação.
+
+**Instalações anteriores não reconhecem esta opção e podem atualizar o sistema.**
+Para a primeira atualização, depois de integrar, revisar e conferir as assinaturas da cópia principal,
+execute o programa novo dessa cópia, apontando para a instalação existente:
+
+```sh
+JANGADA_PATH="$HOME/.local/share/jangada" bash "$HOME/Projetos/jangada/bin/jangada-update" --somente-codigo
+```
+
+Isso utiliza o atualizador nativo conferido; não copia executáveis manualmente.
+Não execute uma versão sem revisão ou ainda modificável por um executor em andamento.
+Confira o SHA exibido e a versão efetivamente instalada.
+
+O atualizador não oferece simulação; `JANGADA_SIMULAR=1` é recusado antes de buscar commits.
+As migrações são conferidas separadamente, pelo programa já instalado:
+
+```sh
+JANGADA_SIMULAR=1 "$HOME/.local/share/jangada/bin/jangada-migrar"
+```
+
+Se houver migrações pendentes, confira os comandos previstos antes de aplicar.
+Migrações podem exigir pacotes ou alterações de sistema; não aplique essas etapas quando estiverem fora da autorização.
+Com o plano conferido e permitido, rode `"$HOME/.local/share/jangada/bin/jangada-migrar"`.
+Reabra os processos do Jangada para usar o código novo.
+Isso não exige reiniciar o computador nem atualizar kernel, drivers ou Hyprland.
+
+`testes/update-codigo.py` usa clones descartáveis e comandos de sistema que falham se forem chamados.
+Confere confirmação, assinaturas, arquivos pendentes e recusas de atualização com sessões, processos ou isolamento.
+
 ## jangada-migrar
 
 ```mermaid
