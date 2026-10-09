@@ -1031,7 +1031,10 @@ conferir "encerramento forçado: diretório dos temporários removido" \
 # O agy roda em namespace de PID próprio, e o número que ele vê não vale fora.
 # Os processos da chamada se reconhecem pelo ambiente que herdaram dela.
 restam_do_falso() {
-  grep -lsaF "FALSO_DIR=$tmp/falso" /proc/[0-9]*/environ | xargs -r grep -lsaF "FALSO_IGNORAR_TERM=$1" | grep -q .
+  # Fora de uma sessão há processos de outros usuários: o grep sai com 2 por
+  # não poder lê-los, e só o resultado do último comando interessa.
+  (set +o pipefail
+   grep -lsaF "FALSO_DIR=$tmp/falso" /proc/[0-9]*/environ | xargs -r grep -lsaF "FALSO_IGNORAR_TERM=$1" | grep -q .)
 }
 nao() { ! "$@"; }
 FALSO_DIR="$tmp/falso" FALSO_IGNORAR_TERM=sonda sleep 5 &
