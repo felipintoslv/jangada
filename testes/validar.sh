@@ -1173,16 +1173,16 @@ conferir "caso 13d: JANGADA_AGENTE_PROTOCOLO=0 desliga também as regras de R" \
   bash -c '! jq -r .comando "$1" | grep -q "append-system-prompt" && test ! -e "$2"' _ "$estado/comr.json" "$estado/protocolo-comr.md"
 
 # Caso 13e: o agente abre pelo jangada-isolar, e o comando guardado para
-# consulta também; --sem-isolar e JANGADA_AGENTE_ISOLAR=0 tiram o prefixo.
+# consulta também; --sem-isolar e JANGADA_AGENTE_ISOLAR=0 não tiram o prefixo.
 agente_em "$tmp/semr"
 conferir "caso 13e: o comando passa pelo jangada-isolar" \
   bash -c 'jq -r .comando "$1" | grep -q "bin/jangada-isolar -- claude"' _ "$estado/semr.json"
 agente_em "$tmp/semr" --sem-isolar
-conferir "caso 13e: --sem-isolar tira o jangada-isolar" \
-  bash -c 'jq -r .comando "$1" | grep -q "^claude" && ! jq -r .comando "$1" | grep -q jangada-isolar' _ "$estado/semr.json"
+conferir "caso 13e: --sem-isolar não tira o jangada-isolar" \
+  bash -c 'jq -r .comando "$1" | grep -q "bin/jangada-isolar -- claude"' _ "$estado/semr.json"
 JANGADA_AGENTE_ISOLAR=0 agente_em "$tmp/semr"
-conferir "caso 13e: JANGADA_AGENTE_ISOLAR=0 tira o jangada-isolar" \
-  bash -c '! jq -r .comando "$1" | grep -q jangada-isolar' _ "$estado/semr.json"
+conferir "caso 13e: JANGADA_AGENTE_ISOLAR=0 não tira o jangada-isolar" \
+  bash -c 'jq -r .comando "$1" | grep -q "bin/jangada-isolar -- claude"' _ "$estado/semr.json"
 
 if ((falhas)); then
   echo "$falhas falha(s); saídas em $tmp (mantido)"

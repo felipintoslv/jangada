@@ -207,12 +207,14 @@ conferir "caso 1b: hooks do git somente leitura" seguidos --ro-bind "$tmp/repo/.
 conferir "caso 1b: worktrees somente leitura" seguidos --ro-bind "$tmp/repo/.git/worktrees" "$tmp/repo/.git/worktrees"
 conferir "caso 1b: o git segue funcionando com o commondir" git -C "$tmp/repo" status --porcelain
 
-# Caso 2: desligado, roda o comando direto.
-saida="$(isolar "$tmp/wt" JANGADA_AGENTE_ISOLAR=0 "$repo_jangada/bin/jangada-isolar" -- sh -c 'echo "${JANGADA_ISOLADO:-fora}"')"
-conferir "caso 2: JANGADA_AGENTE_ISOLAR=0 não isola" [ "$saida" = fora ]
+# Caso 2: o isolamento é obrigatório; a opção antiga de desligar só gera aviso.
+mostrar JANGADA_AGENTE_ISOLAR=0 2>"$tmp/erro"
+conferir "caso 2: JANGADA_AGENTE_ISOLAR=0 não desliga o isolamento" [ "$(head -n1 "$tmp/args")" = bwrap ]
+conferir "caso 2: JANGADA_AGENTE_ISOLAR=0 avisa que foi ignorado" grep -q "isolamento obrigatório" "$tmp/erro"
 echo "JANGADA_AGENTE_ISOLAR=0" >"$tmp/config/jangada/jangada.conf"
-saida="$(isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- sh -c 'echo "${JANGADA_ISOLADO:-fora}"')"
-conferir "caso 2: jangada.conf desliga" [ "$saida" = fora ]
+mostrar 2>"$tmp/erro"
+conferir "caso 2: jangada.conf não desliga o isolamento" [ "$(head -n1 "$tmp/args")" = bwrap ]
+conferir "caso 2: jangada.conf avisa que foi ignorado" grep -q "isolamento obrigatório" "$tmp/erro"
 rm -f "$tmp/config/jangada/jangada.conf"
 # JANGADA_ISOLADO herdado, sem a marca que só o bwrap monta, não basta.
 mostrar JANGADA_ISOLADO=1
@@ -236,9 +238,11 @@ saida="$(isolar "$tmp/wt" PATH="$sem_bwrap" "$repo_jangada/bin/jangada-isolar" -
 rc=$?
 conferir "caso 2b: sem bwrap, não roda o comando" [ -z "$saida" ]
 conferir "caso 2b: sem bwrap, sai com erro" [ "$rc" -ne 0 ]
-conferir "caso 2b: sem bwrap, indica o --sem-isolar" grep -q -- --sem-isolar "$tmp/erro"
-saida="$(isolar "$tmp/wt" PATH="$sem_bwrap" JANGADA_AGENTE_ISOLAR=0 "$repo_jangada/bin/jangada-isolar" -- sh -c 'echo rodou')"
-conferir "caso 2b: sem bwrap e desligado, roda direto" [ "$saida" = rodou ]
+conferir "caso 2b: sem bwrap, diz que não há abertura sem isolamento" grep -q "não há abertura sem isolamento" "$tmp/erro"
+rc=0
+saida="$(isolar "$tmp/wt" PATH="$sem_bwrap" JANGADA_AGENTE_ISOLAR=0 "$repo_jangada/bin/jangada-isolar" -- sh -c 'echo rodou' 2>/dev/null)" || rc=$?
+conferir "caso 2b: sem bwrap e desligado, não roda o comando" [ -z "$saida" ]
+conferir "caso 2b: sem bwrap e desligado, sai com erro" [ "$rc" -ne 0 ]
 
 # Caso 3: o isolamento de verdade.
 mkdir -p "$casa/.codex/skills"
