@@ -1,0 +1,4 @@
+  File "<string>", line 1
+    from pathlib import Path; import sys,json; from PyQt6.QtCore import QCoreApplication; from PyQt6.QtNetwork import QLocalServer; app=QCoreApplication([]); raiz=Path(sys.argv[1]); resultados=[]; exec('for tamanho in (80,107,120):
+                                                                                                                                                                                                          ^
+SyntaxError: unterminated string literal (detected at line 1)

@@ -1,0 +1,32 @@
+{
+  "commit": "17178ded546642e3246bfe3bd5c33df8da821874",
+  "raiz_sintetica": "/tmp/jreal-z0ziv6zp",
+  "registro": "/home/felipinto/Projetos/jangada-resultados-p1-2026-10/evidencias/jreal-z0ziv6zp",
+  "credenciais_presentes": {
+    "codex_auth_json": true,
+    "claude_credentials_json": true
+  },
+  "codex_modelo_configurado": "gpt-6.1-sol",
+  "claude_modelo_solicitado": "sonnet",
+  "autorizacao_usuario": "Codex executor e Claude revisor, somente dados sintéticos",
+  "chamadas": [
+    {
+      "provedor": "codex",
+      "codigo": 0,
+      "resposta_esperada": "JANGADA_P1_CODEX_OK",
+      "resposta_conferida": true,
+      "segundos": 5.766,
+      "classificacao": "PASSOU"
+    },
+    {
+      "provedor": "claude",
+      "codigo": 1,
+      "resposta_esperada": "JANGADA_P1_CLAUDE_OK",
+      "resposta_conferida": false,
+      "segundos": 3.235,
+      "classificacao": "REQUER_ANALISE"
+    }
+  ],
+  "limite": "Prova de conectividade, não execução/revisão da atividade econômica. Credenciais temporárias não pertencem às evidências.",
+  "pronto_para_preparar_tarefa": false
+}

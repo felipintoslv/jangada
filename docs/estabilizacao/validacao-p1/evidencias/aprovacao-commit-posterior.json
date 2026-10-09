@@ -1,0 +1,33 @@
+{
+  "candidate_anterior": "8e41d94090c03838ec2157138ca8110c2ac357b3",
+  "HEAD_posterior": "34e0697e9aef3de7661b2b77449259cabc89efdb",
+  "marca_operacional_existe": true,
+  "marca_atual": false,
+  "previa": {
+    "sessao": "teste",
+    "base_sha": "ca419857b6633dccce046c43579a64abc784dc5b",
+    "candidate_sha": "34e0697e9aef3de7661b2b77449259cabc89efdb",
+    "arquivos": "+1 -0 entrega.txt\n+1 -0 posterior.txt",
+    "validacao_local": "marca de outra entrega; valida\u00e7\u00e3o atual desconhecida",
+    "marca": {
+      "cabeca": "8e41d94090c03838ec2157138ca8110c2ac357b3",
+      "num": 1,
+      "limpo": true,
+      "base": "main",
+      "base_sha": "ca419857b6633dccce046c43579a64abc784dc5b",
+      "ponto": "ca419857b6633dccce046c43579a64abc784dc5b",
+      "candidate_sha": "8e41d94090c03838ec2157138ca8110c2ac357b3",
+      "candidate_tree": "82b95ea007d7a8bc4300d52c37b2ada794f3cb4e",
+      "reviewer": "claude",
+      "model": "sonnet",
+      "author": "codex",
+      "local_verified": true,
+      "independent": true
+    },
+    "marca_atual": false,
+    "parecer": "STATUS: REVISAR\nCOMMIT-NOVO-NAO-APROVADO"
+  },
+  "metadados_preservados": true,
+  "codigo": 3,
+  "revisor_simulado": true
+}

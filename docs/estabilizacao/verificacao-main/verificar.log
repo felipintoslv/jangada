@@ -1,0 +1,2014 @@
+
+== capacidades da máquina
+bwrap      sim
+sem-rede   não (os testes que dependem dele se pulam)
+shellcheck sim
+jq         sim
+gitleaks   sim
+zsh        sim
+pdftotext  sim
+pyarrow    sim
+R          sim
+lintr      não (os testes que dependem dele se pulam)
+
+== sintaxe bash
+
+== shellcheck
+
+== sintaxe Lua
+
+== execução da configuração Lua com API imitada
+ok: 65 atalhos, 8 regras, 2 blocos de config, 11 variáveis, 1 eventos
+ok: 65 atalhos, 8 regras, 2 blocos de config, 11 variáveis, 1 eventos
+
+== JSON
+
+== skills do Claude Code
+
+== TOML
+......
+----------------------------------------------------------------------
+Ran 6 tests in 0.100s
+
+OK
+EEEEEE
+======================================================================
+ERROR: test_comando_json_nao_abre_terminal (__main__.Monitoramento.test_comando_json_nao_abre_terminal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/jmain-brza9qwl/codigo/testes/monitoramento.py", line 37, in setUp
+    self.servidor = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socketserver.py", line 453, in __init__
+    self.socket = socket.socket(self.address_family,
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+                                self.socket_type)
+                                ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socket.py", line 236, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+======================================================================
+ERROR: test_endereco_de_escuta_consulta_apenas_loopback (__main__.Monitoramento.test_endereco_de_escuta_consulta_apenas_loopback)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/jmain-brza9qwl/codigo/testes/monitoramento.py", line 37, in setUp
+    self.servidor = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socketserver.py", line 453, in __init__
+    self.socket = socket.socket(self.address_family,
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+                                self.socket_type)
+                                ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socket.py", line 236, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+======================================================================
+ERROR: test_endereco_remoto_e_malformado_nao_faz_pedido (__main__.Monitoramento.test_endereco_remoto_e_malformado_nao_faz_pedido)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/jmain-brza9qwl/codigo/testes/monitoramento.py", line 37, in setUp
+    self.servidor = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socketserver.py", line 453, in __init__
+    self.socket = socket.socket(self.address_family,
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+                                self.socket_type)
+                                ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socket.py", line 236, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+======================================================================
+ERROR: test_enderecos_locais_sem_porta_usam_padrao_ollama (__main__.Monitoramento.test_enderecos_locais_sem_porta_usam_padrao_ollama)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/jmain-brza9qwl/codigo/testes/monitoramento.py", line 37, in setUp
+    self.servidor = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socketserver.py", line 453, in __init__
+    self.socket = socket.socket(self.address_family,
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+                                self.socket_type)
+                                ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socket.py", line 236, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+======================================================================
+ERROR: test_leitura_real_de_proc_e_somente_listagem_local (__main__.Monitoramento.test_leitura_real_de_proc_e_somente_listagem_local)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/jmain-brza9qwl/codigo/testes/monitoramento.py", line 37, in setUp
+    self.servidor = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socketserver.py", line 453, in __init__
+    self.socket = socket.socket(self.address_family,
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+                                self.socket_type)
+                                ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socket.py", line 236, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+======================================================================
+ERROR: test_sem_redirecionamento_e_sem_confundir_erro_com_zero (__main__.Monitoramento.test_sem_redirecionamento_e_sem_confundir_erro_com_zero)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/jmain-brza9qwl/codigo/testes/monitoramento.py", line 37, in setUp
+    self.servidor = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socketserver.py", line 453, in __init__
+    self.socket = socket.socket(self.address_family,
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+                                self.socket_type)
+                                ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socket.py", line 236, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.002s
+
+FAILED (errors=6)
+XX monitoramento sob demanda
+
+== modelos do matugen referenciados existem
+
+== tema de login (QML)
+
+== comandos citados na configuração do Hyprland existem em bin/
+
+== escritas fora das pastas do jangada estão nas exceções da regra 1
+ok    caso 1: todo caminho de fora está nas exceções ou nas leituras
+ok    caso 2: escrita nova em ~/.novo é apontada
+ok    caso 3: ~/.claude/output-styles vem da linha do ~/.claude
+ok    caso 4: "$HOME"/.novo também é apontado
+todos os testes da regra 1 passaram
+
+== comandos citados nos protocolos dos agentes existem em bin/
+
+== registro de provedores
+ok    os quatro provedores do repositório
+ok    sessão principal: claude e codex
+ok    revisão: agy, claude e codex
+ok    delegação: agy e ollama
+ok    claude reproduz o protocolo, o modelo e a reserva
+ok    agy
+ok    codex
+ok    ollama só é descrito, sem comando
+ok    provedor ausente é recusado
+ok    nome com barra é recusado
+ok    provedor do usuário entra na lista
+ok    sem NOME, vale o nome do arquivo, que também é o executável
+ok    chave desconhecida não vira variável
+ok    nada do registro é exportado
+ok    arquivo sem quebra de linha no fim é lido inteiro
+ok    arquivo do usuário tem precedência
+ok    e muda a lista de principais
+ok    tipo de API é recusado
+ok    tipo ausente é recusado
+ok    função desconhecida é recusado
+ok    sem função é recusado
+ok    ollama como principal é recusado
+ok    ollama como principal e delegação é recusado
+ok    argumento de protocolo com comando embutido é recusado
+ok    argumento de protocolo com espaço é recusado
+ok    reserva não numérica é recusado
+ok    modelo com espaço é recusado
+ok    argumentos livres não aparecem na configuração pública
+ok    registro vazio faz o jangada-agente parar
+ok    e o erro diz onde o registro foi procurado
+ok    sem imprimir catálogo
+
+tudo certo
+
+== jangada-validar com claude e agy falsos
+..........
+----------------------------------------------------------------------
+Ran 10 tests in 1.074s
+
+OK
+ok    caso 1: REVISAR sai com 3
+ok    caso 1: o agy revisou
+ok    caso 1: o claude não foi chamado
+ok    caso 1: o agy revisa com o agente revisor, em --sandbox
+ok    caso 1: pedido traz o diff e a tarefa
+ok    caso 1: estado registra a rodada e o revisor
+ok    caso 1: parecer gravado
+ok    caso 2: APROVADO sai com 0
+ok    caso 2: pedido traz a resposta do agente
+ok    caso 2: pedido traz o parecer anterior
+true
+ok    caso 2: marca registra verificação local
+ok    caso 3: o claude revisou
+ok    caso 3: o agy não foi chamado
+ok    caso 3: status com Markdown vale como APROVADO
+ok    caso 3: o claude revisor lê só as configurações do usuário
+ok    caso Claude: Codex revisa por padrão
+ok    caso Claude: o autor não revisa e o agy não é chamado
+ok    caso Claude: oposto também escolhe Codex
+ok    caso Codex: Claude revisa por padrão
+ok    caso Codex: pedido identifica o autor
+ok    caso codex-codex: aprovação normalizada
+ok    caso codex-codex: revisão pelo mesmo modelo explícita
+ok    caso codex-codex: terminal, hooks e integrações desativados
+ok    caso codex-codex: revisor passa pelo isolamento
+ok    caso codex-codex: revisão sem ambiente da sessão
+ok    caso codex-codex: pasta do projeto não é a pasta do revisor
+ok    caso codex-codex: reprovação normalizada
+ok    caso codex-codex: resposta sem status não aprova
+ok    caso codex-codex: mesmo e seleção de modelo
+ok    caso codex-codex: falha do processo não aprova
+ok    caso codex-codex: com --revisor, a falha não passa a outro modelo
+ok    caso reserva: falha do Codex passa ao Claude
+ok    caso reserva: o Claude não revisa como o mesmo modelo
+ok    caso reserva: falha do agy passa ao Codex
+ok    caso reserva: o pedido é o do Codex, sem ferramenta de leitura
+ok    caso reserva: o autor fica para o fim
+ok    caso reserva: a falha do agy fica nas métricas
+ok    caso reserva: sem agy nem Codex, o Claude revisa o próprio trabalho
+ok    caso prazo: revisor preso sai com erro
+ok    caso prazo: não espera o revisor
+ok    caso prazo: diz que o prazo venceu
+ok    caso prazo: sem parecer nem aprovação
+ok    caso 3b: APROVADO fora da primeira linha não aprova
+ok    caso 3d: "STATUS: APROVADO COM RESSALVAS" não aprova
+ok    caso 3d: "STATUS: APROVADO, mas falta teste" não aprova
+ok    caso 3d: "status: aprovado" não aprova
+ok    caso 3d: "STATUS: APROVADO_AUTORREVISAO" não aprova
+ok    caso 3d: "O STATUS: APROVADO" não aprova
+ok    caso 3d: "APROVADO" não aprova
+ok    caso 3d: marcação de Markdown e espaço no fim ainda aprovam
+ok    caso 3b: linhas em branco antes do status não contam
+ok    caso 3c: a rodada ignora os pareceres de s-x
+ok    caso 3c: o pedido não leva parecer de s-x
+ok    caso 4: acima do limite sai com 4
+ok    caso 5: aprovado mesmo com diff grande
+ok    caso 5: pedido cabe no argumento
+ok    caso 5: pedido aponta o arquivo do diff
+ok    caso 6: auto-revisão do agy sai com 0
+ok    caso 6: o agy revisou o próprio trabalho
+ok    caso 6: o claude não foi chamado
+ok    caso 6: pedido identifica o autor como Antigravity
+ok    caso 6: pedido alerta sobre revisão pelo mesmo modelo
+ok    caso 6: estado registra a rodada e o revisor agy
+ok    caso 6b: sem o agente revisor a validação falha sem chamar o agy
+ok    caso 7: auto-revisão do claude com --revisor mesmo sai com 0
+ok    caso 7: o claude revisou o próprio trabalho
+ok    caso 7: o agy não foi chamado
+ok    caso 7: pedido identifica o autor como Claude
+ok    caso 7: pedido alerta sobre revisão pelo mesmo modelo
+ok    caso 7: estado registra a autorrevisão
+true
+ok    caso 7: a marca diz que a revisão não foi independente
+ok    caso 7: a métrica registra a autorrevisão
+ok    caso 8: perfis codex-agy e claude-claude definem comando e revisor
+ok    caso 8: nenhum perfil pronto abre o agy como agente principal
+ok    caso 9: --revisor mesmo fora de sessão sai com 0
+ok    caso 9: o claude revisou
+ok    caso 9: pedido identifica autor coerente com revisor
+ok    caso 9: pedido inclui alerta de auto-revisão
+ok    caso 10a: perfil codex-agy prevalece sobre global claude
+ok    caso 10b: perfil claude-claude prevalece sobre global agy
+ok    caso 10c: --revisor agy explícito prevalece sobre perfil claude-claude
+ok    caso 10d: JANGADA_VALIDAR_REVISOR=mesmo global resolve para o agente da sessão
+ok    caso 10e: revisor do estado prevalece sobre global claude no jangada-validar
+ok    caso 11a: falha local sai com código 3
+ok    caso 11a: revisor IA não foi chamado
+ok    caso 11a: estado gravado como REVISAR (local)
+ok    caso 11b: --pular-local chama o revisor mesmo com falha local
+true
+ok    caso 11b: marca registra teste local pulado
+ok    caso 11b: o revisor foi chamado com --pular-local
+On branch agente/x
+nothing to commit, working tree clean
+ok    caso 11c: limite de rodadas com reversão sai com 4
+ok    caso 11c: arquivo pendente foi revertido
+ok    caso 11d: conflito em arquivo novo reprova
+ok    caso 11d: o parecer aponta o arquivo novo pelo nome
+ok    caso 11d: script com byte nulo reprova
+ok    caso 11d: o parecer aponta o script com byte nulo
+ok    caso 11d: script novo com erro reprova
+ok    caso 11d: o parecer aponta o script novo
+ok    caso 11d: script rastreado com acento e erro reprova
+ok    caso 11d: o parecer aponta o script pelo nome
+ok    caso 11e: nome com quebra de linha reprova
+ok    caso 11e: o parecer explica
+pulado caso 12: R ou lintr não instalado
+ok    caso 14: pedido traz os critérios de escrita
+ok    caso 14: commit sem Co-Authored-By não gera aviso
+ok    caso 14: Co-Authored-By só avisa, não reprova
+ok    caso 14: pedido traz o corpo do commit
+ok    caso 14: o aviso aponta o commit
+ok    caso 15: APROVADO grava o commit aprovado
+ok    caso 15: nova entrega começa na rodada 1
+ok    caso 15: o parecer novo não sobrescreve os antigos
+ok    caso 15: pedido traz só a entrega nova
+ok    caso 15: pedido não traz o parecer da entrega aprovada
+ok    caso 15: a segunda chamada é a rodada 2
+ok    caso 15: a rodada 2 traz o parecer anterior
+ok    caso 16a: segredo antigo não barra linha nova limpa
+ok    caso 16b: segredo novo reprova
+ok    caso 16b: o revisor não foi chamado
+ok    caso 16b: o parecer aponta arquivo e linha
+ok    caso 16b: o segredo não aparece no parecer nem na saída
+ok    caso 16b: .gitleaks.toml da entrega não libera o segredo
+ok    caso 16c: gitleaks:allow libera a linha
+ok    caso 16i: segredo na linha 1 reprova
+ok    caso 16i: o parecer aponta a linha 1
+ok    caso 16d: segredo em arquivo novo reprova
+ok    caso 16d: o parecer aponta o arquivo novo
+ok    caso 16f: renomear não faz o segredo antigo parecer novo
+ok    caso 16g: colchetes no nome não acusam segredo antigo
+ok    caso 16h: segredo em arquivo com aspas no nome reprova
+ok    caso 16e: gitleaks com erro reprova
+ok    caso 16e: o parecer diz que o gitleaks falhou
+ok    caso 16e: com JANGADA_VALIDAR_SEM_GITLEAKS=1, só avisa
+ok    caso 16e: relatório que não é JSON reprova
+ok    caso 17: uma linha por rodada
+true
+ok    caso 17: REVISAR do revisor com itens e tamanho
+true
+ok    caso 17: falha local registrada
+true
+ok    caso 17: APROVADO na rodada 3
+ok    caso 17: --metricas resume
+ok    caso 17: --metricas separa por revisor
+ok    caso 17: falha do revisor registrada
+ok    caso 17: limite registrado
+ok    caso 17: no worktree, o projeto é o repositório e não a tarefa
+ok    caso 17: linha corrompida não derruba o --metricas
+ok    caso 17b: resumo dos subagentes na linha da entrega
+ok    caso 17b: campos antigos continuam
+ok    caso 17b: sem subagentes na pasta, o resumo vem zerado
+ok    caso 17b: o resumo conta desde a criação da sessão, não o commit de partida
+ok    caso 17b (falha): a linha sai sem resumo e com o motivo
+ok    caso 17b (falha): o validar avisa que o resumo não foi gravado
+ok    caso 17b (lixo): a linha sai sem resumo e com o motivo
+ok    caso 17b (lixo): o validar avisa que o resumo não foi gravado
+ok    caso 17c: uma linha por rodada simultânea
+ok    caso 17c: as linhas novas são JSON válido
+ok    caso 18: o link aparece com o destino
+ok    caso 18: o conteúdo do alvo não vai ao revisor
+ok    caso 19: corte sem cobertura no parecer não aprova
+ok    caso 19: parecer registra a recusa por cobertura
+ok    caso 19: corte sem cobertura não grava marca
+ok    caso 19: o pedido lista o arquivo depois do corte
+ok    caso 19: o pedido lista o arquivo partido no corte
+ok    caso 19: cobertura explícita permite aprovação
+ok    caso 19: Codex recusa o diff cortado
+ok    caso 19: a recusa lista o arquivo de fora
+ok    caso 19: o Codex não é chamado
+ok    caso 19: a recusa não deixa aprovação
+ok    caso 19: Codex recusa arquivo novo acima de 50 KB
+ok    caso 20: o pedido traz o AGENTS.md da base
+ok    caso 20: sem mudança no .jangada/validar.sh, o pedido não fala dele
+ok    caso 20: .jangada/validar.sh novo ou alterado vai ao revisor para conferir
+FALHA caso 20b: o .jangada/validar.sh roda no isolamento, com git, e passa
+ok    caso 20b: o .jangada/validar.sh grava na cópia, não na pasta do agente
+ok    caso 20b: o .jangada/validar.sh não grava fora do projeto
+ok    caso 20c: sem o bwrap, a validação reprova
+ok    caso 20c: sem o bwrap, o .jangada/validar.sh não roda
+ok    caso 20c: o motivo é o bwrap
+ok    caso 20d: aprovado fora do isolamento
+ok    caso 20d: o autor vem da cópia (claude, revisado pelo agy)
+ok    caso 20d: a tarefa vem da cópia
+ok    caso 20d: a marca forjada em agentes/ não encurta o diff
+ok    caso 20d: o parecer vai para revisoes/
+ok    caso 20d: nenhum parecer novo em agentes/
+true
+ok    caso 20d: a marca em revisoes/ diz o que foi revisado, contra qual base e por quem
+ok    caso 20d: a métrica vai para revisoes/validar.jsonl
+ok    caso 20d: --metricas conta a aprovação de fora à parte
+ok    caso 22: aprovado
+ok    caso 22: o revisor não trabalha na pasta do agente
+ok    caso 22: o revisor lê o conteúdo de antes da troca
+true
+ok    caso 22: a marca traz a árvore da foto e o commit do ramo
+ok    caso 22: a foto some no fim
+ok    caso 22b: aprovado
+ok    caso 22b: o pedido traz a alteração sem commit
+true
+ok    caso 22b: a marca não vale para o commit do ramo
+ok    caso 22c: o git lê o objeto forjado sem reclamar
+ok    caso 22c: objeto forjado barra a revisão
+ok    caso 22c: a mensagem diz que o espelho recusou
+ok    caso 22c: o revisor não é chamado e nada é aprovado
+ok    caso 20d: sem a cópia da sessão, avisa que os metadados vêm do estado gravável
+ok    caso 21: a prévia mostra o parecer da sessão
+ok    caso 21: a prévia ignora a sessão vizinha
+ok    caso 21: a prévia avisa quem gravou o parecer
+ok    caso 21: sem revisão de fora, a prévia não mostra nenhuma
+ok    caso 21b: a prévia separa a autorrevisão
+ok    caso 21b: a prévia mostra a revisão de fora
+ok    caso 21b: a aprovação de fora vale para o commit do ramo
+ok    caso 21b: com commit novo no ramo, a aprovação de fora não vale
+ok    caso 13: a cópia da sessão em revisoes/ traz tarefa e autor
+ok    caso 13a: sem R, o Claude recebe o protocolo da sessão
+ok    caso 13a: sem R, o protocolo traz o padrão e os subagentes, sem as regras de R
+ok    caso 13b: com R, o Claude recebe o protocolo da sessão
+ok    caso 13b: o protocolo da sessão traz o padrão, os subagentes e as regras de R
+ok    caso 13c: o agy não abre sessão principal
+ok    caso 13c: a recusa sai com 1 e diz o que o agy atende
+ok    caso 13g: o Claude sem a variável delega ao agy
+ok    caso 13g: o perfil claude-claude usa os subagentes do Claude
+ok    caso 13g: JANGADA_DELEGAR global vale sem a chave no perfil
+ok    caso 13g: a chave do perfil vence a global
+ok    caso 13g: sem o agy instalado, agy vira claude
+ok    caso 13g: todo destino tem o texto comum de não editar e não revisar
+ok    caso 13h: o provedor novo recebe o protocolo pela opção do registro
+ok    caso 13h: sem a opção no registro, o comando do Claude sai sem o protocolo
+ok    caso 13h: revisor do registro sem função de revisão é recusado
+ok    caso 13h: o revisor da sessão também passa pelo registro
+ok    caso 13h: JANGADA_VALIDAR_REVISOR também passa pelo registro
+ok    caso 13h: provedor sem a função revisor não é aceito em --revisor
+ok    caso 13d: JANGADA_AGENTE_PROTOCOLO=0 desliga também as regras de R
+ok    caso 13e: o comando passa pelo jangada-isolar
+ok    caso 13e: --sem-isolar tira o jangada-isolar
+ok    caso 13e: JANGADA_AGENTE_ISOLAR=0 tira o jangada-isolar
+1 falha(s); saídas em /tmp/jmain-brza9qwl/tmp/tmp.UhVsLu1WUl (mantido)
+XX testes/validar.sh
+
+== isolamento dos agentes
+ok    caso 1: a pasta é gravável
+ok    caso 1: o .git comum do worktree é somente leitura
+ok    caso 1: objetos do git graváveis
+ok    caso 1: das refs, só a pasta do ramo e a das cópias são graváveis
+ok    caso 1: refs e logs inteiros não são graváveis
+ok    caso 1: pasta do worktree no .git gravável
+ok    caso 1: commondir do worktree somente leitura
+ok    caso 1: gitdir do worktree somente leitura
+ok    caso 1: namespace de PID próprio
+ok    caso 1: morre com o processo pai
+ok    caso 1: sem Hyprland, Wayland nem X no ambiente
+ok    caso 1: settings.json do Claude somente leitura
+ok    caso 1: settings.json ausente vira {}
+ok    caso 1: skills do Claude somente leitura
+ok    caso 1: clones do yay somente leitura
+ok    caso 1: arquivo .git do worktree somente leitura
+ok    caso 1: ~/.ssh oculto
+ok    caso 1: ~/.netrc oculto
+ok    caso 1: ~/.pgpass oculto
+ok    caso 1: credenciais do gcloud ocultas
+ok    caso 1: variáveis de credencial não entram
+ok    caso 1: /tmp próprio
+ok    caso 1: marca do isolamento montada no /tmp próprio
+ok    caso 1: histórico da área de transferência oculto
+ok    caso 1: token do painel oculto
+ok    caso 1: a pasta do token existe antes do agente, só para o dono
+ok    caso 1: revisões feitas fora do isolamento ocultas
+ok    caso 1: a pasta das revisões existe antes do agente, só para o dono
+ok    caso 1: termina com o comando
+ok    caso 1: estado dos agentes gravável
+ok    caso 1: métricas do validar graváveis
+ok    caso 1: histórico de estados gravável
+ok    caso 1: registro de delegações gravável
+ok    caso 1: trava local gravável
+ok    caso 1: dispositivos de GPU não expostos
+ok    caso 1: o resto do estado não é gravável
+ok    caso 1: fora do tmux e do agente SSH
+ok    caso 1: pasta ausente não entra
+ok    caso 1: bin do agy em camada temporária ou somente leitura
+ok    caso 1: sem a opção, variável comum não é retirada
+ok    ambiente mínimo: variável fora da lista sai
+ok    ambiente mínimo: variável comum sai
+ok    ambiente mínimo: PATH, HOME e as do jangada ficam
+ok    ambiente mínimo: JANGADA_ISOLAR_AMBIENTE_MANTER fica
+ok    ambiente mínimo: o valor não aparece nos argumentos
+ok    caso 1: sem a opção, a pasta pessoal não é esvaziada
+ok    casa mínima: a pasta pessoal vira pasta vazia
+ok    casa mínima: o .claude.json volta somente leitura
+ok    casa mínima: JANGADA_ISOLAR_CASA_LER volta somente leitura
+ok    casa mínima: os arquivos de início do shell não voltam
+ok    casa mínima: a pasta vazia vem antes das outras montagens
+ok    caso 1: sem sobreposição, nenhuma camada temporária
+ok    caso 1: sem sobreposição, .cache vazio em memória
+ok    caso 1: sem sobreposição, .cache não é gravável no disco
+ok    caso 1: sem sobreposição, .claude/shell-snapshots vazio em memória
+ok    caso 1: sem sobreposição, .claude/shell-snapshots não é gravável no disco
+ok    caso 1: sem sobreposição, .claude/session-env vazio em memória
+ok    caso 1: sem sobreposição, .claude/session-env não é gravável no disco
+ok    caso 1: sem sobreposição, .claude/ide vazio em memória
+ok    caso 1: sem sobreposição, .claude/ide não é gravável no disco
+ok    caso 1: sem sobreposição, bin do agy somente leitura
+ok    caso 1: JANGADA_ISOLAR_ESCRITA acrescenta gravável
+ok    caso 1: JANGADA_ISOLAR_OCULTAR vazio não oculta a lista padrão
+ok    caso 1: JANGADA_ISOLAR_OCULTAR vazio ainda oculta o token do painel
+ok    caso 1: JANGADA_ISOLAR_OCULTAR vazio ainda oculta as revisões
+ok    caso 1: JANGADA_ISOLAR_OCULTAR_EXTRA mantém a lista padrão
+ok    caso 1: JANGADA_ISOLAR_OCULTAR_EXTRA oculta a pasta a mais
+ok    caso 1: JANGADA_ISOLAR_OCULTAR_EXTRA oculta o arquivo a mais
+ok    caso 1: o perfil de agente mantém a rede
+ok    verificação: sem rede
+ok    verificação: a pasta do Claude some
+ok    verificação: o .claude.json some
+ok    verificação: ANTHROPIC_API_KEY não entra
+ok    verificação: OPENAI_API_KEY não entra
+ok    verificação: GEMINI_API_KEY não entra
+ok    verificação: a lista padrão de ocultos continua
+ok    verificação com rede: a rede fica
+ok    verificação com rede: a chave do provedor não entra
+ok    perfil desconhecido é recusado
+ok    reftable: o isolamento recusa o worktree
+ok    reftable: nenhuma chamada ao bwrap é montada
+ok    reftable: a recusa diz o motivo
+ok    caso 1b: o .git principal é gravável
+ok    caso 1b: commondir criado apontando para o próprio .git
+ok    caso 1b: commondir somente leitura
+ok    caso 1b: config do git somente leitura
+ok    caso 1b: hooks do git somente leitura
+ok    caso 1b: worktrees somente leitura
+ok    caso 1b: o git segue funcionando com o commondir
+ok    caso 2: JANGADA_AGENTE_ISOLAR=0 não isola
+ok    caso 2: jangada.conf desliga
+ok    caso 2: JANGADA_ISOLADO sem a marca não dispensa o isolamento
+ok    caso 2: arquivo comum no lugar da marca não vale
+ok    caso 2b: sem bwrap, não roda o comando
+ok    caso 2b: sem bwrap, sai com erro
+ok    caso 2b: sem bwrap, indica o --sem-isolar
+ok    caso 2b: sem bwrap e desligado, roda direto
+ok    caso Codex: execução em dados próprios da sessão
+ok    caso Codex: configuração global somente leitura
+ok    caso Codex: login somente leitura
+ok    caso Codex: skills somente leitura
+ok    caso Codex: configuração ausente não vem do estado
+ok    caso Codex: SQLite usa dados da sessão
+ok    caso Codex: pasta de dados não exposta por fora
+ok    caso Codex: link no lugar dos dados é recusado
+ok    caso Codex: sessão . é recusada
+ok    caso Codex: sessão .. é recusada
+FALHA caso Codex real: dados graváveis e configuração protegida
+FALHA caso Codex real: histórico persiste no estado
+ok    caso Codex real: histórico não contamina pasta global
+FALHA caso Codex real: revisor isolado mesmo com isolamento global desligado
+FALHA caso Codex real: revisor grava apenas no próprio estado
+ok    caso Codex real: revisor não grava na pasta global
+ok    caso 3: grava na pasta
+ok    caso 3: o arquivo chega ao disco
+ok    caso 3: commit no worktree
+ok    caso 3: o agente não move o main
+ok    caso 3: o main segue onde estava
+ok    caso 3: o agente não cria tag
+ok    caso 3: o agente não grava o stash
+ok    caso 3: ramo de cópia em backup/ é criado
+ok    caso 3: gravação na HOME não chega ao disco
+ok    caso 3: chave oculta
+ok    caso 3: variável de credencial não chega ao agente
+bwrap: loopback: Failed to create NETLINK_ROUTE socket: Operation not permitted
+FALHA verificação: chave e login de provedor não chegam ao comando
+bwrap: loopback: Failed to create NETLINK_ROUTE socket: Operation not permitted
+FALHA verificação: só a interface de loopback existe
+ok    ambiente mínimo: variável fora da lista não chega ao agente
+ok    caso 3: hook do git não é gravável
+ok    caso 3: config do git não é gravável
+ok    caso 3: arquivo .git do worktree não é gravável
+ok    caso 3: estado dos agentes é gravável
+ok    caso 3: o resto do estado não é gravável
+ok    caso 3: sem TMUX nem SSH_AUTH_SOCK
+ok    caso 3: ~/.claude.json não muda
+ok    caso 3: o /tmp do agente é próprio
+ok    caso 3: commondir do worktree não é gravável
+ok    caso 3: commondir do .git principal não é criado pelo worktree
+ok    caso 3: git status de fora não roda o fsmonitor plantado
+ok    caso 3: commit no repositório principal
+ok    caso 3: commondir do .git principal não é gravável
+ok    caso 3: git status de fora segue sem fsmonitor
+ok    caso 3: hyprctl não alcança o Hyprland
+ok    caso 3: sem socket do Wayland
+ok    caso 3: systemd-run --user falha
+pulado caso 3 do D-Bus: sem sessão D-Bus, xdg-dbus-proxy ou busctl
+pulado casa mínima (leitura): /var/tmp não é gravável aqui
+ok    casa mínima: chave segue oculta
+ok    casa mínima: a pasta do Claude segue gravável
+ok    casa mínima: o cache de fora segue legível
+ok    casa mínima: commit no worktree
+ok    casa mínima: o que o agente grava na casa não chega ao disco
+ok    caso 3: sem agy, o proxy não libera o keyring
+ok    caso 3: com agy, o proxy libera o keyring e as notificações
+ok    keyring por item: o serviço inteiro não é liberado
+ok    keyring por item: a busca leva os atributos
+ok    keyring por item: só o item achado é liberado por inteiro
+ok    keyring por item: a coleção do item aceita busca e gravação
+ok    keyring por item: os dois atributos chegam pelo jangada.conf
+ok    keyring por item: valor inválido não busca nem libera item
+FALHA keyring por item: sem a opção, o outro item é lido
+FALHA keyring por item: o item do agy é lido
+ok    keyring por item: o outro item é negado
+ok    keyring por item: a leitura em lote pelo serviço é negada
+FALHA keyring por item: a busca na coleção passa
+ok    caso 3: não vê os processos de fora
+ok    caso 3: settings.json do Claude não é gravável
+ok    caso 3: pasta de skills do Claude não é gravável
+ok    caso 3: o resto do ~/.claude segue gravável
+ok    caso 3: retrato do shell gravado dentro não chega ao disco
+ok    caso 3: ~/.cache/yay não é gravável
+ok    caso 3: gravação no ~/.cache não chega ao disco
+ok    caso 3: o agy regrava o agentapi dentro
+ok    caso 3: o agentapi regravado dentro não chega ao disco
+ok    caso 3: histórico da área de transferência não é legível
+ok    caso 3: histórico da área de transferência não muda
+ok    caso 3: já isolado, roda direto sem aninhar
+env: ‘/tmp/jmain-brza9qwl/codigo/bin/jangada-isolar’: No such file or directory
+FALHA verificação aninhada (verificacao): credenciais e D-Bus ficam ocultos
+env: ‘/tmp/jmain-brza9qwl/codigo/bin/jangada-isolar’: No such file or directory
+FALHA verificação aninhada (verificacao-rede): credenciais e D-Bus ficam ocultos
+env: ‘/tmp/jmain-brza9qwl/codigo/bin/jangada-isolar’: No such file or directory
+FALHA verificação aninhada: só a interface de loopback existe
+ok    caso 3: a marca não é removível de dentro
+ok    caso 3: propaga código de saída
+ok    caso 3: propaga sinal SIGTERM
+ok    caso 3: propaga sinal SIGHUP
+ok    caso 3: propaga sinal SIGINT ao grupo
+ok    caso 3: processo filho sleep não sobra
+ok    caso 3: SIGINT ao grupo de processos chega ao filho isolado uma única vez
+ok    caso 3: filho isolado captura SIGINT e encerra com código 0
+ok    caso 3: entrada padrão via pipe chega ao comando isolado
+ok    caso 3: leitura interativa de linha via pipe funciona
+ok    caso 3b: vram-livre criada e legível dentro do isolamento
+ok    caso 3b: jogo-ativo criado e legível dentro do isolamento
+ok    caso 3b: vram-livre gravada no host
+ok    caso 3b: jogo-ativo gravado no host
+ok    caso 3b: jogo-ativo removido quando o jogo fecha
+ok    caso 3b: monitor não deixa sleep em segundo plano
+ok    caso 3b: nenhum temporário .vram-livre deixado para trás
+ok    caso 3b: nenhum temporário .jogo-ativo deixado para trás
+ok    caso 3c: sandbox enxerga atualização dinâmica de vram e novo jogo-ativo
+ok    caso 3d: hooks executam dentro do isolamento
+uniq: /tmp/jmain-brza9qwl/tmp/tmp.jPiVbmyknF/sinais-waybar: No such file or directory
+FALHA caso 3d: Waybar recebe os três estados pelo observador no host
+ok    caso 3d: observador do estado não deixa inotifywait após encerrar
+ok    caso 3d: o vigia sobe com a sessão
+ok    caso 3d: o vigia sai depois do KILL no jangada-isolar
+ok    caso 4: alvo do link da trava intacto
+ok    caso 4: estado alterado sob a trava
+13 falha(s); saídas em /tmp/jmain-brza9qwl/tmp/tmp.jPiVbmyknF (mantido)
+XX testes/isolar.sh
+ok    caso 1: o Claude abre isolado na pasta do projeto
+ok    caso 1: retoma a conversa e recebe o protocolo
+ok    caso 1: o estado passa a iniciado
+ok    caso 2: o comando gravado no estado não roda
+ok    caso 2: a sessão abre com o comando recomposto
+ok    caso 3: isolar:false no estado é ignorado
+ok    caso 4: JANGADA_AGENTE_ISOLAR=0 abre fora do jangada-isolar
+ok    caso 5: agente com comando anexado é recusado
+ok    caso 5: agente fora da lista é recusado
+ok    caso 5: id de conversa inválido é recusado
+ok    caso 5: a recusa diz o motivo
+ok    caso 5: pasta fora dos projetos e sem git é recusada
+ok    caso 5: a instalação do jangada é recusada, mesmo sendo repositório git
+ok    caso 5: .. no caminho não escapa da conferência
+ok    caso 5: perfil com caminho é recusado
+ok    caso 5: revisor fora da lista é recusado
+ok    caso 6: o perfil não desliga o isolamento na restauração
+ok    caso 6: o resto do ambiente do perfil vale
+ok    caso 7: a sessão antiga do agy volta na mesma conversa
+ok    caso 7: o perfil agy retirado é recusado com o motivo
+ok    caso 7: a recusa não roda nada
+ok    caso 8: worktree sem id retoma com --continue
+ok    caso 9: repositório git fora de JANGADA_PROJETOS restaura
+ok    caso 10: o protocolo é refeito das fontes
+ok    caso 11: Codex retoma isolado com UUID e revisor Codex
+ok    caso 11: protocolo de delegação do Codex refeito
+ok    caso 12: Codex sem UUID no worktree retoma por pasta
+ok    caso 13: Codex direto sem UUID abre conversa nova
+ok    caso 14: sem revisor, restauração preserva o protocolo
+ok    caso 14: sem revisor, restauração avisa
+todos os testes da restauração passaram
+== pid do estado
+ok    sessão direta encerra (0)
+ok    o pid gravado não é morto
+== ramo inválido
+ok    ramo main: recusado (1)
+ok    ramo main: explica
+ok    ramo main: estado mantido
+ok    ramo main: tmux intocado
+ok    ramo main: worktree mantido
+== worktree fora de JANGADA_WORKTREES
+ok    worktree fora: recusado (1)
+ok    worktree fora: explica
+ok    worktree fora: estado mantido
+ok    worktree fora: tmux intocado
+ok    worktree fora: mantido
+ok    worktree com ..: recusado (1)
+ok    worktree com ..: explica
+ok    worktree com ..: estado mantido
+ok    worktree com ..: tmux intocado
+== worktree por link simbólico
+ok    link simbólico: recusado (1)
+ok    link simbólico: explica
+ok    link simbólico: estado mantido
+ok    link simbólico: tmux intocado
+ok    link simbólico: worktree mantido
+== raiz de outro repositório
+ok    raiz trocada: recusado (1)
+ok    raiz trocada: explica
+ok    raiz trocada: estado mantido
+ok    raiz trocada: tmux intocado
+ok    raiz trocada: ramo do outro repositório mantido
+ok    raiz trocada com --integrar: recusado (1)
+ok    raiz trocada sem worktree: recusado (1)
+ok    raiz trocada sem worktree: explica
+ok    raiz trocada sem worktree: estado mantido
+ok    raiz trocada sem worktree: tmux intocado
+== pasta que não é worktree registrado
+ok    worktree igual à raiz: recusado (1)
+ok    worktree igual à raiz: explica
+ok    worktree igual à raiz: estado mantido
+ok    worktree igual à raiz: tmux intocado
+ok    pasta de outro repositório: recusado (1)
+ok    pasta de outro repositório: explica
+ok    pasta de outro repositório: estado mantido
+ok    pasta de outro repositório: tmux intocado
+ok    pasta sem registro: recusado (1)
+ok    pasta sem registro: explica
+ok    pasta sem registro: estado mantido
+ok    pasta sem registro: tmux intocado
+ok    pasta sem registro: motivo
+== base que vira opção do git
+ok    base --output: recusado (1)
+ok    base --output: explica
+ok    base --output: estado mantido
+ok    base --output: tmux intocado
+ok    base --output: nada gravado
+== estado válido
+ok    pareceres da sessão apagados
+ok    parecer da sessão vizinha mantido
+ok    encerra (0)
+ok    worktree removido
+ok    estado apagado
+ok    ramo mantido
+== --integrar e a revisão fora do isolamento
+ok    GUI: sem marca recusa
+ok    GUI: sem marca mantém worktree
+ok    GUI: autorrevisão recusa
+ok    GUI: candidato diferente recusa
+ok    GUI: base diferente recusa
+ok    GUI: marca retirada antes da trava recusa
+ok    GUI: marca retirada não mescla
+ok    GUI: confirmação exata integra sem entrada padrão
+ok    GUI: conteúdo integrado
+ok    aprovação de fora: integra (0)
+ok    aprovação de fora: diz que vale
+ok    aprovação de fora: o revisor não roda
+ok    aprovação de fora: mesclado
+ok    aprovação de fora: a revisão sai com a sessão
+ok    marca forjada: o revisor roda fora
+ok    marca forjada: o parecer vai para revisoes/
+ok    marca forjada: pede confirmação sem aprovação
+ok    marca forjada: resposta n não integra (1)
+ok    marca forjada: sessão mantida
+ok    revisão aprovada fora: integra (0)
+ok    revisão aprovada fora: pergunta sem o aviso
+ok    --sem-revisao: o revisor não roda
+ok    --sem-revisao: pede confirmação sem aprovação
+ok    --sem-revisao: resposta n não integra
+ok    --sem-revisao: resposta s integra (0)
+ok    ramo avançou: recusa (1)
+ok    ramo avançou: explica
+ok    ramo avançou: nada mesclado
+ok    ramo avançou: sessão mantida
+ok    marca antiga: o revisor roda de novo
+ok    marca antiga: não integra
+ok    árvore trocada: o revisor roda de novo
+ok    autorrevisão: o revisor não roda de novo
+ok    autorrevisão: avisa e pede a confirmação à parte
+ok    autorrevisão: resposta n não integra
+ok    base andou: o revisor roda de novo
+ok    base andou: não integra
+ok    base andou na revisão: recusa (1)
+ok    base andou na revisão: explica
+ok    base andou na revisão: nada mesclado, sessão mantida
+ok    trava ocupada: recusa (1)
+ok    trava ocupada: explica
+ok    trava ocupada: nada mesclado
+ok    simultâneas: ao menos uma integra
+ok    simultâneas: i6 foi mesclada se e só se saiu com 0 (0)
+ok    simultâneas: i7 foi mesclada se e só se saiu com 0 (1)
+ok    simultâneas: cada merge parte da base conferida ou de outro merge, com o repositório íntegro
+ok    simultâneas: a que ficou de fora integra depois de revisada de novo
+true
+ok    objeto forjado: a marca ainda vale para o commit
+ok    objeto forjado: recusa (1)
+ok    objeto forjado: explica
+ok    objeto forjado: nada mesclado
+ok    objeto forjado durante o merge: o índice considera o conteúdo limpo
+ok    objeto forjado durante o merge: recusa (1)
+ok    objeto forjado durante o merge: explica
+ok    objeto forjado durante o merge: a base volta e nada fica mesclado
+ok    conferência diff-tree: recusa (1)
+ok    conferência diff-tree: explica
+ok    conferência diff-tree: a base volta e a sessão permanece
+ok    conferência link: recusa (1)
+ok    conferência link: explica
+ok    conferência link: a base volta e a sessão permanece
+ok    conferência executavel: recusa (1)
+ok    conferência executavel: explica
+ok    conferência executavel: a base volta e a sessão permanece
+ok    conferência sem-execucao: recusa (1)
+ok    conferência sem-execucao: explica
+ok    conferência sem-execucao: a base volta e a sessão permanece
+ok    dentro do isolamento: o revisor não roda
+ok    dentro do isolamento: explica
+== --limpar-concluidos
+ok    resposta n: termina sem erro (0)
+ok    resposta n: lista a sessão
+ok    resposta n: sessão não encerrada
+ok    resposta n: worktree mantido
+ok    sem terminal: sessão não encerrada
+ok    sem terminal: estado mantido
+ok    resposta s: encerra (0)
+ok    resposta s: sessão encerrada
+ok    resposta s: worktree removido
+tudo certo
+
+== histórico de estados dos agentes
+ok    caso 1: uma linha por mudança de estado
+ok    caso 1: o projeto vem da raiz, não do worktree
+ok    caso 1: agente e data em toda linha
+ok    caso 2: agy grava só a mudança
+ok    caso 2: agy com agente e projeto
+ok    caso 3: sem JANGADA_SESSAO, nada muda
+ok    caso 4: foco registrado
+ok    caso 4b: início e fim do subagente registrados
+ok    caso 4b: estado da sessão não muda
+ok    caso 4b: linhas antigas sem campos novos
+ok    caso 5: histórico ilegível não derruba o hook do Claude
+ok    caso 5: nem o do agy, que segue respondendo {}
+ok    anexação concorrente: 96 linhas inteiras
+todos os testes do histórico de estados passaram
+ok    perfil codex-codex cria a sessão
+ok    worktree próprio
+true
+ok    revisor e delegação no estado
+ok    protocolo compatível com Codex
+ok    lançamento isolado pelo adaptador
+true
+ok    metadados externos para revisão
+ok    perfil codex-agy cria a sessão
+true
+ok    Codex com revisor e delegação agy
+ok    revisor Flash explícito no ambiente
+ok    adaptador sem isolamento recusa antes de chamar CLI
+ok    recusa não executa Codex
+ok    adaptador executa Codex
+ok    TOML, protocolo, permissões e hooks válidos
+ok    retoma pelo UUID
+ok    retomada sem UUID usa filtro da pasta
+ok    versão sem execução própria é recusada
+ok    versão recusada não abre sessão
+ok    UUID inválido é recusado
+ok    UUID inválido não executa
+ok    confiança exige confirmação, persiste por pasta e preserva configuração global
+ok    aprovação de hooks: recusa, persistência, mudança, externos e hashes no Codex real
+ok    Codex real reconhece confiança com pontos, espaços e aspas sem gravar configuração
+ok    pedido de permissão mantém saída vazia
+true
+ok    permissão registra aguardando
+true
+ok    subagente não conclui a sessão
+true
+ok    conversa registrada
+true
+ok    eventos sem repetição
+ok    JSON inválido não altera o estado
+ok    hook não recria sessão encerrada
+ok    falha do tmux recusa lançamento
+ok    falha cancela a execução criada
+ok    falha de registro recusa lançamento (recusa-nova)
+ok    falha de registro preserva causa (recusa-nova)
+ok    falha de registro explica recusa (recusa-nova)
+ok    falha de registro recusa lançamento (tarefa)
+ok    falha de registro preserva causa (tarefa)
+ok    falha de registro explica recusa (tarefa)
+ok    falha remove worktree novo
+ok    falha remove ramo novo
+ok    falha preserva worktree reaproveitado
+ok    falha preserva ramo reaproveitado
+ok    orçamento recusa nova sessão interativa
+ok    recusa orienta conferir política e usar fila controlada
+ok    sessão existente reanexa sem conferir orçamento de nova sessão
+
+== barra (módulos e migração)
+ok    caso 1: custom/indicadores logo depois do custom/agentes
+ok    caso 1: exec só lê o cache, JSON, sinal 9 e intervalo longo
+ok    caso 1: clique solto e botão direito encerra
+ok    caso 1: o sinal 9 é só do custom/indicadores
+ok    caso 1: nenhum outro comando manda RTMIN+9
+ok    caso 2: base.css estiliza .parado
+ok    caso 2: base.css estiliza .no-ar
+ok    caso 2: base.css estiliza .atualizando
+ok    caso 2: base.css estiliza .erro
+ok    caso 2: base.css troca a folga na barra em pé
+ok    caso 3: borda.jsonc é JSON
+ok    caso 3: barra em pé com custom/indicadores depois do custom/agentes
+ok    caso 4: a barra de antes não tem o módulo
+ok    caso 4: simulação não altera o arquivo
+ok    caso 4: migração roda sem erro
+ok    caso 4: resultado com o mesmo módulo do padrão
+ok    caso 4: deixa uma cópia de segurança
+ok    caso 4: segunda passada roda sem erro
+ok    caso 4: segunda passada não muda nada
+ok    caso 5: migração roda sem erro
+ok    caso 5: módulo entra no fim da lista em várias linhas
+ok    caso 6: sem custom/agentes, sai sem erro
+ok    caso 6: sem custom/agentes, não altera o arquivo
+ok    caso 7: sem cópia própria, sai sem erro
+ok    caso 7: sem cópia própria, não cria o arquivo
+ok    caso 8: nenhum clique que abre janela sem setsid -f ()
+ok    caso 9: a barra de antes tem clique preso
+ok    caso 9: simulação não altera o arquivo
+ok    caso 9: migração roda sem erro
+ok    caso 9: resultado igual ao padrão
+ok    caso 9: deixa uma cópia de segurança
+ok    caso 9: segunda passada roda sem erro
+ok    caso 9: segunda passada não muda nada
+ok    caso 9: segunda passada não faz outra cópia
+ok    caso 10: microfone controla a fonte e mostra seu volume
+ok    caso 10: simulação preserva a barra
+ok    caso 10: migra a configuração anterior
+ok    caso 10: configurações novas iguais ao padrão
+ok    caso 10: migração repetível
+ok    caso 10: segunda passada não muda nada
+ok    caso 10: migração aceita configuração personalizada
+ok    caso 10: controles pessoais preservados
+ok    caso 10: migra JSONC com comentários e vírgula final
+ok    caso 10: preserva comentário de linha
+ok    caso 10: preserva comentário de bloco
+ok    caso 10: comentário não impede corrigir a dica
+ok    caso 10: comentário não impede corrigir a rolagem
+ok    caso 10: JSONC comentado também é repetível
+ok    caso 10: comentários mantidos na segunda passada
+todos os testes da barra passaram
+ok    recarga atinge só a barra da sessão e configuração corretas
+ok    reinício preserva barras alheias
+ok    papel de parede sem marca não é encerrado
+ok    makoctl só recarrega quando o dono do serviço pertence à sessão
+ok    sem sessão gráfica, não seleciona processos
+ok    último atalho aparece uma vez, com ou sem delimitador final
+test_atencao_antes_de_projeto (__main__.Interface.test_atencao_antes_de_projeto) ... ok
+test_atualizacao_sem_mudanca_de_ordem_preserva_itens_e_grupos (__main__.Interface.test_atualizacao_sem_mudanca_de_ordem_preserva_itens_e_grupos) ... ok
+test_aviso_de_runtime_nao_sobrescreve_erro_de_consulta (__main__.Interface.test_aviso_de_runtime_nao_sobrescreve_erro_de_consulta) ... ok
+test_botoes_acionam_a_tarefa_selecionada (__main__.Interface.test_botoes_acionam_a_tarefa_selecionada) ... ok
+test_catalogo_com_agente_fora_do_formato_e_recusado (__main__.Interface.test_catalogo_com_agente_fora_do_formato_e_recusado) ... ok
+test_catalogo_de_agentes_vem_do_jangada_agente (__main__.Interface.test_catalogo_de_agentes_vem_do_jangada_agente) ... ok
+test_central_de_tarefas_acompanha_mudancas_sem_enviar_respostas (__main__.Interface.test_central_de_tarefas_acompanha_mudancas_sem_enviar_respostas) ... ok
+test_cli_reutiliza_processo_existente (__main__.Interface.test_cli_reutiliza_processo_existente) ... FAIL
+test_cli_waybar_sem_display (__main__.Interface.test_cli_waybar_sem_display) ... ok
+test_comando_ausente (__main__.Interface.test_comando_ausente) ... ok
+test_confirmacao_grafica_mostra_sha_e_recusa_padrao (__main__.Interface.test_confirmacao_grafica_mostra_sha_e_recusa_padrao) ... ok
+test_criar_comando_ausente_permite_tentar_novamente (__main__.Interface.test_criar_comando_ausente_permite_tentar_novamente) ... ok
+test_criar_real_argumentos_e_pedido_preservados (__main__.Interface.test_criar_real_argumentos_e_pedido_preservados) ... ok
+test_criar_simulada_persiste_entre_cenarios (__main__.Interface.test_criar_simulada_persiste_entre_cenarios) ... ok
+test_ctrl_x_no_pedido_nao_encerra_sessao (__main__.Interface.test_ctrl_x_no_pedido_nao_encerra_sessao) ... ok
+test_erro_preserva_selecao_e_historico_sem_permitir_acao (__main__.Interface.test_erro_preserva_selecao_e_historico_sem_permitir_acao) ... ok
+test_eventos_continuos_nao_adiam_atualizacao_indefinidamente (__main__.Interface.test_eventos_continuos_nao_adiam_atualizacao_indefinidamente) ... ok
+test_eventos_reiniciam_espera_e_consulta_operacional_dispensa_catalogos (__main__.Interface.test_eventos_reiniciam_espera_e_consulta_operacional_dispensa_catalogos) ... ok
+test_falha_ao_criar_tentativa_remove_raiz_sem_tocar_acao_existente (__main__.Interface.test_falha_ao_criar_tentativa_remove_raiz_sem_tocar_acao_existente) ... ok
+test_falha_de_consulta_preserva_agentes_simples (__main__.Interface.test_falha_de_consulta_preserva_agentes_simples) ... ok
+test_falha_de_gravacao_remove_preparacao_incompleta (__main__.Interface.test_falha_de_gravacao_remove_preparacao_incompleta) ... ok
+test_falha_na_abertura_do_terminal_nao_anuncia_encerramento (__main__.Interface.test_falha_na_abertura_do_terminal_nao_anuncia_encerramento) ... ok
+test_finalizacao_bloqueada_durante_abertura (__main__.Interface.test_finalizacao_bloqueada_durante_abertura) ... ok
+test_finalizacao_bloqueada_sem_dados_e_na_simulacao (__main__.Interface.test_finalizacao_bloqueada_sem_dados_e_na_simulacao) ... ok
+test_finalizacao_impede_pedidos_simultaneos_e_permite_nova_tentativa (__main__.Interface.test_finalizacao_impede_pedidos_simultaneos_e_permite_nova_tentativa) ... ok
+test_finalizacao_recusa_nome_interpretavel_como_opcao (__main__.Interface.test_finalizacao_recusa_nome_interpretavel_como_opcao) ... ok
+test_foco_argumentos_separados (__main__.Interface.test_foco_argumentos_separados) ... ok
+test_formulario_preserva_rascunho_e_valida (__main__.Interface.test_formulario_preserva_rascunho_e_valida) ... ok
+test_idade_de_atualizacao_aceita_fuso_e_rejeita_horario_invalido (__main__.Interface.test_idade_de_atualizacao_aceita_fuso_e_rejeita_horario_invalido) ... ok
+test_importacao_interna_informa_causa_sem_pedir_qt (__main__.Interface.test_importacao_interna_informa_causa_sem_pedir_qt) ... FAIL
+test_integracao_grafica_envia_so_a_entrega_confirmada (__main__.Interface.test_integracao_grafica_envia_so_a_entrega_confirmada) ... ok
+test_lancadores_do_painel_e_da_conversa (__main__.Interface.test_lancadores_do_painel_e_da_conversa) ... ok
+test_lista_vazia (__main__.Interface.test_lista_vazia) ... ok
+test_marca_carrega_com_transparencia_e_preserva_titulo_quando_ausente (__main__.Interface.test_marca_carrega_com_transparencia_e_preserva_titulo_quando_ausente) ... ok
+test_modo_recomendado_e_opcoes_recolhidas (__main__.Interface.test_modo_recomendado_e_opcoes_recolhidas) ... ok
+test_modos_da_central_e_navegacao_por_teclado (__main__.Interface.test_modos_da_central_e_navegacao_por_teclado) ... ok
+test_nova_pasta_cria_o_projeto_e_preenche_o_campo (__main__.Interface.test_nova_pasta_cria_o_projeto_e_preenche_o_campo) ... ok
+test_nova_pasta_desligada_na_simulacao (__main__.Interface.test_nova_pasta_desligada_na_simulacao) ... ok
+test_nova_tarefa_sugere_raiz_em_vez_de_worktree (__main__.Interface.test_nova_tarefa_sugere_raiz_em_vez_de_worktree) ... ok
+test_observador_acompanha_substituicao_atomica (__main__.Interface.test_observador_acompanha_substituicao_atomica) ... ok
+test_opcoes_avancadas_preservam_controles_explicitos (__main__.Interface.test_opcoes_avancadas_preservam_controles_explicitos) ... ok
+test_operacional_identifica_tarefa_por_projeto_e_preserva_alvo (__main__.Interface.test_operacional_identifica_tarefa_por_projeto_e_preserva_alvo) ... ok
+test_operacional_recusa_cancelamento_e_dados_parciais (__main__.Interface.test_operacional_recusa_cancelamento_e_dados_parciais) ... ok
+test_pasta_do_soquete_rejeita_link_e_permissao_aberta (__main__.Interface.test_pasta_do_soquete_rejeita_link_e_permissao_aberta) ... ok
+test_perfil_preserva_escolha_de_revisor_e_delegacao_no_lancamento (__main__.Interface.test_perfil_preserva_escolha_de_revisor_e_delegacao_no_lancamento) ... ok
+test_previa_da_selecao_antiga_nao_substitui_a_atual (__main__.Interface.test_previa_da_selecao_antiga_nao_substitui_a_atual) ... ok
+test_previa_identifica_revisor_e_independencia_como_dados_da_marca (__main__.Interface.test_previa_identifica_revisor_e_independencia_como_dados_da_marca) ... ok
+test_previa_mostra_opcoes_no_fim_sem_perder_leitura_anterior (__main__.Interface.test_previa_mostra_opcoes_no_fim_sem_perder_leitura_anterior) ... ok
+test_projeto_sem_caminho_fica_somente_leitura (__main__.Interface.test_projeto_sem_caminho_fica_somente_leitura) ... ok
+test_raiz_vazia_nao_bloqueia_a_sessao (__main__.Interface.test_raiz_vazia_nao_bloqueia_a_sessao) ... ok
+test_reabrir_central_preserva_bloqueio_da_acao (__main__.Interface.test_reabrir_central_preserva_bloqueio_da_acao) ... ok
+test_registro_invalido_e_link (__main__.Interface.test_registro_invalido_e_link) ... ok
+test_registros_ambiguos_preservam_bloqueio_de_seguranca (__main__.Interface.test_registros_ambiguos_preservam_bloqueio_de_seguranca) ... ok
+test_runtime_invalido_bloqueia_acoes_sem_abortar_a_janela (__main__.Interface.test_runtime_invalido_bloqueia_acoes_sem_abortar_a_janela) ... ok
+test_segundo_clique_reutiliza_janela_e_abre_formulario (__main__.Interface.test_segundo_clique_reutiliza_janela_e_abre_formulario) ... FAIL
+test_selecao_detalhes_e_desaparecimento (__main__.Interface.test_selecao_detalhes_e_desaparecimento) ... ok
+test_simulacao_nao_executa (__main__.Interface.test_simulacao_nao_executa) ... ok
+test_soquete_sem_confirmacao_nao_indica_sucesso (__main__.Interface.test_soquete_sem_confirmacao_nao_indica_sucesso) ... FAIL
+test_tarefa_reiniciada_nao_herda_eventos_da_execucao_anterior (__main__.Interface.test_tarefa_reiniciada_nao_herda_eventos_da_execucao_anterior) ... ok
+test_terminal_atrasado_nao_usa_pasta_da_nova_tentativa (__main__.Interface.test_terminal_atrasado_nao_usa_pasta_da_nova_tentativa) ... ok
+test_terminal_desacoplado_nao_libera_acao_que_ja_comecou (__main__.Interface.test_terminal_desacoplado_nao_libera_acao_que_ja_comecou) ... ok
+test_terminal_morto_antes_da_acao_libera_nova_tentativa (__main__.Interface.test_terminal_morto_antes_da_acao_libera_nova_tentativa) ... ok
+test_terminal_preserva_argumentos_confirmacao_e_resultado (__main__.Interface.test_terminal_preserva_argumentos_confirmacao_e_resultado) ... ok
+test_timer_atualiza_sem_intervencao (__main__.Interface.test_timer_atualiza_sem_intervencao) ... ok
+test_tooltip_renderiza_html_da_tarefa_como_texto (__main__.Interface.test_tooltip_renderiza_html_da_tarefa_como_texto) ... ok
+test_trava_de_execucao_impede_segunda_acao_no_terminal (__main__.Interface.test_trava_de_execucao_impede_segunda_acao_no_terminal) ... ok
+test_waybar_estados_erro_e_texto_escapado (__main__.Interface.test_waybar_estados_erro_e_texto_escapado) ... ok
+
+======================================================================
+FAIL: test_cli_reutiliza_processo_existente (__main__.Interface.test_cli_reutiliza_processo_existente)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/jmain-brza9qwl/codigo/testes/tarefas.py", line 1011, in test_cli_reutiliza_processo_existente
+    aguardar(pronta.exists)
+    ~~~~~~~~^^^^^^^^^^^^^^^
+  File "/tmp/jmain-brza9qwl/codigo/testes/tarefas.py", line 40, in aguardar
+    raise AssertionError('O processo não terminou no prazo da verificação')
+AssertionError: O processo não terminou no prazo da verificação
+
+======================================================================
+FAIL: test_importacao_interna_informa_causa_sem_pedir_qt (__main__.Interface.test_importacao_interna_informa_causa_sem_pedir_qt)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/jmain-brza9qwl/codigo/testes/tarefas.py", line 968, in test_importacao_interna_informa_causa_sem_pedir_qt
+    self.assertIn('falha ao importar janela', resultado.stderr)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'falha ao importar janela' not found in 'Central de tarefas: Não foi possível abrir o soquete da central.\n'
+
+======================================================================
+FAIL: test_segundo_clique_reutiliza_janela_e_abre_formulario (__main__.Interface.test_segundo_clique_reutiliza_janela_e_abre_formulario)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/jmain-brza9qwl/codigo/testes/tarefas.py", line 921, in test_segundo_clique_reutiliza_janela_e_abre_formulario
+    self.assertTrue(servidor.listen(nome))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_soquete_sem_confirmacao_nao_indica_sucesso (__main__.Interface.test_soquete_sem_confirmacao_nao_indica_sucesso)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/jmain-brza9qwl/codigo/testes/tarefas.py", line 940, in test_soquete_sem_confirmacao_nao_indica_sucesso
+    self.assertTrue(servidor.listen(nome))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 67 tests in 9.451s
+
+FAILED (failures=4)
+XX testes/tarefas.py
+   [simulação] cp -a /tmp/jmain-brza9qwl/tmp/tmp.9cFuwtHjTs/config/jangada/waybar/config.jsonc /tmp/jmain-brza9qwl/tmp/tmp.9cFuwtHjTs/config/jangada/waybar/config.jsonc.jangada-20261009-011143.bak
+==> cópia de segurança: /tmp/jmain-brza9qwl/tmp/tmp.9cFuwtHjTs/config/jangada/waybar/config.jsonc.jangada-20261009-011143.bak
+==> [simulação] atualizaria a central de tarefas em /tmp/jmain-brza9qwl/tmp/tmp.9cFuwtHjTs/config/jangada/waybar/config.jsonc
+ ok central de tarefas configurada: /tmp/jmain-brza9qwl/tmp/tmp.9cFuwtHjTs/config/jangada/waybar/config.jsonc
+==> cópia de segurança: /tmp/jmain-brza9qwl/tmp/tmp.9cFuwtHjTs/config/jangada/waybar/config.jsonc.jangada-20261009-011143.bak
+ ok central de tarefas configurada: /tmp/jmain-brza9qwl/tmp/tmp.9cFuwtHjTs/config/jangada/waybar/config.jsonc
+ ok central já atualizada ou personalizada
+ ok central já atualizada ou personalizada
+==> cópia de segurança: /tmp/jmain-brza9qwl/tmp/tmp.9cFuwtHjTs/config/jangada/waybar/config.jsonc.jangada-20261009-011143.bak
+ ok central de tarefas configurada: /tmp/jmain-brza9qwl/tmp/tmp.9cFuwtHjTs/config/jangada/waybar/config.jsonc
+ ok sem cópia própria da barra; usa o padrão atualizado
+migração, central única e leitura das interrupções passaram
+contador funciona sem Qt
+..E
+======================================================================
+ERROR: setUpClass (__main__.ConversaTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/jmain-brza9qwl/codigo/testes/conversa.py", line 79, in setUpClass
+    cls.servidor = http.server.ThreadingHTTPServer(('127.0.0.1', 0), OllamaFalso)
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socketserver.py", line 453, in __init__
+    self.socket = socket.socket(self.address_family,
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+                                self.socket_type)
+                                ^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/socket.py", line 236, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.009s
+
+FAILED (errors=1)
+XX testes/conversa.py
+
+== painel de indicadores
+............metricas: OSError
+...........
+----------------------------------------------------------------------
+Ran 23 tests in 0.158s
+
+OK
+.........
+----------------------------------------------------------------------
+Ran 9 tests in 0.762s
+
+OK
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.005s
+
+OK
+ok    caso 1: coleta sem erro
+ok    caso 1: lê as 10 linhas da conversa
+ok    caso 1: resposta repetida conta uma vez, com a saída final
+ok    caso 1: falha de teste é erro; recusa do usuário não
+ok    caso 1: rodadas, entregas, pareceres antigos e slug do projeto
+ok    caso 1: arquivos citados nos itens do parecer REVISAR
+ok    caso 1: indicadores do dia
+ok    caso 2: segunda coleta incremental
+ok    caso 2: só as linhas novas, sem duplicar a resposta já contada
+ok    caso 3: --waybar com o app parado
+ok    caso 3: --waybar durante a coleta
+ok    caso 3: --waybar com erro
+ok    caso 3: --conferir com o R quebrado lista os pacotes R
+ok    caso 4: rodada 1 barrada na verificação local abre outra entrega
+ok    caso 4: revisão de fora forma entrega própria e tem apontamentos
+ok    caso 4: sessão esquecida em aguardando conta no máximo 12 horas
+ok    caso 4: parcial de coleta interrompida e compactação sem repetidos
+ok    caso 4: retenção do cache, com o consumo dos dias antigos somado
+ok    caso 4: o JANGADA_PAINEL_RETENCAO do jangada.conf chega ao coletor
+ok    caso 4: delegação com tipos errados não derruba os indicadores
+ok    caso 4: erro nos indicadores de subagentes vai para o subagentes.json
+R ou pacotes do app ausentes; caso 5 ignorado
+todos os testes do painel passaram
+
+== subagentes
+ok    explorador: existe nos dois agentes
+ok    explorador: mesmo nome nos dois
+ok    explorador: mesmo texto nos dois
+ok    explorador: corpo começa por título H1
+ok    explorador: modelo do Claude
+ok    explorador: modelo do agy é flash
+ok    explorador: subagente no agy
+ok    explorador: nenhuma ferramenta de escrita no Claude
+ok    explorador: nenhuma ferramenta de escrita no agy
+ok    explorador: exige citar a origem
+ok    explorador: não edita
+ok    leitor: existe nos dois agentes
+ok    leitor: mesmo nome nos dois
+ok    leitor: mesmo texto nos dois
+ok    leitor: corpo começa por título H1
+ok    leitor: modelo do Claude
+ok    leitor: modelo do agy é flash
+ok    leitor: subagente no agy
+ok    leitor: nenhuma ferramenta de escrita no Claude
+ok    leitor: nenhuma ferramenta de escrita no agy
+ok    leitor: exige citar a origem
+ok    leitor: não edita
+ok    pesquisador: existe nos dois agentes
+ok    pesquisador: mesmo nome nos dois
+ok    pesquisador: mesmo texto nos dois
+ok    pesquisador: corpo começa por título H1
+ok    pesquisador: modelo do Claude
+ok    pesquisador: modelo do agy é flash
+ok    pesquisador: subagente no agy
+ok    pesquisador: nenhuma ferramenta de escrita no Claude
+ok    pesquisador: nenhuma ferramenta de escrita no agy
+ok    pesquisador: exige citar a origem
+ok    pesquisador: não edita
+ok    verificador: existe nos dois agentes
+ok    verificador: mesmo nome nos dois
+ok    verificador: mesmo texto nos dois
+ok    verificador: corpo começa por título H1
+ok    verificador: modelo do Claude
+ok    verificador: modelo do agy é flash
+ok    verificador: subagente no agy
+ok    verificador: nenhuma ferramenta de escrita no Claude
+ok    verificador: nenhuma ferramenta de escrita no agy
+ok    verificador: exige citar a origem
+ok    verificador: não edita
+ok    auditor: existe nos dois agentes
+ok    auditor: mesmo nome nos dois
+ok    auditor: mesmo texto nos dois
+ok    auditor: corpo começa por título H1
+ok    auditor: modelo do Claude
+ok    auditor: modelo do agy é flash
+ok    auditor: subagente no agy
+ok    auditor: nenhuma ferramenta de escrita no Claude
+ok    auditor: nenhuma ferramenta de escrita no agy
+ok    auditor: exige citar a origem
+ok    auditor: não edita
+ok    arquiteto: existe nos dois agentes
+ok    arquiteto: mesmo nome nos dois
+ok    arquiteto: mesmo texto nos dois
+ok    arquiteto: corpo começa por título H1
+ok    arquiteto: modelo do Claude
+ok    arquiteto: modelo do agy é flash
+ok    arquiteto: subagente no agy
+ok    arquiteto: nenhuma ferramenta de escrita no Claude
+ok    arquiteto: nenhuma ferramenta de escrita no agy
+ok    arquiteto: exige citar a origem
+ok    arquiteto: não edita
+ok    otimizador: existe nos dois agentes
+ok    otimizador: mesmo nome nos dois
+ok    otimizador: mesmo texto nos dois
+ok    otimizador: corpo começa por título H1
+ok    otimizador: modelo do Claude
+ok    otimizador: modelo do agy é flash
+ok    otimizador: subagente no agy
+ok    otimizador: nenhuma ferramenta de escrita no Claude
+ok    otimizador: nenhuma ferramenta de escrita no agy
+ok    otimizador: exige citar a origem
+ok    otimizador: não edita
+ok    redator: existe nos dois agentes
+ok    redator: mesmo nome nos dois
+ok    redator: mesmo texto nos dois
+ok    redator: corpo começa por título H1
+ok    redator: modelo do Claude
+ok    redator: modelo do agy é flash
+ok    redator: subagente no agy
+ok    redator: nenhuma ferramenta de escrita no Claude
+ok    redator: nenhuma ferramenta de escrita no agy
+ok    redator: exige citar a origem
+ok    redator: não edita
+ok    supervisor: existe nos dois agentes
+ok    supervisor: mesmo nome nos dois
+ok    supervisor: mesmo texto nos dois
+ok    supervisor: corpo começa por título H1
+ok    supervisor: modelo do Claude
+ok    supervisor: modelo do agy é flash
+ok    supervisor: subagente no agy
+ok    supervisor: nenhuma ferramenta de escrita no Claude
+ok    supervisor: nenhuma ferramenta de escrita no agy
+ok    supervisor: exige citar a origem
+ok    supervisor: não edita
+ok    só o pesquisador busca na web (Claude)
+ok    explorador: run_command no agy se e só se Bash no Claude
+ok    leitor: run_command no agy se e só se Bash no Claude
+ok    pesquisador: run_command no agy se e só se Bash no Claude
+ok    verificador: run_command no agy se e só se Bash no Claude
+ok    auditor: run_command no agy se e só se Bash no Claude
+ok    arquiteto: run_command no agy se e só se Bash no Claude
+ok    otimizador: run_command no agy se e só se Bash no Claude
+ok    redator: run_command no agy se e só se Bash no Claude
+ok    supervisor: run_command no agy se e só se Bash no Claude
+ok    leitor: hook PreToolUse no Bash
+ok    papel com Bash sem hook: só o verificador
+ok    hook do leitor libera: pdftotext -layout -f 2 -l 3 'Relatório final.pdf' - | grep -n 'Total' | head -40
+ok    hook do leitor libera: grep -c 'fim$' notas.txt
+ok    hook do leitor libera: ls -la docs
+ok    hook do leitor libera: pdfinfo a.pdf
+ok    hook do leitor libera: tail -n 5 a.csv | cut -d, -f2
+ok    hook do leitor recusa: pdftotext a.pdf saida.txt
+ok    hook do leitor recusa: cat a.pdf > b
+ok    hook do leitor recusa: grep x a; rm -rf ~
+ok    hook do leitor recusa: echo $(id)
+ok    hook do leitor recusa: head `id`
+ok    hook do leitor recusa: rm a
+ok    hook do leitor recusa: python3 -c 1
+ok    hook do leitor recusa: head a && touch b
+ok    hook do leitor recusa: grep x a &
+ok    hook do leitor recusa: A=1 grep x a
+ok    hook do leitor recusa: grep x $HOME/.ssh/id
+ok    hook do leitor recusa: cat a | sh
+ok    hook do leitor recusa: tee b
+ok    hook do leitor recusa: head a\ntouch b
+ok    hook do leitor recusa: grep 'x
+ok    hook do leitor recusa: grep x a |
+ok    hook do leitor recusa: cat <a
+ok    hook do leitor: recusa sai com 2
+ok    hook do leitor: outra ferramenta passa
+ok    hook do leitor: evento ilegível recusa
+ok    hook do agy: leitor pelo papel, comando que grava recusado
+ok    hook do agy: a recusa traz o motivo
+ok    hook do agy: leitor pelo papel, leitura segue as permissões
+ok    hook do agy: subagente leitor pelo json da conversa
+ok    hook do agy: outro subagente não é limitado
+ok    hook do agy: agente principal não é limitado
+ok    hook do agy: conversa fora do formato não vira caminho
+ok    hook do agy: JANGADA_HOOK_DESLIGADO não solta o leitor
+ok    hook do agy: evento ilegível do leitor recusa
+ok    hook do agy: evento ilegível de outro agente segue as permissões
+ok    hook do agy: falha do Python recusa
+ok    hook do agy: PreToolUse do run_command no hooks.json do jangada
+ok    revisor do agy existe
+ok    revisor do agy não é subagente
+ok    revisor do agy só lê
+ok    simulação não cria nada
+ok    agents.json aponta para a pasta do jangada
+ok    agents.json mantém as outras chaves
+ok    agents.json ganhou cópia de segurança
+ok    subagente do Claude ligado ao repositório
+ok    arquivo alheio com o mesmo nome fica
+ok    rodar de novo não muda nada
+ !! /tmp/jmain-brza9qwl/tmp/tmp.hknB0lTgBW/home/.claude/agents/leitor.md já existe e não é um link do jangada; mantido
+ok    migração liga supervisor sem reinstalar
+ !! /tmp/jmain-brza9qwl/tmp/tmp.hknB0lTgBW/home/.claude/agents/leitor.md já existe e não é um link do jangada; mantido
+ok    migração repetida preserva configuração do agy
+ok    registros: primeiro plano com totais e retorno da conversa mãe
+ok    registros: segundo plano com totais do aviso e retorno do handback
+ok    registros: sem totais na mãe, usa o contexto do último turno
+ok    registros: subagente do agy com passos e escrita
+ok    entrega: soma subagentes e delegações da pasta
+ok    entrega: --desde deixa só o que veio depois
+ok    entrega: outra pasta não conta nada
+ok    indicadores: só entregas com resumo
+ok    indicadores 1: tokens do Claude com e sem agy
+ok    indicadores 2: fração ao agy e recusa com motivo
+ok    indicadores 3: compressão em séries separadas
+ok    indicadores 4: cota por delegação e por semana
+ok    indicadores 5: aprovação com e sem verificador
+ok    indicadores 6: afirmações sem fonte
+ok    indicadores 7: desvios
+ok    indicadores 8: árvore por pasta e conversa
+ok    indicadores: texto para o terminal
+ok    memo: mesmo resultado que sem memo
+ok    memo: um registro por subagente
+ok    memo: a segunda leitura não abre arquivo sem mudança
+ok    memo: arquivo alterado é relido
+ok    memo: subagente apagado sai do memo
+
+todos os testes de subagentes passaram
+ok    caso 1: código 0
+ok    caso 1: imprime o relatório
+ok    caso 1: o agy recebe o papel, que o hook do leitor lê
+ok    caso 1: agente do papel
+ok    caso 1: Flash high para o explorador
+ok    caso 1: roda com --sandbox
+ok    caso 1: roda na pasta atual
+ok    caso 2: Flash high para o verificador
+ok    caso 2: cota do antes vem do cache
+ok    caso 2: uma linha por chamada
+ok    caso 2: linha com os campos
+ok    caso 3: cota baixa recusa com código 4
+ok    caso 3: agy não é chamado
+ok    caso 3: diz a cota
+ok    caso 3: indica o subagente do Claude
+ok    caso 3: recusa registrada com o motivo
+ok    caso 3b: cota semanal zerada recusa
+ok    caso 3b: agy não é chamado
+ok    caso 3b: motivo é a cota
+ok    caso 3c: Gemini sem cota passa ao modelo seguinte
+ok    caso 3c: chama o Sonnet do agy
+ok    caso 3c: registra o modelo usado e a cota do grupo dele
+ok    caso 3d: modelo esgotado na chamada passa ao seguinte
+ok    caso 3d: avisa da troca
+ok    caso 3d: registra o modelo que respondeu
+ok    caso 3e: esgotado e sem outro grupo, recusa
+ok    caso 3e: motivo é a cota do primeiro modelo
+ok    caso 3f: JANGADA_DELEGAR_MODELOS troca o modelo
+ok    cota parcial: grupo ilegível não impede outro válido
+ok    cota parcial: usa somente o grupo válido
+ok    cota parcial: primeiro grupo ausente permite Gemini
+ok    cota parcial: preserva ordem e pula cota desconhecida
+ok    caso 4: /usage falhou, recusa
+ok    caso 4: consulta o /usage uma vez, não uma por modelo
+ok    caso 5: agy falhou, recusa com código 4
+ok    caso 5: indica o subagente do Claude
+ok    caso 6: agente não achado, recusa
+ok    caso 6: diz o motivo
+ok    caso 7: relatório longo sai cortado
+ok    caso 7: arquivo completo existe
+ok    caso 8: --arquivo grava o relatório
+ok    caso 8b: conta as afirmações sem fonte
+ok    caso 9: perfil claude recusa sem chamar o agy
+ok    caso 9: registrada com destino claude
+ok    caso 10: sessão do agy aponta o invoke_subagent
+ok    caso 12: ação negada sem resposta recusa e diz o quê
+ok    caso 13: ação negada com resposta avisa e entrega
+ok    caso 13: pedido manda seguir depois da negação
+ok    caso 14: pasta sem confiança recusa sem chamar o agy
+ok    caso 14: o settings.json do agy fica como estava
+ok    caso 14b: pasta confiada pelo link simbólico é aceita
+ok    caso 15: papel ausente no agy recusa antes do pedido
+ok    caso 16: confiança adicionada e removida por caminho
+ok    caso 16: cópia do settings.json de antes da primeira alteração
+ok    caso 16b: settings.json trocado por link não é seguido
+ok    caso 16c: rename falho com link no lugar não grava no alvo
+ok    caso 16c: o temporário fica no estado, fora da pasta do settings.json
+ok    caso 16d: link para pasta posto antes do rename não recebe o arquivo
+ok    caso 17: raiz sem confiança, worktree sem confiança
+ok    caso 17: avisa que o worktree fica sem confiança
+ok    caso 17: raiz confiável, worktree confiável
+ok    caso 18: leitor sem o hook no agy recusa antes do pedido
+ok    caso 18: os outros papéis não dependem do hook
+ok    caso 11: papel desconhecido dá código 2
+ok    caso 19: destino local recusa papel não permitido (código 4)
+ok    caso 19: agy não é chamado
+ok    caso 19: erro indica papéis leitor e redator
+ok    caso 19: recusa registrada com destino local
+ok    caso 20: destino local sem --arquivos dá código 2
+ok    caso 21: arquivo inexistente recusa com código 4
+ok    caso 21: agy não é chamado
+ok    caso 22: Ollama fora do ar recusa com código 4
+ok    caso 22: erro indica Ollama fora do ar
+ok    caso 22: agy não é chamado
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()
+                     ~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/socket.py", line 236, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 1] Operation not permitted
+Traceback (most recent call last):
+  File "/tmp/jmain-brza9qwl/tmp/tmp.VfABvaeD4u/servidor_ollama.py", line 67, in <module>
+    httpd = socketserver.TCPServer(('127.0.0.1', int(sys.argv[4])), Handler)
+                                                 ~~~^^^^^^^^^^^^^
+ValueError: invalid literal for int() with base 10: ''
+ok    caso 23: modelo ausente recusa com código 4
+FALHA caso 23: indica modelo não encontrado
+ok    caso 23: agy não é chamado
+ok    caso 24: jogo aberto recusa com código 4
+FALHA caso 24: indica jogo aberto
+ok    caso 24: agy não é chamado
+ok    caso 25: memória livre insuficiente recusa com código 4
+FALHA caso 25: indica memória livre insuficiente
+ok    caso 25: agy não é chamado
+ok    caso 26: vaga ocupada recusa com código 4
+FALHA caso 26: indica vaga ocupada
+ok    caso 26: agy não é chamado
+FALHA caso 27: código 0 no destino local
+FALHA caso 27: imprime o relatório retornado
+ok    caso 27: agy não é chamado
+FALHA caso 27: leitor envia temperatura zero
+jq: error (at /tmp/jmain-brza9qwl/tmp/tmp.VfABvaeD4u/ollama.reqs:0): null (null) cannot be matched, as it is not a string
+FALHA caso 27: pedido termina com a regra de citação e um prefixo real
+FALHA caso 27: registro com destino local e tokens Ollama
+FALHA caso 28: redator no destino local código 0
+ok    caso 28: agy não é chamado
+ok    caso 28: redator mantém a temperatura do modelo
+jq: error (at /tmp/jmain-brza9qwl/tmp/tmp.VfABvaeD4u/ollama.reqs:0): null (null) and string ("Regras da resposta") cannot have their containment checked
+FALHA caso 28: redator não recebe a regra de citação
+FALHA caso 29: conta afirmações sem fonte no destino local
+FALHA caso 29b: tags think na mesma linha sao filtradas
+FALHA caso 29b: mantem o texto util da linha
+ok    caso 29b: remove a tag think
+FALHA caso 30: documento fatiado termina com código 0
+FALHA caso 30: executou fatias mais passada de consolidação
+FALHA caso 30: todas as 8 linhas numeradas aparecem nas fatias
+FALHA caso 30: passada final de consolidação executada
+ok    caso 30: agy não é chamado
+ok    caso 31: documento excedendo fatias máximas recusa com código 4
+FALHA caso 31: erro indica fatias máximas
+ok    caso 31: agy não é chamado
+FALHA caso 32: modelo residente permite chamada com pouca memória livre
+ok    caso 32: agy não é chamado
+ok    caso 33: JANGADA_DELEGAR=claude recusa --destino local
+ok    caso 33: erro indica recusa do perfil
+ok    caso 33: agy não é chamado
+ok    caso 33b: JANGADA_DELEGAR=claude recusa --destino agy
+ok    caso 33b: erro indica recusa do perfil
+FALHA caso 34: JANGADA_DELEGAR=local sem --destino chama local
+ok    caso 34: gravou destino local no registro
+ok    caso 35: jangada_delegacao aceita local para claude
+ok    caso 35: jangada_delegacao mantém nativo para agy
+ok    caso 36: --destino inválido dá código 2
+ok    caso 36: erro indica destino inválido
+FALHA caso 37: linha única gigante é fatiada com sucesso
+FALHA caso 37: pedaços seguintes da linha gigante mantêm prefixo
+FALHA caso 48: faixa de linhas termina com código 0
+FALHA caso 48: envia as linhas pedidas com o número original
+ok    caso 48: não envia linhas fora das faixas
+ok    caso 49: faixa além do fim do arquivo recusa com código 4
+ok    caso 49: erro indica a faixa e o total de linhas
+ok    caso 49: faixa invertida recusa com código 4
+ok    caso 49: faixa de arquivo inexistente recusa com código 4
+ok    caso 49: nenhuma faixa inválida chega ao Ollama
+FALHA caso 50: arquivo existente terminado em :1-2 é lido inteiro
+FALHA caso 37b: caminho longo com prefixo grande não entra em laço infinito
+ok    caso 38: truncamento de contexto recusa com código 4
+FALHA caso 38: erro indica contexto estourado
+ok    caso 38: agy não é chamado
+FALHA caso 39: PDF extraído com pdftotext tem código 0
+FALHA caso 39: texto enviado traz numeracao de paginas
+ok    caso 51: faixa em PDF pela extensão recusa com código 4
+FALHA caso 51: erro indica que a faixa não vale para PDF
+ok    caso 51: faixa em PDF pelo tipo MIME recusa com código 4
+FALHA caso 51: erro indica o PDF sem extensão
+ok    caso 51: nenhuma faixa de PDF chega ao Ollama
+ok    caso 40: DELEGAR=nativo recusa --destino local
+ok    caso 40: erro indica invoke_subagent
+ok    caso 41: DELEGAR=local recusa --destino agy
+ok    caso 41: erro indica restricao ao destino local
+FALHA caso 42: argumentos posicionais apos -- tratados corretamente
+FALHA caso 42: pedido apos -- enviado ao modelo
+ok    caso 42b: papel e pedido apos -- com agy
+FALHA caso 43a: marca jogo-ativo fora do isolamento é ignorada
+ok    caso 43b: marca jogo-ativo recente no isolamento recusa com código 4
+FALHA caso 43b: erro indica jogo aberto
+FALHA caso 43c: marca jogo-ativo expirada no isolamento é ignorada
+ok    caso 43d: marca jogo-ativo malformada no isolamento recusa com código 4
+FALHA caso 43d: erro indica jogo aberto
+FALHA caso 44a: marca vram-livre recente permite medicao no isolamento
+FALHA caso 44a2: erro do nvidia-smi na saída padrão usa marca recente
+ok    caso 44a3: erro do nvidia-smi não ignora limite de memória
+FALHA caso 44a3: informa memória insuficiente medida pelo host
+ok    caso 44b: marca vram-livre expirada no isolamento recusa com código 4
+FALHA caso 44b: erro indica vram nao verificada
+ok    caso 44c: marca vram-livre com timestamp invalido recusa
+ok    caso 45: sessao isolada sem medicao de vram recusa
+FALHA caso 45: erro indica vram nao verificada
+FALHA caso 46: JANGADA_LOCAL_IGNORAR_VRAM=1 libera chamada
+ok    caso 47: arquivo protocolo-delegar-local.md existe e legivel
+ok    caso 47: protocolo contém instrução de delegação local
+ok    cota expirada: falha de atualização recusa antes do pedido
+ok    cota expirada: motivo estruturado
+ok    cota textual: recusa estruturada
+ok    cota fora da faixa: recusa
+ok    cota zero: insuficiente
+ok    recusa no Codex: orienta continuar na sessão
+ok    recusa no Codex: não recomenda Claude
+FALHA capacidade: seleciona local e valida referência
+FALHA capacidade: mantém medidas por chamada local
+ok    capacidade: agy normal
+ok    capacidade: agy recebe fonte explícita
+FALHA capacidade: cota baixa troca agy por local
+ok    capacidade: tentativas compartilham identificação
+FALHA capacidade: cota desconhecida tenta local
+FALHA privacidade: sem autorização remota descarta agy
+ok    privacidade: agy não recebe pedido
+ok    perfil local: autorização da tarefa não amplia perfil
+FALHA qualidade: saída inválida tenta outro executor
+ok    privacidade: falha local não autoriza nuvem
+FALHA sem executor: recusa explicável
+ok    qualidade: linha inexistente reprova
+ok    qualidade: saída reprovada preserva arquivo
+ok    destino explícito: não troca executor
+FALHA limite: não chama segundo executor
+FALHA limite: registra esgotamento
+ok    tempo total: executor começou antes do prazo
+ok    tempo total: interrompe executor
+ok    política: ordem do usuário prevalece
+ok    política: rejeita executor não integrado
+ok    política: não executa agy
+ok    permissão: negação não dispara troca
+ok    perfil Claude: não delega a outro executor
+ok    capacidade: papel incompatível recusa
+ok    capacidade: redator não substitui leitor
+ok    capacidade: desconhecida é erro de uso
+ok    qualidade: fonte omitida reprova
+ok    sem executor: indisponibilidade registrada
+FALHA limite: reserva consolidação antes de consumir chamadas
+FALHA completude: explica requisito com referência
+FALHA geração: desativa raciocínio e limita saída
+FALHA extração: confere estrutura e referência
+FALHA extração: formato obrigatório enviado ao Ollama
+FALHA extração: referência inexistente recusa
+FALHA extração: permite ausência sem inventar citação
+ok    extração: exige destino local explícito
+ok    extração: tipo desconhecido é erro de uso
+ok    extração: campo repetido é erro de uso
+ok    extração: requisito textual é incompatível
+ok    extração: papel diferente de leitor é incompatível
+FALHA extração: consolida sem apagar fatos e sem chamada adicional
+FALHA extração: somente as partes são chamadas
+FALHA extração: conflito recusa sem escolher um fato
+ok    extração: recusa preserva arquivo anterior
+FALHA completude: localizador sozinho reprova
+grep: : No such file or directory
+FALHA completude: preserva relatório reprovado para diagnóstico
+FALHA geração: relatório cortado pelo limite reprova
+FALHA compatibilidade: saída longa sem capacidade mantém contrato
+jq: error (at /tmp/jmain-brza9qwl/tmp/tmp.VfABvaeD4u/ollama.reqs:0): endswith() requires string inputs
+FALHA compatibilidade: não altera opções antigas de geração
+FALHA geração: outros modelos não recebem controle Qwen3
+ok    uso: requisito exige capacidade
+ok    uso: requisito começando com hífen é recusado
+ok    uso: ajuda apresenta requisito
+FALHA limite: orçamento exato inclui consolidação
+FALHA limite: desconta chamada anterior antes das partes locais
+grep: /tmp/jmain-brza9qwl/tmp/tmp.VfABvaeD4u/completo.md: No such file or directory
+FALHA arquivo: roteamento bem-sucedido grava relatório completo
+FALHA prévia: escopo da verificação é explícito
+ok    encerramento forçado: recusa estruturada
+ok    encerramento forçado: diretório dos temporários removido
+ok    encerramento forçado: agy não continua executando
+ok    encerramento forçado: filho do agy não continua executando
+ok    consulta interrompida: recusa estruturada
+ok    consulta interrompida: temporário ao lado do cache removido
+ok    executor: resultado não JSON recusa
+FALHA fonte: codificação inválida reprova saída
+FALHA PDF: extrai e valida página no fluxo completo
+Traceback (most recent call last):
+  File "<stdin>", line 16, in <module>
+AssertionError
+FALHA painel: troca de executor conta duas entradas, sem duplicar consumo
+Traceback (most recent call last):
+  File "<stdin>", line 16, in <module>
+AssertionError
+FALHA painel: falha total conta executores e recusa final, sem duplicar consumo
+ok    supervisor agy: JSON puro passa pelo comando real e pelo gate de referências
+ok    supervisor agy: relatório completo continua JSON
+ok    supervisor ausente do catálogo: recusa antes da geração
+ok    supervisor ausente do catálogo: não usa agente padrão
+
+77 teste(s) falharam
+XX testes/delegar.sh
+........
+----------------------------------------------------------------------
+Ran 8 tests in 0.075s
+
+OK
+...............
+----------------------------------------------------------------------
+Ran 15 tests in 0.126s
+
+OK
+..........
+----------------------------------------------------------------------
+Ran 10 tests in 0.001s
+
+OK
+..............................
+----------------------------------------------------------------------
+Ran 30 tests in 0.916s
+
+OK
+..........................................
+----------------------------------------------------------------------
+Ran 42 tests in 8.555s
+
+OK
+....................................
+----------------------------------------------------------------------
+Ran 36 tests in 1.726s
+
+OK
+........................
+----------------------------------------------------------------------
+Ran 24 tests in 9.468s
+
+OK
+............
+----------------------------------------------------------------------
+Ran 12 tests in 0.197s
+
+OK
+..........................
+----------------------------------------------------------------------
+Ran 26 tests in 0.362s
+
+OK
+....................
+----------------------------------------------------------------------
+Ran 20 tests in 0.387s
+
+OK
+.....................
+----------------------------------------------------------------------
+Ran 21 tests in 0.229s
+
+OK
+.................
+----------------------------------------------------------------------
+Ran 17 tests in 0.342s
+
+OK
+...................................
+----------------------------------------------------------------------
+Ran 35 tests in 6.362s
+
+OK
+
+== versões
+ok    sem tag: sem versão (hash curto)
+ok    -h responde
+ok    --ajuda responde fora de repositório
+ok    -C PASTA -h responde
+ok    novidades: rc 0
+ok    novidades: feat(x) vira x: ...
+ok    novidades: commit do ramo integrado entra
+ok    novidades: fix: sem prefixo
+ok    novidades: correção: sem prefixo
+ok    novidades: correções: sem prefixo
+ok    novidades: outros ficam inteiros
+ok    novidades: ignora Integra
+ok    novidades: ignora merge
+ok    novidades: grupos, ordem e itens exatos
+ok    novidades: linha em branco antes de cada grupo seguinte
+ok    lancar 0.1.0: rc 0
+ok    lancar 0.1.0: tag anotada v0.1.0
+ok    lancar 0.1.0: mensagem da tag
+ok    lancar 0.1.0: a tag aponta para HEAD
+ok    lancar 0.1.0: assunto do commit
+ok    lancar 0.1.0: o commit só muda o CHANGELOG.md
+ok    lancar 0.1.0: árvore limpa depois
+ok    lancar 0.1.0: título do CHANGELOG
+ok    lancar 0.1.0: seção com a data de hoje
+ok    lancar 0.1.0: itens no CHANGELOG
+ok    lancar 0.1.0: sem Integra nem Não lançado
+ok    lancar 0.1.0: versão 0.1.0
+ok    recusa: nada novo desde a tag
+ok    recusa: árvore suja
+ok    recusa: versão menor
+ok    recusa: versão igual (tag existente)
+ok    recusa: semver inválido 1.2
+ok    recusa: semver inválido a.b.c
+ok    recusa: tag já existe
+ok    recusa: a tag existente continua no lugar
+ok    depois do commit: versão 0.1.0-1-g...
+ok    depois do commit: novidades só com o novo
+ok    novidades DE ATE explícitos
+ok    novidades sem mudança: saída vazia
+ok    registro: Não lançado antes de 0.1.0
+ok    registro: o item novo fica em Não lançado
+ok    registro: não grava
+ok    lancar 0.2.0: rc 0
+ok    lancar 0.2.0: tag v0.2.0
+ok    lancar 0.2.0: 0.2.0 antes de 0.1.0
+ok    lancar 0.2.0: item novo sob 0.2.0
+ok    lancar 0.2.0: itens da 0.1.0 não se repetem
+ok    lancar 0.2.0: itens da 0.1.0 continuam sob 0.1.0
+ok    lancar 0.2.0: sem Não lançado
+ok    sem -C: usa o repositório da pasta atual
+ok    sem -C: fora de um repositório usa o JANGADA_PATH
+todos os testes do jangada-versao passaram
+
+== atualização da cópia instalada
+== jangada-update
+ok    resposta n: termina sem erro (0)
+ok    resposta n: cópia instalada não avança
+ok    resposta n: migração nova não roda
+ok    resposta n: pacman -Syu roda mesmo assim
+ok    mostra o commit novo
+ok    assunto sem o caractere ESC
+ok    destaca a mudança em migrations/
+ok    avisa que não aplicou
+ok    checkupdates sem atualização não é falha
+ok    sem terminal: termina sem erro (0)
+ok    sem terminal: cópia instalada não avança
+ok    sem terminal: migração nova não roda
+ok    resposta s: termina sem erro (0)
+ok    resposta s: cópia instalada avança
+ok    resposta s: migração nova roda
+ok    origem reescrita: termina sem erro (0)
+ok    origem reescrita: cópia instalada não muda
+ok    origem reescrita: explica a recusa
+== jangada-agente-fim --integrar
+ok    integra sem erro (0)
+ok    ramo integrado na origem
+ok    ramo apagado depois da integração
+ok    worktree removido
+ok    cópia instalada não é atualizada
+ok    pede para rodar jangada-update
+ok    fsmonitor e ganchos do repositório não rodam
+== assinaturas
+ok    sem assinatura: a cópia instalada não avança
+ok    sem assinatura: diz o commit e o jangada-assinar
+ok    assinar sem terminal: não assina (1)
+ok    assinar sem terminal: o commit segue sem assinatura
+ok    assinar: termina sem erro (0)
+ok    assinar: mostra o commit
+ok    assinar: o commit tem assinatura válida
+ok    assinar: sem commit enviado por assinar, não avisa
+ok    assinar: o já enviado não muda
+ok    assinar de novo: nada a assinar
+ok    assinado: a cópia instalada avança
+ok    outra chave: a cópia instalada não avança
+ok    outra chave: assinar só reescreve o commit dela
+ok    outra chave, depois de assinar: a cópia instalada avança
+ok    enviado sem assinatura: avisa e diz o commit
+ok    enviado sem assinatura: não reescreve
+ok    enviado sem assinatura, caminho com espaço e $(): o comando do aviso avança só essa cópia
+ok    enviado sem assinatura: o comando do aviso avança a cópia instalada
+ok    enviado sem assinatura, cópia instalada avançada: não avisa mais
+ok    vários sem assinatura: assina todos (0)
+ok    vários sem assinatura: o mais antigo tem assinatura válida
+ok    merge: assina sem erro (0)
+ok    merge: continua merge, com a mesma árvore
+ok    merge: o merge e o commit do ramo têm assinatura válida
+ok    merge: o já assinado antes do ramo não muda
+ok    merge assinado: a cópia instalada avança
+ok    integrar com allowed_signers: termina sem erro (0)
+ok    integrar com allowed_signers: o merge e o commit do ramo têm assinatura válida
+ok    integrar com allowed_signers: ramo apagado
+ok    integrar sem confirmar a assinatura: encerra a sessão e avisa (0)
+ok    integrar sem confirmar a assinatura: o merge fica sem assinatura
+ok    integrar de dentro da sessão: termina sem erro e avisa (0)
+ok    integrar de dentro da sessão: a limpeza termina sem chamar o jangada-assinar
+ok    integrar de dentro da sessão: o merge fica sem assinatura
+ok    merge alterado à mão: recusa (1)
+ok    merge alterado à mão: o ramo volta ao que era
+ok    merge alterado à mão e desfeito depois: recusa (1)
+ok    merge alterado à mão e desfeito depois: o ramo volta ao que era
+ok    merges que trocariam de árvore: recusa (1)
+ok    merges que trocariam de árvore: o ramo volta ao que era
+ok    gpg.ssh.program do repositório: assina e aplica
+ok    gpg.ssh.program do repositório: não roda
+ok    sem a chave: recusa (1)
+ok    sem a chave: indica o terminal comum
+== install.sh só da cópia instalada
+ok    instala de um clone comum (0)
+ok    a etapa rodou
+ok    recusa a cópia de trabalho (1)
+ok    diz por que recusou
+ok    nenhuma etapa rodou
+ok    simula na cópia de trabalho (0)
+ok    a simulação avisa
+ok    recusa um worktree (1)
+ok    recusa um clone em JANGADA_WORKTREES (1)
+tudo certo
+
+== diagnóstico do jangada-verificar
+ok    grava o diagnóstico
+ok    o log traz o erro
+ok    o log traz o aviso
+ok    o log não traz o título de janela
+ok    o log não traz linhas comuns
+ok    sem caracteres de controle
+ok    só as crases das cercas
+ok    o log vem marcado como dados
+ok    o relatório de falha vem marcado como dados
+ok    o relatório de falha entra
+ok    o pedido ao agente avisa que o log é dado
+todos os testes do diagnóstico passaram
+
+== hooks com a configuração vazia ou inválida
+== settings.json do Claude vazio
+ok    verificar aponta o arquivo vazio
+ok    a mescla grava os hooks
+ok    a mescla não diz que já estavam instalados
+ok    a mescla guarda a cópia do vazio
+ok    verificar dá os hooks por instalados
+ok    rodar de novo não muda nada
+== settings.json do Claude inválido
+ok    a mescla avisa e não grava
+ok    verificar aponta o arquivo inválido
+== hooks.json do agy vazio
+ok    verificar aponta o arquivo vazio
+ok    a mescla grava os hooks
+ok    a mescla não diz que já estavam instalados
+ok    a mescla guarda a cópia do vazio
+ok    verificar dá os hooks por instalados
+ok    rodar de novo não muda nada
+== hooks.json do agy inválido
+ok    a mescla avisa e não grava
+ok    verificar aponta o arquivo inválido
+== escrita atômica do settings.json
+ok    leitor aberto antes da mescla vê o arquivo antigo inteiro
+true
+ok    arquivo novo é JSON com os hooks e o que já havia
+ok    permissões mantidas
+ok    sem temporário ao lado
+testes/hooks.sh: line 91: 59068 Killed                     PATH="$tmp/mata:$PATH" bash -c 'source install/lib.sh && mesclar_hooks_claude' > /dev/null 2>&1
+ok    interrompida, a mescla deixa o arquivo antigo inteiro
+ok    link simbólico preservado e alvo atualizado
+todos os testes dos hooks passaram
+
+== importação da configuração do niri
+ok    termina sem erro
+ok    teclado br com opções
+ok    ambiente sem o null
+ok    programa ao iniciar sem o sh -c
+ok    xwayland-satellite fica de fora
+ok    título do niri vira descrição
+ok    terminal com título passa pelo jangada-terminal
+ok    allow-when-locked vira locked
+ok    bloqueio do Noctalia vira jangada-bloquear
+ok    conflito com o padrão sai comentado
+ok    ação sem equivalente listada
+ok    nó desligado com /- some
+ok    largura de coluna vira resize repetido
+ok    monitor com modo, escala, posição e rotação
+ok    monitor desligado
+ok    monitor sem aspas (KDL 2) e escala auto
+ok    variável de driver sai comentada
+ok    variável comum fica ativa
+ok    terminal no jangada.conf
+ok    usuario.lua.importado é Lua válido
+ok    monitores.lua.importado é Lua válido
+ok    nada fora da pasta de saída
+todos os testes do importar passaram
+
+== utilitários (mapear, rede, bluetooth, snapshot, calendário, reverter)
+ok    mascarado: IOSFODNN7EXAMPLE
+ok    mascarado: ABCDEFGHIJKLMNOP
+ok    mascarado: wJalrXUtnFEMI
+ok    mascarado: 11ABCDEFG0123456789
+ok    mascarado: abcdefghijklmnopqrstuvwxyz0123456789
+ok    mascarado: abcdefghij1234567890
+ok    mascarado: ZYXWVUTSRQPONMLKJIHGFEDCBA
+ok    mascarado: hf_abcdefghijklmnop
+ok    mascarado: api03
+ok    mascarado: sk-proj-abcdef
+ok    mascarado: OiJIUzI1NiJ9
+ok    mascarado: dozjgNryP4J3
+ok    mascarado: b3BlbnNzaC1rZXktdjEAAAAABG5vbmU
+ok    mascarado: aSecretaDoMeio
+ok    mascarado: MIIEvChaveDeContaDeServico
+ok    mascarado: s3nh4forte
+ok    mascarado: senhaDoBanco
+ok    mascarado: abcdef1234567890xyz
+ok    mascarado: tokenDoCabecalho123
+ok    mascarado: dXN1YXJpbzpzZW5oYQ
+ok    mascarado: segredo
+ok    mascarado: espacos
+ok    mascarado: chavePrivadaXYZ
+ok    mascarado: uma senha
+ok    mascarado: outra senha
+ok    mascarado: senha aqui
+ok    mascarado: aspas
+ok    mascarado: dentro
+ok    mascarado: abc123chave
+ok    mascarado: clienteSecreto
+ok    bloco de chave privada substituído
+ok    prefixo da chave AWS mantido para identificação
+ok    texto comum sem alteração
+mapear: tudo certo
+ok    WPA2: a senha não vai em argumento do nmcli
+ok    WPA2: perfil criado com wpa-psk
+ok    WPA2: passwd-file no formato do nmcli
+ok    WPA2: avisa que conectou
+ok    SSID com dois pontos aparece inteiro no menu
+ok    WPA2/WPA3: perfil com wpa-psk
+ok    WPA3: perfil com sae
+ok    WPA3: senha pelo passwd-file
+ok    perfil existente: não cria outro
+ok    perfil existente: senha pelo passwd-file
+ok    802.1X: não cria perfil
+ok    802.1X: não ativa
+ok    802.1X: indica o editor
+ok    nenhuma chamada levou a senha
+rede: tudo certo
+ok    caso 1: termina sem erro (0)
+ok    caso 1: pareia
+ok    caso 1: pergunta se confia
+ok    caso 1: não confia
+ok    caso 1: conecta
+ok    caso 2: não confia
+ok    caso 2: conecta
+ok    caso 3: confia
+ok    caso 3: conecta
+ok    caso 4: termina sem erro (0)
+ok    caso 4: não pergunta se confia
+ok    caso 4: não confia nem conecta
+todos os testes do bluetooth passaram
+ok    caso 1: termina sem erro (0)
+ok    caso 1: cria com a limpeza por número
+ok    caso 1: não apaga nada
+ok    caso 2: termina sem erro (0)
+ok    caso 2: cria fora da limpeza, marcado
+ok    caso 2: apaga só o mais antigo do agente
+ok    caso 3: fica com os 2 mais recentes do agente
+ok    caso 4: limite inválido usa 5
+ok    caso 4: avisa do limite inválido
+ok    caso 5: dentro do limite não apaga
+ok    caso 6: jangada-agente chama jangada-snapshot --agente
+todos os testes do snapshot passaram
+ok    o trecho em Python compila
+ok    add com arquivo corrompido termina bem
+ok    arquivo corrompido guardado em .corrompido-<data>
+ok    conteúdo corrompido preservado intacto
+ok    aviso no stderr
+ok    arquivo novo é JSON válido
+ok    arquivo novo tem o evento adicionado
+ok    formato inesperado guardado à parte
+ok    sem permissão de leitura o add falha
+ok    sem permissão de leitura o arquivo fica como estava
+ok    sem permissão de leitura nada vai para .corrompido
+ok    30 adds simultâneos, 30 eventos gravados
+ok    nenhum temporário sobrando
+ok    janela e add não se sobrescrevem
+ok    falha no meio da gravação preserva o arquivo antigo
+ok    leitor simultâneo nunca viu arquivo truncado (1980 leituras)
+ok    20 adds com leitor simultâneo, 20 eventos
+ok    trava apontada por link simbólico não cria o alvo
+calendario: tudo certo
+ok    bash: lista os commits do ramo
+ok    bash: lista o segundo commit
+ok    bash: lista a alteração não commitada
+ok    bash: lista o não rastreado
+ok    bash: não lista o ignorado
+ok    bash: recusa mantém o HEAD
+ok    bash: recusa mantém o não rastreado
+ok    bash: recusa não cria ramo de cópia
+ok    bash: cria o ramo de cópia
+ok    bash: a cópia aponta para o HEAD anterior
+ok    bash: informa o nome da cópia
+ok    bash: HEAD volta ao ponto inicial
+ok    bash: apaga o não rastreado
+ok    bash: mantém o ignorado
+ok    bash: descarta a alteração
+ok    bash: sem nada a reverter, avisa
+ok    bash: sem nada a reverter, não cria outra cópia
+ok    zsh: lista os commits do ramo
+ok    zsh: lista o segundo commit
+ok    zsh: lista a alteração não commitada
+ok    zsh: lista o não rastreado
+ok    zsh: não lista o ignorado
+ok    zsh: recusa mantém o HEAD
+ok    zsh: recusa mantém o não rastreado
+ok    zsh: recusa não cria ramo de cópia
+ok    zsh: cria o ramo de cópia
+ok    zsh: a cópia aponta para o HEAD anterior
+ok    zsh: informa o nome da cópia
+ok    zsh: HEAD volta ao ponto inicial
+ok    zsh: apaga o não rastreado
+ok    zsh: mantém o ignorado
+ok    zsh: descarta a alteração
+ok    zsh: sem nada a reverter, avisa
+ok    zsh: sem nada a reverter, não cria outra cópia
+reverter: tudo certo
+
+6 falha(s)

@@ -1,0 +1,10 @@
+{
+  "A7": {
+    "linhas_historicas_alteradas": 36000,
+    "teste_de_invariancia": "FALHOU"
+  },
+  "CONTROLE": {
+    "linhas_historicas_alteradas": 0,
+    "teste_de_invariancia": "PASSOU"
+  }
+}

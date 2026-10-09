@@ -32,6 +32,10 @@ jangada/
 └── revisao/               pareceres, avaliações e comparações; índice em revisao/README.md
 ```
 
+## Estado da estabilização
+
+Os [achados atuais](docs/estabilizacao/ACHADOS_ATUAIS.md) distinguem o código de `main`, a correção P0 e a instalação ativa. A validação P1 permanece inconclusiva. Os relatórios incorporados não atualizam o código nem autorizam apresentar a instalação como validada para produção.
+
 ## Documentação dos processos
 
 Cada processo tem um documento em `docs/`, com fluxograma, passos por

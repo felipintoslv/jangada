@@ -1,0 +1,22 @@
+[
+  {
+    "arquivo": "dados/brutos/empregos.csv",
+    "sha256": "884d6744469f6b7ed256e604f107b9c2deceddb715b6a6b37d807144ba02a3da",
+    "confere": true
+  },
+  {
+    "arquivo": "saidas/testes-executor.log",
+    "sha256": "0cbcaf3e1b87ac68b51f256f9f6e88baa6d9a6bba2f3cb65f73deb7534ba4245",
+    "confere": true
+  },
+  {
+    "arquivo": "saidas/parecer-agy-r1.md",
+    "sha256": "a85c8e3059049db4c15fd448a672476245aba0b6b8b66f997459d41e1e0f614d",
+    "confere": true
+  },
+  {
+    "arquivo": "saidas/validacao-executor.log",
+    "sha256": "360f152716693107dd831628317339bac87cd32b9f60c6d94fc058e0f9d1114e",
+    "confere": true
+  }
+]

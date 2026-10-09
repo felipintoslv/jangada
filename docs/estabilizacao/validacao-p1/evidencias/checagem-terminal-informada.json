@@ -1,0 +1,8 @@
+{
+  "origem": "Saída enviada pelo usuário; execução no terminal local, não nesta sessão",
+  "socket_rede": "PASSOU",
+  "socket_local": "PASSOU",
+  "bubblewrap": "PASSOU",
+  "comunicacao_e_isolamento_disponiveis": true,
+  "modelo_real_verificado": false
+}

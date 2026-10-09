@@ -1,0 +1,17 @@
+{
+  "codigo": 1,
+  "segundos": 172.957,
+  "base_codigo": "bf7a5f1e7b11c7156d94de42c7869ed98940c20d",
+  "comando": "bash testes/verificar.sh",
+  "ambiente": "Cópia temporária do código e documentos, HOME e XDG separados, sem credenciais",
+  "grupos_com_falha": [
+    "monitoramento sob demanda",
+    "testes/validar.sh",
+    "testes/isolar.sh",
+    "testes/tarefas.py",
+    "testes/conversa.py",
+    "testes/delegar.sh"
+  ],
+  "log_sha256": "6460854bf6228e69e7a5c190959354e86375836e779500e1aee975d52786167f",
+  "instalacao_alterada": false
+}

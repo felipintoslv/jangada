@@ -1,0 +1,45 @@
+{
+  "atividade": "atv-7530b29c79d5",
+  "tarefas": [
+    {
+      "id": "ECON-P1",
+      "especificacao": {
+        "atividade": "atv-7530b29c79d5",
+        "capacidade": "analise_documental",
+        "criterios_aceite": [
+          "Importação e irregularidades documentadas",
+          "QL nacional por ano",
+          "HHI Shannon e diversidade coerentes",
+          "Shift-share aditivo por célula",
+          "Sem vazamento temporal",
+          "Sem inferência causal sem identificação",
+          "R tabelas gráficos e Shiny reproduzíveis",
+          "Revisão independente executada e oráculo privado conferido"
+        ],
+        "fontes": [
+          "/tmp/jangada-p1-342gtope/projetos/economia-sintetica/rodada-1/LEIA-ME.md"
+        ],
+        "id": "ECON-P1",
+        "max_chamadas": 4,
+        "papel": "analista",
+        "pedido": "Implementar a análise conforme LEIA-ME; não aprovar a própria entrega",
+        "permitir_remoto": false,
+        "qualidade": "high",
+        "risco": 3,
+        "tempo_total": 600
+      },
+      "status": "QUEUED",
+      "tentativas": 0,
+      "dono": null,
+      "prazo": null,
+      "artefato": null,
+      "hash_artefato": null,
+      "resultado": null,
+      "motivo": null,
+      "criado": 1791508033.2171988,
+      "atualizado": 1791508033.2171988
+    }
+  ],
+  "execucoes": 0,
+  "modelo_real_executado": false
+}

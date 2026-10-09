@@ -1,0 +1,50 @@
+[
+  {
+    "defeito": "A1",
+    "verificador_nativo_referencia": "ACEITOU posição existente",
+    "veracidade_metodologica": "não avaliada pelo verificador",
+    "revisao_por_modelo": false
+  },
+  {
+    "defeito": "A2",
+    "verificador_nativo_referencia": "ACEITOU posição existente",
+    "veracidade_metodologica": "não avaliada pelo verificador",
+    "revisao_por_modelo": false
+  },
+  {
+    "defeito": "A3",
+    "verificador_nativo_referencia": "ACEITOU posição existente",
+    "veracidade_metodologica": "não avaliada pelo verificador",
+    "revisao_por_modelo": false
+  },
+  {
+    "defeito": "A4",
+    "verificador_nativo_referencia": "ACEITOU posição existente",
+    "veracidade_metodologica": "não avaliada pelo verificador",
+    "revisao_por_modelo": false
+  },
+  {
+    "defeito": "A5",
+    "verificador_nativo_referencia": "ACEITOU posição existente",
+    "veracidade_metodologica": "não avaliada pelo verificador",
+    "revisao_por_modelo": false
+  },
+  {
+    "defeito": "A6",
+    "verificador_nativo_referencia": "ACEITOU posição existente",
+    "veracidade_metodologica": "não avaliada pelo verificador",
+    "revisao_por_modelo": false
+  },
+  {
+    "defeito": "A7",
+    "verificador_nativo_referencia": "ACEITOU posição existente",
+    "veracidade_metodologica": "não avaliada pelo verificador",
+    "revisao_por_modelo": false
+  },
+  {
+    "defeito": "A8",
+    "verificador_nativo_referencia": "ACEITOU posição existente",
+    "veracidade_metodologica": "não avaliada pelo verificador",
+    "revisao_por_modelo": false
+  }
+]

@@ -1,0 +1,22 @@
+
+/home/felipinto/.local/bin/agy:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000007846e80 <crosscall2@@Base+0x1925800>:
+ 7846e80:	4c 8d 64 24 f8       	lea    -0x8(%rsp),%r12
+ 7846e85:	4d 3b 66 10          	cmp    0x10(%r14),%r12
+ 7846e89:	0f 86 32 02 00 00    	jbe    78470c1 <crosscall2@@Base+0x1925a41>
+ 7846e8f:	55                   	push   %rbp
+ 7846e90:	48 89 e5             	mov    %rsp,%rbp
+ 7846e93:	48 83 c4 80          	add    $0xffffffffffffff80,%rsp
+ 7846e97:	48 8b 38             	mov    (%rax),%rdi
+ 7846e9a:	48 8b 70 08          	mov    0x8(%rax),%rsi
+ 7846e9e:	48 8b 15 8b bc 52 03 	mov    0x352bc8b(%rip),%rdx        # ad72b30 <_ZTISt10bad_typeid@@Base+0x4c6ef0>
+ 7846ea5:	48 8b 52 28          	mov    0x28(%rdx),%rdx
+ 7846ea9:	48 8b 05 88 bc 52 03 	mov    0x352bc88(%rip),%rax        # ad72b38 <_ZTISt10bad_typeid@@Base+0x4c6ef8>
+ 7846eb0:	48 8d 1d 5e 13 84 fd 	lea    -0x27beca2(%rip),%rbx        # 5088215 <_cgo_topofstack@@Base-0xc84cab>
+ 7846eb7:	b9 06 00 00 00       	mov    $0x6,%ecx
+ 7846ebc:	ff d2                	call   *%rdx
+ 7846ebe:	66 90                	xchg   %ax,%ax

@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"01a11e50-6b34-7a22-ba04-a7c9ed014612"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Code Mode is unavailable because code-mode host is disabled. Code mode will fail closed; enable `features.code_mode_host` and install `codex-code-mode-host`."}}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"JANGADA_P1_CODEX_OK"}}
+{"type":"turn.completed","usage":{"input_tokens":8753,"cached_input_tokens":3328,"cache_write_input_tokens":0,"output_tokens":12,"reasoning_output_tokens":0}}

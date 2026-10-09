@@ -1,0 +1,5 @@
+2026-10-09T01:39:09.226831Z ERROR codex_skills_extension::host_service: failed to install system skills: io error while create system skills dir: Read-only file system (os error 30)
+2026-10-09T01:39:09.866522Z ERROR codex_skills_extension::host_service: failed to install system skills: io error while create system skills dir: Read-only file system (os error 30)
+2026-10-09T01:39:09.868099Z ERROR codex_skills_extension::host_service: failed to install system skills: io error while create system skills dir: Read-only file system (os error 30)
+2026-10-09T01:39:09.868126Z ERROR codex_skills_extension::host_service: failed to install system skills: io error while create system skills dir: Read-only file system (os error 30)
+2026-10-09T01:39:09.869155Z ERROR codex_skills_extension::host_service: failed to install system skills: io error while create system skills dir: Read-only file system (os error 30)

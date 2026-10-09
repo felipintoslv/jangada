@@ -1,0 +1,81 @@
+{
+  "exit": 0,
+  "stdout": "STATUS: APROVADO\n1. FUNDAMENTO-SINTETICO-UNICO-IRRECUPERAVEL\n",
+  "stderr": "jangada-validar: rodada 1 de 3, Claude (sonnet) revisando 1 arquivo(s)...\n\njangada-validar: APROVADO (parecer em /tmp/tmp861vhr40/estado/jangada/revisoes/validacao-teste-r1.md)\n",
+  "approved": true,
+  "mode": "MOCK de revisor; arquivos Git reais",
+  "close_exit": 0,
+  "close": "sessão encerrada: teste\n",
+  "before": {
+    "revisoes/validacao-teste.aprovado": "7b5497005c99a68dafaf90add628d61fb0673875dd1ad26f85df12a6a3fcf532",
+    "revisoes/validar.jsonl": "ec2afd3686e4334de90846a770e79c9caeba7c6c9fc18f0cb18bd1edab673868",
+    "revisoes/validacao-teste-r1.md": "44425e20ca747ac252dd65071a9d99ee0089ba23b6e9dad532c71f2565a3a86e",
+    "revisoes/teste.json": "593ef941384cbfc555c06d90ae5cbe02a2757aea7b852df508508890b35151a9",
+    "agentes/protocolo-teste.md": "5e9141b07d97b2598b0abdfbd672c1d1a7e2e2aa4b34fbe191b1c0bef025597c",
+    "agentes/prompt-teste.md": "a71432c0c8eb135836304d3e643940308d55724094042ce0b05a152bba8183ee",
+    "agentes/teste.json": "da3669cf1cbe87a8543c32b5002921add9cc8f170b0c7aea341f948c0c57c084",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/FETCH_HEAD": "0a959d308aecfd793449267f6c19492029e87fab0a89685d35835fed15a401c4",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/HEAD": "7e82abdef0f74b0ad0999e278b9686454b583555f6f3bc7d8bae89fbd5279de3",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/config": "dd548269913b6adbdfa7049170ea86850050cb762ea3b9c510a0b2986d2113e3",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/refs/jangada/46070d4bf934fb0d/base": "a1ef3c2c6c7e68596a2f6506dac43a9e70b3ae0a4410044cd9b790185e21e23b",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/refs/jangada/46070d4bf934fb0d/rastreados": "2427aa7b0a9cfa609755d7c1f035f03fa8d34545cc8b4e20f2dd08b5ed9cb61f",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/refs/jangada/46070d4bf934fb0d/candidato": "2427aa7b0a9cfa609755d7c1f035f03fa8d34545cc8b4e20f2dd08b5ed9cb61f",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/objects/8f/083b12afbfbb912b84496db1ad8af919a7c46b": "75bf45e6c1bd42d3d570130d5c41e0fa33912e55f03c5b2e8aff664056f5ff21",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/objects/82/b95ea007d7a8bc4300d52c37b2ada794f3cb4e": "6c94da643ed8443526b1a38a26745f0e85ab2023e231c86c09ee16e3c72f1eea",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/objects/4b/48deed3a433909bfd6b6ab3d4b91348b6af464": "d1f781b16c851b005c8603ab4bb758d1c0c50fc97b8ce7af0477d36af3aab95b",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/objects/5e/e1fe93634f368f66e34aa9fadbef995e8c0aea": "a3b6f9f8989268f6faf24769fb82e5507f630c417bbfcbf8546bbf877efa8f88",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/objects/84/ba58c88d7c127ca201627a72e5c2927138e361": "3fff30f4d9361c3aece06c7ef3c970c6ecd94ab2daca4fa255d7ff443b2ac1a3",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/objects/0f/0fe7ba42b587f96d842e45fcb6a2e5dd636907": "d17be37e608daeaec3a2e83906ea4a5d2cbbbb104ac7cba812c692b49d681c8c"
+  },
+  "after": {
+    "revisoes/validar.jsonl": "ec2afd3686e4334de90846a770e79c9caeba7c6c9fc18f0cb18bd1edab673868",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/FETCH_HEAD": "0a959d308aecfd793449267f6c19492029e87fab0a89685d35835fed15a401c4",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/HEAD": "7e82abdef0f74b0ad0999e278b9686454b583555f6f3bc7d8bae89fbd5279de3",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/config": "dd548269913b6adbdfa7049170ea86850050cb762ea3b9c510a0b2986d2113e3",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/refs/jangada/46070d4bf934fb0d/base": "a1ef3c2c6c7e68596a2f6506dac43a9e70b3ae0a4410044cd9b790185e21e23b",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/refs/jangada/46070d4bf934fb0d/rastreados": "2427aa7b0a9cfa609755d7c1f035f03fa8d34545cc8b4e20f2dd08b5ed9cb61f",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/refs/jangada/46070d4bf934fb0d/candidato": "2427aa7b0a9cfa609755d7c1f035f03fa8d34545cc8b4e20f2dd08b5ed9cb61f",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/objects/8f/083b12afbfbb912b84496db1ad8af919a7c46b": "75bf45e6c1bd42d3d570130d5c41e0fa33912e55f03c5b2e8aff664056f5ff21",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/objects/82/b95ea007d7a8bc4300d52c37b2ada794f3cb4e": "6c94da643ed8443526b1a38a26745f0e85ab2023e231c86c09ee16e3c72f1eea",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/objects/4b/48deed3a433909bfd6b6ab3d4b91348b6af464": "d1f781b16c851b005c8603ab4bb758d1c0c50fc97b8ce7af0477d36af3aab95b",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/objects/5e/e1fe93634f368f66e34aa9fadbef995e8c0aea": "a3b6f9f8989268f6faf24769fb82e5507f630c417bbfcbf8546bbf877efa8f88",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/objects/84/ba58c88d7c127ca201627a72e5c2927138e361": "3fff30f4d9361c3aece06c7ef3c970c6ecd94ab2daca4fa255d7ff443b2ac1a3",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/objects/0f/0fe7ba42b587f96d842e45fcb6a2e5dd636907": "d17be37e608daeaec3a2e83906ea4a5d2cbbbb104ac7cba812c692b49d681c8c"
+  },
+  "lost": [
+    "agentes/prompt-teste.md",
+    "agentes/protocolo-teste.md",
+    "agentes/teste.json",
+    "revisoes/teste.json",
+    "revisoes/validacao-teste-r1.md",
+    "revisoes/validacao-teste.aprovado"
+  ],
+  "retained": [
+    "revisoes/espelhos/4d1d593d4d9aec95.git/FETCH_HEAD",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/HEAD",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/config",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/objects/0f/0fe7ba42b587f96d842e45fcb6a2e5dd636907",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/objects/4b/48deed3a433909bfd6b6ab3d4b91348b6af464",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/objects/5e/e1fe93634f368f66e34aa9fadbef995e8c0aea",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/objects/82/b95ea007d7a8bc4300d52c37b2ada794f3cb4e",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/objects/84/ba58c88d7c127ca201627a72e5c2927138e361",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/objects/8f/083b12afbfbb912b84496db1ad8af919a7c46b",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/refs/jangada/46070d4bf934fb0d/base",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/refs/jangada/46070d4bf934fb0d/candidato",
+    "revisoes/espelhos/4d1d593d4d9aec95.git/refs/jangada/46070d4bf934fb0d/rastreados",
+    "revisoes/validar.jsonl"
+  ],
+  "before_content": {
+    "revisoes/validacao-teste.aprovado": "{\n  \"cabeca\": \"84ba58c88d7c127ca201627a72e5c2927138e361\",\n  \"num\": 1,\n  \"limpo\": true,\n  \"base\": \"main\",\n  \"base_sha\": \"0f0fe7ba42b587f96d842e45fcb6a2e5dd636907\",\n  \"ponto\": \"0f0fe7ba42b587f96d842e45fcb6a2e5dd636907\",\n  \"candidate_sha\": \"84ba58c88d7c127ca201627a72e5c2927138e361\",\n  \"candidate_tree\": \"82b95ea007d7a8bc4300d52c37b2ada794f3cb4e\",\n  \"reviewer\": \"claude\",\n  \"model\": \"sonnet\",\n  \"author\": \"codex\",\n  \"local_verified\": true,\n  \"independent\": true\n}\n",
+    "revisoes/validar.jsonl": "{\"data\":\"2026-10-08T19:27:05-03:00\",\"projeto\":\"projeto\",\"rotulo\":\"teste\",\"rodada\":1,\"resultado\":\"aprovado\",\"etapa\":\"revisor\",\"revisor\":\"claude\",\"modelo\":\"sonnet\",\"autor\":\"codex\",\"independente\":true,\"execucao\":null,\"arquivos\":1,\"mais\":1,\"menos\":0,\"itens\":1,\"segundos\":1,\"subagentes\":{\"n\":0,\"claude\":{\"n\":0,\"tokens\":0,\"principal\":0,\"principal_cache_lido\":0},\"delegadas_agy\":0,\"codex_economico\":{\"n\":0},\"agy\":{\"n\":0,\"passos\":0},\"local\":{\"n\":0,\"atendidas\":0,\"recusas\":0,\"tokens_entrada\":null,\"tokens_saida\":null,\"medidas_entrada\":0,\"medidas_saida\":0,\"ferramentas_disponiveis\":false},\"papeis\":{},\"retorno_tokens\":0,\"edicoes\":0,\"autorrevisao\":0,\"recusas\":0}}\n",
+    "revisoes/validacao-teste-r1.md": "STATUS: APROVADO\n1. FUNDAMENTO-SINTETICO-UNICO-IRRECUPERAVEL\n",
+    "revisoes/teste.json": "{\"base\": \"main\", \"agente\": \"codex\", \"revisor\": \"claude\", \"inicio\": \"0f0fe7ba42b587f96d842e45fcb6a2e5dd636907\"}",
+    "agentes/protocolo-teste.md": "PROMPT-SINTETICO-UNICO-protocolo-teste.md",
+    "agentes/prompt-teste.md": "PROMPT-SINTETICO-UNICO-prompt-teste.md",
+    "agentes/teste.json": "{\n  \"base\": \"main\",\n  \"agente\": \"codex\",\n  \"revisor\": \"claude\",\n  \"inicio\": \"0f0fe7ba42b587f96d842e45fcb6a2e5dd636907\",\n  \"validacao\": \"r1: APROVADO (claude)\"\n}\n"
+  },
+  "remaining_metrics": {
+    "revisoes/validar.jsonl": "{\"data\":\"2026-10-08T19:27:05-03:00\",\"projeto\":\"projeto\",\"rotulo\":\"teste\",\"rodada\":1,\"resultado\":\"aprovado\",\"etapa\":\"revisor\",\"revisor\":\"claude\",\"modelo\":\"sonnet\",\"autor\":\"codex\",\"independente\":true,\"execucao\":null,\"arquivos\":1,\"mais\":1,\"menos\":0,\"itens\":1,\"segundos\":1,\"subagentes\":{\"n\":0,\"claude\":{\"n\":0,\"tokens\":0,\"principal\":0,\"principal_cache_lido\":0},\"delegadas_agy\":0,\"codex_economico\":{\"n\":0},\"agy\":{\"n\":0,\"passos\":0},\"local\":{\"n\":0,\"atendidas\":0,\"recusas\":0,\"tokens_entrada\":null,\"tokens_saida\":null,\"medidas_entrada\":0,\"medidas_saida\":0,\"ferramentas_disponiveis\":false},\"papeis\":{},\"retorno_tokens\":0,\"edicoes\":0,\"autorrevisao\":0,\"recusas\":0}}\n"
+  },
+  "artifact_preserved": "entrega\n"
+}

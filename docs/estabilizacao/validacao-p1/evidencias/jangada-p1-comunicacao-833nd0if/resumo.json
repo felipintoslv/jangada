@@ -1,0 +1,38 @@
+{
+  "commit": "17178ded546642e3246bfe3bd5c33df8da821874",
+  "raiz_sintetica": "/tmp/jangada-p1-comunicacao-833nd0if",
+  "registro": "/home/felipinto/Projetos/jangada-resultados-p1-2026-10/evidencias/jangada-p1-comunicacao-833nd0if",
+  "modelos_reais_executados": false,
+  "resultados": [
+    {
+      "suite": "interface",
+      "comando": [
+        "/usr/bin/python3",
+        "-B",
+        "/tmp/jangada-p1-comunicacao-833nd0if/codigo/testes/tarefas.py"
+      ],
+      "codigo": 1,
+      "segundos": 7.205,
+      "classificacao": "REQUER_ANALISE"
+    },
+    {
+      "suite": "p0",
+      "comando": [
+        "/usr/bin/python3",
+        "-B",
+        "/tmp/jangada-p1-comunicacao-833nd0if/codigo/testes/confianca-p0.py"
+      ],
+      "codigo": 0,
+      "segundos": 12.637,
+      "classificacao": "PASSOU"
+    }
+  ],
+  "hashes": {
+    "interface.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "interface.stderr.log": "4de1de22290f0ca8a29b1a8d327bbd6e18866754e59370c173d56cf09b39f8df",
+    "ataques-bubblewrap.jsonl": "22c1b192171351a520cc847e75d1e090c0d01abf2a574c4c7db09e5b4b06992f",
+    "arquivo-sintetico.json": "2dd9de29cb1792ee17540c4b717ed0a793eb35e5e077eabf3137e23aa2d5d5ba",
+    "p0.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "p0.stderr.log": "2bcb55d5ee8b979f752acdf59c67515373670ea8b6c4a76a398367dedab4708b"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "comando": "jangada-isolar -- python3 [conferencia preventiva sem modelos]",
+  "codigo": 0,
+  "stdout": "{\"pessoal_real_oculto\": true, \"oraculo_oculto\": true, \"escrita_autoritativa_recusada\": \"[Errno 30] Read-only file system: '/tmp/jangada-p1-342gtope/estado/jangada/agentes/projetos/ataque'\", \"marca_fisica\": true}\n",
+  "stderr": "",
+  "provedor_real": false
+}

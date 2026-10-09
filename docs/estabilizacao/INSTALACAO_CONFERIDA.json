@@ -1,0 +1,36 @@
+{
+  "conferencia": "Somente leitura em 2026-10-09",
+  "instalacao_alterada": false,
+  "arquivos": [
+    {
+      "arquivo": "bin/jangada-agente",
+      "instalacao_sha256": "76e968af48ed443ccdd4c1129dfd71f745127398211980f51c5e3e02ff3a731a",
+      "p0_sha256": "598ec713b9f189cbc0c897524211fa8e2b7f4bd658b34261b868d538811bc80c",
+      "main_sha256": "76e968af48ed443ccdd4c1129dfd71f745127398211980f51c5e3e02ff3a731a"
+    },
+    {
+      "arquivo": "bin/jangada-validar",
+      "instalacao_sha256": "2c3d98ba7294fc41e70777734b698ac68d6313d956046db732ab00730a4278a4",
+      "p0_sha256": "d4715d391c135707abb5ff9da61098cf7c50e5a78251d103141773afd75943a8",
+      "main_sha256": "2c3d98ba7294fc41e70777734b698ac68d6313d956046db732ab00730a4278a4"
+    },
+    {
+      "arquivo": "bin/jangada-isolar",
+      "instalacao_sha256": "6bab032635699dcfa0f3baddc1fafde54b147795f283d605216251bbbea8608e",
+      "p0_sha256": "8b4ecbb0ca59bfc8e68da5477db27addf3727e978238829674766355fd249471",
+      "main_sha256": "6bab032635699dcfa0f3baddc1fafde54b147795f283d605216251bbbea8608e"
+    },
+    {
+      "arquivo": "bin/jangada-agente-fim",
+      "instalacao_sha256": "a50b05e8c61e87afc9df80dd5a62047e620783b26a081d15d6186e7ae62c9514",
+      "p0_sha256": "d2ac06ee9c674a66d366f3da163fe9a82e5c3141d108f21dd5d9e7008168d5b6",
+      "main_sha256": "a50b05e8c61e87afc9df80dd5a62047e620783b26a081d15d6186e7ae62c9514"
+    },
+    {
+      "arquivo": "default/orquestracao/confianca.py",
+      "instalacao_sha256": null,
+      "p0_sha256": "01f2305611ab0876afd7724764c04403eb6bd60d5eb43262889226d13c30a496",
+      "main_sha256": null
+    }
+  ]
+}

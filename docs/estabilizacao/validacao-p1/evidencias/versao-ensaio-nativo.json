@@ -1,0 +1,43 @@
+{
+  "origem_execucao": "/home/felipinto/.local/share/jangada",
+  "origem_identificacao": "Campo comando do registro da sessão par-cobaia--tarefa-9c1ba243388f, conferência de bytes instalada/P0",
+  "comparacoes": [
+    {
+      "arquivo": "bin/jangada-agente",
+      "instalado_presente": true,
+      "igual_a_p0": false,
+      "sha256_instalado": "76e968af48ed443ccdd4c1129dfd71f745127398211980f51c5e3e02ff3a731a",
+      "sha256_p0": "598ec713b9f189cbc0c897524211fa8e2b7f4bd658b34261b868d538811bc80c"
+    },
+    {
+      "arquivo": "bin/jangada-validar",
+      "instalado_presente": true,
+      "igual_a_p0": false,
+      "sha256_instalado": "2c3d98ba7294fc41e70777734b698ac68d6313d956046db732ab00730a4278a4",
+      "sha256_p0": "d4715d391c135707abb5ff9da61098cf7c50e5a78251d103141773afd75943a8"
+    },
+    {
+      "arquivo": "bin/jangada-isolar",
+      "instalado_presente": true,
+      "igual_a_p0": false,
+      "sha256_instalado": "6bab032635699dcfa0f3baddc1fafde54b147795f283d605216251bbbea8608e",
+      "sha256_p0": "8b4ecbb0ca59bfc8e68da5477db27addf3727e978238829674766355fd249471"
+    },
+    {
+      "arquivo": "bin/jangada-agente-fim",
+      "instalado_presente": true,
+      "igual_a_p0": false,
+      "sha256_instalado": "a50b05e8c61e87afc9df80dd5a62047e620783b26a081d15d6186e7ae62c9514",
+      "sha256_p0": "d2ac06ee9c674a66d366f3da163fe9a82e5c3141d108f21dd5d9e7008168d5b6"
+    },
+    {
+      "arquivo": "default/orquestracao/confianca.py",
+      "instalado_presente": false,
+      "igual_a_p0": false,
+      "sha256_instalado": null,
+      "sha256_p0": "01f2305611ab0876afd7724764c04403eb6bd60d5eb43262889226d13c30a496"
+    }
+  ],
+  "instalacao_alterada": false,
+  "limite": "Arquivos diferentes não identificam por si só um commit instalado; não atribuir execução à P0"
+}

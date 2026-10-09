@@ -1,0 +1,37 @@
+test_A_alias_simbolico_nao_reabre_banco (__main__.Confianca.test_A_alias_simbolico_nao_reabre_banco) ... ok
+test_A_configuracao_nao_desliga_fronteira (__main__.Confianca.test_A_configuracao_nao_desliga_fronteira) ... ok
+test_A_descritor_adicional_nao_e_herdado (__main__.Confianca.test_A_descritor_adicional_nao_e_herdado) ... ok
+test_A_descritor_padrao_para_banco_recusado (__main__.Confianca.test_A_descritor_padrao_para_banco_recusado) ... ok
+test_A_ligacao_fisica_recusada_antes_de_iniciar (__main__.Confianca.test_A_ligacao_fisica_recusada_antes_de_iniciar) ... ok
+test_A_sqlite_real_somente_leitura_mesmo_com_extra (__main__.Confianca.test_A_sqlite_real_somente_leitura_mesmo_com_extra) ... ok
+test_B_dependencia_nao_libera_por_sqlite_forjado (__main__.Confianca.test_B_dependencia_nao_libera_por_sqlite_forjado) ... ok
+test_B_estado_sqlite_forjado_nao_e_decisao (__main__.Confianca.test_B_estado_sqlite_forjado_nao_e_decisao) ... ok
+test_B_executor_delegado_realmente_isolado_do_sqlite (__main__.Confianca.test_B_executor_delegado_realmente_isolado_do_sqlite) ... ok
+test_B_interface_recusa_executor_mesmo_sem_variavel (__main__.Confianca.test_B_interface_recusa_executor_mesmo_sem_variavel) ... ok
+test_B_json_de_supervisao_inventada_nao_aprova (__main__.Confianca.test_B_json_de_supervisao_inventada_nao_aprova) ... ok
+test_B_revisor_agy_realmente_isolado_do_sqlite (__main__.Confianca.test_B_revisor_agy_realmente_isolado_do_sqlite) ... ok
+test_B_revisor_claude_realmente_isolado_do_sqlite (__main__.Confianca.test_B_revisor_claude_realmente_isolado_do_sqlite) ... ok
+test_C_aprovacao_outra_tarefa_nao_pode_ser_reutilizada (__main__.Confianca.test_C_aprovacao_outra_tarefa_nao_pode_ser_reutilizada) ... ok
+test_C_artefato_alterado_invalida_decisao (__main__.Confianca.test_C_artefato_alterado_invalida_decisao) ... ok
+test_D_reprovacao_manual_nao_finge_independencia (__main__.Confianca.test_D_reprovacao_manual_nao_finge_independencia) ... ok
+test_D_sem_revisao_independente_nao_aprova (__main__.Confianca.test_D_sem_revisao_independente_nao_aprova) ... ok
+test_E_rotulo_modelo_nao_registra_revisao_inexistente (__main__.Confianca.test_E_rotulo_modelo_nao_registra_revisao_inexistente) ... ok
+test_FG_encerramento_preserva_integrais_e_contexto (__main__.Confianca.test_FG_encerramento_preserva_integrais_e_contexto) ... ok
+test_F_reprovacoes_e_rodadas_intermediarias_preservadas (__main__.Confianca.test_F_reprovacoes_e_rodadas_intermediarias_preservadas) ... ok
+test_G_prompt_inicial_protegido_mesmo_apos_adulteracao_local (__main__.Confianca.test_G_prompt_inicial_protegido_mesmo_apos_adulteracao_local) ... ok
+test_H_alias_de_arquivo_recusado_antes_de_criar_pastas (__main__.Confianca.test_H_alias_de_arquivo_recusado_antes_de_criar_pastas) ... ok
+test_H_contexto_ausente_nao_encerra_com_aprovacao (__main__.Confianca.test_H_contexto_ausente_nao_encerra_com_aprovacao) ... ok
+test_H_falha_fsync_nao_apaga_documentos (__main__.Confianca.test_H_falha_fsync_nao_apaga_documentos) ... ok
+test_H_falha_publicacao_preserva_originais (__main__.Confianca.test_H_falha_publicacao_preserva_originais) ... ok
+test_H_ligacoes_em_evidencias_bloqueiam_limpeza (__main__.Confianca.test_H_ligacoes_em_evidencias_bloqueiam_limpeza) ... ok
+test_I_arquivamento_repetido_sem_duplicacao (__main__.Confianca.test_I_arquivamento_repetido_sem_duplicacao) ... ok
+test_J_codigo_do_controlador_nao_pode_ser_alterado (__main__.Confianca.test_J_codigo_do_controlador_nao_pode_ser_alterado) ... ok
+test_J_evidencia_protegida_nao_persiste_escrita_real (__main__.Confianca.test_J_evidencia_protegida_nao_persiste_escrita_real) ... ok
+test_J_foto_nao_pode_reexpor_autoridade (__main__.Confianca.test_J_foto_nao_pode_reexpor_autoridade) ... ok
+test_J_isolamento_nao_altera_outro_projeto (__main__.Confianca.test_J_isolamento_nao_altera_outro_projeto) ... ok
+test_L_integracao_permanece_bloqueada (__main__.Confianca.test_L_integracao_permanece_bloqueada) ... ok
+
+----------------------------------------------------------------------
+Ran 32 tests in 12.552s
+
+OK

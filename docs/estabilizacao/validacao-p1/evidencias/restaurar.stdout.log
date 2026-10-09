@@ -1,0 +1,31 @@
+ok    caso 1: o Claude abre isolado na pasta do projeto
+ok    caso 1: retoma a conversa e recebe o protocolo
+ok    caso 1: o estado passa a iniciado
+ok    caso 2: o comando gravado no estado não roda
+ok    caso 2: a sessão abre com o comando recomposto
+ok    caso 3: isolar:false no estado é ignorado
+ok    caso 4: JANGADA_AGENTE_ISOLAR=0 mantém isolamento obrigatório
+ok    caso 5: agente com comando anexado é recusado
+ok    caso 5: agente fora da lista é recusado
+ok    caso 5: id de conversa inválido é recusado
+ok    caso 5: a recusa diz o motivo
+ok    caso 5: pasta fora dos projetos e sem git é recusada
+ok    caso 5: a instalação do jangada é recusada, mesmo sendo repositório git
+ok    caso 5: .. no caminho não escapa da conferência
+ok    caso 5: perfil com caminho é recusado
+ok    caso 5: revisor fora da lista é recusado
+ok    caso 6: o perfil não desliga o isolamento na restauração
+ok    caso 6: o resto do ambiente do perfil vale
+ok    caso 7: a sessão antiga do agy volta na mesma conversa
+ok    caso 7: o perfil agy retirado é recusado com o motivo
+ok    caso 7: a recusa não roda nada
+ok    caso 8: worktree sem id retoma com --continue
+ok    caso 9: repositório git fora de JANGADA_PROJETOS restaura
+ok    caso 10: o protocolo é refeito das fontes
+ok    caso 11: Codex retoma isolado com UUID e revisor Codex
+ok    caso 11: protocolo de delegação do Codex refeito
+ok    caso 12: Codex sem UUID no worktree retoma por pasta
+ok    caso 13: Codex direto sem UUID abre conversa nova
+ok    caso 14: sem revisor, restauração preserva o protocolo
+ok    caso 14: sem revisor, restauração avisa
+todos os testes da restauração passaram

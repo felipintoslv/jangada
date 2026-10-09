@@ -1,0 +1,47 @@
+{
+  "chamadas_externas": false,
+  "credenciais_acessadas": false,
+  "sondas": {
+    "socket_rede": {
+      "estado": "BLOQUEADO",
+      "errno": 1,
+      "erro": "[Errno 1] Operation not permitted"
+    },
+    "socket_local": {
+      "estado": "BLOQUEADO",
+      "errno": 1,
+      "erro": "[Errno 1] Operation not permitted"
+    },
+    "bubblewrap": {
+      "estado": "BLOQUEADO",
+      "codigo": 1,
+      "erro": "bwrap: loopback: Failed to create NETLINK_ROUTE socket: Operation not permitted"
+    },
+    "executavel_Rscript": {
+      "presente": true,
+      "modelo_real_verificado": false
+    },
+    "executavel_tmux": {
+      "presente": true,
+      "modelo_real_verificado": false
+    },
+    "executavel_ollama": {
+      "presente": true,
+      "modelo_real_verificado": false
+    },
+    "executavel_codex": {
+      "presente": true,
+      "modelo_real_verificado": false
+    },
+    "executavel_claude": {
+      "presente": true,
+      "modelo_real_verificado": false
+    },
+    "executavel_agy": {
+      "presente": true,
+      "modelo_real_verificado": false
+    }
+  },
+  "comunicacao_e_isolamento_disponiveis": false,
+  "limite": "Não verifica autenticação, execução de modelos, Qt ou o ciclo Jangada. Somente comunicação local e isolamento mínimo."
+}

@@ -1,0 +1,10 @@
+{
+  "origem": "Usuário respondeu autorizo à proposta de Codex executor e Claude revisor",
+  "provedores": [
+    "codex",
+    "claude"
+  ],
+  "somente_dados_sinteticos": true,
+  "chamadas_remotas_autorizadas": true,
+  "instalacao_ativa_deve_ser_preservada": true
+}

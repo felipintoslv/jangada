@@ -1,0 +1,25 @@
+{
+  "commit": "17178ded546642e3246bfe3bd5c33df8da821874",
+  "raiz_sintetica": "/tmp/jp1-pio6_bdi",
+  "registro": "/home/felipinto/Projetos/jangada-resultados-p1-2026-10/evidencias/jp1-pio6_bdi",
+  "modelos_reais_executados": false,
+  "resultados": [
+    {
+      "suite": "interface",
+      "comando": [
+        "/usr/bin/python3",
+        "-B",
+        "/tmp/jp1-pio6_bdi/codigo/testes/tarefas.py"
+      ],
+      "codigo": 0,
+      "segundos": 7.16,
+      "classificacao": "PASSOU"
+    }
+  ],
+  "hashes": {
+    "sonda-qt.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sonda-qt.stderr.log": "1b1a68f431fbe8e75a615bcf84afe227ac2e8c3ca568ed42102fac780a20e47e",
+    "interface.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "interface.stderr.log": "158341a58b1f8a863e23e928e8369c62c5517d285ab0d46cf178880fc219215b"
+  }
+}

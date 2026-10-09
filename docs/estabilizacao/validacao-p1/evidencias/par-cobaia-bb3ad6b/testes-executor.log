@@ -1,0 +1,38 @@
+ok    participação soma 1 em cada município 
+ok    participação da indústria em A é 0,3 
+ok    QL da indústria em A é 1,5 
+ok    QL da indústria em B é 0,5 
+ok    HHI de A é 0,58 
+ok    HHI de B é 0,82 
+ok    filtrar_ano recusa ano ausente 
+ok    participação soma 1 em cada município e ano 
+ok    participação de 2022 não muda com 2023 na base 
+ok    QL de 2022 não muda com 2023 na base 
+ok    QL da indústria em A em 2023 é 0,6 / 0,35 
+ok    HHI tem uma linha por município e ano 
+ok    HHI de A em 2022 continua 0,58 
+ok    HHI de A em 2023 é 0,52 
+ok    participações conferem com as referências manuais 
+ok    QL confere com as referências manuais 
+ok    participação e QL preservam registros e anos 
+ok    HHI preserva as chaves municipais por ano 
+ok    alterar 2023 preserva a participação de 2022 
+ok    alterar 2023 preserva o QL de 2022 
+ok    alterar 2023 preserva o HHI de 2022 
+ok    participação separa municípios homônimos por UF 
+ok    HHI separa municípios homônimos por UF 
+ok    município sem empregos tem participação e QL ausentes 
+ok    município sem empregos permanece no HHI como ausente 
+ok    ano sem empregos tem indicadores ausentes 
+ok    setor sem empregos tem QL ausente e demais setores têm QL um 
+ok    ausência não vira zero no denominador municipal 
+ok    ausência torna desconhecido o universo de QL do próprio ano 
+ok    HHI ausente permanece na saída sem afetar outro município 
+ok    grupo inteiramente ausente permanece desconhecido 
+ok    base gerada tem dois anos 
+ok    HHI da base entre 0 e 1 
+ok    HHI da base inteira separa os anos 
+ok    HHI da base inteira em 2022 igual ao de 2022 sozinho 
+ok    QL da base inteira em 2022 igual ao de 2022 sozinho 
+
+todos os testes passaram

@@ -1,0 +1,10 @@
+{
+  "segredos_lidos": 0,
+  "unlock_sintetico": 0,
+  "escritas_na_origem": 0,
+  "chamadas": {
+    "SearchItems": 2,
+    "Properties.Get": 1
+  },
+  "buscas_sem_correspondencia": 0
+}

@@ -1,0 +1,103 @@
+== pid do estado
+ok    sessão direta encerra (0)
+ok    o pid gravado não é morto
+== ramo inválido
+ok    ramo main: recusado (1)
+ok    ramo main: explica
+ok    ramo main: estado mantido
+ok    ramo main: tmux intocado
+ok    ramo main: worktree mantido
+== worktree fora de JANGADA_WORKTREES
+ok    worktree fora: recusado (1)
+ok    worktree fora: explica
+ok    worktree fora: estado mantido
+ok    worktree fora: tmux intocado
+ok    worktree fora: mantido
+ok    worktree com ..: recusado (1)
+ok    worktree com ..: explica
+ok    worktree com ..: estado mantido
+ok    worktree com ..: tmux intocado
+== worktree por link simbólico
+ok    link simbólico: recusado (1)
+ok    link simbólico: explica
+ok    link simbólico: estado mantido
+ok    link simbólico: tmux intocado
+ok    link simbólico: worktree mantido
+== raiz de outro repositório
+ok    raiz trocada: recusado (1)
+ok    raiz trocada: explica
+ok    raiz trocada: estado mantido
+ok    raiz trocada: tmux intocado
+ok    raiz trocada: ramo do outro repositório mantido
+ok    raiz trocada com --integrar: recusado (1)
+ok    raiz trocada sem worktree: recusado (1)
+ok    raiz trocada sem worktree: explica
+ok    raiz trocada sem worktree: estado mantido
+ok    raiz trocada sem worktree: tmux intocado
+== pasta que não é worktree registrado
+ok    worktree igual à raiz: recusado (1)
+ok    worktree igual à raiz: explica
+ok    worktree igual à raiz: estado mantido
+ok    worktree igual à raiz: tmux intocado
+ok    pasta de outro repositório: recusado (1)
+ok    pasta de outro repositório: explica
+ok    pasta de outro repositório: estado mantido
+ok    pasta de outro repositório: tmux intocado
+ok    pasta sem registro: recusado (1)
+ok    pasta sem registro: explica
+ok    pasta sem registro: estado mantido
+ok    pasta sem registro: tmux intocado
+ok    pasta sem registro: motivo
+== base que vira opção do git
+ok    base --output: recusado (1)
+ok    base --output: explica
+ok    base --output: estado mantido
+ok    base --output: tmux intocado
+ok    base --output: nada gravado
+== estado válido
+ok    pareceres da sessão apagados
+ok    parecer da sessão vizinha mantido
+ok    encerra (0)
+ok    worktree removido
+ok    estado apagado
+ok    ramo mantido
+== --integrar e a revisão fora do isolamento
+ok    terminal: integração bloqueada
+ok    terminal: motivo explícito
+ok    terminal: HEAD preservado
+ok    terminal: arquivo novo preservado
+ok    terminal: índice preservado
+ok    terminal: trabalho preservado
+ok    terminal: sessão mantida
+ok    terminal: worktree mantido
+ok    sem-revisao: integração bloqueada
+ok    sem-revisao: motivo explícito
+ok    sem-revisao: HEAD preservado
+ok    sem-revisao: arquivo novo preservado
+ok    sem-revisao: índice preservado
+ok    sem-revisao: trabalho preservado
+ok    sem-revisao: sessão mantida
+ok    sem-revisao: worktree mantido
+ok    grafica: integração bloqueada
+ok    grafica: motivo explícito
+ok    grafica: HEAD preservado
+ok    grafica: arquivo novo preservado
+ok    grafica: índice preservado
+ok    grafica: trabalho preservado
+ok    grafica: sessão mantida
+ok    grafica: worktree mantido
+ok    concorrência 1: recusada
+ok    concorrência 2: recusada
+ok    concorrência: HEAD preservado
+ok    backend sem rollback destrutivo
+== --limpar-concluidos
+ok    resposta n: termina sem erro (0)
+ok    resposta n: lista a sessão
+ok    resposta n: sessão não encerrada
+ok    resposta n: worktree mantido
+ok    sem terminal: sessão não encerrada
+ok    sem terminal: estado mantido
+ok    resposta s: encerra (0)
+ok    resposta s: sessão encerrada
+ok    resposta s: worktree removido
+tudo certo

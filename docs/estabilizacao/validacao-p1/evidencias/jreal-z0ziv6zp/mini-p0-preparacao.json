@@ -1,0 +1,13 @@
+{
+  "projeto": "/tmp/jreal-z0ziv6zp/projetos/mini-p0",
+  "codigo_p0": "/tmp/jreal-z0ziv6zp/codigo",
+  "base_fonte": "0331e4a4daafc20a1b1ba5767f0e825fbf0a9b03",
+  "sem_historico_original": true,
+  "sem_links_de_dados": true,
+  "sem_gabarito": true,
+  "chamadas_modelos": 0,
+  "executor": "codex",
+  "revisor": "agy",
+  "pedido": "/tmp/jreal-z0ziv6zp/pedido-mini-p0.md",
+  "fase": "PREPARADA, autenticação isolada agy ainda necessária"
+}

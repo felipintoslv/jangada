@@ -1,0 +1,1055 @@
+{
+  "p0": "17178ded546642e3246bfe3bd5c33df8da821874",
+  "auditoria": "28a007b9ce4f9cf8ad5cb4e305085ae686d74faf",
+  "codigo_producao_alterado": false,
+  "arquivos_importados": [
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/README.md",
+      "sha256": "760eb4e75ee5eba69b4df4610fc5bb212959a40c1bec235d6bf30e242bbac2f5"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/SHA256SUMS",
+      "sha256": "fe8721be71ca7a354308eeead097f5f5b9a33b5578b4e8a8fc7e24c5306eb07f"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/acompanhamento.stderr.log",
+      "sha256": "3a798347f6ea830f103ba542a70a59ee424e5409520f0883333700bffda69cd4"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/acompanhamento.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/agy-autenticacao-estatica/identificacao.json",
+      "sha256": "267315302078b68b365d631275f97291b17c8f494898eb706fdde824baa00eb1"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/agy-autenticacao-estatica/load-stored-token.txt",
+      "sha256": "c96ef03cfdf708a4a0deb580f7299af3c34091fa28c84d1515e3dfb64fa38845"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/aprovacao-commit-posterior.json",
+      "sha256": "f01a719264a76c6ba43a5e61bc84b5a145ce23d04bc40b328a63eea2d5709e7f"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/arquivo-sintetico.json",
+      "sha256": "41c91e398f2e48262385d4fde715f92b0c51820eec5746c839434b3b7a68e6c7"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/ataques-bubblewrap.jsonl",
+      "sha256": "dac13e467bfefc63c95aee6d4f69dae31c4d7db099359576aff7f2801af404f0"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/atividade.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/atividade.stdout.log",
+      "sha256": "c99c5301600441ce0df26d5e200f8d8536d76a3d3c9d564da50a9b4898c3bfae"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/autorizacao-agy.json",
+      "sha256": "22662b144d189d399e0f15aa6efce1136da1f42de660eeffdb8d15c5a87cc766"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/autorizacao-modelos.json",
+      "sha256": "3447b4531d2ce48d02b5f5224d8791907d6489dad3835aba8d1a27ab12eb40ee"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/backend-cadastro.json",
+      "sha256": "838bf3eceaddeb81f20a5bc757d9f0e1cceb3bb627149f827ac8f7cc08865049"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/cadastro.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/cadastro.stdout.log",
+      "sha256": "31a6c3cc96c7fa7c3d4fd7d346535909d25013046e17cea7c164c24691be4e44"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/checagem-ambiente-atual.json",
+      "sha256": "e2476a7687a2ad5f0fac5bd6f7df21ca547362a31fc2a5420ad4bec30aa74c99"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/checagem-terminal-informada.json",
+      "sha256": "5a242b02fa595f6fd964cc1c68cd8244aa6852cdb4e89c9ed5a7fb544c51084b"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/comandos-adversariais.json",
+      "sha256": "2220d44c8305721275e88779046a1c4748ddd675986a1066cdf953cd15bf0879"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/comandos-backend.json",
+      "sha256": "a5dddc783421820dcc2e313130d794a8e171b37a507bb32efc1bfeb2423b77ea"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/comandos-consolidados.json",
+      "sha256": "3458473e8cdb2c91494ed1b051014fefb2efb0751a1aa814a1d833eb61351b8d"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/comandos.json",
+      "sha256": "07bd7ca33f240796d1a78bb9b2e1be19cf273422095bbae89cb221af3ee45f87"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/configuracao-efetiva.json",
+      "sha256": "ee3965b21f1f6eaf64c0a94514f1a23c2a846f47b48172465a94ebdfcfcf6fa4"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/controle-metodologico-1.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/controle-metodologico-1.stdout.log",
+      "sha256": "7fefc5fa464dbc17a56e29e87ab68c0b154a1fb76f096f3640727220c10de3e7"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/controle-metodologico-2.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/controle-metodologico-2.stdout.log",
+      "sha256": "7fefc5fa464dbc17a56e29e87ab68c0b154a1fb76f096f3640727220c10de3e7"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-1-A1.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-1-A1.stdout.log",
+      "sha256": "497e2475568f458ff610be28c81f50f22f1436e05d5b6ac090b7708103acc465"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-1-A2.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-1-A2.stdout.log",
+      "sha256": "b0c901a4d209bb0d80edf87103d6bf0c5daf3389e6c6f1267ecb29c682853142"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-1-A3.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-1-A3.stdout.log",
+      "sha256": "472dc2cfc3d805af7a60c7979d7148fd652edf1cd00a6ce063ed0895df40a4c0"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-1-A4.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-1-A4.stdout.log",
+      "sha256": "ef2451f76d8d80f61ee2df2f9f47a6855e4f9858855c1894282967e7824f387a"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-1-A5.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-1-A5.stdout.log",
+      "sha256": "153825c60a88371f907bc66b46764ffacdca63f7a104d205fcb4f6300dc61d8a"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-1-A6.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-1-A6.stdout.log",
+      "sha256": "455daa66d7286fd124d740dfb93ffa7509c1346149503a15cf62c3e96ab78d4d"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-1-A7.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-1-A7.stdout.log",
+      "sha256": "b89de1f3825da64b772f29618923e9a67db22682e96fc0300132f82aa410d95b"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-1-A8.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-1-A8.stdout.log",
+      "sha256": "ac7242b916eadcabc5f0e6cf0f7d0cf01546a0e069a771960f1a92cd93ced117"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-2-A1.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-2-A1.stdout.log",
+      "sha256": "497e2475568f458ff610be28c81f50f22f1436e05d5b6ac090b7708103acc465"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-2-A2.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-2-A2.stdout.log",
+      "sha256": "b0c901a4d209bb0d80edf87103d6bf0c5daf3389e6c6f1267ecb29c682853142"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-2-A3.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-2-A3.stdout.log",
+      "sha256": "472dc2cfc3d805af7a60c7979d7148fd652edf1cd00a6ce063ed0895df40a4c0"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-2-A4.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-2-A4.stdout.log",
+      "sha256": "ef2451f76d8d80f61ee2df2f9f47a6855e4f9858855c1894282967e7824f387a"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-2-A5.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-2-A5.stdout.log",
+      "sha256": "153825c60a88371f907bc66b46764ffacdca63f7a104d205fcb4f6300dc61d8a"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-2-A6.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-2-A6.stdout.log",
+      "sha256": "455daa66d7286fd124d740dfb93ffa7509c1346149503a15cf62c3e96ab78d4d"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-2-A7.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-2-A7.stdout.log",
+      "sha256": "b89de1f3825da64b772f29618923e9a67db22682e96fc0300132f82aa410d95b"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-2-A8.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeito-2-A8.stdout.log",
+      "sha256": "ac7242b916eadcabc5f0e6cf0f7d0cf01546a0e069a771960f1a92cd93ced117"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/defeitos-metodologicos.json",
+      "sha256": "8be8eb6258a96adf879cb208a757e189a71dae5f9d557876992ff8ae71e725c4"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/dependencias-r-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/dependencias-r.tsv",
+      "sha256": "0be817384b9b84db43435f39048ac3b65dfe5d07bf7046ccad436bc4e0f00724"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/deterministico.stderr.log",
+      "sha256": "3a46a8f360f2b636a3772cda85e51149b9df4d4eda438753584a158a601896ad"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/deterministico.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/executor.stderr.log",
+      "sha256": "9ca23a63e813e891c2a62445069976abd3386dab1178d2755b8a5d06f2ab70c7"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/executor.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/fim.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/fim.stdout.log",
+      "sha256": "2052644681c9b4d94e129cd1347f1c59d8c19d3fb94b3b72984cb2aecffc21e3"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/git-commit-dados.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/git-commit-dados.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/git-dados.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/git-dados.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/git-init.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/git-init.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/integridade-final.json",
+      "sha256": "736dbd2b0c41cb5e39d74c27f1b064890c77f6910bac158c57b98794f26943c1"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/interface-67.stderr.log",
+      "sha256": "766453dd092900b24b61d64739d72121bdeb8ce4f8c5daa1efcfedb48e85c02a"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/interface-67.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/isolamento-preventivo.json",
+      "sha256": "5adc5dc16f8bb085dc40ea7ac1e6388dad3452b322896d66ae0500e33e32d96d"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jangada-p1-adversarial.log",
+      "sha256": "032a9f6f0e9a95d894374f9ac3306ecc3f10ec7a7709ea5e78c0d6ab65d7f76d"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jangada-p1-backend.log",
+      "sha256": "46cac9ebaf575273d5df2bfabe1ae8ca32d69d11168f3afde68768ddd25cdb41"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jangada-p1-comunicacao-833nd0if/arquivo-sintetico.json",
+      "sha256": "2dd9de29cb1792ee17540c4b717ed0a793eb35e5e077eabf3137e23aa2d5d5ba"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jangada-p1-comunicacao-833nd0if/ataques-bubblewrap.jsonl",
+      "sha256": "22c1b192171351a520cc847e75d1e090c0d01abf2a574c4c7db09e5b4b06992f"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jangada-p1-comunicacao-833nd0if/interface.stderr.log",
+      "sha256": "4de1de22290f0ca8a29b1a8d327bbd6e18866754e59370c173d56cf09b39f8df"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jangada-p1-comunicacao-833nd0if/interface.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jangada-p1-comunicacao-833nd0if/p0.stderr.log",
+      "sha256": "2bcb55d5ee8b979f752acdf59c67515373670ea8b6c4a76a398367dedab4708b"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jangada-p1-comunicacao-833nd0if/p0.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jangada-p1-comunicacao-833nd0if/resumo.json",
+      "sha256": "25d3be4725389c0472fd51491b2f9e03a9b0a9b753d5c43a8db820f20b006e7f"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jangada-p1-execucao.log",
+      "sha256": "1444a21d15e7631f5ae22e3f7acc5f6a215e7a4506939fe0bd22d760443a2e2c"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-268k0oq7/resumo.json",
+      "sha256": "6b99dddf72518198a0254e07a4934fd76896d9047a143e78397db4befb88c353"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-268k0oq7/stderr.log",
+      "sha256": "31c2cb0dffdeb9049fa2269e24af62df15e4161d4f752a648faf9630259725fe"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-268k0oq7/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/entradas/ano_alterado.csv",
+      "sha256": "9b8e1535e9b9dce0c31551f0458aef22b3bf59563e85c2e3a84e6cfa026281f5"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/entradas/ausente.csv",
+      "sha256": "7b2d1fab3f2e0032c0611ecfd9328d84810a473a774f8258e8a39e9603889245"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/entradas/normal.csv",
+      "sha256": "b5a10c98ca69c8142c9bf32ee6709ff0afef16dc25ed77b6c1c1960aafcef64a"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/entradas/ordem_invertida.csv",
+      "sha256": "60738f0e88c7e9a50bdcdaa262c31804d53c1ab00b8e206fab60cab0de1171d8"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/entradas/todo_ausente.csv",
+      "sha256": "7a55038ca8ed73f6451ef897adab4a098e62ab43ffc4e3785689826014aec4c2"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/entradas/zero_municipio.csv",
+      "sha256": "20caabc1e4afcf45cbe80717df39698879b05a513aef39da08df10966ac1e61e"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/entradas/zero_setor.csv",
+      "sha256": "a43a0ff5089c4722a1952f1799b580d447db91bd42f342b8d251ba489c31757e"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/resumo.json",
+      "sha256": "b9062baf2066a36159b4130ce104e22ec4008a934ae1f3f4cb36fc96c519cd92"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/ano_alterado-hhi.csv",
+      "sha256": "61acf60c370133f14dfa1229aa7b3ffd2626c279f2fc3bca3fcf10fd16539e1e"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/ano_alterado-participacao.csv",
+      "sha256": "e9ad0e857c2a41327d5384a3b4b85bfde87b3d99428c410d53cdc54687db3ce3"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/ano_alterado-ql.csv",
+      "sha256": "221defc2ff502d61e24c642225c7f06d4587bf55b8bc66bce7d5cd4151d00927"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/ausente-hhi.csv",
+      "sha256": "e644d063b84176199c9bebaaf8f64addf35b3c410d5012a8c06310028640fe86"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/ausente-participacao.csv",
+      "sha256": "81a31097962f104d39ad8b679a963d32653d5d65bddb8846acb2fbbfc0ecb1e0"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/ausente-ql.csv",
+      "sha256": "af708f08916aa41c18b99dd151dd54aa212be1e638e9d746cf1e82eeca798e02"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/normal-hhi.csv",
+      "sha256": "db32d06b38e8fa7a5a73af92c08339d6c3781661537c73249388052bd188ca6b"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/normal-participacao.csv",
+      "sha256": "3fa21cafacd61d960ef4ca092a6d76fc52028b4a5476fd9127bd5e1e41ab2afe"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/normal-ql.csv",
+      "sha256": "722d51622d15f88e13009018eb4f8ddf60a1dcd5fdc45964938a0c92e45665bc"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/ordem_invertida-hhi.csv",
+      "sha256": "db32d06b38e8fa7a5a73af92c08339d6c3781661537c73249388052bd188ca6b"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/ordem_invertida-participacao.csv",
+      "sha256": "fbd213db22fe8e157bd1ade98806dba051e9a5d346c68980635a6fcfb5fcec01"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/ordem_invertida-ql.csv",
+      "sha256": "758a069ba98cd8aa746c5c4ced09c1872ba28088e568e2ce09d66ba324aad743"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/todo_ausente-hhi.csv",
+      "sha256": "1de4e7778f616825e78641200b738a901f063ec877c675f9448a77229da7f14f"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/todo_ausente-participacao.csv",
+      "sha256": "f551ee3e6f522dd50122a19b39e045b492e14e0abf2cf2a7589bd1a36ff9ae5a"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/todo_ausente-ql.csv",
+      "sha256": "e13ae15ae3e1f07386485f9047c5c0318b27caf566ecc30585cd576a75334de4"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/zero_municipio-hhi.csv",
+      "sha256": "fbf58a06afee58d934d1a8d2e527f040f272b813ef1071c8d128102c114dcc57"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/zero_municipio-participacao.csv",
+      "sha256": "8a7cf8f4f2faea6eef2f70dd1e6f3c3a88ff850143a19898b7656eb582046845"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/zero_municipio-ql.csv",
+      "sha256": "f612b27eefb24afc680725f9564b742ae33b7f66d8f985572955077503cf919a"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/zero_setor-hhi.csv",
+      "sha256": "5681e9e46c9d8a81dab6e308420a043847074864863e71dda5cb30b3992a754a"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/zero_setor-participacao.csv",
+      "sha256": "5f2d53ad66677be234bb696be6317bdc08b80b96bd192860f6f8f1b929b3bcb9"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/saida/zero_setor-ql.csv",
+      "sha256": "4446824565b17f89c1592f692f70f68546888d41f5fee5c3631fe289fd51a600"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jctrl-jt5vmx8p/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jp1-pio6_bdi/interface.stderr.log",
+      "sha256": "158341a58b1f8a863e23e928e8369c62c5517d285ab0d46cf178880fc219215b"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jp1-pio6_bdi/interface.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jp1-pio6_bdi/resumo.json",
+      "sha256": "24b5f862d99f30d49c257c0edbe29128833ef539c66e737312d27c50bd9ecaaf"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jp1-pio6_bdi/sonda-qt.stderr.log",
+      "sha256": "1b1a68f431fbe8e75a615bcf84afe227ac2e8c3ca568ed42102fac780a20e47e"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jp1-pio6_bdi/sonda-qt.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jreal-z0ziv6zp/agy-resumo.json",
+      "sha256": "d77782d72e50253fe6829746b4195826c7c1e70e6700e6b975bcc2d7e2c017d4"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jreal-z0ziv6zp/agy.stderr.log",
+      "sha256": "0df605e461da1484b7b6bb5b9d59cb7b82c9b70ee8859fecf8e8de7ac8aec0f6"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jreal-z0ziv6zp/agy.stdout.log",
+      "sha256": "7ef5ac64ad6e830550cfb17b7921ef565a67aba4ab53bd829de704a10397a0e8"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jreal-z0ziv6zp/claude.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jreal-z0ziv6zp/claude.stdout.log",
+      "sha256": "47a4989225e5d75baa337097e012f800bcb8124483eca33f48597beaecc72079"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jreal-z0ziv6zp/codex.stderr.log",
+      "sha256": "c3cf2ecb722c0c3850faee26523516346ddd938f432ded23a0068ca1114893e6"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jreal-z0ziv6zp/codex.stdout.log",
+      "sha256": "29481a5bafeaf4ab87799cf3b81ef2c0b5b7839644677ab34835bec0f2c564c3"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jreal-z0ziv6zp/isolamento.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jreal-z0ziv6zp/isolamento.stdout.log",
+      "sha256": "e2418446981d6e28a21cd243722dd2bb3fee9edf8cbf1976682c1fc73b097034"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jreal-z0ziv6zp/mini-p0-preparacao.json",
+      "sha256": "f5b4de14dff1a5041b7426c29e9231764a5de113c50256417b2c8ff92e38ae97"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jreal-z0ziv6zp/ponte-agy-resumo.json",
+      "sha256": "eb09e6835f7f77e5c9c32ad32504d87315feb6fa1f0e3ecc0bac0bb02b677c5c"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jreal-z0ziv6zp/resumo.json",
+      "sha256": "b9a427a8a264ec1d2fe5322c79c2b5c2ada4acd894919c83b35e7c0ad9012701"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jreal-z0ziv6zp/tentativas-agy/1791518548794657198/agy-resumo.json",
+      "sha256": "4714fbd4abd2e8f002e967dec084cb7b0bfcf422f7c7a26f549aea7cdfcd111e"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jreal-z0ziv6zp/tentativas-agy/1791518548794657198/agy.stderr.log",
+      "sha256": "0df605e461da1484b7b6bb5b9d59cb7b82c9b70ee8859fecf8e8de7ac8aec0f6"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jreal-z0ziv6zp/tentativas-agy/1791518548794657198/agy.stdout.log",
+      "sha256": "7ef5ac64ad6e830550cfb17b7921ef565a67aba4ab53bd829de704a10397a0e8"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/jreal-z0ziv6zp/tentativas-agy/1791518548794657198/ponte-agy-resumo.json",
+      "sha256": "facd0204373d65fd8f11956f50ada67d6fcbbb461c2ff383276462e184178a20"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/metamorfismo-1-A7.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/metamorfismo-1-A7.stdout.log",
+      "sha256": "b89de1f3825da64b772f29618923e9a67db22682e96fc0300132f82aa410d95b"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/metamorfismo-1-CONTROLE.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/metamorfismo-1-CONTROLE.stdout.log",
+      "sha256": "7fefc5fa464dbc17a56e29e87ab68c0b154a1fb76f096f3640727220c10de3e7"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/metamorfismo-1.json",
+      "sha256": "3faaf7a51e98062809a2c874b293c573de7e4ba3884f6496e5d988827c3aa98e"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/metamorfismo-2-A7.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/metamorfismo-2-A7.stdout.log",
+      "sha256": "b89de1f3825da64b772f29618923e9a67db22682e96fc0300132f82aa410d95b"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/metamorfismo-2-CONTROLE.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/metamorfismo-2-CONTROLE.stdout.log",
+      "sha256": "7fefc5fa464dbc17a56e29e87ab68c0b154a1fb76f096f3640727220c10de3e7"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/metamorfismo-2.json",
+      "sha256": "3faaf7a51e98062809a2c874b293c573de7e4ba3884f6496e5d988827c3aa98e"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/operacional.stderr.log",
+      "sha256": "f0ab61a4e2e5ddd7701c335235064e3b8df65bdd527a3a95ad860911d498db10"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/operacional.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/oraculo-R-1.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/oraculo-R-1.stdout.log",
+      "sha256": "2d6c49f99b38be630caa87d1d86769234715ae883b62521896a4189dc980dd6f"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/oraculo-R-2.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/oraculo-R-2.stdout.log",
+      "sha256": "2d6c49f99b38be630caa87d1d86769234715ae883b62521896a4189dc980dd6f"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/oraculo-inacessivel.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/oraculo-inacessivel.stdout.log",
+      "sha256": "512bf332889e91ec060d0daed1740df9824a1ec1836869d9c952c3274d0e2596"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/oraculos-comparacao-1.json",
+      "sha256": "f3b8bec8757b9dc0c81dfc076a2e493a351f0ab1259e4d60bd71c165f99bd3f4"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/oraculos-comparacao-2.json",
+      "sha256": "a312558d5a5250ec06ded7eee845ba392c6242320208e3f740a759ad2012ae23"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/origem-ensaio.json",
+      "sha256": "d849492956361a8171ce3fcc3c5ba76ff06e5a4a863de11ae8072b08acb60d2a"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/origem.json",
+      "sha256": "1f94df13cd8e3ffb01a52c44b381a67c997d3161d9fd098c1ca9218fbc307c24"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/orquestracao.stderr.log",
+      "sha256": "1dbe5ea31cf7a981b5ee71ee5feb26cc8c88927d05ff89762e994377dbda328e"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/orquestracao.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/p0-32.stderr.log",
+      "sha256": "c9f35e583fd347e29a2285884ea3b6aae4c6140d81308f1e0d8b9db8791079e8"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/p0-32.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/painel-orquestracao.stderr.log",
+      "sha256": "27c4a39d34ece4cbc66cc59cb0870c7abe4cc0a5f009205bdd0ea06a93f8b3ac"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/painel-orquestracao.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/par-cobaia-bb3ad6b/conferencia-hashes.json",
+      "sha256": "f306d4c211eb79d332c23d5a435e737c509d0268ffd60871903d481f53f796cc"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/par-cobaia-bb3ad6b/identidades-executor.log",
+      "sha256": "cf0b2c222be4f217db8c2336f74bb3c2643607bb0830e277f5c2b261a98b112e"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/par-cobaia-bb3ad6b/parecer-agy-r1.md",
+      "sha256": "a85c8e3059049db4c15fd448a672476245aba0b6b8b66f997459d41e1e0f614d"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/par-cobaia-bb3ad6b/testes-executor.log",
+      "sha256": "0cbcaf3e1b87ac68b51f256f9f6e88baa6d9a6bba2f3cb65f73deb7534ba4245"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/par-cobaia-bb3ad6b/validacao-executor.log",
+      "sha256": "360f152716693107dd831628317339bac87cd32b9f60c6d94fc058e0f9d1114e"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/perfil-sem-rede.stderr.log",
+      "sha256": "31c2cb0dffdeb9049fa2269e24af62df15e4161d4f752a648faf9630259725fe"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/perfil-sem-rede.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/reconstrucao-somente-historico.json",
+      "sha256": "7a63627365538d745df7bcb9b5f5911501c59d39f7a1cb783401d7a01967504e"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/referencias-formais.json",
+      "sha256": "5b000966e1af5afb37215d1657a0e1eded4735c6326f292ea1df2d5391e7e207"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/restaurar.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/restaurar.stdout.log",
+      "sha256": "58f500e5c130f2b7183cf70f0b64e376114699b8b29a85c28ec502ccb5894aca"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/seguranca-complementar-exploratorio.stderr.log",
+      "sha256": "9e840029b546b9e5bc2eccff8f6f4bc0be0c3697b9ada5179c3391f6dc7443d5"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/seguranca-complementar-fixture-incompleta.stderr.log",
+      "sha256": "2467cc1727b81d6131af13aa2965d21ffb581f69e493b6b0a30206ca460f9211"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/seguranca-complementar.stderr.log",
+      "sha256": "b1a240e3586e5a0383cf4e12dbdf2b717bacda5e8e20176e40c72577abc91d04"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/seguranca-complementar.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/socket-unix-bind.json",
+      "sha256": "f05a277a60ceab8cb613dcabdf042c1b3a982befd2ab5de933f78f87b46ff49b"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/sockets-preflight.json",
+      "sha256": "ab1ec1ca329e031d728c6634888d751372d56aa7dfc4468a313baeeffe3a502e"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/supervisao.stderr.log",
+      "sha256": "b9b77b5d7ebd190635545a5d7cb2ebd39f2a72e7467d2a5957db8c617dcc94f0"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/supervisao.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/evidencias/versao-ensaio-nativo.json",
+      "sha256": "39d5a3bd935a4f9f8278ddaaadf1c39e6fd588ce0036872a5365e7ae8fe04f31"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/relatorios/AMBIENTE_ISOLADO.md",
+      "sha256": "ff948d0114847487a269c84e5ee03b7422eae8015d03863baf1c492911376fa3"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/relatorios/ENSAIO_PAR_COBAIA.md",
+      "sha256": "a7e36617fa03ca935f27253d34ab30352e554e97b53347485639ff297d4b6717"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/relatorios/EXECUCAO_MODELOS.md",
+      "sha256": "6b57a7221ceddef19b1f8cc6729c95a62e184b12de670c5836ac6d63b36dcb64"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/relatorios/EXPERIMENTO_REAL.md",
+      "sha256": "334cfc8e40b02045777dab5076da377e5324d6fe6cbd27fda8a327f09a3fdfa8"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/relatorios/METRICAS.md",
+      "sha256": "3eabfade431a937a751c13ea194baa1d8c5ec44b523d623f625189fc39327d7b"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/relatorios/ORACULO_INDEPENDENTE.md",
+      "sha256": "731507b7c4df66afe07732cad355471ed979e0e81238bb944ede736437cd63ef"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/relatorios/PLANO_TESTES.md",
+      "sha256": "0cd4dd2484c35e50095acadb18926b9bdeb097315130f5d6affe92b2192580e4"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/relatorios/RASTREABILIDADE.md",
+      "sha256": "db6c878dc88c551613ab453174e2a7fdb8316d97ee38634f0d957b15e346aef2"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/relatorios/RELATORIO_FINAL.md",
+      "sha256": "4845e806c1080f002661be054e87f8f449bf2fba288c9d14f1e59448615a179a"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/relatorios/RESULTADOS_ECONOMICOS.md",
+      "sha256": "8ec6d214b0680633fcda15d10093cacf40528b637ea0e53bcaf0d9d4db045a42"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/relatorios/REVISAO_ADVERSARIAL.md",
+      "sha256": "e87dc85422ab29e7b4801ade36857fe9256216c214c8221d077ad0dff4307b62"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/relatorios/SEGURANCA_APROVACAO.md",
+      "sha256": "2cfb6e6244d29a303b34cf5b68a6ab586090217618afe82e0f6a5a1f6bf52d79"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/relatorios/TESTES_INTERFACE.md",
+      "sha256": "f510529edc83ae2ca25227049b94dd4b5965d2a70c0f916592dcb90df9a7d748"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/backend_e_privacidade.py",
+      "sha256": "7b392b580f1e99f00d0598ff8edf915599d2c25cc96a36f57a5f06bdf46de015"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/checar_ambiente.py",
+      "sha256": "b9b21b6a9f5f2c8c42c9701a88404cb21a600cd0e03eda07b134839379c91205"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/conferir_par_cobaia.py",
+      "sha256": "d483745b471b2b7a41a679df9957d2304ed3670ab3edbf50c469e2f9a27ba123"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/entrega_sintetica.R",
+      "sha256": "88f83805b645e330d5a01a363662f11986808e93fae570e9418e4f8cb3ed9592"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/executar.py",
+      "sha256": "e73aaae94d102f66a41f2cd15a66a657f8b5cc360a64d632d39bec7d10a20b7b"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/finalizar.py",
+      "sha256": "d1462d53e7dfa5781fd8b6d13b6a6c09d659515afb28b6df8f5049bbe458df0d"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/iniciar_atividade_real.py",
+      "sha256": "a28708740598f24015304f0383de443ad913fe68aff7708fe5e93557d8d5e52f"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/metodologia_adversarial.py",
+      "sha256": "9e39ca7833b9019c1cf520dbbdbbb990874d93249f929a6da4e18cbf25e9fe69"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/oraculo.R",
+      "sha256": "183ce98056b694d7b39042e131e95492bc2a686d425aece557a2fb6dba050eb5"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/oraculo.py",
+      "sha256": "ad68d7e7f440bc9b650262731ceebdc28bd9fc6b8e4051cae0bd4b00fe93abca"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/ponte_agy_privada.py",
+      "sha256": "022e0374a40e54316a08c510a339f1c79029b5fbfb2306500a4ccbc846a690d3"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/preparar_mini_p0.py",
+      "sha256": "cb1d0299c8bdbf7a449b94b63a987dfff0720e81cf460499d710a15e60873eb7"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/preparar_modelos_reais.py",
+      "sha256": "10f38d93bfdd272dcf653b61df1f303fec82d15a94a8759184c4107b245e29f8"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/retestar_comunicacao.py",
+      "sha256": "9f3a722ab4cb9702212461f4d2c9dcdb18462810dc4edaadbf06621de6201f17"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/seguranca_e_historico.py",
+      "sha256": "33fe2147c8d07edbb0d6326800a03769d5c5fd2a63c709571dfbb1299a1fde87"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/sondar_socket_qt.py",
+      "sha256": "c63741da9538fd971048d42237b1fee7cbe4eb1be050410c0c5ab17b4547a0cd"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/verificar_agy_real.antes-diagnostico.py",
+      "sha256": "803258edd5f9c02679a953aebf0a68829040e704de52527400f3bbdfe872fea8"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/verificar_agy_real.antes-servico-verificado.py",
+      "sha256": "63f0bfef48c459cb8349d7b542bacaa040d44e15a34fb5ec13f3d922825f02cb"
+    },
+    {
+      "arquivo": "docs/estabilizacao/validacao-p1/scripts/verificar_agy_real.py",
+      "sha256": "d77daf68dca3bb5e872d30fa5aebb1013b0cf797e42e2145c43256f80d860ccb"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/ALTERACOES.md",
+      "sha256": "26974570abfec27eb5ed66ded20dafc96d786979c4474fc17b7c41261fc11621"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/CAUSA_RAIZ.md",
+      "sha256": "d2108ff86dc7ffff93a1b834c8913edcb710b77fb68d1a9a8839e148c2f40932"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/LIMITACOES.md",
+      "sha256": "5b0fa77a22cb294cee616cdd7e77dd14b875a7063c0b04e930e352a7514f659f"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/MODELO_DE_AMEACAS.md",
+      "sha256": "75bb529c4e32414c40a874e95af7442851cb3e9bc0c610673595b093375a054d"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/PRESERVACAO_EVIDENCIAS.md",
+      "sha256": "601fe45ca7e94fd0420d80cff045011a2b5c546c78f786bd64716b362a750f76"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/REGRESSOES.md",
+      "sha256": "9ced211ca94ca7b3eab096787f1c30e39b35fb59d7bc64ad1e249a888cfd4d4e"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/RELATORIO_FINAL.md",
+      "sha256": "6e6a4810cfbcd5eabc50c52a9337a2a66af9435f08bbbcccad6cc1f8da2ed163"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/TESTES_ADVERSARIAIS.md",
+      "sha256": "304b2a5c3bb8e8a198687d0ca7e60dc9327004ff6f00eaa7230974d96f19fdf6"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/MANIFESTO.json",
+      "sha256": "373ffb1af9979d60542b53a4b38a76424f7c3ef02cc3431b78e750cd104f6632"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/acompanhamento.log",
+      "sha256": "67bad2156758cdf0dc29fe7bc8789218d10fbec3da279764feb86c684badf86a"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/arquivo-sintetico.json",
+      "sha256": "286f87f2b84cdc5bdd5d88e5a142071c8eccd31e8c9fccc2ae9aa4cfe409489e"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/ataques-bubblewrap.jsonl",
+      "sha256": "671c70cfc059b7653d8fce7406827a9c2bd1d05b7b0762178f6eda6e80c15b09"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/baseline-adulteracao-fila.json",
+      "sha256": "f7dd5bb14abb6eb500e43d8efd7aed3c80f736565899169d4c70e129babc8bb2"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/baseline-encerramento.json",
+      "sha256": "cb0532a9cfd3456d708bbc7e3e7f307ed8b4a1fd85a1e261e9978113345cf0d9"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/baseline-segura.log",
+      "sha256": "22eea45bc0636ed04c8aca3375fc4529c8e243d6e3f8783d665a91cfc5b0ea7e"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/commits-implementacao.json",
+      "sha256": "114a117cbdf0513b9089a25435c0f82fada607da7e08ee579f1633a2ec4a5e7d"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/confianca-p0.log",
+      "sha256": "5780dbd9baca53ce0f13bf51b03670a9e525e24c3ffd55791058c642f0cc59f6"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/delegacao.log",
+      "sha256": "e753a564c0052fad52a9fa2ef6b3ca3c6c3f68d96c3cc476205e23c494567929"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/deterministico.log",
+      "sha256": "b175f48c396e3474911f06aa98ff6f0f038a3a29cf439a17f66bdf065b2859ee"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/diff-check.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/estado-repositorios.json",
+      "sha256": "90c6815be0e9554020a873f3d2e8464bd84d61657ce4b33ce3fd169b0cf8e963"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/executar.py",
+      "sha256": "1a7fbc201d2477d562daf3b65bc16417ed28fcfd17ee9c982866559e8283bd78"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/executor.log",
+      "sha256": "c9458d49d44eb9f012da9bd058d27d31e4c93ff14285138ebe2759784ece7362"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/fim.log",
+      "sha256": "2052644681c9b4d94e129cd1347f1c59d8c19d3fb94b3b72984cb2aecffc21e3"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/metricas-projeto.log",
+      "sha256": "f495d307254cf09c9930c8f658cde13b219fe727eef278fc602145185ca77fc7"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/metricas.json",
+      "sha256": "a4db07fe73f56a0599f5d280301f7ae5b80754d76c7cb16a6d9b80046d97ce95"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/operacional.log",
+      "sha256": "4ede0162746f56c3eba40c37150a374ce780f15e64aefe2c756109d679fa9c66"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/original-adulteracao-fila.json",
+      "sha256": "0a06bdae143148d62b1d9e27f697d38e5c8d8941e9326aa49b508b1b8d94f121"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/original-encerramento.json",
+      "sha256": "cdcfeea41b66b0755700262895b19d010f79101a7c22bbed0d2410bfa9e29495"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/orquestracao.log",
+      "sha256": "01921ae2492d6c2a7622c5a01261649a17e63409da77badb2e07f5fc8cf19f37"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/painel-orquestracao.log",
+      "sha256": "5279d1fc9a1ced44f9c96da1414ef59e4676f963fbad52e7a1a2903538819b0d"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/recuperacao-sintetica.json",
+      "sha256": "b05b36c4f65e7d4d5766be443f626899c40291cecfdf6f47b0f09bcae0c29195"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/reproducoes-anteriores.json",
+      "sha256": "ecf8793c427b23b3d3a64d8ee5e3cbd9a59eef9b1c46dc6b9516b03b131cd954"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/restaurar.log",
+      "sha256": "58f500e5c130f2b7183cf70f0b64e376114699b8b29a85c28ec502ccb5894aca"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/resultados.json",
+      "sha256": "b17f2a6bd047416709a3859cc2da40b530220febc0fc4743e02187088e8b009a"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/shellcheck-alterados.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/supervisao.log",
+      "sha256": "136c4010424fee605423c24a5cebf7336c60571318989f50a0e3a465f18e80b1"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/tarefas.log",
+      "sha256": "da5b78f926926d55a5763ceb584fbfb470b771008d10b61cb1212b0cad59425d"
+    },
+    {
+      "arquivo": "docs/estabilizacao/correcao-p0/evidencias/verificar-com-limites.log",
+      "sha256": "9a9f0254db1ca38974b76a8f6ba4454a429ba9acdc75ffa22239af848887217c"
+    }
+  ]
+}

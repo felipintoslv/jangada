@@ -1,0 +1,356 @@
+[
+  {
+    "rodada": 1,
+    "defeito": "A1",
+    "artefato_produzido_por": "auditor, não IA",
+    "testes_publicos_passaram": 6,
+    "testes_publicos_total": 6,
+    "defeito_privado_detectado": true,
+    "evidencia": {
+      "chave": {
+        "municipio": "9000001",
+        "setor": "S001",
+        "ano": "2019"
+      },
+      "campo": "emprego",
+      "correto": 997.0,
+      "obtido": 1994.0,
+      "diferenca": 997.0
+    },
+    "revisor_real": null,
+    "justificativa_revisor_real": null,
+    "correcao_proposta": "Usar chave codigo/versao e verificar cardinalidade antes e depois de joins; deduplicar somente repetições idênticas.",
+    "resultado_controle_corrigido": "concorda com oráculo; correção do auditor, não rodada do modelo"
+  },
+  {
+    "rodada": 1,
+    "defeito": "A2",
+    "artefato_produzido_por": "auditor, não IA",
+    "testes_publicos_passaram": 6,
+    "testes_publicos_total": 6,
+    "defeito_privado_detectado": true,
+    "evidencia": {
+      "chave": {
+        "municipio": "9000001",
+        "setor": "S061",
+        "ano": "2022"
+      },
+      "campo": "emprego",
+      "correto": 96.0,
+      "obtido": 1145.0,
+      "diferenca": 1049.0
+    },
+    "revisor_real": null,
+    "justificativa_revisor_real": null,
+    "correcao_proposta": "Aplicar correspondência oficial do ensaio entre versões por ano; não permutar identidades de setores.",
+    "resultado_controle_corrigido": "concorda com oráculo; correção do auditor, não rodada do modelo"
+  },
+  {
+    "rodada": 1,
+    "defeito": "A3",
+    "artefato_produzido_por": "auditor, não IA",
+    "testes_publicos_passaram": 6,
+    "testes_publicos_total": 6,
+    "defeito_privado_detectado": true,
+    "evidencia": {
+      "taxas_por_grupo_2019": [
+        0.2,
+        0.8
+      ],
+      "taxas_por_grupo_2025": [
+        0.3,
+        0.9
+      ],
+      "agregado_2019": 0.7454545454545455,
+      "agregado_2025": 0.35454545454545455,
+      "conclusao_correta": "ambas as taxas por grupo aumentam; a composição muda",
+      "conclusao_incorreta": "A taxa agregada caiu, portanto a taxa de emprego caiu dentro de ambos os grupos."
+    },
+    "revisor_real": null,
+    "justificativa_revisor_real": null,
+    "correcao_proposta": "Examinar taxas por grupo e decompor composição; queda agregada não implica queda em todos os estratos.",
+    "resultado_controle_corrigido": "concorda com oráculo; correção do auditor, não rodada do modelo"
+  },
+  {
+    "rodada": 1,
+    "defeito": "A4",
+    "artefato_produzido_por": "auditor, não IA",
+    "testes_publicos_passaram": 6,
+    "testes_publicos_total": 6,
+    "defeito_privado_detectado": true,
+    "evidencia": {
+      "chave": {
+        "municipio": "9000001",
+        "setor": "S001",
+        "ano": "2019"
+      },
+      "campo": "ql",
+      "correto": 4.597131697868459,
+      "obtido": 4.0329889726862,
+      "diferenca": -0.5641427251822595
+    },
+    "revisor_real": null,
+    "justificativa_revisor_real": null,
+    "correcao_proposta": "Usar o universo nacional definido no contrato, no mesmo ano, com denominadores consistentes.",
+    "resultado_controle_corrigido": "concorda com oráculo; correção do auditor, não rodada do modelo"
+  },
+  {
+    "rodada": 1,
+    "defeito": "A5",
+    "artefato_produzido_por": "auditor, não IA",
+    "testes_publicos_passaram": 6,
+    "testes_publicos_total": 6,
+    "defeito_privado_detectado": true,
+    "evidencia": {
+      "chave": {
+        "municipio": "9000003",
+        "setor": "S021",
+        "ano": "2024"
+      },
+      "campo": "emprego",
+      "correto": 78.0,
+      "obtido": 0.0,
+      "diferenca": -78.0
+    },
+    "revisor_real": null,
+    "justificativa_revisor_real": null,
+    "correcao_proposta": "Tratar desconhecido como ausente; imputação retrospectiva interna explicitamente documentada, sem substituir por zero.",
+    "resultado_controle_corrigido": "concorda com oráculo; correção do auditor, não rodada do modelo"
+  },
+  {
+    "rodada": 1,
+    "defeito": "A6",
+    "artefato_produzido_por": "auditor, não IA",
+    "testes_publicos_passaram": 6,
+    "testes_publicos_total": 6,
+    "defeito_privado_detectado": true,
+    "evidencia": {
+      "municipio": "9000088",
+      "setor": "S050",
+      "residual_obtido": 3924.3128305119444,
+      "residual_correto": 0
+    },
+    "revisor_real": null,
+    "justificativa_revisor_real": null,
+    "correcao_proposta": "RS = delta - NS - IM; conferir identidade por célula e município.",
+    "resultado_controle_corrigido": "concorda com oráculo; correção do auditor, não rodada do modelo"
+  },
+  {
+    "rodada": 1,
+    "defeito": "A7",
+    "artefato_produzido_por": "auditor, não IA",
+    "testes_publicos_passaram": 6,
+    "testes_publicos_total": 6,
+    "defeito_privado_detectado": true,
+    "evidencia": {
+      "chave": {
+        "municipio": "9000001",
+        "setor": "S001",
+        "ano": "2019"
+      },
+      "campo": "ql",
+      "correto": 4.597131697868459,
+      "obtido": 6.63833445776692,
+      "diferenca": 2.041202759898461
+    },
+    "revisor_real": null,
+    "justificativa_revisor_real": null,
+    "correcao_proposta": "Calcular denominadores contemporâneos por ano; testar invariância do passado a mudanças exclusivamente futuras.",
+    "resultado_controle_corrigido": "concorda com oráculo; correção do auditor, não rodada do modelo"
+  },
+  {
+    "rodada": 1,
+    "defeito": "A8",
+    "artefato_produzido_por": "auditor, não IA",
+    "testes_publicos_passaram": 6,
+    "testes_publicos_total": 6,
+    "defeito_privado_detectado": true,
+    "evidencia": {
+      "desenho": "observacional descritivo",
+      "efeito_causal_identificado": false,
+      "afirmacao_inadmissivel": "A diversificação causou o crescimento do emprego; o QL demonstra esse efeito causal.",
+      "correto": "não inferir causalidade sem desenho identificador"
+    },
+    "revisor_real": null,
+    "justificativa_revisor_real": null,
+    "correcao_proposta": "Retirar inferência causal; descrição observacional não identifica efeito causal.",
+    "resultado_controle_corrigido": "concorda com oráculo; correção do auditor, não rodada do modelo"
+  },
+  {
+    "rodada": 2,
+    "defeito": "A1",
+    "artefato_produzido_por": "auditor, não IA",
+    "testes_publicos_passaram": 6,
+    "testes_publicos_total": 6,
+    "defeito_privado_detectado": true,
+    "evidencia": {
+      "chave": {
+        "municipio": "9000001",
+        "setor": "S001",
+        "ano": "2019"
+      },
+      "campo": "emprego",
+      "correto": 359.0,
+      "obtido": 718.0,
+      "diferenca": 359.0
+    },
+    "revisor_real": null,
+    "justificativa_revisor_real": null,
+    "correcao_proposta": "Usar chave codigo/versao e verificar cardinalidade antes e depois de joins; deduplicar somente repetições idênticas.",
+    "resultado_controle_corrigido": "concorda com oráculo; correção do auditor, não rodada do modelo"
+  },
+  {
+    "rodada": 2,
+    "defeito": "A2",
+    "artefato_produzido_por": "auditor, não IA",
+    "testes_publicos_passaram": 6,
+    "testes_publicos_total": 6,
+    "defeito_privado_detectado": true,
+    "evidencia": {
+      "chave": {
+        "municipio": "9000001",
+        "setor": "S061",
+        "ano": "2022"
+      },
+      "campo": "emprego",
+      "correto": 40.0,
+      "obtido": 470.0,
+      "diferenca": 430.0
+    },
+    "revisor_real": null,
+    "justificativa_revisor_real": null,
+    "correcao_proposta": "Aplicar correspondência oficial do ensaio entre versões por ano; não permutar identidades de setores.",
+    "resultado_controle_corrigido": "concorda com oráculo; correção do auditor, não rodada do modelo"
+  },
+  {
+    "rodada": 2,
+    "defeito": "A3",
+    "artefato_produzido_por": "auditor, não IA",
+    "testes_publicos_passaram": 6,
+    "testes_publicos_total": 6,
+    "defeito_privado_detectado": true,
+    "evidencia": {
+      "taxas_por_grupo_2019": [
+        0.2,
+        0.85
+      ],
+      "taxas_por_grupo_2025": [
+        0.44,
+        0.95
+      ],
+      "agregado_2019": 0.7777777777777778,
+      "agregado_2025": 0.4777777777777778,
+      "conclusao_correta": "ambas as taxas por grupo aumentam; a composição muda",
+      "conclusao_incorreta": "A taxa agregada caiu, portanto a taxa de emprego caiu dentro de ambos os grupos."
+    },
+    "revisor_real": null,
+    "justificativa_revisor_real": null,
+    "correcao_proposta": "Examinar taxas por grupo e decompor composição; queda agregada não implica queda em todos os estratos.",
+    "resultado_controle_corrigido": "concorda com oráculo; correção do auditor, não rodada do modelo"
+  },
+  {
+    "rodada": 2,
+    "defeito": "A4",
+    "artefato_produzido_por": "auditor, não IA",
+    "testes_publicos_passaram": 6,
+    "testes_publicos_total": 6,
+    "defeito_privado_detectado": true,
+    "evidencia": {
+      "chave": {
+        "municipio": "9000001",
+        "setor": "S001",
+        "ano": "2019"
+      },
+      "campo": "ql",
+      "correto": 4.002007320875242,
+      "obtido": 4.00581120996463,
+      "diferenca": 0.003803889089388335
+    },
+    "revisor_real": null,
+    "justificativa_revisor_real": null,
+    "correcao_proposta": "Usar o universo nacional definido no contrato, no mesmo ano, com denominadores consistentes.",
+    "resultado_controle_corrigido": "concorda com oráculo; correção do auditor, não rodada do modelo"
+  },
+  {
+    "rodada": 2,
+    "defeito": "A5",
+    "artefato_produzido_por": "auditor, não IA",
+    "testes_publicos_passaram": 6,
+    "testes_publicos_total": 6,
+    "defeito_privado_detectado": true,
+    "evidencia": {
+      "chave": {
+        "municipio": "9000003",
+        "setor": "S023",
+        "ano": "2022"
+      },
+      "campo": "emprego",
+      "correto": 1044.5,
+      "obtido": 0.0,
+      "diferenca": -1044.5
+    },
+    "revisor_real": null,
+    "justificativa_revisor_real": null,
+    "correcao_proposta": "Tratar desconhecido como ausente; imputação retrospectiva interna explicitamente documentada, sem substituir por zero.",
+    "resultado_controle_corrigido": "concorda com oráculo; correção do auditor, não rodada do modelo"
+  },
+  {
+    "rodada": 2,
+    "defeito": "A6",
+    "artefato_produzido_por": "auditor, não IA",
+    "testes_publicos_passaram": 6,
+    "testes_publicos_total": 6,
+    "defeito_privado_detectado": true,
+    "evidencia": {
+      "municipio": "9000110",
+      "setor": "S080",
+      "residual_obtido": 5450.549223944201,
+      "residual_correto": 0
+    },
+    "revisor_real": null,
+    "justificativa_revisor_real": null,
+    "correcao_proposta": "RS = delta - NS - IM; conferir identidade por célula e município.",
+    "resultado_controle_corrigido": "concorda com oráculo; correção do auditor, não rodada do modelo"
+  },
+  {
+    "rodada": 2,
+    "defeito": "A7",
+    "artefato_produzido_por": "auditor, não IA",
+    "testes_publicos_passaram": 6,
+    "testes_publicos_total": 6,
+    "defeito_privado_detectado": true,
+    "evidencia": {
+      "chave": {
+        "municipio": "9000001",
+        "setor": "S001",
+        "ano": "2019"
+      },
+      "campo": "ql",
+      "correto": 4.002007320875242,
+      "obtido": 5.76138457972551,
+      "diferenca": 1.759377258850268
+    },
+    "revisor_real": null,
+    "justificativa_revisor_real": null,
+    "correcao_proposta": "Calcular denominadores contemporâneos por ano; testar invariância do passado a mudanças exclusivamente futuras.",
+    "resultado_controle_corrigido": "concorda com oráculo; correção do auditor, não rodada do modelo"
+  },
+  {
+    "rodada": 2,
+    "defeito": "A8",
+    "artefato_produzido_por": "auditor, não IA",
+    "testes_publicos_passaram": 6,
+    "testes_publicos_total": 6,
+    "defeito_privado_detectado": true,
+    "evidencia": {
+      "desenho": "observacional descritivo",
+      "efeito_causal_identificado": false,
+      "afirmacao_inadmissivel": "A diversificação causou o crescimento do emprego; o QL demonstra esse efeito causal.",
+      "correto": "não inferir causalidade sem desenho identificador"
+    },
+    "revisor_real": null,
+    "justificativa_revisor_real": null,
+    "correcao_proposta": "Retirar inferência causal; descrição observacional não identifica efeito causal.",
+    "resultado_controle_corrigido": "concorda com oráculo; correção do auditor, não rodada do modelo"
+  }
+]

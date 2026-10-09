@@ -1,0 +1,107 @@
+{
+  "commit": "bb3ad6b4b2bb8f3032e28efb7af5f1a5c4abb9bb",
+  "codigo_sha256": "fe56b11787d68b0fb9497e10d0176915a1a15f05e04fc7e30b3be1e75508c74c",
+  "raiz_sintetica": "/tmp/jctrl-jt5vmx8p",
+  "registro": "/home/felipinto/Projetos/jangada-resultados-p1-2026-10/evidencias/jctrl-jt5vmx8p",
+  "comando": [
+    "/usr/bin/bwrap",
+    "--unshare-all",
+    "--die-with-parent",
+    "--new-session",
+    "--ro-bind",
+    "/usr",
+    "/usr",
+    "--symlink",
+    "usr/bin",
+    "/bin",
+    "--symlink",
+    "usr/lib",
+    "/lib",
+    "--symlink",
+    "usr/lib",
+    "/lib64",
+    "--ro-bind",
+    "/etc/R",
+    "/etc/R",
+    "--proc",
+    "/proc",
+    "--dev",
+    "/dev",
+    "--tmpfs",
+    "/tmp",
+    "--dir",
+    "/work",
+    "--dir",
+    "/home",
+    "--setenv",
+    "HOME",
+    "/home",
+    "--ro-bind",
+    "/tmp/jctrl-jt5vmx8p/entradas",
+    "/work/entradas",
+    "--ro-bind",
+    "/tmp/jctrl-jt5vmx8p/indicadores.R",
+    "/work/indicadores.R",
+    "--ro-bind",
+    "/tmp/jctrl-jt5vmx8p/runner.R",
+    "/work/runner.R",
+    "--bind",
+    "/tmp/jctrl-jt5vmx8p/saida",
+    "/work/saida",
+    "--chdir",
+    "/work",
+    "--",
+    "/usr/bin/Rscript",
+    "--vanilla",
+    "/work/runner.R"
+  ],
+  "codigo": 0,
+  "segundos": 0.149,
+  "casos": [
+    {
+      "caso": "normal",
+      "verificacoes": 42,
+      "falhas": [],
+      "classificacao": "PASSOU"
+    },
+    {
+      "caso": "ano_alterado",
+      "verificacoes": 42,
+      "falhas": [],
+      "classificacao": "PASSOU"
+    },
+    {
+      "caso": "zero_municipio",
+      "verificacoes": 42,
+      "falhas": [],
+      "classificacao": "PASSOU"
+    },
+    {
+      "caso": "zero_setor",
+      "verificacoes": 42,
+      "falhas": [],
+      "classificacao": "PASSOU"
+    },
+    {
+      "caso": "ausente",
+      "verificacoes": 42,
+      "falhas": [],
+      "classificacao": "PASSOU"
+    },
+    {
+      "caso": "todo_ausente",
+      "verificacoes": 42,
+      "falhas": [],
+      "classificacao": "PASSOU"
+    },
+    {
+      "caso": "ordem_invertida",
+      "verificacoes": 42,
+      "falhas": [],
+      "classificacao": "PASSOU"
+    }
+  ],
+  "nenhuma_chamada_modelo": true,
+  "originais_alterados": false,
+  "classificacao": "PASSOU"
+}

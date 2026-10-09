@@ -1,0 +1,50 @@
+{
+  "rodada": 2,
+  "comparacoes": [
+    {
+      "arquivo": "painel",
+      "linhas": 84000,
+      "diferenca_absoluta_max": 0,
+      "classificacao": "PASSOU"
+    },
+    {
+      "arquivo": "ql",
+      "linhas": 84000,
+      "diferenca_absoluta_max": 5.329070518200751e-15,
+      "classificacao": "PASSOU"
+    },
+    {
+      "arquivo": "indicadores",
+      "linhas": 1050,
+      "diferenca_absoluta_max": 5.684341886080802e-14,
+      "classificacao": "PASSOU"
+    },
+    {
+      "arquivo": "shift",
+      "linhas": 12000,
+      "diferenca_absoluta_max": 5.002220859751105e-12,
+      "classificacao": "PASSOU"
+    }
+  ],
+  "qualidade_python": {
+    "invalidos": 6,
+    "duplicatas": 15,
+    "imputadas": 240,
+    "residual_shift_max": 4.547473508864641e-13,
+    "totais": {
+      "2019": 3757930.0,
+      "2020": 3979602.5,
+      "2021": 4243825.5,
+      "2022": 4565884.5,
+      "2023": 4942094.5,
+      "2024": 5382144.0,
+      "2025": 5893078.0
+    }
+  },
+  "qualidade_R": {
+    "invalidos": "6",
+    "duplicatas": "15",
+    "imputadas": "240"
+  },
+  "classificacao": "PASSOU"
+}

@@ -1,0 +1,17 @@
+test_commit_posterior_nao_reutiliza_marca (__main__.Complementar.test_commit_posterior_nao_reutiliza_marca) ... FAIL
+test_autoria_local_adulterada_nao_supera_protegida (__main__.Complementar.test_autoria_local_adulterada_nao_supera_protegida) ... ok
+test_aprovacao_sem_parecer_bloqueia_arquivo (__main__.Complementar.test_aprovacao_sem_parecer_bloqueia_arquivo) ... ok
+
+======================================================================
+FAIL: test_commit_posterior_nao_reutiliza_marca (__main__.Complementar.test_commit_posterior_nao_reutiliza_marca)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/felipinto/Projetos/jangada-resultados-p1-2026-10/scripts/seguranca_e_historico.py", line 21, in test_commit_posterior_nao_reutiliza_marca
+    self.assertEqual(previa.returncode,0,previa.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : 
+
+----------------------------------------------------------------------
+Ran 3 tests in 2.811s
+
+FAILED (failures=1)

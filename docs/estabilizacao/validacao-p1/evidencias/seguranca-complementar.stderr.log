@@ -1,0 +1,8 @@
+test_commit_posterior_nao_reutiliza_marca (__main__.Complementar.test_commit_posterior_nao_reutiliza_marca) ... ok
+test_autoria_local_adulterada_nao_supera_protegida (__main__.Complementar.test_autoria_local_adulterada_nao_supera_protegida) ... ok
+test_aprovacao_sem_parecer_bloqueia_arquivo (__main__.Complementar.test_aprovacao_sem_parecer_bloqueia_arquivo) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 2.860s
+
+OK

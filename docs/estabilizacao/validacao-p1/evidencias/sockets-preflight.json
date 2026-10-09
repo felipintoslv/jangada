@@ -1,0 +1,1 @@
+{"INET": {"criacao": "bloqueada", "erro": "[Errno 1] Operation not permitted"}, "UNIX": {"criacao": "permitida", "bind": "nao_testado"}}

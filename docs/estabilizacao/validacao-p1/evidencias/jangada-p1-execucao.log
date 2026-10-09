@@ -1,0 +1,15 @@
+{"caso": "oraculo-R-1", "comando": ["/usr/bin/Rscript", "--vanilla", "/home/felipinto/Projetos/jangada-resultados-p1-2026-10/scripts/oraculo.R", "/tmp/jangada-p1-342gtope/projetos/economia-sintetica/rodada-1", "/home/felipinto/Projetos/jangada-resultados-p1-2026-10/privado/rodada-1/R"], "codigo": 0, "segundos": 1.624, "classificacao": "PASSOU"}
+Comparacao independente: 1 PASSOU
+{"caso": "oraculo-R-2", "comando": ["/usr/bin/Rscript", "--vanilla", "/home/felipinto/Projetos/jangada-resultados-p1-2026-10/scripts/oraculo.R", "/tmp/jangada-p1-342gtope/projetos/economia-sintetica/rodada-2", "/home/felipinto/Projetos/jangada-resultados-p1-2026-10/privado/rodada-2/R"], "codigo": 0, "segundos": 1.621, "classificacao": "PASSOU"}
+Comparacao independente: 2 PASSOU
+{"caso": "p0-32", "comando": ["/usr/bin/python3", "-B", "testes/confianca-p0.py"], "codigo": 0, "segundos": 12.829, "classificacao": "PASSOU"}
+{"caso": "orquestracao", "comando": ["/usr/bin/python3", "-B", "testes/orquestracao.py"], "codigo": 0, "segundos": 1.269, "classificacao": "PASSOU"}
+{"caso": "executor", "comando": ["/usr/bin/python3", "-B", "testes/executor.py"], "codigo": 0, "segundos": 9.515, "classificacao": "PASSOU"}
+{"caso": "supervisao", "comando": ["/usr/bin/python3", "-B", "testes/supervisao.py"], "codigo": 0, "segundos": 13.228, "classificacao": "PASSOU"}
+{"caso": "operacional", "comando": ["/usr/bin/python3", "-B", "testes/operacional.py"], "codigo": 0, "segundos": 2.174, "classificacao": "PASSOU"}
+{"caso": "deterministico", "comando": ["/usr/bin/python3", "-B", "testes/deterministico.py"], "codigo": 0, "segundos": 0.517, "classificacao": "PASSOU"}
+{"caso": "acompanhamento", "comando": ["/usr/bin/python3", "-B", "testes/acompanhamento.py"], "codigo": 0, "segundos": 0.321, "classificacao": "PASSOU"}
+{"caso": "painel-orquestracao", "comando": ["/usr/bin/python3", "-B", "testes/painel-orquestracao.py"], "codigo": 0, "segundos": 0.106, "classificacao": "PASSOU"}
+{"caso": "interface-67", "comando": ["/usr/bin/python3", "-B", "testes/tarefas.py"], "codigo": 1, "segundos": 10.078, "classificacao": "FALHOU"}
+{"caso": "fim", "comando": ["/usr/bin/bash", "testes/fim.sh"], "codigo": 0, "segundos": 1.512, "classificacao": "PASSOU"}
+{"caso": "restaurar", "comando": ["/usr/bin/bash", "testes/restaurar.sh"], "codigo": 0, "segundos": 2.502, "classificacao": "PASSOU"}

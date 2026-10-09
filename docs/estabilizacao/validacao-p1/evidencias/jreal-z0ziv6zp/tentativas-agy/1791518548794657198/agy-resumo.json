@@ -1,0 +1,32 @@
+{
+  "raiz_sintetica": "/tmp/jreal-z0ziv6zp",
+  "revisor": "agy",
+  "autorizacao": "Usuário solicitou use o agy",
+  "chaveiro_global_alterado": false,
+  "chamada_real": true,
+  "pronto_para_preparar_tarefa": false,
+  "diagnostico_metadados": {
+    "itens_encontrados": 1,
+    "itens": [
+      {
+        "campos": [
+          "service",
+          "username",
+          "xdg:schema"
+        ],
+        "service_presente": true,
+        "service_formato_compativel": true,
+        "marca_agy_reconhecida": true,
+        "service_sha256": "5d72436256ada53828b51895a94bb8489e9f1ac4fe937a8024ef1594e7045ff6",
+        "service_publicavel": "gemini"
+      }
+    ],
+    "segredos_lidos": false
+  },
+  "codigo": 1,
+  "segundos": 60.839,
+  "resposta_conferida": false,
+  "classificacao": "REQUER_ANALISE",
+  "itens_de_autenticacao_selecionados": 1,
+  "limite": "Conectividade não é revisão da atividade; renovação de token e escritas no chaveiro são bloqueadas"
+}

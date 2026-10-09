@@ -1,0 +1,10 @@
+{
+  "executavel_sha256": "32f9478e47d1d456e090f7ed0a297fcde2fa45ec10839904f03ea1ba00645e49",
+  "rotina": "codeassistclient.(*KeyringTokenStorage).LoadStoredToken",
+  "endereco_rotina": "0x7846e80",
+  "endereco_service": "0x5088215",
+  "service": "gemini",
+  "service_sha256": "5d72436256ada53828b51895a94bb8489e9f1ac4fe937a8024ef1594e7045ff6",
+  "segredos_lidos": false,
+  "chamada_modelo": false
+}
