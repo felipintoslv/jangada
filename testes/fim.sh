@@ -198,258 +198,40 @@ marca() {
       reviewer: "agy", author: "claude", independent: true}' | jq "${3:-.}" >"$2/validacao-$1.aprovado"
 }
 
-# Confirmação gráfica vincula os dois commits e exige aprovação independente.
-preparar gui
-b_gui="$(git -C "$proj" rev-parse main)"
-c_gui="$(git -C "$proj" rev-parse agente/gui)"
-integrar_teste gui '' --confirmacao "$b_gui" "$c_gui"
-conferir "GUI: sem marca recusa" test "$rc" -ne 0
-conferir "GUI: sem marca mantém worktree" test -d "$wts/proj/gui"
-marca gui "$revisoes" '.independent = false'
-integrar_teste gui '' --confirmacao "$b_gui" "$c_gui"
-conferir "GUI: autorrevisão recusa" test "$rc" -ne 0
-marca gui "$revisoes"
-integrar_teste gui '' --confirmacao "$b_gui" "$b_gui"
-conferir "GUI: candidato diferente recusa" test "$rc" -ne 0
-integrar_teste gui '' --confirmacao "$c_gui" "$c_gui"
-conferir "GUI: base diferente recusa" test "$rc" -ne 0
-# A aprovação é retirada depois da prévia, antes da reconferência sob trava.
-mkdir -p "$tmp/hash-gui"
-cat >"$tmp/hash-gui/sha256sum" <<EOF
-#!/usr/bin/env bash
-rm -f "$revisoes/validacao-gui.aprovado"
-exec $(command -v sha256sum) "\$@"
-EOF
-chmod +x "$tmp/hash-gui/sha256sum"
-PATH="$tmp/hash-gui:$PATH" integrar_teste gui '' --confirmacao "$b_gui" "$c_gui"
-conferir "GUI: marca retirada antes da trava recusa" test "$rc" -ne 0
-conferir "GUI: marca retirada não mescla" test ! -e "$proj/gui.txt"
-marca gui "$revisoes"
-integrar_teste gui '' --confirmacao "$b_gui" "$c_gui"
-conferir "GUI: confirmação exata integra sem entrada padrão" test "$rc" -eq 0
-conferir "GUI: conteúdo integrado" test -e "$proj/gui.txt"
-
-# Aprovação de fora para o commit do ramo: integra sem chamar o revisor.
-preparar i1
-marca i1 "$revisoes"
-printf 'STATUS: APROVADO\n' >"$revisoes/validacao-i1-r1.md"
-integrar_teste i1 s
-conferir "aprovação de fora: integra ($rc)" test "$rc" -eq 0
-conferir "aprovação de fora: diz que vale" grep -q "aprovado fora do isolamento no commit" "$tmp/saida"
-conferir "aprovação de fora: o revisor não roda" test ! -e "$tmp/revisor-chamado"
-conferir "aprovação de fora: mesclado" test -e "$proj/i1.txt"
-conferir "aprovação de fora: a revisão sai com a sessão" \
-  bash -c 'test ! -e "$1/validacao-i1.aprovado" && test ! -e "$1/validacao-i1-r1.md"' _ "$revisoes"
-
-# Marca forjada em agentes/ e aprovação de fora com o worktree sujo não
-# contam: o revisor roda, reprova, e a resposta n não integra.
-preparar i2
-marca i2 "$estado"
-printf 'STATUS: APROVADO\n' >"$estado/validacao-i2-r1.md"
-marca i2 "$revisoes" '.limpo = false'
-FALSO_RESPOSTA='STATUS: REVISAR\n1. i2.txt:1: problema' integrar_teste i2 n
-conferir "marca forjada: o revisor roda fora" test -e "$tmp/revisor-chamado"
-conferir "marca forjada: o parecer vai para revisoes/" grep -q problema "$revisoes/validacao-i2-r1.md"
-conferir "marca forjada: pede confirmação sem aprovação" grep -q "sem aprovação feita fora do isolamento" "$tmp/saida"
-conferir "marca forjada: resposta n não integra ($rc)" bash -c '[ "$1" -ne 0 ] && test ! -e "$2/i2.txt"' _ "$rc" "$proj"
-conferir "marca forjada: sessão mantida" test -f "$estado/i2.json"
-
-# Revisor aprova: a marca nova vale e o merge segue.
-FALSO_RESPOSTA='STATUS: APROVADO' integrar_teste i2 s
-conferir "revisão aprovada fora: integra ($rc)" bash -c '[ "$1" -eq 0 ] && test -e "$2/i2.txt"' _ "$rc" "$proj"
-conferir "revisão aprovada fora: pergunta sem o aviso" bash -c '! grep -q "sem aprovação feita fora" "$1"' _ "$tmp/saida"
-
-# --sem-revisao: não chama o revisor e pede a confirmação explícita.
-preparar i3
-integrar_teste i3 n --sem-revisao
-conferir "--sem-revisao: o revisor não roda" test ! -e "$tmp/revisor-chamado"
-conferir "--sem-revisao: pede confirmação sem aprovação" grep -q "sem aprovação feita fora do isolamento" "$tmp/saida"
-conferir "--sem-revisao: resposta n não integra" test ! -e "$proj/i3.txt"
-integrar_teste i3 s --sem-revisao
-conferir "--sem-revisao: resposta s integra ($rc)" bash -c '[ "$1" -eq 0 ] && test -e "$2/i3.txt"' _ "$rc" "$proj"
-
-# O ramo avança durante a revisão: nem o commit conferido nem o novo entram.
-preparar i5
-FALSO_AVANCA="$wts/proj/i5" FALSO_RESPOSTA='STATUS: APROVADO' integrar_teste i5 s
-conferir "ramo avançou: recusa ($rc)" test "$rc" -ne 0
-conferir "ramo avançou: explica" grep -q "mudou depois da conferência" "$tmp/saida"
-conferir "ramo avançou: nada mesclado" bash -c 'test ! -e "$1/i5.txt" && test ! -e "$1/depois.txt"' _ "$proj"
-conferir "ramo avançou: sessão mantida" test -f "$estado/i5.json"
-
-# Marca no formato antigo (COMMIT N ESTADO) não diz base nem revisor: não vale.
-preparar i6
-printf '%s 1 limpo\n' "$(git -C "$proj" rev-parse agente/i6)" >"$revisoes/validacao-i6.aprovado"
-FALSO_RESPOSTA='STATUS: REVISAR\n1. x' integrar_teste i6 n
-conferir "marca antiga: o revisor roda de novo" test -e "$tmp/revisor-chamado"
-conferir "marca antiga: não integra" test ! -e "$proj/i6.txt"
-
-# Árvore diferente da que o revisor leu: não vale.
-marca i6 "$revisoes" '.candidate_tree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"'
-FALSO_RESPOSTA='STATUS: REVISAR\n1. x' integrar_teste i6 n
-conferir "árvore trocada: o revisor roda de novo" test -e "$tmp/revisor-chamado"
-
-# Autorrevisão: não vale como aprovação, e revisar de novo daria a mesma.
-marca i6 "$revisoes" '.independent = false | .reviewer = "claude"'
-integrar_teste i6 n
-conferir "autorrevisão: o revisor não roda de novo" test ! -e "$tmp/revisor-chamado"
-conferir "autorrevisão: avisa e pede a confirmação à parte" \
-  bash -c 'grep -q "só tem autorrevisão" "$1" && grep -q "nada foi feito" "$1"' _ "$tmp/saida"
-conferir "autorrevisão: resposta n não integra" test ! -e "$proj/i6.txt"
-
-# A base andou depois da revisão: a aprovação era contra outra base.
-marca i6 "$revisoes"
-echo b >"$proj/base.txt"; git -C "$proj" add base.txt; git -C "$proj" commit --quiet -m "base anda"
-FALSO_RESPOSTA='STATUS: REVISAR\n1. x' integrar_teste i6 n
-conferir "base andou: o revisor roda de novo" test -e "$tmp/revisor-chamado"
-conferir "base andou: não integra" test ! -e "$proj/i6.txt"
-
-# A base anda durante a revisão: a marca nasce contra a base antiga, e mesmo
-# com a resposta s nada é mesclado.
-FALSO_COMANDO="echo c >'$proj/durante.txt'; git -C '$proj' add durante.txt; git -C '$proj' commit --quiet -m durante" \
-  FALSO_RESPOSTA='STATUS: APROVADO' integrar_teste i6 s
-conferir "base andou na revisão: recusa ($rc)" test "$rc" -ne 0
-conferir "base andou na revisão: explica" \
-  bash -c 'grep -q "a base main mudou depois da conferência" "$1"' _ "$tmp/saida"
-conferir "base andou na revisão: nada mesclado, sessão mantida" \
-  bash -c 'test ! -e "$1/i6.txt" && test -f "$2/i6.json"' _ "$proj" "$estado"
-
-# Outra integração segura a trava do repositório: esta não mescla.
-marca i6 "$revisoes"
-trava="$revisoes/travas/$(realpath "$proj/.git" | sha256sum | cut -c1-16)"
-mkdir -p "$trava"
-flock "$trava" sleep 8 &
-vitima=$!
-sleep 1
-integrar_teste i6 s
-kill "$vitima" 2>/dev/null; wait "$vitima" 2>/dev/null; vitima=""
-conferir "trava ocupada: recusa ($rc)" test "$rc" -ne 0
-conferir "trava ocupada: explica" grep -q "outra integração segura a trava" "$tmp/saida"
-conferir "trava ocupada: nada mesclado" test ! -e "$proj/i6.txt"
-
-# Duas integrações ao mesmo tempo, as duas aprovadas contra a mesma base: só
-# entra o que foi conferido contra a base em que o merge acontece.
-preparar i7
-marca i6 "$revisoes"; marca i7 "$revisoes"
-base_antes="$(git -C "$proj" rev-parse main)"
-for n in i6 i7; do
-  ( FALSO_RESPOSTA='STATUS: APROVADO' "$repo_jangada/bin/jangada-agente-fim" --integrar "$n" <<<s >"$tmp/saida-$n" 2>&1
-    echo $? >"$tmp/rc-$n" ) &
+# Mesmo uma aprovação válida não autoriza publicação automática nesta baseline.
+preparar bloqueada
+marca bloqueada "$revisoes"
+ponta="$(git -C "$proj" rev-parse HEAD)"
+echo usuario >"$proj/a"
+echo indice >"$proj/indice"; git -C "$proj" add indice
+echo novo >"$proj/nao-rastreado"
+git -C "$proj" diff >"$tmp/antes.diff"
+git -C "$proj" diff --cached >"$tmp/antes.indice"
+for modo in terminal sem-revisao grafica; do
+  args=()
+  case "$modo" in
+    sem-revisao) args=(--sem-revisao) ;;
+    grafica) args=(--confirmacao "$ponta" "$(git -C "$proj" rev-parse agente/bloqueada)") ;;
+  esac
+  integrar_teste bloqueada s "${args[@]}"
+  conferir "$modo: integração bloqueada" test "$rc" -ne 0
+  conferir "$modo: motivo explícito" grep -q 'integração automática bloqueada' "$tmp/saida"
+  conferir "$modo: HEAD preservado" test "$(git -C "$proj" rev-parse HEAD)" = "$ponta"
+  conferir "$modo: arquivo novo preservado" grep -qx novo "$proj/nao-rastreado"
+  conferir "$modo: índice preservado" bash -c 'git -C "$1" diff --cached | cmp -s "$2" -' _ "$proj" "$tmp/antes.indice"
+  conferir "$modo: trabalho preservado" bash -c 'git -C "$1" diff | cmp -s "$2" -' _ "$proj" "$tmp/antes.diff"
+  conferir "$modo: sessão mantida" test -f "$estado/bloqueada.json"
+  conferir "$modo: worktree mantido" test -d "$wts/proj/bloqueada"
+done
+# Concorrência: nenhuma chamada pode publicar ou remover a sessão.
+for n in 1 2; do
+  (integrar_teste bloqueada s; echo "$rc" >"$tmp/rc-$n") &
 done
 wait
-conferir "simultâneas: ao menos uma integra" \
-  bash -c '[ "$(cat "$1/rc-i6")" = 0 ] || [ "$(cat "$1/rc-i7")" = 0 ]' _ "$tmp"
-for n in i6 i7; do
-  conferir "simultâneas: $n foi mesclada se e só se saiu com 0 ($(cat "$tmp/rc-$n"))" \
-    bash -c 'if [ "$(cat "$1/rc-$3")" = 0 ]; then test -e "$2/$3.txt"; else test ! -e "$2/$3.txt"; fi' _ "$tmp" "$proj" "$n"
-done
-conferir "simultâneas: cada merge parte da base conferida ou de outro merge, com o repositório íntegro" \
-  bash -c 'git -C "$1" fsck --no-dangling >/dev/null 2>&1 && git -C "$1" merge-base --is-ancestor "$2" main \
-           && [ -z "$(git -C "$1" status --porcelain --untracked-files=no)" ]' _ "$proj" "$base_antes"
-for n in i6 i7; do
-  [[ "$(cat "$tmp/rc-$n")" == 0 ]] || FALSO_RESPOSTA='STATUS: APROVADO' integrar_teste "$n" s
-done
-conferir "simultâneas: a que ficou de fora integra depois de revisada de novo" \
-  bash -c 'test -e "$1/i6.txt" && test -e "$1/i7.txt"' _ "$proj"
-
-# Objeto trocado em .git/objects depois da revisão: o git mesclaria o conteúdo
-# forjado com o nome do original. O espelho já tem o objeto honesto.
-preparar i8
-FALSO_RESPOSTA='STATUS: APROVADO' integrar_teste i8 n
-blob="$(git -C "$proj" rev-parse agente/i8:i8.txt)"
-objeto="$proj/.git/objects/${blob:0:2}/${blob:2}"
-chmod u+w "$objeto"
-python3 -c 'import sys, zlib
-d = b"forjado\n"
-sys.stdout.buffer.write(zlib.compress(b"blob %d\0" % len(d) + d))' >"$objeto"
-conferir "objeto forjado: a marca ainda vale para o commit" \
-  jq -e --arg c "$(git -C "$proj" rev-parse agente/i8)" '.candidate_sha == $c and .independent' "$revisoes/validacao-i8.aprovado"
-integrar_teste i8 s
-conferir "objeto forjado: recusa ($rc)" test "$rc" -ne 0
-conferir "objeto forjado: explica" grep -q "não conferem com o espelho" "$tmp/saida"
-conferir "objeto forjado: nada mesclado" test ! -e "$proj/i8.txt"
-rm -f "$objeto"
-
-# Objeto trocado entre a conferência com o espelho e o merge: um git falso
-# forja o blob na hora do merge. A mescla refeita no espelho não bate com o
-# que foi escrito, e a base volta para onde estava.
-preparar i9
-FALSO_RESPOSTA='STATUS: APROVADO' integrar_teste i9 n
-blob="$(git -C "$proj" rev-parse agente/i9:i9.txt)"
-objeto="$proj/.git/objects/${blob:0:2}/${blob:2}"
-git_real="$(command -v git)"
-mkdir -p "$tmp/git-forja"
-cat >"$tmp/git-forja/git" <<FIM
-#!/usr/bin/env bash
-if [[ " \$* " == *" merge --no-ff "* ]]; then
-  chmod u+w "$objeto"
-  python3 -c 'import sys, zlib
-d = b"forjado\n"
-sys.stdout.buffer.write(zlib.compress(b"blob %d\0" % len(d) + d))' >"$objeto"
-  "$git_real" "\$@" || exit \$?
-  indice="\$("$git_real" -C "$proj" rev-parse --path-format=absolute --git-path index)"
-  python3 -c 'import os, sys, time; t = time.time() + 10; os.utime(sys.argv[1], (t, t))' "\$indice"
-  "$git_real" -C "$proj" update-index --really-refresh
-  python3 -c 'import os, sys, time; t = time.time() + 10; os.utime(sys.argv[1], (t, t))' "\$indice"
-  "$git_real" -C "$proj" diff-index --quiet HEAD -- && touch "$tmp/indice-enganado"
-  exit 0
-fi
-exec "$git_real" "\$@"
-FIM
-chmod +x "$tmp/git-forja/git"
-base_antes="$(git -C "$proj" rev-parse main)"
-PATH="$tmp/git-forja:$PATH" integrar_teste i9 s
-conferir "objeto forjado durante o merge: o índice considera o conteúdo limpo" test -e "$tmp/indice-enganado"
-conferir "objeto forjado durante o merge: recusa ($rc)" test "$rc" -ne 0
-conferir "objeto forjado durante o merge: explica" grep -q "não confere com a mescla refeita no espelho" "$tmp/saida"
-conferir "objeto forjado durante o merge: a base volta e nada fica mesclado" \
-  bash -c '[ "$(git -C "$1" rev-parse main)" = "$2" ] && [ ! -e "$1/i9.txt" ]' _ "$proj" "$base_antes"
-rm -f "$objeto"
-
-# Falha ao listar os arquivos e troca de tipo ou permissão depois do merge.
-for caso in diff-tree link executavel sem-execucao; do
-  preparar "i-$caso"
-  if [[ "$caso" == sem-execucao ]]; then
-    chmod +x "$wts/proj/i-$caso/i-$caso.txt"
-    git -C "$wts/proj/i-$caso" add .
-    git -C "$wts/proj/i-$caso" commit --quiet -m executavel
-  fi
-  marca "i-$caso" "$revisoes"
-  mkdir -p "$tmp/git-conferencia"
-  cat >"$tmp/git-conferencia/git" <<FIM
-#!/usr/bin/env bash
-if [[ "$caso" == diff-tree && " \$* " == *" diff-tree "* ]]; then
-  exit 1
-fi
-if [[ " \$* " == *" merge --no-ff "* ]]; then
-  "$git_real" "\$@" || exit \$?
-  case "$caso" in
-    link)
-      mv "$proj/i-$caso.txt" "$tmp/alvo-link"
-      ln -s "$tmp/alvo-link" "$proj/i-$caso.txt"
-      ;;
-    executavel) chmod +x "$proj/i-$caso.txt" ;;
-    sem-execucao) chmod -x "$proj/i-$caso.txt" ;;
-  esac
-  exit 0
-fi
-exec "$git_real" "\$@"
-FIM
-  chmod +x "$tmp/git-conferencia/git"
-  base_antes="$(git -C "$proj" rev-parse main)"
-  PATH="$tmp/git-conferencia:$PATH" integrar_teste "i-$caso" s
-  conferir "conferência $caso: recusa ($rc)" test "$rc" -ne 0
-  conferir "conferência $caso: explica" grep -q "não confere com a mescla refeita no espelho" "$tmp/saida"
-  conferir "conferência $caso: a base volta e a sessão permanece" \
-    bash -c '[ "$(git -C "$1" rev-parse main)" = "$2" ] && test -e "$3"' \
-    _ "$proj" "$base_antes" "$estado/i-$caso.json"
-done
-
-# Dentro do isolamento não há revisão que valha: nem roda o revisor.
-preparar i4
-JANGADA_ISOLADO=1 integrar_teste i4 n
-conferir "dentro do isolamento: o revisor não roda" test ! -e "$tmp/revisor-chamado"
-conferir "dentro do isolamento: explica" grep -q "rode o --integrar fora dele" "$tmp/saida"
-: >"$tmp/mortas"
+for n in 1 2; do conferir "concorrência $n: recusada" test "$(cat "$tmp/rc-$n")" -ne 0; done
+conferir "concorrência: HEAD preservado" test "$(git -C "$proj" rev-parse HEAD)" = "$ponta"
+# Não há merge a interromper, conflito a publicar ou recuperação destrutiva.
+conferir "backend sem rollback destrutivo" bash -c '! rg -q "reset .*--hard|merge --no-ff" "$1/bin/jangada-agente-fim"' _ "$repo_jangada"
 
 echo "== --limpar-concluidos"
 rm -f "$estado"/*.json

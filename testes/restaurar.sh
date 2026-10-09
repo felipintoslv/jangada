@@ -120,8 +120,8 @@ conferir "caso 3: isolar:false no estado é ignorado" grep -q '^isolado|' "$log"
 
 # Caso 4: só a configuração do usuário desliga o isolamento.
 restaurar '{}' JANGADA_AGENTE_ISOLAR=0
-conferir "caso 4: JANGADA_AGENTE_ISOLAR=0 abre fora do jangada-isolar" \
-  bash -c 'grep -q "^fora|" "$1" && ! grep -q jangada-isolar "$2"' _ "$log" "$tmp/digitado"
+conferir "caso 4: JANGADA_AGENTE_ISOLAR=0 mantém isolamento obrigatório" \
+  bash -c 'grep -q "^isolado|" "$1" && grep -q jangada-isolar "$2"' _ "$log" "$tmp/digitado"
 
 # Caso 5: campos que não passam na conferência: recusa sem rodar nada.
 restaurar "{\"agente\":\"claude; touch $invadido #\"}"

@@ -18,7 +18,7 @@
 #                     rejeitado e por quê); entra no pedido da rodada seguinte
 #   --forcar          passa do limite de rodadas (JANGADA_VALIDAR_RODADAS, 3)
 #   --pular-local     pula a verificação determinística local antes do revisor
-#   --reverter-se-limite reverte o worktree para o ponto inicial se atingir o limite
+#   --reverter-se-limite preserva o worktree ao atingir o limite (reversão bloqueada)
 #   --metricas        resume as rodadas registradas e sai
 #
 # A revisão pelo agy leva alguns minutos. Quem chama por uma ferramenta com
@@ -121,7 +121,7 @@ registrar() {
     --arg modelo "$modelo" --arg autor "$autor" --argjson arquivos "$(grep -c . <<<"$arquivos" || true)" \
     --argjson mais "${mais:-0}" --argjson menos "${menos:-0}" --argjson itens "${itens:-0}" \
     --argjson segundos "$SECONDS" --arg subagentes "$resumo" --arg subagentes_erro "$resumo_erro" \
-    --argjson auto "${auto_revisao:-0}" --arg execucao "${execucao:-}" \
+    --argjson auto "$(( ${auto_revisao:-0} || !${autoria_confiavel:-0} ))" --arg execucao "${execucao:-}" \
     '{data: $data, projeto: $projeto, rotulo: $rotulo, rodada: $rodada, resultado: $resultado,
       etapa: $etapa, revisor: $revisor, modelo: $modelo, autor: $autor, independente: ($auto == 0),
       execucao: (if $execucao == "" then null else $execucao end),
@@ -222,6 +222,13 @@ fi
 # Fora de uma sessão, os pareceres ficam com o nome da pasta.
 rotulo="${sessao:-$(basename "$dir")}"
 rotulo="${rotulo//[^A-Za-z0-9_.-]/-}"
+if ((fora)); then
+  # A pasta protegida também é a trava. Encerramento e revisão não podem
+  # publicar/limpar documentos simultaneamente. O descritor fecha na saída.
+  (umask 077; mkdir -p "$revisoes_dir/travas/$rotulo")
+  exec {trava_revisoes}<"$revisoes_dir/travas/$rotulo"
+  flock -w 15 "$trava_revisoes" || { echo "revisão ocupada; tente novamente" >&2; exit 1; }
+fi
 
 tarefa=""; inicio=""; autor=""; criada=""; execucao=""
 if [[ -n "$arq_meta" ]]; then
@@ -239,6 +246,12 @@ if [[ -n "$arq_meta" ]]; then
 fi
 [[ -n "$revisor" ]] || revisor="${JANGADA_VALIDAR_REVISOR:-}"
 
+autoria_confiavel=1
+# Fora do isolamento, autoria gravável pela sessão não comprova independência.
+[[ -n "$autor" ]] || autoria_confiavel=0
+if ((fora)) && [[ -n "$sessao" && "$arq_meta" != "$revisoes_dir/$sessao.json" ]]; then
+  autoria_confiavel=0
+fi
 auto_revisao=0
 if [[ "$revisor" == "mesmo" ]]; then
   auto_revisao=1
@@ -304,19 +317,25 @@ arq_aprovado="$pareceres_dir/validacao-$rotulo.aprovado"
 # Aprovação com alteração sem commit ("sujo") não prova que o commit sozinho
 # foi aprovado: as rodadas recomeçam, mas a revisão parte do ponto de antes.
 aprovado_commit=""; aprovado_num=0; aprovado_estado=""
-if [[ -f "$arq_aprovado" ]]; then
+if ((fora)) && [[ -f "$arq_aprovado" ]]; then
+  # Só marcas protegidas podem encurtar a próxima revisão.
   # A marca é um objeto JSON; a de versões anteriores, "COMMIT N ESTADO".
-  if jq -e 'type == "object"' "$arq_aprovado" >/dev/null 2>&1; then
+  if jq -e 'type == "object" and .local_verified == true and .independent == true
+    and .candidate_sha == .cabeca and (.candidate_tree | type == "string")' "$arq_aprovado" >/dev/null 2>&1; then
     IFS=$'\t' read -r aprovado_commit aprovado_num aprovado_estado \
       < <(jq -r '[.cabeca // "", (.num // 0 | tostring), (if .limpo then "limpo" else "sujo" end)] | @tsv' "$arq_aprovado") || true
   else
-    read -r aprovado_commit aprovado_num aprovado_estado <"$arq_aprovado" || true
+    echo "jangada-validar: marca de aprovação incompleta ou inválida ignorada" >&2
   fi
   [[ "$aprovado_num" =~ ^[0-9]+$ ]] || aprovado_num=0
-  if [[ "$aprovado_estado" != sujo ]] \
+  if [[ "$aprovado_estado" != sujo && -n "$aprovado_commit" ]] \
+     && [[ "$(jq -r '.candidate_tree' "$arq_aprovado")" == "$(git -C "$dir" rev-parse --verify "$aprovado_commit^{tree}" 2>/dev/null)" ]] \
+     && [[ "$(jq -r '.base_sha' "$arq_aprovado")" == "$(git -C "$dir" rev-parse --verify "${base:-HEAD}^{commit}" 2>/dev/null)" ]] \
      && git -C "$dir" merge-base --is-ancestor "$ponto" "$aprovado_commit" 2>/dev/null \
      && git -C "$dir" merge-base --is-ancestor "$aprovado_commit" HEAD 2>/dev/null; then
     ponto="$(git -C "$dir" rev-parse "$aprovado_commit")"
+  else
+    aprovado_num=0
   fi
 fi
 
@@ -371,6 +390,10 @@ congelar() {
       "+$candidato:refs/jangada/$chave/candidato" "+$rastreados:refs/jangada/$chave/rastreados" \
       ${base_sha:+"+$base_sha:refs/jangada/$chave/base"} \
       || { echo "jangada-validar: o espelho recusou os objetos da entrega (objeto adulterado ou repositório corrompido)" >&2; return 1; }
+    # Uma rodada posterior troca a ref operacional. As refs por conteúdo
+    # mantêm os candidatos e bases anteriores recuperáveis mesmo após gc.
+    git --git-dir="$espelho" update-ref "refs/jangada/historico/$candidato" "$candidato" || return 1
+    [[ -z "$base_sha" ]] || git --git-dir="$espelho" update-ref "refs/jangada/historico/$base_sha" "$base_sha" || return 1
     objetos="$espelho/objects"
     foto="$(umask 077; mkdir -p "$revisoes_dir/fotos" && mktemp -d "$revisoes_dir/fotos/XXXXXX")" || return 1
   else
@@ -461,23 +484,7 @@ rodada=$((num - aprovado_num))
 if ((rodada > rodadas_max && !forcar)); then
   echo "jangada-validar: limite de $rodadas_max rodadas atingido para $rotulo." >&2
   if ((reverter_se_limite)); then
-    ramo_atual="$(git -C "$origem_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-    base_efetiva="${base:-main}"
-    wt_padrao="${JANGADA_WORKTREES:-$HOME/.local/share/jangada-worktrees}"
-    dir_valido=0
-    [[ "$origem_dir/" == "$wt_padrao"/* || "$origem_dir" == /tmp/* ]] && dir_valido=1
-    [[ -n "${TMPDIR:-}" && "$origem_dir/" == "${TMPDIR%/}"/* ]] && dir_valido=1
-
-    if [[ "$ramo_atual" == "$base_efetiva" || "$ramo_atual" == "main" || "$ramo_atual" == "master" ]]; then
-      echo "jangada-validar: reversão cancelada para proteção do ramo base ($ramo_atual)." >&2
-    elif ((!dir_valido)); then
-      echo "jangada-validar: reversão cancelada: diretório fora de JANGADA_WORKTREES ($origem_dir)." >&2
-    else
-      echo "jangada-validar: revertendo worktree para o ponto inicial ($ponto)..." >&2
-      git -C "$origem_dir" reset --hard "$ponto" >&2
-      git -C "$origem_dir" clean -fd >&2
-      echo "jangada-validar: worktree revertido com sucesso." >&2
-    fi
+    echo "jangada-validar: reversão automática bloqueada na baseline; arquivos e commits foram preservados. Faça uma cópia antes de qualquer recuperação manual." >&2
   else
     echo "Pare e descreva o que ficou pendente; o usuário decide se roda de novo com --forcar ou se reverte com jangada-shell 'reverter'." >&2
   fi
@@ -605,6 +612,20 @@ EOF
 montar_pedido
 
 saida="$pareceres_dir/validacao-$rotulo-r$num.md"
+# Cada rodada, inclusive reprovação local ou falha do provedor, guarda a
+# identidade congelada e o pedido integral. Não inferir revisão executada
+# somente pela existência deste contexto.
+jq -n --arg sessao "$rotulo" --arg execucao "$execucao" --arg tarefa "$tarefa" \
+  --arg candidato "$candidato" --arg arvore "$arvore_candidato" --arg base "$base_sha" \
+  --arg autor "$autor" --arg revisor "$revisor" --arg modelo "$modelo" \
+  --arg pedido "$pedido" --argjson rodada "$num" --argjson protegido "$fora" \
+  '{sessao:$sessao, execucao:$execucao, tarefa:$tarefa, rodada:$rodada,
+    candidate_sha:$candidato, candidate_tree:$arvore, base_sha:$base,
+    autor:$autor, revisor_solicitado:$revisor, modelo_solicitado:$modelo,
+    pedido:$pedido, protegido:($protegido == 1), execucao_revisao:"consultar parecer e verificacoes"}' \
+  >"${saida%.md}.contexto.json.tmp" \
+  && mv "${saida%.md}.contexto.json.tmp" "${saida%.md}.contexto.json" \
+  || { echo "falha ao preservar contexto da revisão" >&2; exit 1; }
 
 # Roda o lintr e imprime arquivo, linha, linter e mensagem separados por
 # tabulação. Argumentos: arquivo de configuração e os arquivos R. Sai com 2
@@ -641,9 +662,26 @@ linhas_novas() {
 
 # Portão determinístico local pré-revisão: valida marcadores de conflito, sintaxe,
 # lintr, segredos e testes antes de gastar tempo e tokens com o modelo revisor.
+# Estados explícitos acompanham cada verificação. A falta de ferramenta
+# obrigatória reprova, sem enviar o diff ao revisor.
+arq_verificacoes="${saida%.md}.verificacoes.tsv"
+# Revoga aprovação da entrega atual. Uma entrega anterior pode continuar
+# servindo de ponto de partida, sem aprovar o candidato desta rodada.
+if [[ -f "$arq_aprovado" ]] && { ! jq -e 'type == "object" and .local_verified == true and .independent == true' "$arq_aprovado" >/dev/null 2>&1 \
+    || [[ "$(jq -r '.candidate_sha' "$arq_aprovado")" == "$candidato" ]]; }; then
+  rm -f "$arq_aprovado"
+fi
+registrar_verificacao() {
+  if [[ "$2" == PASSED ]] && grep -q "^$1"$'\t' "$arq_verificacoes" 2>/dev/null; then
+    return 0
+  fi
+  printf '%s\t%s\n' "$1" "$2" >>"$arq_verificacoes"
+}
+
 verificar_local() {
   local erros=""
-  local arq alterados
+  : >"$arq_verificacoes"
+  local arq alterados antes="" sintaxe_aplicavel=0
   # Rastreados e novos, sem os apagados.
   alterados="$(git -C "$dir" diff -z --name-only --diff-filter=d "$ponto" 2>/dev/null | nomes_z || true
                printf '%s\n' "$novos")"
@@ -670,6 +708,13 @@ verificar_local() {
     fi
   done <<<"$alterados"
 
+  if [[ "$erros" == "$antes" ]]; then
+    registrar_verificacao conflitos PASSED
+  else
+    registrar_verificacao conflitos FAILED
+  fi
+  antes="$erros"
+
   # 1b. Script que o grep toma por binário (byte nulo ou codificação inválida)
   # roda no shell, mas chega ao revisor como "Binary files differ" e escapa
   # das conferências de sintaxe e de segredos.
@@ -680,6 +725,13 @@ verificar_local() {
       erros+="script tratado como binário (byte nulo ou codificação inválida), que o revisor não lê: $arq"$'\n'
     fi
   done <<<"$alterados"
+
+  if [[ "$erros" == "$antes" ]]; then
+    registrar_verificacao scripts-binarios PASSED
+  else
+    registrar_verificacao scripts-binarios FAILED
+  fi
+  antes="$erros"
 
   # 2. Sintaxe de arquivos de script modificados
   while IFS= read -r arq; do
@@ -694,15 +746,20 @@ verificar_local() {
         ;;
     esac
     if ((eh_script_shell)); then
+      sintaxe_aplicavel=1
       if command -v shellcheck >/dev/null 2>&1; then
         local sc_out
         if ! sc_out="$(shellcheck -S warning "$dir/$arq" 2>&1)"; then
           erros+="falha no shellcheck em $arq:"$'\n'"$sc_out"$'\n'
         fi
+      else
+        registrar_verificacao "shellcheck:$arq" UNAVAILABLE
+        erros+="UNAVAILABLE: shellcheck ausente para $arq"$'\n'
       fi
     fi
     case "$arq" in
       *.lua)
+        sintaxe_aplicavel=1
         local luac_bin
         luac_bin="$(command -v luac || command -v luac5.4 || true)"
         if [[ -n "$luac_bin" ]]; then
@@ -710,10 +767,22 @@ verificar_local() {
           if ! luac_out="$("$luac_bin" -p "$dir/$arq" 2>&1)"; then
             erros+="falha de sintaxe lua em $arq:"$'\n'"$luac_out"$'\n'
           fi
+        else
+          registrar_verificacao "lua:$arq" UNAVAILABLE
+          erros+="UNAVAILABLE: luac ausente para $arq"$'\n'
         fi
         ;;
     esac
   done <<<"$alterados"
+
+  if ((!sintaxe_aplicavel)); then
+    registrar_verificacao sintaxe NOT_APPLICABLE
+  elif [[ "$erros" == "$antes" ]]; then
+    registrar_verificacao sintaxe PASSED
+  else
+    registrar_verificacao sintaxe FAILED
+  fi
+  antes="$erros"
 
   # 3. lintr nos arquivos R, só nas linhas que a mudança tocou, para um cat()
   # antigo em código legado não barrar a entrega. Com .lintr no projeto, o
@@ -755,7 +824,7 @@ verificar_local() {
     ((r_rc)) || achados="$(cd "$lint_dir" && R_PROFILE_USER="$HOME/.Rprofile" R_ENVIRON_USER="$HOME/.Renviron" \
       R_LINTR_LINTER_FILE="$lint_dir/.jangada-lintr" JANGADA_ISOLAR_PERFIL=verificacao \
       "$JANGADA_PATH/bin/jangada-isolar" -- \
-      Rscript -e "$lintr_r" "$lint_dir/.jangada-lintr" "${r_arqs[@]}" 2>"$r_err")" || r_rc=$?
+      timeout --kill-after=5 120 Rscript -e "$lintr_r" "$lint_dir/.jangada-lintr" "${r_arqs[@]}" 2>"$r_err")" || r_rc=$?
     rm -rf "$lint_dir"
     if ((r_rc == 0)) && [[ -n "$achados" ]]; then
       # NF >= 2: um arquivo só com linhas apagadas deixa linha vazia em $linhas.
@@ -769,17 +838,32 @@ verificar_local() {
           printf 'jangada-validar: aviso do lintr (padrão do jangada; não reprova, crie um .lintr no projeto para reprovar):\n%s\n' "$achados" >&2
         fi
       fi
-    elif ((r_rc != 0 && r_rc != 2)); then
+    elif ((r_rc == 2)); then
+      registrar_verificacao lintr UNAVAILABLE
+      erros+="UNAVAILABLE: lintr ausente, arquivos R não conferidos"$'\n'
+    elif ((r_rc != 0)); then
       # 2 é lintr ausente. Outro código é falha do lintr ou do isolamento: com
       # .lintr no projeto a regra é obrigatória, e sem conferir a entrega reprova.
       if ((bloqueia)); then
         erros+="lintr (.lintr do projeto) falhou, arquivos R não conferidos:"$'\n'"$(tail -n 5 "$r_err")"$'\n'
       else
-        printf 'jangada-validar: lintr falhou, arquivos R não conferidos:\n%s\n' "$(tail -n 5 "$r_err")" >&2
+        erros+="FAILED: lintr falhou, arquivos R não conferidos:"$'\n'"$(tail -n 5 "$r_err")"$'\n'
       fi
     fi
     rm -f "$r_err"
+  elif ((${#r_arqs[@]})); then
+    registrar_verificacao R UNAVAILABLE
+    erros+="UNAVAILABLE: Rscript ausente, arquivos R não conferidos"$'\n'
+  else
+    registrar_verificacao lintr NOT_APPLICABLE
   fi
+
+  if [[ "$erros" == "$antes" ]]; then
+    registrar_verificacao lintr PASSED
+  else
+    registrar_verificacao lintr FAILED
+  fi
+  antes="$erros"
 
   # 4. Segredos, com o gitleaks, só nas linhas que a entrega acrescentou. Cada
   # arquivo vira uma cópia com as demais linhas em branco, para a linha do
@@ -818,7 +902,8 @@ verificar_local() {
       else
         gl_saida="gitleaks falhou, segredos não conferidos:"$'\n'"$(tail -n 5 "$espelho.err")"
         if [[ "${JANGADA_VALIDAR_SEM_GITLEAKS:-0}" == 1 ]]; then
-          printf 'jangada-validar: %s\n' "$gl_saida" >&2
+          registrar_verificacao gitleaks SKIPPED
+          erros+="SKIPPED: $gl_saida"$'\n'
         else
           erros+="$gl_saida"$'\n'"(o diff iria ao revisor sem conferência; JANGADA_VALIDAR_SEM_GITLEAKS=1 aceita o risco)"$'\n'
         fi
@@ -826,10 +911,19 @@ verificar_local() {
     fi
     rm -rf "$espelho" "$espelho.err"
   elif [[ "${JANGADA_VALIDAR_SEM_GITLEAKS:-0}" == 1 ]]; then
-    echo "jangada-validar: aviso: gitleaks não instalado, segredos não conferidos (pacote gitleaks)" >&2
+    registrar_verificacao gitleaks SKIPPED
+    erros+="SKIPPED: gitleaks não instalado, segredos não conferidos"$'\n'
   else
-    erros+="gitleaks não instalado, segredos não conferidos: instale o pacote gitleaks ou aceite o risco com JANGADA_VALIDAR_SEM_GITLEAKS=1"$'\n'
+    registrar_verificacao gitleaks UNAVAILABLE
+    erros+="UNAVAILABLE: gitleaks não instalado, segredos não conferidos: instale o pacote gitleaks ou aceite o risco com JANGADA_VALIDAR_SEM_GITLEAKS=1"$'\n'
   fi
+
+  if [[ "$erros" == "$antes" ]]; then
+    registrar_verificacao segredos PASSED
+  else
+    registrar_verificacao segredos FAILED
+  fi
+  antes="$erros"
 
   # 5. Commit com Co-Authored-By, que o protocolo dos agentes proíbe. Checagem
   # exata, então fica aqui e não no revisor. Só avisa: corrigir exige
@@ -840,6 +934,13 @@ verificar_local() {
   if [[ -n "$coautor" ]]; then
     printf 'jangada-validar: aviso: commit com linha Co-Authored-By (o protocolo pede sem):\n%s\n' "$coautor" >&2
   fi
+
+  if [[ "$erros" == "$antes" ]]; then
+    registrar_verificacao coautor PASSED
+  else
+    registrar_verificacao coautor FAILED
+  fi
+  antes="$erros"
 
   # 6. Validação do projeto se existir e não estiver em recursão. O script é
   # código do repositório avaliado, na versão da entrega: roda pelo
@@ -859,22 +960,40 @@ verificar_local() {
       if ! { cp -a "$dir/." "$foto_exec/" && printf '%s\n' "$cabeca" >"$foto_exec/.git/shallow" \
              && git -C "$foto_exec" repack -a -d -q && rm -f "$foto_exec/.git/objects/info/alternates"; } 2>/dev/null; then
         erros+="falha ao copiar a entrega para rodar o .jangada/validar.sh"$'\n'
-      elif ! val_out="$(cd "$foto_exec" && JANGADA_ISOLAR_PERFIL="$perfil_exec" "$JANGADA_PATH/bin/jangada-isolar" -- .jangada/validar.sh 2>&1)"; then
+      elif ! val_out="$(cd "$foto_exec" && JANGADA_ISOLAR_PERFIL="$perfil_exec" timeout --kill-after=5 300 "$JANGADA_PATH/bin/jangada-isolar" -- .jangada/validar.sh 2>&1)"; then
         erros+="falha na validação do projeto (.jangada/validar.sh):"$'\n'"$val_out"$'\n'
       fi
       rm -rf "$foto_exec"
+    else
+      registrar_verificacao projeto NOT_APPLICABLE
     fi
+  else
+    registrar_verificacao projeto SKIPPED
+    erros+="SKIPPED: validação do projeto em recursão"$'\n'
   fi
+
+  if [[ "$erros" == "$antes" ]]; then
+    registrar_verificacao projeto PASSED
+  else
+    registrar_verificacao projeto FAILED
+  fi
+  antes="$erros"
 
   rm -rf "$regras_dir"
   if [[ -n "$erros" ]]; then
+    registrar_verificacao conjunto FAILED
     printf '%s\n' "$erros"
     return 1
   fi
+  registrar_verificacao conjunto PASSED
   return 0
 }
 
 local_verificado=false
+if ((pular_local)) || [[ "${JANGADA_VALIDAR_TESTANDO:-0}" == 1 ]]; then
+  : >"$arq_verificacoes"
+  registrar_verificacao conjunto SKIPPED
+fi
 if ((!pular_local)) && [[ "${JANGADA_VALIDAR_TESTANDO:-0}" != "1" ]]; then
   erros_locais=""
   if ! erros_locais="$(verificar_local)"; then
@@ -907,12 +1026,15 @@ echo "jangada-validar: rodada $rodada de $rodadas_max, $nome_revisor${modelo:+ (
 # O hook do revisor fica desligado: ele não é o agente da sessão, e o Stop
 # dele marcaria a sessão como concluída.
 revisar_claude() {
-  local rc=0
-  (cd "$dir" && env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 "${com_prazo[@]}" claude -p \
+  local rc=0 resposta
+  # A saída protegida é escrita pelo controlador, não herdada pelo revisor.
+  resposta="$(cd "$dir" && env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 \
+    JANGADA_ISOLAR_FOTO="$foto" "${com_prazo[@]}" "$JANGADA_PATH/bin/jangada-isolar" -- claude -p \
     --model "$modelo" --setting-sources user \
     --allowedTools "Read,Grep,Glob" \
     --disallowedTools "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch" \
-    <<<"$pedido") >"$saida.tmp" || rc=$?
+    <<<"$pedido")" || rc=$?
+  printf '%s\n' "$resposta" >"$saida.tmp"
   anotar_prazo "$rc"
   return "$rc"
 }
@@ -920,14 +1042,15 @@ revisar_claude() {
 # Só o pedido completo (regras da base, commits e diff), sem ferramentas.
 # A pasta vazia impede carregar configuração ou instruções da entrega.
 revisar_codex() {
-  local pasta_revisor codex_cmd rc=0
+  local pasta_revisor codex_cmd registro rc=0
   codex_cmd="$(command -v codex)" || return 1
   pasta_revisor="$(mktemp -d)" || return 1
   local -a args=(--output-last-message "$pasta_revisor/resposta")
   [[ -n "$modelo" ]] && args+=(--model "$modelo")
-  (cd "$pasta_revisor" && env JANGADA_SESSAO="revisao-codex-$rotulo" JANGADA_HOOK_DESLIGADO=1 \
+  registro="$(cd "$pasta_revisor" && env JANGADA_SESSAO="revisao-codex-$rotulo" JANGADA_HOOK_DESLIGADO=1 \
     "${com_prazo[@]}" "$JANGADA_PATH/bin/jangada-isolar" -- "$JANGADA_PATH/bin/jangada-codex" --revisar -- \
-    "$codex_cmd" "${args[@]}" <<<"$pedido") >"$saida.log" 2>&1 || rc=$?
+    "$codex_cmd" "${args[@]}" <<<"$pedido" 2>&1)" || rc=$?
+  printf '%s\n' "$registro" >"$saida.log"
   anotar_prazo "$rc"
   if ((rc == 0)) && [[ -s "$pasta_revisor/resposta" ]]; then
     cat "$pasta_revisor/resposta" >"$saida.tmp" || rc=1
@@ -943,11 +1066,12 @@ revisar_codex() {
 # 131.072 bytes (MAX_ARG_STRLEN). Acima do teto, o diff sai do pedido e vai
 # para um arquivo que o agy lê.
 revisar_agy() {
-  local LC_ALL=C args saida_agy status_agy tentativa log="$saida.log"
+  local LC_ALL=C args saida_agy status_agy tentativa log="$saida.log" log_temporario
+  log_temporario="$(mktemp)" || return 1
   if (( ${#pedido} > 126000 )); then
-    printf '%s\n' "$diff_conteudo" >"$saida.diff"
-    pedido="${pedido/"$diff_conteudo"/"[diff grande demais para o pedido; leia o arquivo $saida.diff]"}"
-    echo "jangada-validar: pedido acima do limite de argumento; o diff vai em $saida.diff" >&2
+    printf '%s\n' "$diff_conteudo" >"$dir/.jangada-revisao.diff"
+    pedido="${pedido/"$diff_conteudo"/"[diff grande demais para o pedido; leia o arquivo $dir/.jangada-revisao.diff]"}"
+    echo "jangada-validar: pedido acima do limite de argumento; o diff vai em $dir/.jangada-revisao.diff" >&2
   fi
   # O revisor lê o conteúdo menos confiável da entrega: roda com o agente
   # revisor (default/agy/agents/revisor), só com ferramentas de leitura, e em
@@ -955,9 +1079,10 @@ revisar_agy() {
   # com todas as ferramentas, então a falta do revisor para a validação.
   if ! env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 timeout 60 agy agents </dev/null 2>/dev/null | grep -qx revisor; then
     echo "jangada-validar: o agy não achou o agente revisor (rode ./install.sh 50)" >&2
+    rm -f "$log_temporario"
     return 1
   fi
-  args=(-p "$pedido" --agent revisor --sandbox --output-format json --add-dir "$dir" --add-dir "$pareceres_dir")
+  args=(-p "$pedido" --agent revisor --sandbox --output-format json --add-dir "$dir")
   [[ -n "$modelo" ]] && args+=(--model "$modelo")
   [[ -n "${JANGADA_VALIDAR_ESFORCO:-high}" ]] && args+=(--effort "${JANGADA_VALIDAR_ESFORCO:-high}")
   # A saída vem por cano: o agy reabre o próprio descritor de saída, e com
@@ -965,19 +1090,24 @@ revisar_agy() {
   # sem nome. A segunda tentativa cobre as respostas vazias com código 0, não
   # o prazo vencido, que dobraria a espera.
   for tentativa in 1 2; do
-    if saida_agy="$(cd "$dir" && env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 "${com_prazo[@]}" agy "${args[@]}" </dev/null 2>"$log")"; then
+    if saida_agy="$(cd "$dir" && env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 JANGADA_ISOLAR_FOTO="$foto" "${com_prazo[@]}" "$JANGADA_PATH/bin/jangada-isolar" -- agy "${args[@]}" </dev/null 2>"$log_temporario")"; then
+      cp "$log_temporario" "$log"
       status_agy="$(jq -r '.status // ""' <<<"$saida_agy" 2>/dev/null || true)"
       if [[ "$status_agy" == SUCCESS ]] && jq -r '.response // ""' <<<"$saida_agy" >"$saida.tmp" 2>/dev/null \
          && [[ -n "$(tr -d '[:space:]' <"$saida.tmp")" ]]; then
-        rm -f "$log" "$saida.diff"
+        rm -f "$log_temporario"
         return 0
       fi
     else
-      anotar_prazo "$?"
+      local rc=$?
+      cp "$log_temporario" "$log"
+      rm -f "$log_temporario"
+      anotar_prazo "$rc"
       ((prazo_vencido)) && return 1
     fi
     ((tentativa < 2)) && { echo "jangada-validar: o agy não respondeu; tentando de novo em 5s" >&2; sleep 5; }
   done
+  rm -f "$log_temporario"
   echo "jangada-validar: saída do agy: ${saida_agy:0:300}" >&2
   echo "jangada-validar: erro em $log e em ~/.gemini/antigravity-cli/log/" >&2
   return 1
@@ -1057,10 +1187,22 @@ if [[ "$status" == APROVADO && -n "$fora_do_pedido" ]]; then
     fi
   done <<<"$fora_do_pedido"
 fi
+if [[ "$status" == APROVADO ]] && { [[ "$local_verificado" != true ]] || ((auto_revisao || !autoria_confiavel)); }; then
+  status=REVISAR
+  { printf 'STATUS: REVISAR\n\nValidação local incompleta ou revisão sem independência comprovada.\n\nParecer recebido:\n'; cat "$saida"; } >"$saida.incompleto"
+  mv "$saida.incompleto" "$saida"
+fi
 cat "$saida"
 # O mesmo modelo que escreveu tende a concordar consigo: a aprovação dele fica
 # registrada à parte e não vale como revisão independente no --integrar.
 veredito="$status"
+jq --arg revisor "$revisor" --arg modelo "$modelo" --arg status "$status" \
+  --argjson autoria "$autoria_confiavel" --argjson local_verificado "$local_verificado" \
+  '. + {revisor_executado:$revisor, modelo_executado:$modelo, resultado:$status,
+        autoria_confiavel:($autoria == 1), local_verified:$local_verificado}' \
+  "${saida%.md}.contexto.json" >"${saida%.md}.contexto.json.tmp" \
+  && mv "${saida%.md}.contexto.json.tmp" "${saida%.md}.contexto.json" \
+  || { echo "falha ao preservar decisão da revisão" >&2; exit 1; }
 ((auto_revisao)) && [[ "$status" == APROVADO ]] && veredito=APROVADO_AUTORREVISAO
 if [[ -n "$arq_estado" ]]; then
   tmp="$(mktemp "$arq_estado.XXXXXX")"

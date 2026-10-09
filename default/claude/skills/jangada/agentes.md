@@ -123,23 +123,25 @@ conferência de processo zumbi e o prazo; outros erros continuam sendo falhas.
 | `jangada-hook-leitor` | PreToolUse do leitor: só comandos de leitura no terminal; no Claude pelo frontmatter do agente, no agy (`--agy`) pelo `PreToolUse` do `run_command` no `~/.gemini/config/hooks.json` |
 | `jangada-filtrar` | condensa saídas longas de comandos no terminal para poupar tokens; atalho `resumir` no jangada shell |
 | `jangada-mapa` | extrai a estrutura de arquivos e assinaturas em Markdown; atalho `mapa` no jangada shell |
-| `jangada-validar` | revisão do diff por outro modelo ou pelo mesmo modelo isolado (claude ou agy), só leitura, chamada pelo agente antes de entregar; executa portão determinístico local antes (conflitos, script com byte nulo, sintaxe, lintr, gitleaks nas linhas acrescentadas; sem gitleaks reprova, salvo `JANGADA_VALIDAR_SEM_GITLEAKS=1`; `.gitleaks.toml`, `.gitleaksignore`, `AGENTS.md` e `CLAUDE.md` valem da base, e `.lintr` também quando a base tem um); só a primeira linha não vazia do parecer decide o status; pareceres em `validacao-<sessao>-rN.md`; a primeira linha tem de ser exatamente `STATUS: APROVADO` ou `STATUS: REVISAR`, e a aprovação pelo modelo do autor sai como `APROVADO_AUTORREVISAO`; a revisão lê uma foto congelada da entrega, não o worktree vivo; depois de um APROVADO, `validacao-<sessao>.aprovado` (JSON) guarda commit, árvore, base e revisor, e a próxima entrega parte dele com as rodadas zeradas; cada rodada vira uma linha em `~/.local/state/jangada/validar.jsonl`, resumida por `--metricas` |
+| `jangada-validar` | revisão do diff por outro modelo ou pelo mesmo modelo isolado (claude ou agy), só leitura, chamada pelo agente antes de entregar; executa portão determinístico local antes (conflitos, script com byte nulo, sintaxe, lintr, gitleaks nas linhas acrescentadas; sem gitleaks reprova, inclusive com `JANGADA_VALIDAR_SEM_GITLEAKS=1`; `.gitleaks.toml`, `.gitleaksignore`, `AGENTS.md` e `CLAUDE.md` valem da base, e `.lintr` também quando a base tem um); só a primeira linha não vazia do parecer decide o status; pareceres em `validacao-<sessao>-rN.md`; a primeira linha tem de ser exatamente `STATUS: APROVADO` ou `STATUS: REVISAR`, e aprovação pelo autor, com autoria não comprovada fora do isolamento ou com validação local incompleta vira `REVISAR`; a revisão lê uma foto congelada da entrega, não o worktree vivo; depois de um APROVADO, `validacao-<sessao>.aprovado` (JSON) guarda commit, árvore, base e revisor, e a próxima entrega parte dele com as rodadas zeradas; cada rodada vira uma linha em `~/.local/state/jangada/validar.jsonl`, resumida por `--metricas` |
 | `jangada-agentes` | seletor, painel, módulo da barra, `--focar`, `--proximo`, `--anterior`, `--restaurar` |
-| `jangada-agente-fim` | encerra a sessão e remove o worktree (mantém o ramo); `--integrar` exige aprovação independente feita fora do isolamento (`revisoes/`: commit e árvore atuais do ramo, worktree limpo, base na mesma ponta da revisão), roda o `jangada-validar` fora se não houver e, sem APROVADO ou só com autorrevisão, pede confirmação (`--sem-revisao` pula a revisão); sob a trava do repositório (`revisoes/travas/`), reconfere ramo, base e objetos contra o espelho e faz o merge na base, avisa para rodar o `jangada-update` se for o repositório do jangada, apaga o ramo e, nesse repositório e com `allowed_signers`, chama o `jangada-assinar` |
+| `jangada-agente-fim` | encerra e remove a worktree após conferência, mantendo o ramo; na baseline 2026-10, `--integrar` está bloqueado no backend, inclusive com confirmação gráfica ou `--sem-revisao`; sessão, ramo e worktree são preservados para integração manual supervisionada |
 | `jangada-consumo` | tokens do Claude no bloco de 5 horas, lidos de `~/.claude/projects` |
 | `jangada-painel` | indicadores num app Shiny em 127.0.0.1; `default/painel/coletor.py` grava o cache em Parquet (`~/.local/state/jangada/painel`), `default/painel/app.R` só lê o cache |
 | `jangada-gancho` | roda os ganchos do usuário em `~/.config/jangada/ganchos/` |
 
 ## Revisão incremental e integração
 
-Uma aprovação anterior pode mover o início do diff para o commit aprovado,
+Uma aprovação anterior protegida, com autoria, árvore, base e execução local
+conferidas, pode mover o início do diff para o commit aprovado,
 mesmo com `--base main`. Confira a quantidade de arquivos anunciada:
 aprovar as correções não comprova que o revisor leu toda a entrega acumulada.
 
 Na revisão manual fora do isolamento, use `JANGADA_SESSAO` com o nome
 completo registrado da sessão. Sem ele, o rótulo vem do nome da pasta;
-a marca recebe outro nome e não é a que `jangada-agente-fim` procura.
-Isso não dispensa as conferências de commit, árvore, base e independência.
+a marca recebe outro nome, e a conferência manual deve identificar a entrega
+correta. `--integrar` permanece bloqueado na baseline. Isso não dispensa as
+conferências de commit, árvore, base e independência.
 
 ## Isolamento (`jangada-isolar`)
 
@@ -413,35 +415,33 @@ porta de entrada. O que se aprendeu com ele vale para o revisor agy:
 - `.aprovado` com `limpo` falso (worktree com alteração sem commit) não move o ponto
   de comparação: com o commit igual ao `HEAD`, a próxima rodada daria "nada a
   revisar" sem ninguém ter visto o commit sozinho.
-- O git não reconfere o hash de um objeto solto ao ler: um blob trocado em
-  `.git/objects` passa pelo `cat-file`, pelo `diff` e pelo `merge` com o nome
-  do original. Quem recalcula é o `git fetch` para outro repositório, e ele
-  não precisa de `fetch.fsckObjects`. Por isso o `jangada-validar` e o
-  `--integrar` buscam a entrega num espelho em `revisoes/espelhos/` e comparam
-  o `cat-file --batch` dos dois lados antes do merge.
-  O merge ainda lê os objetos depois dessa comparação, então o `--integrar`
-  refaz a mescla no espelho (`git merge-tree --write-tree`), exige a mesma
-  árvore e recalcula o hash de cada arquivo mudado (`git hash-object`) contra
-  o nome na árvore do espelho; diferença desfaz o merge. Não servem `git diff
-  --quiet HEAD` (compara o arquivo com o conteúdo do objeto forjado e não vê
-  diferença) nem `update-index --really-refresh` com `diff-index` (o
-  `--really-refresh` só ignora o assume-unchanged: com o stat igual ao do
-  índice, o arquivo não é relido).
-  O que isso não cobre: o agente segue gravando em `.git/objects` depois da
-  integração, e um objeto trocado mais tarde só aparece no `git fsck`.
-- Uma marca `.aprovado` que não vale para o merge (base andou, árvore
-  trocada, formato antigo) tem de sair antes de revisar de novo: com ela, o
-  `jangada-validar` parte do commit aprovado e responde "nada a revisar".
+- O Git não reconfere o hash de um objeto solto ao ler. A revisão fora do
+  isolamento busca objetos em espelho protegido. A trava por repositório
+  coordena o Jangada, mas não impede o editor ou Git externo de escrever.
+  Uma falha posterior ao merge não autoriza `reset --hard`: ele pode apagar
+  uma edição concorrente. A baseline bloqueia a integração automática;
+  `update-ref` sozinho também não garante consistência do worktree.
+- Uma marca só encurta a próxima revisão quando está protegida em `revisoes/`,
+  registra execução local completa e revisão independente e bate com
+  candidato, árvore e base. Marca gravável pelo agente não vale para isso.
 - `read -p` só mostra a pergunta com a entrada num terminal. Teste que
   responde pela entrada padrão confere a mensagem anterior à pergunta, não a
   pergunta.
-- O `jangada-validar` executa uma checagem determinística local antes do revisor por IA (marcadores de conflito do Git, sintaxe de scripts alterados e `.jangada/validar.sh`). Se falhar, grava `STATUS: REVISAR (local)` sem acionar a API externa, economizando tokens. A opção `--pular-local` ignora o portão local.
+- O `jangada-validar` executa uma checagem determinística local antes do revisor por IA (marcadores de conflito do Git, sintaxe de scripts alterados e `.jangada/validar.sh`). Se falhar, grava `STATUS: REVISAR (local)` sem acionar a API externa, economizando tokens. A opção `--pular-local` permite obter um parecer diagnóstico, mas não aprovação. O arquivo `.verificacoes.tsv` distingue PASSED, FAILED, UNAVAILABLE, SKIPPED e NOT_APPLICABLE.
 - Um comentário de shell que começa pela palavra `shellcheck` vira diretiva e
   quebra a análise do arquivo inteiro (SC1073). Reescreva a frase.
 - O `gitleaks dir` lê sozinho o `.gitleaks.toml` e o `.gitleaksignore` da
   pasta examinada. O espelho das linhas novas não copia esses dois arquivos;
   as regras vão por `--config` e `--gitleaks-ignore-path`, tiradas da base.
-- Se o limite de rodadas for atingido, a opção `--reverter-se-limite` (ou o comando `reverter` no jangada shell) restaura o worktree para o ponto inicial limpo da tarefa. O `reverter` do shell mostra antes da confirmação os commits, as alterações e os arquivos não rastreados que se perdem, e guarda o HEAD anterior num ramo `backup/reverter-<data>-<pid>`, cujo nome informa ao terminar.
+- Ao atingir o limite de rodadas, `--reverter-se-limite` preserva arquivos e
+  commits. A reversão automática está bloqueada. O `reverter` manual do
+  shell ainda confirma descarte, mas o ramo de cópia guarda somente commits:
+  não preserva arquivos novos ou alterações sem commit. Não o use sem backup.
+- No perfil de verificação, Bubblewrap precisa criar namespace de rede e
+  soquetes internos de loopback. Um sandbox externo pode permitir a chamada
+  básica e impedir esse perfil. Nesse caso a validação falha, e os testes
+  reais continuam pendentes; não substitua por execução fora do isolamento.
+
 
 Depois de integrar uma mudança no próprio jangada, confira e
 atualize a cópia instalada com `jangada-update`.
@@ -637,8 +637,7 @@ Conversa aberta (`jangada-conversa`), Ollama 0.35.1, medida em 07/10/2026:
   `DESCRICAO=` e
   outras chaves em maiúsculas, que viram ambiente só daquela sessão (exemplo
   em `default/agentes/exemplo.conf`). O arquivo é lido, não executado.
-  `JANGADA_AGENTE_ISOLAR=0` no perfil abre aquele agente fora do bubblewrap.
-  Use para outra conta, outro modelo ou outro agente.
+  Na correção P0, `JANGADA_AGENTE_ISOLAR=0` não desliga o isolamento.
 - Ganchos: executável `~/.config/jangada/ganchos/EVENTO` ou arquivos em
   `EVENTO.d/`. Eventos: `pos-tema`, `pos-agente-fim` (sessão, raiz, integrado),
   `pos-validar`, `pos-update`. Falha de gancho gera só aviso.
@@ -650,3 +649,29 @@ O agy aceita nomes desconhecidos em `--agent` e pode usar o agente padrão, com 
 - Função Bash definida dentro de outra não captura suas variáveis locais.
   A conferência da marca declara o caminho na própria função, pois também
   roda sob a trava depois de terminar a chamada de revisão.
+
+## Fronteira de confiança da fila e encerramento
+
+Bubblewrap preserva descritores adicionais herdados. Uma montagem somente
+leitura não impede escrita por um descritor aberto antes do isolamento.
+O lançador fecha esses descritores, exceto o cano do proxy criado por ele,
+e recusa descritores padrão apontando para estado protegido ou sockets.
+Arquivos protegidos com ligações físicas adicionais também são recusados.
+O isolamento é obrigatório também na abertura e retomada de sessões.
+
+A fila em `agentes/projetos` é somente leitura no isolamento, mesmo com
+extras de escrita. O controlador fora do isolamento é quem reserva,
+registra e autoriza conclusões. Um rótulo de revisor recebido por comando
+não comprova que um modelo revisou: use supervisão efetivamente executada
+ou decisão manual identificada, respeitando a política da atividade.
+
+O encerramento arquiva pareceres, contextos das rodadas, prompts e marcas
+em `revisoes/arquivo` antes de limpar documentos operacionais. Falha de
+arquivamento mantém os originais. A aprovação antiga sem contexto deve ser
+reconferida; a documentação da correção P0 descreve recuperação e limites.
+
+Revisores chamados fora de uma sessão também precisam do Bubblewrap. A saída
+protegida deve ser coletada por cano e escrita pelo controlador: herdar um
+descritor do próprio parecer exporia o arquivo antes da montagem. A foto
+congelada é reexposta somente leitura; o restante de revisoes fica oculto.
+Prompts e protocolos são registrados antes de iniciar ou retomar a sessão.

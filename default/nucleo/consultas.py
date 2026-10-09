@@ -13,6 +13,7 @@ import tempfile
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'orquestracao'))
 from projetos import chave, ler_json, ler_projeto  # noqa: E402
+from confianca import conferir_conclusao  # noqa: E402
 
 ESTADOS = {'QUEUED': 'Pronta', 'RUNNING': 'Executando', 'COMPLETED': 'Concluída',
            'REVIEW_REQUIRED': 'Em revisão', 'REVISION_REQUIRED': 'Em revisão',
@@ -107,7 +108,7 @@ def consultar(raiz, projeto=None):
                 raise ValueError('banco com ligação simbólica')
             with banco_leitura(banco) as db:
                 tabelas = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-                tarefas = [dict(r) for r in db.execute('SELECT * FROM tarefas ORDER BY criado,id')]
+                tarefas = [conferir_conclusao(pasta, dict(r)) for r in db.execute('SELECT * FROM tarefas ORDER BY criado,id')]
                 estados = {t['id']: t['status'] for t in tarefas}
                 for tarefa in tarefas:
                     spec = json.loads(tarefa['especificacao'])

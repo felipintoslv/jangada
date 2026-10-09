@@ -42,7 +42,7 @@ jobs:
 
       # R e lintr ficam no job sandbox-e2e: compilar o lintr leva minutos.
       - name: Dependências
-        run: pacman -Syu --noconfirm --needed git sudo shellcheck lua jq python python-pyqt6 qt6-declarative gitleaks bubblewrap diffutils openssh xdg-dbus-proxy dbus python-dbus python-gobject zsh poppler python-pyarrow
+        run: pacman -Syu --noconfirm --needed git sudo shellcheck lua jq python python-pyqt6 qt6-svg qt6-declarative gitleaks bubblewrap diffutils openssh xdg-dbus-proxy dbus python-dbus python-gobject zsh poppler python-pyarrow
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 

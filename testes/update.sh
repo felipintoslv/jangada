@@ -151,13 +151,14 @@ printf 's\n' | (cd "$tmp" && "$repo_jangada/bin/jangada-agente-fim" --integrar x
 rc=$?
 git -C "$origem" config --unset core.fsmonitor
 git -C "$origem" config --unset core.hooksPath
-conferir "integra sem erro ($rc)" test "$rc" -eq 0
-conferir "ramo integrado na origem" grep -q 'feat(teste): tarefa' <(git -C "$origem" log --oneline main)
-conferir "ramo apagado depois da integração" test -z "$(git -C "$origem" branch --list agente/x)"
-conferir "worktree removido" test ! -d "$wt"
+conferir "integração automática bloqueada ($rc)" test "$rc" -ne 0
+conferir "ramo mantido" test -n "$(git -C "$origem" branch --list agente/x)"
+conferir "worktree mantido" test -d "$wt"
 conferir "cópia instalada não é atualizada" test "$(head_instalado)" = "$antes_fim"
-conferir "pede para rodar jangada-update" grep -q 'rode jangada-update' "$tmp/saida"
+conferir "bloqueio explícito" grep -q 'integração automática bloqueada' "$tmp/saida"
 conferir "fsmonitor e ganchos do repositório não rodam" test ! -e "$alerta"
+# Prossegue o ensaio de atualização com integração manual no repositório sintético.
+git -C "$origem" merge --quiet --no-ff -m "Integra agente/x manualmente" agente/x
 
 echo "== assinaturas"
 
@@ -292,44 +293,22 @@ m_assinado="$(git -C "$origem" rev-parse HEAD)"
 atualizar <<<s
 conferir "merge assinado: a cópia instalada avança" test "$(head_instalado)" = "$m_assinado"
 
-# O --integrar chama o jangada-assinar depois de apagar o ramo: a primeira
-# resposta confirma o merge, a segunda a assinatura.
-integrar_y() {
-  git -C "$origem" worktree add --quiet -b agente/y "$wt_y" main
-  echo "$1" >"$wt_y/y.txt"
-  git -C "$wt_y" add y.txt
-  git -C "$wt_y" commit --quiet -m "feat(teste): tarefa y $1"
-  jq -n --arg w "$wt_y" --arg r "$origem" \
-    '{worktree: $w, ramo: "agente/y", base: "main", raiz: $r, estado: "concluido"}' \
-    >"$XDG_STATE_HOME/jangada/agentes/y.json"
-  printf '%s\n' s "$2" | (cd "$tmp" && "$repo_jangada/bin/jangada-agente-fim" --integrar y) >"$tmp/saida" 2>&1
-  rc=$?
-}
+# Assinaturas não liberam a publicação bloqueada.
 wt_y="$HOME/.local/share/jangada-worktrees/origem/y"
-integrar_y a s
-conferir "integrar com allowed_signers: termina sem erro ($rc)" [ "$rc" -eq 0 ]
-conferir "integrar com allowed_signers: o merge e o commit do ramo têm assinatura válida" \
-  [ "$(assinatura HEAD)$(assinatura HEAD^2)" = GG ]
-conferir "integrar com allowed_signers: ramo apagado" test -z "$(git -C "$origem" branch --list agente/y)"
-integrar_y b n
-conferir "integrar sem confirmar a assinatura: encerra a sessão e avisa ($rc)" \
-  bash -c '[ "$1" -eq 0 ] && grep -q "sessão encerrada: y" "$2" && grep -q "ficou sem assinatura" "$2"' _ "$rc" "$tmp/saida"
-conferir "integrar sem confirmar a assinatura: o merge fica sem assinatura" [ "$(assinatura HEAD)" != G ]
-git -C "$origem" reset --quiet --hard "$m_assinado"
-
-# De dentro da própria sessão a limpeza segue sem terminal: avisa e não assina.
-JANGADA_SESSAO=y integrar_y c s
-registro_y="$XDG_STATE_HOME/jangada/agentes/fim-y.log"
-for _ in $(seq 50); do
-  grep -q "sessão encerrada: y" "$registro_y" 2>/dev/null && break
-  sleep 0.2
-done
-conferir "integrar de dentro da sessão: termina sem erro e avisa ($rc)" \
-  bash -c '[ "$1" -eq 0 ] && grep -q "ficou sem assinatura" "$2"' _ "$rc" "$tmp/saida"
-conferir "integrar de dentro da sessão: a limpeza termina sem chamar o jangada-assinar" \
-  bash -c 'grep -q "sessão encerrada: y" "$1" && ! grep -q "assinar" "$1"' _ "$registro_y"
-conferir "integrar de dentro da sessão: o merge fica sem assinatura" [ "$(assinatura HEAD)" != G ]
-git -C "$origem" reset --quiet --hard "$m_assinado"
+git -C "$origem" worktree add --quiet -b agente/y "$wt_y" main
+echo y >"$wt_y/y.txt"
+git -C "$wt_y" add y.txt
+git -C "$wt_y" commit --quiet -m "feat(teste): tarefa y"
+jq -n --arg w "$wt_y" --arg r "$origem" \
+  '{worktree: $w, ramo: "agente/y", base: "main", raiz: $r, estado: "concluido"}' \
+  >"$XDG_STATE_HOME/jangada/agentes/y.json"
+antes_y="$(git -C "$origem" rev-parse HEAD)"
+printf 's\ns\n' | "$repo_jangada/bin/jangada-agente-fim" --integrar y >"$tmp/saida" 2>&1
+rc=$?
+conferir "allowed_signers: integração bloqueada" test "$rc" -ne 0
+conferir "allowed_signers: HEAD preservado" test "$(git -C "$origem" rev-parse HEAD)" = "$antes_y"
+conferir "allowed_signers: sessão mantida" test -f "$XDG_STATE_HOME/jangada/agentes/y.json"
+conferir "allowed_signers: ramo mantido" test -n "$(git -C "$origem" branch --list agente/y)"
 
 # Merge com alteração feita à mão: refazê-lo perderia a alteração, então nada
 # é assinado e o ramo volta ao que era.

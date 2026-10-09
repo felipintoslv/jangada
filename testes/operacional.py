@@ -275,10 +275,12 @@ class Operacional(unittest.TestCase):
         with patch.dict(os.environ, {'JANGADA_ISOLADO': ''}):
             with self.assertRaises(ValueError):
                 self.estado.revisar('T1', 'conferido', True, 'codex', 'outro')
-            self.estado.revisar('T1', 'conferido', True, 'claude', 'revisor')
+            with self.assertRaisesRegex(ValueError, 'execução verificável'):
+                self.estado.revisar('T1', 'conferido', True, 'claude', 'revisor')
+            self.estado.revisar('T1', 'conferido', True)
         evento = json.loads(self.estado.db.execute("SELECT dados FROM eventos WHERE evento='revisada'").fetchone()[0])
         self.assertEqual(evento['artefato_sha256'], hashlib.sha256('relatório'.encode()).hexdigest())
-        self.assertTrue(evento['independente'])
+        self.assertIsNone(evento['independente'])
 
     def test_parecer_exige_criterios_hash_e_tarefa(self):
         tarefa = self.entregar(criterios_aceite=['Fidelidade'])

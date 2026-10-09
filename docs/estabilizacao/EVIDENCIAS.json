@@ -1,0 +1,110 @@
+{
+  "data": "2026-10-08",
+  "commit_inicial": "bf7a5f1e7b11c7156d94de42c7869ed98940c20d",
+  "ramo": "estabilizacao/baseline-2026-10",
+  "codigo_testado": "5816c76e81829569e9e4c9593ed176c53c4e69bc",
+  "resultado_prontidao": "NÃO APTA",
+  "commits_codigo": [
+    "5e635b493cf638bc93f513d2d4779142f6e906bd fix(git): bloqueia integração automática para preservar trabalho concorrente",
+    "85724864ede9d03eb262af10c17897d525bcf747 fix(validacao): exige verificações completas e revisão independente",
+    "e2b03b9b6c70975b33366469e9ae052626f77107 fix(ci): instala QtSvg para os testes da Central",
+    "5816c76e81829569e9e4c9593ed176c53c4e69bc fix(revisao): recusa aprovação sem autoria protegida"
+  ],
+  "resultados": [
+    {
+      "suite": "verificar-prontidao",
+      "revisao_codigo": "5816c76e81829569e9e4c9593ed176c53c4e69bc",
+      "comando": [
+        "testes/verificar.sh"
+      ],
+      "codigo": 1,
+      "segundos": 218.26,
+      "log": "/tmp/jangada-baseline-verificar-prontidao.log",
+      "sha256": "33b48f93889a3f0cc1718c4c6e3728ffe72644c0509d58017f415b2481d47e94",
+      "grupos_reprovados": [
+        "monitoramento sob demanda",
+        "testes/validar.sh",
+        "testes/isolar.sh",
+        "testes/tarefas.py",
+        "testes/conversa.py",
+        "testes/painel.sh",
+        "testes/delegar.sh"
+      ],
+      "verificacoes_individuais_reprovadas": 100
+    },
+    {
+      "suite": "baseline",
+      "comando": [
+        "python3",
+        "testes/baseline.py"
+      ],
+      "codigo": 0,
+      "log": "/tmp/jangada-baseline-adversariais-final.log",
+      "sha256": "34477744ce0160e4c1953a35ad8dd1266dab012036015dc301e820f43bcb4838",
+      "testes": 12
+    },
+    {
+      "suite": "fim",
+      "comando": [
+        "testes/fim.sh"
+      ],
+      "codigo": 0,
+      "log": "/tmp/jangada-baseline-fim-consolidado.log",
+      "sha256": "2052644681c9b4d94e129cd1347f1c59d8c19d3fb94b3b72984cb2aecffc21e3",
+      "assercoes_aprovadas": 92
+    },
+    {
+      "suite": "update",
+      "comando": [
+        "testes/update.sh"
+      ],
+      "codigo": 0,
+      "log": "/tmp/jangada-baseline-update-consolidado.log",
+      "sha256": "a5acbaf768ae4e96376de0ab016d94c6e8b23a41471ff92745b1bd67874124e5",
+      "assercoes_aprovadas": 73
+    },
+    {
+      "suite": "painel-motores-R",
+      "comando": [
+        "Rscript",
+        "testes/painel-motores.R"
+      ],
+      "codigo": 0,
+      "log": "/tmp/jangada-baseline-r-motores-definitivo.log",
+      "sha256": "57623297801dca068a88854a9777b6eb322ae53623107f1db3b63f9cd36056f5"
+    },
+    {
+      "suite": "painel-operacional-R",
+      "comando": [
+        "Rscript",
+        "testes/painel-operacional.R"
+      ],
+      "codigo": 0,
+      "log": "/tmp/jangada-baseline-r-operacional-definitivo.log",
+      "sha256": "9836c145c1f0453656d4fc6b8d7597c755671ace836ab1239d554e25b69286f2"
+    }
+  ],
+  "capacidades": {
+    "bwrap_basico": true,
+    "sem_rede": false,
+    "shellcheck": true,
+    "jq": true,
+    "gitleaks": true,
+    "zsh": true,
+    "pdftotext": true,
+    "pyarrow": true,
+    "R": true,
+    "lintr": true,
+    "QtSvg": true,
+    "dbus_importavel": true,
+    "bind_soquete_local": false
+  },
+  "impedimentos": [
+    "Bubblewrap: Failed to create NETLINK_ROUTE socket: Operation not permitted",
+    "bind AF_UNIX em diretório sintético: PermissionError [Errno 1] Operation not permitted",
+    "servidores HTTP sintéticos e comunicação da Central indisponíveis no sandbox",
+    "sessão gráfica, agente e revisor reais não executados"
+  ],
+  "verificacoes_estaticas": "ShellCheck, sintaxe Bash/Lua, JSON e git diff --check aprovados",
+  "limites": "Provedores sintéticos. Registros temporários podem desaparecer. Sem push, tag ou instalação ativa."
+}

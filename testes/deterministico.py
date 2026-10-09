@@ -274,7 +274,9 @@ class Conferencia(unittest.TestCase):
         self.rodar()
         resumo = self.estado.listar()[0]['artefato']
         (self.estado.pasta / 'artefatos' / f'{resumo}.txt').write_text('alterado')
-        self.assertEqual(self.rodar()[0]['status'], 'REVISION_REQUIRED')
+        self.assertEqual(self.rodar(), [])
+        self.assertEqual(self.estado.listar()[0]['status'], 'REVIEW_REQUIRED')
+        self.assertEqual(self.estado.listar()[1]['tentativas'], 0)
 
     def test_dependencia_ausente_na_segunda_leitura_nao_deixa_reserva_ativa(self):
         self.estado.importar([self.tarefa(), self.tarefa('T2', dependencias=['T1'])])

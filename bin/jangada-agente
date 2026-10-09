@@ -16,7 +16,7 @@
 #   --revisor NOME    revisor para jangada-validar (claude, agy, codex, mesmo ou oposto)
 #   --prompt TEXTO    tarefa inicial, entregue ao agente ao abrir
 #   --prompt-arquivo ARQ  o mesmo, lida de um arquivo
-#   --sem-isolar      abre o agente fora do bubblewrap (JANGADA_AGENTE_ISOLAR=0)
+#   --sem-isolar      opção antiga, ignorada com aviso; isolamento obrigatório
 #
 # Sem --agente nem --perfil, num terminal, um seletor pergunta qual agente
 # abrir: o padrão (JANGADA_AGENTE) ou um dos perfis, cada um com a descrição
@@ -61,7 +61,7 @@ perfis_json() {
         JANGADA_VALIDAR_REVISOR=*) revisao="${ambiente#*=}" ;;
       esac
     done
-    [[ "$(basename "${PERFIL_COMANDO%% *}")" != codex ]] || isolado=1
+    isolado=1 # A política P0 prevalece sobre a opção antiga do perfil.
     jq -n --arg nome "$perfil" --arg descricao "$PERFIL_DESCRICAO" \
       --arg executor "$(basename "${PERFIL_COMANDO%% *}")" \
       --arg delegacao "$(jangada_delegacao "$PERFIL_COMANDO" "$delegacao")" \
@@ -165,7 +165,7 @@ if ((!agente_dado)) && [[ -z "$perfil" && -t 0 && "${JANGADA_AGENTE_ESCOLHER:-1}
           command -v agy >/dev/null 2>&1 || printf '; delegação indisponível: agy não instalado'
           ;;
       esac
-      [[ "$base" == codex ]] && isolamento=1
+      isolamento=1 # Mesmo os perfis antigos precisam do Bubblewrap.
       [[ "$isolamento" == 0 ]] && printf '; sem isolamento' || printf '; isolado'
       if [[ "$destino" == local || "$base" == codex ]]; then
         command -v ollama >/dev/null 2>&1 || printf '; delegação local indisponível: Ollama não instalado'
@@ -408,7 +408,8 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
   fi
   # O prefixo entra no comando guardado só para consulta: a sessão restaurada
   # volta isolada pela configuração, e não pelo .isolar do estado.
-  [[ "$base_agente" == codex ]] && isolar=1
+  [[ "$isolar" != 0 ]] || echo "isolamento obrigatório na correção P0; opção sem isolamento ignorada" >&2
+  isolar=1
   if [[ "$isolar" != 0 ]]; then
     cmd_agente="$(printf '%q' "$JANGADA_PATH/bin/jangada-isolar") -- $cmd_agente"
     cmd_base="$cmd_agente"
@@ -521,6 +522,8 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
       || echo "aviso: não gravei a cópia da sessão em $JANGADA_ESTADO/revisoes" >&2
   fi
 
+  python3 "$JANGADA_PATH/default/orquestracao/confianca.py" registrar-inicio "$JANGADA_ESTADO" "$sessao" \
+    || { echo "abertura bloqueada: falha ao preservar pedido e protocolo; trabalho mantido" >&2; exit 1; }
   "${JANGADA_TMUX[@]}" send-keys -t "=$sessao:" "$cmd_agente" Enter
 elif [[ -n "$prompt" ]]; then
   echo "a sessão $sessao já existe; o prompt não foi enviado" >&2
