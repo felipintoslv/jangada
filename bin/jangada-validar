@@ -222,6 +222,13 @@ fi
 # Fora de uma sessão, os pareceres ficam com o nome da pasta.
 rotulo="${sessao:-$(basename "$dir")}"
 rotulo="${rotulo//[^A-Za-z0-9_.-]/-}"
+if ((fora)); then
+  # A pasta protegida também é a trava. Encerramento e revisão não podem
+  # publicar/limpar documentos simultaneamente. O descritor fecha na saída.
+  (umask 077; mkdir -p "$revisoes_dir/travas/$rotulo")
+  exec {trava_revisoes}<"$revisoes_dir/travas/$rotulo"
+  flock -w 15 "$trava_revisoes" || { echo "revisão ocupada; tente novamente" >&2; exit 1; }
+fi
 
 tarefa=""; inicio=""; autor=""; criada=""; execucao=""
 if [[ -n "$arq_meta" ]]; then
@@ -383,6 +390,10 @@ congelar() {
       "+$candidato:refs/jangada/$chave/candidato" "+$rastreados:refs/jangada/$chave/rastreados" \
       ${base_sha:+"+$base_sha:refs/jangada/$chave/base"} \
       || { echo "jangada-validar: o espelho recusou os objetos da entrega (objeto adulterado ou repositório corrompido)" >&2; return 1; }
+    # Uma rodada posterior troca a ref operacional. As refs por conteúdo
+    # mantêm os candidatos e bases anteriores recuperáveis mesmo após gc.
+    git --git-dir="$espelho" update-ref "refs/jangada/historico/$candidato" "$candidato" || return 1
+    [[ -z "$base_sha" ]] || git --git-dir="$espelho" update-ref "refs/jangada/historico/$base_sha" "$base_sha" || return 1
     objetos="$espelho/objects"
     foto="$(umask 077; mkdir -p "$revisoes_dir/fotos" && mktemp -d "$revisoes_dir/fotos/XXXXXX")" || return 1
   else
@@ -601,6 +612,20 @@ EOF
 montar_pedido
 
 saida="$pareceres_dir/validacao-$rotulo-r$num.md"
+# Cada rodada, inclusive reprovação local ou falha do provedor, guarda a
+# identidade congelada e o pedido integral. Não inferir revisão executada
+# somente pela existência deste contexto.
+jq -n --arg sessao "$rotulo" --arg execucao "$execucao" --arg tarefa "$tarefa" \
+  --arg candidato "$candidato" --arg arvore "$arvore_candidato" --arg base "$base_sha" \
+  --arg autor "$autor" --arg revisor "$revisor" --arg modelo "$modelo" \
+  --arg pedido "$pedido" --argjson rodada "$num" --argjson protegido "$fora" \
+  '{sessao:$sessao, execucao:$execucao, tarefa:$tarefa, rodada:$rodada,
+    candidate_sha:$candidato, candidate_tree:$arvore, base_sha:$base,
+    autor:$autor, revisor_solicitado:$revisor, modelo_solicitado:$modelo,
+    pedido:$pedido, protegido:($protegido == 1), execucao_revisao:"consultar parecer e verificacoes"}' \
+  >"${saida%.md}.contexto.json.tmp" \
+  && mv "${saida%.md}.contexto.json.tmp" "${saida%.md}.contexto.json" \
+  || { echo "falha ao preservar contexto da revisão" >&2; exit 1; }
 
 # Roda o lintr e imprime arquivo, linha, linter e mensagem separados por
 # tabulação. Argumentos: arquivo de configuração e os arquivos R. Sai com 2
@@ -1001,12 +1026,15 @@ echo "jangada-validar: rodada $rodada de $rodadas_max, $nome_revisor${modelo:+ (
 # O hook do revisor fica desligado: ele não é o agente da sessão, e o Stop
 # dele marcaria a sessão como concluída.
 revisar_claude() {
-  local rc=0
-  (cd "$dir" && env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 "${com_prazo[@]}" claude -p \
+  local rc=0 resposta
+  # A saída protegida é escrita pelo controlador, não herdada pelo revisor.
+  resposta="$(cd "$dir" && env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 \
+    JANGADA_ISOLAR_FOTO="$foto" "${com_prazo[@]}" "$JANGADA_PATH/bin/jangada-isolar" -- claude -p \
     --model "$modelo" --setting-sources user \
     --allowedTools "Read,Grep,Glob" \
     --disallowedTools "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch" \
-    <<<"$pedido") >"$saida.tmp" || rc=$?
+    <<<"$pedido")" || rc=$?
+  printf '%s\n' "$resposta" >"$saida.tmp"
   anotar_prazo "$rc"
   return "$rc"
 }
@@ -1014,14 +1042,15 @@ revisar_claude() {
 # Só o pedido completo (regras da base, commits e diff), sem ferramentas.
 # A pasta vazia impede carregar configuração ou instruções da entrega.
 revisar_codex() {
-  local pasta_revisor codex_cmd rc=0
+  local pasta_revisor codex_cmd registro rc=0
   codex_cmd="$(command -v codex)" || return 1
   pasta_revisor="$(mktemp -d)" || return 1
   local -a args=(--output-last-message "$pasta_revisor/resposta")
   [[ -n "$modelo" ]] && args+=(--model "$modelo")
-  (cd "$pasta_revisor" && env JANGADA_SESSAO="revisao-codex-$rotulo" JANGADA_HOOK_DESLIGADO=1 \
+  registro="$(cd "$pasta_revisor" && env JANGADA_SESSAO="revisao-codex-$rotulo" JANGADA_HOOK_DESLIGADO=1 \
     "${com_prazo[@]}" "$JANGADA_PATH/bin/jangada-isolar" -- "$JANGADA_PATH/bin/jangada-codex" --revisar -- \
-    "$codex_cmd" "${args[@]}" <<<"$pedido") >"$saida.log" 2>&1 || rc=$?
+    "$codex_cmd" "${args[@]}" <<<"$pedido" 2>&1)" || rc=$?
+  printf '%s\n' "$registro" >"$saida.log"
   anotar_prazo "$rc"
   if ((rc == 0)) && [[ -s "$pasta_revisor/resposta" ]]; then
     cat "$pasta_revisor/resposta" >"$saida.tmp" || rc=1
@@ -1037,11 +1066,12 @@ revisar_codex() {
 # 131.072 bytes (MAX_ARG_STRLEN). Acima do teto, o diff sai do pedido e vai
 # para um arquivo que o agy lê.
 revisar_agy() {
-  local LC_ALL=C args saida_agy status_agy tentativa log="$saida.log"
+  local LC_ALL=C args saida_agy status_agy tentativa log="$saida.log" log_temporario
+  log_temporario="$(mktemp)" || return 1
   if (( ${#pedido} > 126000 )); then
-    printf '%s\n' "$diff_conteudo" >"$saida.diff"
-    pedido="${pedido/"$diff_conteudo"/"[diff grande demais para o pedido; leia o arquivo $saida.diff]"}"
-    echo "jangada-validar: pedido acima do limite de argumento; o diff vai em $saida.diff" >&2
+    printf '%s\n' "$diff_conteudo" >"$dir/.jangada-revisao.diff"
+    pedido="${pedido/"$diff_conteudo"/"[diff grande demais para o pedido; leia o arquivo $dir/.jangada-revisao.diff]"}"
+    echo "jangada-validar: pedido acima do limite de argumento; o diff vai em $dir/.jangada-revisao.diff" >&2
   fi
   # O revisor lê o conteúdo menos confiável da entrega: roda com o agente
   # revisor (default/agy/agents/revisor), só com ferramentas de leitura, e em
@@ -1049,9 +1079,10 @@ revisar_agy() {
   # com todas as ferramentas, então a falta do revisor para a validação.
   if ! env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 timeout 60 agy agents </dev/null 2>/dev/null | grep -qx revisor; then
     echo "jangada-validar: o agy não achou o agente revisor (rode ./install.sh 50)" >&2
+    rm -f "$log_temporario"
     return 1
   fi
-  args=(-p "$pedido" --agent revisor --sandbox --output-format json --add-dir "$dir" --add-dir "$pareceres_dir")
+  args=(-p "$pedido" --agent revisor --sandbox --output-format json --add-dir "$dir")
   [[ -n "$modelo" ]] && args+=(--model "$modelo")
   [[ -n "${JANGADA_VALIDAR_ESFORCO:-high}" ]] && args+=(--effort "${JANGADA_VALIDAR_ESFORCO:-high}")
   # A saída vem por cano: o agy reabre o próprio descritor de saída, e com
@@ -1059,19 +1090,24 @@ revisar_agy() {
   # sem nome. A segunda tentativa cobre as respostas vazias com código 0, não
   # o prazo vencido, que dobraria a espera.
   for tentativa in 1 2; do
-    if saida_agy="$(cd "$dir" && env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 "${com_prazo[@]}" agy "${args[@]}" </dev/null 2>"$log")"; then
+    if saida_agy="$(cd "$dir" && env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 JANGADA_ISOLAR_FOTO="$foto" "${com_prazo[@]}" "$JANGADA_PATH/bin/jangada-isolar" -- agy "${args[@]}" </dev/null 2>"$log_temporario")"; then
+      cp "$log_temporario" "$log"
       status_agy="$(jq -r '.status // ""' <<<"$saida_agy" 2>/dev/null || true)"
       if [[ "$status_agy" == SUCCESS ]] && jq -r '.response // ""' <<<"$saida_agy" >"$saida.tmp" 2>/dev/null \
          && [[ -n "$(tr -d '[:space:]' <"$saida.tmp")" ]]; then
-        rm -f "$log" "$saida.diff"
+        rm -f "$log_temporario"
         return 0
       fi
     else
-      anotar_prazo "$?"
+      local rc=$?
+      cp "$log_temporario" "$log"
+      rm -f "$log_temporario"
+      anotar_prazo "$rc"
       ((prazo_vencido)) && return 1
     fi
     ((tentativa < 2)) && { echo "jangada-validar: o agy não respondeu; tentando de novo em 5s" >&2; sleep 5; }
   done
+  rm -f "$log_temporario"
   echo "jangada-validar: saída do agy: ${saida_agy:0:300}" >&2
   echo "jangada-validar: erro em $log e em ~/.gemini/antigravity-cli/log/" >&2
   return 1
@@ -1160,6 +1196,13 @@ cat "$saida"
 # O mesmo modelo que escreveu tende a concordar consigo: a aprovação dele fica
 # registrada à parte e não vale como revisão independente no --integrar.
 veredito="$status"
+jq --arg revisor "$revisor" --arg modelo "$modelo" --arg status "$status" \
+  --argjson autoria "$autoria_confiavel" --argjson local_verificado "$local_verificado" \
+  '. + {revisor_executado:$revisor, modelo_executado:$modelo, resultado:$status,
+        autoria_confiavel:($autoria == 1), local_verified:$local_verificado}' \
+  "${saida%.md}.contexto.json" >"${saida%.md}.contexto.json.tmp" \
+  && mv "${saida%.md}.contexto.json.tmp" "${saida%.md}.contexto.json" \
+  || { echo "falha ao preservar decisão da revisão" >&2; exit 1; }
 ((auto_revisao)) && [[ "$status" == APROVADO ]] && veredito=APROVADO_AUTORREVISAO
 if [[ -n "$arq_estado" ]]; then
   tmp="$(mktemp "$arq_estado.XXXXXX")"

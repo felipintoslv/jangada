@@ -249,8 +249,8 @@ refazer_protocolo() {
 # como texto: o agente só pode ser claude, agy ou codex, o id da conversa é um uuid,
 # a pasta passa pela pasta_restauravel, e os argumentos, o perfil e o
 # isolamento vêm da configuração do usuário. O .comando e o .isolar do estado
-# são ignorados; só JANGADA_AGENTE_ISOLAR=0 da configuração abre sem o
-# jangada-isolar. Estado que não passa na conferência é recusado.
+# são ignorados; o isolamento permanece obrigatório mesmo com a opção antiga
+# JANGADA_AGENTE_ISOLAR=0. Estado que não passa na conferência é recusado.
 restaurar() {
   local s="$1" arq agente base dir conversa perfil worktree rev cmd exe args delegar
   if [[ ! "$s" =~ ^[A-Za-z0-9_.-]+$ ]]; then
@@ -309,9 +309,7 @@ restaurar() {
 
   cmd="$exe"
   [[ -n "$args" ]] && cmd+=" $args"
-  if [[ "$JANGADA_AGENTE_ISOLAR" != 0 ]]; then
-    cmd="$(printf '%q' "$JANGADA_PATH/bin/jangada-isolar") -- $cmd"
-  fi
+  cmd="$(printf '%q' "$JANGADA_PATH/bin/jangada-isolar") -- $cmd"
   if [[ "$base" == claude ]]; then
     local protocolo=""
     protocolo="$(refazer_protocolo "$s" "$dir" "$delegar" "${rev:-agy}")" || protocolo=""
@@ -364,6 +362,8 @@ restaurar() {
   [[ -n "$rev" ]] && amb+=(-e "JANGADA_VALIDAR_REVISOR=$rev")
   "${JANGADA_TMUX[@]}" new-session -d -s "$s" -c "$dir" "${amb[@]}"
   marcar "$arq" iniciado "restaurada"
+  python3 "$JANGADA_PATH/default/orquestracao/confianca.py" registrar-inicio "$JANGADA_ESTADO" "$s" \
+    || { echo "retomada bloqueada: falha ao preservar contexto; trabalho mantido" >&2; return 1; }
   "${JANGADA_TMUX[@]}" send-keys -t "=$s:" "$cmd" Enter
   echo "restaurada: $s"
 }

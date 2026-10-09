@@ -637,8 +637,7 @@ Conversa aberta (`jangada-conversa`), Ollama 0.35.1, medida em 07/10/2026:
   `DESCRICAO=` e
   outras chaves em maiúsculas, que viram ambiente só daquela sessão (exemplo
   em `default/agentes/exemplo.conf`). O arquivo é lido, não executado.
-  `JANGADA_AGENTE_ISOLAR=0` no perfil abre aquele agente fora do bubblewrap.
-  Use para outra conta, outro modelo ou outro agente.
+  Na correção P0, `JANGADA_AGENTE_ISOLAR=0` não desliga o isolamento.
 - Ganchos: executável `~/.config/jangada/ganchos/EVENTO` ou arquivos em
   `EVENTO.d/`. Eventos: `pos-tema`, `pos-agente-fim` (sessão, raiz, integrado),
   `pos-validar`, `pos-update`. Falha de gancho gera só aviso.
@@ -650,3 +649,29 @@ O agy aceita nomes desconhecidos em `--agent` e pode usar o agente padrão, com 
 - Função Bash definida dentro de outra não captura suas variáveis locais.
   A conferência da marca declara o caminho na própria função, pois também
   roda sob a trava depois de terminar a chamada de revisão.
+
+## Fronteira de confiança da fila e encerramento
+
+Bubblewrap preserva descritores adicionais herdados. Uma montagem somente
+leitura não impede escrita por um descritor aberto antes do isolamento.
+O lançador fecha esses descritores, exceto o cano do proxy criado por ele,
+e recusa descritores padrão apontando para estado protegido ou sockets.
+Arquivos protegidos com ligações físicas adicionais também são recusados.
+O isolamento é obrigatório também na abertura e retomada de sessões.
+
+A fila em `agentes/projetos` é somente leitura no isolamento, mesmo com
+extras de escrita. O controlador fora do isolamento é quem reserva,
+registra e autoriza conclusões. Um rótulo de revisor recebido por comando
+não comprova que um modelo revisou: use supervisão efetivamente executada
+ou decisão manual identificada, respeitando a política da atividade.
+
+O encerramento arquiva pareceres, contextos das rodadas, prompts e marcas
+em `revisoes/arquivo` antes de limpar documentos operacionais. Falha de
+arquivamento mantém os originais. A aprovação antiga sem contexto deve ser
+reconferida; a documentação da correção P0 descreve recuperação e limites.
+
+Revisores chamados fora de uma sessão também precisam do Bubblewrap. A saída
+protegida deve ser coletada por cano e escrita pelo controlador: herdar um
+descritor do próprio parecer exporia o arquivo antes da montagem. A foto
+congelada é reexposta somente leitura; o restante de revisoes fica oculto.
+Prompts e protocolos são registrados antes de iniciar ou retomar a sessão.

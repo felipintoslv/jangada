@@ -186,6 +186,8 @@ if ((integrar)); then
   if [[ -z "$ramo" || -z "$base" || -z "$raiz" ]]; then
     echo "a sessão $s não tem ramo próprio (trabalho direto no repositório); nada a integrar"
     [[ -n "$raiz" ]] && avisar_copia_instalada "$raiz"
+    echo "integração automática bloqueada; sessão e evidências mantidas" >&2
+    exit 1
   else
     trava="$JANGADA_ESTADO/revisoes/travas/$(dir_comum "$raiz" | sha256sum | cut -c1-16)"
     (umask 077; mkdir -p "$trava")
@@ -224,7 +226,18 @@ fi
 # dentro da própria sessão, encerrar a sessão mataria este script no meio;
 # nesse caso a limpeza continua num processo separado, com registro em arquivo.
 limpar() {
+  (umask 077; mkdir -p "$JANGADA_ESTADO/revisoes/travas/$s")
+  local trava_revisoes
+  exec {trava_revisoes}<"$JANGADA_ESTADO/revisoes/travas/$s"
+  flock -w 15 "$trava_revisoes" || { echo "revisão ocupada; encerramento adiado" >&2; return 1; }
+  # Parar o agente não apaga os documentos nem o trabalho produzido.
   "${JANGADA_TMUX[@]}" kill-session -t "=$s" 2>/dev/null || true
+  # O histórico protegido é publicado e conferido antes de qualquer remoção.
+  # Falha de leitura, integridade, espaço ou publicação mantém os originais.
+  local arquivo_historico
+  arquivo_historico="$(python3 "$JANGADA_PATH/default/orquestracao/confianca.py" arquivar "$JANGADA_ESTADO" "$s")" \
+    || { echo "encerramento bloqueado: evidências originais mantidas" >&2; return 1; }
+  echo "evidências preservadas: $arquivo_historico"
   if [[ -n "$worktree" && -d "$worktree" ]]; then
     if ((forcar)); then
       jangada_git_seguro -C "$raiz" worktree remove --force "$worktree"
