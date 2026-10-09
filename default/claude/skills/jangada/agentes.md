@@ -404,6 +404,9 @@ porta de entrada. O que se aprendeu com ele vale para o revisor agy:
   limite à ferramenta de comando.
 - O revisor erra sobre `set -e`: falha dentro de uma lista `a && b && c`, fora
   do último comando, não encerra o script. Teste com `bash -c` antes de aceitar.
+- Ao preservar o contexto da revisão, o pedido pode ultrapassar os 128 KiB
+  de um argumento do Linux. Passe o texto ao `jq` pela entrada padrão,
+  com `-Rs`; `--arg pedido` falha antes de chamar o revisor.
 - Dentro do isolamento, parecer, `.aprovado` e `validar.jsonl` ficam onde o
   agente grava e não provam revisão. Fora dele (`JANGADA_ISOLADO` vazio), o
   `jangada-validar` grava em `revisoes/`, oculta pelo `jangada-isolar`, e lê

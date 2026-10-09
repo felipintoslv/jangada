@@ -615,14 +615,14 @@ saida="$pareceres_dir/validacao-$rotulo-r$num.md"
 # Cada rodada, inclusive reprovação local ou falha do provedor, guarda a
 # identidade congelada e o pedido integral. Não inferir revisão executada
 # somente pela existência deste contexto.
-jq -n --arg sessao "$rotulo" --arg execucao "$execucao" --arg tarefa "$tarefa" \
+printf '%s' "$pedido" | jq -Rs --arg sessao "$rotulo" --arg execucao "$execucao" --arg tarefa "$tarefa" \
   --arg candidato "$candidato" --arg arvore "$arvore_candidato" --arg base "$base_sha" \
   --arg autor "$autor" --arg revisor "$revisor" --arg modelo "$modelo" \
-  --arg pedido "$pedido" --argjson rodada "$num" --argjson protegido "$fora" \
+  --argjson rodada "$num" --argjson protegido "$fora" \
   '{sessao:$sessao, execucao:$execucao, tarefa:$tarefa, rodada:$rodada,
     candidate_sha:$candidato, candidate_tree:$arvore, base_sha:$base,
     autor:$autor, revisor_solicitado:$revisor, modelo_solicitado:$modelo,
-    pedido:$pedido, protegido:($protegido == 1), execucao_revisao:"consultar parecer e verificacoes"}' \
+    pedido:., protegido:($protegido == 1), execucao_revisao:"consultar parecer e verificacoes"}' \
   >"${saida%.md}.contexto.json.tmp" \
   && mv "${saida%.md}.contexto.json.tmp" "${saida%.md}.contexto.json" \
   || { echo "falha ao preservar contexto da revisão" >&2; exit 1; }
