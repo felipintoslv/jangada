@@ -1036,6 +1036,8 @@ restam_do_falso() {
 nao() { ! "$@"; }
 FALSO_DIR="$tmp/falso" FALSO_IGNORAR_TERM=sonda sleep 5 &
 sonda_pid=$!
+# O /proc só mostra o ambiente novo depois que o filho troca de programa.
+for _ in 1 2 3 4 5 6 7 8 9 10; do restam_do_falso sonda && break; sleep 0.1; done
 conferir "encerramento forçado: a busca enxerga um processo vivo" restam_do_falso sonda
 kill "$sonda_pid" 2>/dev/null; wait "$sonda_pid" 2>/dev/null
 conferir "encerramento forçado: agy e filho não continuam executando" nao restam_do_falso 1

@@ -7,6 +7,18 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 repo_jangada="$PWD"
+# Os casos chamam o validar como o agente chama, e JANGADA_ISOLADO só vale com
+# a marca montada. Fora de uma sessão, o teste roda de novo com a marca e
+# nada mais do isolamento.
+marca="${JANGADA_MARCA_ISOLADO:-/tmp/.jangada-isolado}"
+if ! awk -v m="$marca" '$5 == m { a = 1 } END { exit !a }' /proc/self/mountinfo; then
+  pasta_marca="$(mktemp -d)"
+  JANGADA_MARCA_ISOLADO="$pasta_marca/marca" \
+    bwrap --dev-bind / / --ro-bind /dev/null "$pasta_marca/marca" -- bash "$0" "$@"
+  rc=$?
+  rm -rf "$pasta_marca"
+  exit "$rc"
+fi
 unset JANGADA_VALIDAR_REVISOR JANGADA_DELEGAR
 # Sem o gitleaks, o portão reprovaria todos os casos; o 16e liga de novo.
 command -v gitleaks >/dev/null 2>&1 || export JANGADA_VALIDAR_SEM_GITLEAKS=1
