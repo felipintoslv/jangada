@@ -89,10 +89,13 @@ guardado() {
 }
 
 # Arquivo de estado de sessão. Restos do antigo jangada-par (o JSON bruto do
-# agy, revisao-<sessão>-rN.json) ficam na mesma pasta; tratados como sessão,
-# apareceriam na lista e a barra os apagaria como órfãos.
+# agy, revisao-<sessão>-rN.json) e o contexto de cada rodada do jangada-validar
+# (validacao-<sessão>-rN.contexto.json) ficam na mesma pasta; tratados como
+# sessão, apareceriam na lista e a barra os apagaria como órfãos.
 eh_estado() {
-  [[ -e "$1" && "$(basename "$1")" != revisao-* ]]
+  local nome
+  nome="$(basename "$1")"
+  [[ -e "$1" && "$nome" != revisao-* && ! "$nome" =~ ^validacao-.+-r[0-9]+\.contexto\.json$ ]]
 }
 
 # Uma linha por sessão: estado<TAB>sessão<TAB>diretório<TAB>atualizado<TAB>ramo<TAB>tarefa

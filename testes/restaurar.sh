@@ -191,6 +191,20 @@ conferir "caso 14: sem revisor, restauração preserva o protocolo" \
 conferir "caso 14: sem revisor, restauração avisa" grep -q 'revisão indisponível' "$tmp/saida"
 mv "$tmp/agy-guardado" "$tmp/bin/agy"
 
+# A barra limpa estados órfãos a cada atualização: o contexto da rodada do
+# jangada-validar mora na mesma pasta e precisa sobreviver até a decisão.
+rm -f "$estado/s.json"
+printf '{"sessao":"s","rodada":1}\n' >"$estado/validacao-s-r1.contexto.json"
+printf '{"sessao":"morta"}\n' >"$estado/morta.json"
+env -u TMUX -u JANGADA_ISOLADO PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp" \
+  XDG_STATE_HOME="$tmp/state" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$jp" \
+  "$repo_jangada/bin/jangada-agentes" --lista-atualizada >"$tmp/lista" 2>&1
+conferir "caso 15: a limpeza de órfãos preserva o contexto da rodada" \
+  test -s "$estado/validacao-s-r1.contexto.json"
+conferir "caso 15: o contexto da rodada não aparece como sessão" \
+  bash -c '! grep -q "validacao-s-r1" "$1"' _ "$tmp/lista"
+conferir "caso 15: o estado órfão de sessão continua sendo limpo" test ! -e "$estado/morta.json"
+
 if ((falhas)); then
   echo "$falhas falha(s); saídas em $tmp (mantido)"
   trap - EXIT
