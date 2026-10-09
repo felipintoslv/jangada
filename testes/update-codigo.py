@@ -12,7 +12,7 @@ REPO = Path(__file__).resolve().parents[1]
 
 class Atualizacao(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix='update-codigo-', dir=REPO / 'mapeamento')
+        self.tmp = tempfile.TemporaryDirectory(prefix='update-codigo-')
         self.addCleanup(self.tmp.cleanup)
         self.raiz = Path(self.tmp.name)
         self.origem = self.raiz / 'origem'
@@ -64,8 +64,8 @@ class Atualizacao(unittest.TestCase):
         if shutil.which('bwrap') is None:
             self.skipTest('Bubblewrap ausente: conferência do controlador bloqueada')
         comando = ['bwrap', '--die-with-parent', '--unshare-net', '--unshare-pid',
-                   '--ro-bind', '/', '/', '--bind', str(self.raiz), str(self.raiz),
-                   '--bind', str(self.raiz / 'temporario'), '/tmp', '--proc', '/proc', '--dev', '/dev']
+                   '--ro-bind', '/', '/', '--bind', str(self.raiz / 'temporario'), '/tmp',
+                   '--bind', str(self.raiz), str(self.raiz), '--proc', '/proc', '--dev', '/dev']
         if marcador:
             comando += ['--ro-bind', '/dev/null', '/tmp/.jangada-sem-autoridade']
         comando += ['--', str(REPO / 'bin/jangada-update'), '--somente-codigo']
