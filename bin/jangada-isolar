@@ -41,7 +41,7 @@
 # credenciais dos provedores, nem em arquivo nem em variável.
 # "verificacao-rede" mantém a rede. Perfil desconhecido é recusado.
 #
-# JANGADA_AGENTE_ISOLAR=0 desliga; já isolado (JANGADA_ISOLADO=1 e a marca
+# Na correção P0 o isolamento é obrigatório; já isolado (variável e a marca
 # que só o bwrap monta), o perfil agente roda direto; os de verificação
 # sempre criam outro isolamento. Sem o bwrap, recusa.
 set -euo pipefail
@@ -74,15 +74,15 @@ case "$perfil" in
   *) echo "jangada-isolar: perfil desconhecido em JANGADA_ISOLAR_PERFIL: $perfil" >&2; exit 1 ;;
 esac
 
-codex_comando=0
-[[ "$(basename -- "$1")" == jangada-codex ]] && codex_comando=1
-isolamento_obrigatorio="$codex_comando"
-if [[ "$perfil" == agente ]] && { { [[ "$JANGADA_AGENTE_ISOLAR" == 0 ]] && ((!isolamento_obrigatorio)); } || ja_isolado; }; then
+if [[ "$perfil" == agente ]] && ja_isolado; then
   exec "$@"
+fi
+if [[ "$perfil" == agente && "$JANGADA_AGENTE_ISOLAR" == 0 ]]; then
+  echo "jangada-isolar: isolamento obrigatório na correção P0; configuração sem isolamento ignorada" >&2
 fi
 if ((!mostrar)) && ! command -v bwrap >/dev/null 2>&1; then
   echo "jangada-isolar: bwrap não instalado (pacote bubblewrap); o agente não abre sem isolamento." >&2
-  echo "Para abrir mesmo assim: jangada-agente --sem-isolar, ou JANGADA_AGENTE_ISOLAR=0 no jangada.conf." >&2
+  echo "Instale a dependência antes de abrir agentes; não há abertura sem isolamento nesta versão." >&2
   exit 1
 fi
 
@@ -94,6 +94,13 @@ pasta="$(pwd -P)"
 args=(--ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --ro-bind /dev/null "$marca"
       --unshare-pid --die-with-parent)
 [[ "$perfil" == verificacao ]] && args+=(--unshare-net)
+
+# Executáveis temporários do controlador continuam visíveis, somente leitura.
+# As proteções obrigatórias abaixo prevalecem sobre estas montagens.
+IFS=: read -ra dirs_temporarios <<<"$PATH"
+for p in "${dirs_temporarios[@]}"; do
+  [[ "$p" == /tmp/?* && -d "$p" ]] && args+=(--ro-bind "$p" "$p")
+done
 
 gravavel() { [[ -e "$1" ]] && args+=(--bind "$1" "$1"); return 0; }
 somente_leitura() { [[ -e "$1" ]] && args+=(--ro-bind "$1" "$1"); return 0; }
@@ -276,6 +283,8 @@ atualizar_marcas_host() {
 }
 
 mkdir -p "$JANGADA_ESTADO/agentes" 2>/dev/null || true
+# Recusa aliases, canais locais e descritores que contornariam a montagem.
+python3 "$JANGADA_PATH/default/orquestracao/confianca.py" preparar-isolamento "$JANGADA_ESTADO"
 for p in validar.jsonl eventos-agentes.jsonl delegacoes.jsonl local.lock; do
   [[ -e "$JANGADA_ESTADO/$p" ]] || : 2>/dev/null >>"$JANGADA_ESTADO/$p" || true
 done
@@ -488,6 +497,22 @@ for p in "${ocultos[@]}"; do
   fi
 done
 
+# A fila, políticas, recibos e objetos são autoridade do controlador. Esta
+# montagem vem depois dos extras, do cwd e dos ocultos: um extra não a reabre.
+somente_leitura "$JANGADA_PATH"
+somente_leitura "$JANGADA_CONFIG"
+somente_leitura "$JANGADA_ESTADO/agentes/projetos"
+# Só a foto congelada é reexposta ao revisor, nunca recibos ou metadados.
+if [[ -n "${JANGADA_ISOLAR_FOTO:-}" ]]; then
+  foto_conferida="$(realpath -e "$JANGADA_ISOLAR_FOTO")"
+  fotos_conferidas="$(realpath -e "$JANGADA_ESTADO/revisoes/fotos")"
+  [[ "$foto_conferida" == "$fotos_conferidas"/?* && -d "$foto_conferida"      && "$foto_conferida" == "$JANGADA_ISOLAR_FOTO" ]] || {
+    echo 'AUTORIZACAO_RECUSADA: foto de revisão fora da pasta protegida' >&2; exit 1;
+  }
+  somente_leitura "$foto_conferida"
+fi
+args+=(--ro-bind /dev/null /tmp/.jangada-sem-autoridade)
+
 # Ambiente mínimo: sai toda variável exportada que não está na lista. Vai por
 # nome (--unsetenv) e não por --clearenv com --setenv, que poria os valores na
 # linha de comando do bwrap e na saída do --mostrar.
@@ -603,12 +628,25 @@ if [[ "$codex_sessao" =~ ^[A-Za-z0-9_.-]+$ && "$codex_sessao" != . && "$codex_se
   monitor_estado_pid=$!
 fi
 
-bwrap "${args[@]}" <&0 &
+# Bubblewrap preserva descritores extras herdados: uma montagem ro não
+# revoga um banco já aberto. Feche todos, exceto o cano do proxy criado aqui.
+python3 -c 'import os,sys
+permitido = int(sys.argv[1]) if sys.argv[1] else -1
+for nome in os.listdir("/proc/self/fd"):
+    fd = int(nome)
+    if fd > 2 and fd != permitido:
+        try: os.close(fd)
+        except OSError: pass
+os.execvp("bwrap", ["bwrap", *sys.argv[2:]])' "$dbus_sinc" "${args[@]}" <&0 &
 bwrap_pid=$!
 
-codigo=0
-while kill -0 "$bwrap_pid" 2>/dev/null; do
-  wait "$bwrap_pid" 2>/dev/null
-  codigo=$?
+while :; do
+  codigo=0
+  wait "$bwrap_pid" 2>/dev/null || codigo=$?
+  kill -0 "$bwrap_pid" 2>/dev/null || break
 done
+if ((codigo)); then
+  python3 "$JANGADA_PATH/default/orquestracao/confianca.py" registrar-falha "$JANGADA_ESTADO" "$codigo" \
+    || echo "falha ao registrar execução isolada malsucedida" >&2
+fi
 exit "$codigo"

@@ -10,9 +10,28 @@ import signal
 import subprocess
 
 from deterministico import objeto_sem_repeticoes, constante_invalida
+from confianca import codificar, exigir_controlador
 
 CRITERIOS = {'fidelidade', 'completude', 'extrapolacoes'}
 REMOTOS = {'agy', 'codex-economico'}
+
+
+class ResultadoSupervisao(dict):
+    """Comprovante em memória emitido após execução, não reconstituível por JSON."""
+
+    comprovante = None
+
+    def resumo(self, tarefa, relatorio):
+        # O controlador limita o orçamento da reserva em memória; isso não
+        # altera o conteúdo revisado. O recibo persistente inclui a spec inteira.
+        conteudo = {k: v for k, v in tarefa.items() if k != 'max_chamadas'}
+        return hashlib.sha256(codificar([conteudo, relatorio, dict(self)])).hexdigest()
+
+    def registrar(self, tarefa, relatorio):
+        self.comprovante = self.resumo(tarefa, relatorio)
+
+    def confere(self, tarefa, relatorio):
+        return self.comprovante == self.resumo(tarefa, relatorio)
 
 
 def intermediaria(tarefa):
@@ -72,11 +91,15 @@ def aprovacao_valida(tarefa, relatorio, resultado):
     registro = resultado.get('delegacao', {})
     if not isinstance(supervisao, dict) or not isinstance(registro, dict):
         return False
+    if not isinstance(supervisao, ResultadoSupervisao) or not supervisao.confere(tarefa, relatorio):
+        return False
     autor = registro.get('destino')
     revisor = supervisao.get('executor')
     return (elegivel(tarefa) and tarefa.get('permitir_remoto') is True
             and isinstance(autor, str) and isinstance(revisor, str)
             and autor in {'local', *REMOTOS} and revisor in REMOTOS and autor != revisor
+            and supervisao.get('autor') == autor
+            and supervisao.get('modelo_autor') == registro.get('modelo')
             and supervisao.get('habilitada') is True
             and supervisao.get('referencias_conferidas') is True
             and resultado.get('verificacao') == 'referencias_e_requisitos_validos'
@@ -106,9 +129,12 @@ def pendente(item):
 
 
 def supervisionar(tarefa, relatorio, fontes, arquivo_autor, pasta, raiz, projeto, ambiente,
-                 tempo, saldo, autor, permitir_remoto, permitir_codex, perfil, saude, contar, validar):
-    resultado = {'habilitada': True, 'executor': None, 'chamadas': 0, 'decisao': 'ESCALATE',
-                 'motivo': '', 'texto': '', 'delegacao': None, 'aguardando': False, 'referencias_conferidas': False}
+                 tempo, saldo, autor, permitir_remoto, permitir_codex, perfil, saude, contar, validar,
+                 modelo_autor=None):
+    exigir_controlador()
+    resultado = ResultadoSupervisao(habilitada=True, executor=None, chamadas=0, decisao='ESCALATE',
+                 motivo='', texto='', delegacao=None, aguardando=False, referencias_conferidas=False,
+                 autor=autor, modelo_autor=modelo_autor)
     destinos = candidatos(tarefa, autor, perfil, permitir_remoto, permitir_codex)
     impedidos = {i['destino'] for i in saude.impedimentos()} if saude is not None else set()
     destinos = [c for c in destinos if c not in impedidos]
@@ -150,6 +176,10 @@ def supervisionar(tarefa, relatorio, fontes, arquivo_autor, pasta, raiz, projeto
         if not isinstance(registro, dict):
             raise ValueError('supervisor não devolveu registro estruturado')
         resultado['delegacao'] = registro
+        if (not isinstance(registro.get('modelo'), str) or not registro['modelo'].strip()
+                or not isinstance(modelo_autor, str) or not modelo_autor.strip()
+                or modelo_autor == registro['modelo']):
+            raise ValueError('supervisor sem identidade de modelo verificável')
         resultado['chamadas'] = contar(registro, processo.returncode)
         if saude is not None:
             saude.registrar_delegacao(registro, processo.returncode)
@@ -170,6 +200,7 @@ def supervisionar(tarefa, relatorio, fontes, arquivo_autor, pasta, raiz, projeto
         validar(referencias, [*fontes, str(arquivo_autor)], sorted(CRITERIOS))
         resultado['referencias_conferidas'] = True
         resultado['decisao'] = parecer['decisao']
+        resultado.registrar(tarefa, relatorio)
     except (OSError, UnicodeError, ValueError, TypeError, RecursionError, subprocess.SubprocessError) as erro:
         resultado['motivo'] = str(erro)
     finally:

@@ -17,6 +17,7 @@ from saude import Saude  # noqa: E402
 
 class Consulta(Estado):
     def __init__(self, caminho):
+        self.pasta = Path(caminho).absolute().parent
         self.leitura = banco_leitura(caminho)
         self.db = self.leitura.__enter__()
 

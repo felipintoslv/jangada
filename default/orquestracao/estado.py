@@ -16,6 +16,7 @@ from deterministico import conferir as conferir_deterministica
 from metricas_projeto import amostragem, identidade
 from projetos import ler_projeto, especificacao_atual, provedor_de, trava_projetos, executor_permitido
 from supervisao import amostravel, aprovacao_valida, elegivel as elegivel_supervisao, pendente as supervisao_pendente
+from confianca import exigir_controlador, autorizar_conclusao, conferir_conclusao, auditar_recusa
 
 ESTADOS = {
     'QUEUED', 'RUNNING', 'COMPLETED', 'REVIEW_REQUIRED', 'REVISION_REQUIRED',
@@ -110,6 +111,7 @@ def prioridades_efetivas(tarefas, estados):
 
 class Estado:
     def __init__(self, pasta, raiz=None):
+        exigir_controlador()
         original = pathlib.Path(pasta).absolute()
         base = pathlib.Path(raiz).absolute() if raiz is not None else original.parent
         relativo = original.relative_to(base)
@@ -329,7 +331,7 @@ class Estado:
     def listar(self):
         resultado = []
         for linha in self.db.execute('SELECT * FROM tarefas ORDER BY criado,id'):
-            item = dict(linha)
+            item = conferir_conclusao(self.pasta, dict(linha))
             item['especificacao'] = json.loads(item['especificacao'])
             item['resultado'] = json.loads(item['resultado']) if item['resultado'] else None
             resultado.append(item)
@@ -370,7 +372,8 @@ class Estado:
                 self.evento(antiga['id'], 'reserva_expirada', {'dono': antiga['dono']})
             # Só a fila é lida por inteiro: o histórico entra pelo estado, sem
             # interpretar especificação nem resultado sob a transação de escrita.
-            estados = {r['id']: r['status'] for r in self.db.execute('SELECT id,status FROM tarefas')}
+            estados = {r['id']: conferir_conclusao(self.pasta, dict(r))['status']
+                       for r in self.db.execute('SELECT * FROM tarefas')}
             tarefas = [dict(r, especificacao=json.loads(r['especificacao'])) for r in self.db.execute(
                 'SELECT id,especificacao,tentativas,criado FROM tarefas WHERE status=? ORDER BY criado,id', ('QUEUED',))]
             for tarefa in tarefas:
@@ -469,7 +472,9 @@ class Estado:
             self.evento(identificador, 'reservada', {'dono': dono, 'fase': 'supervisao', 'artefato': item['artefato']})
             return item, dono, restante, spec.get('max_chamadas', 8) - consumo['chamadas']
 
+    @auditar_recusa
     def finalizar(self, identificador, dono, status, resultado, artefato=None):
+        exigir_controlador()
         if status not in {'COMPLETED', 'REVIEW_REQUIRED', 'REVISION_REQUIRED', 'FAILED',
                           'WAITING_PROVIDER', 'WAITING_QUOTA', 'WAITING_REVIEWER'}:
             raise ValueError('estado de conclusão da execução inválido')
@@ -496,6 +501,9 @@ class Estado:
                 raise ValueError('executor não possui reserva válida da tarefa')
             if status == 'COMPLETED':
                 spec = json.loads(tarefa['especificacao'])
+                regra = (ler_projeto(self.pasta) or {}).get('politica', {}).get('revisao_minima', {}).get(str(spec['risco']), {})
+                if regra.get('independente') and not aprovacao_valida(self.atual(spec), artefato, resultado):
+                    raise ValueError('política exige revisão independente executada pelo controlador')
                 if spec.get('criterios_aceite'):
                     raise ValueError('critérios de aceite exigem revisão separada por critério')
                 if spec['capacidade'] == 'validacao_json':
@@ -503,7 +511,7 @@ class Estado:
                         raise ValueError('artefato não corresponde à conferência determinística das fontes')
                     if metricas.get('chamadas') != 0 or resultado.get('execucao_iniciada') is not True:
                         raise ValueError('conferência determinística exige execução local sem chamadas a modelos')
-                elif not (aprovacao_valida(spec, artefato, resultado)
+                elif not (aprovacao_valida(self.atual(spec), artefato, resultado)
                           or self.fora_da_amostra(spec, artefato, resultado)):
                     raise ValueError('conclusão intermediária exige supervisão remota independente válida '
                                      'ou sorteio fora da amostra de revisão')
@@ -534,6 +542,8 @@ class Estado:
             if resultado.get('execucao_iniciada') is False:
                 self.db.execute('UPDATE tarefas SET tentativas=tentativas-1 WHERE id=?', (identificador,))
             self.evento(identificador, 'execucao_encerrada', {'dono': dono, 'status': status, 'resultado': resultado, 'artefato': hash_artefato})
+            if status == 'COMPLETED':
+                autorizar_conclusao(self.pasta, self.db.execute('SELECT * FROM tarefas WHERE id=?', (identificador,)).fetchone())
 
     def fora_da_amostra(self, spec, artefato, resultado):
         sorteio = resultado.get('amostragem')
@@ -546,7 +556,9 @@ class Estado:
     def revisar(self, identificador, parecer, aprovar, revisor='humano', modelo=None, contexto='repositorio'):
         self.revisar_lote([identificador], parecer, aprovar, revisor, modelo, contexto)
 
+    @auditar_recusa
     def revisar_lote(self, identificadores, parecer, aprovar, revisor='humano', modelo=None, contexto='repositorio'):
+        exigir_controlador()
         if os.environ.get('JANGADA_ISOLADO'):
             raise ValueError('revisão da fila exige execução fora do isolamento')
         if (revisor not in {'humano', 'claude', 'codex', 'agy'}
@@ -557,10 +569,22 @@ class Estado:
             raise ValueError('revisão exige parecer e decisão explícitos')
         if not identificadores or len(set(identificadores)) != len(identificadores):
             raise ValueError('revisão exige identificadores sem repetição')
+        if revisor != 'humano':
+            # Rótulos e texto enviados pelo chamador não comprovam execução de
+            # um modelo. Não registrar como realizada uma revisão inexistente.
+            with self.transacao():
+                for identificador in identificadores:
+                    self.evento(identificador, 'autorizacao_recusada', {
+                        'motivo': 'revisão de modelo sem comprovante de execução', 'revisor_declarado': revisor})
+            raise ValueError('revisão de modelo exige execução verificável; rótulo fornecido não comprova independência')
         status = 'COMPLETED' if aprovar else 'REVISION_REQUIRED'
         with self.transacao():
             for identificador in identificadores:
                 tarefa = self.db.execute('SELECT * FROM tarefas WHERE id=?', (identificador,)).fetchone()
+                if tarefa and tarefa['status'] == 'COMPLETED' and conferir_conclusao(self.pasta, dict(tarefa))['status'] != 'COMPLETED':
+                    self.evento(identificador, 'conclusao_nao_comprovada', {'estado_anterior': dict(tarefa)})
+                    self.db.execute("UPDATE tarefas SET status='REVIEW_REQUIRED' WHERE id=?", (identificador,))
+                    tarefa = self.db.execute('SELECT * FROM tarefas WHERE id=?', (identificador,)).fetchone()
                 if not tarefa or tarefa['status'] != 'REVIEW_REQUIRED' or not tarefa['hash_artefato']:
                     raise ValueError(f'tarefa sem artefato aguardando revisão: {identificador}')
                 self.ler_artefato(tarefa['hash_artefato'])
@@ -573,7 +597,7 @@ class Estado:
                     raise ValueError('revisão exige autor e revisor independentes e identificados')
                 projeto = ler_projeto(self.pasta)
                 regra = (projeto or {}).get('politica', {}).get('revisao_minima', {}).get(str(spec['risco']), {})
-                if regra.get('independente') and revisor == 'humano':
+                if aprovar and regra.get('independente') and revisor == 'humano':
                     raise ValueError('política exige revisor independente com provedor e modelo identificados')
                 if regra.get('contexto') == 'repositorio' and contexto != 'repositorio':
                     raise ValueError('política exige revisão com contexto do repositório')
@@ -603,6 +627,8 @@ class Estado:
                             'autor': autor, 'modelo_autor': modelo_autor, 'revisor': revisor, 'modelo': modelo,
                             'independente': True if revisor != 'humano' else None, 'contexto': contexto,
                             'artefato_sha256': tarefa['hash_artefato'], 'criterios_aceite': criterios})
+                if aprovar:
+                    autorizar_conclusao(self.pasta, self.db.execute('SELECT * FROM tarefas WHERE id=?', (identificador,)).fetchone())
 
     def ler_artefato(self, resumo):
         if not isinstance(resumo, str) or not re.fullmatch(r'[0-9a-f]{64}', resumo):

@@ -56,7 +56,7 @@ def contexto_principal(estado, identificador, projeto):
     for dep in tarefa.get('dependencias', []):
         item = mapa[dep]
         if item['status'] != 'COMPLETED':
-            raise ValueError('dependências ainda não concluídas')
+            raise ValueError(item.get('motivo') or 'dependências ainda não concluídas')
         estado.ler_artefato(item['artefato'])
         dependencias.append({'id': dep, 'sha256': item['artefato'],
                             'arquivo': str(estado.pasta / 'artefatos' / f'{item["artefato"]}.txt')})
@@ -296,7 +296,8 @@ def executar_uma(estado, projeto, raiz, perfil, permitir_remoto, saude, permitir
                     revisao = supervisionar(tarefa, texto, fontes, saida, pasta, raiz, projeto, ambiente,
                                             tempo - math.ceil(time.monotonic() - inicio), saldo - quantidade,
                                             registro.get('destino'), permitir_remoto, permitir_codex,
-                                            perfil, saude, chamadas, verificador.verificar)
+                                            perfil, saude, chamadas, verificador.verificar,
+                                            modelo_autor=registro.get('modelo'))
                 except KeyboardInterrupt:
                     resultado['metricas'] = {'chamadas': None, 'segundos': math.ceil(time.monotonic() - inicio)}
                     encerrar('REVISION_REQUIRED', 'supervisor interrompido; consumo desconhecido', texto)
@@ -395,7 +396,8 @@ def retomar_supervisao(estado, projeto, raiz, perfil, permitir_remoto, saude, pe
                 resultado['execucao_iniciada'] = True
                 revisao = supervisionar(tarefa, texto, fontes, arquivo, pasta, raiz, projeto, ambiente,
                                         tempo - math.ceil(time.monotonic() - inicio), saldo, anterior.get('destino'),
-                                        permitir_remoto, permitir_codex, perfil, saude, chamadas, gate.verificar)
+                                        permitir_remoto, permitir_codex, perfil, saude, chamadas, gate.verificar,
+                                        modelo_autor=anterior.get('modelo'))
             resultado['supervisao'] = revisao
             resultado['metricas']['chamadas'] = revisao['chamadas']
             resultado['execucao_iniciada'] = revisao['chamadas'] != 0
