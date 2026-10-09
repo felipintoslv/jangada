@@ -32,7 +32,9 @@ with open(os.environ['REGISTRO_SUPERVISAO'],'a') as registro:
     registro.write(json.dumps({'fase':'revisao' if revisao else 'autor','destino':destino,
                               'saldo':os.environ['JANGADA_DELEGAR_CHAMADAS_MAX']})+'\\n')
 modo=os.environ.get('MODO_SUPERVISAO','ok')
-registro={'destino':destino,'modelo':'simulado','tentativas':[{'destino':destino,'chamadas':1}]}
+registro={'destino':destino,'modelo':'revisor-simulado' if revisao else 'autor-simulado','tentativas':[{'destino':destino,'chamadas':1}]}
+if revisao and modo=='modelo_ausente':registro.pop('modelo')
+if revisao and modo=='modelo_autor':registro['modelo']='autor-simulado'
 if revisao and modo=='quota':
     registro.update(motivo_codigo='cota_insuficiente',recusa=True)
     registro['tentativas'][0].update(chamadas=0,motivo_codigo='cota_insuficiente')
@@ -63,6 +65,24 @@ print(json.dumps(registro))
 
 
 class Supervisao(unittest.TestCase):
+    def test_modelo_ausente_ou_igual_ao_autor_nao_aprova(self):
+        for modo in ('modelo_ausente', 'modelo_autor'):
+            with self.subTest(modo=modo), patch.dict(os.environ, MODO_SUPERVISAO=modo):
+                identificador = 'IDENTIDADE-' + modo
+                self.estado.importar([self.tarefa(identificador)])
+                resultado = self.rodar()[0]
+                self.assertNotEqual(resultado['status'], 'COMPLETED')
+
+    def test_json_nao_reconstroi_comprovante_de_execucao(self):
+        tarefa = self.tarefa()
+        self.estado.importar([tarefa])
+        resultado = self.rodar()[0]
+        relatorio = self.estado.ler_artefato(self.estado.listar()[0]['hash_artefato'])
+        self.assertTrue(aprovacao_valida(tarefa, relatorio, resultado))
+        self.assertFalse(aprovacao_valida(tarefa, relatorio, json.loads(json.dumps(resultado))))
+        self.assertFalse(aprovacao_valida(tarefa, relatorio + 'alterado', resultado))
+        self.assertFalse(aprovacao_valida({**tarefa, 'id': 'OUTRA'}, relatorio, resultado))
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)

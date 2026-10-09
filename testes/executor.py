@@ -422,7 +422,11 @@ class Execucao(unittest.TestCase):
         resumo = self.estado.listar()[0]['artefato']
         (self.estado.pasta / 'artefatos' / f'{resumo}.txt').write_text('alterado')
         self.registro.unlink()
-        self.assertEqual(self.rodar()[0]['status'], 'REVISION_REQUIRED')
+        self.assertEqual(self.rodar(), [])
+        mapa = {t['id']: t for t in self.estado.listar()}
+        self.assertEqual(mapa['T1']['status'], 'REVIEW_REQUIRED')
+        self.assertEqual(mapa['T2']['status'], 'QUEUED')
+        self.assertEqual(mapa['T2']['tentativas'], 0)
         self.assertFalse(self.registro.exists())
 
     def test_dependencia_ausente_no_mapa_preserva_estado(self):
