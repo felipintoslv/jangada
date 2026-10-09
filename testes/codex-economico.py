@@ -563,7 +563,7 @@ print(json.dumps({'status':'SUCCESS','conversation_id':'sup','response':json.dum
             while time.monotonic() < limite:
                 try:
                     encerrado = proc.read_text().split(') ')[1].startswith('Z')
-                except FileNotFoundError:
+                except (FileNotFoundError, ProcessLookupError):
                     encerrado = True
                 if encerrado and not pathlib.Path(dados['casa']).exists():
                     break
