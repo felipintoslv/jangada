@@ -1,16 +1,16 @@
 # Relatório de prontidão
 
-**NÃO APTA para congelamento da baseline de 30 dias neste momento.** Em 09/10/2026 restam duas das quatro condições: backup completo conferido e aprovação do uso supervisionado. As seções a partir de "Avaliação original" descrevem o código `5816c76` e ficam como histórico.
+**NÃO APTA para congelamento da baseline de 30 dias neste momento.** Em 09/10/2026 resta uma das quatro condições: a aprovação do uso supervisionado. As seções a partir de "Avaliação original" descrevem o código `5816c76` e ficam como histórico.
 
 ## Situação em 09/10/2026
 
-Código conferido: `db0ee931acd251c647f7665a780f6232efe0b164`, na `main` e na instalação ativa (versão `0.2.0-277`), com commits assinados e 0 migrações pendentes. A atualização foi de somente código; nenhum pacote do sistema foi alterado.
+Código conferido: `db0ee931acd251c647f7665a780f6232efe0b164`, na instalação ativa (versão `0.2.0-277`), com commits assinados e 0 migrações pendentes. A `main` está à frente da instalação só em `docs/`. A atualização foi de somente código; nenhum pacote do sistema foi alterado.
 
 | Condição | Estado | Evidência |
 |---|---|---|
 | Suíte completa sem falhas em ambiente compatível | Atendida | `testes/verificar.sh` no terminal do host, fora das sessões: 1.514 verificações `ok`, 0 falhas. |
 | Ensaio gráfico com agente e revisor reais em projeto sintético | Atendida | Projeto `teste-central`, sessão `teste-central--tarefa-ba2e86f7c899`: agente Claude, commit `a0d0231`, revisão do Codex aprovada na rodada 2, com contexto e marca gravados. Alt+I recusou a integração automática e manteve sessão, ramo e worktree. Ctrl+X encerrou a sessão, removeu a worktree e manteve o ramo; a `main` do projeto não mudou. |
-| Backup completo e recuperação conferidos | Parcial | Backup de 09/10 às 18:43 restaurado em pasta descartável: o `repo.bundle` clona e passa no `git fsck`, a instalação copiada está limpa, a configuração é idêntica e os 5 bancos passam no `integrity_check`. Esse backup não inclui worktrees nem projetos externos, exigidos em `BACKUP_RECUPERACAO.md`. |
+| Backup completo e recuperação conferidos | Atendida, com uma exceção | Backup de 09/10 às 18:56 em `~/jangada-baseline-backup-20261009-185618`, feito com sessões, Central e painel parados: instalação, configuração, estado, worktrees e `~/Projetos`. O `diff -rq` entre origem e cópia deu 0 diferenças nos quatro primeiros e 1 em projetos: a pasta `CNPJ/pgdata`, de outro usuário do sistema, não foi lida e ficou fora. O `repo.bundle` clona, passa no `git fsck` e confere com a `main`; os 5 bancos passam no `integrity_check`; o manifesto SHA-256 lista 59.852 arquivos. A recuperação foi ensaiada com o backup das 18:43, restaurado em pasta descartável: bundle, instalação limpa, configuração idêntica e bancos íntegros. |
 | Uso supervisionado com integração manual aprovado | Pendente | Decisão do usuário. |
 
 O ensaio gráfico revelou um defeito, corrigido em `db0ee93`: a limpeza de sessões órfãs da barra apagava o contexto da rodada (`validacao-<sessão>-rN.contexto.json`) cerca de 1 s depois de gravado, e o `jangada-validar` dentro da sessão falhava ao registrar a decisão. A rodada 1 do ensaio falhou por isso; a rodada 2, já com a correção instalada, passou.
