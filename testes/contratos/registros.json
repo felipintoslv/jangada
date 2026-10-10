@@ -19,7 +19,38 @@
       "menos": {"tipo": ["inteiro"], "obrigatorio": true},
       "itens": {"tipo": ["inteiro"], "obrigatorio": true},
       "segundos": {"tipo": ["inteiro"], "obrigatorio": true},
-      "subagentes": {"tipo": ["objeto"], "obrigatorio": false},
+      "subagentes": {"tipo": ["objeto"], "obrigatorio": false, "campos": {
+        "n": {"tipo": ["inteiro"], "obrigatorio": true},
+        "claude": {"tipo": ["objeto"], "obrigatorio": true, "campos": {
+          "n": {"tipo": ["inteiro"], "obrigatorio": true},
+          "tokens": {"tipo": ["numero"], "obrigatorio": true},
+          "principal": {"tipo": ["numero"], "obrigatorio": true},
+          "principal_cache_lido": {"tipo": ["numero"], "obrigatorio": true}
+        }},
+        "agy": {"tipo": ["objeto"], "obrigatorio": true, "campos": {
+          "n": {"tipo": ["inteiro"], "obrigatorio": true},
+          "passos": {"tipo": ["numero"], "obrigatorio": true}
+        }},
+        "delegadas_agy": {"tipo": ["inteiro"], "obrigatorio": true},
+        "codex_economico": {"tipo": ["objeto"], "obrigatorio": true, "campos": {
+          "n": {"tipo": ["inteiro"], "obrigatorio": true}
+        }},
+        "local": {"tipo": ["objeto"], "obrigatorio": true, "campos": {
+          "n": {"tipo": ["inteiro"], "obrigatorio": true},
+          "atendidas": {"tipo": ["inteiro"], "obrigatorio": true},
+          "recusas": {"tipo": ["inteiro"], "obrigatorio": true},
+          "tokens_entrada": {"tipo": ["numero", "nulo"], "obrigatorio": true},
+          "tokens_saida": {"tipo": ["numero", "nulo"], "obrigatorio": true},
+          "medidas_entrada": {"tipo": ["inteiro"], "obrigatorio": true},
+          "medidas_saida": {"tipo": ["inteiro"], "obrigatorio": true},
+          "ferramentas_disponiveis": {"tipo": ["booleano"], "obrigatorio": true}
+        }},
+        "papeis": {"tipo": ["objeto"], "obrigatorio": true},
+        "retorno_tokens": {"tipo": ["numero"], "obrigatorio": true},
+        "edicoes": {"tipo": ["inteiro"], "obrigatorio": true},
+        "autorrevisao": {"tipo": ["inteiro"], "obrigatorio": true},
+        "recusas": {"tipo": ["inteiro"], "obrigatorio": true}
+      }},
       "subagentes_erro": {"tipo": ["texto"], "obrigatorio": false}
     }
   },
@@ -47,7 +78,7 @@
   },
   "SESSAO.json": {
     "secao": "4",
-    "sem_exemplo": ["perfil", "atividade", "tarefa_id", "pid"],
+    "sem_exemplo": ["pid"],
     "campos": {
       "sessao": {"tipo": ["texto"], "obrigatorio": true},
       "dir": {"tipo": ["texto"], "obrigatorio": true},
@@ -124,8 +155,29 @@
       "artefato": {"tipo": ["texto"], "obrigatorio": true},
       "relatorio_cortado": {"tipo": ["booleano"], "obrigatorio": true},
       "verificacao_escopo": {"tipo": ["texto"], "obrigatorio": true},
-      "tentativas": {"tipo": ["lista"], "obrigatorio": true},
-      "chamadas_local": {"tipo": ["lista", "nulo"], "obrigatorio": true},
+      "tentativas": {"tipo": ["lista"], "obrigatorio": true, "itens": {
+        "destino": {"tipo": ["texto"], "obrigatorio": true},
+        "motivo_codigo": {"tipo": ["texto"], "obrigatorio": true},
+        "motivo": {"tipo": ["texto"], "obrigatorio": true},
+        "codigo_saida": {"tipo": ["inteiro"], "obrigatorio": true},
+        "chamadas": {"tipo": ["inteiro", "nulo"], "obrigatorio": true}
+      }},
+      "chamadas_local": {"tipo": ["lista", "nulo"], "obrigatorio": true, "itens": {
+        "id": {"tipo": ["texto"], "obrigatorio": true},
+        "modelo": {"tipo": ["texto"], "obrigatorio": true},
+        "fase": {"tipo": ["texto"], "obrigatorio": true},
+        "indice": {"tipo": ["inteiro"], "obrigatorio": true},
+        "codigo_transporte": {"tipo": ["inteiro"], "obrigatorio": true},
+        "tokens_entrada": {"tipo": ["numero", "nulo"], "obrigatorio": true},
+        "tokens_saida": {"tipo": ["numero", "nulo"], "obrigatorio": true},
+        "cache_lido": {"tipo": ["numero", "nulo"], "obrigatorio": true},
+        "tempos_ms": {"tipo": ["objeto"], "obrigatorio": true, "campos": {
+          "total": {"tipo": ["numero", "nulo"], "obrigatorio": true},
+          "carregamento": {"tipo": ["numero", "nulo"], "obrigatorio": true},
+          "entrada": {"tipo": ["numero", "nulo"], "obrigatorio": true},
+          "geracao": {"tipo": ["numero", "nulo"], "obrigatorio": true}
+        }}
+      }},
       "documento_chars": {"tipo": ["numero", "nulo"], "obrigatorio": true},
       "retorno_chars": {"tipo": ["numero", "nulo"], "obrigatorio": true},
       "contexto": {"tipo": ["numero", "nulo"], "obrigatorio": true},

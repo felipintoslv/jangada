@@ -5,8 +5,9 @@ registros das seções 1, 2, 4, 8 e 9 de docs/registros.md.
 Os registros são gerados pelos comandos do jangada numa pasta temporária, com
 HOME, XDG_* e PATH próprios e um tmux falso; nada vem do estado da instalação
 nem do tmux da máquina. Cada registro é conferido contra a tabela
-testes/contratos/registros.json (nome, tipo e obrigatoriedade de cada campo),
-e cada campo da tabela precisa estar citado na seção do documento.
+testes/contratos/registros.json (nome, tipo e obrigatoriedade de cada campo,
+e dos campos internos de objetos e de listas de objetos), e cada campo da
+tabela precisa estar citado na seção do documento.
 
 O jangada-projeto é trocado por um falso: registrar a execução da sessão exige
 controlador fora do isolamento, e o teste precisa dar o mesmo resultado dentro
@@ -45,7 +46,7 @@ TIPOS = {
     'nulo': lambda v: v is None,
 }
 # Um campo renomeado em cada ponto do código que grava: (arquivo, de, para,
-# registro, campo que some, campo que aparece).
+# registro, campo que some, campo que aparece). Campo interno vai pelo caminho.
 TROCAS = [
     ('bin/jangada-validar', 'itens: $itens,', 'apontamentos: $itens,',
      'validar.jsonl', 'itens', 'apontamentos'),
@@ -54,6 +55,10 @@ TROCAS = [
     ('bin/jangada-agente', 'desde:$agora,', 'criado:$agora,', 'SESSAO.json', 'desde', 'criado'),
     ('bin/jangada-config', 'estado: $e,', 'situacao: $e,', 'eventos-agentes.jsonl', 'estado', 'situacao'),
     ('bin/jangada-delegar', 'papel: $papel,', 'funcao: $papel,', 'delegacoes.jsonl', 'papel', 'funcao'),
+    ('bin/jangada-delegar', 'chamadas: $total_chamadas}', 'quantas: $total_chamadas}',
+     'delegacoes.jsonl', 'tentativas.chamadas', 'tentativas.quantas'),
+    ('bin/jangada-delegar', 'codigo_transporte: $codigo,', 'transporte: $codigo,',
+     'delegacoes.jsonl', 'chamadas_local.codigo_transporte', 'chamadas_local.transporte'),
 ]
 
 FALSOS = {
@@ -78,6 +83,14 @@ fi
 jq -n --arg r "$(printf '%b' "$FALSO_RESPOSTA")" \\
   '{conversation_id: "c1", status: "SUCCESS", response: $r, denied_actions: []}'
 ''',
+    # Ollama: o modelo pedido, nenhum outro carregado e uma resposta com medidas.
+    'curl': '''#!/bin/sh
+case "$*" in
+  */api/tags*) echo '{"models":[{"name":"qwen3:4b"}]}' ;;
+  */api/ps*) echo '{"models":[]}' ;;
+  */api/chat*) echo '{"message":{"content":"resumo em doc.txt:1"},"prompt_eval_count":20,"eval_count":5,"total_duration":1000000}' ;;
+esac
+''',
     'jangada-projeto': '''#!/bin/sh
 case " $* " in *" sessao-iniciar "*) echo '{"execucao":"exe-0123456789abcdef"}' ;; esac
 exit 0
@@ -96,20 +109,50 @@ def conferir(descricao, certo, detalhe=()):
             print('      ' + str(linha))
 
 
-def problemas(nome, registro, campos):
-    """Um problema por linha; lista vazia quando o registro cumpre a tabela."""
+def problemas(nome, registro, campos, caminho=''):
+    """Um problema por linha; lista vazia quando o registro cumpre a tabela.
+    Desce nos objetos com "campos" e nos itens das listas com "itens"."""
     if not isinstance(registro, dict):
-        return [f'{nome}: o registro não é um objeto JSON']
+        return [f'{nome}: {caminho or "o registro"} não é um objeto JSON']
     achados = []
     for campo, regra in campos.items():
+        nome_campo = caminho + campo
         if campo not in registro:
             if regra['obrigatorio']:
-                achados.append(f'{nome}: falta o campo obrigatório {campo}')
-        elif not any(TIPOS[t](registro[campo]) for t in regra['tipo']):
-            achados.append(f'{nome}: {campo} devia ser {" ou ".join(regra["tipo"])}, '
-                           f'veio {json.dumps(registro[campo], ensure_ascii=False)[:60]}')
-    achados += [f'{nome}: campo fora da tabela: {campo}' for campo in registro if campo not in campos]
+                achados.append(f'{nome}: falta o campo obrigatório {nome_campo}')
+            continue
+        valor = registro[campo]
+        if not any(TIPOS[t](valor) for t in regra['tipo']):
+            achados.append(f'{nome}: {nome_campo} devia ser {" ou ".join(regra["tipo"])}, '
+                           f'veio {json.dumps(valor, ensure_ascii=False)[:60]}')
+        elif 'campos' in regra and isinstance(valor, dict):
+            achados += problemas(nome, valor, regra['campos'], nome_campo + '.')
+        elif 'itens' in regra and isinstance(valor, list):
+            for item in valor:
+                achados += problemas(nome, item, regra['itens'], nome_campo + '.')
+    achados += [f'{nome}: campo fora da tabela: {caminho}{campo}' for campo in registro if campo not in campos]
     return achados
+
+
+def caminhos(campos, caminho=''):
+    """Os caminhos de todos os campos da tabela, internos inclusive."""
+    for campo, regra in campos.items():
+        yield caminho + campo
+        yield from caminhos(regra.get('campos') or regra.get('itens') or {}, caminho + campo + '.')
+
+
+def presentes(registro, campos, caminho=''):
+    """Os caminhos da tabela que aparecem no registro."""
+    if not isinstance(registro, dict):
+        return
+    for campo, regra in campos.items():
+        if campo not in registro:
+            continue
+        yield caminho + campo
+        valor = registro[campo]
+        internos = regra.get('campos') or regra.get('itens') or {}
+        for item in (valor if 'itens' in regra and isinstance(valor, list) else [valor]):
+            yield from presentes(item, internos, caminho + campo + '.')
 
 
 def secao_do_documento(numero):
@@ -153,10 +196,12 @@ class Gerador:
             destino.unlink()
             executavel(destino, texto.replace(de, para))
         executavel(self.arvore / 'bin/jangada-projeto', FALSOS['jangada-projeto'])
-        for nome in ('tmux', 'agy'):
+        for nome in ('tmux', 'agy', 'curl'):
             executavel(tmp / 'bin' / nome, FALSOS[nome])
         for nome in ('claude', 'notify-send', 'setsid', 'pkill'):
             executavel(tmp / 'bin' / nome, '#!/bin/sh\nexit 0\n')
+        # Nenhum jogo aberto, qualquer que seja a máquina.
+        executavel(tmp / 'bin/pgrep', '#!/bin/sh\nexit 1\n')
         (tmp / 'config/jangada/jangada.conf').write_text(f'JANGADA_WORKTREES={tmp}/worktrees\n')
         (self.casa / '.gemini/antigravity-cli/settings.json').write_text(
             json.dumps({'trustedWorkspaces': [str(self.projeto.resolve())]}))
@@ -219,6 +264,7 @@ class Gerador:
     def abrir_sessao(self):
         """SESSAO.json criado pelo jangada-agente (seção 4)."""
         self.rodar(self.comando('jangada-agente'), '--agente', 'claude', '--revisor', 'agy',
+                   '--perfil', 'claude-agy', '--atividade', 'atv-1', '--tarefa-id', 'tarefa-1',
                    '--projeto', self.projeto, '--nome', 'tarefa', '--prompt', 'tarefa de teste')
         return self.sessao()
 
@@ -251,13 +297,18 @@ class Gerador:
         return codigos
 
     def delegar(self):
-        """delegacoes.jsonl (seção 9): uma delegação atendida e uma recusada por cota."""
+        """delegacoes.jsonl (seção 9): uma delegação ao agy atendida, outra recusada
+        por cota e uma ao modelo local, que grava as medidas de cada chamada."""
         codigos = []
         for cota in ('0.9', '0.1'):
             feito = self.como_agente(self.comando('jangada-delegar'), 'explorador', 'mapeie', pasta=self.projeto,
                                      FALSO_COTA=cota, FALSO_RESPOSTA='relatorio em a.sh:1',
                                      JANGADA_DELEGAR_CACHE='0')
             codigos.append(feito.returncode)
+        (self.projeto / 'doc.txt').write_text('texto do documento\n')
+        feito = self.como_agente(self.comando('jangada-delegar'), 'leitor', 'resuma', '--destino', 'local',
+                                 '--arquivos', 'doc.txt', pasta=self.projeto, JANGADA_LOCAL_IGNORAR_VRAM='1')
+        codigos.append(feito.returncode)
         return codigos
 
     def tudo(self):
@@ -296,8 +347,8 @@ def main():
     for nome, descricao in {**tabela, 'validacao-SESSAO-rN.md': parecer}.items():
         secao = secao_do_documento(descricao['secao'])
         conferir(f'{nome}: a seção {descricao["secao"]} existe em docs/registros.md', bool(secao))
-        faltam = [campo for campo in descricao.get('campos', {})
-                  if f'`{campo}`' not in secao and f'"{campo}"' not in secao]
+        faltam = [campo for campo in caminhos(descricao.get('campos', {}))
+                  if f'`{campo.rsplit(".", 1)[-1]}`' not in secao and f'"{campo}"' not in secao]
         conferir(f'{nome}: todo campo da tabela está citado na seção {descricao["secao"]}', not faltam,
                  [f'sem citação: {campo}' for campo in faltam])
 
@@ -307,6 +358,10 @@ def main():
         achados = achados_de(tabela, registros)
 
         conferir('o jangada-agente grava o SESSAO.json', registros['SESSAO.json'][0][1] is not None)
+        conferir('o SESSAO.json leva o perfil e os vínculos dados ao jangada-agente',
+                 {campo: (registros['SESSAO.json'][0][1] or {}).get(campo)
+                  for campo in ('perfil', 'atividade', 'tarefa_id')}
+                 == {'perfil': 'claude-agy', 'atividade': 'atv-1', 'tarefa_id': 'tarefa-1'})
         conferir('os hooks e a troca de foco gravam seis eventos',
                  [e.get('estado') for _, e in registros['eventos-agentes.jsonl']]
                  == ['inicio', 'trabalhando', 'subagente-inicio', 'subagente-fim', 'aguardando', 'foco'],
@@ -329,15 +384,16 @@ def main():
                  bool(primeiras) and all(re.match(parecer['primeira_linha'], linha) for linha in primeiras),
                  primeiras)
         conferir('o APROVADO grava a marca validacao-SESSAO.aprovado', bool(registros['validacao-SESSAO.aprovado']))
-        conferir('o jangada-delegar sai com 0 na delegação atendida e 4 na recusada',
-                 gerador.codigos_delegar == [0, 4], [gerador.codigos_delegar])
-        conferir('o delegacoes.jsonl tem uma linha atendida e uma recusada',
-                 [d.get('recusa') for _, d in registros['delegacoes.jsonl']] == [False, True])
+        conferir('o jangada-delegar sai com 0 nas delegações atendidas e 4 na recusada',
+                 gerador.codigos_delegar == [0, 4, 0], [gerador.codigos_delegar])
+        conferir('o delegacoes.jsonl tem a delegação ao agy, a recusada e a local',
+                 [(d.get('destino'), d.get('recusa')) for _, d in registros['delegacoes.jsonl']]
+                 == [('agy', False), ('agy', True), ('local', False)])
         for nome in tabela:
             conferir(f'{nome}: campos e tipos conforme a tabela', not achados[nome], achados[nome])
-            presentes = {campo for _, registro in registros[nome] if isinstance(registro, dict) for campo in registro}
-            ausentes = [campo for campo in tabela[nome]['campos'] if campo not in presentes]
-            ausentes = sorted(set(ausentes) - set(tabela[nome].get('sem_exemplo', [])))
+            vistos = {c for _, registro in registros[nome] for c in presentes(registro, tabela[nome]['campos'])}
+            ausentes = sorted(set(caminhos(tabela[nome]['campos'])) - vistos
+                              - set(tabela[nome].get('sem_exemplo', [])))
             conferir(f'{nome}: todo campo da tabela aparece em algum registro gerado, salvo os de "sem_exemplo"',
                      not ausentes, [f'ausentes: {ausentes}'])
 
@@ -352,6 +408,23 @@ def main():
             conferir(f'{nome}: campo {campo} renomeado numa cópia do registro é apontado',
                      f'{nome}: falta o campo obrigatório {campo}' in achado
                      and f'{nome}: campo fora da tabela: {campo}_novo' in achado, achado)
+        internos = [('validar.jsonl', ['subagentes', 'claude'], 'principal_cache_lido',
+                     'subagentes.claude.principal_cache_lido'),
+                    ('delegacoes.jsonl', ['tentativas', 0], 'chamadas', 'tentativas.chamadas'),
+                    ('delegacoes.jsonl', ['chamadas_local', 0, 'tempos_ms'], 'total', 'chamadas_local.tempos_ms.total')]
+        for nome, rota, campo, caminho in internos:
+            alterado = copy.deepcopy(registros[nome][-1][1]) if registros[nome] else {}
+            try:
+                objeto = alterado
+                for passo in rota:
+                    objeto = objeto[passo]
+                objeto[f'{campo}_novo'] = objeto.pop(campo)
+            except (KeyError, IndexError, TypeError):
+                pass
+            achado = problemas(nome, alterado, tabela[nome]['campos'])
+            conferir(f'{nome}: campo interno {caminho} renomeado numa cópia do registro é apontado',
+                     f'{nome}: falta o campo obrigatório {caminho}' in achado
+                     and f'{nome}: campo fora da tabela: {caminho}_novo' in achado, achado)
         errado = copy.deepcopy(registros['validar.jsonl'][-1][1]) if registros['validar.jsonl'] else {}
         errado['rodada'] = '2'
         conferir('validar.jsonl: campo com o tipo trocado numa cópia do registro é apontado',

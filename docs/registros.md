@@ -588,11 +588,18 @@ subagente tem `.db` próprio.
   - `relatorio_cortado`: indica se o relatório devolvido é uma prévia.
   - `chamadas_executor`: chamadas ao modelo neste executor, incluindo partes
     locais; `null` se a interrupção impedir conhecer o total.
-  - `tentativas`: destinos descartados ou executados até esse registro, com
-    motivos, códigos de saída e contagem de chamadas. O registro seguinte
-    pode repetir o histórico; não some novamente essas contagens.
+  - `tentativas`: destinos descartados ou executados até esse registro, um
+    objeto por destino com `destino`, `motivo_codigo`, `motivo`,
+    `codigo_saida` e `chamadas` (`null` quando o executor não informou). O
+    registro seguinte pode repetir o histórico; não some novamente essas
+    contagens.
   - `chamadas_local`: lista com a medida de cada chamada ao Ollama; `null`
-    quando o destino não é `local`.
+    quando o destino não é `local`. Cada medida tem `id` (`delegacao_id`,
+    dois pontos e a ordem da chamada), `modelo`, `fase` (`documento`,
+    `fatia` ou `consolidacao`), `indice`, `codigo_transporte` (saída do
+    curl), `tokens_entrada`, `tokens_saida`, `cache_lido` e `tempos_ms`
+    (`total`, `carregamento`, `entrada`, `geracao`, em milissegundos),
+    com `null` no que a API não informou.
   - `documento_chars`, `contexto`: caracteres do documento lido e janela de
     contexto (`JANGADA_LOCAL_CTX`) na delegação local; `null` nas demais.
   - `ferramentas_disponiveis`: `false` nos destinos `local` e
