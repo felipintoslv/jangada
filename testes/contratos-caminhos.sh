@@ -54,6 +54,9 @@ copia() {
   rm -rf "$tmp/copia" "$tmp/fora"
   mkdir "$tmp/copia" "$tmp/fora"
   caminhos | xargs -d '\n' cp -a --parents -t "$tmp/copia"
+  # Caminho da lista que é link precisa do destino na cópia para existir.
+  caminhos | while IFS= read -r c; do [[ -L "$c" ]] && realpath --relative-to=. "$c"; done |
+    xargs -r -d '\n' cp -a --parents -t "$tmp/copia"
 }
 copia
 conferir "cópia intacta dos caminhos passa" [ -z "$(problemas "$tmp/copia")" ]
