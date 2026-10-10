@@ -171,6 +171,49 @@ cp "$alvo" "$tmp/microfone-comentado"
 conferir "caso 10: JSONC comentado também é repetível" migrar
 conferir "caso 10: comentários mantidos na segunda passada" iguais "$alvo" "$tmp/microfone-comentado"
 
+# Caso 11: contrato K8 dos três módulos, sem consultar estado ou pacotes reais.
+formato_waybar() {
+  [[ "$(wc -l <"$1")" == 1 ]] &&
+    jq_ok -s 'length == 1 and (.[0] | type == "object"
+      and has("text") and has("tooltip") and has("class")
+      and (.text | type == "string")
+      and (.tooltip | type == "string")
+      and (.class | type == "string"))' "$1"
+}
+printf '{"text":"","tooltip":"sistema em dia","class":"vazio"}\n' >"$tmp/vazio.json"
+conferir "caso 11: texto vazio é saída válida" formato_waybar "$tmp/vazio.json"
+printf '{"text":"","tooltip":"sistema em dia"}\n' >"$tmp/sem-classe.json"
+if formato_waybar "$tmp/sem-classe.json"; then
+  falha "caso 11: saída sem class foi aceita"
+else
+  ok "caso 11: saída sem class é rejeitada"
+fi
+cat "$tmp/vazio.json" "$tmp/vazio.json" >"$tmp/duas-linhas.json"
+if formato_waybar "$tmp/duas-linhas.json"; then
+  falha "caso 11: saída com duas linhas foi aceita"
+else
+  ok "caso 11: saída com duas linhas é rejeitada"
+fi
+mkdir -p "$tmp/modulos/bin" "$tmp/modulos/config/jangada" \
+  "$tmp/modulos/state" "$tmp/modulos/cache" "$tmp/modulos/runtime"
+printf 'JANGADA_PROJETOS=%s\n' "$tmp/modulos/projetos" >"$tmp/modulos/config/jangada/jangada.conf"
+for comando in checkupdates paru yay tmux; do
+  printf '#!/bin/sh\nexit 0\n' >"$tmp/modulos/bin/$comando"
+  chmod +x "$tmp/modulos/bin/$comando"
+done
+for modulo in tarefas painel atualizacoes; do
+  saida="$tmp/modulos/$modulo.json"
+  if PATH="$tmp/modulos/bin:$PATH" XDG_CONFIG_HOME="$tmp/modulos/config" \
+    XDG_STATE_HOME="$tmp/modulos/state" XDG_CACHE_HOME="$tmp/modulos/cache" \
+    XDG_RUNTIME_DIR="$tmp/modulos/runtime" JANGADA_PATH="$repo_jangada" \
+    "bin/jangada-$modulo" --waybar >"$saida" 2>"$tmp/modulos/$modulo.erro"; then
+    conferir "caso 11: jangada-$modulo emite uma linha JSON com text, tooltip e class" \
+      formato_waybar "$saida"
+  else
+    falha "caso 11: jangada-$modulo --waybar: $(cat "$tmp/modulos/$modulo.erro")"
+  fi
+done
+
 if ((falhas)); then
   echo "$falhas teste(s) da barra falharam"
   exit 1
