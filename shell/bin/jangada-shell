@@ -67,7 +67,7 @@ _jangada_abertura() {
     while IFS= read -r linha || [[ -n "$linha" ]]; do
       cor=""
       fim=""
-      if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+      if [[ -t 1 && -z "${NO_COLOR+x}" ]]; then
         fim=$'\033[0m'
         case "$linha" in
           '$1'*) cor=$'\033[97m' ;;
