@@ -22,7 +22,7 @@ Critérios da especificação, na ordem da tabela de
 | # | Critério | Resultado | Prova |
 |---|---|---|---|
 | 1 | Três pastas reais no monorepositório | atendido | seção 2.1 |
-| 2 | Core independente do Shell e do Monitor | atendido com ressalva | seções 2.2, 3 e 4 |
+| 2 | Core independente do Shell e do Monitor | não atendido: o teste de fronteira passa, mas o teste de remoção mostrou que o `jangada-validar` depende de um arquivo do Shell | seções 2.2, 3 e 4 |
 | 3 | Monitor por contratos definidos | atendido com ressalva | seção 2.3 |
 | 4 | Comandos `jangada-*` preservados | atendido | seção 2.4 |
 | 5 | `shell/` existente não sobrescrito | atendido | seção 2.5 |
@@ -35,14 +35,14 @@ Aceitação da própria M3-20, conforme o [backlog](04-backlog.md#m3-20-validaç
 | # | Item | Resultado | Prova |
 |---|---|---|---|
 | 9 | Lista de exceções de K9 vazia ou com justificativa | atendido com ressalva: 8 linhas, todas justificadas; a aprovação das justificativas é do usuário | seção 3 |
-| 10 | Teste de remoção | atendido com ressalva: feito; sem `shell/` e `monitor/`, 4 testes do Core falham a mais, e um deles mostra dependência do Core no Shell | seção 4 |
+| 10 | Teste de remoção | feito, com resultado negativo: sem `shell/` e `monitor/`, 4 testes do Core falham a mais, e um deles mostra dependência do Core no Shell | seção 4 |
 | 11 | Nenhum documento alterado cita caminho que não existe | atendido com ressalva | seção 6 |
 | 12 | `testes/verificar.sh` com saída 0 fora do isolamento | a confirmar pelo coordenador; dentro do isolamento a lista de grupos falhos é igual à da base | seção 5 |
 | 13 | Trabalho `sandbox-e2e` com saída 0 | a confirmar pelo coordenador | seção 5 |
 
-Nenhum critério ficou como "não atendido". As ressalvas e o que ainda
-depende de execução externa estão descritos em cada seção, e os defeitos
-achados no caminho estão na seção 7.
+Um critério não foi atendido: a independência do Core (critério 2). As
+ressalvas e o que ainda depende de execução externa estão descritos em cada
+seção, e os defeitos achados no caminho estão na seção 7.
 
 ## 2. Provas por critério
 
@@ -79,10 +79,12 @@ $ bash testes/fronteiras.sh | tail -1
 tudo certo
 $ grep -c sem-contrato testes/contratos/fronteiras-excecoes.txt
 0
-$ grep -vc '^#' testes/contratos/fronteiras-excecoes.txt   # linhas de exceção, fora as vazias: 8
+$ grep -vc -e '^#' -e '^$' testes/contratos/fronteiras-excecoes.txt
+8
 ```
 
-Ressalvas:
+O teste de fronteira passa. O critério não é atendido por causa do teste de
+remoção (item 3 abaixo).
 
 1. A lista não tem só as exceções permanentes. Além das 6 permanentes, há 2
    linhas do contrato K6: chamadas opcionais do Core a comandos do Monitor.
@@ -111,17 +113,17 @@ chega pela variável `JANGADA_CORE_PY`. O teste de fronteira recusa a
 importação (caso "Monitor que chama comando que altera estado é apontado" e
 a regra 2 de K9).
 
-Ressalva: os dois testes que exercitam os contratos com dados,
-`testes/painel-orquestracao.py` (K5) e `testes/contratos-registros.py` (K7),
-falham dentro do isolamento, na base e nesta entrega, por
-`AUTORIZACAO_RECUSADA`. A confirmação deles vem da execução do coordenador
-(seção 5). O `testes/contratos-registros.py` é também intermitente fora do
-isolamento (seção 8, item 5).
+O `testes/contratos-registros.py` (K7) passou dentro do isolamento, na base
+e nesta entrega. Ressalva: o `testes/painel-orquestracao.py` (K5) falha
+dentro do isolamento, na base e nesta entrega, por `AUTORIZACAO_RECUSADA`, e
+a confirmação dele vem da execução do coordenador (seção 5). O
+`testes/contratos-registros.py` é também intermitente quando roda junto de
+outras suítes (seção 8, item 5).
 
 ### 2.4 Comandos `jangada-*` preservados
 
 ```
-$ grep -vc '^#' testes/contratos/comandos.txt
+$ grep -vc -e '^#' -e '^$' testes/contratos/comandos.txt
 59
 $ bash testes/contratos-fachada.sh | tail -1
 tudo certo
@@ -144,7 +146,7 @@ shell/bin/jangada-barra: linha 14: shell/bin/jangada-config: Arquivo ou diretór
 ```
 
 Isso é o comportamento previsto na [prova dos links](prova-links.md), item
-1, e está escrito nos três `LEIAME.md` e na skill.
+1, e está escrito no `core/LEIAME.md` e na skill.
 
 ### 2.5 `shell/` existente não sobrescrito
 
@@ -181,9 +183,11 @@ banco de estado real.
 
 ### 2.7 Nenhum agente aprova a própria alteração
 
-Toda entrega passou pelo `jangada-validar` com revisor de outro modelo
-(`codex` revisando `claude`, ou o inverso nas tarefas anteriores à D10), e
-nenhum autor aprovou o próprio trabalho.
+As entregas passaram pelo `jangada-validar`, que manda o diff a um revisor
+de outro modelo e grava em cada rodada se o revisor é independente do autor
+(campo `independente` de `validar.jsonl`). Esta conferência não releu o
+registro de cada rodada, que fica no banco de estado real, fora do alcance
+desta tarefa.
 
 Ressalva: duas tarefas foram integradas por decisão do usuário sem parecer
 `STATUS: APROVADO`.
@@ -200,13 +204,17 @@ que a reproduza a partir do repositório.
 
 ### 2.8 Integração supervisionada
 
-Cada tarefa entrou no `main` com confirmação humana, uma por vez: manual até
-a M3-11a e, depois dela, pelo botão ou por alt+i com as conferências da
-tarefa. O `git log --first-parent` do `main` entre a etiqueta e `390a63b`
-é linear. Esta tarefa não integra nem envia ao remoto.
+Cada tarefa entrou no `main` por decisão do usuário, uma por vez. O
+histórico entre a etiqueta e `390a63b` é linear:
 
-A situação atual do botão e do alt+i na cópia instalada não foi conferida
-aqui; a entrega deles depende da versão instalada.
+```
+$ git rev-list --count jangada-pre-modularizacao-3.0..390a63b
+69
+$ git rev-list --count --merges jangada-pre-modularizacao-3.0..390a63b
+0
+```
+
+Esta tarefa não integra nem envia ao remoto.
 
 ## 3. Exceções de K9, linha a linha
 
@@ -324,7 +332,64 @@ Leitura do resultado:
 
 ## 5. `testes/verificar.sh` e `sandbox-e2e`
 
-@@VERIFICAR@@
+### 5.1 Dentro do isolamento
+
+A suíte rodou duas vezes, num clone de `390a63b` (base) e num clone do ramo
+desta tarefa (entrega), uma depois da outra e sem outras suítes em paralelo:
+
+```
+env -u JANGADA_ISOLADO -u JANGADA_DELEGAR -u JANGADA_PAPEL -u JANGADA_PAPEL_AJUSTE -u JANGADA_VALIDAR_REVISOR \
+  JANGADA_PATH="$PWD" bash testes/verificar.sh </dev/null >verificar-<base|entrega>.log 2>&1
+$ diff <(grep '^XX' verificar-base.log | sort) <(grep '^XX' verificar-entrega.log | sort) && echo diferença-vazia
+diferença-vazia
+```
+
+As duas saíram com código 1 e "21 falha(s)". Os 21 grupos falhos são os
+mesmos: `testes/acompanhamento.py`, `agente-seletor.py`, `baseline.py`,
+`codex-economico.py`, `codex.sh`, `contexto-revisao.py`, `cota-codex.py`,
+`delegar.sh`, `deterministico.py`, `executor.py`, `fim.sh`, `isolar.sh`,
+`metricas-projeto.py`, `operacional.py`, `orquestracao.py`,
+`painel-orquestracao.py`, `restaurar.sh`, `saude.py`, `supervisao.py`,
+`update-codigo.py` e `validar.sh`. As falhas são do isolamento: o log da base
+tem 315 linhas com `AUTORIZACAO_RECUSADA`. Como esta entrega só muda
+documentação, a lista igual é o resultado esperado.
+
+### 5.2 Fora do isolamento, pelo coordenador
+
+Três execuções ficam para o coordenador, num terminal comum, fora da sessão
+isolada:
+
+```
+cd ~/.local/share/jangada-worktrees/jangada/m3-20-final
+
+# 1. suíte completa; o critério é saída 0
+JANGADA_PATH=$PWD bash testes/verificar.sh; echo "saída $?"
+
+# 2. equivalente local do trabalho sandbox-e2e (.github/workflows/verificar.yml)
+JANGADA_PATH=$PWD JANGADA_TESTES_EXIGIR_ISOLAMENTO=1 \
+  JANGADA_TESTES_EXIGIR="bwrap sem-rede jq gitleaks zsh R lintr" \
+  sh -ec 'testes/capacidades.sh; testes/isolar.sh; testes/validar.sh; testes/fim.sh'; echo "saída $?"
+
+# 3. teste de remoção sem o isolamento esconder casos (seção 4)
+t=$(mktemp -d); git clone -q . "$t/semmod"; cd "$t/semmod"
+find . -path ./.git -prune -o -type l -print | while read -r l; do
+  case "$(readlink "$l")" in ../shell/*|../monitor/*|../../monitor/*) rm "$l";; esac
+done
+rm -rf shell monitor
+for x in acompanhamento.py agente-seletor.py avaliar-ollama.py baseline.py codex-economico.py codex.sh \
+  confianca-p0.py contexto-revisao.py cota-codex.py delegacao.py delegar.sh deterministico.py eventos.sh \
+  executor.py extracao.py fim.sh hooks.sh isolar.sh metricas-projeto.py operacional.py orquestracao.py \
+  provedores.sh restaurar.sh saude.py subagentes.sh supervisao.py validar.sh; do
+  case $x in *.py) c=python3;; *) c=bash;; esac
+  JANGADA_PATH=$PWD timeout 900 $c testes/$x </dev/null >"$t/$x.log" 2>&1; echo "$x $?"
+done
+```
+
+No item 3, a comparação útil é com a mesma lista rodada numa cópia intacta:
+as diferenças esperadas são as da seção 4 (`hooks.sh`, `subagentes.sh`,
+`delegar.sh` e `validar.sh`). Qualquer outra é dependência nova a registrar.
+Os testes intermitentes da seção 8 (itens 4 e 5) podem falhar sem relação com
+esta entrega; nesse caso, repetir o teste sozinho.
 
 ## 6. Documentos alterados e conferência de caminhos
 
