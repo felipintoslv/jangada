@@ -4,12 +4,13 @@ Conferência feita em 10/10/2026 sobre o `main` em `390a63b`, na worktree
 `agente/m3-20-final`. A etiqueta de partida é `jangada-pre-modularizacao-3.0`
 (`ad30fdd`); entre ela e `390a63b` há 69 commits.
 
-Tudo o que está aqui rodou dentro da sessão isolada do agente
+A conferência original rodou dentro da sessão isolada do agente
 (`JANGADA_ISOLADO=1`). Nesse ambiente uma parte da suíte falha por bloqueio
-do próprio isolamento, com a mensagem `AUTORIZACAO_RECUSADA`. Por isso dois
-critérios dependem de uma execução que só o coordenador faz, fora do
-isolamento. Eles estão marcados como "a confirmar" e os comandos estão na
-seção 5.
+do próprio isolamento, com a mensagem `AUTORIZACAO_RECUSADA`. Nesta
+complementação (M3-20b), foram registrados os resultados fornecidos pelo
+coordenador em 10/10/2026, fora do isolamento, no commit `dbc168a` da M3-20.
+O autor desta complementação não reproduziu essas execuções. Os resultados
+estão nas seções 4 e 5.
 
 Esta tarefa só alterou documentação. Nenhum código, teste ou arquivo de
 contrato foi alterado, e nenhum link de compatibilidade foi removido.
@@ -37,12 +38,14 @@ Aceitação da própria M3-20, conforme o [backlog](04-backlog.md#m3-20-validaç
 | 9 | Lista de exceções de K9 vazia ou com justificativa | atendido com ressalva: 8 linhas, todas justificadas; a aprovação das justificativas é do usuário | seção 3 |
 | 10 | Teste de remoção | feito, com resultado negativo: sem `shell/` e `monitor/`, 4 testes do Core falham a mais, e um deles mostra dependência do Core no Shell | seção 4 |
 | 11 | Nenhum documento alterado cita caminho que não existe | atendido com ressalva | seção 6 |
-| 12 | `testes/verificar.sh` com saída 0 fora do isolamento | a confirmar pelo coordenador; dentro do isolamento a lista de grupos falhos é igual à da base | seção 5 |
-| 13 | Trabalho `sandbox-e2e` com saída 0 | a confirmar pelo coordenador | seção 5 |
+| 12 | `testes/verificar.sh` com saída 0 fora do isolamento | atendido, conforme resultado fornecido pelo coordenador no commit `dbc168a` | seção 5.2 |
+| 13 | Trabalho `sandbox-e2e` com saída 0 | atendido pelo equivalente local, conforme resultado fornecido pelo coordenador no commit `dbc168a` | seção 5.2 |
 
 Um critério não foi atendido: a independência do Core (critério 2). As
-ressalvas e o que ainda depende de execução externa estão descritos em cada
-seção, e os defeitos achados no caminho estão na seção 7.
+ressalvas estão descritas em cada seção, e os defeitos achados no caminho
+estão na seção 7. Os critérios 12 e 13 foram confirmados pelos resultados
+externos fornecidos pelo coordenador; o teste de remoção externo confirmou
+as falhas da seção 4.
 
 ## 2. Provas por critério
 
@@ -116,7 +119,7 @@ a regra 2 de K9).
 O `testes/contratos-registros.py` (K7) passou dentro do isolamento, na base
 e nesta entrega. Ressalva: o `testes/painel-orquestracao.py` (K5) falha
 dentro do isolamento, na base e nesta entrega, por `AUTORIZACAO_RECUSADA`, e
-a confirmação dele vem da execução do coordenador (seção 5). O
+a execução do coordenador confirmou a suíte fora do isolamento (seção 5). O
 `testes/contratos-registros.py` é também intermitente quando roda junto de
 outras suítes (seção 8, item 5).
 
@@ -326,16 +329,36 @@ Leitura do resultado:
    procura chamada de comando, import e caminho do estado, e não vê leitura
    de arquivo de configuração de outro módulo. Fica registrado como defeito
    na seção 7, item 2.
-3. Ressalva: o isolamento esconde o efeito da remoção nos 20 testes que
-   falham nas duas cópias. Fora do isolamento a comparação pode mostrar
-   outras dependências. O comando para repetir está na seção 5.
+3. O isolamento esconde o efeito da remoção nos 20 testes que falham nas
+   duas cópias. A confirmação externa abaixo permite comparar os 27 testes
+   sem essas falhas do ambiente.
+
+### Confirmação externa pelo coordenador
+
+Em 10/10/2026, o coordenador refez a comparação fora do isolamento, com dois
+clones do ramo no commit `dbc168a`: um intacto e outro sem `shell/`,
+`monitor/` e os links que apontam para esses módulos. Rodou os mesmos 27
+testes do Core do inventário citados nesta seção. O autor desta
+complementação não reproduziu essa execução; registrou o resultado
+fornecido pelo coordenador.
+
+| Cópia | Testes com código 0 | Testes com código 1 |
+|---|---|---|
+| Intacta | 27 | nenhum |
+| Sem `shell/` e `monitor/` | 23 | `delegar.sh`, `hooks.sh`, `subagentes.sh`, `validar.sh` |
+
+Fora do isolamento, a cópia intacta não tem falhas, ao contrário das
+contagens da execução isolada acima. Os quatro testes que falham após a
+remoção são os mesmos já apontados nesta seção. O critério 2 continua não
+atendido.
 
 ## 5. `testes/verificar.sh` e `sandbox-e2e`
 
 ### 5.1 Dentro do isolamento
 
-A suíte rodou duas vezes, num clone de `390a63b` (base) e num clone do ramo
-desta tarefa (entrega), uma depois da outra e sem outras suítes em paralelo:
+Na M3-20 original, a suíte rodou duas vezes, num clone de `390a63b` (base) e
+num clone do ramo `agente/m3-20-final` (entrega), uma depois da outra e sem
+outras suítes em paralelo:
 
 ```
 env -u JANGADA_ISOLADO -u JANGADA_DELEGAR -u JANGADA_PAPEL -u JANGADA_PAPEL_AJUSTE -u JANGADA_VALIDAR_REVISOR \
@@ -356,44 +379,38 @@ documentação, a lista igual é o resultado esperado.
 
 ### 5.2 Fora do isolamento, pelo coordenador
 
-Três execuções ficam para o coordenador, num terminal comum, fora da sessão
-isolada:
+O coordenador forneceu os resultados das execuções feitas em 10/10/2026,
+fora do isolamento, no commit `dbc168a`. O autor desta complementação não
+reproduziu essas execuções. Elas confirmam os critérios 12 e 13; não
+eliminam o defeito de independência do Core registrado na seção 4.
 
-```
-cd ~/.local/share/jangada-worktrees/jangada/m3-20-final
+Comando da suíte completa, executado no worktree da M3-20:
 
-# 1. suíte completa; o critério é saída 0
-JANGADA_PATH=$PWD bash testes/verificar.sh; echo "saída $?"
-
-# 2. equivalente local do trabalho sandbox-e2e (.github/workflows/verificar.yml)
-JANGADA_PATH=$PWD JANGADA_TESTES_EXIGIR_ISOLAMENTO=1 \
-  JANGADA_TESTES_EXIGIR="bwrap sem-rede jq gitleaks zsh R lintr" \
-  sh -ec 'testes/capacidades.sh; testes/isolar.sh; testes/validar.sh; testes/fim.sh'; echo "saída $?"
-
-# 3. teste de remoção sem o isolamento esconder casos (seção 4)
-t=$(mktemp -d); git clone -q . "$t/semmod"; cd "$t/semmod"
-find . -path ./.git -prune -o -type l -print | while read -r l; do
-  case "$(readlink "$l")" in ../shell/*|../monitor/*|../../monitor/*) rm "$l";; esac
-done
-rm -rf shell monitor
-for x in acompanhamento.py agente-seletor.py avaliar-ollama.py baseline.py codex-economico.py codex.sh \
-  confianca-p0.py contexto-revisao.py cota-codex.py delegacao.py delegar.sh deterministico.py eventos.sh \
-  executor.py extracao.py fim.sh hooks.sh isolar.sh metricas-projeto.py operacional.py orquestracao.py \
-  provedores.sh restaurar.sh saude.py subagentes.sh supervisao.py validar.sh; do
-  case $x in *.py) c=python3;; *) c=bash;; esac
-  JANGADA_PATH=$PWD timeout 900 $c testes/$x </dev/null >"$t/$x.log" 2>&1; echo "$x $?"
-done
+```sh
+env -u JANGADA_ISOLADO -u JANGADA_DELEGAR -u JANGADA_PAPEL -u JANGADA_PAPEL_AJUSTE JANGADA_PATH=$PWD bash testes/verificar.sh </dev/null
 ```
 
-No item 3, a comparação útil é com a mesma lista rodada numa cópia intacta:
-as diferenças esperadas são as da seção 4 (`hooks.sh`, `subagentes.sh`,
-`delegar.sh` e `validar.sh`). Qualquer outra é dependência nova a registrar.
-Os testes intermitentes da seção 8 (itens 4 e 5) podem falhar sem relação com
-esta entrega; nesse caso, repetir o teste sozinho.
+Resultado informado pelo coordenador: código de término 0, nenhuma linha
+começando com `XX`, 2127 linhas "ok" e última linha "tudo certo".
+
+Comando do equivalente local do trabalho de CI `sandbox-e2e`:
+
+```sh
+JANGADA_TESTES_EXIGIR_ISOLAMENTO=1 JANGADA_TESTES_EXIGIR="bwrap sem-rede jq gitleaks zsh R lintr" sh -ec 'testes/capacidades.sh; testes/isolar.sh; testes/validar.sh; testes/fim.sh'
+```
+
+Resultado informado pelo coordenador: código de término 0 e última linha
+"tudo certo". Esse resultado é do equivalente local, não de uma execução
+do trabalho no serviço de CI.
+
+O coordenador também refez o teste de remoção fora do isolamento no mesmo
+commit. Na cópia intacta os 27 testes do Core saíram com 0; sem os módulos,
+23 saíram com 0 e os mesmos 4 testes da seção 4 saíram com 1.
 
 ## 6. Documentos alterados e conferência de caminhos
 
-Arquivos alterados nesta tarefa, e o que mudou em cada um:
+Arquivos alterados na M3-20 original, e o que mudou em cada um. A
+complementação M3-20b alterou somente este documento.
 
 | Arquivo | Mudança |
 |---|---|
@@ -519,8 +536,8 @@ Esta tarefa não pode alterar código. Os itens abaixo ficam registrados.
 4. **Um link relativo da skill quebrou com a mudança de pasta.** Em
    `core/agentes/claude/skills/jangada/agentes.md:421`, o link para
    `docs/ciclo-da-tarefa.md` subia quatro níveis, o certo quando a skill
-   morava em `default/claude/skills/jangada`. Este foi corrigido aqui, por
-   ser guia da skill: agora sobe cinco níveis.
+   morava em `default/claude/skills/jangada`. Este foi corrigido na M3-20
+   original, por ser guia da skill: agora sobe cinco níveis.
 5. **`shell/menus/tarefas/janela.py:27` sem `JANGADA_PATH`.** Ver seção 8,
    item 6.
 6. **Aviso do `jangada-validar` para link de pasta.** Ver seção 8, item 3.
