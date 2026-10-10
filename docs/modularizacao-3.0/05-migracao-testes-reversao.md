@@ -25,6 +25,7 @@
 | 0 | este plano | nada | aprovação do usuário |
 | A | M3-01 a M3-10 e M3-10a | nada visível; uma opção nova (`--limpar-orfaos`) | `verificar.sh` 0 e revisão cruzada por tarefa |
 | B | M3-11 | pastas novas vazias | aprovação do usuário |
+| B1 | M3-11a | restaura integração pelo botão e por alt+i, depois do portão da M3-11 e antes da M3-12 | revisão cruzada, `verificar.sh` 0 fora do isolamento e confirmação humana por entrega |
 | C1 | M3-12 a M3-15 | arquivos do Shell mudam de pasta; caminhos antigos seguem | teste em Hyprland aninhado; aprovação antes da primeira |
 | C2 | M3-16, M3-17 | pacotes Python, perfis e painel mudam de pasta | ciclo em estado temporário |
 | C3 | M3-18 | comandos do Core mudam de pasta | ciclo completo em repositório de teste |
@@ -83,7 +84,7 @@ na Onda C; K9 deve passar com a lista atualizada no mesmo commit.
 |---|---|---|
 | Conferência local | subagente `verificador` na própria sessão | só lista problemas, não aprova |
 | Parecer | `jangada-validar` com o modelo cruzado | primeira linha `STATUS: APROVADO`; `REVISAR` volta ao autor |
-| Integração | usuário | manual, uma tarefa por vez, com assinatura por `jangada-assinar` |
+| Integração | usuário | uma tarefa por vez, com assinatura por `jangada-assinar`; até a M3-11a, manual; depois, pelo botão ou por alt+i, com as conferências da M3-11a |
 
 Uma tarefa com três pareceres `REVISAR` seguidos para e volta ao
 Coordenador, que a redivide ou a devolve ao usuário.
@@ -114,4 +115,4 @@ edição direta da cópia instalada.
 | `shell/` existente não sobrescrito | `sha256sum` dos dois arquivos em M3-11 e na Onda C |
 | Sistema atual operacional durante o processo | cópia instalada na versão anterior até cada `jangada-update` |
 | Nenhum agente aprova a própria alteração | revisão cruzada por `jangada-validar` |
-| Integração supervisionada | manual pelo usuário |
+| Integração supervisionada | confirmação humana por entrega; até a M3-11a, manual; depois, botão ou alt+i com as conferências da M3-11a |

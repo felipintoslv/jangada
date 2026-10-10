@@ -1,6 +1,6 @@
 # 6. Backlog multiagentes
 
-Vinte e uma tarefas em quatro ondas. A situação das entregas aparece abaixo.
+Vinte e duas tarefas em quatro ondas. A situação das entregas aparece abaixo.
 
 ## Regras de execução
 
@@ -14,8 +14,10 @@ Vinte e uma tarefas em quatro ondas. A situação das entregas aparece abaixo.
    `testes/verificar.sh` e `testes/regra1.sh`.
 4. Toda entrega passa por `testes/verificar.sh` com saída 0 e por
    `jangada-validar` com revisor de outro modelo. Quem escreveu não aprova.
-5. A integração no `main` é manual, feita pelo usuário, uma tarefa por vez.
-   `jangada-agente-fim --integrar` segue bloqueado.
+5. A integração no `main` exige confirmação humana por entrega, uma tarefa
+   por vez. Até a M3-11a, é manual e `jangada-agente-fim --integrar` segue
+   bloqueado. Depois da M3-11a, o botão ou o alt+i é o gesto de aprovação,
+   sujeito às conferências da tarefa.
 6. A cópia instalada só muda por `jangada-update`, quando o usuário quiser.
 
 ## Papéis e provedores
@@ -59,11 +61,12 @@ flowchart LR
   M02 --> M10a["M3-10a"]
   M07 --> M10a
   M10a --> M11
-  M11 --> M12["M3-12"]
+  M11 --> M11a["M3-11a"]
+  M11a --> M12["M3-12"]
   M12 --> M13["M3-13"]
   M13 --> M14["M3-14"]
   M14 --> M15["M3-15"]
-  M11 --> M16["M3-16"]
+  M11a --> M16["M3-16"]
   M16 --> M17["M3-17"]
   M15 --> M18["M3-18"]
   M17 --> M18
@@ -72,7 +75,9 @@ flowchart LR
 ```
 
 Aprovação humana obrigatória antes de M3-01 (este plano), antes de M3-11
-(estrutura) e antes de M3-12 (primeira mudança de pasta).
+(estrutura) e antes de M3-12 (primeira mudança de pasta). A M3-11a vem
+logo depois do portão da M3-11 e antes da M3-12; não dispensa a confirmação
+humana de nenhuma entrega.
 
 ## Onda A: contratos e desacoplamento, sem mover arquivo
 
@@ -254,6 +259,30 @@ M3-11 (D8).
 | Riscos | padrões de nome do `verificar.sh` deixarem arquivo sem exame |
 | Reversão | `git revert`; pastas novas só têm `LEIAME.md` |
 
+### M3-11a Integração supervisionada pelo botão e por alt+i
+
+| Campo | Conteúdo |
+|---|---|
+| Objetivo | Restaurar a integração pelo botão da Central de Tarefas e por alt+i, conforme decisão do usuário em 09/10/2026; é restauração de comportamento existente |
+| Primeira etapa | Reconstituir, pelo diff do commit `7707e86` e pelos testes removidos, o que a integração antiga fazia e qual era o risco ao trabalho concorrente; o que não estiver no commit ou no código fica a reconstituir na M3-11a |
+| Agente | Core (`claude`), revisor `codex` |
+| Arquivos permitidos | Prováveis: `bin/jangada-agente-fim`, `testes/fim.sh`, `testes/update.sh`, `docs/ciclo-da-tarefa.md`, `default/claude/skills/jangada/agentes.md`, `default/claude/skills/jangada/SKILL.md`; `bin/jangada-agentes` e `default/tarefas/janela.py` só se a chamada precisar mudar |
+| Dependências | M3-11 e seu portão de aprovação humana; executar antes da M3-12 e das mudanças de pasta da Onda C |
+| Aceitação | Só aceita parecer `APROVADO` de revisão independente, gravado fora do isolamento, correspondente ao SHA a integrar. Faz rebase do ramo sobre a base na worktree da tarefa, sem tocar na cópia principal durante a preparação. Se o rebase mudar o SHA, exige parecer para o novo SHA. Roda `testes/verificar.sh` fora do isolamento com saída 0. Integra só por avanço rápido (`merge --ff-only`). Recusa sem alterar nada se a base andou desde a conferência ou se a cópia principal tem alterações. A confirmação humana por entrega continua obrigatória: o botão ou o alt+i é o gesto de aprovação. Não envia ao remoto, não roda `jangada-update`, mantém ramo e worktree; `--sem-revisao` continua sem liberar |
+| Testes | `testes/fim.sh`, `testes/update.sh`, `testes/verificar.sh`; comprovar aprovação para o SHA final, recusa por base alterada ou cópia principal com alterações, preservação de trabalho concorrente, ramo e worktree, e ausência de envio ao remoto e de `jangada-update` |
+| Riscos | Merge fora do isolamento a partir de estado gravável pelo agente: manter o `conferir_estado`. Perda de trabalho concorrente. Custo de cerca de quatro minutos da suíte por integração |
+| Reversão | `git revert` do commit, voltando à recusa de integração |
+
+Estado atual: o commit `7707e86`, de 08/10/2026, tem a mensagem
+"bloqueia integração automática para preservar trabalho concorrente".
+Seu diff retira o merge `--no-ff` na cópia principal e a recuperação com
+`reset --hard`. O comentário da trava diz que ela não impede editores ou
+Git externo. Os testes de integração são substituídos por testes de recusa
+que preservam arquivos, índice, HEAD, sessão e worktree.
+`bin/jangada-agentes` ainda chama `--integrar` por alt+i;
+`default/tarefas/janela.py` confirma os SHA e chama `--integrar --confirmacao`.
+Ambas as chamadas continuam sujeitas à recusa atual.
+
 ## Onda C: migração (Fase 4)
 
 Molde comum às tarefas M3-12 a M3-18: `git mv` da origem para o destino,
@@ -275,7 +304,7 @@ a cópia instalada volta por
 | Objetivo | `default/hypr`, `default/hypridle` e `default/waybar` para `shell/hyprland` e `shell/waybar` |
 | Agente | Shell (`codex`), revisor `claude` |
 | Arquivos permitidos | as três pastas de origem, os destinos, os três links |
-| Dependências | M3-11, aprovação humana |
+| Dependências | M3-11a, aprovação humana |
 | Aceitação | comum; `testes/simular-hypr.lua` e `testes/aninhado.sh` passam; `require("default.hypr.jangada")` resolve pelo link |
 | Testes | `testes/simular-hypr.lua`, `testes/barra.sh`, `testes/interface.sh`, `verificar.sh` |
 | Riscos | sessão gráfica não subir depois do `jangada-update`; por isso é a primeira, com teste em Hyprland aninhado antes de integrar |
@@ -327,7 +356,7 @@ a cópia instalada volta por
 | Objetivo | `default/nucleo`, `orquestracao`, `delegacao` para `core/`; `default/agentes`, `claude`, `agy`, `tmux` para `core/agentes`; `default/provedores` para `core/provedores` |
 | Agente | Core (`claude`), revisor `codex` |
 | Arquivos permitidos | origens, destinos, links; `bin/jangada-config` (valor de `JANGADA_CORE_PY`) |
-| Dependências | M3-11 |
+| Dependências | M3-11a |
 | Aceitação | comum; links de `~/.claude/skills` e `~/.claude/agents` seguem resolvendo em instalação simulada; `jangada-fila --json` idêntico antes e depois |
 | Testes | todos os testes do Core do inventário, `verificar.sh` |
 | Riscos | banco de estado não é tocado, mas o código que o lê muda de pasta: rodar em estado temporário antes |
