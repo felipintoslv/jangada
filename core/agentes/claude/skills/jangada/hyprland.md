@@ -1,5 +1,9 @@
 # Hyprland em Lua no jangada
 
+Desde a modularização 3.0, os módulos Lua moram em `shell/hyprland/`.
+`default/hypr` é link de compatibilidade e continua sendo o caminho usado
+pelo `hyprland.lua` do usuário e por `require("default.hypr.*")`.
+
 ## `hyprctl dispatch` só aceita Lua
 
 Com a configuração em Lua, `hyprctl dispatch exec foo` dá erro de sintaxe. A

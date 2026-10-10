@@ -1,5 +1,10 @@
 # Barra, tema, bloqueio e login
 
+Desde a modularização 3.0, a barra mora em `shell/waybar/`, os temas em
+`shell/temas/` (matugen, sddm, logo, fastfetch) e o hypridle em
+`shell/hyprland/hypridle/`. Os caminhos de `default/` citados neste guia são
+links de compatibilidade e continuam sendo os usados pelo código.
+
 ## Waybar
 
 - O módulo nativo `mpris` fica fora das listas de módulos por padrão.

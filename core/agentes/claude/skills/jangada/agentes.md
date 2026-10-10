@@ -1,5 +1,12 @@
 # Camada de agentes
 
+Os caminhos de `bin/` e `default/` citados neste guia são links de
+compatibilidade e continuam sendo a forma de uso. Desde a modularização 3.0,
+os comandos de agentes moram em `core/bin/`, os perfis e o protocolo em
+`core/agentes/perfis/` (antes `default/agentes/`), os hooks e subagentes em
+`core/agentes/claude/` e `core/agentes/agy/`, e o painel em `monitor/painel/`
+e `monitor/bin/`. O mapa está em [SKILL.md](SKILL.md).
+
 ## Consulta da fila
 
 SQLite em `mode=ro` ainda pode criar arquivos WAL/SHM na origem.
@@ -411,7 +418,7 @@ porta de entrada. O que se aprendeu com ele vale para o revisor agy:
   chamam o `jangada-validar` sem querer esse modo passam `JANGADA_ISOLADO=1`.
 - Prefira fazer o commit antes de `jangada-validar`, para revisar uma entrega
   limpa. O comando também aceita alterações sem commit; nesse caso, registra
-  a aprovação com `limpo` falso. Veja o [ciclo da tarefa](../../../../docs/ciclo-da-tarefa.md).
+  a aprovação com `limpo` falso. Veja o [ciclo da tarefa](../../../../../docs/ciclo-da-tarefa.md).
 - `.aprovado` com `limpo` falso (worktree com alteração sem commit) não move o ponto
   de comparação: com o commit igual ao `HEAD`, a próxima rodada daria "nada a
   revisar" sem ninguém ter visto o commit sozinho.
