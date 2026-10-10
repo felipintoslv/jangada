@@ -19,10 +19,23 @@ jangada/
 ├── install.sh             ponto de entrada da instalação
 ├── install/               etapas numeradas, executadas em ordem
 │   └── pacotes/           listas de pacotes por grupo
-├── bin/                   comandos jangada-* (entram no PATH)
-├── default/               padrões atualizáveis (hypr em Lua, waybar, matugen, tmux, hooks e skills dos agentes)
+├── bin/                   comandos jangada-* (entram no PATH): 7 arquivos compartilhados e 52 links para os módulos
+├── default/               caminhos antigos dos padrões: 20 links para os módulos e a pasta visual/
+├── core/                  agentes: sessões, isolamento, validação, delegação, fila e provedores
+│   ├── bin/               23 comandos
+│   ├── nucleo/, orquestracao/, delegacao/   pacotes Python
+│   ├── agentes/           perfis, tmux, hooks, skills e subagentes do Claude e do agy
+│   └── provedores/        registro de provedores
+├── shell/                 área de trabalho e integração com bash e zsh (jangada.sh, jangada-shell.sh)
+│   ├── bin/               25 comandos
+│   ├── hyprland/, waybar/ configuração Lua do Hyprland, hypridle e barra
+│   ├── temas/             matugen, tela de login, logo e fastfetch
+│   ├── menus/             Central de Tarefas e janela de conversa
+│   └── integracoes/       snapper e R
+├── monitor/               painel de indicadores, consumo, subagentes e diagnóstico
+│   ├── bin/               4 comandos
+│   └── painel/            painel em Python e R
 ├── config/                modelos copiados uma única vez para ~/.config/jangada
-├── shell/                 integração com bash e zsh
 ├── migrations/            ajustes aplicados em ordem a cada atualização
 ├── docs/                  processos com fluxogramas, registros e boas práticas
 ├── testes/                verificar.sh (estático + os demais testes) e aninhado.sh
@@ -31,6 +44,16 @@ jangada/
 ├── mapeamento/            inventários do jangada-mapear (fora do git)
 └── revisao/               pareceres, avaliações e comparações; índice em revisao/README.md
 ```
+
+Desde a modularização 3.0, cada arquivo mora na pasta do seu módulo: `core/`,
+`shell/` ou `monitor/`. Os caminhos antigos (`bin/jangada-*`, `default/hypr`,
+`default/claude` e os demais) são links de compatibilidade versionados e
+continuam sendo a forma de uso: os comandos se chamam por `bin/`, e os
+arquivos do usuário e os documentos seguem citando `default/`. Um comando
+chamado direto pelo caminho de `core/bin`, `shell/bin` ou `monitor/bin` não
+acha o `jangada-config`. O plano, os contratos entre os módulos e a
+conferência final estão em
+[docs/modularizacao-3.0](docs/modularizacao-3.0/README.md).
 
 ## Estado da estabilização
 
@@ -53,6 +76,7 @@ arquivo e função, falhas e os testes que o cobrem:
 | [docs/boas-praticas.md](docs/boas-praticas.md) | regras de código, testes, textos e commits |
 | [docs/analise-painel-20260930.md](docs/analise-painel-20260930.md) | leitura do painel com os dados de 30/09/2026 |
 | [docs/proposta-atualizacao-painel.md](docs/proposta-atualizacao-painel.md) | proposta de atualização do painel, com implementação parcial |
+| [docs/modularizacao-3.0](docs/modularizacao-3.0/README.md) | divisão em `core/`, `shell/` e `monitor/`: inventário, contratos e [validação final](docs/modularizacao-3.0/06-validacao-final.md) |
 
 ## Antes de instalar: mapear a máquina
 
@@ -856,7 +880,10 @@ começa com `feat` entra em Novidades, o que começa com `fix` em Correções e 
 resto em Outras mudanças. O `jangada-update` busca a origem, mostra os
 commits e as novidades que chegariam, avisa quando mudam `migrations/`,
 `install/` ou `bin/` (código que roda na máquina) e só aplica com `s`; sem
-terminal para confirmar, não aplica nada. `jangada-versao` mostra a versão
+terminal para confirmar, não aplica nada. O aviso ainda não cobre `core/`,
+`shell/` e `monitor/`, onde os comandos moram desde a modularização 3.0;
+a mudança neles aparece só no resumo por arquivo (pendência registrada em
+[06-validacao-final.md](docs/modularizacao-3.0/06-validacao-final.md)). `jangada-versao` mostra a versão
 instalada.
 
 ## Desenvolvimento

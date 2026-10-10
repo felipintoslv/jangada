@@ -52,19 +52,19 @@ entrar aqui do mesmo jeito.
 | Caminho | Quem grava | Para quê |
 |---|---|---|
 | `~/.bashrc`, `~/.zshrc` | `install/30-shell.sh` | bloco entre marcas que carrega o ambiente do jangada |
-| `~/.claude/settings.json`, `~/.claude/skills`, `~/.claude/agents` | `install/50-agentes.sh`, migrações | hooks das sessões e links para as skills e os subagentes de `default/` |
+| `~/.claude/settings.json`, `~/.claude/skills`, `~/.claude/agents` | `install/50-agentes.sh`, migrações | hooks das sessões e links para as skills e os subagentes de `default/claude` (link para `core/agentes/claude`) |
 | `~/.claude` (`settings.local.json`, `CLAUDE.md`, `commands`, `hooks`, `plugins`, `output-styles`, `shell-snapshots`, `session-env`, `ide`) | `jangada-isolar` | criados vazios quando faltam, para o bind do isolamento |
 | `~/.gemini/config` (`hooks.json`, `agents.json`, `skills`) | `install/50-agentes.sh`, migrações | hooks, subagentes e skills do agy |
 | `~/.gemini/antigravity-cli` (`settings.json`, `bin`) | `jangada-worktree-preparar`, `jangada-agente-fim`, `jangada-isolar` | confiança do agy no worktree e pasta bin para montar isolada; o original fica em `settings.json.jangada-orig` |
 | `~/.local/share/jangada-worktrees` | `jangada-agente` | worktrees das sessões de agente |
 | Repositórios em `JANGADA_PROJETOS` | `jangada-agente`, `jangada-agente-fim` | ramos `agente/*`, registro dos worktrees e a integração que o usuário confirma |
-| `JANGADA_PROJETOS` | `default/tarefas/janela.py` | pasta vazia de um projeto novo, quando o usuário pede pelo botão Nova pasta |
+| `JANGADA_PROJETOS` | `shell/menus/tarefas/janela.py` | pasta vazia de um projeto novo, quando o usuário pede pelo botão Nova pasta |
 | Pasta atual, com `--saida` | `jangada-avaliar-ollama` | fontes sintéticas e registros da avaliação local, em uma pasta nova por execução |
 | `~/.cache/jangada` | `jangada-consumo`, `jangada-delegar` | cache do consumo e da cota do agy |
 | `~/.cache/cliphist` | `jangada-isolar` | pasta criada com 0700 para poder ocultá-la do agente |
-| `$XDG_RUNTIME_DIR/jangada-tarefas` | `default/tarefas/central.py`, `default/tarefas/janela.py` | soquete privado para reutilizar a janela e avisos privados para acompanhar ações, fora do runtime visível ao agente isolado |
+| `$XDG_RUNTIME_DIR/jangada-tarefas` | `shell/menus/tarefas/central.py`, `shell/menus/tarefas/janela.py` | soquete privado para reutilizar a janela e avisos privados para acompanhar ações, fora do runtime visível ao agente isolado |
 | `$XDG_RUNTIME_DIR/jangada-isolar` | `jangada-isolar` | soquetes do proxy do D-Bus |
-| `$TMPDIR/jangada-consulta-*` (ou `/tmp/jangada-consulta-*`) | `default/nucleo/consultas.py` | cópia privada temporária do SQLite e WAL, removida ao fechar a consulta; evita gravar arquivos auxiliares na origem |
+| `$TMPDIR/jangada-consulta-*` (ou `/tmp/jangada-consulta-*`) | `core/nucleo/consultas.py` | cópia privada temporária do SQLite e WAL, removida ao fechar a consulta; evita gravar arquivos auxiliares na origem |
 | `~/Imagens/Capturas` ou `~/Pictures/Screenshots` | `jangada-captura` | capturas de tela |
 | `/usr/share/wayland-sessions/jangada.desktop` | `install/40-interface.sh` | sessão no gerenciador de login |
 | `/etc/snapper/configs/root`, `/.snapshots` | `install/20-snapshots.sh`, `jangada-snapshot` | configuração do snapper e snapshots |
@@ -74,3 +74,7 @@ Pacotes, serviços do systemd e o estado dos serviços (redes do
 NetworkManager, aparelhos do bluetooth, snapshots) mudam pelos comandos do
 próprio sistema (`pacman`, `systemctl`, `nmcli`, `bluetoothctl`, `snapper`) e
 não entram na conta.
+
+A coluna "Quem grava" cita o arquivo onde ele mora desde a modularização
+3.0 (`core/`, `shell/`, `monitor/`). Os caminhos antigos em `bin/` e
+`default/` são links de compatibilidade para esses arquivos.
