@@ -564,6 +564,58 @@ integrar_teste g1 s
 recusa "git status falha" g1 'o git status falhou' "$antes"
 conferir "git status falha: a suíte não roda" test ! -e "$tmp/verificar-chamado"
 
+# Escrita concorrente recria, durante o avanço, um caminho que o commit
+# remove: como arquivo ou como link pendente. O comando avisa, sai com erro
+# e não apaga o que foi recriado.
+for tipo in arquivo link; do
+  echo removido >"$proj/removido-$tipo"
+  git -C "$proj" add "removido-$tipo"
+  git -C "$proj" commit --quiet -m "removido-$tipo"
+  preparar "x$tipo"
+  git -C "$wts/proj/x$tipo" rm --quiet "removido-$tipo"
+  git -C "$wts/proj/x$tipo" commit --quiet -m "remove removido-$tipo"
+  marca "x$tipo" "$revisoes"
+  if [[ "$tipo" == arquivo ]]; then
+    recriar="echo concorrente >'$proj/removido-$tipo'"
+  else
+    recriar="ln -s '$tmp/nao-existe' '$proj/removido-$tipo'"
+  fi
+  cat >"$tmp/bin/git" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >>"$tmp/git-chamadas"
+"$git_real" "\$@"; rc=\$?
+[[ " \$* " != *" merge --ff-only "* ]] || $recriar
+exit \$rc
+EOF
+  integrar_teste "x$tipo" s
+  conferir "removido recriado ($tipo): sai com erro ($rc)" test "$rc" -ne 0
+  conferir "removido recriado ($tipo): avisa" grep -q 'não conferem com o espelho' "$tmp/saida"
+  conferir "removido recriado ($tipo): nada é desfeito" grep -q 'Nada foi desfeito' "$tmp/saida"
+  conferir "removido recriado ($tipo): a escrita concorrente fica" test -L "$proj/removido-$tipo" -o -e "$proj/removido-$tipo"
+  mantida "removido recriado ($tipo)" "x$tipo"
+  rm -f "$proj/removido-$tipo"
+done
+
+# Pasta no lugar de um arquivo removido, como o commit pede, não é divergência.
+echo d >"$proj/vira-pasta"
+git -C "$proj" add vira-pasta
+git -C "$proj" commit --quiet -m vira-pasta
+preparar xpasta
+git -C "$wts/proj/xpasta" rm --quiet vira-pasta
+mkdir "$wts/proj/xpasta/vira-pasta"
+echo d >"$wts/proj/xpasta/vira-pasta/dentro"
+git -C "$wts/proj/xpasta" add vira-pasta/dentro
+git -C "$wts/proj/xpasta" commit --quiet -m "vira-pasta é pasta"
+marca xpasta "$revisoes"
+cat >"$tmp/bin/git" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >>"$tmp/git-chamadas"
+exec "$git_real" "\$@"
+EOF
+integrar_teste xpasta s
+conferir "arquivo que vira pasta: integra ($rc)" \
+  bash -c '[ "$1" -eq 0 ] && test -f "$2/vira-pasta/dentro"' _ "$rc" "$proj"
+
 conferir "listas temporárias ficam em revisoes/ e saem no fim" \
   bash -c '! compgen -G "$1/objetos-*" >/dev/null && ! compgen -G "$1/avanco-*" >/dev/null' _ "$revisoes"
 
