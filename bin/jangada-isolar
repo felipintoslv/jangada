@@ -625,7 +625,7 @@ if [[ "$codex_sessao" =~ ^[A-Za-z0-9_.-]+$ && "$codex_sessao" != . && "$codex_se
     while kill -0 $$ 2>/dev/null; do
       IFS= read -r -t "$intervalo_monitor" arquivo <&"$eventos_fd" || { (($? > 128)) && continue; break; }
       [[ "$arquivo" == "$codex_sessao.json" ]] || continue
-      pkill -RTMIN+10 -x waybar 2>/dev/null || true
+      jangada_avisar_interface estado-sessao
     done
   ) 2>/dev/null &
   monitor_estado_pid=$!

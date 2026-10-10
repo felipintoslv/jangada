@@ -4,30 +4,6 @@
 # foi criada (M3-03). A lista só diminui: quem retira um acoplamento retira a
 # exceção no mesmo commit, e o teto de cada contrato fica em testes/fronteiras.sh.
 
-# K3 (aviso de mudança de estado, M3-04): o Core sinaliza a Waybar e chama o
-# notify-send direto; passa a chamar jangada_avisar_interface e
-# jangada_notificar.
-# bin/jangada-hook-agy:65
-K3 bin/jangada-hook-agy pkill -RTMIN+10 -x waybar 2>/dev/null || true
-# bin/jangada-hook-agy:71
-K3 bin/jangada-hook-agy if [[ "$evento" == concluido ]] && command -v notify-send >/dev/null 2>&1; then
-# bin/jangada-hook-agy:73
-K3 bin/jangada-hook-agy notify-send -a jangada-agente -u normal "Agente concluiu: $JANGADA_SESSAO" "$mensagem" 2>/dev/null || true
-# bin/jangada-hook-agy:77
-K3 bin/jangada-hook-agy r="$(notify-send -a jangada-agente -u normal -A abrir=Abrir "$1" "$2" 2>/dev/null)"
-# bin/jangada-hook-claude:118
-K3 bin/jangada-hook-claude pkill -RTMIN+10 -x waybar 2>/dev/null || true
-# bin/jangada-hook-claude:128
-K3 bin/jangada-hook-claude && command -v notify-send >/dev/null 2>&1; then
-# bin/jangada-hook-claude:136
-K3 bin/jangada-hook-claude notify-send -a jangada-agente -u "$urg" "$titulo" "$corpo" 2>/dev/null || true
-# bin/jangada-hook-claude:139
-K3 bin/jangada-hook-claude r="$(notify-send -a jangada-agente -u "$1" -A abrir=Abrir "$2" "$3" 2>/dev/null)"
-# bin/jangada-hook-codex:41
-K3 bin/jangada-hook-codex pkill -RTMIN+10 -x waybar 2>/dev/null || true
-# bin/jangada-isolar:628
-K3 bin/jangada-isolar pkill -RTMIN+10 -x waybar 2>/dev/null || true
-
 # K5 (leitura da fila e dos projetos, M3-07): o painel importa e herda as
 # classes de escrita Estado e Saude; passa a ler por nucleo.consultas.
 # default/painel/orquestracao.py:13

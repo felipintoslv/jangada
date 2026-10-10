@@ -207,7 +207,10 @@ conferir "cópia intacta passa" [ -z "$(problemas "$tmp/copia")" ]
 acrescentar bin/jangada-fila 'hyprctl dispatch exit'
 conferir "hyprctl novo em arquivo do Core é apontado" \
   apontado "fora da lista: bin/jangada-fila:$(wc -l <"$tmp/copia/bin/jangada-fila"): hyprctl dispatch exit"
-acrescentar testes/contratos/fronteiras-excecoes.txt 'K3 bin/jangada-fila hyprctl dispatch exit'
+# Exceções novas até passar do teto, qualquer que seja a contagem atual.
+for ((i = $(grep -c '^K3 ' "$tmp/copia/testes/contratos/fronteiras-excecoes.txt"); i <= teto[K3]; i++)); do
+  acrescentar testes/contratos/fronteiras-excecoes.txt 'K3 bin/jangada-fila hyprctl dispatch exit'
+done
 conferir "exceção nova na lista estoura o teto do contrato" \
   apontado "teto excedido: K3 tem $((teto[K3] + 1)) exceções, o teto é ${teto[K3]}"
 
@@ -238,10 +241,12 @@ for linha in 'if jangada-painel; then :; fi' 'command jangada-tarefas --nova' \
 done
 
 copia
-sed -i '/pkill -RTMIN+10 -x waybar/d' "$tmp/copia/bin/jangada-hook-codex"
+acrescentar bin/jangada-fila 'pkill -RTMIN+10 -x waybar 2>/dev/null || true'
+acrescentar testes/contratos/fronteiras-excecoes.txt 'K3 bin/jangada-fila pkill -RTMIN+10 -x waybar 2>/dev/null || true'
+sed -i '/pkill -RTMIN+10 -x waybar/d' "$tmp/copia/bin/jangada-fila"
 conferir "acoplamento retirado com a exceção ainda na lista é apontado" \
-  apontado "exceção sem acoplamento: bin/jangada-hook-codex: pkill -RTMIN+10 -x waybar 2>/dev/null || true"
-sed -i '\|^K3 bin/jangada-hook-codex |d' "$tmp/copia/testes/contratos/fronteiras-excecoes.txt"
+  apontado "exceção sem acoplamento: bin/jangada-fila: pkill -RTMIN+10 -x waybar 2>/dev/null || true"
+sed -i '\|^K3 bin/jangada-fila |d' "$tmp/copia/testes/contratos/fronteiras-excecoes.txt"
 conferir "lista menor que o teto passa" [ -z "$(problemas "$tmp/copia")" ]
 
 copia

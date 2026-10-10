@@ -536,16 +536,34 @@ jangada_alterar_estado() {
   }
   jangada_com_trava_dir "$(dirname "$arq")" _aplicar_jq "$@" || rc=$?
   if ((rc == 0)); then
-    pkill -RTMIN+10 -x waybar 2>/dev/null || true
+    jangada_avisar_interface estado-sessao
   fi
   return $rc
 }
 
-# Notificação do sistema via notify-send.
+# Avisa a interface de que o estado do Core mudou (contrato K3). Só este corpo
+# conhece a Waybar: o sinal 10 atualiza o módulo dos agentes. Sem barra no ar,
+# não faz nada e devolve 0.
+# Uso: jangada_avisar_interface estado-sessao|fila|validacao
+jangada_avisar_interface() {
+  case "${1:-}" in
+    estado-sessao | fila | validacao) pkill -RTMIN+10 -x waybar 2>/dev/null || true ;;
+    *) return 1 ;;
+  esac
+}
+
+# Notificação do sistema (contrato K3). Só este corpo conhece o notify-send.
+# Sem o programa ou sem serviço de notificação, não faz nada e devolve 0.
+# Com -A, espera o clique e imprime a ação escolhida.
+# Uso: jangada_notificar [-a APLICATIVO] [-u URGÊNCIA] [-A AÇÃO=RÓTULO] TÍTULO MENSAGEM
 jangada_notificar() {
-  local titulo="$1" msg="$2"
+  local app=jangada opcoes=()
+  while [[ "${1:-}" == -[auA] ]]; do
+    if [[ "$1" == -a ]]; then app="$2"; else opcoes+=("$1" "$2"); fi
+    shift 2
+  done
   if command -v notify-send >/dev/null 2>&1; then
-    notify-send -a jangada "$titulo" "$msg" 2>/dev/null || true
+    notify-send -a "$app" "${opcoes[@]}" "$1" "$2" 2>/dev/null || true
   fi
 }
 
