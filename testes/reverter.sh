@@ -50,6 +50,16 @@ console_em() {
   printf 'ajuda\n' | SHELL="$1" JANGADA_PATH="$2" "$repo_jangada/bin/jangada-shell" 2>&1
 }
 
+# Linhas da logo que saem com cor quando a saída do console é um terminal.
+cores_no_terminal() {
+  SHELL="$1" JANGADA_PATH="$repo_jangada" timeout 30 script -qec \
+    "printf 'exit\n' | '$repo_jangada/bin/jangada-shell'" /dev/null </dev/null 2>&1 |
+    sed '/Jangada Core: Console/q' | grep -c "$(printf '\033')\[[0-9]*m"
+}
+
+export -f cores_no_terminal
+export repo_jangada
+
 # Cópia do jangada sem o arquivo da logo.
 mkdir -p "$tmp/semlogo/shell"
 ln -s "$repo_jangada/shell/jangada-shell.sh" "$tmp/semlogo/shell/jangada-shell.sh"
@@ -71,6 +81,14 @@ for sh in bash zsh; do
   conferir "$sh: logo sai sem marcador nem cor fora do terminal" \
     bash -c '! grep -q -e "^\$[1-4]" -e "$(printf "\033")\[[0-9]*m" <<<"$1"' _ "$logo"
   conferir "$sh: nome antigo não aparece" bash -c '! grep -q "Jangada Shell" <<<"$1"' _ "$saida"
+  if command -v script >/dev/null 2>&1; then
+    conferir "$sh: no terminal, a logo sai com cor" \
+      test "$(env -u NO_COLOR bash -c 'cores_no_terminal "$1"' _ "$sh")" -gt 0
+    conferir "$sh: NO_COLOR definido, mesmo vazio, tira a cor" \
+      test "$(NO_COLOR='' cores_no_terminal "$sh")" -eq 0
+  else
+    ok "$sh: script ausente, cor no terminal pulada"
+  fi
   saida="$(console_em "$sh" "$tmp/semlogo")"
   conferir "$sh: sem o arquivo da logo, o console abre" \
     grep -qx "Jangada Core: Console de Agentes" <<<"$saida"
