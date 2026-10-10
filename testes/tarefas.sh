@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 repo_jangada="$PWD"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
-export JANGADA_PATH="$repo_jangada" XDG_CONFIG_HOME="$tmp/config" XDG_STATE_HOME="$tmp/state"
+export JANGADA_PATH="$repo_jangada" XDG_CONFIG_HOME="$tmp/config" XDG_STATE_HOME="$tmp/state" WAYLAND_DISPLAY=wayland-teste
 mkdir -p "$tmp/bin" "$XDG_CONFIG_HOME/jangada/waybar" "$XDG_STATE_HOME/jangada/agentes"
 alvo="$XDG_CONFIG_HOME/jangada/waybar/config.jsonc"
 cat >"$alvo" <<'JSON'
