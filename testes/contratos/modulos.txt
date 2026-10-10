@@ -81,6 +81,8 @@ shell bin/jangada-terminal
 # e default/r são links para shell/temas e shell/integracoes e mantêm a linha:
 # o teste de fronteira alcança cada arquivo antes por default/, que vem antes
 # de shell/ na ordem alfabética.
+# default/tarefas e default/conversa são links para shell/menus/tarefas e
+# shell/menus/conversa e mantêm a linha pelo mesmo motivo.
 shell default/hypr/
 shell default/waybar/
 shell default/matugen/
