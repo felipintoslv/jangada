@@ -5,6 +5,9 @@
 # Todo arquivo dessas pastas precisa cair em exatamente uma linha.
 
 # Core: comandos (1.1)
+# Os comandos do Core em bin/ são links para core/bin e mantêm a linha: o
+# teste de fronteira alcança cada arquivo antes por bin/, que vem antes de
+# core/ na ordem alfabética.
 core bin/jangada-agente
 core bin/jangada-agente-fim
 core bin/jangada-agentes
