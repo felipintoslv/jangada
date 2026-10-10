@@ -172,12 +172,38 @@ conferir "estado apagado" test ! -f "$estado/x.json"
 conferir "ramo mantido" git -C "$proj" show-ref --quiet --verify refs/heads/agente/x
 : >"$tmp/mortas"
 
-echo "== --integrar e a revisão fora do isolamento"
+echo "== --integrar: avanço rápido com parecer de fora, suíte e confirmação"
 revisoes="$XDG_STATE_HOME/jangada/revisoes"
 mkdir -p "$revisoes"
+# Suíte falsa do projeto: registra a pasta em que rodou, roda $FALSO_COMANDO
+# (o que acontece na máquina enquanto a suíte roda) e sai com $FALSO_VERIFICAR.
+mkdir -p "$proj/testes"
+cat >"$proj/testes/verificar.sh" <<'EOF'
+#!/usr/bin/env bash
+pwd >>"$FALSO_DIR/verificar-chamado"
+[[ -z "${JANGADA_ISOLADO:-}" ]] || exit 9
+[[ -z "${FALSO_COMANDO:-}" ]] || eval "$FALSO_COMANDO"
+exit "${FALSO_VERIFICAR:-0}"
+EOF
+chmod +x "$proj/testes/verificar.sh"
+git -C "$proj" add testes/verificar.sh
+git -C "$proj" commit --quiet -m "suíte do projeto"
+# Remoto do projeto e git que registra as chamadas: nada pode ser enviado.
+git init --quiet --bare "$tmp/remoto.git"
+git -C "$proj" remote add origin "$tmp/remoto.git"
+git -C "$proj" push --quiet -u origin main 2>/dev/null
+remoto_antes="$(git -C "$tmp/remoto.git" rev-parse main)"
+git_real="$(command -v git)"
+cat >"$tmp/bin/git" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >>"$tmp/git-chamadas"
+exec "$git_real" "\$@"
+EOF
+chmod +x "$tmp/bin/git"
+
 integrar_teste() { # sessão, resposta à confirmação, opções extras
   local s="$1" r="$2"; shift 2
-  rm -f "$tmp/revisor-chamado"
+  rm -f "$tmp/verificar-chamado"
   "$repo_jangada/bin/jangada-agente-fim" --integrar "$@" "$s" <<<"$r" >"$tmp/saida" 2>&1; rc=$?
 }
 preparar() { # sessão
@@ -186,8 +212,9 @@ preparar() { # sessão
   git -C "$wts/proj/$1" add "$1.txt"
   git -C "$wts/proj/$1" commit --quiet -m "$1"
   gravar "$1" "{\"raiz\": \"$proj\", \"worktree\": \"$wts/proj/$1\", \"ramo\": \"agente/$1\", \"base\": \"main\", \"estado\": \"concluido\"}"
+  # Cópia protegida que o jangada-agente grava ao abrir a sessão.
+  cp "$estado/$1.json" "$revisoes/$1.json"
 }
-
 # Marca como o jangada-validar grava: sessão, pasta e, para trocar um campo,
 # um filtro do jq.
 marca() {
@@ -195,43 +222,286 @@ marca() {
   c="$(git -C "$proj" rev-parse "agente/$1")"
   jq -n --arg c "$c" --arg t "$(git -C "$proj" rev-parse "$c^{tree}")" --arg b "$(git -C "$proj" rev-parse main)" \
     '{cabeca: $c, num: 1, limpo: true, base: "main", base_sha: $b, candidate_sha: $c, candidate_tree: $t,
-      reviewer: "agy", author: "claude", independent: true}' | jq "${3:-.}" >"$2/validacao-$1.aprovado"
+      reviewer: "agy", author: "claude", local_verified: true, independent: true}' | jq "${3:-.}" >"$2/validacao-$1.aprovado"
+}
+# HEAD, índice, arquivos rastreados e arquivos novos da cópia principal.
+foto() {
+  git -C "$proj" rev-parse HEAD
+  git -C "$proj" status --porcelain
+  git -C "$proj" diff
+  git -C "$proj" diff --cached
+}
+intacta() { [[ "$(foto)" == "$1" ]]; }
+mantida() { # descrição, sessão
+  conferir "$1: sessão mantida" test -f "$estado/$2.json"
+  conferir "$1: worktree mantido" test -d "$wts/proj/$2"
+  conferir "$1: ramo mantido" git -C "$proj" show-ref --quiet --verify "refs/heads/agente/$2"
+  conferir "$1: tmux intocado" test ! -s "$tmp/mortas"
+}
+recusa() { # descrição, sessão, trecho do motivo, foto da cópia principal
+  conferir "$1: recusa ($rc)" test "$rc" -ne 0
+  conferir "$1: explica" grep -q -- "$3" "$tmp/saida"
+  conferir "$1: cópia principal intacta" intacta "$4"
+  mantida "$1" "$2"
 }
 
-# Mesmo uma aprovação válida não autoriza publicação automática nesta baseline.
-preparar bloqueada
-marca bloqueada "$revisoes"
-ponta="$(git -C "$proj" rev-parse HEAD)"
+# Cópia principal com trabalho do usuário: arquivo rastreado alterado, índice
+# e arquivo novo. Recusa antes de qualquer etapa, com aprovação válida.
+preparar suja
+marca suja "$revisoes"
 echo usuario >"$proj/a"
 echo indice >"$proj/indice"; git -C "$proj" add indice
 echo novo >"$proj/nao-rastreado"
-git -C "$proj" diff >"$tmp/antes.diff"
-git -C "$proj" diff --cached >"$tmp/antes.indice"
-for modo in terminal sem-revisao grafica; do
+antes="$(foto)"
+for modo in terminal grafica; do
   args=()
-  case "$modo" in
-    sem-revisao) args=(--sem-revisao) ;;
-    grafica) args=(--confirmacao "$ponta" "$(git -C "$proj" rev-parse agente/bloqueada)") ;;
-  esac
-  integrar_teste bloqueada s "${args[@]}"
-  conferir "$modo: integração bloqueada" test "$rc" -ne 0
-  conferir "$modo: motivo explícito" grep -q 'integração automática bloqueada' "$tmp/saida"
-  conferir "$modo: HEAD preservado" test "$(git -C "$proj" rev-parse HEAD)" = "$ponta"
-  conferir "$modo: arquivo novo preservado" grep -qx novo "$proj/nao-rastreado"
-  conferir "$modo: índice preservado" bash -c 'git -C "$1" diff --cached | cmp -s "$2" -' _ "$proj" "$tmp/antes.indice"
-  conferir "$modo: trabalho preservado" bash -c 'git -C "$1" diff | cmp -s "$2" -' _ "$proj" "$tmp/antes.diff"
-  conferir "$modo: sessão mantida" test -f "$estado/bloqueada.json"
-  conferir "$modo: worktree mantido" test -d "$wts/proj/bloqueada"
+  [[ "$modo" == terminal ]] || args=(--confirmacao "$(git -C "$proj" rev-parse HEAD)" "$(git -C "$proj" rev-parse agente/suja)")
+  integrar_teste suja s "${args[@]}"
+  recusa "cópia principal alterada ($modo)" suja 'tem alterações sem commit' "$antes"
+  conferir "cópia principal alterada ($modo): a suíte não roda" test ! -e "$tmp/verificar-chamado"
+  conferir "cópia principal alterada ($modo): arquivo novo preservado" grep -qx novo "$proj/nao-rastreado"
 done
-# Concorrência: nenhuma chamada pode publicar ou remover a sessão.
-for n in 1 2; do
-  (integrar_teste bloqueada s; echo "$rc" >"$tmp/rc-$n") &
+git -C "$proj" rm --quiet --cached indice
+rm -f "$proj/indice" "$proj/nao-rastreado"
+echo a >"$proj/a"
+antes="$(foto)"
+
+# --sem-revisao não libera, nem com aprovação válida e resposta s.
+integrar_teste suja s --sem-revisao
+recusa "--sem-revisao" suja 'sem-revisao não libera' "$antes"
+conferir "--sem-revisao: a suíte não roda" test ! -e "$tmp/verificar-chamado"
+
+# Dentro do isolamento não há parecer que valha.
+JANGADA_ISOLADO=1 integrar_teste suja s
+recusa "dentro do isolamento" suja 'fora dele' "$antes"
+
+# Pareceres que não valem: ausente, forjado em agentes/, de outro commit, com
+# worktree sujo na revisão, sem verificação local, com outra árvore, contra
+# outra base, formato antigo e autorrevisão. O revisor não é chamado aqui.
+preparar p1
+integrar_teste p1 s
+recusa "sem parecer" p1 'falta parecer APROVADO gravado fora do isolamento' "$antes"
+conferir "sem parecer: diz como revisar" grep -q 'JANGADA_SESSAO=p1 jangada-validar --base main' "$tmp/saida"
+marca p1 "$estado"
+printf 'STATUS: APROVADO\n' >"$estado/validacao-p1-r1.md"
+integrar_teste p1 s
+recusa "parecer forjado em agentes/" p1 'falta parecer APROVADO' "$antes"
+for caso in '.candidate_sha = "0123456789012345678901234567890123456789"' '.limpo = false' \
+    '.local_verified = false' '.candidate_tree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"'; do
+  marca p1 "$revisoes" "$caso"
+  integrar_teste p1 s
+  recusa "parecer com $caso" p1 'falta parecer APROVADO' "$antes"
+done
+marca p1 "$revisoes" '.base_sha = "0123456789012345678901234567890123456789"'
+integrar_teste p1 s
+recusa "parecer contra outra base" p1 'foi dado contra main' "$antes"
+printf '%s 1 limpo\n' "$(git -C "$proj" rev-parse agente/p1)" >"$revisoes/validacao-p1.aprovado"
+integrar_teste p1 s
+recusa "marca no formato antigo" p1 'falta parecer APROVADO' "$antes"
+marca p1 "$revisoes" '.independent = false | .reviewer = "claude"'
+integrar_teste p1 s
+recusa "autorrevisão" p1 'só tem autorrevisão' "$antes"
+conferir "pareceres inválidos: a suíte não roda e o revisor não é chamado" \
+  bash -c 'test ! -e "$1/verificar-chamado" && test ! -e "$1/revisor-chamado"' _ "$tmp"
+
+# Estado gravável pelo agente diferente da cópia protegida da sessão.
+marca p1 "$revisoes"
+git -C "$proj" branch outra main
+gravar p1 "{\"raiz\": \"$proj\", \"worktree\": \"$wts/proj/p1\", \"ramo\": \"agente/p1\", \"base\": \"outra\", \"estado\": \"concluido\"}"
+integrar_teste p1 s
+recusa "base trocada no estado" p1 'diferem da cópia protegida' "$antes"
+cp "$revisoes/p1.json" "$estado/p1.json"
+
+# Sem a confirmação humana nada roda.
+integrar_teste p1 n
+recusa "resposta n" p1 'sem confirmação' "$antes"
+conferir "resposta n: a suíte não roda" test ! -e "$tmp/verificar-chamado"
+integrar_teste p1 ''
+recusa "sem resposta" p1 'sem confirmação' "$antes"
+
+# Suíte com falha: nada é integrado. Ela roda numa cópia em revisoes/, fora
+# da worktree da tarefa, e a cópia sai no fim.
+FALSO_VERIFICAR=1 integrar_teste p1 s
+recusa "suíte com falha" p1 'não saiu com 0' "$antes"
+conferir "suíte: roda numa cópia protegida, não na worktree" \
+  grep -q "^$revisoes/integracao-" "$tmp/verificar-chamado"
+conferir "suíte: a cópia protegida é removida" bash -c '! compgen -G "$1/integracao-*" >/dev/null' _ "$revisoes"
+
+# Aprovação para o commit exato, confirmação e suíte com 0: avanço rápido.
+c_p1="$(git -C "$proj" rev-parse agente/p1)"
+integrar_teste p1 s
+conferir "aprovada: integra ($rc)" test "$rc" -eq 0
+conferir "aprovada: a base está no commit aprovado, sem commit de merge" test "$(git -C "$proj" rev-parse main)" = "$c_p1"
+conferir "aprovada: arquivo na cópia principal, que fica limpa" \
+  bash -c 'test -e "$1/p1.txt" && [ -z "$(git -C "$1" status --porcelain)" ]' _ "$proj"
+conferir "aprovada: a suíte rodou" test -s "$tmp/verificar-chamado"
+conferir "aprovada: a marca fica" test -f "$revisoes/validacao-p1.aprovado"
+mantida "aprovada" p1
+integrar_teste p1 s
+conferir "já integrada: nada a integrar ($rc)" bash -c '[ "$1" -eq 0 ] && grep -q "nada a integrar" "$2"' _ "$rc" "$tmp/saida"
+
+# A base andou depois da revisão: o rebase acontece na worktree da tarefa, a
+# cópia principal não muda e o commit novo precisa de parecer próprio.
+preparar r2
+marca r2 "$revisoes"
+c_r2="$(git -C "$proj" rev-parse agente/r2)"
+echo b >"$proj/base.txt"; git -C "$proj" add base.txt; git -C "$proj" commit --quiet -m "base anda"
+antes="$(foto)"
+integrar_teste r2 s
+recusa "base andou" r2 'o parecer tem de ser do commit novo' "$antes"
+conferir "base andou: a suíte não roda" test ! -e "$tmp/verificar-chamado"
+n_r2="$(git -C "$proj" rev-parse agente/r2)"
+conferir "base andou: o ramo foi refeito sobre a base na worktree" \
+  bash -c '[ "$3" != "$4" ] && git -C "$1" merge-base --is-ancestor main agente/r2 \
+           && [ "$(git -C "$2" rev-parse HEAD)" = "$4" ] && [ -z "$(git -C "$2" status --porcelain)" ]' \
+  _ "$proj" "$wts/proj/r2" "$c_r2" "$n_r2"
+integrar_teste r2 s
+recusa "base andou: o parecer antigo não vale para o commit novo" r2 'falta parecer APROVADO' "$antes"
+marca r2 "$revisoes"
+integrar_teste r2 s
+conferir "base andou: integra com o parecer do commit final ($rc)" \
+  bash -c '[ "$1" -eq 0 ] && [ "$(git -C "$2" rev-parse main)" = "$3" ]' _ "$rc" "$proj" "$n_r2"
+mantida "base andou" r2
+
+# Rebase com conflito: para na worktree da tarefa e a cópia principal não muda.
+preparar r3
+echo ramo >"$wts/proj/r3/a"; git -C "$wts/proj/r3" commit --quiet -am "ramo mexe em a"
+echo base >"$proj/a"; git -C "$proj" commit --quiet -am "base mexe em a"
+antes="$(foto)"
+integrar_teste r3 s
+recusa "rebase com conflito" r3 'o rebase de agente/r3 parou' "$antes"
+git -C "$wts/proj/r3" rebase --abort
+
+# Enquanto a suíte roda: a base anda, a cópia principal recebe trabalho do
+# usuário ou o ramo avança. Tudo é conferido de novo sob a trava.
+preparar d1
+marca d1 "$revisoes"
+FALSO_COMANDO="echo c >'$proj/durante.txt'; git -C '$proj' add durante.txt; git -C '$proj' commit --quiet -m durante" \
+  integrar_teste d1 s
+antes="$(foto)"
+recusa "base andou durante a suíte" d1 'a base main mudou depois da conferência' "$antes"
+conferir "base andou durante a suíte: o commit concorrente fica e o ramo não entra" \
+  bash -c 'test -e "$1/durante.txt" && test ! -e "$1/d1.txt"' _ "$proj"
+
+preparar d2
+marca d2 "$revisoes"
+ponta="$(git -C "$proj" rev-parse HEAD)"
+FALSO_COMANDO="echo usuario >'$proj/a'; echo indice >'$proj/indice'; git -C '$proj' add indice; echo novo >'$proj/nao-rastreado'" \
+  integrar_teste d2 s
+antes="$(foto)"
+recusa "trabalho concorrente durante a suíte" d2 'recebeu alterações depois da conferência' "$antes"
+conferir "trabalho concorrente: HEAD, arquivo, índice e arquivo novo preservados" \
+  bash -c '[ "$(git -C "$1" rev-parse HEAD)" = "$2" ] && grep -qx usuario "$1/a" \
+           && [ "$(git -C "$1" diff --cached --name-only)" = indice ] && grep -qx novo "$1/nao-rastreado" \
+           && test ! -e "$1/d2.txt"' _ "$proj" "$ponta"
+git -C "$proj" rm --quiet --cached indice
+rm -f "$proj/indice" "$proj/nao-rastreado"
+git -C "$proj" show HEAD:a >"$proj/a"
+
+antes="$(foto)"
+FALSO_COMANDO="echo depois >'$wts/proj/d2/depois.txt'; git -C '$wts/proj/d2' add depois.txt; git -C '$wts/proj/d2' commit --quiet -m depois" \
+  integrar_teste d2 s
+recusa "ramo avançou durante a suíte" d2 'mudou depois da conferência' "$antes"
+
+# Outra integração segura a trava do repositório.
+marca d2 "$revisoes"
+trava="$revisoes/travas/$(realpath "$proj/.git" | sha256sum | cut -c1-16)"
+mkdir -p "$trava"
+flock "$trava" sleep 8 &
+vitima=$!
+sleep 1
+integrar_teste d2 s
+kill "$vitima" 2>/dev/null; wait "$vitima" 2>/dev/null; vitima=""
+recusa "trava ocupada" d2 'outra integração segura a trava' "$antes"
+
+# Confirmação gráfica: vale só para os dois commits exibidos e não lê a
+# entrada padrão.
+b_gui="$(git -C "$proj" rev-parse main)"
+c_gui="$(git -C "$proj" rev-parse agente/d2)"
+integrar_teste d2 '' --confirmacao "$b_gui" "$b_gui"
+recusa "GUI: candidato diferente" d2 'mudaram desde a confirmação gráfica' "$antes"
+integrar_teste d2 '' --confirmacao "$c_gui" "$c_gui"
+recusa "GUI: base diferente" d2 'mudaram desde a confirmação gráfica' "$antes"
+rm -f "$revisoes/validacao-d2.aprovado"
+integrar_teste d2 '' --confirmacao "$b_gui" "$c_gui"
+recusa "GUI: sem parecer" d2 'falta parecer APROVADO' "$antes"
+marca d2 "$revisoes"
+# O parecer é retirado depois da conferência, antes da reconferência sob trava.
+FALSO_COMANDO="rm -f '$revisoes/validacao-d2.aprovado'" integrar_teste d2 '' --confirmacao "$b_gui" "$c_gui"
+recusa "GUI: parecer retirado antes da trava" d2 'falta parecer APROVADO' "$antes"
+marca d2 "$revisoes"
+integrar_teste d2 '' --confirmacao "$b_gui" "$c_gui"
+conferir "GUI: confirmação exata integra sem entrada padrão ($rc)" \
+  bash -c '[ "$1" -eq 0 ] && [ "$(git -C "$2" rev-parse main)" = "$3" ]' _ "$rc" "$proj" "$c_gui"
+mantida "GUI" d2
+
+# Duas integrações ao mesmo tempo, aprovadas contra a mesma base: entra uma,
+# e a outra é recusada porque a base andou.
+preparar s1; preparar s2
+marca s1 "$revisoes"; marca s2 "$revisoes"
+for n in s1 s2; do
+  ( "$repo_jangada/bin/jangada-agente-fim" --integrar "$n" <<<s >"$tmp/saida-$n" 2>&1
+    echo $? >"$tmp/rc-$n" ) &
 done
 wait
-for n in 1 2; do conferir "concorrência $n: recusada" test "$(cat "$tmp/rc-$n")" -ne 0; done
-conferir "concorrência: HEAD preservado" test "$(git -C "$proj" rev-parse HEAD)" = "$ponta"
-# Não há merge a interromper, conflito a publicar ou recuperação destrutiva.
-conferir "backend sem rollback destrutivo" bash -c '! rg -q "reset .*--hard|merge --no-ff" "$1/bin/jangada-agente-fim"' _ "$repo_jangada"
+conferir "simultâneas: só uma integra ($(cat "$tmp/rc-s1"), $(cat "$tmp/rc-s2"))" \
+  bash -c 'a="$(cat "$1/rc-s1")"; b="$(cat "$1/rc-s2")"; { [ "$a" = 0 ] && [ "$b" != 0 ]; } || { [ "$a" != 0 ] && [ "$b" = 0 ]; }' _ "$tmp"
+for n in s1 s2; do
+  conferir "simultâneas: $n entrou se e só se saiu com 0" \
+    bash -c 'if [ "$(cat "$1/rc-$3")" = 0 ]; then test -e "$2/$3.txt"; else test ! -e "$2/$3.txt"; fi' _ "$tmp" "$proj" "$n"
+done
+conferir "simultâneas: repositório íntegro e cópia principal limpa" \
+  bash -c 'git -C "$1" fsck --no-dangling >/dev/null 2>&1 && [ -z "$(git -C "$1" status --porcelain)" ]' _ "$proj"
+
+# Objeto trocado em .git/objects depois de o espelho receber o original: o
+# git leria o conteúdo forjado com o nome do original.
+forjar='import sys, zlib
+d = b"forjado\n"
+sys.stdout.buffer.write(zlib.compress(b"blob %d\0" % len(d) + d))'
+preparar o1
+marca o1 "$revisoes"
+FALSO_VERIFICAR=1 integrar_teste o1 s
+blob="$(git -C "$proj" rev-parse agente/o1:o1.txt)"
+objeto="$proj/.git/objects/${blob:0:2}/${blob:2}"
+chmod u+w "$objeto"
+cp "$objeto" "$tmp/objeto-o1"
+python3 -c "$forjar" >"$objeto"
+antes="$(foto)"
+integrar_teste o1 s
+recusa "objeto forjado" o1 'não conferem com o espelho' "$antes"
+conferir "objeto forjado: a suíte não roda" test ! -e "$tmp/verificar-chamado"
+cp "$tmp/objeto-o1" "$objeto"
+
+# Objeto trocado entre a conferência com o espelho e o avanço. Não há
+# recuperação com descarte: o comando avisa, sai com erro e mantém a sessão.
+cat >"$tmp/bin/git" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >>"$tmp/git-chamadas"
+if [[ " \$* " == *" merge --ff-only "* ]]; then
+  python3 -c '$forjar' >"$objeto"
+fi
+exec "$git_real" "\$@"
+EOF
+integrar_teste o1 s
+conferir "objeto forjado durante o avanço: sai com erro ($rc)" test "$rc" -ne 0
+conferir "objeto forjado durante o avanço: avisa" grep -q 'não conferem com o espelho' "$tmp/saida"
+conferir "objeto forjado durante o avanço: nada é desfeito" grep -q 'Nada foi desfeito' "$tmp/saida"
+mantida "objeto forjado durante o avanço" o1
+cp "$tmp/objeto-o1" "$objeto"
+git -C "$proj" show HEAD:o1.txt >"$proj/o1.txt"
+
+# Nenhuma chamada desta seção enviou ao remoto, atualizou a cópia instalada
+# ou descartou trabalho.
+conferir "remoto intocado" test "$(git -C "$tmp/remoto.git" rev-parse main)" = "$remoto_antes"
+conferir "git: sem push, reset, clean, stash, merge --no-ff nem remoção de worktree ou ramo" \
+  bash -c '! grep -Eq "(^| )(push|reset|clean|stash|restore)( |$)|--no-ff|worktree remove|branch -[dD]" "$1"' _ "$tmp/git-chamadas"
+conferir "backend: integra só por merge --ff-only" \
+  bash -c '[ "$(grep -c "merge --ff-only \"" "$1")" -eq 1 ] && ! grep -Eq "reset +(-q +)?--hard|merge --no-ff|git clean|(seguro|git)[^|]* (push|clean|stash)( |$)" "$1"' \
+  _ "$repo_jangada/bin/jangada-agente-fim"
+conferir "backend: não chama o jangada-update" \
+  bash -c '! grep -Eq "bin/jangada-update|^[^#]*exec.*jangada-update" "$1"' _ "$repo_jangada/bin/jangada-agente-fim"
+rm -f "$tmp/bin/git"
+: >"$tmp/mortas"
 
 echo "== --limpar-concluidos"
 rm -f "$estado"/*.json
