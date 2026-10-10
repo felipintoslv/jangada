@@ -17,6 +17,7 @@ import tempfile
 import time
 
 MARCA = '/tmp/.jangada-sem-autoridade'
+ENTREGAS = ('fotos', 'integracoes')
 
 
 def isolado():
@@ -145,6 +146,27 @@ def conferir_conclusao(pasta, item):
     return item
 
 
+def pasta_entrega(estado, nome):
+    """Pasta privada do estado para árvores entregues pelo agente.
+
+    O conteúdo não é conferido: uma entrega traz links versionados. Por isso
+    estas pastas ficam fora de revisoes/ e o isolamento as oculta inteiras.
+    """
+    exigir_controlador()
+    if nome not in ENTREGAS:
+        raise ValueError('pasta de entregas desconhecida')
+    pasta = Path(estado) / nome
+    if pasta.absolute() != pasta.resolve():
+        raise ValueError('estado protegido não pode atravessar ligação simbólica')
+    pasta.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if pasta.absolute() != pasta.resolve():
+        raise ValueError('estado protegido não pode atravessar ligação simbólica')
+    if pasta.lstat().st_uid != os.getuid():
+        raise ValueError('pasta de entregas pertence a outro usuário')
+    pasta.chmod(0o700)
+    return pasta
+
+
 def preparar_isolamento(estado):
     exigir_controlador()
     estado = Path(estado)
@@ -161,6 +183,7 @@ def preparar_isolamento(estado):
                 raise ValueError('estado protegido contém ligação ou canal de comunicação')
             if stat.S_ISREG(info.st_mode) and info.st_nlink != 1:
                 raise ValueError('estado protegido contém arquivo com ligação adicional')
+    protegidos += [pasta_entrega(estado, nome) for nome in ENTREGAS]
     # O lançador fecha descritores adicionais. Os três padrões sobrevivem:
     # não podem dar acesso a arquivo protegido nem a socket de um controlador.
     for numero in range(3):
@@ -260,6 +283,8 @@ if __name__ == '__main__':
     try:
         if sys.argv[1] == 'preparar-isolamento':
             preparar_isolamento(sys.argv[2])
+        elif sys.argv[1] == 'pasta-entrega':
+            print(pasta_entrega(sys.argv[2], sys.argv[3]))
         elif sys.argv[1] == 'arquivar':
             print(arquivar(sys.argv[2], sys.argv[3]))
         elif sys.argv[1] == 'registrar-falha':

@@ -490,6 +490,13 @@ ocultos+=("$JANGADA_ESTADO/painel-chave")
 # nem forja, e o jangada-validar rodado dentro grava na pasta vazia, que some.
 (umask 077; mkdir -p "$JANGADA_ESTADO/revisoes" 2>/dev/null) || true
 ocultos+=("$JANGADA_ESTADO/revisoes")
+# As árvores entregues pelo agente (foto da revisão e cópia em que a suíte da
+# integração roda) ficam em pastas próprias, fora de revisoes/: trazem os
+# links versionados da entrega, que a conferência de revisoes/ recusa.
+for p in fotos integracoes; do
+  (umask 077; mkdir -p "$JANGADA_ESTADO/$p" 2>/dev/null) || true
+  ocultos+=("$JANGADA_ESTADO/$p")
+done
 for p in "${ocultos[@]}"; do
   [[ -n "$p" ]] || continue
   [[ "$p" == /* ]] || p="$HOME/$p"
@@ -508,8 +515,9 @@ somente_leitura "$JANGADA_ESTADO/agentes/projetos"
 # Só a foto congelada é reexposta ao revisor, nunca recibos ou metadados.
 if [[ -n "${JANGADA_ISOLAR_FOTO:-}" ]]; then
   foto_conferida="$(realpath -e "$JANGADA_ISOLAR_FOTO")"
-  fotos_conferidas="$(realpath -e "$JANGADA_ESTADO/revisoes/fotos")"
-  [[ "$foto_conferida" == "$fotos_conferidas"/?* && -d "$foto_conferida"      && "$foto_conferida" == "$JANGADA_ISOLAR_FOTO" ]] || {
+  fotos_conferidas="$(realpath -e "$JANGADA_ESTADO/fotos")"
+  [[ "${foto_conferida%/*}" == "$fotos_conferidas" && -d "$foto_conferida" \
+     && "$foto_conferida" == "$JANGADA_ISOLAR_FOTO" ]] || {
     echo 'AUTORIZACAO_RECUSADA: foto de revisão fora da pasta protegida' >&2; exit 1;
   }
   somente_leitura "$foto_conferida"

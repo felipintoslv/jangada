@@ -276,12 +276,14 @@ avanco_integro() {
   return "$rc"
 }
 
-# A suíte roda numa cópia do commit tirada do espelho e criada em revisoes/:
-# a worktree da tarefa segue gravável pelo agente enquanto a sessão existe, e
-# o que roda aqui fora do isolamento tem de ser o conteúdo que o revisor leu.
+# A suíte roda numa cópia do commit tirada do espelho e criada em
+# integracoes/, que o isolamento oculta: a worktree da tarefa segue gravável
+# pelo agente enquanto a sessão existe, e o que roda aqui fora do isolamento
+# tem de ser o conteúdo que o revisor leu. A cópia fica fora de revisoes/
+# porque leva os links versionados da entrega, que o jangada-isolar recusa ali.
 # Projeto sem testes/verificar.sh na base e no commit não tem essa etapa.
 verificar_fora() {
-  local espelho copia chave registro="$JANGADA_ESTADO/revisoes/verificar-$s.log" rc=0
+  local espelho copias copia chave registro="$JANGADA_ESTADO/revisoes/verificar-$s.log" rc=0
   objetos_integros && espelho="$(jangada_espelho "$(dir_comum "$raiz")")" || {
     echo "os objetos de $ramo ou de $base não conferem com o espelho (objeto adulterado ou repositório corrompido)" >&2
     return 1
@@ -291,7 +293,8 @@ verificar_fora() {
     echo "o projeto não tem testes/verificar.sh; etapa não se aplica"
     return 0
   fi
-  copia="$(umask 077; mktemp -d "$JANGADA_ESTADO/revisoes/integracao-XXXXXX")" || return 1
+  copias="$(python3 "$JANGADA_PATH/default/orquestracao/confianca.py" pasta-entrega "$JANGADA_ESTADO" integracoes)" \
+    && copia="$(mktemp -d "$copias/XXXXXX")" || return 1
   echo "rodando testes/verificar.sh do commit ${cabeca:0:12} fora do isolamento (registro em $registro)..."
   chave="$(printf '%s' "$s" | sha256sum | cut -c1-16)"
   jangada_git_seguro init -q "$copia" \

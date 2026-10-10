@@ -329,13 +329,13 @@ conferir "resposta n: a suíte não roda" test ! -e "$tmp/verificar-chamado"
 integrar_teste p1 ''
 recusa "sem resposta" p1 'sem confirmação' "$antes"
 
-# Suíte com falha: nada é integrado. Ela roda numa cópia em revisoes/, fora
-# da worktree da tarefa, e a cópia sai no fim.
+# Suíte com falha: nada é integrado. Ela roda numa cópia em integracoes/,
+# fora da worktree da tarefa, e a cópia sai no fim.
 FALSO_VERIFICAR=1 integrar_teste p1 s
 recusa "suíte com falha" p1 'não saiu com 0' "$antes"
 conferir "suíte: roda numa cópia protegida, não na worktree" \
-  grep -q "^$revisoes/integracao-" "$tmp/verificar-chamado"
-conferir "suíte: a cópia protegida é removida" bash -c '! compgen -G "$1/integracao-*" >/dev/null' _ "$revisoes"
+  grep -q "^$XDG_STATE_HOME/jangada/integracoes/" "$tmp/verificar-chamado"
+conferir "suíte: a cópia protegida é removida" bash -c '[[ -z "$(ls -A "$1")" ]]' _ "$XDG_STATE_HOME/jangada/integracoes"
 
 # Aprovação para o commit exato, confirmação e suíte com 0: avanço rápido.
 c_p1="$(git -C "$proj" rev-parse agente/p1)"

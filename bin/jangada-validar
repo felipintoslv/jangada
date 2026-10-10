@@ -354,7 +354,7 @@ limpar_fotos() {
 }
 trap limpar_fotos EXIT
 congelar() {
-  local indice comum chave arvore_rastreados rastreados
+  local indice comum chave arvore_rastreados rastreados fotos
   # Identidade e data fixas: o candidato depende só da árvore e do pai.
   local -a fixo=(env GIT_AUTHOR_NAME=jangada GIT_AUTHOR_EMAIL=jangada@localhost
     GIT_COMMITTER_NAME=jangada GIT_COMMITTER_EMAIL=jangada@localhost
@@ -395,7 +395,10 @@ congelar() {
     git --git-dir="$espelho" update-ref "refs/jangada/historico/$candidato" "$candidato" || return 1
     [[ -z "$base_sha" ]] || git --git-dir="$espelho" update-ref "refs/jangada/historico/$base_sha" "$base_sha" || return 1
     objetos="$espelho/objects"
-    foto="$(umask 077; mkdir -p "$revisoes_dir/fotos" && mktemp -d "$revisoes_dir/fotos/XXXXXX")" || return 1
+    # Fora de revisoes/: a foto leva os links versionados da entrega, e o
+    # jangada-isolar recusa lançamento com link dentro de revisoes/.
+    fotos="$(python3 "$JANGADA_PATH/default/orquestracao/confianca.py" pasta-entrega "$JANGADA_ESTADO" fotos)" \
+      && foto="$(mktemp -d "$fotos/XXXXXX")" || return 1
   else
     foto="$(mktemp -d)" || return 1
   fi

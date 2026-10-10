@@ -170,7 +170,7 @@ else:
         self.assertEqual(self.fila.db.execute('SELECT status FROM tarefas').fetchone()[0], 'REVIEW_REQUIRED')
 
     def test_J_foto_nao_pode_reexpor_autoridade(self):
-        (self.estado / 'revisoes/fotos').mkdir(parents=True, exist_ok=True)
+        (self.estado / 'fotos').mkdir(parents=True, exist_ok=True)
         self.env['JANGADA_ISOLAR_FOTO'] = str(self.pasta)
         resultado = self.isolar("raise SystemExit('processo não deveria iniciar')")
         self.assertNotEqual(resultado.returncode, 0)
