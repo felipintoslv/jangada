@@ -1,8 +1,13 @@
 # Jangada 3.0: modularização em core, shell e monitor
 
-Planejamento das Fases 0, 1 e 2. Nenhum código executável foi movido ou
-alterado. Este conjunto de documentos existe para aprovação humana antes das
-Fases 3, 4 e 5.
+Situação em 10/10/2026: as Fases 3 e 4 foram executadas. O conteúdo está em
+`core/`, `shell/` e `monitor/`, com links de compatibilidade nos caminhos
+antigos. A conferência dos critérios de aceitação e as pendências para
+depois da 3.0 estão em [06-validacao-final.md](06-validacao-final.md).
+
+O texto abaixo é o planejamento das Fases 0, 1 e 2, escrito antes de
+qualquer mudança de pasta e mantido como registro: onde ele diz que nenhum
+código foi movido, descreve o estado daquela data.
 
 | Documento | Entregável |
 |---|---|
@@ -12,6 +17,8 @@ Fases 3, 4 e 5.
 | [03-contratos.md](03-contratos.md) | 5. Contratos entre módulos e seus testes |
 | [04-backlog.md](04-backlog.md) | 6. Backlog multiagentes |
 | [05-migracao-testes-reversao.md](05-migracao-testes-reversao.md) | 7 e 8. Migração incremental, testes e reversão |
+| [prova-links.md](prova-links.md) | Prova dos links simbólicos (M3-02, decisão D2) |
+| [06-validacao-final.md](06-validacao-final.md) | Validação final (M3-20): critérios de aceitação, teste de remoção e pendências |
 
 ## Resumo
 
