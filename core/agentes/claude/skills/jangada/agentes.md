@@ -674,5 +674,8 @@ reconferida; a documentação da correção P0 descreve recuperação e limites.
 Revisores chamados fora de uma sessão também precisam do Bubblewrap. A saída
 protegida deve ser coletada por cano e escrita pelo controlador: herdar um
 descritor do próprio parecer exporia o arquivo antes da montagem. A foto
-congelada é reexposta somente leitura; o restante de revisoes fica oculto.
+congelada fica em `fotos/` do estado, e a cópia da suíte do `--integrar`, em
+`integracoes/`: as duas levam os links versionados da entrega, e link dentro
+de `revisoes/` faz o `jangada-isolar` recusar qualquer lançamento. As duas
+pastas ficam ocultas; só a foto escolhida volta, somente leitura.
 Prompts e protocolos são registrados antes de iniciar ou retomar a sessão.

@@ -128,7 +128,9 @@ flowchart TD
   árvores do git, e uma cópia temporária é montada a partir delas. O portão
   local, o diff e o revisor leem só essa cópia, então o que o agente altera
   durante a revisão fica fora do parecer e da aprovação. Fora do isolamento,
-  os objetos passam por `git fetch` para um espelho em `revisoes/espelhos/`,
+  a cópia fica em `fotos/` do estado, pasta privada que o isolamento oculta,
+  e não em `revisoes/`, porque leva os links versionados da entrega. Os
+  objetos passam antes por `git fetch` para um espelho em `revisoes/espelhos/`,
   que recalcula cada hash: o agente grava em `.git/objects`, e o git não
   reconfere um objeto solto ao ler. A integração confere os objetos com o
   mesmo espelho e faz o avanço lendo só os objetos dele. Uma divergência
@@ -224,7 +226,7 @@ não libera. As etapas, na ordem:
 4. O usuário confirma: a resposta `s` no terminal (`Alt+I`) ou o botão da
    Central, que passa em `--confirmacao` os dois commits exibidos.
 5. `testes/verificar.sh` roda numa cópia do commit tirada do espelho, em
-   `revisoes/`, e tem de sair com 0. O registro fica em
+   `integracoes/` do estado, e tem de sair com 0. O registro fica em
    `revisoes/verificar-SESSAO.log`. Projeto sem esse arquivo na base e no
    candidato segue com aviso.
 6. Sob a trava do repositório, tudo é conferido de novo e a base avança com

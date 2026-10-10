@@ -465,6 +465,24 @@ ficam como estão.
 | Riscos | scripts R com caminho relativo |
 | Reversão | comum |
 
+### M3-17a Foto da revisão e cópia da integração fora de `revisoes/`
+
+| Campo | Conteúdo |
+|---|---|
+| Objetivo | Corrigir a regressão observada em 10/10/2026: desde a M3-12 o repositório tem links de pasta versionados, e a foto do `jangada-validar` e a cópia da suíte do `--integrar`, extraídas em `revisoes/`, faziam o `jangada-isolar` recusar lintr, `.jangada/validar.sh`, revisor e lançamentos concorrentes no mesmo estado. Decisão do coordenador (opção B): as duas árvores vão para pastas irmãs de `revisoes/`, `fotos/` e `integracoes/` |
+| Agente | Core (`claude`), revisor `codex` |
+| Arquivos permitidos | `bin/jangada-validar`, `bin/jangada-isolar`, `bin/jangada-agente-fim`, `core/orquestracao/confianca.py`, `testes/validar.sh`, `testes/isolar.sh`, `testes/fim.sh`, `testes/confianca-p0.py`, `docs/isolamento.md`, `docs/ciclo-da-tarefa.md`, `core/agentes/claude/skills/jangada/agentes.md`, este arquivo |
+| Dependências | M3-11a, M3-12 |
+| Aceitação | As pastas novas são privadas (0700), criadas pelo controlador, com os ancestrais conferidos contra link. No isolamento ficam ocultas; só a foto em `JANGADA_ISOLAR_FOTO`, filho direto de `fotos/`, volta ao revisor em somente leitura, e caminho arbitrário, a raiz da pasta e nome alternativo continuam recusados. Com link de pasta versionado na entrega, fora do isolamento, lintr, `.jangada/validar.sh`, revisor e suíte do `--integrar` rodam, e um lançamento concorrente não é recusado. Link, arquivo com ligação adicional e canal em `agentes/projetos`, `revisoes` e `painel-chave` continuam recusados. As garantias da M3-11a continuam |
+| Testes | `testes/validar.sh` (caso 20e), `testes/fim.sh` (link de pasta), `testes/isolar.sh` (casos 1 e 3f, isolamento real), `testes/confianca-p0.py`, `testes/verificar.sh` |
+| Riscos | Foto ou cópia que sobra depois de queda do processo fica no estado; não bloqueia lançamentos, porque o conteúdo dessas pastas não é conferido |
+| Reversão | `git revert` dos commits; volta a regressão |
+
+Pendência, fora do escopo da M3-17a: limpar fotos em `fotos/` e cópias em
+`integracoes/` que sobram depois de queda do processo. Hoje a armadilha de
+saída do `jangada-validar` e o `verificar_fora` do `jangada-agente-fim`
+removem a árvore no caso normal.
+
 ### M3-18 Core: comandos
 
 | Campo | Conteúdo |
