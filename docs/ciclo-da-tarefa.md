@@ -208,7 +208,8 @@ não libera. As etapas, na ordem:
 
 1. O estado da sessão tem de ser igual à cópia protegida em
    `revisoes/SESSAO.json`. A worktree da tarefa tem de estar limpa, e a
-   cópia principal, na base e sem alterações em arquivos rastreados.
+   cópia principal, na base e sem alterações, inclusive arquivos novos e
+   submódulos.
 2. Se a base andou, o ramo é refeito sobre ela com `git rebase` na worktree
    da tarefa. O commit muda, e o comando recusa pedindo
    `jangada-validar` para o commit novo. Um conflito deixa o rebase parado na
@@ -225,8 +226,10 @@ não libera. As etapas, na ordem:
 6. Sob a trava do repositório, tudo é conferido de novo e a base avança com
    `git merge --ff-only`.
 
-Qualquer recusa deixa arquivos, índice e HEAD da cópia principal como
-estavam. Não há `merge --no-ff`, `reset --hard`, `git clean` nem outro
+Uma recusa anterior ao avanço deixa arquivos, índice e HEAD da cópia
+principal como estavam. Se, depois do avanço, os arquivos da cópia
+principal não conferem com o espelho, a base fica avançada, o comando sai
+com erro e pede conferência manual. Não há `merge --no-ff`, `reset --hard`, `git clean` nem outro
 comando de descarte. O comando não envia ao remoto, não assina, não roda o
 `jangada-update` e mantém sessão, ramo e worktree. O encerramento é outro
 gesto: `Ctrl+X` ou `jangada-agente-fim SESSAO`.

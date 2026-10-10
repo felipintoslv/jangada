@@ -299,7 +299,7 @@ verificar_fora() {
 }
 
 principal_alterada() {
-  [[ -n "$(jangada_git_seguro -C "$raiz" status --porcelain --untracked-files=no --ignore-submodules=all)" ]]
+  [[ -n "$(jangada_git_seguro -C "$raiz" status --porcelain)" ]]
 }
 
 # Roda sob a trava do repositório: entre a conferência e o avanço passam a
@@ -357,7 +357,7 @@ if ((integrar)); then
   atual="$(jangada_git_seguro -C "$raiz" rev-parse --abbrev-ref HEAD)"
   [[ "$atual" == "$base" ]] || negar "a cópia principal ($raiz) está em '$atual', não em '$base'"
   if principal_alterada; then
-    jangada_git_seguro -C "$raiz" status --short --untracked-files=no --ignore-submodules=all | head -20 | tr -d '\000-\010\013-\037\177' >&2
+    jangada_git_seguro -C "$raiz" status --short | head -20 | tr -d '\000-\010\013-\037\177' >&2
     negar "a cópia principal ($raiz) tem alterações sem commit"
   fi
   # A sessão continua aberta: o agente pode mover o ramo. O commit é
