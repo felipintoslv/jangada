@@ -218,7 +218,7 @@ conferir "entrega: saída exata, --desde e --ate" entrega_exata '{"n": 5, "claud
 # para monitor/bin, com o JANGADA_PATH e sem ele, e o resumo é o mesmo.
 subagentes --entrega "$amostra/projeto" >"$tmp/entrega.json"
 mkdir -p "$tmp/arvore/bin" "$tmp/arvore/monitor/bin"
-cp -a "$repo_jangada/default" "$tmp/arvore/"
+cp -a "$repo_jangada"/{default,core} "$tmp/arvore/"
 cp -a "$repo_jangada/bin/jangada-subagentes" "$tmp/arvore/monitor/bin/"
 ln -s ../monitor/bin/jangada-subagentes "$tmp/arvore/bin/jangada-subagentes"
 RAIZ_SUBAGENTES="$tmp/arvore" subagentes --entrega "$amostra/projeto" >"$tmp/entrega-link.json"
