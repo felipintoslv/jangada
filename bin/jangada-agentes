@@ -526,7 +526,7 @@ previa() {
     elif [[ -n "$c" && "$c" == "$cabeca" && "$l" == true && "$i" != true ]]; then
       echo "(autorrevisão do commit atual do ramo, ${c:0:12}: não vale como revisão independente)"
     elif [[ -n "$c" && "$c" == "$cabeca" && "$l" == true ]]; then
-      echo "(aprovação vale para o commit atual do ramo, ${c:0:12}; integração automática bloqueada na baseline)"
+      echo "(aprovação vale para o commit atual do ramo, ${c:0:12}; o --integrar a aceita se a base não andou)"
     elif [[ -n "$c" ]]; then
       echo "(a última aprovação, ${c:0:12}, não é do commit atual do ramo)"
     fi
@@ -540,7 +540,7 @@ previa() {
     echo "--- $(basename "$validacao") ---"
     # O jangada-validar roda no processo do agente, e o parecer fica numa pasta
     # que ele pode gravar: é o que a sessão registrou, não prova de revisão.
-    echo "(gravado pela própria sessão; o --integrar revisa de novo fora do isolamento)"
+    echo "(gravado pela própria sessão; o --integrar só aceita o parecer gravado fora do isolamento)"
     head -60 "$validacao"
   fi
 }

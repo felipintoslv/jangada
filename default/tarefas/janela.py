@@ -854,7 +854,7 @@ class Janela(QMainWindow):
         pergunta = QMessageBox(self)
         pergunta.setWindowTitle('Confirmar integração')
         pergunta.setTextFormat(Qt.TextFormat.PlainText)
-        pergunta.setText('Mesclar esta entrega e encerrar a sessão?')
+        pergunta.setText('Rodar testes/verificar.sh e integrar esta entrega por avanço rápido? A sessão fica aberta.')
         pergunta.setInformativeText(texto)
         pergunta.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         pergunta.setDefaultButton(QMessageBox.StandardButton.No)

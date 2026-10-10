@@ -226,10 +226,15 @@ não libera. As etapas, na ordem:
 6. Sob a trava do repositório, tudo é conferido de novo e a base avança com
    `git merge --ff-only`.
 
-Uma recusa anterior ao avanço deixa arquivos, índice e HEAD da cópia
-principal como estavam. Se, depois do avanço, os arquivos da cópia
-principal não conferem com o espelho, a base fica avançada, o comando sai
-com erro e pede conferência manual. Não há `merge --no-ff`, `reset --hard`, `git clean` nem outro
+A recusa por base alterada ou cópia principal alterada vale até a última
+conferência, sob a trava. A trava não impede um Git de fora do jangada: se
+ele mover a base para um ancestral do candidato entre essa conferência e o
+merge, o `--ff-only` aceita. Essa janela é só detectada: depois do avanço,
+o comando lê no reflog o valor anterior da base e, se não for o conferido,
+avisa e sai com erro, sem desfazer. Uma recusa anterior ao avanço deixa
+arquivos, índice e HEAD da cópia principal como estavam. Se, depois do
+avanço, os arquivos da cópia principal não conferem com o espelho, a base
+fica avançada, o comando sai com erro e pede conferência manual. Não há `merge --no-ff`, `reset --hard`, `git clean` nem outro
 comando de descarte. O comando não envia ao remoto, não assina, não roda o
 `jangada-update` e mantém sessão, ramo e worktree. O encerramento é outro
 gesto: `Ctrl+X` ou `jangada-agente-fim SESSAO`.
