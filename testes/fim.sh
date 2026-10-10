@@ -363,9 +363,10 @@ git -C "$wts/proj/lk" commit --quiet -m "link de pasta"
 marca lk "$revisoes"
 c_lk="$(git -C "$proj" rev-parse agente/lk)"
 if command -v bwrap >/dev/null 2>&1 && bwrap --ro-bind / / --dev /dev --proc /proc true 2>/dev/null; then
+  mkdir -p "$tmp/concorrente"
   # shellcheck disable=SC2016  # avaliado pela suíte falsa, na cópia
   FALSO_COMANDO='{ test -L atalho && cat atalho/dentro.txt; } >"$FALSO_DIR/lk-visto" 2>&1
-    "$JANGADA_PATH/bin/jangada-isolar" -- true </dev/null >"$FALSO_DIR/lk-concorrente.log" 2>&1
+    (cd "$FALSO_DIR/concorrente" && "$JANGADA_PATH/bin/jangada-isolar" -- true) </dev/null >"$FALSO_DIR/lk-concorrente.log" 2>&1
     echo "$?" >"$FALSO_DIR/lk-concorrente"' integrar_teste lk s
   conferir "link de pasta: lançamento concorrente não é recusado durante a suíte" \
     bash -c '[ "$(cat "$1/lk-concorrente" 2>/dev/null)" = 0 ] && ! grep -q AUTORIZACAO_RECUSADA "$1/lk-concorrente.log"' _ "$tmp"
