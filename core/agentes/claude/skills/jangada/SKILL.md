@@ -49,9 +49,12 @@ Pegadinhas dos links:
 - Comando chamado pelo caminho real (`core/bin/jangada-fila`, por exemplo) não acha o
   `jangada-config`, que é procurado ao lado do próprio arquivo. Chame sempre
   por `bin/`. Pelo mesmo motivo, não passe `realpath` em caminho de comando.
-- `Path(__file__).resolve()` no Python e `getwd()` no R devolvem a pasta
-  física (`monitor/painel`, `shell/menus/tarefas`), não a de `default/`.
-  Para achar a raiz, use `JANGADA_PATH`; para importar o núcleo,
+- `Path(__file__).resolve()` no Python devolve a pasta física do arquivo
+  (`monitor/painel`, `shell/menus/tarefas`), não a de `default/`.
+- `getwd()` no R devolve a pasta de trabalho do processo. No app do painel
+  ela é a pasta do app, que também é a física; caminho relativo a ela
+  (`../visual`) não chega a `default/`.
+- Para achar a raiz, use `JANGADA_PATH`; para importar o núcleo,
   `JANGADA_CORE_PY`.
 - Cópia de só uma parte do repositório (`cp -a bin`) leva links quebrados.
   Um teste que monta árvore temporária copia também `core/`, `shell/` e
