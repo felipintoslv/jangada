@@ -505,8 +505,8 @@ recusa "objeto forjado" o1 'não conferem com o espelho' "$antes"
 conferir "objeto forjado: a suíte não roda" test ! -e "$tmp/verificar-chamado"
 cp "$tmp/objeto-o1" "$objeto"
 
-# Objeto trocado entre a conferência com o espelho e o avanço. Não há
-# recuperação com descarte: o comando avisa, sai com erro e mantém a sessão.
+# Objeto trocado entre a conferência com o espelho e o avanço: o avanço lê
+# os objetos do espelho, e a cópia principal recebe o conteúdo aprovado.
 cat >"$tmp/bin/git" <<EOF
 #!/usr/bin/env bash
 printf '%s\n' "\$*" >>"$tmp/git-chamadas"
@@ -516,15 +516,14 @@ fi
 exec "$git_real" "\$@"
 EOF
 integrar_teste o1 s
-conferir "objeto forjado durante o avanço: sai com erro ($rc)" test "$rc" -ne 0
-conferir "objeto forjado durante o avanço: avisa" grep -q 'não conferem com o espelho' "$tmp/saida"
-conferir "objeto forjado durante o avanço: nada é desfeito" grep -q 'Nada foi desfeito' "$tmp/saida"
+conferir "objeto forjado durante o avanço: integra ($rc)" \
+  bash -c '[ "$1" -eq 0 ] && [ "$(git -C "$2" rev-parse main)" = "$3" ]' _ "$rc" "$proj" "$(git -C "$proj" rev-parse agente/o1)"
+conferir "objeto forjado durante o avanço: a cópia principal recebe o conteúdo aprovado" grep -qx o1 "$proj/o1.txt"
+conferir "objeto forjado durante o avanço: o forjado não chega à cópia principal" \
+  bash -c 'python3 -c "import zlib,sys; sys.exit(zlib.decompress(open(sys.argv[1],\"rb\").read()) != b\"blob 8\\0forjado\\n\")" "$1" \
+           && ! grep -rqx forjado "$2" --exclude-dir=.git' _ "$objeto" "$proj"
 mantida "objeto forjado durante o avanço" o1
 cp "$tmp/objeto-o1" "$objeto"
-git -C "$proj" show HEAD:o1.txt >"$proj/o1.txt"
-# O índice guarda o tamanho do arquivo forjado, e o git não refaz o hash
-# quando o tamanho difere.
-git -C "$proj" read-tree HEAD
 
 # Git de fora da trava move a base para um ancestral do candidato logo antes
 # do merge: o --ff-only aceita, e o reflog só detecta depois do avanço.
@@ -564,6 +563,9 @@ antes="$(foto)"
 integrar_teste g1 s
 recusa "git status falha" g1 'o git status falhou' "$antes"
 conferir "git status falha: a suíte não roda" test ! -e "$tmp/verificar-chamado"
+
+conferir "listas temporárias ficam em revisoes/ e saem no fim" \
+  bash -c '! compgen -G "$1/objetos-*" >/dev/null && ! compgen -G "$1/avanco-*" >/dev/null' _ "$revisoes"
 
 # Nenhuma chamada desta seção enviou ao remoto, atualizou a cópia instalada
 # ou descartou trabalho.
