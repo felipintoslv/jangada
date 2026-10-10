@@ -98,8 +98,9 @@ if [[ -n "$protocolo" ]]; then
 fi
 # TOML usa '=' nas tabelas em linha. A string JSON também é uma string TOML
 # válida; a citação de shell fica dentro dela, sem avaliar o caminho.
-hook="$(dirname "${BASH_SOURCE[0]}")/jangada-hook-codex"
-hook="$(realpath "$hook")"
+# Caminho da fachada, sem resolver link: o hook carrega o jangada-config que
+# fica ao lado dele em bin/.
+hook="$JANGADA_PATH/bin/jangada-hook-codex"
 hook="'${hook//\'/\'\\\'\'}'"
 args_hooks=()
 for par in SessionStart:inicio UserPromptSubmit:trabalhando PreToolUse:trabalhando \

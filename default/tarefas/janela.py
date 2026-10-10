@@ -22,7 +22,10 @@ from dados import (LIMITE, NOME, ORDEM, ROTULOS, Sessao,
                    estado_exibido, idade, ler_lista, simuladas)
 
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Com default/tarefas acessada por link, __file__ aponta para a pasta física;
+# visual e logo ficam nos caminhos legados sob JANGADA_PATH.
+RAIZ = Path(os.environ.get('JANGADA_PATH') or Path(__file__).absolute().parents[2])
+sys.path.insert(0, str(RAIZ / 'default'))
 from visual.fichas import carregar as carregar_fichas, ESTADOS
 from operacional import Operacional
 
@@ -655,7 +658,7 @@ class Janela(QMainWindow):
                 item.setForeground(2, QColor(self.cores_estado.get(estado_exibido(sessao), c['texto'])))
 
         try:
-            svg = (Path(__file__).resolve().parents[1] / 'logo/jangada-symbolic.svg').read_bytes()
+            svg = (RAIZ / 'default/logo/jangada-symbolic.svg').read_bytes()
         except OSError:
             self.marca.setAccessibleName('')
             self.marca.hide()

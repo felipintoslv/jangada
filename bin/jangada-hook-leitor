@@ -12,7 +12,8 @@
 # A conferência fica em default/claude/hook-leitor.py. Não obedece a
 # JANGADA_HOOK_DESLIGADO: o jangada-delegar a liga no agy que roda o leitor.
 set -uo pipefail
-hook="$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../default/claude/hook-leitor.py"
+# Sem realpath: chamado pelo link de bin/, a raiz é a pasta acima do link.
+hook="${JANGADA_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}/default/claude/hook-leitor.py"
 if [[ "${1:-}" == --agy ]]; then
   # Uma falha do Python sem resposta não pode liberar o leitor.
   saida="$(python3 "$hook" --agy)" && [[ -n "$saida" ]] ||

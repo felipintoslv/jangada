@@ -46,7 +46,8 @@ if ((somente_codigo)); then
     exit 1
   fi
   processos="$(ps -eo pid=,args= | awk -v pasta="$JANGADA_PATH/" '
-    index($0, pasta "default/") ||
+    index($0, pasta "default/") || index($0, pasta "core/") ||
+    index($0, pasta "shell/") || index($0, pasta "monitor/") ||
     (index($0, pasta "bin/jangada-") && !index($0, pasta "bin/jangada-update")) {print $1}')"
   if [[ -n "$processos" ]]; then
     echo "há processos usando a instalação (PID: $processos); interrompa-os antes de atualizar" >&2

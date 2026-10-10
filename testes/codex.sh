@@ -385,6 +385,35 @@ conferir "JSON inválido não altera o estado" [ "$(sha256sum "$tmp/state/jangad
 rm -f "$tmp/state/jangada/agentes/projeto--tarefa.json"
 hook inicio '{}'
 conferir "hook não recria sessão encerrada" test ! -e "$tmp/state/jangada/agentes/projeto--tarefa.json"
+
+# Árvore como fica depois da migração: adaptador e hook em core/bin, com link
+# relativo em bin/. O comando registrado no Codex é o da fachada e, chamado
+# como o Codex chama, muda o estado da sessão.
+arvore="$tmp/arvore"
+mkdir -p "$arvore/core/bin" "$arvore/testes"
+cp -a "$repo_jangada/bin" "$repo_jangada/default" "$arvore/"
+cp "$repo_jangada/testes/falso-codex-hooks.py" "$arvore/testes/"
+for c in jangada-codex jangada-hook-codex; do
+  mv "$arvore/bin/$c" "$arvore/core/bin/$c"
+  ln -s "../core/bin/$c" "$arvore/bin/$c"
+done
+rm -f "$tmp/codex.args"
+rodar JANGADA_PATH="$arvore" JANGADA_ISOLADO=1 JANGADA_MARCA_ISOLADO=/ "$arvore/bin/jangada-codex" -- codex >"$tmp/saida" 2>&1
+conferir "adaptador executa pelo link" [ "$?" = 0 ]
+python3 - "$tmp/codex.args" >"$tmp/hook-link.comando" <<'PY'
+import pathlib, sys, tomllib
+args = pathlib.Path(sys.argv[1]).read_bytes().decode().split("\0")[:-1]
+arg = next(args[i + 1] for i, a in enumerate(args) if a == "-c" and args[i + 1].startswith("hooks.UserPromptSubmit="))
+print(tomllib.loads(arg)["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"])
+PY
+conferir "hook registrado pela fachada, sem resolver o link" \
+  [ "$(cat "$tmp/hook-link.comando")" = "'$arvore/bin/jangada-hook-codex' trabalhando" ]
+jq -n --arg r "$tmp/projeto" '{estado: "novo", agente: "codex", raiz: $r}' >"$tmp/state/jangada/agentes/projeto--link.json"
+printf '{}' | rodar JANGADA_PATH="$arvore" JANGADA_SESSAO=projeto--link sh -c "$(cat "$tmp/hook-link.comando")"
+conferir "hook registrado muda o estado da sessão" jq -e '.estado == "trabalhando" and .atualizado' \
+  "$tmp/state/jangada/agentes/projeto--link.json"
+conferir "hook registrado grava o evento" jq -se 'any(.[]; .sessao == "projeto--link" and .estado == "trabalhando")' \
+  "$tmp/state/jangada/eventos-agentes.jsonl"
 mkdir -p "$tmp/pasta-falha" "$tmp/pasta-anexar"
 FALSO_TMUX_FALHAR=1 rodar "$repo_jangada/bin/jangada-agente" --agente codex \
   --projeto "$tmp/pasta-falha" --direto >"$tmp/falha-sessao" 2>&1

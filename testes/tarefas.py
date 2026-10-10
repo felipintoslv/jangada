@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'default/tarefas'))
 os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+os.environ['JANGADA_PATH'] = str(Path(__file__).resolve().parents[1])
 try:
     import PyQt6
 except ImportError:
@@ -11,6 +12,7 @@ except ImportError:
     sys.exit(1 if os.environ.get('CI') else 0)
 import json
 import fcntl
+import shutil
 import subprocess
 import tempfile
 import time
@@ -75,7 +77,7 @@ class Interface(unittest.TestCase):
         imagem = marcas[0].pixmap().toImage()
         self.assertEqual((imagem.width(), imagem.height()), (24, 24))
         self.assertEqual(imagem.pixelColor(0, 0).alpha(), 0)
-        self.assertTrue((Path(janela.__file__).resolve().parents[1] / 'logo/jangada-symbolic.svg').is_file())
+        self.assertTrue((janela.RAIZ / 'default/logo/jangada-symbolic.svg').is_file())
         with patch.object(janela, 'QPixmap', return_value=janela.QPixmap()):
             central_sem_marca = Janela(False, self.raiz, self.estado)
         try:
@@ -1020,5 +1022,46 @@ class Interface(unittest.TestCase):
             except subprocess.TimeoutExpired:
                 processo.kill()
                 processo.wait(timeout=4)
+
+
+class Links(unittest.TestCase):
+
+    def test_visual_e_logo_com_pastas_acessadas_por_link(self):
+        repo = Path(__file__).resolve().parents[1]
+        codigo = """
+import sys
+from pathlib import Path
+raiz = Path(sys.argv[1])
+# Como no lançamento pelo jangada-tarefas: o Python põe em sys.path a pasta física do script.
+sys.path.insert(0, str((raiz / 'default/tarefas').resolve()))
+from PyQt6.QtWidgets import QApplication, QLabel
+app = QApplication([])
+import janela
+import visual
+assert Path(janela.__file__).parent == raiz / 'shell/menus/tarefas', janela.__file__
+assert Path(visual.__file__).parent == raiz / 'default/visual', visual.__file__
+central = janela.Janela(False, raiz, raiz / 'estado')
+central.timer.stop()
+assert any(rotulo.accessibleName() == 'Jangada' and not rotulo.pixmap().isNull()
+           for rotulo in central.findChildren(QLabel)), 'logo ausente'
+"""
+        with tempfile.TemporaryDirectory() as pasta:
+            raiz = Path(pasta).resolve() / 'jangada'
+            shutil.copytree(repo / 'default/tarefas', raiz / 'shell/menus/tarefas',
+                            ignore=shutil.ignore_patterns('__pycache__'))
+            shutil.copytree(repo / 'default/logo', raiz / 'shell/temas/logo')
+            shutil.copytree(repo / 'default/visual', raiz / 'default/visual',
+                            ignore=shutil.ignore_patterns('__pycache__'))
+            shutil.copytree(repo / 'default/nucleo', raiz / 'core/nucleo',
+                            ignore=shutil.ignore_patterns('__pycache__'))
+            (raiz / 'default/nucleo').symlink_to('../core/nucleo')
+            (raiz / 'default/tarefas').symlink_to('../shell/menus/tarefas')
+            (raiz / 'default/logo').symlink_to('../shell/temas/logo')
+            resultado = subprocess.run(
+                [sys.executable, '-c', codigo, str(raiz)], capture_output=True, text=True, timeout=30,
+                env=dict(os.environ, JANGADA_PATH=str(raiz), XDG_RUNTIME_DIR=pasta))
+            self.assertEqual(resultado.returncode, 0, resultado.stderr)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

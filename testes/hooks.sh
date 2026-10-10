@@ -102,6 +102,31 @@ mesclar mesclar_hooks_claude
 conferir "link simbólico preservado e alvo atualizado" \
   bash -c '[ -L "$1" ] && jq -e ".antigo == 3 and (.hooks | length > 0)" "$2" >/dev/null' _ "$claude_cfg" "$tmp/dot/settings.json"
 
+echo "== hook do leitor chamado pelo link de bin/"
+# Árvore como fica depois da migração: o comando e a conferência em core/,
+# com links relativos nos caminhos antigos.
+arvore="$tmp/arvore"
+mkdir -p "$arvore/bin" "$arvore/core/bin" "$arvore/core/claude" "$arvore/default"
+cp bin/jangada-hook-leitor "$arvore/core/bin/"
+cp default/claude/hook-leitor.py "$arvore/core/claude/"
+ln -s ../core/bin/jangada-hook-leitor "$arvore/bin/jangada-hook-leitor"
+ln -s ../core/claude "$arvore/default/claude"
+leitor_link() { # comando; demais argumentos vão para o env
+  local cmd="$1"; shift
+  jq -cn --arg c "$cmd" '{tool_name: "Bash", tool_input: {command: $c}}' \
+    | env "$@" "$arvore/bin/jangada-hook-leitor" 2>/dev/null
+}
+agy_link() { # comando, papel
+  jq -cn --arg c "$1" '{conversationId: "x", toolCall: {name: "run_command", args: {CommandLine: $c}}}' \
+    | env -u JANGADA_PATH JANGADA_AGY_DIR="$tmp/agy" JANGADA_AGY_PAPEL="$2" "$arvore/bin/jangada-hook-leitor" --agy | jq -r .decision
+}
+conferir "com JANGADA_PATH, leitura liberada" leitor_link "head a.txt" JANGADA_PATH="$arvore"
+conferir "sem JANGADA_PATH, leitura liberada pela pasta do link" leitor_link "head a.txt" -u JANGADA_PATH
+leitor_link "rm a" -u JANGADA_PATH
+conferir "sem JANGADA_PATH, escrita recusada com 2" [ "$?" = 2 ]
+conferir "agy: outro agente segue as permissões" [ "$(agy_link "rm a" "")" = ask ]
+conferir "agy: leitor que grava é recusado" [ "$(agy_link "rm a" leitor)" = deny ]
+
 if ((falhas)); then
   echo "$falhas teste(s) dos hooks falharam"
   exit 1
