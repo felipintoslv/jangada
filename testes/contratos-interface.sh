@@ -5,7 +5,7 @@
 # confere os argumentos de cada chamada, o exec onde há exec e o terminal
 # solto em focar. Sem sessão gráfica, confere aviso e saída 0.
 #
-# O tmux é falso (a sessão S existe quando há o arquivo $tmp/sessoes/S), e
+# O tmux é falso (a sessão S existe quando há o arquivo $tmp/sessoes/=S), e
 # HOME, XDG_STATE_HOME e XDG_CONFIG_HOME ficam na pasta temporária: o
 # resultado não depende das sessões abertas na máquina nem do isolamento.
 #
@@ -52,8 +52,10 @@ exec "$@"
 EOF
 cat >"$tmp/bin/tmux" <<EOF
 #!/usr/bin/env bash
-[[ " \$* " == *" has-session "* ]] || exit 0
-[[ -e "$tmp/sessoes/\${*: -1}" ]]
+case " \$* " in
+  *" has-session "*) [[ -e "$tmp/sessoes/\${*: -1}" ]] ;;
+  *" list-sessions "*) ls "$tmp/sessoes" | sed 's/^=//' ;;
+esac
 EOF
 # Roda o comando no lugar de um bash que grava o próprio PID: com exec, o
 # falso tem o mesmo PID.
@@ -95,6 +97,12 @@ conferir "--janela sem tarefa: exec da Central com --nova" registro "jangada-tar
 grafico "$tmp/com-pid" "$repo_jangada/bin/jangada-agente" --janela --nome x --direto
 conferir "--janela com tarefa: exec do terminal com o próprio comando" \
   registro "jangada-terminal $(pid) [--classe] [org.jangada.agente] [-e] [$repo_jangada/bin/jangada-agente] [--nome] [x] [--direto]"
+mkdir -p "$tmp/proj"
+touch "$tmp/sessoes/=proj"
+grafico TMUX=teste "$tmp/com-pid" "$repo_jangada/bin/jangada-agente" --projeto "$tmp/proj" --agente true </dev/null
+conferir "sessão que já existe, dentro de outro tmux: exec do terminal com o attach" \
+  registro "jangada-terminal $(pid) [--classe] [org.jangada.agente] [-e] ${tmux_args/=s1/=proj}"
+rm "$tmp/sessoes/=proj"
 
 echo "== jangada-agentes"
 grafico "$tmp/com-pid" "$repo_jangada/bin/jangada-agentes" --janela
@@ -127,6 +135,17 @@ conferir "--anterior: lê a janela ativa e foca a sessão anterior" \
   registro "hyprctl [activewindow] [-j]
 hyprctl [clients] [-j]
 hyprctl [dispatch] [hl.dsp.focus({ window = \"address:0x3\" })]"
+for s in s1 s2; do
+  jq -n --arg s "$s" --arg a "2026-10-10T10:0${s#s}:00-03:00" \
+    '{sessao: $s, dir: "/x/proj", raiz: "/x/proj", estado: "aguardando", atualizado: $a}' \
+    >"$tmp/state/jangada/agentes/$s.json"
+done
+grafico FALSO_CLIENTES="$clientes" FALSO_ATIVA=s1 "$repo_jangada/bin/jangada-agentes" --proximo
+conferir "--proximo: lê a janela ativa e foca a sessão seguinte da fila" \
+  registro "hyprctl [activewindow] [-j]
+hyprctl [clients] [-j]
+hyprctl [dispatch] [hl.dsp.focus({ window = \"address:0x3\" })]"
+rm "$tmp/state/jangada/agentes/"s[12].json
 
 echo "== funções do jangada-config"
 r="$(grafico FALSO_ATIVA="título" bash -c "$(config jangada_janela_ativa)")"
