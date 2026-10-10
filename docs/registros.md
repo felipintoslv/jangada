@@ -56,6 +56,10 @@ substituem a marca protegida que autoriza integração.
     vazio e vale o padrão do CLI, sem a configuração do usuário.
   - `autor`: primeira palavra de `.agente` do `SESSAO.json`. Vazio fora de
     sessão.
+  - `independente`: falso na autorrevisão (revisor igual ao autor ou
+    `mesmo`) e quando a autoria não é confiável (autor vazio, ou revisão de
+    fora do isolamento sem a cópia da sessão em `revisoes/`).
+  - `execucao`: o `.execucao` do `SESSAO.json`; `null` sem vínculo.
   - `arquivos`, `mais`, `menos`: tamanho do diff (arquivo novo conta as
     linhas inteiras).
   - `itens`: linhas do parecer que começam por `N.`. É 0 no `limite` e no
@@ -69,7 +73,10 @@ substituem a marca protegida que autoriza integração.
     (subagentes mais delegações atendidas), `claude` (`n`, `tokens`;
     `principal` e `principal_cache_lido`, tokens da conversa principal na
     pasta, sem e com o cache lido), `agy` (`n`, `passos`), `delegadas_agy`
-    (delegações atendidas), `papeis` (contagem por papel),
+    (delegações atendidas), `codex_economico` (`n`), `local` (`n`,
+    `atendidas`, `recusas`, `tokens_entrada`, `tokens_saida`,
+    `medidas_entrada`, `medidas_saida`, `ferramentas_disponiveis`),
+    `papeis` (contagem por papel),
     `retorno_tokens`, `edicoes`, `autorrevisao` e `recusas`. Falta nas
     linhas antigas, sem python3 e quando a leitura falha.
   - `subagentes_erro` (opcional, a partir de 27/09/2026): motivo de o
@@ -90,6 +97,7 @@ Pasta `$JANGADA_ESTADO/agentes/`. Em 26/09/2026 havia 41 arquivos.
 |---|---|---|---|---|
 | `validacao-SESSAO-rN.md` | 16 | 26/09 20:54 a 23:37 | `bin/jangada-validar:773` (e a reprovação local, linhas 690 a 709) | `bin/jangada-agente-fim:261` a `:264`, ao encerrar a sessão |
 | `validacao-SESSAO.aprovado` | 1 | 26/09 | `bin/jangada-validar:794` | `bin/jangada-agente-fim:264` |
+| `validacao-SESSAO-rN.contexto.json`, `validacao-SESSAO-rN.verificacoes.tsv`, `validacao-SESSAO-rN.md.log` | não medido | não medido | `bin/jangada-validar`, a cada rodada: identidade e pedido da revisão (`:618` a `:627`), estado de cada verificação local (`:667`) e registro do revisor (`:1053`) | ninguém: `bin/jangada-agente-fim:268` a `:272` só apaga `-rN.md` e `.aprovado` |
 | `parecer-SESSAO-rN.md` | 12 | 20/09 a 21/09 | antigo `bin/jangada-par` (removido no commit 411d273, 22/09) | ninguém |
 | `avaliacao-SESSAO-rN.md` | 2 | 21/09 | antigo `bin/jangada-par` (avaliação do Claude sobre o parecer, não é revisão) | ninguém |
 | `revisao-SESSAO-rN.log` | 5 | 20/09 a 21/09 | antigo `bin/jangada-par` (erro do agy, vários vazios) | ninguém |
@@ -109,7 +117,8 @@ Pasta `$JANGADA_ESTADO/agentes/`. Em 26/09/2026 havia 41 arquivos.
   `cabeca` (commit do ramo), `num` (último parecer), `limpo` (falso quando o
   worktree tinha alteração sem commit), `base`, `base_sha`, `ponto`,
   `candidate_sha`, `candidate_tree` (o que o revisor leu), `reviewer`,
-  `model`, `author` e `independent` (falso na autorrevisão). Antes era uma
+  `model`, `author`, `local_verified` (verdadeiro quando a verificação local
+  rodou inteira) e `independent` (falso na autorrevisão). Antes era uma
   linha `COMMIT N limpo|sujo`, que ainda é lida para o ponto de comparação e
   que o `--integrar` não aceita. Marca com `limpo` falso não move o ponto de
   comparação da próxima entrega. Esta pasta é gravável pelo
@@ -344,8 +353,9 @@ resultado.
 
 - **Caminho:** `$JANGADA_ESTADO/agentes/SESSAO.json`.
 - **Quem escreve:** `bin/jangada-agente:377` a `:390` cria;
-  `bin/jangada-hook-claude` (linha 82) e `bin/jangada-hook-agy`
-  atualizam `estado`, `mensagem`, `atualizado` e `conversa`;
+  `bin/jangada-hook-claude` (linha 82), `bin/jangada-hook-agy` e
+  `bin/jangada-hook-codex` atualizam `estado`, `mensagem`, `atualizado` e
+  `conversa`;
   `bin/jangada-validar:704` e `:786` gravam `validacao`; `bin/jangada-agentes` marca
   `interrompido` (função `marcar`).
 - **Exemplo:**
@@ -363,7 +373,10 @@ resultado.
 - **Campos:** `sessao`, `dir`, `raiz`, `worktree`, `ramo`, `base`,
   `agente`, `comando`, `isolar`, `estado` (`iniciado`, `trabalhando`,
   `aguardando`, `concluido`, `interrompido`), `mensagem`, `desde`,
-  `atualizado`, e quando houver `tarefa`, `perfil`, `inicio` (commit),
+  `atualizado`, `execucao` (sempre gravado: o identificador devolvido por
+  `jangada-projeto sessao-iniciar`), e quando houver `tarefa`, `perfil`,
+  `atividade` e `tarefa_id` (vínculos dados por `--atividade` e
+  `--tarefa-id`), `inicio` (commit),
   `revisor`, `conversa`, `validacao`, `delegar` (sempre gravado) e
   `pid` (só o antigo par; nenhum script grava hoje, e o
   `jangada-agente-fim` não o lê nem mata processo por ele).
@@ -510,6 +523,8 @@ subagente tem `.db` próprio.
   - `agente`: `claude` ou `agy`.
   - `estado`: `inicio`, `trabalhando`, `aguardando`, `concluido`, `fim` ou
     `foco`. O `SESSAO.json` grava `iniciado`; aqui o valor é `inicio`.
+  - `execucao`: o `.execucao` do `SESSAO.json`, quando tem a forma `exe-`
+    mais 16 hexadecimais; senão `null`. Presente em toda linha nova.
 - **Subagentes do Claude:** com o hook de subagentes do Claude Code
   (SubagentStart e SubagentStop), o `eventos-agentes.jsonl` ganha linhas
   com estado `subagente-inicio` e `subagente-fim`. Elas trazem três campos
@@ -551,7 +566,10 @@ subagente tem `.db` próprio.
   - `codigo_saida`: 0 atendida, 4 recusada.
   - `versao_registro`: 3 nos registros com seleção por capacidade e recusas
     estruturadas; campos anteriores continuam disponíveis.
+  - `delegacao_id`: UUID da chamada. Sem seleção em andamento, o
+    `roteamento_id` repete esse valor.
   - `roteamento_id`: identifica as tentativas da mesma seleção.
+  - `execucao`: `JANGADA_EXECUCAO` da sessão; `null` fora dela.
   - `capacidade`: capacidade documental solicitada, ou vazio na chamada antiga.
   - `decisao`: ordem por capacidade, destino explícito ou configuração anterior.
   - `motivo_codigo`: motivo estável da recusa; vazio no sucesso.
@@ -573,9 +591,16 @@ subagente tem `.db` próprio.
   - `tentativas`: destinos descartados ou executados até esse registro, com
     motivos, códigos de saída e contagem de chamadas. O registro seguinte
     pode repetir o histórico; não some novamente essas contagens.
+  - `chamadas_local`: lista com a medida de cada chamada ao Ollama; `null`
+    quando o destino não é `local`.
+  - `documento_chars`, `contexto`: caracteres do documento lido e janela de
+    contexto (`JANGADA_LOCAL_CTX`) na delegação local; `null` nas demais.
+  - `ferramentas_disponiveis`: `false` nos destinos `local` e
+    `codex-economico`; `null` nos demais.
   - `palavras`, `tokens_retorno`: tamanho do que voltou ao Claude
     (caracteres impressos divididos por 4, relatório cortado em 600
     palavras).
+  - `retorno_chars`: os mesmos caracteres impressos, sem a divisão.
   - `passos`: linhas da tabela `steps` do `.db` da conversa do agy.
   - `tokens_agy`: `usage.total_tokens` da saída JSON do agy.
   - `tokens_codex_entrada`, `tokens_codex_saida` (opcionais): consumo informado
