@@ -107,9 +107,14 @@ agy) resta para sessões antigas do agy restauradas.
 | Claude, `local` | `protocolo-delegar-local.md` | leitor e redator primeiro no Ollama; demais papéis no Claude |
 | Codex, `local` ou `agy` | `protocolo-delegar-codex.md` | leitor e redator primeiro no Ollama; outros papéis no agy se permitido, ou na sessão |
 
-O Codex não chama subagentes do Claude. Mesmo no perfil `codex-agy`, leitor
-e redator passam primeiro pelo destino local. Os perfis e seus revisores
-estão em [Codex](codex.md).
+O Codex não chama subagentes do Claude. Mesmo no perfil `codex-claude`,
+que delega ao agy, leitor e redator passam primeiro pelo destino local.
+
+Os dois perfis padrão, `claude-codex` e `codex-claude`, usam o destino `agy`.
+O agy só atende em pasta marcada como confiável nele; se recusar, a sessão
+principal faz o trabalho. Os destinos `claude` e `local` valem por
+`--delegacao` ou perfil pessoal. Os perfis e seus revisores estão em
+[Codex](codex.md).
 
 Todos recebem também `default/agentes/protocolo-delegar.md`: citar fontes,
 conferir o que decide a mudança, não editar e não substituir o

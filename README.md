@@ -284,11 +284,15 @@ O fluxo completo, com fluxogramas, está em
 | No seletor | Implementa | Revisa | Delegação padrão |
 |---|---|---|---|
 | `padrão` (Claude na configuração inicial) | Claude | Codex | agy, com alternativa no Claude |
-| `claude-claude` | Claude | Claude | subagentes do Claude |
-| `claude-agy` | Claude | agy Flash, esforço alto | agy, com alternativa no Claude |
-| `codex` | Codex | Claude | leitor e redator no Ollama |
-| `codex-codex` | Codex | outra instância do Codex | leitor e redator no Ollama |
-| `codex-agy` | Codex | agy Flash, esforço alto | leitor e redator no Ollama, demais papéis no agy |
+| `claude-codex` | Claude | Codex | agy, com alternativa no Claude |
+| `codex-claude` | Codex | Claude | leitor e redator no Ollama, demais papéis no agy |
+
+Os perfis padrão são esses dois: autor e revisor ficam sempre em provedores
+diferentes e as delegações vão ao agy. O agy só atende em pasta marcada como
+confiável nele; se recusar, a sessão principal faz o trabalho. Autorrevisão,
+revisor agy e os destinos `claude` e `local` continuam disponíveis por
+`--revisor`, `--delegacao` ou perfil pessoal em `~/.config/jangada/agentes`
+(modelo em `default/agentes/exemplo.conf`).
 
 O agy não abre sessão principal: o `jangada-agente` recusa `--agente agy` e
 todo perfil com `COMANDO=agy`. Ele atende as delegações e a revisão, ao lado
@@ -303,18 +307,17 @@ separadamente. As descrições são calculadas; `DESCRICAO` em perfis antigos
 continua sendo lida, mas não substitui os valores efetivos no seletor.
 
 O Codex usa os worktrees e o tmux da Jangada, sem criar worktree próprio
-nem conectar ao servidor compartilhado do CLI. Todos os perfis Codex usam
-primeiro Ollama para leitor e redator. Os demais papéis ficam na sessão nos
-perfis `codex` e `codex-codex`; no `codex-agy`, são delegados ao agy.
+nem conectar ao servidor compartilhado do CLI. Toda sessão do Codex usa
+primeiro o Ollama para leitor e redator. No perfil `codex-claude`, os demais
+papéis são delegados ao agy; com `JANGADA_DELEGAR=local` (o padrão do Codex
+sem perfil), ficam na sessão.
 
 ```mermaid
 flowchart LR
-    A{Perfil Codex} -- codex --> C[Revisão: Claude]
-    A -- codex-codex --> X[Revisão: outra instância Codex]
-    A -- codex-agy --> G[Revisão: agy Flash<br>esforço alto]
-    C --> L[Leitor e redator: Ollama<br>Outros papéis: na sessão]
-    X --> L
-    G --> D[Leitor e redator: Ollama<br>Outros papéis: agy]
+    A{Sessão do Codex} -- codex-claude --> C[Revisão: Claude]
+    A -- sem perfil --> P[Revisão: Claude]
+    C --> D[Leitor e redator: Ollama<br>Outros papéis: agy]
+    P --> L[Leitor e redator: Ollama<br>Outros papéis: na sessão]
 ```
 
 O revisor Codex recebe o pedido completo, sem terminal ou ferramentas
@@ -458,9 +461,9 @@ perfil (ou global), e o seletor mostra o destino:
 
 | `JANGADA_DELEGAR` | Perfis | Efeito |
 |---|---|---|
-| `agy` | `padrão` (Claude), `claude-agy`, `codex-agy` | `jangada-delegar PAPEL` manda ao agy; o subagente do Claude só se ele recusar |
-| `claude` | `claude-claude` | subagentes do Claude dos papéis, nunca `general-purpose` |
-| `local` | `codex`, `codex-codex` (padrão do Codex) | leitor e redator no Ollama; os demais papéis na própria sessão |
+| `agy` | `padrão` (Claude), `claude-codex`, `codex-claude` | `jangada-delegar PAPEL` manda ao agy; o subagente do Claude só se ele recusar. No Codex, leitor e redator vão antes ao Ollama |
+| `claude` | só perfil pessoal ou `--delegacao claude` | subagentes do Claude dos papéis, nunca `general-purpose` |
+| `local` | Codex sem perfil; perfil pessoal ou `--delegacao local` | leitor e redator no Ollama; os demais papéis na própria sessão |
 
 `jangada-delegar PAPEL "pedido" [--arquivo SAIDA]` roda o agente do papel
 no agy, com `--sandbox`,
@@ -718,7 +721,7 @@ JANGADA_PATH="$PWD" bin/jangada-tarefas --simular
 `SUPER+A` e **Nova tarefa** no menu abrem o formulário da central de tarefas.
 Os atalhos de acompanhamento e os cliques da barra usam essa mesma central.
 O formulário oferece Claude e Codex como agentes principais e os perfis
-configurados, como `claude-agy`, `codex-agy` e `claude-claude`. A escolha do perfil preserva
+configurados: `claude-codex`, `codex-claude` e os pessoais. A escolha do perfil preserva
 executor, revisor e delegação. O agy atende as delegações e a revisão.
 
 Os comandos antigos `jangada-agentes --janela`, `--painel`,

@@ -4,19 +4,21 @@ O Codex implementa no mesmo ciclo de worktree, tmux, validação e integração
 usado pelos outros agentes. Desde a modularização 3.0, os perfis moram em
 `core/agentes/perfis/` e os comandos em `core/bin/`; os caminhos
 `default/agentes/` e `bin/jangada-*` citados aqui são links de
-compatibilidade e continuam sendo a forma de uso. Há três perfis:
+compatibilidade e continuam sendo a forma de uso. Há dois perfis padrão, e
+o Codex participa dos dois:
 
-| Perfil | Implementa | Revisa |
-|---|---|---|
-| `codex` | Codex | Claude |
-| `codex-codex` | Codex | outra instância do Codex |
-| `codex-agy` | Codex | agy Flash, esforço alto |
+| Perfil | Implementa | Revisa | Delegação |
+|---|---|---|---|
+| `codex-claude` | Codex | Claude | leitor e redator no Ollama, demais papéis no agy |
+| `claude-codex` | Claude | Codex | agy |
 
 ```sh
-jangada-agente --perfil codex --nome tarefa --prompt "Implemente a tarefa"
-jangada-agente --perfil codex-codex --nome tarefa --prompt "Implemente a tarefa"
-jangada-agente --perfil codex-agy --nome tarefa --prompt "Implemente a tarefa"
+jangada-agente --perfil codex-claude --nome tarefa --prompt "Implemente a tarefa"
 ```
+
+Outra combinação, como o Codex revisando o próprio trabalho ou o agy como
+revisor, sai por `--revisor`, `--delegacao` ou perfil pessoal em
+`~/.config/jangada/agentes/`.
 
 ## Preparação
 
@@ -125,13 +127,14 @@ Com UUID, usa `codex resume UUID`. Sem UUID, num worktree próprio, usa
 `codex resume --last`, com o filtro de pasta do CLI. Sem UUID no modo direto,
 abre uma conversa nova para não retomar a conversa de outro agente.
 
-Os perfis `codex` e `codex-codex` usam `JANGADA_DELEGAR=local`: somente leitor e redator vão ao
-Ollama, com arquivos explícitos. Os demais papéis ficam na sessão. Um perfil
-com `JANGADA_DELEGAR=agy` permite delegar pelo `jangada-delegar` ao agy.
-O perfil `codex-agy` já configura esse destino e fixa o revisor em
-`gemini-3.8-flash-high`, evitando herdar o modelo principal do agy. Leitor
-e redator continuam indo primeiro ao Ollama; os outros papéis usam o
-primeiro modelo de `JANGADA_DELEGAR_MODELOS` com cota. O protocolo do Codex não manda chamar
+O perfil `codex-claude` usa `JANGADA_DELEGAR=agy`: leitor e redator vão
+primeiro ao Ollama, com arquivos explícitos, e os outros papéis vão pelo
+`jangada-delegar` ao agy, no primeiro modelo de `JANGADA_DELEGAR_MODELOS` com
+cota. O agy só atende em pasta marcada como confiável nele; se recusar, a
+sessão principal faz o trabalho. Sem perfil, ou com `JANGADA_DELEGAR=local`,
+só leitor e redator saem da sessão. Um perfil pessoal com o agy como revisor
+deve fixar `JANGADA_VALIDAR_MODELO` (por exemplo `gemini-3.8-flash-high`),
+para não herdar o modelo principal do agy. O protocolo do Codex não manda chamar
 subagentes do Claude. Recusa local
 nunca autoriza enviar documentos confidenciais a um provedor externo.
 

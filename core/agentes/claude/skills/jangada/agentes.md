@@ -50,7 +50,7 @@ O parser de `-c` do Codex separa a chave por pontos sem interpretar aspas:
 valor de `projects`, com o caminho como chave TOML entre aspas. Confira
 o resultado por `config/read` no CLI real; tomllib sozinho não detecta isso.
 
-Os perfis `codex` e `codex-codex` usam o mesmo ciclo de sessões. O adaptador
+O perfil `codex-claude` usa o mesmo ciclo de sessões. O adaptador
 `jangada-codex` exige `--no-daemon`, injeta o protocolo por
 `developer_instructions` e passa hooks sem alterar a configuração global.
 Os hooks precisam de conferência pelo `/hooks` do CLI; não dispense a
@@ -383,8 +383,8 @@ porta de entrada. O que se aprendeu com ele vale para o revisor agy:
 
 - Por padrão, Codex revisa Claude e Claude revisa Codex. Fora de sessão e
   nas sessões antigas do agy, Claude revisa.
-  Com `--revisor mesmo` ou no perfil `claude-claude`, o mesmo
-  modelo revisa em processo isolado.
+  Com `--revisor mesmo` ou num perfil pessoal com o revisor igual ao
+  executor, o mesmo modelo revisa em processo isolado.
 - Revisor que falha (agy sem cota, por exemplo) passa a vez: outros modelos
   na ordem `claude`, `agy`, `codex`, e por último o do autor. Não passa com
   `--revisor` nem com o prazo vencido. O estado e o `validar.jsonl` dizem
@@ -462,8 +462,14 @@ atualize a cópia instalada com `jangada-update`.
   aberta sem perfil ainda é restaurada pelo `jangada-agentes`.
 - O seletor do `jangada-agente` oferece o padrão e os perfis, cada um com a
   descrição calculada entre parênteses. Os perfis de `default/agentes/`
-  (`claude-claude.conf`, `codex*.conf`) perdem para perfis de mesmo nome em
-  `~/.config/jangada/agentes`.
+  são dois desde 10/10/2026: `claude-codex.conf` e `codex-claude.conf`, com
+  revisor de outro provedor e `JANGADA_DELEGAR=agy`. Perdem para perfis de
+  mesmo nome em `~/.config/jangada/agentes`, onde também ficam autorrevisão,
+  revisor agy e os destinos `claude` e `local`. O agy só atende em pasta
+  marcada como confiável nele; se recusar, a sessão principal faz o trabalho.
+- O estado da sessão guarda o nome do perfil, e o `--restaurar` recusa perfil
+  que não existe mais. Retirar ou renomear um perfil padrão pede migração do
+  campo `perfil` em `~/.local/state/jangada/agentes/*.json`.
 - O protocolo é `default/agentes/protocolo.md`. No Claude vai por
   `--append-system-prompt` e no Codex pelo `jangada-codex`; na restauração o
   `jangada-agentes` monta o protocolo de novo (`refazer_protocolo`), sem ler o

@@ -13,7 +13,10 @@ skill em `core/agentes/claude/skills/jangada/`. Os caminhos de `bin/` e
 `default/` citados aqui são links de compatibilidade e continuam sendo a
 forma de uso. O mapa das pastas está na seção Estrutura do [README](../README.md).
 
-O Codex participa pelos perfis `codex`, `codex-codex` e `codex-agy`.
+Os perfis padrão são `claude-codex` (Claude implementa, Codex revisa) e
+`codex-claude` (Codex implementa, Claude revisa), os dois com delegação ao
+agy. O agy só atende em pasta marcada como confiável nele; se recusar, a
+sessão principal faz o trabalho.
 As diferenças de protocolo, hooks e revisão estão em [Codex](codex.md).
 
 ```mermaid
