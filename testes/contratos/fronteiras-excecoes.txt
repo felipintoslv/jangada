@@ -11,10 +11,6 @@ K6 bin/jangada-agentes consumo="$("$JANGADA_PATH/bin/jangada-consumo" --curto 2>
 # bin/jangada-validar:159
 K6 bin/jangada-validar resumo="$(timeout 30 "$JANGADA_PATH/bin/jangada-subagentes" --entrega "$origem_dir" ${desde:+--desde "$desde"} 2>/dev/null)" || rc=$?
 
-# Sem contrato que as retire: o que resta para a M3-10c (decisão D8).
-# shell/jangada-shell.sh:132, _jangada_sessao_atual; sai pela consulta K4.
-sem-contrato shell/jangada-shell.sh local estado_dir="${JANGADA_ESTADO:-${XDG_STATE_HOME:-$HOME/.local/state}/jangada}/agentes"
-
 # Exceções permanentes (decisão D8, docs/modularizacao-3.0/03-contratos.md),
 # cada uma com o motivo. A linha citada é a de quando a marca foi trocada
 # (M3-10c).
@@ -25,6 +21,12 @@ permanente bin/jangada-agente ((snapshot)) && "$JANGADA_PATH/bin/jangada-snapsho
 # bin/jangada-verificar:76, --agente. O Monitor chama comando que altera
 # estado: ação pedida pelo usuário por opção explícita, pela fachada K1.
 permanente bin/jangada-verificar exec "$JANGADA_PATH/bin/jangada-agente" "${janela[@]}" --projeto "$JANGADA_REPO" \
+# shell/jangada-shell.sh:132, _jangada_sessao_atual. O Shell lê arquivo de
+# estado: compara o campo worktree de cada arquivo com a raiz do repositório.
+# A consulta K4 devolve dir e só sessões vivas ou guardadas; com ela, uma
+# sessão --direto passaria a ser achada na raiz do projeto e uma encerrada
+# fora do prazo deixaria de ser achada. Decisão do usuário na M3-10c.
+permanente shell/jangada-shell.sh local estado_dir="${JANGADA_ESTADO:-${XDG_STATE_HOME:-$HOME/.local/state}/jangada}/agentes"
 # shell/jangada-shell.sh:271, repassar. O Shell lê arquivo de estado: o último
 # parecer e a tarefa. Não há consulta do Core que devolva o parecer, e criá-la
 # seria funcionalidade nova; dívida para depois da 3.0.
@@ -35,3 +37,8 @@ permanente default/tarefas/janela.py pastas = [self.estado_dir, self.estado_dir.
 # default/tarefas/janela.py:700, observar_estado. O Shell monta caminho do
 # estado: só vigia mudança de arquivo, sem ler o conteúdo.
 permanente default/tarefas/janela.py caminhos.update(str(p) for p in pasta.glob('tarefas.sqlite*') if p.is_file() and not p.is_symlink())
+
+# Fora da contagem: default/tarefas/dados.py, em registro(pasta, nome), lê o
+# .json da sessão (raiz, desde, tarefa completa, agente e mensagem), campos
+# que a consulta K4 não devolve. O teste não aponta a leitura porque o caminho
+# chega por parâmetro. Fica como exceção por decisão do usuário na M3-10c.

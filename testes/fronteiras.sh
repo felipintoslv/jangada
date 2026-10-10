@@ -47,7 +47,7 @@ ok()    { printf 'ok    %s\n' "$*"; }
 falha() { printf 'FALHA %s\n' "$*"; falhas=$((falhas + 1)); }
 conferir() { local d="$1"; shift; if "$@"; then ok "$d"; else falha "$d"; fi; }
 
-declare -A teto=([K3]=10 [K4]=0 [K5]=3 [K6]=2 [sem-contrato]=1 [permanente]=5)
+declare -A teto=([K3]=10 [K4]=0 [K5]=3 [K6]=2 [sem-contrato]=0 [permanente]=6)
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
