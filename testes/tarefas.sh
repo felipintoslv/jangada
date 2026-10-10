@@ -72,6 +72,15 @@ bin/jangada-agentes --lista-atualizada >"$tmp/lista"
 jq -e '.estado == "interrompido"' "$XDG_STATE_HOME/jangada/agentes/interrompida.json" >/dev/null
 grep -q $'^concluido\tturno\t' "$tmp/lista"
 
+# A barra limpa a órfã antes de consultar e preserva o contador das demais sessões.
+bin/jangada-tarefas --waybar >"$tmp/barra-sem-orfa.json"
+jq -e '.class != "erro" and (.text | startswith("Tarefas 2"))' "$tmp/barra-sem-orfa.json" >/dev/null
+jq -n '{estado:"concluido", atualizado:"2000-01-01T00:00:00+00:00"}' \
+  >"$XDG_STATE_HOME/jangada/agentes/orfa-barra.json"
+bin/jangada-tarefas --waybar >"$tmp/barra-com-orfa.json"
+cmp "$tmp/barra-sem-orfa.json" "$tmp/barra-com-orfa.json"
+[[ ! -e "$XDG_STATE_HOME/jangada/agentes/orfa-barra.json" ]]
+
 # Prévia gráfica sai dos metadados protegidos e informa os commits atuais.
 mkdir -p "$XDG_STATE_HOME/jangada/revisoes" "$tmp/projeto"
 git -C "$tmp/projeto" init -q -b main
@@ -126,14 +135,20 @@ mkdir -p "$tmp/jangada/bin" "$tmp/jangada/default/tarefas"
 cp bin/jangada-tarefas bin/jangada-config "$tmp/jangada/bin/"
 cp -r default/provedores "$tmp/jangada/default/"
 cat >"$tmp/jangada/default/tarefas/central.py" <<'PYTHON'
+import os
 import sys
+from pathlib import Path
+if '--waybar' in sys.argv:
+    assert Path(os.environ['CHAMADAS_AGENTES']).read_text() == '--limpar-orfaos\n'
 print('\n'.join(sys.argv[1:]))
 PYTHON
 cat >"$tmp/jangada/bin/jangada-agentes" <<'SH'
 #!/bin/sh
-exit 99
+printf '%s\n' "$*" >>"$CHAMADAS_AGENTES"
+[ "$#" -eq 1 ] && [ "$1" = --limpar-orfaos ] || exit 99
 SH
 chmod +x "$tmp/jangada/bin/jangada-agentes"
+export CHAMADAS_AGENTES="$tmp/chamadas-agentes"
 echo JANGADA_CENTRAL=agentes >"$XDG_CONFIG_HOME/jangada/jangada.conf"
 for opcao in '' --anterior --nova --waybar; do
   JANGADA_PATH="$tmp/jangada" bin/jangada-tarefas ${opcao:+"$opcao"} >"$tmp/saida"
@@ -143,6 +158,7 @@ for opcao in '' --anterior --nova --waybar; do
   else
     grep -qx -- '--mostrar' "$tmp/saida"
   fi
+  [[ "$opcao" == --waybar ]] || [[ ! -e "$CHAMADAS_AGENTES" ]]
 done
 cat >"$tmp/jangada/bin/jangada-tarefas" <<'SH'
 #!/bin/sh

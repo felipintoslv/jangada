@@ -11,6 +11,7 @@ case "${1:-}" in
 esac
 args=(--real --jangada "$JANGADA_PATH" --estado "$JANGADA_ESTADO/agentes")
 if [[ "${1:-}" == --waybar ]]; then
+  "$JANGADA_PATH/bin/jangada-agentes" --limpar-orfaos
   args+=(--waybar)
 else
   args+=(--mostrar)
