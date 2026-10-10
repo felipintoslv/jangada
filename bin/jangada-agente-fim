@@ -293,7 +293,9 @@ verificar_fora() {
     echo "o projeto não tem testes/verificar.sh; etapa não se aplica"
     return 0
   fi
-  copias="$(python3 "$JANGADA_PATH/default/orquestracao/confianca.py" pasta-entrega "$JANGADA_ESTADO" integracoes)" \
+  # Junto deste comando, não no JANGADA_PATH: a cópia instalada pode estar
+  # atrás do código que roda e não ter o pasta-entrega.
+  copias="$(python3 "$(dirname "${BASH_SOURCE[0]}")/../default/orquestracao/confianca.py" pasta-entrega "$JANGADA_ESTADO" integracoes)" \
     && copia="$(mktemp -d "$copias/XXXXXX")" || return 1
   echo "rodando testes/verificar.sh do commit ${cabeca:0:12} fora do isolamento (registro em $registro)..."
   chave="$(printf '%s' "$s" | sha256sum | cut -c1-16)"

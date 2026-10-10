@@ -151,8 +151,9 @@ def pasta_entrega(estado, nome):
 
     O conteúdo não é conferido: uma entrega traz links versionados. Por isso
     estas pastas ficam fora de revisoes/ e o isolamento as oculta inteiras.
+    Quem chama já decidiu que roda fora do isolamento, como o mktemp que esta
+    função substitui; dentro dele, a pasta é a vazia que o isolamento monta.
     """
-    exigir_controlador()
     if nome not in ENTREGAS:
         raise ValueError('pasta de entregas desconhecida')
     pasta = Path(estado) / nome
