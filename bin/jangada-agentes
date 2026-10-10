@@ -9,7 +9,8 @@
 #   jangada-agentes --waybar   saída JSON para o módulo da barra
 #   jangada-agentes --focar S  foca a janela da sessão S ou abre uma nova
 #   jangada-agentes --lista    lista simples: estado, sessão, diretório
-#   jangada-agentes --lista-atualizada  limpa estados órfãos e lista sessões
+#   jangada-agentes --lista-atualizada  o mesmo que --lista; não limpa órfãos
+#   jangada-agentes --limpar-orfaos  remove os estados de sessões que já não existem
 #   jangada-agentes --previa S conteúdo do painel de prévia da sessão S
 #   jangada-agentes --proximo  foca o próximo agente ativo ou que espera (SUPER+N)
 #   jangada-agentes --anterior volta ao agente focado antes do atual (SUPER+SHIFT+N)
@@ -619,15 +620,13 @@ icone() {
 }
 
 case "${1:-}" in
-  --lista-atualizada)
-    limpar_orfaos
+  --lista|--lista-atualizada)
     listar
     ;;
-  --lista)
-    listar
+  --limpar-orfaos)
+    limpar_orfaos
     ;;
   --waybar)
-    limpar_orfaos
     linhas="$(listar)"
     # Consumo do Claude no bloco de 5 horas, com cache próprio de 60 s.
     consumo=""
@@ -797,7 +796,7 @@ case "${1:-}" in
     focar "$s"
     ;;
   -h|--ajuda)
-    sed -n '2,25s/^# \{0,1\}//p' "$0"
+    sed -n '2,26s/^# \{0,1\}//p' "$0"
     ;;
   *)
     echo "opção desconhecida: $1" >&2; exit 1

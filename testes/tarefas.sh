@@ -66,6 +66,7 @@ grep -q $'^concluido\tturno\t' "$tmp/lista"
 
 jq -n '{estado:"concluido", atualizado:"2000-01-01T00:00:00+00:00"}' \
   >"$XDG_STATE_HOME/jangada/agentes/orfa.json"
+bin/jangada-agentes --limpar-orfaos
 bin/jangada-agentes --lista-atualizada >"$tmp/lista"
 [[ ! -e "$XDG_STATE_HOME/jangada/agentes/orfa.json" ]]
 jq -e '.estado == "interrompido"' "$XDG_STATE_HOME/jangada/agentes/interrompida.json" >/dev/null

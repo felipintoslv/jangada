@@ -212,6 +212,22 @@ Uma confirmação de descarte perde arquivos sem commit: faça cópia antes.
 Chamado de dentro da própria sessão, o `limpar` roda em segundo plano, com
 registro, porque fechar o tmux encerraria o próprio comando.
 
+## Sessões órfãs
+
+As consultas `jangada-agentes --lista`, `--lista-atualizada` e `--waybar`
+só leem o estado em `~/.local/state/jangada/agentes`. A limpeza é a ação
+explícita `jangada-agentes --limpar-orfaos` (contrato K4 em
+`docs/modularizacao-3.0/03-contratos.md`). Ela remove o estado de sessão sem
+tmux e sem processo vivo. Ficam o `concluido` e o `aguardando` dentro de
+`JANGADA_AGENTES_GUARDAR` horas (padrão 24) e o `interrompido` dentro de 7
+dias. Sessão de agente sem processo e com a pasta no disco vira
+`interrompido` em vez de sair.
+
+Até a barra chamar a limpeza antes da consulta (tarefa M3-06), nada a chama
+sozinho e as órfãs acumulam na pasta. Elas não aparecem na lista nem no
+contador; a sessão que dá para restaurar aparece como `interrompido` sem
+prazo para sair.
+
 ## Testes
 
 | Arquivo | O que cobre |
@@ -222,3 +238,4 @@ registro, porque fechar o tmux encerraria o próprio comando.
 | `testes/update.sh` | bloqueio não mexe na cópia instalada nem roda ganchos; atualização e assinatura continuam ensaiadas com Git sintético |
 | `testes/eventos.sh` | histórico de estados gravado pelos hooks e pela troca de foco |
 | `testes/restaurar.sh` | volta de uma sessão interrompida |
+| `testes/contratos-consulta.sh` | consultas de `jangada-agentes` sem gravar no estado e limpeza explícita das órfãs |

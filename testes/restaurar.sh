@@ -196,9 +196,11 @@ mv "$tmp/agy-guardado" "$tmp/bin/agy"
 rm -f "$estado/s.json"
 printf '{"sessao":"s","rodada":1}\n' >"$estado/validacao-s-r1.contexto.json"
 printf '{"sessao":"morta"}\n' >"$estado/morta.json"
-env -u TMUX -u JANGADA_ISOLADO PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp" \
-  XDG_STATE_HOME="$tmp/state" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$jp" \
-  "$repo_jangada/bin/jangada-agentes" --lista-atualizada >"$tmp/lista" 2>&1
+for opcao in --limpar-orfaos --lista-atualizada; do
+  env -u TMUX -u JANGADA_ISOLADO PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp" \
+    XDG_STATE_HOME="$tmp/state" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$jp" \
+    "$repo_jangada/bin/jangada-agentes" "$opcao" >"$tmp/lista" 2>&1
+done
 conferir "caso 15: a limpeza de órfãos preserva o contexto da rodada" \
   test -s "$estado/validacao-s-r1.contexto.json"
 conferir "caso 15: o contexto da rodada não aparece como sessão" \
