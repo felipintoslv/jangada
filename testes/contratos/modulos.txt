@@ -44,6 +44,9 @@ core default/orquestracao/
 core default/delegacao/
 
 # Shell: comandos (1.1)
+# Os comandos do Shell em bin/ são links para shell/bin e mantêm a linha: o
+# teste de fronteira alcança cada arquivo antes por bin/, que vem antes de
+# shell/ na ordem alfabética.
 shell bin/jangada-atalhos
 shell bin/jangada-atualizacoes
 shell bin/jangada-audio

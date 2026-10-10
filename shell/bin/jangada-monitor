@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Abre o monitor do sistema (btop ou htop) em janela flutuante.
+#
+# Uso: jangada-monitor
+set -euo pipefail
+# shellcheck source=bin/jangada-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
+if [[ "${1:-}" == --json ]]; then
+  exec python3 "$JANGADA_PATH/default/nucleo/monitoramento.py"
+fi
+
+mon="htop"
+if command -v btop >/dev/null 2>&1; then
+  mon="btop"
+elif command -v htop >/dev/null 2>&1; then
+  mon="htop"
+fi
+
+# Solto do processo que chamou: vindo de um clique na waybar, um terminal em
+# primeiro plano prende o módulo daquela barra até a janela fechar.
+setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.monitor --titulo "Monitor do Sistema" -e "$mon"
