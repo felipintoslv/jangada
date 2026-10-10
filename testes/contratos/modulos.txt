@@ -70,6 +70,10 @@ shell bin/jangada-terminal
 # default/hypr, default/hypridle e default/waybar são links para shell/hyprland,
 # shell/hyprland/hypridle e shell/waybar. default/hypridle/ não tem linha: o
 # arquivo dela é alcançado antes por default/hypr/hypridle/.
+# default/matugen, default/sddm, default/logo, default/fastfetch, default/snapper
+# e default/r são links para shell/temas e shell/integracoes e mantêm a linha:
+# o teste de fronteira alcança cada arquivo antes por default/, que vem antes
+# de shell/ na ordem alfabética.
 shell default/hypr/
 shell default/waybar/
 shell default/matugen/
