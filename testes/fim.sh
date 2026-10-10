@@ -265,6 +265,13 @@ git -C "$proj" rm --quiet --cached indice
 rm -f "$proj/indice" "$proj/nao-rastreado"
 echo a >"$proj/a"
 antes="$(foto)"
+# Só um arquivo novo também conta como alteração.
+echo novo >"$proj/nao-rastreado"
+integrar_teste suja s
+conferir "arquivo novo na cópia principal: recusa ($rc)" \
+  bash -c '[ "$1" -ne 0 ] && grep -q "tem alterações sem commit" "$2" && grep -qx novo "$3/nao-rastreado"' _ "$rc" "$tmp/saida" "$proj"
+conferir "arquivo novo na cópia principal: a suíte não roda" test ! -e "$tmp/verificar-chamado"
+rm -f "$proj/nao-rastreado"
 
 # --sem-revisao não libera, nem com aprovação válida e resposta s.
 integrar_teste suja s --sem-revisao
@@ -452,6 +459,21 @@ for n in s1 s2; do
 done
 conferir "simultâneas: repositório íntegro e cópia principal limpa" \
   bash -c 'git -C "$1" fsck --no-dangling >/dev/null 2>&1 && [ -z "$(git -C "$1" status --porcelain)" ]' _ "$proj"
+
+# Submódulo com alteração na cópia principal.
+git init --quiet "$tmp/sub"
+echo s >"$tmp/sub/s"; "$git_real" -C "$tmp/sub" add s; "$git_real" -C "$tmp/sub" commit --quiet -m sub
+"$git_real" -C "$proj" -c protocol.file.allow=always submodule --quiet add "$tmp/sub" sub >/dev/null 2>&1
+"$git_real" -C "$proj" commit --quiet -m "submódulo"
+preparar m1
+marca m1 "$revisoes"
+echo usuario >"$proj/sub/s"
+antes="$(foto)"
+integrar_teste m1 s
+recusa "submódulo alterado" m1 'tem alterações sem commit' "$antes"
+conferir "submódulo alterado: a alteração fica" grep -qx usuario "$proj/sub/s"
+echo s >"$proj/sub/s"
+antes="$(foto)"
 
 # Objeto trocado em .git/objects depois de o espelho receber o original: o
 # git leria o conteúdo forjado com o nome do original.
