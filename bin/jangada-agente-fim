@@ -246,7 +246,17 @@ avanco_integro() {
     IFS= read -r -d '' caminho <&0 || { rc=1; break; }
     read -r _ modo _ nome _ <<<"$meta"
     case "$modo" in
-      000000 | 160000) continue ;;
+      160000) continue ;;
+      000000)
+        # Caminho removido pelo commit tem de estar ausente, inclusive como
+        # link pendente; só vale uma pasta que o commit tem no mesmo lugar.
+        if [[ -e "$raiz/$caminho" || -L "$raiz/$caminho" ]]; then
+          [[ -d "$raiz/$caminho" && ! -L "$raiz/$caminho" \
+             && "$(jangada_git_seguro --git-dir="$espelho" cat-file -t "$cabeca:$caminho" 2>/dev/null)" == tree ]] \
+            || { rc=1; break; }
+        fi
+        continue
+        ;;
       120000)
         [[ -L "$raiz/$caminho" ]] || { rc=1; break; }
         atual="$(readlink -n -- "$raiz/$caminho" | jangada_git_seguro hash-object --stdin)" || { rc=1; break; }
