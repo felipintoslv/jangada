@@ -203,7 +203,12 @@ conferir "entrega: outra pasta não conta nada" jqok -e '.n == 0 and .recusas ==
 # Saída exata do --entrega em três recortes, gravada antes de a montagem do
 # resumo passar para default/delegacao/entrega.py (M3-08): o campo subagentes
 # do validar.jsonl não muda de bytes sem mudar esta referência.
-entrega_exata() { [ "$(subagentes --entrega "$amostra/projeto" "${@:2}")" = "$1" ]; }
+# Em arquivo e com cmp: a substituição de comando cortaria a quebra de linha final.
+entrega_exata() {
+  printf '%s\n' "$1" >"$tmp/entrega-ref.json"
+  subagentes --entrega "$amostra/projeto" "${@:2}" >"$tmp/entrega-exata.json"
+  cmp -s "$tmp/entrega-ref.json" "$tmp/entrega-exata.json"
+}
 conferir "entrega: saída exata, tudo" entrega_exata '{"n": 5, "claude": {"n": 3, "tokens": 70500, "principal": 1000, "principal_cache_lido": 7000}, "delegadas_agy": 1, "codex_economico": {"n": 0}, "agy": {"n": 2, "passos": 17}, "local": {"n": 0, "atendidas": 0, "recusas": 0, "tokens_entrada": null, "tokens_saida": null, "medidas_entrada": 0, "medidas_saida": 0, "ferramentas_disponiveis": false}, "papeis": {"explorador": 2}, "retorno_tokens": 339, "edicoes": 2, "autorrevisao": 2, "recusas": 1}'
 conferir "entrega: saída exata, --desde" entrega_exata '{"n": 0, "claude": {"n": 0, "tokens": 0, "principal": 0, "principal_cache_lido": 0}, "delegadas_agy": 0, "codex_economico": {"n": 0}, "agy": {"n": 0, "passos": 0}, "local": {"n": 0, "atendidas": 0, "recusas": 0, "tokens_entrada": null, "tokens_saida": null, "medidas_entrada": 0, "medidas_saida": 0, "ferramentas_disponiveis": false}, "papeis": {}, "retorno_tokens": 0, "edicoes": 0, "autorrevisao": 0, "recusas": 1}' --desde 2026-09-27T10:05:30Z
 conferir "entrega: saída exata, --desde e --ate" entrega_exata '{"n": 5, "claude": {"n": 3, "tokens": 70500, "principal": 0, "principal_cache_lido": 0}, "delegadas_agy": 1, "codex_economico": {"n": 0}, "agy": {"n": 2, "passos": 17}, "local": {"n": 0, "atendidas": 0, "recusas": 0, "tokens_entrada": null, "tokens_saida": null, "medidas_entrada": 0, "medidas_saida": 0, "ferramentas_disponiveis": false}, "papeis": {"explorador": 2}, "retorno_tokens": 339, "edicoes": 2, "autorrevisao": 2, "recusas": 0}' \
