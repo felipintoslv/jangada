@@ -391,11 +391,11 @@ conferir "hook não recria sessão encerrada" test ! -e "$tmp/state/jangada/agen
 # como o Codex chama, muda o estado da sessão.
 arvore="$tmp/arvore"
 mkdir -p "$arvore/core/bin" "$arvore/testes"
-cp -a "$repo_jangada/bin" "$repo_jangada/default" "$arvore/"
+cp -a "$repo_jangada/bin" "$repo_jangada/default" "$repo_jangada/core" "$arvore/"
 cp "$repo_jangada/testes/falso-codex-hooks.py" "$arvore/testes/"
 for c in jangada-codex jangada-hook-codex; do
-  mv "$arvore/bin/$c" "$arvore/core/bin/$c"
-  ln -s "../core/bin/$c" "$arvore/bin/$c"
+  cp -aL "$repo_jangada/bin/$c" "$arvore/core/bin/$c"
+  ln -sfn "../core/bin/$c" "$arvore/bin/$c"
 done
 rm -f "$tmp/codex.args"
 rodar JANGADA_PATH="$arvore" JANGADA_ISOLADO=1 JANGADA_MARCA_ISOLADO=/ "$arvore/bin/jangada-codex" -- codex >"$tmp/saida" 2>&1
