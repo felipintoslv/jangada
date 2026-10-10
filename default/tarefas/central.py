@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 
-from dados import barra
+from dados import barra, pasta_sessoes
 
 
 def encaminhar(nome, nova=False):
@@ -118,7 +118,7 @@ def main():
             from PyQt6.QtWidgets import QApplication
             app = QApplication(sys.argv[:1])
         jangada = Path(args.jangada or Path.home() / '.local/share/jangada').expanduser().resolve()
-        estado = Path(args.estado or Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'jangada/agentes').expanduser().resolve()
+        estado = pasta_sessoes(args.estado).resolve()
         nome = nome_soquete(jangada, estado, args.real)
         if encaminhar(nome, args.nova):
             return

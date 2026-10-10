@@ -18,14 +18,6 @@ K6 bin/jangada-validar resumo="$(timeout 30 "$JANGADA_PATH/bin/jangada-subagente
 sem-contrato bin/jangada-agente ((snapshot)) && "$JANGADA_PATH/bin/jangada-snapshot" --agente "antes do agente $sessao" || true
 # bin/jangada-verificar:76
 sem-contrato bin/jangada-verificar exec "$JANGADA_PATH/bin/jangada-agente" "${janela[@]}" --projeto "$JANGADA_REPO" \
-# bin/jangada-tarefas:12
-sem-contrato bin/jangada-tarefas args=(--real --jangada "$JANGADA_PATH" --estado "$JANGADA_ESTADO/agentes")
-# default/tarefas/central.py:121
-sem-contrato default/tarefas/central.py estado = Path(args.estado or Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'jangada/agentes').expanduser().resolve()
-# default/tarefas/dados.py:129
-sem-contrato default/tarefas/dados.py estado = Path(args.estado or Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'jangada/agentes').expanduser()
-# default/tarefas/janela.py:256
-sem-contrato default/tarefas/janela.py self.estado_dir = Path(estado or Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'jangada/agentes').expanduser()
 # default/tarefas/janela.py:691
 sem-contrato default/tarefas/janela.py pastas = [self.estado_dir, self.estado_dir.parent / 'revisoes', self.estado_dir / 'projetos']
 # default/tarefas/janela.py:697

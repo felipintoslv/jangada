@@ -28,7 +28,7 @@ import janela
 from janela import Janela
 import central
 from central import encaminhar, receber
-from dados import barra, idade, ler_lista, registro, resumo_barra
+from dados import barra, idade, ler_lista, pasta_sessoes, registro, resumo_barra
 from argparse import Namespace
 APP = QApplication([])
 
@@ -50,6 +50,9 @@ class Interface(unittest.TestCase):
         os.environ['XDG_RUNTIME_DIR'] = str(self.raiz)
         self.estado = self.raiz / 'estado'
         self.estado.mkdir()
+        ambiente = patch.dict(os.environ, JANGADA_SESSOES=str(self.estado))
+        ambiente.start()
+        self.addCleanup(ambiente.stop)
         self.bin = self.raiz / 'bin'
         self.bin.mkdir()
         self.comando = self.bin / 'jangada-agentes'
@@ -267,6 +270,32 @@ class Interface(unittest.TestCase):
         else:
             os.environ['XDG_RUNTIME_DIR'] = self.runtime_anterior
         self.pasta.cleanup()
+
+    def test_central_usa_a_pasta_de_sessoes_da_variavel(self):
+        outra = self.raiz / 'sessoes'
+        outra.mkdir()
+        (outra / 'projeto--um.json').write_text(json.dumps({'agente': 'da-variavel'}))
+        with patch.dict(os.environ, JANGADA_SESSOES=str(outra)):
+            self.assertEqual(pasta_sessoes(self.estado), self.estado)
+            self.assertIn('Tarefa um', barra(Namespace(real=True, jangada=self.raiz, estado=None))['tooltip'])
+            aberta = Janela(True, self.raiz)
+            aberta.timer.stop()
+            try:
+                aguardar(lambda: aberta.consulta.state() == QProcess.ProcessState.NotRunning)
+                self.assertEqual(aberta.estado_dir, outra)
+                self.assertEqual(aberta.sessoes['projeto--um'].agente, 'da-variavel')
+            finally:
+                aberta.close()
+        with patch.dict(os.environ):
+            del os.environ['JANGADA_SESSOES']
+            with self.assertRaises(ValueError):
+                pasta_sessoes()
+            self.assertEqual(barra(Namespace(real=True, jangada=self.raiz, estado=None))['class'], 'erro')
+            resultado = subprocess.run(
+                [sys.executable, str(Path(central.__file__)), '--real', '--jangada', str(self.raiz)],
+                capture_output=True, text=True, timeout=5)
+            self.assertEqual(resultado.returncode, 1)
+            self.assertIn('pasta de sessões não foi informada', resultado.stderr)
 
     def test_selecao_detalhes_e_desaparecimento(self):
         self.assertEqual(self.janela.selecionada(), 'projeto--um')

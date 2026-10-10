@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout,
                             QPlainTextEdit, QPushButton, QSplitter, QTabWidget,
                             QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 from dados import (LIMITE, NOME, ORDEM, ROTULOS, Sessao,
-                   estado_exibido, idade, ler_lista, simuladas)
+                   estado_exibido, idade, ler_lista, pasta_sessoes, simuladas)
 
 sys.dont_write_bytecode = True
 # Com default/tarefas acessada por link, __file__ aponta para a pasta física;
@@ -256,7 +256,7 @@ class Janela(QMainWindow):
         self.eventos = {}
         self.observadas = {}
         self.jangada = Path(jangada or Path.home() / '.local/share/jangada').expanduser().resolve()
-        self.estado_dir = Path(estado or Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'jangada/agentes').expanduser()
+        self.estado_dir = pasta_sessoes(estado)
         self.sessoes = {}
         self.estrutura = None
         self.itens = {}

@@ -76,6 +76,14 @@ def texto(valor):
     return valor[:16000] if isinstance(valor, str) else ''
 
 
+def pasta_sessoes(estado=None):
+    """Pasta de sessões: a informada ou a que o jangada-config exporta."""
+    estado = estado or os.environ.get('JANGADA_SESSOES')
+    if not estado:
+        raise ValueError('A pasta de sessões não foi informada: use --estado ou JANGADA_SESSOES.')
+    return Path(estado).expanduser()
+
+
 def registro(pasta, nome):
     try:
         fd = os.open(pasta / (nome + ".json"), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
@@ -126,8 +134,8 @@ def barra(args):
     if not args.real:
         return resumo_barra(simuladas(0))
     jangada = Path(args.jangada or Path.home() / '.local/share/jangada').expanduser().resolve()
-    estado = Path(args.estado or Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'jangada/agentes').expanduser()
     try:
+        estado = pasta_sessoes(args.estado)
         ambiente = dict(os.environ, JANGADA_PATH=str(jangada),
                         XDG_STATE_HOME=str(estado.parent.parent))
         resposta = subprocess.run([str(jangada / 'bin/jangada-agentes'), '--lista-atualizada'], capture_output=True, timeout=10, env=ambiente, check=True)

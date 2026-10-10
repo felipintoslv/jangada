@@ -9,7 +9,7 @@ case "${1:-}" in
   ""|--nova|--waybar) ;;
   *) printf 'Uso: jangada-tarefas [--nova|--waybar|--simular]\n' >&2; exit 1 ;;
 esac
-args=(--real --jangada "$JANGADA_PATH" --estado "$JANGADA_ESTADO/agentes")
+args=(--real --jangada "$JANGADA_PATH" --estado "$JANGADA_SESSOES")
 if [[ "${1:-}" == --waybar ]]; then
   "$JANGADA_PATH/bin/jangada-agentes" --limpar-orfaos
   args+=(--waybar)

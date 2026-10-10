@@ -141,6 +141,7 @@ from pathlib import Path
 if '--waybar' in sys.argv:
     assert Path(os.environ['CHAMADAS_AGENTES']).read_text() == '--limpar-orfaos\n'
 print('\n'.join(sys.argv[1:]))
+print('sessoes=' + os.environ['JANGADA_SESSOES'])
 PYTHON
 cat >"$tmp/jangada/bin/jangada-agentes" <<'SH'
 #!/bin/sh
@@ -153,6 +154,7 @@ echo JANGADA_CENTRAL=agentes >"$XDG_CONFIG_HOME/jangada/jangada.conf"
 for opcao in '' --anterior --nova --waybar; do
   JANGADA_PATH="$tmp/jangada" bin/jangada-tarefas ${opcao:+"$opcao"} >"$tmp/saida"
   grep -qx -- '--real' "$tmp/saida"
+  grep -A1 -x -- '--estado' "$tmp/saida" | grep -qxF "$XDG_STATE_HOME/jangada/agentes"
   if [[ "$opcao" == --nova || "$opcao" == --waybar ]]; then
     grep -qx -- "$opcao" "$tmp/saida"
   else
@@ -160,6 +162,10 @@ for opcao in '' --anterior --nova --waybar; do
   fi
   [[ "$opcao" == --waybar ]] || [[ ! -e "$CHAMADAS_AGENTES" ]]
 done
+# O modo simulado não recebe --estado: a pasta de sessões chega pela variável.
+JANGADA_PATH="$tmp/jangada" bin/jangada-tarefas --simular >"$tmp/saida"
+grep -qxF "sessoes=$XDG_STATE_HOME/jangada/agentes" "$tmp/saida"
+! grep -q -- --estado "$tmp/saida"
 cat >"$tmp/jangada/bin/jangada-tarefas" <<'SH'
 #!/bin/sh
 printf 'central\n%s\n' "$*"
