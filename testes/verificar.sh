@@ -12,15 +12,21 @@ falha() { printf 'XX %s\n' "$*"; falhas=$((falhas + 1)); }
 passo "capacidades da máquina"
 testes/capacidades.sh || falha "falta capacidade exigida em JANGADA_TESTES_EXIGIR"
 
+# Comandos nas pastas dos módulos (docs/modularizacao-3.0). A pasta que ainda
+# não existe ou não tem arquivo não entra na lista.
+shopt -s nullglob
+dos_modulos=(core/bin/* shell/bin/* monitor/bin/*)
+shopt -u nullglob
+
 passo "sintaxe bash"
-for f in install.sh install/*.sh bin/* shell/jangada.sh migrations/*.sh; do
+for f in install.sh install/*.sh bin/* "${dos_modulos[@]}" shell/jangada.sh migrations/*.sh; do
   [[ -f "$f" ]] || continue
   bash -n "$f" || falha "bash -n: $f"
 done
 
 passo "shellcheck"
 if command -v shellcheck >/dev/null; then
-  shellcheck -x -S warning install.sh install/*.sh bin/* migrations/*.sh testes/*.sh || falha "shellcheck"
+  shellcheck -x -S warning install.sh install/*.sh bin/* "${dos_modulos[@]}" migrations/*.sh testes/*.sh || falha "shellcheck"
   shellcheck -s sh -S warning shell/jangada.sh || falha "shellcheck shell/jangada.sh"
   # As funções da subshell não estavam sendo conferidas por ninguém.
   shellcheck -S warning shell/jangada-shell.sh || falha "shellcheck shell/jangada-shell.sh"

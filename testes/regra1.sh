@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Testa a regra 1 do AGENTS.md: todo caminho de fora de ~/.config/jangada,
 # ~/.local/share/jangada e ~/.local/state/jangada escrito por extenso em bin/,
-# install/, migrations/ e install.sh está em "Exceções à regra 1" ou na lista
-# de caminhos só lidos abaixo. Um caminho novo reprova até alguém decidir em
-# qual das duas listas ele entra.
+# core/bin/, shell/bin/, monitor/bin/, install/, migrations/ e install.sh está
+# em "Exceções à regra 1" ou na lista de caminhos só lidos abaixo. Um caminho
+# novo reprova até alguém decidir em qual das duas listas ele entra.
 #
 # Uso: testes/regra1.sh
 set -uo pipefail
@@ -95,7 +95,7 @@ def coberto(c):
     # um permitido, que o mkdir -p cria no caminho.
     return any(c == p or c.startswith(p + "/") or p.startswith(c + "/") for p in permitidos)
 
-arqs = [p for d in ("bin", "install", "migrations") for p in sorted((raiz / d).rglob("*")) if p.is_file()]
+arqs = [p for d in ("bin", "core/bin", "shell/bin", "monitor/bin", "install", "migrations") for p in sorted((raiz / d).rglob("*")) if p.is_file()]
 arqs += [raiz / "install.sh"]
 vistos = {}
 for arq in arqs:
@@ -121,7 +121,7 @@ conferir "caso 1: todo caminho de fora está nas exceções ou nas leituras${for
 
 # Caso 2: uma escrita nova fora das listas reprova.
 mkdir -p "$tmp/copia"
-cp -r AGENTS.md bin install migrations install.sh "$tmp/copia/"
+cp -r AGENTS.md bin core shell monitor install migrations install.sh "$tmp/copia/"
 printf '#!/bin/sh\necho x >"$HOME/.novo/arquivo"\n' >"$tmp/copia/bin/jangada-novo"
 fora="$(varrer "$tmp/copia")"
 conferir "caso 2: escrita nova em ~/.novo é apontada" grep -q '^~/.novo/arquivo (bin/jangada-novo:2)$' <<<"$fora"
@@ -135,6 +135,16 @@ conferir "caso 3: ~/.claude/output-styles vem da linha do ~/.claude" [ -z "$fora
 printf '#!/bin/sh\necho x >"$HOME"/.novo/arquivo\n' >"$tmp/copia/bin/jangada-novo"
 fora="$(varrer "$tmp/copia")"
 conferir "caso 4: \"\$HOME\"/.novo também é apontado" grep -q '^~/.novo/arquivo (bin/jangada-novo:2)$' <<<"$fora"
+
+# Caso 5: a pasta bin de cada módulo é examinada como bin/.
+rm "$tmp/copia/bin/jangada-novo"
+for m in core shell monitor; do
+  mkdir -p "$tmp/copia/$m/bin"
+  printf '#!/bin/sh\necho x >"$HOME/.novo/arquivo"\n' >"$tmp/copia/$m/bin/jangada-novo"
+  fora="$(varrer "$tmp/copia")"
+  conferir "caso 5: escrita nova em $m/bin é apontada" grep -q "^~/.novo/arquivo ($m/bin/jangada-novo:2)\$" <<<"$fora"
+  rm "$tmp/copia/$m/bin/jangada-novo"
+done
 
 if ((falhas)); then
   echo "$falhas teste(s) da regra 1 falharam"

@@ -44,9 +44,9 @@ com agentes de IA. Leia o README.md antes de alterar qualquer coisa.
 
 Escritas fora de `~/.config/jangada`, `~/.local/share/jangada` e
 `~/.local/state/jangada`, cada uma com o motivo. O `testes/regra1.sh` confere
-que todo caminho de fora escrito por extenso em `bin/`, `install/`,
-`migrations/` e `install.sh` está nesta lista ou na lista de caminhos só lidos
-do próprio teste. Caminho montado em variável escapa da conferência e precisa
+que todo caminho de fora escrito por extenso em `bin/`, `core/bin/`,
+`shell/bin/`, `monitor/bin/`, `install/`, `migrations/` e `install.sh` está
+nesta lista ou na lista de caminhos só lidos do próprio teste. Caminho montado em variável escapa da conferência e precisa
 entrar aqui do mesmo jeito.
 
 | Caminho | Quem grava | Para quê |
