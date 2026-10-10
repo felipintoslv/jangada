@@ -235,6 +235,8 @@ conferir "caso 16: perfil do Codex vira codex-claude com o revisor que o antigo 
 conferir "caso 16: perfil com cópia do usuário e perfil pessoal não mudam" \
   bash -c '[ "$(jq -c . "$1/d.json")" = "{\"agente\":\"claude\",\"perfil\":\"claude-claude\"}" ] &&
            [ "$(jq -r .perfil "$1/e.json")" = solto ]' _ "$estado"
+conferir "caso 16: a sessão com revisor agy é avisada do modelo, e só ela" \
+  bash -c '[ "$(grep -c -- "--modelo gemini-3.8-flash-high" "$1")" = 1 ] && grep -q "sessão a: o revisor agy" "$1"' _ "$tmp/migracao"
 conferir "caso 16: o estado alterado ganha cópia de segurança" \
   bash -c 'ls "$1"/a.json.jangada-*.bak >/dev/null 2>&1' _ "$estado"
 rm -f "$estado"/*.bak
