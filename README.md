@@ -77,6 +77,7 @@ arquivo e função, falhas e os testes que o cobrem:
 | [docs/analise-painel-20260930.md](docs/analise-painel-20260930.md) | leitura do painel com os dados de 30/09/2026 |
 | [docs/proposta-atualizacao-painel.md](docs/proposta-atualizacao-painel.md) | proposta de atualização do painel, com implementação parcial |
 | [docs/modularizacao-3.0](docs/modularizacao-3.0/README.md) | divisão em `core/`, `shell/` e `monitor/`: inventário, contratos e [validação final](docs/modularizacao-3.0/06-validacao-final.md) |
+| [docs/inspector](docs/inspector/README.md) | proposta do Jangada Inspector (diagnóstico do sistema e aditivos da barra por pedido do usuário): decisões e especificação original, sem implementação |
 
 ## Antes de instalar: mapear a máquina
 
