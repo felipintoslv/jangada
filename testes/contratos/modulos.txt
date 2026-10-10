@@ -94,6 +94,10 @@ shell default/r/
 shell shell/
 
 # Monitor: comandos (1.1) e painel (1.2)
+# Os quatro comandos são links para monitor/bin, e default/painel, para
+# monitor/painel. default/nucleo/monitoramento.py é link para
+# monitor/painel/monitoramento.py e, alcançado antes por default/nucleo/,
+# conta como Core neste teste.
 monitor bin/jangada-painel
 monitor bin/jangada-consumo
 monitor bin/jangada-subagentes
