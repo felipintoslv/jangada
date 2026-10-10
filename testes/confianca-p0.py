@@ -177,6 +177,33 @@ else:
         self.assertNotIn('processo não deveria iniciar', resultado.stderr)
         self.assertIn('AUTORIZACAO_RECUSADA', resultado.stderr)
 
+    def test_J_foto_com_ligacao_inicia_sem_reexpor_revisoes(self):
+        foto = self.estado / 'fotos/f1'
+        foto.mkdir(parents=True)
+        (foto / 'volta').symlink_to('../../revisoes')
+        (self.estado / 'revisoes').mkdir(exist_ok=True)
+        (self.estado / 'revisoes/segredo').write_text('ATAQUE')
+        self.env['JANGADA_ISOLAR_FOTO'] = str(foto)
+        resultado = self.isolar(f"import os;assert os.listdir({str(foto / 'volta')!r}) == [];print('INICIOU')")
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+        self.assertIn('INICIOU', resultado.stdout)
+        (self.estado / 'fotos/alias').symlink_to('../revisoes')
+        self.env['JANGADA_ISOLAR_FOTO'] = str(self.estado / 'fotos/alias')
+        resultado = self.isolar("print('INICIOU')")
+        self.assertNotEqual(resultado.returncode, 0)
+        self.assertNotIn('INICIOU', resultado.stdout)
+        self.assertIn('AUTORIZACAO_RECUSADA', resultado.stderr)
+
+    def test_J_descritor_padrao_para_foto_recusado(self):
+        foto = self.estado / 'fotos/f1'
+        foto.mkdir(parents=True)
+        (foto / 'entrega.diff').write_text('diff')
+        with open(foto / 'entrega.diff') as entrada:
+            resultado = self.isolar("print('INICIOU')", stdin=entrada)
+        self.assertNotEqual(resultado.returncode, 0)
+        self.assertNotIn('INICIOU', resultado.stdout)
+        self.assertIn('descritor padrão', resultado.stderr)
+
     def test_A_sqlite_real_somente_leitura_mesmo_com_extra(self):
         resultado = self.isolar("import os,sqlite3; d=sqlite3.connect(os.environ['DB_SINTETICO']); d.execute(\"UPDATE tarefas SET status='COMPLETED'\");d.commit()")
         self.assertNotEqual(resultado.returncode, 0)

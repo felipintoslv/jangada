@@ -88,6 +88,11 @@ conferir "caso 1: revisões feitas fora do isolamento ocultas" \
   seguidos --tmpfs "$casa/.local/state/jangada/revisoes" ""
 conferir "caso 1: a pasta das revisões existe antes do agente, só para o dono" \
   [ "$(stat -c %a "$casa/.local/state/jangada/revisoes" 2>/dev/null)" = 700 ]
+for p in fotos integracoes; do
+  conferir "caso 1: $p, fora de revisoes/, oculta" seguidos --tmpfs "$casa/.local/state/jangada/$p" ""
+  conferir "caso 1: a pasta $p existe antes do agente, só para o dono" \
+    [ "$(stat -c %a "$casa/.local/state/jangada/$p" 2>/dev/null)" = 700 ]
+done
 conferir "caso 1: termina com o comando" [ "$(tail -n1 "$tmp/args")" = true ]
 conferir "caso 1: estado dos agentes gravável" \
   seguidos --bind "$casa/.local/state/jangada/agentes" "$casa/.local/state/jangada/agentes"
@@ -341,6 +346,52 @@ EOF
   export TMUX=x SSH_AUTH_SOCK=y
   conferir "caso 3: sem TMUX nem SSH_AUTH_SOCK" roda '[ -z "${TMUX:-}${SSH_AUTH_SOCK:-}" ]'
   unset TMUX SSH_AUTH_SOCK
+  # Caso 3f: fotos da revisão e cópias da integração trazem links da entrega.
+  # O lançamento segue, as duas pastas ficam ocultas e só a foto escolhida
+  # volta, em somente leitura; link em revisoes/ continua recusado.
+  est="$casa/.local/state/jangada"
+  mkdir -p "$est/fotos/f1/pasta" "$est/fotos/f2" "$est/integracoes/c1/pasta"
+  echo um >"$est/fotos/f1/pasta/a"
+  echo dois >"$est/fotos/f2/b"
+  ln -s pasta "$est/fotos/f1/atalho"
+  ln -s pasta "$est/integracoes/c1/atalho"
+  ln -s ../../revisoes "$est/fotos/f1/volta"
+  ln -s ../revisoes "$est/fotos/alias"
+  ln -s f1 "$est/fotos/nome"
+  echo segredo >"$est/revisoes/segredo-3f"
+  conferir "caso 3f: link em fotos/ e integracoes/ não recusa o lançamento, e as duas ficam ocultas" \
+    roda "! find '$est/fotos' '$est/integracoes' -mindepth 1 | grep -q ."
+  conferir "caso 3f: a foto escolhida volta com o link, e só ela" \
+    isolar "$tmp/wt" JANGADA_ISOLAR_FOTO="$est/fotos/f1" "$repo_jangada/bin/jangada-isolar" -- \
+    bash -c '[[ "$(ls -A "$1/fotos")" == f1 && "$(cat "$1/fotos/f1/atalho/a")" == um && -z "$(ls -A "$1/integracoes")" ]]' _ "$est"
+  conferir "caso 3f: link na foto não reexpõe revisoes/" \
+    isolar "$tmp/wt" JANGADA_ISOLAR_FOTO="$est/fotos/f1" "$repo_jangada/bin/jangada-isolar" -- \
+    bash -c '[[ -z "$(ls -A "$1/fotos/f1/volta/")" ]]' _ "$est"
+  isolar "$tmp/wt" JANGADA_ISOLAR_FOTO="$est/fotos/f1" "$repo_jangada/bin/jangada-isolar" -- \
+    bash -c 'echo x >"$1/fotos/f1/novo"' _ "$est" >/dev/null 2>&1
+  conferir "caso 3f: a foto é somente leitura" test ! -e "$est/fotos/f1/novo"
+  for alvo in "$est/fotos" "$est/fotos/" "$est/fotos/alias" "$est/fotos/nome" "$est/fotos/f1/volta" \
+      "$est/fotos/f1/" "$est/fotos/../fotos/f1" "$est/fotos/f1/pasta" "$est/integracoes/c1" "$est/revisoes" "$tmp/wt"; do
+    isolar "$tmp/wt" JANGADA_ISOLAR_FOTO="$alvo" "$repo_jangada/bin/jangada-isolar" -- echo INICIOU >"$tmp/foto.log" 2>&1
+    conferir "caso 3f: JANGADA_ISOLAR_FOTO=${alvo#"$casa"/} recusada antes de iniciar" \
+      bash -c '[ "$1" -ne 0 ] && grep -q AUTORIZACAO_RECUSADA "$2" && ! grep -q INICIOU "$2"' _ "$?" "$tmp/foto.log"
+  done
+  for p in revisoes painel-chave agentes/projetos; do
+    mkdir -p "$est/$p"
+    ln -s "$est/fotos" "$est/$p/link-3f"
+    isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- echo INICIOU >"$tmp/link.log" 2>&1
+    conferir "caso 3f: link em $p continua recusado" \
+      bash -c '[ "$1" -ne 0 ] && grep -q "ligação ou canal" "$2" && ! grep -q INICIOU "$2"' _ "$?" "$tmp/link.log"
+    rm -f "$est/$p/link-3f"
+  done
+  mv "$est/fotos" "$tmp/fotos-real"
+  ln -s "$tmp/fotos-real" "$est/fotos"
+  isolar "$tmp/wt" "$repo_jangada/bin/jangada-isolar" -- echo INICIOU >"$tmp/link.log" 2>&1
+  conferir "caso 3f: fotos/ como link recusa o lançamento" \
+    bash -c '[ "$1" -ne 0 ] && grep -q "atravessar ligação" "$2" && ! grep -q INICIOU "$2"' _ "$?" "$tmp/link.log"
+  rm "$est/fotos"
+  mv "$tmp/fotos-real" "$est/fotos"
+  rm -rf "$est/fotos/"* "$est/integracoes/"* "$est/revisoes/segredo-3f"
   # A casa do teste fica no /tmp, e o /tmp do isolamento é gravável: confere
   # o arquivo de verdade, do lado de fora.
   roda "echo x >>'$casa/.claude.json'"
