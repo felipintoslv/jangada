@@ -11,6 +11,10 @@
 # guarda, entra o que o perfil antigo fixava. A delegação da sessão
 # restaurada passa a ser a do perfil novo. Sessão cujo perfil tem cópia do
 # usuário em ~/.config/jangada/agentes não muda.
+#
+# O JANGADA_VALIDAR_MODELO que claude-agy e codex-agy fixavam não tem campo
+# no estado e não volta na restauração: a sessão com revisor agy recebe um
+# aviso com a opção --modelo.
 set -euo pipefail
 # shellcheck source=install/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../install/lib.sh"
@@ -39,6 +43,9 @@ for arq in "$JANGADA_ESTADO"/agentes/*.json; do
     '.perfil = $p | if (.revisor // "") == "" then .revisor = $r else . end' "$arq" >"$tmp"; then
     mv -f "$tmp" "$arq"
     ok "sessão $(basename "$arq" .json): perfil $perfil trocado por $novo"
+    if [[ "$perfil" == *-agy && "$(jq -r '.revisor // ""' "$arq")" == agy ]]; then
+      aviso "sessão $(basename "$arq" .json): o revisor agy fica sem modelo fixo; use jangada-validar --modelo gemini-3.8-flash-high"
+    fi
   else
     rm -f "$tmp"
     morrer "não foi possível regravar $arq"

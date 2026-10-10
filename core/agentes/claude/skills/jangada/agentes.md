@@ -462,7 +462,7 @@ atualize a cópia instalada com `jangada-update`.
   aberta sem perfil ainda é restaurada pelo `jangada-agentes`.
 - O seletor do `jangada-agente` oferece o padrão e os perfis, cada um com a
   descrição calculada entre parênteses. Os perfis de `default/agentes/`
-  são dois desde 10/10/2026: `claude-codex.conf` e `codex-claude.conf`, com
+  são dois: `claude-codex.conf` e `codex-claude.conf`, com
   revisor de outro provedor e `JANGADA_DELEGAR=agy`. Perdem para perfis de
   mesmo nome em `~/.config/jangada/agentes`, onde também ficam autorrevisão,
   revisor agy e os destinos `claude` e `local`. O agy só atende em pasta
