@@ -115,7 +115,7 @@ done
 # Com --projeto, a central abre a sessão; sem tarefa, abre o formulário.
 if ((janela)) && [[ -z "$projeto$nome$perfil$prompt$delegacao_dada" ]] && \
     ((!direto && !snapshot && !agente_dado && !revisor_dado && !isolar_dado && ${#extras[@]} == 0)); then
-  exec "$JANGADA_PATH/bin/jangada-tarefas" --nova
+  jangada_abrir_central --nova
 fi
 
 if ((janela)); then
@@ -131,7 +131,7 @@ if ((janela)); then
   ((isolar_dado)) && args+=(--sem-isolar)
   [[ -n "$prompt" ]] && args+=(--prompt "$prompt")
   ((${#extras[@]})) && args+=(-- "${extras[@]}")
-  exec "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente -e "$0" "${args[@]}"
+  jangada_abrir_terminal --exec org.jangada.agente "$0" "${args[@]}"
 fi
 
 # Escolha do agente. Só com terminal e sem escolha feita na linha de comando:
@@ -531,7 +531,7 @@ fi
 
 # Dentro de outro tmux, anexar aninhado confunde; abre numa janela nova.
 if [[ -n "${TMUX:-}" && -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
-  exec "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente -e "${JANGADA_TMUX[@]}" attach -t "=$sessao"
+  jangada_abrir_terminal --exec org.jangada.agente "${JANGADA_TMUX[@]}" attach -t "=$sessao"
 fi
 unset TMUX
 exec "${JANGADA_TMUX[@]}" attach -t "=$sessao"

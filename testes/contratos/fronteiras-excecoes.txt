@@ -11,32 +11,11 @@ K6 bin/jangada-agentes consumo="$("$JANGADA_PATH/bin/jangada-consumo" --curto 2>
 K6 bin/jangada-validar resumo="$(timeout 30 "$JANGADA_PATH/bin/jangada-subagentes" --entrega "$origem_dir" ${desde:+--desde "$desde"} 2>/dev/null)" || rc=$?
 
 # Sem contrato que as retire: acoplamentos que existem no código e não estão
-# no inventário nem em K3 a K6. K3 só cobre aviso e notificação, não o foco
-# de janela pelo hyprctl nem a abertura de terminal ou da Central; K4 não
-# cobre a leitura direta do estado pelo Shell. Precisam de contrato novo ou
-# de decisão antes de M3-11.
-# bin/jangada-agente:118
-sem-contrato bin/jangada-agente exec "$JANGADA_PATH/bin/jangada-tarefas" --nova
-# bin/jangada-agente:134
-sem-contrato bin/jangada-agente exec "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente -e "$0" "${args[@]}"
+# no inventário nem em K3 a K6. O foco de janela e a abertura de terminal ou
+# da Central saíram pelo K10 (M3-10b); K4 não cobre a leitura direta do
+# estado pelo Shell. O destino das que restam é a M3-10c (decisão D8).
 # bin/jangada-agente:365
 sem-contrato bin/jangada-agente ((snapshot)) && "$JANGADA_PATH/bin/jangada-snapshot" --agente "antes do agente $sessao" || true
-# bin/jangada-agente:534
-sem-contrato bin/jangada-agente exec "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente -e "${JANGADA_TMUX[@]}" attach -t "=$sessao"
-# bin/jangada-agentes:389
-sem-contrato bin/jangada-agentes atual="$(hyprctl activewindow -j 2>/dev/null | jq -r '.title // empty' 2>/dev/null || true)"
-# bin/jangada-agentes:416
-sem-contrato bin/jangada-agentes endereco="$(hyprctl clients -j 2>/dev/null | jq -r --arg s "$s" '(map(select(.title == $s)) + map(select(.title | startswith($s)))) | .[0].address // empty' 2>/dev/null || true)"
-# bin/jangada-agentes:419
-sem-contrato bin/jangada-agentes hyprctl dispatch "hl.dsp.focus({ window = \"address:$endereco\" })" >/dev/null
-# bin/jangada-agentes:422
-sem-contrato bin/jangada-agentes setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente \
-# bin/jangada-agentes:425
-sem-contrato bin/jangada-agentes "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente \
-# bin/jangada-agentes:460
-sem-contrato bin/jangada-agentes atual="$(hyprctl activewindow -j 2>/dev/null | jq -r '.title // empty' 2>/dev/null || true)"
-# bin/jangada-agentes:717
-sem-contrato bin/jangada-agentes exec "$JANGADA_PATH/bin/jangada-tarefas"
 # bin/jangada-verificar:76
 sem-contrato bin/jangada-verificar exec "$JANGADA_PATH/bin/jangada-agente" "${janela[@]}" --projeto "$JANGADA_REPO" \
 # bin/jangada-tarefas:12

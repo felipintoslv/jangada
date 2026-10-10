@@ -384,11 +384,9 @@ registrar_foco() {
 }
 
 anterior() {
-  local atual="" s
+  local atual s
   [[ -f "$historico" ]] || { echo "nenhum agente focado ainda"; return 0; }
-  if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
-    atual="$(hyprctl activewindow -j 2>/dev/null | jq -r '.title // empty' 2>/dev/null || true)"
-  fi
+  atual="$(jangada_janela_ativa)"
   # Da mais recente para a mais antiga: a primeira que ainda existe e não é a
   # janela em foco. Assim, repetir o atalho alterna entre os dois últimos.
   while read -r s; do
@@ -401,7 +399,7 @@ anterior() {
 }
 
 focar() {
-  local s="$1" endereco=""
+  local s="$1" rc=0
   if [[ -f "$estado_dir/$s.json" ]] && ! "${JANGADA_TMUX[@]}" has-session -t "=$s" 2>/dev/null \
      && restauravel "$estado_dir/$s.json"; then
     restaurar "$s" >/dev/null || true
@@ -413,19 +411,10 @@ focar() {
       "$(jq -r '(.raiz // .dir // "") | split("/") | last // ""' "$estado_dir/$s.json" 2>/dev/null || true)" \
       "$(jq -r '.agente // ""' "$estado_dir/$s.json" 2>/dev/null || true)" foco
   fi
-  if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
-    endereco="$(hyprctl clients -j 2>/dev/null | jq -r --arg s "$s" '(map(select(.title == $s)) + map(select(.title | startswith($s)))) | .[0].address // empty' 2>/dev/null || true)"
-  fi
-  if [[ -n "$endereco" ]]; then
-    hyprctl dispatch "hl.dsp.focus({ window = \"address:$endereco\" })" >/dev/null
-  elif "${JANGADA_TMUX[@]}" has-session -t "=$s" 2>/dev/null; then
-    if command -v setsid >/dev/null 2>&1; then
-      setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente \
-        -e "${JANGADA_TMUX[@]}" attach -t "=$s" >/dev/null 2>&1
-    else
-      "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente \
-        -e "${JANGADA_TMUX[@]}" attach -t "=$s" >/dev/null 2>&1 &
-    fi
+  jangada_focar_janela "$s" || rc=$?
+  ((rc == 1)) || return "$rc"
+  if "${JANGADA_TMUX[@]}" has-session -t "=$s" 2>/dev/null; then
+    jangada_abrir_terminal --solto org.jangada.agente "${JANGADA_TMUX[@]}" attach -t "=$s"
   fi
 }
 
@@ -456,10 +445,7 @@ proximo() {
     return 0
   fi
 
-  atual=""
-  if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
-    atual="$(hyprctl activewindow -j 2>/dev/null | jq -r '.title // empty' 2>/dev/null || true)"
-  fi
+  atual="$(jangada_janela_ativa)"
   alvo="${fila[0]}"
   for ((i = 0; i < n; i++)); do
     if [[ "${fila[i]}" == "$atual" ]]; then
@@ -713,7 +699,7 @@ case "${1:-}" in
     fi
     ;;
   --janela|--janela-anterior|--painel|--painel-anterior)
-    exec "$JANGADA_PATH/bin/jangada-tarefas"
+    jangada_abrir_central
     ;;
   --monitor)
     while true; do

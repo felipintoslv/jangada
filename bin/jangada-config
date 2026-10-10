@@ -580,6 +580,64 @@ jangada_focar_classe() {
   hyprctl dispatch "hl.dsp.focus({ window = \"address:$_end\" })" >/dev/null
 }
 
+# Abertura de interface e foco de janela (contrato K10). Só estes corpos
+# conhecem o jangada-terminal, o jangada-tarefas e o hyprctl do Core. Sem
+# sessão gráfica (sem WAYLAND_DISPLAY e sem HYPRLAND_INSTANCE_SIGNATURE),
+# avisam na saída de erro e saem com 0.
+_jangada_sem_grafico() {
+  [[ -z "${WAYLAND_DISPLAY:-}${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] || return 1
+  echo "aviso: sem sessão gráfica; $1" >&2
+}
+
+# Abre o terminal do jangada com a classe CLASSE rodando COMANDO. --exec
+# substitui o processo e, sem sessão gráfica, encerra o script com 0; --solto
+# deixa o terminal fora do processo, por setsid -f ou em segundo plano.
+# Uso: jangada_abrir_terminal --exec|--solto CLASSE COMANDO...
+jangada_abrir_terminal() {
+  local modo="$1" classe="$2"
+  [[ "$modo" == --exec || "$modo" == --solto ]] || return 1
+  shift 2
+  if _jangada_sem_grafico "o terminal não foi aberto"; then
+    [[ "$modo" == --solto ]] || exit 0
+    return 0
+  fi
+  if [[ "$modo" == --exec ]]; then
+    exec "$JANGADA_PATH/bin/jangada-terminal" --classe "$classe" -e "$@"
+  elif command -v setsid >/dev/null 2>&1; then
+    setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe "$classe" -e "$@" >/dev/null 2>&1
+  else
+    "$JANGADA_PATH/bin/jangada-terminal" --classe "$classe" -e "$@" >/dev/null 2>&1 &
+  fi
+}
+
+# Abre a Central de Tarefas no lugar do processo; com --nova, no formulário
+# de tarefa nova. Sem sessão gráfica, encerra o script com 0.
+# Uso: jangada_abrir_central [--nova]
+jangada_abrir_central() {
+  _jangada_sem_grafico "a Central não foi aberta" && exit 0
+  exec "$JANGADA_PATH/bin/jangada-tarefas" "$@"
+}
+
+# Imprime o título da janela ativa; fora do Hyprland, nada.
+jangada_janela_ativa() {
+  _jangada_sem_grafico "a janela ativa não foi lida" && return 0
+  [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] || return 0
+  hyprctl activewindow -j 2>/dev/null | jq -r '.title // empty' 2>/dev/null || true
+}
+
+# Foca a janela cujo título é TÍTULO, ou começa por ele. Devolve 1 se não
+# achar, para o chamador abrir o terminal, e 2 se o Hyprland recusar o foco.
+# Uso: jangada_focar_janela TÍTULO
+jangada_focar_janela() {
+  local endereco=""
+  _jangada_sem_grafico "a janela $1 não foi focada" && return 0
+  if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    endereco="$(hyprctl clients -j 2>/dev/null | jq -r --arg s "$1" '(map(select(.title == $s)) + map(select(.title | startswith($s)))) | .[0].address // empty' 2>/dev/null || true)"
+  fi
+  [[ -n "$endereco" ]] || return 1
+  hyprctl dispatch "hl.dsp.focus({ window = \"address:$endereco\" })" >/dev/null || return 2
+}
+
 # Socket próprio do tmux para as sessões de agentes, separado do tmux pessoal.
 # shellcheck disable=SC2034  # usado pelos scripts que carregam este arquivo
 JANGADA_TMUX=(tmux -L jangada -f "$JANGADA_PATH/default/tmux/agentes.conf")
