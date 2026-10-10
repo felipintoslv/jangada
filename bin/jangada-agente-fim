@@ -300,8 +300,14 @@ verificar_fora() {
 
 # Opções na linha de comando: status.showUntrackedFiles, diff.ignoreSubmodules
 # e submodule.*.ignore vêm do repositório, que o agente grava.
+# Uma falha do git status conta como alteração.
 principal_alterada() {
-  [[ -n "$(jangada_git_seguro -C "$raiz" status --porcelain --untracked-files=all --ignore-submodules=none)" ]]
+  local saida
+  if ! saida="$(jangada_git_seguro -C "$raiz" status --porcelain --untracked-files=all --ignore-submodules=none)"; then
+    echo "o git status falhou em $raiz" >&2
+    return 0
+  fi
+  [[ -n "$saida" ]]
 }
 
 # Roda sob a trava do repositório: entre a conferência e o avanço passam a
@@ -332,9 +338,21 @@ integrar_sob_trava() {
     echo "os objetos de $ramo ou de $base em $raiz não conferem com o espelho (objeto adulterado ou repositório corrompido)" >&2
     return 11
   fi
-  if ! jangada_git_seguro -C "$raiz" merge --ff-only "$cabeca"; then
+  # O reflog vem ligado na linha de comando: core.logAllRefUpdates é do
+  # repositório, que o agente grava.
+  if ! jangada_git_seguro -C "$raiz" -c core.logAllRefUpdates=true merge --ff-only "$cabeca"; then
     echo "o git recusou o avanço rápido de $base em $raiz" >&2
     return 11
+  fi
+  # Entre a última conferência e o merge, um Git de fora da trava pode ter
+  # movido a base para um ancestral de $cabeca, e o --ff-only aceita. O reflog
+  # só detecta esse caso depois do avanço.
+  local anterior
+  anterior="$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet "refs/heads/$base@{1}" || true)"
+  if [[ "$anterior" != "$ponta_base" \
+        || "$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet "refs/heads/$base" || true)" != "$cabeca" ]]; then
+    echo "!! $base avançou para ${cabeca:0:12}, mas antes do avanço estava em ${anterior:0:12}, não em ${ponta_base:0:12}: a base mudou depois da última conferência. Nada foi desfeito: confira $raiz e o reflog de $base. A sessão, o ramo e o worktree foram mantidos." >&2
+    return 13
   fi
   avanco_integro || return 12
 }
@@ -401,6 +419,7 @@ if ((integrar)); then
     echo "!! $base avançou de ${ponta_base:0:12} para ${cabeca:0:12}, mas os arquivos gravados em $raiz não conferem com o espelho (objeto adulterado durante o avanço). Nada foi desfeito: confira $raiz antes de qualquer outro uso. A sessão, o ramo e o worktree foram mantidos." >&2
     exit 1
   fi
+  ((rc != 13)) || exit 1
   ((rc == 0 || rc == 11)) || echo "outra integração segura a trava deste repositório" >&2
   ((rc == 0)) || negar "nada foi integrado; rode de novo"
   echo "integrado em $base por avanço rápido, em ${cabeca:0:12}"
