@@ -987,6 +987,38 @@ git rev-parse --verify --quiet HEAD >/dev/null || exit 1
   conferir "caso 20b: o .jangada/validar.sh grava na cópia, não na pasta do agente" \
     test ! -e "$tmp/projeto/.jangada/rodou"
   conferir "caso 20b: o .jangada/validar.sh não grava fora do projeto" test ! -e "$tmp/validar-fora"
+
+  # Caso 20e: entrega com link de pasta versionado, fora do isolamento. A foto
+  # leva o link, e cada etapa que passa pelo jangada-isolar (lintr, quando há
+  # R, .jangada/validar.sh e revisor) roda enquanto a foto existe.
+  sessao_de claude agy
+  rm -f "$tmp/estado/jangada/revisoes/validacao-s"*
+  mkdir -p "$tmp/projeto/pasta-real"
+  echo 'h <- 1' >"$tmp/projeto/pasta-real/novo.R"
+  ln -s pasta-real "$tmp/projeto/atalho"
+  git -C "$tmp/projeto" add pasta-real atalho
+  git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "caso 20e"
+  printf '#!/usr/bin/env bash\n[[ -L atalho && -f atalho/novo.R && "${JANGADA_ISOLADO:-}" == 1 ]]\n' \
+    >"$tmp/projeto/.jangada/validar.sh"
+  rm -f "$tmp/falso/agy.visto" "$tmp/falso/agy.pasta" "$tmp/falso/agy.oculto"
+  # shellcheck disable=SC2016  # avaliado pelo agy falso, dentro do isolamento
+  FALSO_COMANDO='pwd >"$FALSO_DIR/agy.pasta"; test -L atalho && cat atalho/novo.R >"$FALSO_DIR/agy.visto"
+    ls -A "${PWD%/*}" >"$FALSO_DIR/agy.fotos"; ! echo x >invadido 2>/dev/null || echo gravou >>"$FALSO_DIR/agy.fotos"' \
+    VALIDAR_FORA=1 validar 'STATUS: APROVADO'; rc=$?
+  conferir "caso 20e: entrega com link de pasta é aprovada fora do isolamento ($rc)" [ "$rc" = 0 ]
+  conferir "caso 20e: o isolamento não recusa por causa da foto" \
+    bash -c '! grep -q "AUTORIZACAO_RECUSADA\|estado protegido" "$1" "$2"' _ "$tmp/saida.log" "$tmp/estado/jangada/revisoes/validacao-s-r1.md"
+  conferir "caso 20e: lintr e .jangada/validar.sh rodaram" \
+    bash -c '! grep -q "arquivos R não conferidos\|falha na validação do projeto" "$1" "$2"' _ "$tmp/saida.log" "$tmp/estado/jangada/revisoes/validacao-s-r1.md"
+  conferir "caso 20e: o revisor lê o link de pasta na foto" [ "$(cat "$tmp/falso/agy.visto" 2>/dev/null)" = 'h <- 1' ]
+  conferir "caso 20e: a foto fica na pasta própria do estado, fora de revisoes/" \
+    bash -c '[[ "$(cat "$1")" == "$2"/?* ]]' _ "$tmp/falso/agy.pasta" "$tmp/estado/jangada/fotos"
+  conferir "caso 20e: o revisor vê só a foto escolhida, em somente leitura" \
+    bash -c '[[ "$(cat "$1")" == "$(basename "$(cat "$2")")" ]]' _ "$tmp/falso/agy.fotos" "$tmp/falso/agy.pasta"
+  conferir "caso 20e: a pasta das fotos é só do dono" [ "$(stat -c %a "$tmp/estado/jangada/fotos" 2>/dev/null)" = 700 ]
+  conferir "caso 20e: a foto some no fim" bash -c '[[ -z "$(ls -A "$1")" ]]' _ "$tmp/estado/jangada/fotos"
+  git -C "$tmp/projeto" rm -q -r pasta-real atalho
+  git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "desfaz o caso 20e"
 else
   if [[ "${JANGADA_TESTES_EXIGIR_ISOLAMENTO:-}" == 1 ]]; then
     falha "caso 20b: bwrap ausente ou sem namespaces e o isolamento real é exigido"

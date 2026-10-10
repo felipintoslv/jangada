@@ -350,6 +350,42 @@ mantida "aprovada" p1
 integrar_teste p1 s
 conferir "já integrada: nada a integrar ($rc)" bash -c '[ "$1" -eq 0 ] && grep -q "nada a integrar" "$2"' _ "$rc" "$tmp/saida"
 
+# Entrega com link de pasta versionado: a cópia da suíte leva o link e fica em
+# integracoes/, fora de revisoes/. Enquanto a suíte roda, outro lançamento pelo
+# jangada-isolar no mesmo estado não é recusado por causa da cópia.
+integracoes="$XDG_STATE_HOME/jangada/integracoes"
+preparar lk
+mkdir "$wts/proj/lk/pasta-real"
+echo real >"$wts/proj/lk/pasta-real/dentro.txt"
+ln -s pasta-real "$wts/proj/lk/atalho"
+git -C "$wts/proj/lk" add pasta-real atalho
+git -C "$wts/proj/lk" commit --quiet -m "link de pasta"
+marca lk "$revisoes"
+c_lk="$(git -C "$proj" rev-parse agente/lk)"
+if command -v bwrap >/dev/null 2>&1 && bwrap --ro-bind / / --dev /dev --proc /proc true 2>/dev/null; then
+  # shellcheck disable=SC2016  # avaliado pela suíte falsa, na cópia
+  FALSO_COMANDO='{ test -L atalho && cat atalho/dentro.txt; } >"$FALSO_DIR/lk-visto" 2>&1
+    "$JANGADA_PATH/bin/jangada-isolar" -- true </dev/null >"$FALSO_DIR/lk-concorrente.log" 2>&1
+    echo "$?" >"$FALSO_DIR/lk-concorrente"' integrar_teste lk s
+  conferir "link de pasta: lançamento concorrente não é recusado durante a suíte" \
+    bash -c '[ "$(cat "$1/lk-concorrente" 2>/dev/null)" = 0 ] && ! grep -q AUTORIZACAO_RECUSADA "$1/lk-concorrente.log"' _ "$tmp"
+else
+  # shellcheck disable=SC2016
+  FALSO_COMANDO='{ test -L atalho && cat atalho/dentro.txt; } >"$FALSO_DIR/lk-visto" 2>&1' integrar_teste lk s
+  if [[ "${JANGADA_TESTES_EXIGIR_ISOLAMENTO:-}" == 1 ]]; then
+    falha "link de pasta: bwrap ausente ou sem namespaces e o isolamento real é exigido"
+  else
+    echo "pulado link de pasta, lançamento concorrente: bwrap ausente ou namespaces indisponíveis"
+  fi
+fi
+conferir "link de pasta: integra ($rc)" \
+  bash -c '[ "$1" -eq 0 ] && [ "$(git -C "$2" rev-parse main)" = "$3" ]' _ "$rc" "$proj" "$c_lk"
+conferir "link de pasta: a suíte roda na cópia em integracoes/, com o link" \
+  bash -c 'grep -q "^$1/" "$2/verificar-chamado" && [ "$(cat "$2/lk-visto")" = real ]' _ "$integracoes" "$tmp"
+conferir "link de pasta: a pasta das cópias é só do dono" [ "$(stat -c %a "$integracoes" 2>/dev/null)" = 700 ]
+conferir "link de pasta: a cópia é removida" bash -c '[[ -z "$(ls -A "$1" 2>/dev/null)" ]]' _ "$integracoes"
+mantida "link de pasta" lk
+
 # A base andou depois da revisão: o rebase acontece na worktree da tarefa, a
 # cópia principal não muda e o commit novo precisa de parecer próprio.
 preparar r2
