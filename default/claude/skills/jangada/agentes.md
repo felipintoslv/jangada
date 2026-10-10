@@ -125,7 +125,7 @@ conferência de processo zumbi e o prazo; outros erros continuam sendo falhas.
 | `jangada-mapa` | extrai a estrutura de arquivos e assinaturas em Markdown; atalho `mapa` no jangada shell |
 | `jangada-validar` | revisão do diff por outro modelo ou pelo mesmo modelo isolado (claude ou agy), só leitura, chamada pelo agente antes de entregar; executa portão determinístico local antes (conflitos, script com byte nulo, sintaxe, lintr, gitleaks nas linhas acrescentadas; sem gitleaks reprova, inclusive com `JANGADA_VALIDAR_SEM_GITLEAKS=1`; `.gitleaks.toml`, `.gitleaksignore`, `AGENTS.md` e `CLAUDE.md` valem da base, e `.lintr` também quando a base tem um); só a primeira linha não vazia do parecer decide o status; pareceres em `validacao-<sessao>-rN.md`; a primeira linha tem de ser exatamente `STATUS: APROVADO` ou `STATUS: REVISAR`, e aprovação pelo autor, com autoria não comprovada fora do isolamento ou com validação local incompleta vira `REVISAR`; a revisão lê uma foto congelada da entrega, não o worktree vivo; depois de um APROVADO, `validacao-<sessao>.aprovado` (JSON) guarda commit, árvore, base e revisor, e a próxima entrega parte dele com as rodadas zeradas; cada rodada vira uma linha em `~/.local/state/jangada/validar.jsonl`, resumida por `--metricas` |
 | `jangada-agentes` | seletor, painel, módulo da barra, `--focar`, `--proximo`, `--anterior`, `--restaurar` |
-| `jangada-agente-fim` | encerra e remove a worktree após conferência, mantendo o ramo; na baseline 2026-10, `--integrar` está bloqueado no backend, inclusive com confirmação gráfica ou `--sem-revisao`; sessão, ramo e worktree são preservados para integração manual supervisionada |
+| `jangada-agente-fim` | encerra e remove a worktree após conferência, mantendo o ramo; `--integrar` avança a base por `merge --ff-only` até o commit com parecer APROVADO independente em `revisoes/`, depois de confirmação humana (resposta `s` ou `--confirmacao` da Central) e de `testes/verificar.sh` sair com 0 fora do isolamento; se a base andou, refaz o ramo na worktree da tarefa e exige parecer do commit novo; recusa com cópia principal alterada e com `--sem-revisao`; não envia ao remoto, não assina, não roda o `jangada-update` e mantém sessão, ramo e worktree |
 | `jangada-consumo` | tokens do Claude no bloco de 5 horas, lidos de `~/.claude/projects` |
 | `jangada-painel` | indicadores num app Shiny em 127.0.0.1; `default/painel/coletor.py` grava o cache em Parquet (`~/.local/state/jangada/painel`), `default/painel/app.R` só lê o cache |
 | `jangada-gancho` | roda os ganchos do usuário em `~/.config/jangada/ganchos/` |
@@ -140,8 +140,8 @@ aprovar as correções não comprova que o revisor leu toda a entrega acumulada.
 Na revisão manual fora do isolamento, use `JANGADA_SESSAO` com o nome
 completo registrado da sessão. Sem ele, o rótulo vem do nome da pasta;
 a marca recebe outro nome, e a conferência manual deve identificar a entrega
-correta. `--integrar` permanece bloqueado na baseline. Isso não dispensa as
-conferências de commit, árvore, base e independência.
+correta. O `--integrar` não chama o revisor: lê a marca dessa sessão e
+confere commit, árvore, base, verificação local e independência.
 
 ## Isolamento (`jangada-isolar`)
 
@@ -345,8 +345,8 @@ trava é solta antes do `xdg-open`, que também a passaria ao navegador.
   com `=` (como `-t =sessao:` do tmux) é expandida. Chame o próprio script
   (`--previa`) em vez de montar o comando na string.
 - Em sessões diretas no repositório (sem ramo nem worktree), `jangada-agente-fim`
-  com `--integrar` não deve falhar: avisa que não há ramo a integrar e encerra a
-  sessão normalmente.
+  com `--integrar` avisa que não há ramo a integrar, sai com erro e mantém a
+  sessão.
 - `read -p` só mostra o texto quando a entrada é um terminal. Aviso que um
   teste precisa ver (ou quem responde por cano) sai num `echo` antes da
   pergunta.
@@ -418,9 +418,10 @@ porta de entrada. O que se aprendeu com ele vale para o revisor agy:
 - O Git não reconfere o hash de um objeto solto ao ler. A revisão fora do
   isolamento busca objetos em espelho protegido. A trava por repositório
   coordena o Jangada, mas não impede o editor ou Git externo de escrever.
-  Uma falha posterior ao merge não autoriza `reset --hard`: ele pode apagar
-  uma edição concorrente. A baseline bloqueia a integração automática;
-  `update-ref` sozinho também não garante consistência do worktree.
+  Uma falha posterior ao avanço não autoriza `reset --hard`: ele pode apagar
+  uma edição concorrente. O `--integrar` só avança com `merge --ff-only`,
+  com a cópia principal sem alterações, e uma divergência depois do avanço
+  só gera aviso; `update-ref` sozinho não garante consistência do worktree.
 - Uma marca só encurta a próxima revisão quando está protegida em `revisoes/`,
   registra execução local completa e revisão independente e bate com
   candidato, árvore e base. Marca gravável pelo agente não vale para isso.

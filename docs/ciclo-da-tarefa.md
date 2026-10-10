@@ -2,8 +2,8 @@
 
 Uma tarefa passa por três comandos: `jangada-agente` abre a sessão,
 `jangada-validar` manda a entrega ao revisor configurado e
-`jangada-agente-fim` encerra e limpa. Na baseline 2026-10, `--integrar`
-está bloqueado: a revisão continua, mas a integração é manual supervisionada.
+`jangada-agente-fim` encerra e limpa. Com `--integrar`, ele avança a base
+até o commit aprovado, depois de confirmação humana, e mantém a sessão.
 Veja [segurança operacional](estabilizacao/SEGURANCA_OPERACIONAL.md). O estado de cada sessão fica em
 `~/.local/state/jangada/agentes/SESSAO.json`, com o contrato descrito em
 `default/claude/skills/jangada/agentes.md`.
@@ -19,7 +19,8 @@ flowchart LR
     C -- REVISAR --> B
     C -- APROVADO --> E{mais uma entrega?}
     E -- sim --> B
-    E -- não --> F[integração manual supervisionada<br>e encerramento após conferência]
+    E -- não --> F[jangada-agente-fim --integrar:<br>confirmação, suíte e avanço rápido]
+    F --> H[encerramento após conferência]
     C -- limite --> G[usuário decide:<br>--forcar ou reverter]
 ```
 
@@ -76,9 +77,9 @@ Na Central de Tarefas v0.1, `concluido` aparece como **Turno encerrado**,
 sem afirmar que a tarefa foi concluída. Cada sessão representa uma tarefa.
 A central acompanha estados e mensagens a cada dois segundos; mudanças
 observadas ficam em memória durante a janela. Perguntas e permissões
-continuam no terminal. Na tarefa selecionada, `Alt+I` abre a integração e
-encerramento; `Ctrl+X` abre o encerramento sem integração. Ambos usam
-`jangada-agente-fim` num terminal, preservando suas conferências e confirmações.
+continuam no terminal. Na tarefa selecionada, `Alt+I` abre a integração,
+que mantém a sessão; `Ctrl+X` abre o encerramento sem integração. Ambos usam
+`jangada-agente-fim`, preservando suas conferências e confirmações.
 Veja [instalação e reversão](../README.md#central-de-tarefas-v01).
 
 Cada mudança registrada vira uma linha em `eventos-agentes.jsonl`
@@ -129,9 +130,10 @@ flowchart TD
   durante a revisão fica fora do parecer e da aprovação. Fora do isolamento,
   os objetos passam por `git fetch` para um espelho em `revisoes/espelhos/`,
   que recalcula cada hash: o agente grava em `.git/objects`, e o git não
-  reconfere um objeto solto ao ler. A integração automática está bloqueada:
-  uma conferência posterior ao merge não autoriza rollback destrutivo no
-  worktree principal. A trava do Jangada não impede alterações do editor.
+  reconfere um objeto solto ao ler. A integração confere os objetos com o
+  mesmo espelho antes e depois do avanço. Uma divergência posterior ao
+  avanço só gera aviso: não autoriza rollback destrutivo na cópia principal.
+  A trava do Jangada não impede alterações do editor.
 - **Diff.** Entram os arquivos rastreados e os novos não rastreados. Nome de
   arquivo com quebra de linha reprova na verificação local, porque escaparia
   das listas.
@@ -200,11 +202,34 @@ fora de `agente/NOME`, worktree fora de `JANGADA_WORKTREES` e worktree de
 outro repositório. O estado gravável pelo agente não autoriza operação fora
 da sessão.
 
-Com `--integrar`, uma sessão com ramo próprio recebe recusa explícita sob a
-trava do repositório. Confirmação gráfica, marca aprovada e `--sem-revisao`
-não liberam a publicação. Não se executa merge, recuperação ou limpeza.
-A sessão, os arquivos, o índice, HEAD, worktree e ramo ficam disponíveis
-para revisão e integração manual supervisionada.
+Com `--integrar`, uma sessão com ramo próprio é integrada à base por avanço
+rápido, fora do isolamento. O comando não chama o revisor e `--sem-revisao`
+não libera. As etapas, na ordem:
+
+1. O estado da sessão tem de ser igual à cópia protegida em
+   `revisoes/SESSAO.json`. A worktree da tarefa tem de estar limpa, e a
+   cópia principal, na base e sem alterações em arquivos rastreados.
+2. Se a base andou, o ramo é refeito sobre ela com `git rebase` na worktree
+   da tarefa. O commit muda, e o comando recusa pedindo
+   `jangada-validar` para o commit novo. Um conflito deixa o rebase parado na
+   worktree.
+3. A marca `revisoes/validacao-SESSAO.aprovado` tem de registrar revisão
+   independente, verificação local, worktree limpo e o commit, a árvore e a
+   base exatos.
+4. O usuário confirma: a resposta `s` no terminal (`Alt+I`) ou o botão da
+   Central, que passa em `--confirmacao` os dois commits exibidos.
+5. `testes/verificar.sh` roda numa cópia do commit tirada do espelho, em
+   `revisoes/`, e tem de sair com 0. O registro fica em
+   `revisoes/verificar-SESSAO.log`. Projeto sem esse arquivo na base e no
+   candidato segue com aviso.
+6. Sob a trava do repositório, tudo é conferido de novo e a base avança com
+   `git merge --ff-only`.
+
+Qualquer recusa deixa arquivos, índice e HEAD da cópia principal como
+estavam. Não há `merge --no-ff`, `reset --hard`, `git clean` nem outro
+comando de descarte. O comando não envia ao remoto, não assina, não roda o
+`jangada-update` e mantém sessão, ramo e worktree. O encerramento é outro
+gesto: `Ctrl+X` ou `jangada-agente-fim SESSAO`.
 
 Sem `--integrar`, o encerramento conserva a conferência de alterações
 pendentes e a confirmação humana antes de remover a worktree. O ramo fica.
@@ -233,9 +258,9 @@ prazo para sair.
 | Arquivo | O que cobre |
 |---|---|
 | `testes/validar.sh` | veredito, rodadas, limite, ponto de comparação, verificação local, pareceres e métricas, com claude e agy falsos |
-| `testes/fim.sh` | estado adulterado, bloqueio da integração e preservação de arquivos, índice, HEAD, sessão e worktree, inclusive chamadas simultâneas |
+| `testes/fim.sh` | estado adulterado; integração por avanço rápido com parecer do commit final, recusa por parecer inválido, base alterada, cópia principal alterada, suíte com falha e objeto forjado; preservação de arquivos, índice, HEAD, sessão, ramo e worktree, inclusive com trabalho concorrente e chamadas simultâneas |
 | `testes/baseline.py` | reprodução do rollback antigo, conflito, repetição após publicação manual, interrupção da trava, ferramentas ausentes, marcas inválidas e recuperação sintética |
-| `testes/update.sh` | bloqueio não mexe na cópia instalada nem roda ganchos; atualização e assinatura continuam ensaiadas com Git sintético |
+| `testes/update.sh` | a integração não mexe na cópia instalada, não envia ao remoto, não assina nem roda ganchos; atualização e assinatura continuam ensaiadas com Git sintético |
 | `testes/eventos.sh` | histórico de estados gravado pelos hooks e pela troca de foco |
 | `testes/restaurar.sh` | volta de uma sessão interrompida |
 | `testes/contratos-consulta.sh` | consultas de `jangada-agentes` sem gravar no estado e limpeza explícita das órfãs |

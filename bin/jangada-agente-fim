@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 # Encerra uma sessão de agente e remove o worktree, conferindo alterações pendentes.
 # O ramo agente/<nome> é mantido; apague-o com git branch -d quando quiser.
-# Na baseline 2026-10, --integrar recusa publicação automática e mantém a sessão.
-# A revisão continua disponível pelo jangada-validar. A integração é manual.
+# Com --integrar, avança a base até o commit do ramo (merge --ff-only na cópia
+# principal) e para: não encerra a sessão, não remove worktree nem ramo, não
+# envia ao remoto e não roda o jangada-update. Exige, nesta ordem:
+# - cópia principal no ramo base e sem alteração em arquivo rastreado;
+# - ramo à frente da base; se a base andou, faz o rebase na worktree da
+#   tarefa e recusa, porque o commit novo precisa de parecer próprio;
+# - parecer APROVADO de revisão independente, gravado fora do isolamento em
+#   ~/.local/state/jangada/revisoes para o commit exato; --sem-revisao recusa;
+# - confirmação no terminal, ou --confirmacao BASE CANDIDATO vinda da Central;
+# - testes/verificar.sh com saída 0 numa cópia protegida do commit.
 # Uso: jangada-agente-fim [--integrar [--sem-revisao]] SESSAO
 set -euo pipefail
 # shellcheck source=bin/jangada-config
@@ -11,7 +19,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 integrar=0; sem_revisao=0; s=""; gui_base=""; gui_candidato=""
 while (($#)); do
   case "$1" in
-    -h|--ajuda) sed -n '2,6s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    -h|--ajuda) sed -n '2,15s/^# \{0,1\}//p' "$0"; exit 0 ;;
     --integrar) integrar=1; shift ;;
     --confirmacao) gui_base="${2:-}"; gui_candidato="${3:-}"; shift 3 ;;
     --sem-revisao) sem_revisao=1; shift ;;
@@ -133,8 +141,7 @@ confirmar() {
   [[ "${r,,}" == s* ]]
 }
 
-# Integração: as mesmas conferências da função concluir do shell, feitas antes
-# de qualquer limpeza. Se o merge falhar, nada é removido.
+# Integração: avanço rápido da base, sem limpeza da sessão.
 #
 # O git roda aqui fora do isolamento sobre o worktree e o repositório do
 # agente, cujo .git o agente pode alterar: todas as chamadas passam por
@@ -173,29 +180,231 @@ avisar_copia_instalada() {
   return 0
 }
 
-# A trava coordena chamadas do Jangada, mas não impede editores ou Git externo.
-# A baseline não publica no worktree principal nem tenta recuperar com reset.
-mesclar_sob_trava() {
-  echo "integração automática bloqueada na baseline 2026-10; use revisão e integração manual supervisionada. A sessão, o ramo e o worktree foram mantidos." >&2
-  return 12
+# Recusa da integração. A cópia principal fica como estava.
+negar() {
+  echo "integração automática bloqueada: $1. A sessão, o ramo e o worktree foram mantidos." >&2
+  exit 1
+}
+
+# Parecer que vale: a marca em revisoes/, que o jangada-isolar oculta, para o
+# commit exato do ramo, com a árvore que o revisor leu, contra a base como
+# está agora, com verificação local completa e revisor que não é o autor. Os
+# pareceres em agentes/ são graváveis pelo agente e não contam.
+motivo_marca=""
+aprovada() {
+  local marca="$JANGADA_ESTADO/revisoes/validacao-$s.aprovado" c="" l="" b="" t="" i="" v=""
+  motivo_marca="falta parecer APROVADO gravado fora do isolamento para o commit ${cabeca:0:12} de $ramo"
+  [[ -f "$marca" && ! -L "$marca" ]] || return 1
+  IFS=$'\t' read -r c l b t i v < <(jq -r 'objects
+    | [.candidate_sha, .limpo, .base_sha, .candidate_tree, .independent, .local_verified]
+    | map(tostring) | @tsv' "$marca" 2>/dev/null) || return 1
+  [[ "$c" == "$cabeca" && "$l" == true && "$v" == true ]] || return 1
+  [[ "$t" == "$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet "$cabeca^{tree}" || true)" ]] || return 1
+  if [[ "$b" != "$ponta_base" ]]; then
+    motivo_marca="o parecer do commit ${cabeca:0:12} foi dado contra $base em ${b:0:12}, e ela está em ${ponta_base:0:12}"
+    return 1
+  fi
+  if [[ "$i" != true ]]; then
+    motivo_marca="o commit ${cabeca:0:12} só tem autorrevisão, que não vale como revisão independente"
+    return 1
+  fi
+}
+
+# O agente grava em .git/objects, e o git não reconfere o hash de um objeto
+# solto ao ler: um blob trocado entraria na base com o nome do original. O
+# espelho recebe o ramo e a base por fetch, que recalcula cada hash, e o
+# conteúdo de cada objeto que o avanço lê tem de ser igual nos dois lados.
+objetos_integros() {
+  local comum espelho chave lista rc=0
+  comum="$(dir_comum "$raiz")" && espelho="$(jangada_espelho "$comum")" || return 1
+  chave="$(printf '%s' "$s" | sha256sum | cut -c1-16)"
+  jangada_git_seguro --git-dir="$espelho" fetch -q --no-tags "$comum" \
+    "+$cabeca:refs/jangada/$chave/candidato" "+$ponta_base:refs/jangada/$chave/base" || return 1
+  lista="$(mktemp)" || return 1
+  { jangada_git_seguro --git-dir="$espelho" rev-list --objects "$ponta_base..$cabeca"
+    jangada_git_seguro --git-dir="$espelho" rev-list --objects --no-walk "$ponta_base" "$cabeca"
+  } | cut -d' ' -f1 | sort -u >"$lista" || rc=1
+  ((rc)) || cmp -s <(jangada_git_seguro --git-dir="$espelho" cat-file --batch <"$lista") \
+                   <(jangada_git_seguro -C "$raiz" cat-file --batch <"$lista") || rc=1
+  rm -f "$lista"
+  return "$rc"
+}
+
+# O avanço lê objetos que o agente ainda grava, depois de objetos_integros.
+# Cada arquivo que mudou entre a base e o commit, na árvore do espelho, tem
+# de ter no disco o conteúdo do nome que leva nessa árvore. O hash é
+# recalculado do arquivo: o índice e o stat não entram, porque quem os gravou
+# foi o avanço conferido.
+avanco_integro() {
+  local espelho meta caminho modo nome atual lista rc=0
+  espelho="$(jangada_espelho "$(dir_comum "$raiz")")" || return 1
+  lista="$(mktemp)" || return 1
+  if ! jangada_git_seguro --git-dir="$espelho" diff-tree -r -z --no-renames "$ponta_base" "$cabeca" >"$lista"; then
+    rm -f "$lista"
+    return 1
+  fi
+  while IFS= read -r -d '' meta; do
+    IFS= read -r -d '' caminho <&0 || { rc=1; break; }
+    read -r _ modo _ nome _ <<<"$meta"
+    case "$modo" in
+      000000 | 160000) continue ;;
+      120000)
+        [[ -L "$raiz/$caminho" ]] || { rc=1; break; }
+        atual="$(readlink -n -- "$raiz/$caminho" | jangada_git_seguro hash-object --stdin)" || { rc=1; break; }
+        ;;
+      *)
+        [[ -f "$raiz/$caminho" && ! -L "$raiz/$caminho" ]] || { rc=1; break; }
+        if { [[ "$modo" == 100755 ]] && [[ ! -x "$raiz/$caminho" ]]; } ||
+           { [[ "$modo" == 100644 ]] && [[ -x "$raiz/$caminho" ]]; }; then
+          rc=1; break
+        fi
+        atual="$(cd "$raiz" && jangada_git_seguro hash-object -- "$caminho" 2>/dev/null)" || { rc=1; break; }
+        ;;
+    esac
+    [[ "$atual" == "$nome" ]] || { rc=1; break; }
+  done <"$lista"
+  rm -f "$lista"
+  return "$rc"
+}
+
+# A suíte roda numa cópia do commit tirada do espelho e criada em revisoes/:
+# a worktree da tarefa segue gravável pelo agente enquanto a sessão existe, e
+# o que roda aqui fora do isolamento tem de ser o conteúdo que o revisor leu.
+# Projeto sem testes/verificar.sh na base e no commit não tem essa etapa.
+verificar_fora() {
+  local espelho copia chave registro="$JANGADA_ESTADO/revisoes/verificar-$s.log" rc=0
+  objetos_integros && espelho="$(jangada_espelho "$(dir_comum "$raiz")")" || {
+    echo "os objetos de $ramo ou de $base não conferem com o espelho (objeto adulterado ou repositório corrompido)" >&2
+    return 1
+  }
+  if ! jangada_git_seguro --git-dir="$espelho" cat-file -e "$cabeca:testes/verificar.sh" 2>/dev/null \
+     && ! jangada_git_seguro --git-dir="$espelho" cat-file -e "$ponta_base:testes/verificar.sh" 2>/dev/null; then
+    echo "o projeto não tem testes/verificar.sh; etapa não se aplica"
+    return 0
+  fi
+  copia="$(umask 077; mktemp -d "$JANGADA_ESTADO/revisoes/integracao-XXXXXX")" || return 1
+  echo "rodando testes/verificar.sh do commit ${cabeca:0:12} fora do isolamento (registro em $registro)..."
+  chave="$(printf '%s' "$s" | sha256sum | cut -c1-16)"
+  jangada_git_seguro init -q "$copia" \
+    && jangada_git_seguro -C "$copia" fetch -q --no-tags "$espelho" "refs/jangada/$chave/candidato" \
+    && [[ "$(jangada_git_seguro -C "$copia" rev-parse --verify --quiet FETCH_HEAD)" == "$cabeca" ]] \
+    && jangada_git_seguro -C "$copia" checkout -q --detach "$cabeca" || rc=1
+  ((rc)) || (cd "$copia" && env -u JANGADA_SESSAO ./testes/verificar.sh) </dev/null >"$registro" 2>&1 || rc=$?
+  rm -rf "$copia"
+  if ((rc)); then
+    tail -20 "$registro" 2>/dev/null | tr -d '\000-\010\013-\037\177' >&2
+    echo "testes/verificar.sh terminou com código $rc" >&2
+  fi
+  return "$rc"
+}
+
+principal_alterada() {
+  [[ -n "$(jangada_git_seguro -C "$raiz" status --porcelain --untracked-files=no --ignore-submodules=all)" ]]
+}
+
+# Roda sob a trava do repositório: entre a conferência e o avanço passam a
+# confirmação e a suíte, e nesse meio outra sessão pode ter sido integrada ou
+# o usuário pode ter editado a cópia principal. Tudo é conferido de novo, e
+# qualquer diferença recusa. A trava coordena chamadas do jangada, não
+# impede editores nem Git externo: por isso o avanço é --ff-only, que não
+# grava por cima de alteração local, e nenhuma falha é desfeita com descarte.
+integrar_sob_trava() {
+  if ! aprovada; then
+    echo "$motivo_marca" >&2
+    return 11
+  fi
+  if [[ "$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet "$ramo^{commit}" || true)" != "$cabeca" ]]; then
+    echo "o ramo $ramo mudou depois da conferência (era ${cabeca:0:12})" >&2
+    return 11
+  fi
+  if [[ "$(jangada_git_seguro -C "$raiz" rev-parse --abbrev-ref HEAD)" != "$base" \
+        || "$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet HEAD || true)" != "$ponta_base" ]]; then
+    echo "a base $base mudou depois da conferência (era ${ponta_base:0:12})" >&2
+    return 11
+  fi
+  if principal_alterada; then
+    echo "a cópia principal ($raiz) recebeu alterações depois da conferência" >&2
+    return 11
+  fi
+  if ! objetos_integros; then
+    echo "os objetos de $ramo ou de $base em $raiz não conferem com o espelho (objeto adulterado ou repositório corrompido)" >&2
+    return 11
+  fi
+  if ! jangada_git_seguro -C "$raiz" merge --ff-only "$cabeca"; then
+    echo "o git recusou o avanço rápido de $base em $raiz" >&2
+    return 11
+  fi
+  avanco_integro || return 12
 }
 
 integrado=0
 apagar_ramo=0
 if ((integrar)); then
-  if [[ -z "$ramo" || -z "$base" || -z "$raiz" ]]; then
-    echo "a sessão $s não tem ramo próprio (trabalho direto no repositório); nada a integrar"
-    [[ -n "$raiz" ]] && avisar_copia_instalada "$raiz"
-    echo "integração automática bloqueada; sessão e evidências mantidas" >&2
-    exit 1
-  else
-    trava="$JANGADA_ESTADO/revisoes/travas/$(dir_comum "$raiz" | sha256sum | cut -c1-16)"
-    (umask 077; mkdir -p "$trava")
-    rc=0
-    jangada_com_trava_dir "$trava" mesclar_sob_trava || rc=$?
-    ((rc == 12)) || echo "outra integração segura a trava deste repositório; nada foi mesclado" >&2
+  [[ -n "$ramo" && -n "$base" && -n "$raiz" ]] \
+    || negar "a sessão $s não tem ramo próprio (trabalho direto no repositório); nada a integrar"
+  ((!sem_revisao)) || negar "--sem-revisao não libera a integração"
+  [[ -z "${JANGADA_ISOLADO:-}" ]] || negar "dentro do isolamento não há parecer que valha; rode o --integrar fora dele"
+  # Ramo, base, raiz e worktree vêm do estado, que o agente grava. Têm de ser
+  # os que o jangada-agente copiou para revisoes/ ao abrir a sessão.
+  jq -e --arg r "$raiz" --arg w "$worktree" --arg m "$ramo" --arg b "$base" \
+    '.raiz == $r and .worktree == $w and .ramo == $m and .base == $b' \
+    "$JANGADA_ESTADO/revisoes/$s.json" >/dev/null 2>&1 \
+    || negar "ramo, base, raiz ou worktree do estado diferem da cópia protegida em $JANGADA_ESTADO/revisoes/$s.json"
+  if [[ -n "$worktree" && -d "$worktree" && -n "$(jangada_git_seguro -C "$worktree" status --porcelain --ignore-submodules=all)" ]]; then
+    jangada_git_seguro -C "$worktree" status --short --ignore-submodules=all | head -20 | tr -d '\000-\010\013-\037\177' >&2
+    negar "o worktree $worktree tem alterações sem commit"
+  fi
+  atual="$(jangada_git_seguro -C "$raiz" rev-parse --abbrev-ref HEAD)"
+  [[ "$atual" == "$base" ]] || negar "a cópia principal ($raiz) está em '$atual', não em '$base'"
+  if principal_alterada; then
+    jangada_git_seguro -C "$raiz" status --short --untracked-files=no --ignore-submodules=all | head -20 | tr -d '\000-\010\013-\037\177' >&2
+    negar "a cópia principal ($raiz) tem alterações sem commit"
+  fi
+  # A sessão continua aberta: o agente pode mover o ramo. O commit é
+  # resolvido uma vez, e é ele que se lista, se confere, se testa e se integra.
+  cabeca="$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet "$ramo^{commit}" || true)"
+  ponta_base="$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet HEAD || true)"
+  [[ -n "$cabeca" && -n "$ponta_base" ]] || negar "o ramo $ramo ou a base $base não tem commit"
+  if [[ -n "$gui_base" ]] && [[ "$gui_base" != "$ponta_base" || "$gui_candidato" != "$cabeca" ]]; then
+    negar "os commits mudaram desde a confirmação gráfica"
+  fi
+  if [[ "$cabeca" == "$ponta_base" ]] || jangada_git_seguro -C "$raiz" merge-base --is-ancestor "$cabeca" "$ponta_base"; then
+    echo "o ramo $ramo não tem commits além de $base; nada a integrar"
+    exit 0
+  fi
+  if ! jangada_git_seguro -C "$raiz" merge-base --is-ancestor "$ponta_base" "$cabeca"; then
+    [[ -n "$worktree" && -d "$worktree" ]] || negar "a base $base andou e não há worktree para o rebase de $ramo"
+    [[ "$(jangada_git_seguro -C "$worktree" symbolic-ref -q HEAD || true)" == "refs/heads/$ramo" ]] \
+      || negar "a base $base andou e o worktree $worktree não está em $ramo"
+    echo "a base $base andou (está em ${ponta_base:0:12}); rebase de $ramo em $worktree"
+    jangada_git_seguro -C "$worktree" rebase "$ponta_base" >&2 \
+      || negar "o rebase de $ramo parou em $worktree; resolva lá (git rebase --continue) ou desfaça (git rebase --abort) e peça nova revisão"
+    nova="$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet "$ramo^{commit}" || true)"
+    negar "o rebase mudou $ramo de ${cabeca:0:12} para ${nova:0:12}, e o parecer tem de ser do commit novo; rode fora do isolamento: JANGADA_SESSAO=$s jangada-validar --base $base $worktree"
+  fi
+  echo "commits de $ramo a integrar em $base ($raiz):"
+  jangada_git_seguro -C "$raiz" log --oneline "$ponta_base..$cabeca" | tr -d '\000-\010\013-\037\177' | head -30
+  aprovada || negar "$motivo_marca; rode fora do isolamento: JANGADA_SESSAO=$s jangada-validar --base $base $worktree"
+  echo "aprovado fora do isolamento no commit ${cabeca:0:12}, contra $base em ${ponta_base:0:12}"
+  if [[ -z "$gui_base" ]]; then
+    confirmar "rodar testes/verificar.sh e integrar em $base por avanço rápido?" || negar "sem confirmação"
+  fi
+  verificar_fora || negar "testes/verificar.sh fora do isolamento não saiu com 0"
+  # A trava só cobre a reconferência e o avanço, nunca a espera pelo usuário.
+  trava="$JANGADA_ESTADO/revisoes/travas/$(dir_comum "$raiz" | sha256sum | cut -c1-16)"
+  (umask 077; mkdir -p "$trava")
+  rc=0
+  jangada_com_trava_dir "$trava" integrar_sob_trava || rc=$?
+  if ((rc == 12)); then
+    echo "!! $base avançou de ${ponta_base:0:12} para ${cabeca:0:12}, mas os arquivos gravados em $raiz não conferem com o espelho (objeto adulterado durante o avanço). Nada foi desfeito: confira $raiz antes de qualquer outro uso. A sessão, o ramo e o worktree foram mantidos." >&2
     exit 1
   fi
+  ((rc == 0 || rc == 11)) || echo "outra integração segura a trava deste repositório" >&2
+  ((rc == 0)) || negar "nada foi integrado; rode de novo"
+  echo "integrado em $base por avanço rápido, em ${cabeca:0:12}"
+  echo "sessão, ramo e worktree mantidos; nada foi enviado ao remoto"
+  avisar_copia_instalada "$raiz"
+  exit 0
 fi
 
 forcar=0
