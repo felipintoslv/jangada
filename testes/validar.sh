@@ -870,9 +870,13 @@ conferir "caso 17d: a linha sai sem resumo e com o motivo, como na falha" \
   bash -c 'tail -n1 "$1" | jq -e "(has(\"subagentes\") | not) and (.subagentes_erro | length > 0)" >/dev/null' _ "$metricas"
 conferir "caso 17d: o validar avisa que o resumo não foi gravado" \
   grep -q "resumo de subagentes não gravado" "$tmp/saida.log"
+# O tmux falso não tem sessão: as sessões de agente da máquina não entram na barra.
+mkdir -p "$tmp/tmux-falso"
+printf '#!/bin/sh\nexit 0\n' >"$tmp/tmux-falso/tmux"
+chmod +x "$tmp/tmux-falso/tmux"
 barra_k6() {
-  env -u TMUX HOME="$tmp/casa" XDG_STATE_HOME="$tmp/estado-barra" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$1" \
-    "$1/bin/jangada-agentes" --waybar
+  env -u TMUX PATH="$tmp/tmux-falso:$PATH" HOME="$tmp/casa" XDG_STATE_HOME="$tmp/estado-barra" XDG_CONFIG_HOME="$tmp/config" \
+    JANGADA_PATH="$1" "$1/bin/jangada-agentes" --waybar
 }
 barra_falho="$(barra_k6 "$tmp/consumo-falho" 2>&1)"
 barra_sem="$(barra_k6 "$tmp/sem-monitor" 2>&1)"; rc=$?
