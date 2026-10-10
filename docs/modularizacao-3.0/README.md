@@ -26,11 +26,12 @@ Fases 3, 4 e 5.
 4. Os caminhos antigos continuam válidos por links simbólicos relativos
    versionados (`bin/jangada-x`, `default/hypr` e semelhantes). Isso evita
    migração imediata dos arquivos do usuário que guardam caminho absoluto.
-5. Nove contratos precisam existir antes de mover código. Cinco deles
+5. Dez contratos precisam existir antes de mover código (K10 entrou pela
+   decisão D8). Cinco deles
    desfazem acoplamentos que hoje impedem a separação (Core que sinaliza a
    Waybar, painel que herda a classe de escrita do Core, consulta que limpa
    estado, entre outros).
-6. O backlog tem 22 tarefas em quatro ondas. A primeira onda não move nada:
+6. O backlog tem 24 tarefas em quatro ondas. A primeira onda não move nada:
    cria os testes de contrato e desfaz os acoplamentos.
 
 ## Fase 0: linha de base
@@ -79,9 +80,9 @@ tarefas de escrita do backlog sobem por `jangada-agente`, uma worktree cada.
 
 ## Decisões em aberto
 
-Os itens D1 a D7 trazem a recomendação adotada nos documentos. D8 permanece
-sem recomendação fechada. Mudar a resposta muda o inventário, não o método.
-D9 registra a decisão do usuário sobre a restauração da integração.
+Os itens D1 a D7 trazem a recomendação adotada nos documentos. Mudar a
+resposta muda o inventário, não o método. D8 e D9 registram decisões do
+usuário.
 
 | # | Decisão | Recomendação | Alternativa |
 |---|---|---|---|
@@ -92,7 +93,7 @@ D9 registra a decisão do usuário sobre a restauração da integração.
 | D5 | `testes/` ou `tests/`, e `scripts/` | Manter `testes/` (regra 7) e não criar `scripts/` | Renomear |
 | D6 | Limpeza de sessões órfãs | Sai da consulta e vira ação explícita, chamada pelo próprio Shell | Manter como está e registrar exceção |
 | D7 | Quando retirar os links de compatibilidade | Só em versão posterior, com migração própria e autorização | Nunca retirar |
-| D8 | Destino dos 20 acoplamentos `sem-contrato` da M3-03, não retirados por K3 a K6 (ver situação em [04-backlog.md](04-backlog.md#m3-03-teste-de-fronteira)) | Em aberto; decidir cada item antes do portão da M3-11 | Contrato, mudança de módulo ou exceção permanente |
+| D8 | Destino dos 20 acoplamentos `sem-contrato` da M3-03, não retirados por K3 a K6 (ver situação em [04-backlog.md](04-backlog.md#m3-03-teste-de-fronteira)) | Decisão do usuário em 10/10/2026: 14 retirados por contrato, no mínimo (10 pelo K10 na M3-10b; 5 na M3-10c, 4 pelo caminho único de K5 e 1 pela consulta K4, ou 4 se o modo `--simular` precisar do padrão), e no máximo 6 exceções permanentes com motivo ([03-contratos.md](03-contratos.md#exceções-permanentes-de-k9)) | Mudança de módulo, não adotada |
 | D9 | Integração pelo botão e por alt+i | Decisão do usuário em 09/10/2026: restaurar na M3-11a, logo depois do portão da M3-11 e antes da M3-12, com confirmação humana por entrega | Até a M3-11a, `--integrar` continua recusando |
 
 ## Conflito a resolver antes da Fase 3

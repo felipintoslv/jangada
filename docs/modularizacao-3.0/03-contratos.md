@@ -11,11 +11,12 @@ uma chamada direta por uma indireta.
 | K2 | Caminhos legados | compartilhado | arquivos do usuário | existe, sem teste |
 | K3 | Aviso de mudança de estado | compartilhado | Core emite, Shell recebe | Core chama a Waybar direto |
 | K4 | Consulta de sessões sem efeito | Core | Shell, Monitor | a consulta limpa órfãos |
-| K5 | Leitura da fila e dos projetos | Core | Monitor | painel herda `Estado` |
+| K5 | Leitura da fila e dos projetos | Core | Monitor, Shell (caminho do estado) | painel herda `Estado`; Shell monta o caminho das sessões |
 | K6 | Resumo de entrega opcional | Core | `jangada-validar` | chama comando do Monitor |
 | K7 | Formato dos registros | Core | Monitor | documentado, sem teste de formato |
 | K8 | Módulos da Waybar | Shell | Core, Monitor | existe, sem teste único |
 | K9 | Fronteira entre módulos | Revisor | todos | não existe |
+| K10 | Abertura de interface e foco de janela | compartilhado | Core chama, Shell executa | Core chama `jangada-terminal`, `jangada-tarefas` e `hyprctl` direto |
 
 ## K1. Fachada de comandos
 
@@ -74,6 +75,15 @@ uma chamada direta por uma indireta.
   gravam nada. A limpeza vira `jangada-agentes --limpar-orfaos`. Para não
   mudar o comportamento percebido, `jangada-tarefas --waybar` (Shell) passa
   a chamar a limpeza antes da consulta. O Monitor usa só a consulta.
+- Acréscimo da D8 (M3-10c): `_jangada_sessao_atual`, em
+  `shell/jangada-shell.sh`, deixa de ler os arquivos `.json` da pasta de
+  sessões e passa a usar `jangada-agentes --lista`. Ponto a conferir na
+  tarefa: hoje a função compara o campo `worktree` de cada arquivo com a
+  raiz do repositório atual e lê todos os arquivos; a consulta devolve o
+  campo `dir` (igual ao `worktree` nas sessões com worktree e igual à
+  `raiz` nas sessões `--direto`) e lista só sessões vivas ou guardadas.
+  Se essa diferença mudar o resultado, a tarefa registra e não acrescenta
+  campo à consulta sem decisão.
 - Teste: tira um retrato (`sha256sum`) de `~/.local/state/jangada` em pasta
   temporária com uma sessão órfã falsa, roda as três consultas e confere que
   nada mudou; roda `--limpar-orfaos` e confere que a órfã saiu.
@@ -111,6 +121,34 @@ uma chamada direta por uma indireta.
 - Teste: `testes/painel-orquestracao.py` passa a rodar com o banco em modo
   somente leitura (arquivo `0400`, pasta `0500`); o teste de fronteira
   recusa `from estado import Estado` em `monitor/`.
+
+### Caminho único do estado das sessões (acréscimo da D8, M3-10c)
+
+- Hoje: o Shell monta o caminho da pasta de sessões em quatro pontos:
+  `bin/jangada-tarefas:12` (`$JANGADA_ESTADO/agentes`) e o padrão
+  `XDG_STATE_HOME` ou `~/.local/state`, mais `jangada/agentes`, em
+  `default/tarefas/central.py:121`, `dados.py:129` e `janela.py:259`.
+- Contrato: `bin/jangada-config` exporta a pasta de sessões numa variável,
+  na forma de `JANGADA_CORE_PY`; o nome é fixado na M3-10c. Hoje ele já
+  exporta `JANGADA_ESTADO` (`bin/jangada-config:8` e `:96`), a pasta acima
+  de `agentes/`. `jangada-tarefas` repassa a variável e os arquivos Python
+  deixam de montar o caminho.
+- Ponto a conferir: `jangada-tarefas --simular` chama `central.py` sem
+  `--estado`, e `central.py:121` calcula o caminho também nesse modo, para
+  o nome do soquete. Se o modo simulado precisar do padrão, fica no máximo
+  uma exceção, registrada com o motivo.
+- Ponto a conferir: `dados.py:132` e `janela.py:683` derivam
+  `XDG_STATE_HOME` da pasta de sessões (`estado.parent.parent`) para chamar
+  `jangada-agentes`. A tarefa mantém essa passagem ou a troca pela variável
+  nova, sem mudar o comportamento.
+- Limite conhecido, a decidir na M3-10c: `default/tarefas/dados.py`, na
+  função `registro(pasta, nome)` (linha 79), lê o `.json` da sessão para
+  `raiz`, `desde`, `tarefa`, `agente` e `mensagem`. O teste de fronteira
+  não aponta porque o caminho chega por parâmetro. A M3-10c decide entre
+  exceção permanente e campos a mais na consulta K4; este plano não decide.
+- Teste: o teste de fronteira (K9) deixa de ter as quatro exceções; um caso
+  em `testes/tarefas.py` ou `testes/tarefas.sh` confere que a Central usa a
+  pasta da variável.
 
 ## K6. Resumo de entrega opcional
 
@@ -166,8 +204,64 @@ uma chamada direta por uma indireta.
 - Antes da mudança de pasta o teste usa a lista de arquivos por módulo do
   inventário; depois, usa as pastas.
 
+## K10. Abertura de interface e foco de janela
+
+Decidido pelo usuário em 10/10/2026 (D8, grupos A e B).
+
+- Hoje: o Core abre terminal ou a Central e fala com o Hyprland direto, em
+  dez pontos:
+  - `bin/jangada-agente:118`: `exec jangada-tarefas --nova`;
+  - `bin/jangada-agente:134` e `:534`: `exec jangada-terminal`;
+  - `bin/jangada-agentes:423` e `:426` (função `focar`): `jangada-terminal`
+    em segundo plano, por `setsid -f` ou por `&`;
+  - `bin/jangada-agentes:716`: `exec jangada-tarefas`;
+  - `bin/jangada-agentes:390` e `:461`: título da janela ativa por
+    `hyprctl activewindow`;
+  - `bin/jangada-agentes:417`: endereço da janela cujo título é a sessão,
+    ou começa por ela, por `hyprctl clients`;
+  - `bin/jangada-agentes:420`: foco por `hyprctl dispatch`.
+- Contrato: o Core chama só funções de `bin/jangada-config`, na forma do
+  K3. O corpo delas é o único lugar que conhece `jangada-terminal`,
+  `jangada-tarefas` e `hyprctl`. Funções, com nomes propostos que a M3-10b
+  pode ajustar e o teste fixa:
+  - `jangada_abrir_terminal`: abre o terminal do jangada com classe e
+    comando; com variante que substitui o processo (`exec`) e variante que
+    solta o terminal, para manter cada chamada como é hoje;
+  - `jangada_abrir_central`: abre a Central, com ou sem `--nova`;
+  - `jangada_janela_ativa`: imprime o título da janela ativa, ou nada;
+  - `jangada_focar_janela`: procura a janela pelo título da sessão e a foca;
+    devolve 1 se não achar, para o chamador abrir o terminal.
+- Sem sessão gráfica, as funções avisam em vez de falhar. Com sessão
+  gráfica, o comportamento é o de hoje.
+- `jangada_focar_classe` (`bin/jangada-config:575`) já segue essa forma:
+  é função do arquivo compartilhado que chama `hyprctl`.
+- Teste: o teste de fronteira (K9) deixa de ter as dez exceções; um teste
+  das funções roda sem `WAYLAND_DISPLAY` e sem
+  `HYPRLAND_INSTANCE_SIGNATURE` e confere aviso e saída 0, e com um
+  `hyprctl` e um `jangada-terminal` falsos no `PATH` confere os argumentos
+  recebidos.
+
+## Exceções permanentes de K9
+
+Decididas pelo usuário em 10/10/2026 (D8). Ficam na lista de exceções com
+uma marca própria e o motivo no lugar de `sem-contrato`; a troca é da
+M3-10c. São no máximo seis.
+
+| Arquivo e trecho | Fronteira | Motivo |
+|---|---|---|
+| `bin/jangada-agente:365`, `jangada-snapshot --agente` com `--snapshot` | Core chama comando do Shell | chamada opcional e tolerante à ausência, na forma do K6; caso de teste mostra que a sessão abre sem o comando |
+| `bin/jangada-verificar:76`, `exec jangada-agente` com `--agente` | Monitor chama comando que altera estado | ação pedida pelo usuário por opção explícita; passa pela fachada K1 |
+| `shell/jangada-shell.sh:271`, `repassar` | Shell lê arquivo de estado | lê o último parecer e a tarefa; não há consulta do Core que devolva o parecer, e criá-la seria funcionalidade nova; dívida para depois da 3.0 |
+| `default/tarefas/janela.py:694`, `observar_estado` | Shell monta caminho do estado | só vigia mudança de arquivo, sem ler o conteúdo |
+| `default/tarefas/janela.py:700`, `observar_estado` | Shell monta caminho do estado | só vigia mudança de arquivo, sem ler o conteúdo |
+| `default/tarefas/central.py:121`, caminho padrão do modo `--simular`, se a M3-10c mostrar que é preciso | Shell monta caminho do estado | modo simulado sem `--estado`; ver o caminho único em K5 |
+
+`default/tarefas/dados.py`, em `registro(pasta, nome)`, não está na lista
+porque o teste não o aponta; o destino fica para a M3-10c (ver K5).
+
 ## Compatibilidade com os comandos `jangada-*`
 
 Nenhum comando muda de nome, de opção ou de código de saída. A única opção
-nova é `jangada-agentes --limpar-orfaos` (K4). As variáveis `JANGADA_PATH`,
+nova é `jangada-agentes --limpar-orfaos` (K4). As funções de K10 e a
+variável da pasta de sessões (K5) são internas de `jangada-config`. As variáveis `JANGADA_PATH`,
 `JANGADA_REPO`, `JANGADA_CONFIG` e `JANGADA_PROJETOS` mantêm o sentido.

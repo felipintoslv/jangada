@@ -1,6 +1,6 @@
 # 6. Backlog multiagentes
 
-Vinte e duas tarefas em quatro ondas. A situação das entregas aparece abaixo.
+Vinte e quatro tarefas em quatro ondas. A situação das entregas aparece abaixo.
 
 ## Regras de execução
 
@@ -61,6 +61,13 @@ flowchart LR
   M02 --> M10a["M3-10a"]
   M07 --> M10a
   M10a --> M11
+  M04 --> M10b["M3-10b"]
+  M08 --> M10b
+  M10b --> M10c["M3-10c"]
+  M06 --> M10c
+  M10a --> M10c
+  M10b --> M11
+  M10c --> M11
   M11 --> M11a["M3-11a"]
   M11a --> M12["M3-12"]
   M12 --> M13["M3-13"]
@@ -138,6 +145,20 @@ de estado pelo Shell; e uma abertura de sessão de agente por
 `jangada-verificar` (6 + 1 + 4 + 8 + 1 = 20). Cada item precisa de contrato,
 de mudança de módulo ou de exceção permanente decidida antes do portão da
 M3-11 (D8).
+
+Situação em 10/10/2026: D8 decidida pelo usuário. As seis aberturas e as
+quatro chamadas ao Hyprland saem pelo contrato K10 (M3-10b). Das oito
+leituras do Shell, as quatro montagens do caminho saem pelo caminho único
+de K5 e a de `_jangada_sessao_atual` sai pela consulta K4 (M3-10c); a de
+`central.py` fica como exceção se o modo `--simular` precisar do padrão.
+Ficam como exceção permanente, com motivo, o snapshot, o `jangada-verificar
+--agente`, o `repassar` e os dois trechos de `observar_estado`. São 15
+retirados e 5 permanentes, ou 14 e 6. As linhas citadas na lista de
+exceções andaram desde a M3-03: em `bin/jangada-agentes`, 389, 416, 419,
+422, 425, 460 e 717 são hoje 390, 417, 420, 423, 426, 461 e 716; em
+`default/tarefas/janela.py`, 256, 691 e 697 são hoje 259, 694 e 700. O
+trecho de cada exceção não mudou. Ver
+[03-contratos.md](03-contratos.md#exceções-permanentes-de-k9).
 
 ### M3-04 Aviso de mudança de estado (K3)
 
@@ -244,6 +265,35 @@ M3-11 (D8).
 | Riscos | hook sair com 0 sem atualizar o estado; conferência de processos incluir a própria atualização |
 | Reversão | `git revert`; sem mudança de pasta |
 
+### M3-10b Abertura de interface e foco de janela (K10)
+
+| Campo | Conteúdo |
+|---|---|
+| Tarefa | M3-10b, Onda A |
+| Objetivo | Criar em `bin/jangada-config` as funções de K10 e trocar por elas as dez chamadas dos grupos A e B da D8 em `bin/jangada-agente` e `bin/jangada-agentes`; sem mudança de comportamento com sessão gráfica |
+| Agente | Core (`claude`), revisor `codex` |
+| Arquivos permitidos | Prováveis: `bin/jangada-config`, `bin/jangada-agente`, `bin/jangada-agentes`, `testes/contratos/fronteiras-excecoes.txt`, `testes/fronteiras.sh` (só o teto), o teste que cobrir as funções |
+| Dependências | M3-04 (forma do K3 em `bin/jangada-config`), M3-08 (mesmo `bin/jangada-agentes`), decisão D8 |
+| Aceitação | as dez exceções saem da lista e o teto de `sem-contrato` passa de 20 para 10; o Core não cita `jangada-terminal`, `jangada-tarefas` nem `hyprctl` fora de `bin/jangada-config`; sem sessão gráfica, as funções avisam e saem com 0; com `hyprctl` e `jangada-terminal` falsos, os argumentos recebidos são os de hoje, inclusive `exec` onde há `exec` e terminal solto em `focar`; `testes/verificar.sh` sai com 0 fora do isolamento e com sessões de agente abertas na máquina; o teste novo isola o tmux, `HOME` e `XDG_STATE_HOME` |
+| Testes | `testes/fronteiras.sh`, `testes/eventos.sh` (troca de foco), `testes/contratos-aviso.sh` ou o teste novo das funções, `testes/verificar.sh` |
+| Riscos | trocar `exec` por chamada comum e deixar processo pendurado; perder o terminal solto de `focar` e prender o atalho; aviso sem sessão gráfica sair em código diferente de 0 e quebrar quem chama |
+| Reversão | `git revert` do commit; sem mudança de estado em disco |
+
+### M3-10c Caminho único do estado e sessão atual pela consulta (K4, K5)
+
+| Campo | Conteúdo |
+|---|---|
+| Tarefa | M3-10c, Onda A |
+| Objetivo | Exportar a pasta de sessões por variável de `bin/jangada-config` e retirar a montagem do caminho de `jangada-tarefas` e da Central; fazer `_jangada_sessao_atual` usar `jangada-agentes --lista`; trocar a marca `sem-contrato` das exceções permanentes por marca própria com motivo |
+| Agente | Shell (`claude`), revisor `codex`, por decisão do usuário na D8 |
+| Arquivos permitidos | Prováveis: `bin/jangada-config`, `bin/jangada-tarefas`, `default/tarefas/central.py`, `default/tarefas/dados.py`, `default/tarefas/janela.py`, `shell/jangada-shell.sh`, `testes/contratos/fronteiras-excecoes.txt`, `testes/fronteiras.sh`, `testes/tarefas.py`, `testes/tarefas.sh`, `testes/reverter.sh` ou o teste que cobrir `_jangada_sessao_atual`, `testes/snapshot.sh` |
+| Dependências | M3-10b (mesmo `bin/jangada-config`, mesma lista de exceções e mesmo teto), M3-06 (mesmo `bin/jangada-tarefas`), M3-10a (mesmo `janela.py`), decisão D8 |
+| Aceitação | saem da lista as quatro exceções do grupo E e a de `_jangada_sessao_atual`; as exceções do snapshot, do `jangada-verificar --agente`, do `repassar` e dos dois trechos de `observar_estado` passam a uma marca própria com motivo; o teto de `sem-contrato` vai a zero e a marca nova tem teto próprio de 5, ou 6 se o modo `--simular` precisar do padrão (a conferência do número de tetos em `testes/fronteiras.sh` muda junto); caso de teste mostra que `jangada-agente --snapshot` abre a sessão sem `jangada-snapshot` no `PATH`; `_jangada_sessao_atual` devolve a mesma sessão de hoje para um worktree de agente; a decisão sobre `dados.py`, em `registro(pasta, nome)`, fica registrada (exceção ou campos a mais na consulta K4); `testes/verificar.sh` sai com 0 fora do isolamento e com sessões de agente abertas na máquina; o teste novo isola o tmux, `HOME` e `XDG_STATE_HOME` |
+| Testes | `testes/fronteiras.sh`, `testes/tarefas.py`, `testes/tarefas.sh`, `testes/barra.sh`, `testes/reverter.sh`, `testes/snapshot.sh` com o caso novo, `testes/verificar.sh` |
+| Pontos a conferir | o modo `--simular` calcula o caminho em `central.py:121` sem `--estado`; a consulta K4 devolve `dir`, não `worktree`, e lista só sessões vivas ou guardadas, o que pode mudar o resultado de `_jangada_sessao_atual` em sessão `--direto` ou encerrada; `dados.py:132` e `janela.py:683` derivam `XDG_STATE_HOME` da pasta de sessões |
+| Riscos | Central abrir em pasta de estado diferente da do Core; `_jangada_sessao_atual` deixar de achar a sessão e `repassar` ou `reverter` agirem sobre a sessão errada; consulta lenta no prompt do shell |
+| Reversão | `git revert` do commit; sem mudança de estado em disco |
+
 ## Onda B: estrutura (Fase 3)
 
 ### M3-11 Pastas dos módulos e ferramentas que seguem as duas localizações
@@ -253,7 +303,7 @@ M3-11 (D8).
 | Objetivo | Criar `core/`, `monitor/` e as subpastas novas de `shell/`, cada uma com um `LEIAME.md` que cita este plano; fazer `verificar.sh`, `regra1.sh` e a integração contínua examinarem também `core/bin`, `shell/bin` e `monitor/bin` |
 | Agente | Core (`claude`), revisor `codex` |
 | Arquivos permitidos | `core/LEIAME.md`, `monitor/LEIAME.md`, `shell/LEIAME.md`, `testes/verificar.sh`, `testes/regra1.sh`, `testes/contratos-fachada.sh`, `testes/fronteiras.sh`, `.github/workflows/verificar.yml`, `AGENTS.md` (só a frase que lista as pastas conferidas pelo `regra1.sh`) |
-| Dependências | M3-02 com conclusão positiva, M3-06, M3-08, M3-09, M3-10, M3-10a, aprovação humana |
+| Dependências | M3-02 com conclusão positiva, M3-06, M3-08, M3-09, M3-10, M3-10a, M3-10b, M3-10c, aprovação humana |
 | Aceitação | nenhum arquivo movido; `shell/jangada.sh` e `shell/jangada-shell.sh` intactos (mesmo `sha256sum`); `verificar.sh` com saída 0; um arquivo de teste posto em `core/bin` é examinado pelo shellcheck e pelo `regra1.sh`; ressalva 4: `testes/contratos-fachada.sh` e `testes/fronteiras.sh` copiam também `core/`, `shell/` e `monitor/`; passam em cópia temporária com os links da prova |
 | Testes | `verificar.sh`, `regra1.sh` |
 | Riscos | padrões de nome do `verificar.sh` deixarem arquivo sem exame |

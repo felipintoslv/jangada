@@ -23,7 +23,7 @@
 | Etapa | Tarefas | O que muda para quem usa | Portão |
 |---|---|---|---|
 | 0 | este plano | nada | aprovação do usuário |
-| A | M3-01 a M3-10 e M3-10a | nada visível; uma opção nova (`--limpar-orfaos`) | `verificar.sh` 0 e revisão cruzada por tarefa |
+| A | M3-01 a M3-10, M3-10a, M3-10b e M3-10c | nada visível; uma opção nova (`--limpar-orfaos`) | `verificar.sh` 0 e revisão cruzada por tarefa |
 | B | M3-11 | pastas novas vazias | aprovação do usuário |
 | B1 | M3-11a | restaura integração pelo botão e por alt+i, depois do portão da M3-11 e antes da M3-12 | revisão cruzada, `verificar.sh` 0 fora do isolamento e confirmação humana por entrega |
 | C1 | M3-12 a M3-15 | arquivos do Shell mudam de pasta; caminhos antigos seguem | teste em Hyprland aninhado; aprovação antes da primeira |
@@ -109,7 +109,7 @@ edição direta da cópia instalada.
 | Critério | Como se confere |
 |---|---|
 | Três pastas reais no monorepositório | M3-11 e Onda C |
-| Core independente do Shell e do Monitor | K9 com lista vazia e teste de remoção em M3-20 |
+| Core independente do Shell e do Monitor | K9 sem exceção `sem-contrato`, só as exceções permanentes da D8, e teste de remoção em M3-20 |
 | Monitor por contratos definidos | K5 e K7 |
 | Comandos `jangada-*` preservados | K1 em toda tarefa |
 | `shell/` existente não sobrescrito | `sha256sum` dos dois arquivos em M3-11 e na Onda C |
