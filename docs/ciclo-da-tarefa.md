@@ -131,8 +131,9 @@ flowchart TD
   os objetos passam por `git fetch` para um espelho em `revisoes/espelhos/`,
   que recalcula cada hash: o agente grava em `.git/objects`, e o git não
   reconfere um objeto solto ao ler. A integração confere os objetos com o
-  mesmo espelho antes e depois do avanço. Uma divergência posterior ao
-  avanço só gera aviso: não autoriza rollback destrutivo na cópia principal.
+  mesmo espelho e faz o avanço lendo só os objetos dele. Uma divergência
+  posterior ao avanço só gera aviso: não autoriza rollback destrutivo na
+  cópia principal.
   A trava do Jangada não impede alterações do editor.
 - **Diff.** Entram os arquivos rastreados e os novos não rastreados. Nome de
   arquivo com quebra de linha reprova na verificação local, porque escaparia
@@ -224,7 +225,8 @@ não libera. As etapas, na ordem:
    `revisoes/verificar-SESSAO.log`. Projeto sem esse arquivo na base e no
    candidato segue com aviso.
 6. Sob a trava do repositório, tudo é conferido de novo e a base avança com
-   `git merge --ff-only`.
+   `git merge --ff-only`, lendo os objetos do espelho em `revisoes/espelhos/`,
+   não os de `.git/objects`, que o agente grava.
 
 A recusa por base alterada ou cópia principal alterada vale até a última
 conferência, sob a trava. A trava não impede um Git de fora do jangada: se

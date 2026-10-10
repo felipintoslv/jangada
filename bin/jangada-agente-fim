@@ -220,7 +220,7 @@ objetos_integros() {
   chave="$(printf '%s' "$s" | sha256sum | cut -c1-16)"
   jangada_git_seguro --git-dir="$espelho" fetch -q --no-tags "$comum" \
     "+$cabeca:refs/jangada/$chave/candidato" "+$ponta_base:refs/jangada/$chave/base" || return 1
-  lista="$(mktemp)" || return 1
+  lista="$(umask 077; mktemp "$JANGADA_ESTADO/revisoes/objetos-XXXXXX")" || return 1
   { jangada_git_seguro --git-dir="$espelho" rev-list --objects "$ponta_base..$cabeca"
     jangada_git_seguro --git-dir="$espelho" rev-list --objects --no-walk "$ponta_base" "$cabeca"
   } | cut -d' ' -f1 | sort -u >"$lista" || rc=1
@@ -230,15 +230,14 @@ objetos_integros() {
   return "$rc"
 }
 
-# O avanço lê objetos que o agente ainda grava, depois de objetos_integros.
-# Cada arquivo que mudou entre a base e o commit, na árvore do espelho, tem
-# de ter no disco o conteúdo do nome que leva nessa árvore. O hash é
-# recalculado do arquivo: o índice e o stat não entram, porque quem os gravou
-# foi o avanço conferido.
+# Conferência posterior ao avanço. Cada arquivo que mudou entre a base e o
+# commit, na árvore do espelho, tem de ter no disco o conteúdo do nome que
+# leva nessa árvore. O hash é recalculado do arquivo: o índice e o stat não
+# entram, porque quem os gravou foi o avanço conferido.
 avanco_integro() {
   local espelho meta caminho modo nome atual lista rc=0
   espelho="$(jangada_espelho "$(dir_comum "$raiz")")" || return 1
-  lista="$(mktemp)" || return 1
+  lista="$(umask 077; mktemp "$JANGADA_ESTADO/revisoes/avanco-XXXXXX")" || return 1
   if ! jangada_git_seguro --git-dir="$espelho" diff-tree -r -z --no-renames "$ponta_base" "$cabeca" >"$lista"; then
     rm -f "$lista"
     return 1
@@ -338,9 +337,14 @@ integrar_sob_trava() {
     echo "os objetos de $ramo ou de $base em $raiz não conferem com o espelho (objeto adulterado ou repositório corrompido)" >&2
     return 11
   fi
-  # O reflog vem ligado na linha de comando: core.logAllRefUpdates é do
-  # repositório, que o agente grava.
-  if ! jangada_git_seguro -C "$raiz" -c core.logAllRefUpdates=true merge --ff-only "$cabeca"; then
+  # O avanço lê os objetos do espelho, que o fetch recalculou e o agente não
+  # grava; os de $raiz/.git/objects e seus alternates ficam de fora. O reflog
+  # vem ligado na linha de comando: core.logAllRefUpdates é do repositório,
+  # que o agente grava.
+  local espelho
+  espelho="$(jangada_espelho "$(dir_comum "$raiz")")" || return 11
+  if ! GIT_OBJECT_DIRECTORY="$espelho/objects" GIT_ALTERNATE_OBJECT_DIRECTORIES='' \
+       jangada_git_seguro -C "$raiz" -c core.logAllRefUpdates=true merge --ff-only "$cabeca"; then
     echo "o git recusou o avanço rápido de $base em $raiz" >&2
     return 11
   fi
@@ -416,7 +420,7 @@ if ((integrar)); then
   rc=0
   jangada_com_trava_dir "$trava" integrar_sob_trava || rc=$?
   if ((rc == 12)); then
-    echo "!! $base avançou de ${ponta_base:0:12} para ${cabeca:0:12}, mas os arquivos gravados em $raiz não conferem com o espelho (objeto adulterado durante o avanço). Nada foi desfeito: confira $raiz antes de qualquer outro uso. A sessão, o ramo e o worktree foram mantidos." >&2
+    echo "!! $base avançou de ${ponta_base:0:12} para ${cabeca:0:12}, mas os arquivos gravados em $raiz não conferem com o espelho (arquivo alterado durante o avanço). Nada foi desfeito: confira $raiz antes de qualquer outro uso. A sessão, o ramo e o worktree foram mantidos." >&2
     exit 1
   fi
   ((rc != 13)) || exit 1
