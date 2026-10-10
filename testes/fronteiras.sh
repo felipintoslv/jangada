@@ -144,7 +144,11 @@ problemas() {
     cd "$raiz" || exit 1
     local modulos=testes/contratos/modulos.txt excecoes=testes/contratos/fronteiras-excecoes.txt
     local cmd_sm estado_cmds achados lista c n
-    classes="$(find bin default shell -type f ! -path '*/__pycache__/*' | sort | awk '
+    # -L: arquivo movido para core/, shell/ ou monitor/ é lido pelo link de
+    # bin/ ou default/, com o nome que modulos.txt conhece. Arquivo alcançado
+    # por dois caminhos conta uma vez, pelo primeiro em ordem alfabética.
+    classes="$(find -L bin default shell -type f ! -path '*/__pycache__/*' -printf '%i\t%p\n' | sort -t$'\t' -k2 |
+      awk -F'\t' '!visto[$1]++ { print $2 }' | awk '
       NR == FNR { if ($0 !~ /^#/ && NF) { mod[++n] = $1; cam[n] = $2 }; next }
       {
         c = 0
