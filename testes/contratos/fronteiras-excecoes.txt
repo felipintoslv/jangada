@@ -1,8 +1,9 @@
 # Contrato K9: exceções do teste de fronteira (testes/fronteiras.sh).
 # Formato: CONTRATO ARQUIVO TRECHO. TRECHO é a linha do código sem os espaços
 # das pontas; a linha citada no comentário de cada grupo é a de quando a lista
-# foi criada (M3-03). A lista só diminui: quem retira um acoplamento retira a
-# exceção no mesmo commit, e o teto de cada contrato fica em testes/fronteiras.sh.
+# foi criada (M3-03), salvo indicação. A lista só diminui: quem retira um
+# acoplamento retira a exceção no mesmo commit, e o teto de cada contrato fica
+# em testes/fronteiras.sh.
 
 # K6 (resumo de entrega opcional, M3-08): o Core chama comandos do Monitor.
 # bin/jangada-agentes:635
@@ -10,19 +11,27 @@ K6 bin/jangada-agentes consumo="$("$JANGADA_PATH/bin/jangada-consumo" --curto 2>
 # bin/jangada-validar:159
 K6 bin/jangada-validar resumo="$(timeout 30 "$JANGADA_PATH/bin/jangada-subagentes" --entrega "$origem_dir" ${desde:+--desde "$desde"} 2>/dev/null)" || rc=$?
 
-# Sem contrato que as retire: acoplamentos que existem no código e não estão
-# no inventário nem em K3 a K6. O foco de janela e a abertura de terminal ou
-# da Central saíram pelo K10 (M3-10b); K4 não cobre a leitura direta do
-# estado pelo Shell. O destino das que restam é a M3-10c (decisão D8).
-# bin/jangada-agente:365
-sem-contrato bin/jangada-agente ((snapshot)) && "$JANGADA_PATH/bin/jangada-snapshot" --agente "antes do agente $sessao" || true
-# bin/jangada-verificar:76
-sem-contrato bin/jangada-verificar exec "$JANGADA_PATH/bin/jangada-agente" "${janela[@]}" --projeto "$JANGADA_REPO" \
-# default/tarefas/janela.py:691
-sem-contrato default/tarefas/janela.py pastas = [self.estado_dir, self.estado_dir.parent / 'revisoes', self.estado_dir / 'projetos']
-# default/tarefas/janela.py:697
-sem-contrato default/tarefas/janela.py caminhos.update(str(p) for p in pasta.glob('tarefas.sqlite*') if p.is_file() and not p.is_symlink())
-# shell/jangada-shell.sh:132
+# Sem contrato que as retire: o que resta para a M3-10c (decisão D8).
+# shell/jangada-shell.sh:132, _jangada_sessao_atual; sai pela consulta K4.
 sem-contrato shell/jangada-shell.sh local estado_dir="${JANGADA_ESTADO:-${XDG_STATE_HOME:-$HOME/.local/state}/jangada}/agentes"
-# shell/jangada-shell.sh:271
-sem-contrato shell/jangada-shell.sh local estado_dir="${JANGADA_ESTADO:-${XDG_STATE_HOME:-$HOME/.local/state}/jangada}/agentes"
+
+# Exceções permanentes (decisão D8, docs/modularizacao-3.0/03-contratos.md),
+# cada uma com o motivo. A linha citada é a de quando a marca foi trocada
+# (M3-10c).
+# bin/jangada-agente:365, --snapshot. O Core chama comando do Shell: chamada
+# opcional e tolerante à ausência, na forma do K6; testes/snapshot.sh mostra
+# que a sessão abre sem o comando.
+permanente bin/jangada-agente ((snapshot)) && "$JANGADA_PATH/bin/jangada-snapshot" --agente "antes do agente $sessao" || true
+# bin/jangada-verificar:76, --agente. O Monitor chama comando que altera
+# estado: ação pedida pelo usuário por opção explícita, pela fachada K1.
+permanente bin/jangada-verificar exec "$JANGADA_PATH/bin/jangada-agente" "${janela[@]}" --projeto "$JANGADA_REPO" \
+# shell/jangada-shell.sh:271, repassar. O Shell lê arquivo de estado: o último
+# parecer e a tarefa. Não há consulta do Core que devolva o parecer, e criá-la
+# seria funcionalidade nova; dívida para depois da 3.0.
+permanente shell/jangada-shell.sh local estado_dir="${JANGADA_ESTADO:-${XDG_STATE_HOME:-$HOME/.local/state}/jangada}/agentes"
+# default/tarefas/janela.py:694, observar_estado. O Shell monta caminho do
+# estado: só vigia mudança de arquivo, sem ler o conteúdo.
+permanente default/tarefas/janela.py pastas = [self.estado_dir, self.estado_dir.parent / 'revisoes', self.estado_dir / 'projetos']
+# default/tarefas/janela.py:700, observar_estado. O Shell monta caminho do
+# estado: só vigia mudança de arquivo, sem ler o conteúdo.
+permanente default/tarefas/janela.py caminhos.update(str(p) for p in pasta.glob('tarefas.sqlite*') if p.is_file() and not p.is_symlink())

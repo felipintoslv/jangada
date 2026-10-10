@@ -33,7 +33,9 @@
 # das pontas. A lista é igual aos acoplamentos: acoplamento fora dela falha, e
 # exceção sem acoplamento correspondente também falha (retire-a da lista).
 # A lista só diminui: o teto de cada contrato, abaixo, é a contagem de quando
-# a lista foi criada (M3-03), e só sobe com mudança neste arquivo.
+# a lista foi criada (M3-03), e só sobe com mudança neste arquivo. A marca
+# "permanente" reúne as exceções que ficam por decisão (D8), cada uma com o
+# motivo na lista; o teto dela é o número decidido.
 #
 # Uso: testes/fronteiras.sh
 set -uo pipefail
@@ -45,7 +47,7 @@ ok()    { printf 'ok    %s\n' "$*"; }
 falha() { printf 'FALHA %s\n' "$*"; falhas=$((falhas + 1)); }
 conferir() { local d="$1"; shift; if "$@"; then ok "$d"; else falha "$d"; fi; }
 
-declare -A teto=([K3]=10 [K4]=0 [K5]=3 [K6]=2 [sem-contrato]=6)
+declare -A teto=([K3]=10 [K4]=0 [K5]=3 [K6]=2 [sem-contrato]=1 [permanente]=5)
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
@@ -187,7 +189,7 @@ problemas() {
   )
 }
 
-conferir "teto de cada contrato definido" [ "${#teto[@]}" -eq 5 ]
+conferir "teto de cada contrato definido" [ "${#teto[@]}" -eq 6 ]
 achados="$(problemas "$repo_jangada")"
 conferir "nenhum acoplamento entre módulos fora da lista de exceções" [ -z "$achados" ]
 [[ -n "$achados" ]] && printf '      %s\n' "$achados"
