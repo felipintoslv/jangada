@@ -8,6 +8,11 @@ Veja [segurança operacional](estabilizacao/SEGURANCA_OPERACIONAL.md). O estado 
 `~/.local/state/jangada/agentes/SESSAO.json`, com o contrato descrito em
 `default/claude/skills/jangada/agentes.md`.
 
+Desde a modularização 3.0, os comandos deste ciclo moram em `core/bin/` e a
+skill em `core/agentes/claude/skills/jangada/`. Os caminhos de `bin/` e
+`default/` citados aqui são links de compatibilidade e continuam sendo a
+forma de uso. O mapa das pastas está na seção Estrutura do [README](../README.md).
+
 O Codex participa pelos perfis `codex`, `codex-codex` e `codex-agy`.
 As diferenças de protocolo, hooks e revisão estão em [Codex](codex.md).
 

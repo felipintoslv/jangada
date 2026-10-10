@@ -12,6 +12,14 @@ um só. Paralelismo de implementação é outra sessão do jangada.
 São nove papéis, e cada um existe no Claude e no agy, com o mesmo nome: no Claude em
 `default/claude/agents/PAPEL.md`, no agy em `default/agy/agents/PAPEL/agent.md`.
 
+Desde a modularização 3.0, os caminhos de `default/` e `bin/` citados neste
+documento são links de compatibilidade e continuam sendo a forma de uso. Os
+arquivos moram em `core/agentes/claude/`, `core/agentes/agy/`,
+`core/agentes/perfis/` (antes `default/agentes/`), `core/delegacao/`,
+`core/nucleo/` e `core/bin/`; o `jangada-subagentes` e o
+`default/painel/subagentes.py` moram em `monitor/bin/` e `monitor/painel/`.
+O mapa das pastas está na seção Estrutura do [README](../README.md).
+
 | Papel | Uso | Claude |
 |---|---|---|
 | explorador | localizar código e ligações entre partes | haiku |

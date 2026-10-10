@@ -6,7 +6,9 @@ substitui as listas que ficavam fixas no `jangada-agente` e no
 
 ## Onde ficam
 
-Um arquivo `NOME.conf` por provedor, em `default/provedores/`. Uma cópia em
+Um arquivo `NOME.conf` por provedor, em `default/provedores/` (link de
+compatibilidade; desde a modularização 3.0 a pasta mora em
+`core/provedores/`). Uma cópia em
 `~/.config/jangada/provedores/NOME.conf` tem precedência sobre a do
 repositório, e um arquivo novo nessa pasta acrescenta um provedor.
 

@@ -6,6 +6,12 @@ existe, se é sobrescrito ou acumulado e quem apaga. Os números de linha são
 do repositório em 26/09/2026. Os exemplos são reais, resumidos, com textos
 trocados por `...`.
 
+Desde a modularização 3.0, os comandos citados como `bin/jangada-*` são
+links de compatibilidade: o arquivo mora em `core/bin/`, `shell/bin/` ou
+`monitor/bin/`, e `default/painel/` mora em `monitor/painel/`. Só o
+`jangada-config` e outros seis comandos compartilhados continuam em `bin/`.
+O mapa das pastas está na seção Estrutura do [README](../README.md).
+
 Caminhos usados abaixo:
 
 - `$JANGADA_ESTADO` = `~/.local/state/jangada` (`bin/jangada-config:8`).

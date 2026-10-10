@@ -90,7 +90,11 @@ flowchart TD
 - **Confirmação.** A origem da cópia instalada é a cópia de trabalho, cujas
   refs um agente isolado pode gravar. Por isso nada que chega por ela roda
   sem você ver: `confirmar_novidades` mostra os commits, os arquivos e um
-  aviso quando mudam `migrations/`, `install/` ou `bin/`. Os textos passam
+  aviso quando mudam `migrations/`, `install/` ou `bin/`. Desde a
+  modularização 3.0, 52 dos 59 comandos de `bin/` são links para `core/bin`,
+  `shell/bin` e `monitor/bin`: mudança no arquivo real não altera o link e
+  não entra nesse aviso, só no resumo por arquivo. A pendência está em
+  [modularizacao-3.0/06-validacao-final.md](modularizacao-3.0/06-validacao-final.md). Os textos passam
   por um filtro de caracteres de controle, para que uma sequência de escape
   não disfarce a lista. Sem terminal, a resposta é não.
 - **Assinaturas.** Com `~/.config/jangada/allowed_signers`, todo commit que

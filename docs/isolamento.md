@@ -6,6 +6,11 @@ fica somente leitura, e os segredos ficam ocultos. O objetivo é que nada do
 que o agente fizer rode depois fora do isolamento: um hook do git, um
 `settings.json` do Claude, um clone do AUR compilado com sudo.
 
+Desde a modularização 3.0, o `jangada-isolar` e o `jangada-agentes` moram em
+`core/bin/` e a skill em `core/agentes/claude/skills/jangada/`. Os caminhos
+de `bin/` e `default/` citados aqui são links de compatibilidade e continuam
+sendo a forma de uso. O mapa das pastas está na seção Estrutura do [README](../README.md).
+
 No Codex, dados de execução próprios da sessão são montados sobre a pasta
 global do CLI, com configuração e login somente leitura. O servidor
 compartilhado fica desligado. Veja [Codex](codex.md).

@@ -5,6 +5,12 @@ investigação. As pegadinhas de ferramentas específicas (API do Hyprland,
 waybar, agy) ficam na skill, em `default/claude/skills/jangada/`; aqui fica o
 que vale para qualquer mudança.
 
+Desde a modularização 3.0, cada arquivo mora em `core/`, `shell/` ou
+`monitor/`. Os caminhos de `bin/` e `default/` citados neste guia são links de
+compatibilidade e continuam valendo: a skill mora em
+`core/agentes/claude/skills/jangada/`, a configuração do Hyprland em
+`shell/hyprland/` e o `jangada-painel` em `monitor/bin/`. O mapa das pastas está na seção Estrutura do [README](../README.md).
+
 ## Fluxo de uma mudança
 
 ```mermaid
