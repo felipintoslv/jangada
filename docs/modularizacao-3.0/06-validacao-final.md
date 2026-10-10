@@ -378,11 +378,27 @@ print(f'caminhos inexistentes: {faltas}')
 
 ```
 $ python3 caminhos.py $(git diff --name-only 390a63b..)
-@@SAIDA_CAMINHOS@@
+core/agentes/claude/skills/jangada/agentes.md: config/read
+docs/codex.md: config/read
+docs/modularizacao-3.0/06-validacao-final.md: bin/jangada-par
+docs/modularizacao-3.0/06-validacao-final.md: bin/jangada-x
+docs/modularizacao-3.0/06-validacao-final.md: config/read
+docs/modularizacao-3.0/06-validacao-final.md: core/projetos
+docs/modularizacao-3.0/06-validacao-final.md: core/tarefas
+docs/modularizacao-3.0/06-validacao-final.md: docs/arquitetura/modulos.md
+docs/modularizacao-3.0/06-validacao-final.md: monitor/historico
+docs/modularizacao-3.0/06-validacao-final.md: shell/default
+docs/modularizacao-3.0/README.md: bin/jangada-x
+docs/modularizacao-3.0/README.md: core/projetos
+docs/modularizacao-3.0/README.md: core/tarefas
+docs/modularizacao-3.0/README.md: docs/arquitetura/modulos.md
+docs/modularizacao-3.0/README.md: monitor/historico
+docs/registros.md: bin/jangada-par
+caminhos inexistentes: 16
 ```
 
 Ressalva: o programa aponta os nomes acima, e nenhum é caminho que o texto
-dê como existente.
+dê como existente. Os do próprio 06 são as citações da tabela abaixo.
 
 | Citação | Onde | Por que não é caminho quebrado |
 |---|---|---|
