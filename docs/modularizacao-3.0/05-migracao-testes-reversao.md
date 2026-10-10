@@ -53,7 +53,8 @@ de novo fora do isolamento antes de integrar; o restante da regra está em
 
 Divergência registrada, sem ajuste: o parágrafo acima diz que o Shell vai
 primeiro e o Core por último. Com a D11, isso vale para a M3-12 e para a
-M3-18; a M3-16 e a M3-17 integram antes da M3-14 e da M3-15.
+M3-18. A M3-16 integra antes da etapa da M3-14 e da M3-17, e a M3-17 integra
+antes da M3-15. Dentro de cada par, a ordem de integração não está fixada.
 
 ### Atualização da cópia instalada
 
