@@ -149,21 +149,16 @@ de migração atualiza; os outros são o defeito do item 2.
 
 ## 4. Link dentro do `jangada-isolar`
 
-**Não conferido.** De dentro da sessão, `$S/prova/bin/jangada-isolar` (com e
-sem `--mostrar`) recusa:
+**Conferido em 09/10/2026 pelo coordenador, fora do isolamento**, sobre o
+`main` em `e604eaa`, com os comandos abaixo. Dentro do `jangada-isolar`,
+tanto com a casa padrão quanto com `JANGADA_ISOLAR_CASA=minima`, os dois
+`readlink` devolveram `../core/bin/jangada-fila` e `../monitor/painel`.
+`default/waybar` listou `base.css`, `config.jsonc` e `style.css.modelo`;
+`jangada-barra --posicao` devolveu `topo` e `jangada-painel --waybar` devolveu
+o JSON com `class` igual a `parado`.
 
-```
-AUTORIZACAO_RECUSADA ou falha de preservação: operação exige controlador fora do isolamento
-```
-
-É trava deliberada e não foi contornada. Indício parcial: esta própria sessão
-roda num `jangada-isolar`, e os links em `$S` resolvem e executam (itens 1, 6
-e 8). O `jangada-isolar` monta `JANGADA_PATH` inteiro com `--ro-bind`
-(`bin/jangada-isolar:106` e `:505`), então um link relativo que não sai da
-pasta continua dentro da montagem.
-
-Comando para o usuário rodar fora do isolamento. A cópia fica na pasta
-pessoal porque o `/tmp` do isolamento é próprio:
+Comandos usados fora do isolamento. A cópia fica na pasta pessoal porque o
+`/tmp` do isolamento é próprio:
 
 ```
 P="$(mktemp -d ~/prova-links.XXXXXX)/jangada"
@@ -183,13 +178,19 @@ for casa in "" minima; do
 done
 ```
 
-Esperado: os dois `readlink`, os três arquivos da Waybar, `topo` e o JSON do
+Resultado: os dois `readlink`, os três arquivos da Waybar, `topo` e o JSON do
 painel, nas duas casas. Depois, `rm -rf` da pasta criada pelo `mktemp`.
 
 ## 5. `jangada-update` numa cópia instalada falsa
 
-**Conferido em parte.** `$S/instalada` é um clone de `$S/prova` posto em
-`e654742` (ramo `main` acompanhando a origem), com um
+**Conferido em 09/10/2026 pelo coordenador, fora do isolamento**, sobre o
+`main` em `e604eaa`, com o `jangada-update --somente-codigo` e os comandos
+abaixo. Na cópia instalada falsa, os três links apareceram em "mudam código
+que roda fora do isolamento". A atualização terminou com "código instalado
+em" o commit da prova; os links resolveram e `git status` ficou limpo.
+
+Conferência anterior, dentro da sessão isolada: `$S/instalada` é um clone de
+`$S/prova` posto em `e654742` (ramo `main` acompanhando a origem), com um
 `default/painel/__pycache__/coletor.cpython-314.pyc` ignorado, como existe
 hoje na cópia instalada real. Rodei os mesmos comandos do `jangada-update`,
 com `jangada_git_seguro` carregado do `jangada-config` da prova:
@@ -215,10 +216,10 @@ sem erro. A volta (`git switch --detach HEAD~1`) recria `default/painel` como
 pasta. Os três links aparecem na lista "mudam código que roda fora do
 isolamento", o que é correto.
 
-O próprio `jangada-update --somente-codigo` recusa aqui:
-`atualização exige terminal externo ao agente isolado`. Comando para o
-usuário, fora do isolamento, depois de montar `$P` como no item 4. O
-`XDG_CONFIG_HOME` temporário evita a conferência de assinatura do
+Na conferência anterior, `jangada-update --somente-codigo` recusou:
+`atualização exige terminal externo ao agente isolado`. O coordenador rodou
+o comando abaixo fora do isolamento, depois de montar `$P` como no item 4.
+O `XDG_CONFIG_HOME` temporário evita a conferência de assinatura do
 `allowed_signers` real, e o `TMUX_TMPDIR` temporário evita a recusa pelas
 sessões de agente abertas:
 
@@ -231,8 +232,8 @@ JANGADA_PATH="$I" XDG_CONFIG_HOME="$(mktemp -d)" TMUX_TMPDIR="$(mktemp -d)" \
 readlink "$I/bin/jangada-fila" "$I/default/painel"
 ```
 
-Esperado: lista com o commit `prova`, pergunta `[s/N]`, `código instalado em`
-e os dois links.
+Resultado: lista com o commit `prova`, pergunta `[s/N]`, `código instalado em`
+e os dois links resolvendo; `git status` limpo.
 
 Ressalva: a conferência de processos do `jangada-update` (linhas 48 a 50)
 procura `"$JANGADA_PATH/default/"` e `"$JANGADA_PATH/bin/jangada-"` na linha de
@@ -310,4 +311,3 @@ define `JANGADA_PATH=$S/wt`.
 5. A conferência de processos do `jangada-update` (linhas 48 a 50) passa a
    procurar também `core/`, `shell/` e `monitor/`.
 6. A aceitação comum da Onda C usa `git diff -M -B --stat`.
-7. Itens 4 e 5 ficam por conferir fora do isolamento, com os comandos acima.

@@ -1,6 +1,6 @@
 # 6. Backlog multiagentes
 
-Vinte tarefas em quatro ondas. Nenhuma foi iniciada.
+Vinte e uma tarefas em quatro ondas. A situação das entregas aparece abaixo.
 
 ## Regras de execução
 
@@ -46,6 +46,8 @@ flowchart LR
   M04 --> M05["M3-05"]
   M05 --> M06["M3-06"]
   M04 --> M07["M3-07"]
+  M02 --> M07
+  M05 --> M08
   M07 --> M08["M3-08"]
   M01 --> M09["M3-09"]
   M01 --> M10["M3-10"]
@@ -54,6 +56,9 @@ flowchart LR
   M08 --> M11
   M09 --> M11
   M10 --> M11
+  M02 --> M10a["M3-10a"]
+  M07 --> M10a
+  M10a --> M11
   M11 --> M12["M3-12"]
   M12 --> M13["M3-13"]
   M13 --> M14["M3-14"]
@@ -174,10 +179,10 @@ M3-11 (D8).
 |---|---|
 | Objetivo | `painel/orquestracao.py` e `coletor.py` deixam de herdar `Estado` e de montar `sys.path` por `resolve()`; passam a usar `nucleo.consultas` e `JANGADA_CORE_PY` |
 | Agente | Monitor (`claude`), revisor `codex` |
-| Arquivos permitidos | `default/painel/orquestracao.py`, `default/painel/coletor.py`, `bin/jangada-config` (só a variável nova), `bin/jangada-painel`, `testes/painel-orquestracao.py`, `testes/contratos/fronteiras-excecoes.txt` |
-| Dependências | M3-04 (fila do `jangada-config`) |
-| Aceitação | painel mostra os mesmos números com o banco somente leitura; exceções retiradas |
-| Testes | `testes/painel-orquestracao.py`, `testes/painel-local.py`, `testes/painel.sh`, `verificar.sh` |
+| Arquivos permitidos | `default/painel/orquestracao.py`, `default/painel/coletor.py`, `bin/jangada-config` (só a variável nova), `bin/jangada-painel`, `default/painel/app.R`, `default/painel/fichas.R`, `default/painel/operacional.R`, `testes/painel-motores.R`, `testes/painel-operacional.R`, `testes/painel-orquestracao.py`, `testes/contratos/fronteiras-excecoes.txt` |
+| Dependências | M3-04 (fila do `jangada-config`), M3-02 |
+| Aceitação | painel mostra os mesmos números com o banco somente leitura; exceções retiradas; ressalva 1: `JANGADA_CORE_PY` permite importar `coletor` e `orquestracao` com `default/painel` como link; o app R recebe `JANGADA_PATH` e carrega visual, logo e monitoramento sem depender de `getwd()`, antes da M3-17 |
+| Testes | `testes/painel-orquestracao.py`, `testes/painel-local.py`, `testes/painel.sh`, `testes/painel-motores.R`, `testes/painel-operacional.R`, `verificar.sh` |
 | Riscos | consulta que dependia de método herdado sem equivalente de leitura |
 | Reversão | `git revert` |
 
@@ -189,7 +194,7 @@ M3-11 (D8).
 | Agente | Core (`claude`), revisor `codex` |
 | Arquivos permitidos | `default/delegacao/entrega.py` (novo), `default/painel/subagentes.py`, `bin/jangada-subagentes`, `bin/jangada-validar` (só o trecho da linha 159), `bin/jangada-agentes` (só o trecho da linha 635), `testes/validar.sh`, `testes/subagentes.sh`, lista de exceções |
 | Dependências | M3-07 (mesma pasta `default/painel`), M3-05 (mesmo `jangada-agentes`) |
-| Aceitação | parecer idêntico com e sem `jangada-subagentes` no `PATH`; saída de `--entrega` idêntica byte a byte à atual em três amostras |
+| Aceitação | parecer idêntico com e sem `jangada-subagentes` no `PATH`; saída de `--entrega` idêntica byte a byte à atual em três amostras; ressalva 3, `jangada-subagentes`: usa `JANGADA_PATH` em vez do `realpath` da linha 13 e executa pela fachada com destino em `monitor/bin`, antes da M3-17 |
 | Testes | `testes/validar.sh`, `testes/subagentes.sh`, `testes/amostras-subagentes.py`, `verificar.sh` |
 | Riscos | mexer no `jangada-validar`, que é a porta de aprovação |
 | Reversão | `git revert` |
@@ -220,6 +225,20 @@ M3-11 (D8).
 | Riscos | baixo |
 | Reversão | `git revert` |
 
+### M3-10a Caminhos independentes da pasta física (K5)
+
+| Campo | Conteúdo |
+|---|---|
+| Tarefa | M3-10a, Onda A |
+| Objetivo | Corrigir os caminhos da Central, do hook leitor e do hook do Codex; ampliar a conferência de processos da atualização, conforme a prova |
+| Agente | Core (`claude`), revisor `codex` |
+| Arquivos permitidos | `default/tarefas/janela.py`, `bin/jangada-hook-leitor`, `bin/jangada-codex`, `bin/jangada-update`, `testes/tarefas.py`, `testes/tarefas.sh`, `testes/hooks.sh`, `testes/codex.sh`, `testes/update.sh`, `testes/update-codigo.py` |
+| Dependências | M3-02, M3-07 (variáveis de K5) |
+| Aceitação | ressalva 2: importação de `visual` (linha 25) e logo (linha 658) usam `JANGADA_PATH` e funcionam com `default/tarefas` e `default/logo` como links, antes da M3-13 e M3-15; ressalva 3: `jangada-hook-leitor:15` usa `JANGADA_PATH` e executa pelo link, e `jangada-codex:101,102` registra o hook pela fachada sem `realpath`; o hook altera de fato o estado da sessão, antes da M3-18; ressalva 5: atualização recusa processos com caminhos em `core/`, `shell/` e `monitor/`, além dos legados, em instalação falsa |
+| Testes | `testes/tarefas.py`, `testes/tarefas.sh`, `testes/hooks.sh`, `testes/codex.sh`, `testes/update.sh`, `testes/update-codigo.py`, `testes/verificar.sh` |
+| Riscos | hook sair com 0 sem atualizar o estado; conferência de processos incluir a própria atualização |
+| Reversão | `git revert`; sem mudança de pasta |
+
 ## Onda B: estrutura (Fase 3)
 
 ### M3-11 Pastas dos módulos e ferramentas que seguem as duas localizações
@@ -228,9 +247,9 @@ M3-11 (D8).
 |---|---|
 | Objetivo | Criar `core/`, `monitor/` e as subpastas novas de `shell/`, cada uma com um `LEIAME.md` que cita este plano; fazer `verificar.sh`, `regra1.sh` e a integração contínua examinarem também `core/bin`, `shell/bin` e `monitor/bin` |
 | Agente | Core (`claude`), revisor `codex` |
-| Arquivos permitidos | `core/LEIAME.md`, `monitor/LEIAME.md`, `shell/LEIAME.md`, `testes/verificar.sh`, `testes/regra1.sh`, `.github/workflows/verificar.yml`, `AGENTS.md` (só a frase que lista as pastas conferidas pelo `regra1.sh`) |
-| Dependências | M3-02 com conclusão positiva, M3-06, M3-08, M3-09, M3-10, aprovação humana |
-| Aceitação | nenhum arquivo movido; `shell/jangada.sh` e `shell/jangada-shell.sh` intactos (mesmo `sha256sum`); `verificar.sh` com saída 0; um arquivo de teste posto em `core/bin` é examinado pelo shellcheck e pelo `regra1.sh` |
+| Arquivos permitidos | `core/LEIAME.md`, `monitor/LEIAME.md`, `shell/LEIAME.md`, `testes/verificar.sh`, `testes/regra1.sh`, `testes/contratos-fachada.sh`, `testes/fronteiras.sh`, `.github/workflows/verificar.yml`, `AGENTS.md` (só a frase que lista as pastas conferidas pelo `regra1.sh`) |
+| Dependências | M3-02 com conclusão positiva, M3-06, M3-08, M3-09, M3-10, M3-10a, aprovação humana |
+| Aceitação | nenhum arquivo movido; `shell/jangada.sh` e `shell/jangada-shell.sh` intactos (mesmo `sha256sum`); `verificar.sh` com saída 0; um arquivo de teste posto em `core/bin` é examinado pelo shellcheck e pelo `regra1.sh`; ressalva 4: `testes/contratos-fachada.sh` e `testes/fronteiras.sh` copiam também `core/`, `shell/` e `monitor/`; passam em cópia temporária com os links da prova |
 | Testes | `verificar.sh`, `regra1.sh` |
 | Riscos | padrões de nome do `verificar.sh` deixarem arquivo sem exame |
 | Reversão | `git revert`; pastas novas só têm `LEIAME.md` |
@@ -238,11 +257,15 @@ M3-11 (D8).
 ## Onda C: migração (Fase 4)
 
 Molde comum às tarefas M3-12 a M3-18: `git mv` da origem para o destino,
-link relativo no caminho antigo no mesmo commit, nenhuma edição de conteúdo
-além da necessária para o teste passar. Aceitação comum: `verificar.sh` com
-saída 0, testes de K1, K2 e K9 passando, `git diff --stat -M` mostrando só
-renomeações e links. Reversão comum: `git revert` do commit único da tarefa;
-como os caminhos antigos continuam válidos, a cópia instalada volta por
+link relativo no caminho antigo no mesmo commit, sem correções de conteúdo.
+Ressalva 4: cada tarefa inclui `testes/contratos/modulos.txt` nos arquivos
+permitidos e atualiza a lista junto com cada mudança de pasta. Ressalva 6:
+a conferência das renomeações usa `git diff -M -B --stat`.
+Aceitação comum: `verificar.sh` com saída 0, testes de K1, K2 e K9 passando
+com `modulos.txt` atualizado; `git diff -M -B --stat` mostra só renomeações
+e links, além da atualização dessa lista. Reversão comum: `git revert` do
+commit único da tarefa; como os caminhos antigos continuam válidos,
+a cópia instalada volta por
 `jangada-update` sem migração.
 
 ### M3-12 Shell: Hyprland e Waybar
@@ -290,7 +313,7 @@ como os caminhos antigos continuam válidos, a cópia instalada volta por
 |---|---|
 | Objetivo | `default/tarefas` e `default/conversa` para `shell/menus` |
 | Agente | Shell (`codex`), revisor `claude` |
-| Arquivos permitidos | origens, destinos, links; `default/tarefas/janela.py:25` se a importação precisar de `JANGADA_CORE_PY` |
+| Arquivos permitidos | origens, destinos e links |
 | Dependências | M3-14, decisão D3 |
 | Aceitação | comum; a Central abre e executa uma ação em estado temporário |
 | Testes | `testes/tarefas.py`, `testes/tarefas.sh`, `testes/conversa.py`, `testes/operacional.py` |

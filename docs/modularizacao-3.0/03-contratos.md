@@ -93,6 +93,21 @@ uma chamada direta por uma indireta.
   `Path(__file__).resolve().parent.parent`. Sem isso o painel deixa de achar
   o núcleo no dia em que `default/painel` virar link para `monitor/painel`,
   porque `resolve()` segue o link.
+- O caminho do jangada chega por `JANGADA_PATH` ao app R
+  (`default/painel/app.R:9`, hoje `getwd()`) e à Central de Tarefas
+  (`default/tarefas/janela.py:25` e `:658`, hoje `resolve()` para importar
+  `visual` e localizar o logo). Recursos usam os caminhos legados sob essa
+  raiz; importações do Core usam `JANGADA_CORE_PY`.
+- Os comandos `bin/jangada-subagentes:13` e `bin/jangada-hook-leitor:15`
+  deixam de inferir a raiz por `realpath`; recebem `JANGADA_PATH`.
+  `bin/jangada-codex:101` e `:102` devem registrar o caminho da fachada
+  `$JANGADA_PATH/bin/jangada-hook-codex`, sem resolver o link. O destino
+  físico procura `jangada-config` na pasta errada. Esse caso falha em
+  silêncio: o hook sai com 0 e descarta a saída, mas não atualiza a sessão.
+- A [prova dos links](prova-links.md)
+  exige corrigir esses caminhos na Onda A, antes de mover cada arquivo.
+  A aceitação cobre importações, recursos do R e da Central e atualização
+  real do estado pelo hook do Codex, também com links em cópia temporária.
 - Teste: `testes/painel-orquestracao.py` passa a rodar com o banco em modo
   somente leitura (arquivo `0400`, pasta `0500`); o teste de fronteira
   recusa `from estado import Estado` em `monitor/`.

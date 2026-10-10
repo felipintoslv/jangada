@@ -30,7 +30,7 @@ Fases 3, 4 e 5.
    desfazem acoplamentos que hoje impedem a separação (Core que sinaliza a
    Waybar, painel que herda a classe de escrita do Core, consulta que limpa
    estado, entre outros).
-6. O backlog tem 20 tarefas em quatro ondas. A primeira onda não move nada:
+6. O backlog tem 21 tarefas em quatro ondas. A primeira onda não move nada:
    cria os testes de contrato e desfaz os acoplamentos.
 
 ## Fase 0: linha de base
@@ -85,7 +85,7 @@ sem recomendação fechada. Mudar a resposta muda o inventário, não o método.
 | # | Decisão | Recomendação | Alternativa |
 |---|---|---|---|
 | D1 | Monorepositório ou três repositórios | Monorepositório, como pede esta especificação | Três projetos com Git próprio (ver "Conflito") |
-| D2 | Como manter os caminhos antigos | Links simbólicos relativos versionados | Arquivos de repasse de duas linhas em `bin/` |
+| D2 | Como manter os caminhos antigos | Links simbólicos relativos versionados; a [prova dos links](prova-links.md) manteve D2 com ressalvas | Arquivos de repasse de duas linhas em `bin/` |
 | D3 | Central de Tarefas e janela de conversa | Shell, porque mudam estado pelo Core; o Monitor fica só de leitura | Monitor, como classificou o agente Shell |
 | D4 | Subpastas do esboço (`core/projetos`, `core/tarefas`, `monitor/historico` etc.) | Mover os pacotes Python inteiros e criar só as subpastas que correspondem a unidades existentes | Dividir os pacotes agora, o que obriga a reescrever importações |
 | D5 | `testes/` ou `tests/`, e `scripts/` | Manter `testes/` (regra 7) e não criar `scripts/` | Renomear |

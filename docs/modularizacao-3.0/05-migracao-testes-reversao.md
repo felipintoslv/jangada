@@ -10,7 +10,7 @@
 2. Um commit por mudança de pasta, com o link de compatibilidade no mesmo
    commit. Não existe estado intermediário em que um caminho antigo falte.
 3. Mover não é editar. Cada tarefa da Onda C mostra só renomeações em
-   `git diff -M`. Correção de conteúdo é outra tarefa.
+   `git diff -M -B --stat`. Correção de conteúdo é outra tarefa.
 4. O jangada instalado segue na versão anterior enquanto o usuário quiser.
    O desenvolvimento usa `JANGADA_PATH=$PWD` na worktree. A cópia instalada
    só avança por `jangada-update`, confirmado no terminal.
@@ -23,7 +23,7 @@
 | Etapa | Tarefas | O que muda para quem usa | Portão |
 |---|---|---|---|
 | 0 | este plano | nada | aprovação do usuário |
-| A | M3-01 a M3-10 | nada visível; uma opção nova (`--limpar-orfaos`) | `verificar.sh` 0 e revisão cruzada por tarefa |
+| A | M3-01 a M3-10 e M3-10a | nada visível; uma opção nova (`--limpar-orfaos`) | `verificar.sh` 0 e revisão cruzada por tarefa |
 | B | M3-11 | pastas novas vazias | aprovação do usuário |
 | C1 | M3-12 a M3-15 | arquivos do Shell mudam de pasta; caminhos antigos seguem | teste em Hyprland aninhado; aprovação antes da primeira |
 | C2 | M3-16, M3-17 | pacotes Python, perfis e painel mudam de pasta | ciclo em estado temporário |
@@ -41,6 +41,11 @@ Recomendação: rodar `jangada-update` em três momentos, não a cada tarefa.
 1. Depois da Onda A, com alguns dias de uso.
 2. Depois de C1, com a sessão gráfica testada antes em modo aninhado.
 3. Depois de M3-20.
+
+Na M3-10a, a conferência de processos do `jangada-update` passa a procurar
+`core/`, `shell/` e `monitor/` sob `JANGADA_PATH`, além de `default/` e
+`bin/jangada-*`. A aceitação usa processos em uma instalação falsa e
+confere a recusa antes de atualizar.
 
 Antes de cada um: cópia de segurança conforme
 `docs/estabilizacao/BACKUP_RECUPERACAO.md` e anotação do commit instalado.
@@ -65,6 +70,12 @@ Critério de regressão: qualquer grupo do `verificar.sh` que passe em
 
 Os testes de integração usam `JANGADA_ESTADO` e `HOME` temporários. Nenhum
 teste abre os bancos da instalação ativa.
+
+`testes/contratos-fachada.sh` e `testes/fronteiras.sh` copiam só parte do
+repositório. Na tarefa de estrutura M3-11, passam a copiar também `core/`,
+`shell/` e `monitor/`, para que os links da fachada resolvam nas cópias de
+teste. `testes/contratos/modulos.txt` muda junto com cada mudança de pasta
+na Onda C; K9 deve passar com a lista atualizada no mesmo commit.
 
 ### Revisão
 
