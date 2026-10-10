@@ -81,7 +81,7 @@ tarefas de escrita do backlog sobem por `jangada-agente`, uma worktree cada.
 ## Decisões em aberto
 
 Os itens D1 a D7 trazem a recomendação adotada nos documentos. Mudar a
-resposta muda o inventário, não o método. D8 e D9 registram decisões do
+resposta muda o inventário, não o método. D8 a D11 registram decisões do
 usuário.
 
 | # | Decisão | Recomendação | Alternativa |
@@ -95,6 +95,8 @@ usuário.
 | D7 | Quando retirar os links de compatibilidade | Só em versão posterior, com migração própria e autorização | Nunca retirar |
 | D8 | Destino dos 20 acoplamentos `sem-contrato` da M3-03, não retirados por K3 a K6 (ver situação em [04-backlog.md](04-backlog.md#m3-03-teste-de-fronteira)) | Decisão do usuário em 10/10/2026: 14 retirados por contrato, no mínimo (10 pelo K10 na M3-10b; 5 na M3-10c, 4 pelo caminho único de K5 e 1 pela consulta K4, ou 4 se o modo `--simular` precisar do padrão), e no máximo 6 exceções permanentes com motivo ([03-contratos.md](03-contratos.md#exceções-permanentes-de-k9)) | Mudança de módulo, não adotada |
 | D9 | Integração pelo botão e por alt+i | Decisão do usuário em 09/10/2026: restaurar na M3-11a, logo depois do portão da M3-11 e antes da M3-12, com confirmação humana por entrega | Até a M3-11a, `--integrar` continua recusando |
+| D10 | Autor e revisor das tarefas novas abertas por criação de agentes | Decisão do usuário em 10/10/2026: `claude` como autor e `codex` como revisor, o que mantém a revisão cruzada; M3-12 a M3-15 passam a Shell (`claude`), revisor `codex`; tarefas já integradas não mudam ([04-backlog.md](04-backlog.md#papéis-e-provedores)) | Shell (`codex`), revisor `claude`, como estava |
+| D11 | Ordem da Onda C | Decisão do usuário em 10/10/2026: duas frentes. M3-12 sozinha, com portão humano e teste em Hyprland aninhado; M3-13 e M3-16 em paralelo; M3-14 e M3-17 em paralelo; M3-15 e depois M3-18. A M3-16 passa a depender também da M3-12 integrada. Até duas sessões de escrita ao mesmo tempo, as duas com `claude` como autor e `codex` como revisor. Em cada par, a segunda tarefa faz rebase sobre o `main` e roda `testes/verificar.sh` de novo fora do isolamento ([04-backlog.md](04-backlog.md#onda-c-migração-fase-4)) | Uma frente só, com uma sessão por provedor, como estava |
 
 ## Conflito a resolver antes da Fase 3
 

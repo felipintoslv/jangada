@@ -35,6 +35,26 @@ Ordem dentro da Onda C: o Shell vai primeiro porque tem menos importações
 entre arquivos e porque um defeito aparece na hora (a sessão aninhada não
 sobe). O Core vai por último porque é a ferramenta que conduz a migração.
 
+Decisão do usuário em 10/10/2026 (D11): as linhas C1 e C2 da tabela agrupam
+as tarefas por módulo, não por ordem no tempo. A execução corre em duas
+frentes:
+
+1. M3-12 sozinha, com a aprovação do usuário e o teste em Hyprland aninhado
+   antes de integrar.
+2. M3-13 e M3-16 em paralelo.
+3. M3-14 e M3-17 em paralelo.
+4. M3-15, depois M3-18.
+
+Os portões de cada linha da tabela continuam valendo para as tarefas dela.
+A integração segue uma tarefa por vez. Em cada par, a segunda tarefa faz
+`git rebase` sobre o `main` na própria worktree e roda `testes/verificar.sh`
+de novo fora do isolamento antes de integrar; o restante da regra está em
+[04-backlog.md](04-backlog.md#onda-c-migração-fase-4).
+
+Divergência registrada, sem ajuste: o parágrafo acima diz que o Shell vai
+primeiro e o Core por último. Com a D11, isso vale para a M3-12 e para a
+M3-18; a M3-16 e a M3-17 integram antes da M3-14 e da M3-15.
+
 ### Atualização da cópia instalada
 
 Recomendação: rodar `jangada-update` em três momentos, não a cada tarefa.
@@ -42,6 +62,12 @@ Recomendação: rodar `jangada-update` em três momentos, não a cada tarefa.
 1. Depois da Onda A, com alguns dias de uso.
 2. Depois de C1, com a sessão gráfica testada antes em modo aninhado.
 3. Depois de M3-20.
+
+Divergência registrada, sem ajuste: com a D11, quando C1 termina (M3-15
+integrada), a M3-16 e a M3-17 já estão no `main`. A atualização do momento
+2 leva junto as mudanças de C2, e o portão de C2 (ciclo em estado
+temporário) precisa estar cumprido antes dela. O usuário não decidiu se o
+momento 2 muda.
 
 Na M3-10a, a conferência de processos do `jangada-update` passa a procurar
 `core/`, `shell/` e `monitor/` sob `JANGADA_PATH`, além de `default/` e

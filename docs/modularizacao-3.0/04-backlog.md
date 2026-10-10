@@ -11,7 +11,10 @@ Vinte e quatro tarefas em quatro ondas. A situação das entregas aparece abaixo
    lista reprova a entrega.
 3. Arquivos compartilhados têm um dono por vez. As dependências abaixo
    põem em fila as tarefas que tocam `bin/jangada-config`,
-   `testes/verificar.sh` e `testes/regra1.sh`.
+   `testes/verificar.sh` e `testes/regra1.sh`. Divergência registrada, sem
+   ajuste desta regra: nos pares da Onda C (D11), duas tarefas editam
+   `testes/contratos/modulos.txt` ao mesmo tempo, sob a regra do rebase
+   descrita no molde comum da Onda C.
 4. Toda entrega passa por `testes/verificar.sh` com saída 0 e por
    `jangada-validar` com revisor de outro modelo. Quem escreveu não aprova.
 5. A integração no `main` exige confirmação humana por entrega, uma tarefa
@@ -30,13 +33,19 @@ Só `claude` e `codex` abrem sessão principal (`docs/provedores.md`). `agy` e
 |---|---|---|
 | Coordenador | sessão do usuário com Claude | usuário |
 | Agente Core | `claude` | `codex` |
-| Agente Shell | `codex` | `claude` |
+| Agente Shell | `claude` | `codex` |
 | Agente Monitor | `claude` | `codex` |
 | Agente Revisor | o modelo cruzado de cada tarefa, por `jangada-validar` | |
 | Apoio de leitura | subagentes `explorador`, `arquiteto`, `verificador`; `agy` ou `ollama` por `jangada-delegar` | |
 
-No máximo duas sessões de escrita ao mesmo tempo, uma por provedor, para
-respeitar as cotas e manter a revisão cruzada disponível.
+Decisão do usuário em 10/10/2026 (D10): as tarefas novas abertas por
+criação de agentes têm `claude` como autor e `codex` como revisor, o que
+mantém a revisão cruzada. Até essa data o Agente Shell era `codex`, com
+revisor `claude`. As tarefas já integradas (M3-06 e M3-10) não mudam.
+
+No máximo duas sessões de escrita ao mesmo tempo, as duas com `claude` como
+autor e `codex` como revisor (D10 e D11). A regra anterior era uma sessão
+por provedor.
 
 ## Ordem
 
@@ -74,12 +83,17 @@ flowchart LR
   M13 --> M14["M3-14"]
   M14 --> M15["M3-15"]
   M11a --> M16["M3-16"]
+  M12 --> M16
   M16 --> M17["M3-17"]
   M15 --> M18["M3-18"]
   M17 --> M18
   M18 --> M19["M3-19"]
   M18 --> M20["M3-20"]
 ```
+
+A Onda C corre em duas frentes (D11): M3-12 sozinha; depois M3-13 e M3-16
+em paralelo; depois M3-14 e M3-17 em paralelo; depois M3-15 e, por último,
+M3-18. As etapas e a regra do rebase estão no molde comum da Onda C.
 
 Aprovação humana obrigatória antes de M3-01 (este plano), antes de M3-11
 (estrutura) e antes de M3-12 (primeira mudança de pasta). A M3-11a vem
@@ -347,12 +361,42 @@ commit único da tarefa; como os caminhos antigos continuam válidos,
 a cópia instalada volta por
 `jangada-update` sem migração.
 
+Ordem em duas frentes, por decisão do usuário em 10/10/2026 (D11):
+
+1. M3-12 sozinha, com o portão humano e a conferência na sessão gráfica
+   (teste em Hyprland aninhado antes de integrar).
+2. M3-13 e M3-16 em paralelo.
+3. M3-14 e M3-17 em paralelo.
+4. M3-15, depois M3-18.
+
+M3-12 continua a primeira e M3-18 a última, pelos motivos escritos nos
+riscos de cada uma. A M3-16 passa a depender também da M3-12 integrada.
+
+Regra do rebase em cada par: uma tarefa integra primeiro. A outra faz
+`git rebase` sobre o `main` na própria worktree e roda `testes/verificar.sh`
+de novo fora do isolamento antes de integrar. As duas tarefas de um par
+editam `testes/contratos/modulos.txt`. Se o rebase exigir mais do que juntar
+linhas independentes desse arquivo, a tarefa volta ao `jangada-validar` para
+novo parecer. O coordenador não resolve conflito de conteúdo por conta
+própria.
+
+Divergência registrada, sem ajuste: a aceitação da M3-11a exige parecer para
+o novo SHA sempre que o rebase mudar o SHA, e o rebase sobre um `main` que
+avançou sempre muda. Pela M3-11a, a segunda tarefa de cada par precisa de
+novo parecer em todos os casos; pela D11, só quando o rebase passa de juntar
+linhas independentes de `modulos.txt`. Fica para o usuário decidir qual das
+duas vale na integração pelo botão ou por alt+i.
+
+A conferir no código: se a M3-15 pode subir antes da M3-14. O usuário não
+decidiu esse ponto. A ordem M3-13, M3-14, M3-15 e a dependência da M3-15
+ficam como estão.
+
 ### M3-12 Shell: Hyprland e Waybar
 
 | Campo | Conteúdo |
 |---|---|
 | Objetivo | `default/hypr`, `default/hypridle` e `default/waybar` para `shell/hyprland` e `shell/waybar` |
-| Agente | Shell (`codex`), revisor `claude` |
+| Agente | Shell (`claude`), revisor `codex`, por decisão do usuário na D10 |
 | Arquivos permitidos | as três pastas de origem, os destinos, os três links |
 | Dependências | M3-11a, aprovação humana |
 | Aceitação | comum; `testes/simular-hypr.lua` e `testes/aninhado.sh` passam; `require("default.hypr.jangada")` resolve pelo link |
@@ -365,7 +409,7 @@ a cópia instalada volta por
 | Campo | Conteúdo |
 |---|---|
 | Objetivo | `default/matugen`, `sddm`, `logo`, `fastfetch` para `shell/temas`; `default/snapper` e `default/r` para `shell/integracoes` |
-| Agente | Shell (`codex`), revisor `claude` |
+| Agente | Shell (`claude`), revisor `codex`, por decisão do usuário na D10 |
 | Arquivos permitidos | origens, destinos e links |
 | Dependências | M3-12 |
 | Aceitação | comum; `jangada-tema` gera os mesmos arquivos em pasta temporária |
@@ -378,7 +422,7 @@ a cópia instalada volta por
 | Campo | Conteúdo |
 |---|---|
 | Objetivo | Os 25 comandos do Shell para `shell/bin`, com link em `bin/` |
-| Agente | Shell (`codex`), revisor `claude` |
+| Agente | Shell (`claude`), revisor `codex`, por decisão do usuário na D10 |
 | Arquivos permitidos | os 25 arquivos, `shell/bin/`, os 25 links |
 | Dependências | M3-13 |
 | Aceitação | comum; `jangada-sessao` monta o mesmo `PATH` |
@@ -391,7 +435,7 @@ a cópia instalada volta por
 | Campo | Conteúdo |
 |---|---|
 | Objetivo | `default/tarefas` e `default/conversa` para `shell/menus` |
-| Agente | Shell (`codex`), revisor `claude` |
+| Agente | Shell (`claude`), revisor `codex`, por decisão do usuário na D10 |
 | Arquivos permitidos | origens, destinos e links |
 | Dependências | M3-14, decisão D3 |
 | Aceitação | comum; a Central abre e executa uma ação em estado temporário |
@@ -406,7 +450,7 @@ a cópia instalada volta por
 | Objetivo | `default/nucleo`, `orquestracao`, `delegacao` para `core/`; `default/agentes`, `claude`, `agy`, `tmux` para `core/agentes`; `default/provedores` para `core/provedores` |
 | Agente | Core (`claude`), revisor `codex` |
 | Arquivos permitidos | origens, destinos, links; `bin/jangada-config` (valor de `JANGADA_CORE_PY`) |
-| Dependências | M3-11a |
+| Dependências | M3-11a e M3-12 integrada (D11) |
 | Aceitação | comum; links de `~/.claude/skills` e `~/.claude/agents` seguem resolvendo em instalação simulada; `jangada-fila --json` idêntico antes e depois |
 | Testes | todos os testes do Core do inventário, `verificar.sh` |
 | Riscos | banco de estado não é tocado, mas o código que o lê muda de pasta: rodar em estado temporário antes |
