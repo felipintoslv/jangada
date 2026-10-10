@@ -198,7 +198,7 @@ conferir "nenhum acoplamento entre módulos fora da lista de exceções" [ -z "$
 copia() {
   rm -rf "$tmp/copia"
   mkdir -p "$tmp/copia/testes"
-  cp -a "$repo_jangada"/{bin,default,shell} "$tmp/copia/"
+  cp -a "$repo_jangada"/{bin,default,core,shell,monitor} "$tmp/copia/"
   cp -a "$repo_jangada/testes/contratos" "$tmp/copia/testes/"
 }
 acrescentar() { printf '%s\n' "$2" >>"$tmp/copia/$1"; }

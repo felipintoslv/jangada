@@ -64,8 +64,9 @@ caminho="$(env -u JANGADA_PATH HOME="$tmp/casa" XDG_CONFIG_HOME="$tmp/casa/confi
   bash -c 'source "$(dirname "$1")/jangada-config" >/dev/null 2>&1; printf %s "$JANGADA_PATH"' _ "$repo_jangada/bin/jangada")"
 conferir "jangada-config carregado de bin/ define JANGADA_PATH como a pasta acima" [ "$caminho" = "$repo_jangada" ]
 
-# O teste precisa falhar quando a fachada muda: prova em cópias de bin/.
-copia() { rm -rf "$tmp/copia"; mkdir "$tmp/copia"; cp -a "$repo_jangada/bin" "$tmp/copia/bin"; }
+# O teste precisa falhar quando a fachada muda: prova em cópias de bin/. As
+# pastas dos módulos vão junto, para os links de bin/ resolverem na cópia.
+copia() { rm -rf "$tmp/copia"; mkdir "$tmp/copia"; cp -a "$repo_jangada"/{bin,core,shell,monitor} "$tmp/copia/"; }
 copia
 conferir "cópia intacta de bin/ passa" [ -z "$(problemas "$tmp/copia")" ]
 rm "$tmp/copia/bin/jangada-mapa"
