@@ -1,0 +1,90 @@
+# Contrato K9: exceções do teste de fronteira (testes/fronteiras.sh).
+# Formato: CONTRATO ARQUIVO TRECHO. TRECHO é a linha do código sem os espaços
+# das pontas; a linha citada no comentário de cada grupo é a de quando a lista
+# foi criada (M3-03). A lista só diminui: quem retira um acoplamento retira a
+# exceção no mesmo commit, e o teto de cada contrato fica em testes/fronteiras.sh.
+
+# K3 (aviso de mudança de estado, M3-04): o Core sinaliza a Waybar e chama o
+# notify-send direto; passa a chamar jangada_avisar_interface e
+# jangada_notificar.
+# bin/jangada-hook-agy:65
+K3 bin/jangada-hook-agy pkill -RTMIN+10 -x waybar 2>/dev/null || true
+# bin/jangada-hook-agy:71
+K3 bin/jangada-hook-agy if [[ "$evento" == concluido ]] && command -v notify-send >/dev/null 2>&1; then
+# bin/jangada-hook-agy:73
+K3 bin/jangada-hook-agy notify-send -a jangada-agente -u normal "Agente concluiu: $JANGADA_SESSAO" "$mensagem" 2>/dev/null || true
+# bin/jangada-hook-agy:77
+K3 bin/jangada-hook-agy r="$(notify-send -a jangada-agente -u normal -A abrir=Abrir "$1" "$2" 2>/dev/null)"
+# bin/jangada-hook-claude:118
+K3 bin/jangada-hook-claude pkill -RTMIN+10 -x waybar 2>/dev/null || true
+# bin/jangada-hook-claude:128
+K3 bin/jangada-hook-claude && command -v notify-send >/dev/null 2>&1; then
+# bin/jangada-hook-claude:136
+K3 bin/jangada-hook-claude notify-send -a jangada-agente -u "$urg" "$titulo" "$corpo" 2>/dev/null || true
+# bin/jangada-hook-claude:139
+K3 bin/jangada-hook-claude r="$(notify-send -a jangada-agente -u "$1" -A abrir=Abrir "$2" "$3" 2>/dev/null)"
+# bin/jangada-hook-codex:41
+K3 bin/jangada-hook-codex pkill -RTMIN+10 -x waybar 2>/dev/null || true
+# bin/jangada-isolar:628
+K3 bin/jangada-isolar pkill -RTMIN+10 -x waybar 2>/dev/null || true
+
+# K5 (leitura da fila e dos projetos, M3-07): o painel importa e herda as
+# classes de escrita Estado e Saude; passa a ler por nucleo.consultas.
+# default/painel/orquestracao.py:13
+K5 default/painel/orquestracao.py from estado import Estado  # noqa: E402
+# default/painel/orquestracao.py:15
+K5 default/painel/orquestracao.py from saude import Saude  # noqa: E402
+# default/painel/orquestracao.py:18
+K5 default/painel/orquestracao.py class Consulta(Estado):
+
+# K6 (resumo de entrega opcional, M3-08): o Core chama comandos do Monitor.
+# bin/jangada-agentes:635
+K6 bin/jangada-agentes consumo="$("$JANGADA_PATH/bin/jangada-consumo" --curto 2>/dev/null || true)"
+# bin/jangada-validar:159
+K6 bin/jangada-validar resumo="$(timeout 30 "$JANGADA_PATH/bin/jangada-subagentes" --entrega "$origem_dir" ${desde:+--desde "$desde"} 2>/dev/null)" || rc=$?
+
+# Sem contrato que as retire: acoplamentos que existem no código e não estão
+# no inventário nem em K3 a K6. K3 só cobre aviso e notificação, não o foco
+# de janela pelo hyprctl nem a abertura de terminal ou da Central; K4 não
+# cobre a leitura direta do estado pelo Shell. Precisam de contrato novo ou
+# de decisão antes de M3-11.
+# bin/jangada-agente:118
+sem-contrato bin/jangada-agente exec "$JANGADA_PATH/bin/jangada-tarefas" --nova
+# bin/jangada-agente:134
+sem-contrato bin/jangada-agente exec "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente -e "$0" "${args[@]}"
+# bin/jangada-agente:365
+sem-contrato bin/jangada-agente ((snapshot)) && "$JANGADA_PATH/bin/jangada-snapshot" --agente "antes do agente $sessao" || true
+# bin/jangada-agente:534
+sem-contrato bin/jangada-agente exec "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente -e "${JANGADA_TMUX[@]}" attach -t "=$sessao"
+# bin/jangada-agentes:389
+sem-contrato bin/jangada-agentes atual="$(hyprctl activewindow -j 2>/dev/null | jq -r '.title // empty' 2>/dev/null || true)"
+# bin/jangada-agentes:416
+sem-contrato bin/jangada-agentes endereco="$(hyprctl clients -j 2>/dev/null | jq -r --arg s "$s" '(map(select(.title == $s)) + map(select(.title | startswith($s)))) | .[0].address // empty' 2>/dev/null || true)"
+# bin/jangada-agentes:419
+sem-contrato bin/jangada-agentes hyprctl dispatch "hl.dsp.focus({ window = \"address:$endereco\" })" >/dev/null
+# bin/jangada-agentes:422
+sem-contrato bin/jangada-agentes setsid -f "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente \
+# bin/jangada-agentes:425
+sem-contrato bin/jangada-agentes "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.agente \
+# bin/jangada-agentes:460
+sem-contrato bin/jangada-agentes atual="$(hyprctl activewindow -j 2>/dev/null | jq -r '.title // empty' 2>/dev/null || true)"
+# bin/jangada-agentes:717
+sem-contrato bin/jangada-agentes exec "$JANGADA_PATH/bin/jangada-tarefas"
+# bin/jangada-verificar:76
+sem-contrato bin/jangada-verificar exec "$JANGADA_PATH/bin/jangada-agente" "${janela[@]}" --projeto "$JANGADA_REPO" \
+# bin/jangada-tarefas:12
+sem-contrato bin/jangada-tarefas args=(--real --jangada "$JANGADA_PATH" --estado "$JANGADA_ESTADO/agentes")
+# default/tarefas/central.py:121
+sem-contrato default/tarefas/central.py estado = Path(args.estado or Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'jangada/agentes').expanduser().resolve()
+# default/tarefas/dados.py:129
+sem-contrato default/tarefas/dados.py estado = Path(args.estado or Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'jangada/agentes').expanduser()
+# default/tarefas/janela.py:256
+sem-contrato default/tarefas/janela.py self.estado_dir = Path(estado or Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'jangada/agentes').expanduser()
+# default/tarefas/janela.py:691
+sem-contrato default/tarefas/janela.py pastas = [self.estado_dir, self.estado_dir.parent / 'revisoes', self.estado_dir / 'projetos']
+# default/tarefas/janela.py:697
+sem-contrato default/tarefas/janela.py caminhos.update(str(p) for p in pasta.glob('tarefas.sqlite*') if p.is_file() and not p.is_symlink())
+# shell/jangada-shell.sh:132
+sem-contrato shell/jangada-shell.sh local estado_dir="${JANGADA_ESTADO:-${XDG_STATE_HOME:-$HOME/.local/state}/jangada}/agentes"
+# shell/jangada-shell.sh:271
+sem-contrato shell/jangada-shell.sh local estado_dir="${JANGADA_ESTADO:-${XDG_STATE_HOME:-$HOME/.local/state}/jangada}/agentes"

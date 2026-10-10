@@ -1,0 +1,98 @@
+# Contrato K9: módulo de cada arquivo de bin/, default/ e shell/, conforme
+# docs/modularizacao-3.0/01-inventario.md (seções 1.1, 1.2 e 1.3).
+# Formato: MÓDULO CAMINHO. Caminho terminado em / vale para a pasta inteira.
+# Módulos: core, shell, monitor e compartilhado (este não é conferido).
+# Todo arquivo dessas pastas precisa cair em exatamente uma linha.
+
+# Core: comandos (1.1)
+core bin/jangada-agente
+core bin/jangada-agente-fim
+core bin/jangada-agentes
+core bin/jangada-isolar
+core bin/jangada-validar
+core bin/jangada-delegar
+core bin/jangada-worktree-preparar
+core bin/jangada-hook-claude
+core bin/jangada-hook-agy
+core bin/jangada-hook-codex
+core bin/jangada-hook-leitor
+core bin/jangada-codex
+core bin/jangada-codex-hooks
+core bin/jangada-projeto
+core bin/jangada-fila
+core bin/jangada-task
+core bin/jangada-executar
+core bin/jangada-retomar
+core bin/jangada-provedor
+core bin/jangada-router
+core bin/jangada-avaliar-ollama
+core bin/jangada-mapa
+core bin/jangada-filtrar
+
+# Core: pastas de default/ (1.2)
+core default/agentes/
+core default/claude/
+core default/agy/
+core default/tmux/
+core default/provedores/
+core default/nucleo/
+core default/orquestracao/
+core default/delegacao/
+
+# Shell: comandos (1.1)
+shell bin/jangada-atalhos
+shell bin/jangada-atualizacoes
+shell bin/jangada-audio
+shell bin/jangada-barra
+shell bin/jangada-bloquear
+shell bin/jangada-bluetooth
+shell bin/jangada-calendario
+shell bin/jangada-captura
+shell bin/jangada-conversa
+shell bin/jangada-energia
+shell bin/jangada-importar
+shell bin/jangada-interface-processos
+shell bin/jangada-logo
+shell bin/jangada-mapear
+shell bin/jangada-menu
+shell bin/jangada-monitor
+shell bin/jangada-recarregar
+shell bin/jangada-rede
+shell bin/jangada-sddm
+shell bin/jangada-sessao
+shell bin/jangada-shell
+shell bin/jangada-snapshot
+shell bin/jangada-tarefas
+shell bin/jangada-tema
+shell bin/jangada-terminal
+
+# Shell: pastas de default/ (1.2) e a pasta shell/ que já existe (1.3)
+shell default/hypr/
+shell default/hypridle/
+shell default/waybar/
+shell default/matugen/
+shell default/sddm/
+shell default/logo/
+shell default/fastfetch/
+shell default/tarefas/
+shell default/conversa/
+shell default/snapper/
+shell default/r/
+shell shell/
+
+# Monitor: comandos (1.1) e painel (1.2)
+monitor bin/jangada-painel
+monitor bin/jangada-consumo
+monitor bin/jangada-subagentes
+monitor bin/jangada-verificar
+monitor default/painel/
+
+# Compartilhados (1.1, 1.2 e 1.4)
+compartilhado bin/jangada
+compartilhado bin/jangada-config
+compartilhado bin/jangada-gancho
+compartilhado bin/jangada-update
+compartilhado bin/jangada-migrar
+compartilhado bin/jangada-versao
+compartilhado bin/jangada-assinar
+compartilhado default/visual/
