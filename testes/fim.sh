@@ -227,9 +227,9 @@ marca() {
 # HEAD, índice, arquivos rastreados e arquivos novos da cópia principal.
 foto() {
   git -C "$proj" rev-parse HEAD
-  git -C "$proj" status --porcelain
-  git -C "$proj" diff
-  git -C "$proj" diff --cached
+  git -C "$proj" status --porcelain --untracked-files=all --ignore-submodules=none
+  git -C "$proj" diff --ignore-submodules=none
+  git -C "$proj" diff --cached --ignore-submodules=none
 }
 intacta() { [[ "$(foto)" == "$1" ]]; }
 mantida() { # descrição, sessão
@@ -265,9 +265,12 @@ git -C "$proj" rm --quiet --cached indice
 rm -f "$proj/indice" "$proj/nao-rastreado"
 echo a >"$proj/a"
 antes="$(foto)"
-# Só um arquivo novo também conta como alteração.
+# Só um arquivo novo também conta como alteração, mesmo com a configuração
+# do repositório escondendo-o.
 echo novo >"$proj/nao-rastreado"
+git -C "$proj" config status.showUntrackedFiles no
 integrar_teste suja s
+git -C "$proj" config --unset status.showUntrackedFiles
 conferir "arquivo novo na cópia principal: recusa ($rc)" \
   bash -c '[ "$1" -ne 0 ] && grep -q "tem alterações sem commit" "$2" && grep -qx novo "$3/nao-rastreado"' _ "$rc" "$tmp/saida" "$proj"
 conferir "arquivo novo na cópia principal: a suíte não roda" test ! -e "$tmp/verificar-chamado"
@@ -471,6 +474,14 @@ echo usuario >"$proj/sub/s"
 antes="$(foto)"
 integrar_teste m1 s
 recusa "submódulo alterado" m1 'tem alterações sem commit' "$antes"
+# A configuração do repositório não esconde o submódulo.
+git -C "$proj" config submodule.sub.ignore all
+git -C "$proj" config diff.ignoreSubmodules all
+integrar_teste m1 s
+recusa "submódulo alterado e ignorado na configuração" m1 'tem alterações sem commit' "$antes"
+conferir "submódulo ignorado na configuração: a suíte não roda" test ! -e "$tmp/verificar-chamado"
+git -C "$proj" config --unset submodule.sub.ignore
+git -C "$proj" config --unset diff.ignoreSubmodules
 conferir "submódulo alterado: a alteração fica" grep -qx usuario "$proj/sub/s"
 echo s >"$proj/sub/s"
 antes="$(foto)"
