@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Testa, em repositórios temporários, o que chega à cópia instalada: o
 # jangada-update só aplica commits novos da origem com confirmação e, com
-# allowed_signers, só os assinados, que o jangada-assinar assina, chamado
-# também pelo --integrar; o
-# jangada-agente-fim --integrar não atualiza a cópia instalada nem roda o git
-# com fsmonitor ou ganchos do repositório do agente; o install.sh recusa a
+# allowed_signers, só os assinados, que o jangada-assinar assina; o
+# jangada-agente-fim --integrar avança a base com parecer de fora do
+# isolamento, mantém ramo e worktree, não assina, não envia ao remoto, não
+# atualiza a cópia instalada nem roda o git com fsmonitor ou ganchos do
+# repositório do agente; o install.sh recusa a
 # cópia de trabalho e os worktrees. pacman, checkupdates,
 # sudo, paru e tmux são substituídos por scripts falsos.
 #
@@ -127,14 +128,34 @@ git -C "$origem" reset --quiet --hard "$novo"
 wt="$HOME/.local/share/jangada-worktrees/origem/x"
 git -C "$origem" worktree add --quiet -b agente/x "$wt" main
 echo "tarefa" >"$wt/tarefa.txt"
-git -C "$wt" add tarefa.txt
+# Suíte do projeto: o --integrar a roda antes de avançar a base.
+mkdir -p "$wt/testes"
+printf '#!/bin/sh\ntouch "$HOME/suite-rodou"\n' >"$wt/testes/verificar.sh"
+chmod +x "$wt/testes/verificar.sh"
+git -C "$wt" add tarefa.txt testes/verificar.sh
 git -C "$wt" commit --quiet -m "feat(teste): tarefa"
-mkdir -p "$XDG_STATE_HOME/jangada/agentes"
-jq -n --arg w "$wt" --arg r "$origem" \
-  '{worktree: $w, ramo: "agente/x", base: "main", raiz: $r, estado: "concluido"}' \
-  >"$XDG_STATE_HOME/jangada/agentes/x.json"
+revisoes="$XDG_STATE_HOME/jangada/revisoes"
+mkdir -p "$XDG_STATE_HOME/jangada/agentes" "$revisoes"
+# Estado da sessão, cópia protegida dele e parecer do jangada-validar.
+sessao() { # sessão, worktree
+  jq -n --arg w "$2" --arg r "$origem" --arg s "$1" \
+    '{worktree: $w, ramo: ("agente/" + $s), base: "main", raiz: $r, estado: "concluido"}' \
+    >"$XDG_STATE_HOME/jangada/agentes/$1.json"
+  cp "$XDG_STATE_HOME/jangada/agentes/$1.json" "$revisoes/$1.json"
+}
+parecer() { # sessão
+  local c
+  c="$(git -C "$origem" rev-parse "agente/$1")"
+  jq -n --arg c "$c" --arg t "$(git -C "$origem" rev-parse "$c^{tree}")" --arg b "$(git -C "$origem" rev-parse main)" \
+    '{cabeca: $c, num: 1, limpo: true, base: "main", base_sha: $b, candidate_sha: $c, candidate_tree: $t,
+      reviewer: "agy", author: "claude", local_verified: true, independent: true}' >"$revisoes/validacao-$1.aprovado"
+}
+sessao x "$wt"
+parecer x
+c_x="$(git -C "$origem" rev-parse agente/x)"
 git -C "$instalado" fetch --quiet origin
 antes_fim="$(head_instalado)"
+chamadas_antes="$(wc -l <"$registro")"
 
 # O que o agente poderia gravar no .git comum: fsmonitor e ganchos.
 alerta="$tmp/executou-codigo-do-agente"
@@ -151,14 +172,17 @@ printf 's\n' | (cd "$tmp" && "$repo_jangada/bin/jangada-agente-fim" --integrar x
 rc=$?
 git -C "$origem" config --unset core.fsmonitor
 git -C "$origem" config --unset core.hooksPath
-conferir "integração automática bloqueada ($rc)" test "$rc" -ne 0
+conferir "integra por avanço rápido ($rc)" test "$rc" -eq 0
+conferir "a base está no commit aprovado, sem commit de merge" test "$(git -C "$origem" rev-parse main)" = "$c_x"
+conferir "a suíte do projeto rodou" test -e "$HOME/suite-rodou"
+conferir "sessão mantida" test -f "$XDG_STATE_HOME/jangada/agentes/x.json"
 conferir "ramo mantido" test -n "$(git -C "$origem" branch --list agente/x)"
 conferir "worktree mantido" test -d "$wt"
 conferir "cópia instalada não é atualizada" test "$(head_instalado)" = "$antes_fim"
-conferir "bloqueio explícito" grep -q 'integração automática bloqueada' "$tmp/saida"
+conferir "jangada-update e pacman não são chamados" \
+  bash -c '[ "$(wc -l <"$1")" -eq "$2" ]' _ "$registro" "$chamadas_antes"
+conferir "avisa que a cópia instalada ficou para trás" grep -q 'jangada-update' "$tmp/saida"
 conferir "fsmonitor e ganchos do repositório não rodam" test ! -e "$alerta"
-# Prossegue o ensaio de atualização com integração manual no repositório sintético.
-git -C "$origem" merge --quiet --no-ff -m "Integra agente/x manualmente" agente/x
 
 echo "== assinaturas"
 
@@ -267,7 +291,7 @@ conferir "vários sem assinatura: assina todos ($rc)" \
 conferir "vários sem assinatura: o mais antigo tem assinatura válida" [ "$(assinatura HEAD~19)" = G ]
 atualizar <<<s
 
-# Merge do jangada-agente-fim --integrar: o ramo saiu de antes de um commit
+# Merge feito à mão com --no-ff: o ramo saiu de antes de um commit
 # já assinado, que fica como está; o commit do ramo e o merge são assinados.
 git -C "$origem" branch agente/m
 echo m1 >"$origem/m1.txt"
@@ -293,22 +317,34 @@ m_assinado="$(git -C "$origem" rev-parse HEAD)"
 atualizar <<<s
 conferir "merge assinado: a cópia instalada avança" test "$(head_instalado)" = "$m_assinado"
 
-# Assinaturas não liberam a publicação bloqueada.
+# Assinaturas não substituem o parecer, e o --integrar não assina nem envia
+# ao remoto.
 wt_y="$HOME/.local/share/jangada-worktrees/origem/y"
 git -C "$origem" worktree add --quiet -b agente/y "$wt_y" main
 echo y >"$wt_y/y.txt"
 git -C "$wt_y" add y.txt
 git -C "$wt_y" commit --quiet -m "feat(teste): tarefa y"
-jq -n --arg w "$wt_y" --arg r "$origem" \
-  '{worktree: $w, ramo: "agente/y", base: "main", raiz: $r, estado: "concluido"}' \
-  >"$XDG_STATE_HOME/jangada/agentes/y.json"
+sessao y "$wt_y"
 antes_y="$(git -C "$origem" rev-parse HEAD)"
+c_y="$(git -C "$origem" rev-parse agente/y)"
+remoto_y="$(git -C "$remoto" rev-parse main)"
+instalado_y="$(head_instalado)"
 printf 's\ns\n' | "$repo_jangada/bin/jangada-agente-fim" --integrar y >"$tmp/saida" 2>&1
 rc=$?
-conferir "allowed_signers: integração bloqueada" test "$rc" -ne 0
+conferir "allowed_signers: sem parecer, recusa" \
+  bash -c '[ "$1" -ne 0 ] && grep -q "falta parecer APROVADO" "$2"' _ "$rc" "$tmp/saida"
 conferir "allowed_signers: HEAD preservado" test "$(git -C "$origem" rev-parse HEAD)" = "$antes_y"
+parecer y
+printf 's\ns\n' | "$repo_jangada/bin/jangada-agente-fim" --integrar y >"$tmp/saida" 2>&1
+rc=$?
+conferir "allowed_signers: com parecer, integra ($rc)" \
+  bash -c '[ "$1" -eq 0 ] && [ "$(git -C "$2" rev-parse main)" = "$3" ]' _ "$rc" "$origem" "$c_y"
+conferir "allowed_signers: o commit não é assinado nem reescrito" [ "$(assinatura HEAD)" != G ]
+conferir "allowed_signers: nada é enviado ao remoto" test "$(git -C "$remoto" rev-parse main)" = "$remoto_y"
+conferir "allowed_signers: cópia instalada não é atualizada" test "$(head_instalado)" = "$instalado_y"
 conferir "allowed_signers: sessão mantida" test -f "$XDG_STATE_HOME/jangada/agentes/y.json"
-conferir "allowed_signers: ramo mantido" test -n "$(git -C "$origem" branch --list agente/y)"
+conferir "allowed_signers: ramo e worktree mantidos" \
+  bash -c 'test -n "$(git -C "$1" branch --list agente/y)" && test -d "$2"' _ "$origem" "$wt_y"
 
 # Merge com alteração feita à mão: refazê-lo perderia a alteração, então nada
 # é assinado e o ramo volta ao que era.
