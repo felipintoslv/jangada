@@ -92,6 +92,60 @@ conferir "caso 5: dentro do limite não apaga" nao_apagou
 conferir "caso 6: jangada-agente chama jangada-snapshot --agente" \
   grep -q 'bin/jangada-snapshot" --agente ' bin/jangada-agente
 
+# Caso 7: o snapshot é opcional para o jangada-agente (exceção permanente de
+# K9). Numa cópia do jangada sem bin/jangada-snapshot, o --snapshot abre a
+# sessão do mesmo jeito. O tmux é falso e registra as chamadas; HOME e as
+# pastas de estado e de configuração ficam na pasta temporária. O
+# jangada-projeto e o confianca.py também são falsos: os reais recusam o
+# registro da sessão dentro do isolamento, e o caso precisa dar o mesmo
+# resultado dentro e fora dele.
+jp="$tmp/jangada"
+mkdir -p "$jp/bin" "$jp/default/orquestracao" "$tmp/proj" "$tmp/state" "$tmp/config-agente/jangada" "$tmp/runtime"
+for c in default/*; do
+  [[ "$c" == default/orquestracao ]] || ln -s "$PWD/$c" "$jp/default/"
+done
+: >"$jp/default/orquestracao/confianca.py"
+for c in bin/jangada*; do
+  case "$c" in bin/jangada-snapshot|bin/jangada-projeto) ;; *) ln -s "$PWD/$c" "$jp/bin/" ;; esac
+done
+cat >"$jp/bin/jangada-projeto" <<'FIM'
+#!/usr/bin/env bash
+case " $* " in *" sessao-iniciar "*) echo '{"execucao": "e1"}' ;; esac
+FIM
+chmod +x "$jp/bin/jangada-projeto"
+cat >"$tmp/bin/tmux" <<'FIM'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$FALSO/tmux"
+case " $* " in *" has-session "*) exit 1 ;; esac
+exit 0
+FIM
+printf '#!/bin/sh\nexit 0\n' >"$tmp/bin/claude"
+chmod +x "$tmp/bin/"*
+agente() {
+  rm -f "$FALSO/tmux" "$FALSO/snapshot"
+  env -u TMUX -u JANGADA_SESSAO -u JANGADA_ISOLADO -u JANGADA_ESTADO -u JANGADA_SESSOES \
+    -u WAYLAND_DISPLAY -u HYPRLAND_INSTANCE_SIGNATURE \
+    PATH="$tmp/bin:$PATH" XDG_STATE_HOME="$tmp/state" XDG_CONFIG_HOME="$tmp/config-agente" \
+    XDG_RUNTIME_DIR="$tmp/runtime" JANGADA_PATH="$jp" JANGADA_PROJETOS="$tmp" \
+    "$jp/bin/jangada-agente" --direto --snapshot --agente claude --projeto "$tmp/proj" --prompt "$1" \
+    >"$tmp/saida" 2>&1 </dev/null
+  rc=$?
+}
+sessao_aberta() {
+  grep -q -- ' new-session -d -s proj ' "$FALSO/tmux" && grep -q -- ' attach -t =proj$' "$FALSO/tmux" &&
+    [ "$(jq -r .estado "$tmp/state/jangada/agentes/proj.json")" = iniciado ]
+}
+agente "sem o comando"
+conferir "caso 7: sem jangada-snapshot, termina sem erro ($rc)" test "$rc" -eq 0
+conferir "caso 7: sem jangada-snapshot, a sessão abre" sessao_aberta
+rm -f "$tmp/state/jangada/agentes/proj.json"
+printf '#!/bin/sh\nprintf "%%s\\n" "$*" >"$FALSO/snapshot"\n' >"$jp/bin/jangada-snapshot"
+chmod +x "$jp/bin/jangada-snapshot"
+agente "com o comando"
+conferir "caso 7: com jangada-snapshot, ele é chamado antes da sessão" \
+  grep -qxF -- "--agente antes do agente proj" "$FALSO/snapshot"
+conferir "caso 7: com jangada-snapshot, a sessão abre" sessao_aberta
+
 if ((falhas)); then
   echo "--- última saída"; cat "$tmp/saida"
   echo "$falhas teste(s) do snapshot falharam"
