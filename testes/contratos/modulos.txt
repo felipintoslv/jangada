@@ -30,6 +30,10 @@ core bin/jangada-mapa
 core bin/jangada-filtrar
 
 # Core: pastas de default/ (1.2)
+# default/nucleo, default/orquestracao, default/delegacao e default/provedores
+# são links para as pastas de mesmo nome em core/; default/agentes,
+# default/claude, default/agy e default/tmux, para core/agentes/perfis,
+# core/agentes/claude, core/agentes/agy e core/agentes/tmux.
 core default/agentes/
 core default/claude/
 core default/agy/

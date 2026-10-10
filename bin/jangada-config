@@ -11,7 +11,7 @@ JANGADA_ESTADO="${XDG_STATE_HOME:-$HOME/.local/state}/jangada"
 JANGADA_SESSOES="$JANGADA_ESTADO/agentes"
 # Pasta de importação dos pacotes Python do Core. Sempre derivada do
 # JANGADA_PATH, para um valor herdado de outra cópia não trocar o código lido.
-JANGADA_CORE_PY="$JANGADA_PATH/default"
+JANGADA_CORE_PY="$JANGADA_PATH/core"
 
 # Valores padrão, substituídos pelo arquivo do usuário se ele existir.
 JANGADA_INTERFACE=componentes
