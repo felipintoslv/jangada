@@ -97,7 +97,7 @@ class Painel(unittest.TestCase):
             link = Path(pasta) / 'monitor/painel'
             link.parent.mkdir()
             link.symlink_to(os.path.relpath(RAIZ / 'default/painel', link.parent))
-            codigo = 'import orquestracao, coletor; print(orquestracao.NUCLEO)'
+            codigo = 'import orquestracao, coletor; print(orquestracao.NUCLEO, coletor.NUCLEO)'
             ambiente = dict(os.environ, PYTHONPATH=str(link), PYTHONDONTWRITEBYTECODE='1')
             ambiente.pop('JANGADA_CORE_PY')
             sem = subprocess.run([sys.executable, '-c', codigo], cwd=pasta, env=ambiente,
@@ -106,7 +106,7 @@ class Painel(unittest.TestCase):
             com = subprocess.run([sys.executable, '-c', codigo], cwd=pasta, capture_output=True, text=True,
                                  env=dict(ambiente, JANGADA_CORE_PY=str(RAIZ / 'default')), check=False)
             self.assertEqual(com.returncode, 0, com.stderr)
-            self.assertEqual(com.stdout.strip(), str(RAIZ / 'default'))
+            self.assertEqual(com.stdout.split(), [str(RAIZ / 'default')] * 2)
 
     def test_ausencia_e_banco_corrompido_nao_criam_estado(self):
         with tempfile.TemporaryDirectory() as pasta:
