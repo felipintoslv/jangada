@@ -10,4 +10,7 @@
 #
 # A leitura fica em default/painel/subagentes.py, a mesma do painel.
 set -euo pipefail
-exec python3 "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../default/painel/subagentes.py" "$@"
+# Sem realpath: chamado pelo link de bin/, a raiz é a pasta acima do link.
+raiz="${JANGADA_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+# O resumo de entrega vem do Core, da mesma cópia que este comando.
+JANGADA_CORE_PY="$raiz/default" exec python3 "$raiz/default/painel/subagentes.py" "$@"

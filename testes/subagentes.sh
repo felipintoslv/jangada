@@ -175,7 +175,8 @@ mkdir -p "$amostra/projeto"
 python3 testes/amostras-subagentes.py "$amostra" "$amostra/projeto"
 subagentes() {
   env -u JANGADA_ESTADO JANGADA_CLAUDE_PROJETOS="$amostra/claude/projects" JANGADA_AGY_DIR="$amostra/agy" \
-    XDG_STATE_HOME="$amostra/state" "$repo_jangada/bin/jangada-subagentes" "$@"
+    XDG_STATE_HOME="$amostra/state" JANGADA_PATH="${RAIZ_SUBAGENTES:-$repo_jangada}" \
+    "${RAIZ_SUBAGENTES:-$repo_jangada}/bin/jangada-subagentes" "$@"
 }
 subagentes --registros >"$tmp/registros.jsonl"
 reg() { jq -e --arg id "$1" "select(.id == \$id) | $2" "$tmp/registros.jsonl" >/dev/null; }
@@ -198,6 +199,20 @@ subagentes --entrega "$amostra/projeto" --desde 2026-09-27T10:05:30Z >"$tmp/entr
 conferir "entrega: --desde deixa só o que veio depois" jqok -e '.n == 0 and .recusas == 1' "$tmp/entrega.json"
 subagentes --entrega "$tmp" >"$tmp/entrega.json"
 conferir "entrega: outra pasta não conta nada" jqok -e '.n == 0 and .recusas == 0' "$tmp/entrega.json"
+
+# Contrato K6: o comando roda pela fachada quando bin/ só tem um link relativo
+# para monitor/bin, com o JANGADA_PATH e sem ele, e o resumo é o mesmo.
+subagentes --entrega "$amostra/projeto" >"$tmp/entrega.json"
+mkdir -p "$tmp/arvore/bin" "$tmp/arvore/monitor/bin"
+cp -a "$repo_jangada/default" "$tmp/arvore/"
+cp -a "$repo_jangada/bin/jangada-subagentes" "$tmp/arvore/monitor/bin/"
+ln -s ../monitor/bin/jangada-subagentes "$tmp/arvore/bin/jangada-subagentes"
+RAIZ_SUBAGENTES="$tmp/arvore" subagentes --entrega "$amostra/projeto" >"$tmp/entrega-link.json"
+conferir "entrega: mesmo resumo pelo link relativo para monitor/bin" cmp -s "$tmp/entrega.json" "$tmp/entrega-link.json"
+(cd / && env -u JANGADA_PATH -u JANGADA_ESTADO JANGADA_CORE_PY=/nao-existe JANGADA_CLAUDE_PROJETOS="$amostra/claude/projects" \
+  JANGADA_AGY_DIR="$amostra/agy" XDG_STATE_HOME="$amostra/state" \
+  "$tmp/arvore/bin/jangada-subagentes" --entrega "$amostra/projeto") >"$tmp/entrega-link.json"
+conferir "entrega: sem JANGADA_PATH, a raiz é a pasta acima do link" cmp -s "$tmp/entrega.json" "$tmp/entrega-link.json"
 
 # Os oito indicadores sobre as amostras, com duas entregas aprovadas: uma
 # com delegação ao agy e verificador, outra sem.

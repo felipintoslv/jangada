@@ -835,6 +835,50 @@ for modo in falha lixo; do
   conferir "caso 17b ($modo): o validar avisa que o resumo não foi gravado" \
     grep -q "resumo de subagentes não gravado" "$tmp/saida.log"
 done
+# Caso 17d (contrato K6): fachada sem os comandos do Monitor. O parecer, a
+# saída e a linha da entrega são os de quando o resumo falha, e a barra sai
+# como quando o consumo falha.
+mkdir -p "$tmp/sem-monitor/bin" "$tmp/consumo-falho" "$tmp/casa/.claude/projects"
+ln -s "$repo_jangada/default" "$tmp/sem-monitor/default"
+for f in "$repo_jangada"/bin/*; do
+  case "${f##*/}" in
+    jangada-subagentes|jangada-consumo) ;;
+    *) ln -s "$f" "$tmp/sem-monitor/bin/${f##*/}" ;;
+  esac
+done
+cp -a "$tmp/sem-monitor/." "$tmp/consumo-falho/"
+printf '#!/bin/sh\nexit 1\n' >"$tmp/consumo-falho/bin/jangada-consumo"
+chmod +x "$tmp/consumo-falho/bin/jangada-consumo"
+# Sem os campos que mudam a cada rodada nem os do resumo.
+linha_k6() { tail -n1 "$metricas" | jq -cS 'del(.data, .segundos, .subagentes, .subagentes_erro)'; }
+saida_k6() { grep -v "resumo de subagentes não gravado" "$tmp/saida.log"; }
+echo "m-k6" >>"$tmp/projeto/metricas.txt"
+sessao_de claude agy
+validar 'STATUS: APROVADO'; rc_com=$?
+cp "$estado/validacao-s-r1.md" "$tmp/parecer-com.md"
+linha_com="$(linha_k6)"; saida_com="$(saida_k6)"
+conferir "caso 17d: com o comando, a linha tem o resumo" \
+  bash -c 'tail -n1 "$1" | jq -e "has(\"subagentes\") and (has(\"subagentes_erro\") | not)" >/dev/null' _ "$metricas"
+sessao_de claude agy
+VALIDAR_PATH="$tmp/sem-monitor" validar 'STATUS: APROVADO'; rc_sem=$?
+conferir "caso 17d: sem jangada-subagentes, mesma saída do validar" [ "$rc_com $rc_sem" = "0 0" ]
+conferir "caso 17d: sem jangada-subagentes, mesmo parecer" cmp -s "$tmp/parecer-com.md" "$estado/validacao-s-r1.md"
+conferir "caso 17d: sem jangada-subagentes, mesma saída fora o aviso do resumo" [ "$saida_com" = "$(saida_k6)" ]
+conferir "caso 17d: sem jangada-subagentes, mesma linha fora o resumo" [ "$linha_com" = "$(linha_k6)" ]
+conferir "caso 17d: sem jangada-subagentes, a marca de aprovação é gravada" test -e "$estado/validacao-s.aprovado"
+conferir "caso 17d: a linha sai sem resumo e com o motivo, como na falha" \
+  bash -c 'tail -n1 "$1" | jq -e "(has(\"subagentes\") | not) and (.subagentes_erro | length > 0)" >/dev/null' _ "$metricas"
+conferir "caso 17d: o validar avisa que o resumo não foi gravado" \
+  grep -q "resumo de subagentes não gravado" "$tmp/saida.log"
+barra_k6() {
+  env -u TMUX HOME="$tmp/casa" XDG_STATE_HOME="$tmp/estado-barra" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$1" \
+    "$1/bin/jangada-agentes" --waybar
+}
+barra_falho="$(barra_k6 "$tmp/consumo-falho" 2>&1)"
+barra_sem="$(barra_k6 "$tmp/sem-monitor" 2>&1)"; rc=$?
+conferir "caso 17d: sem jangada-consumo, a barra sai com 0" [ "$rc" = 0 ]
+conferir "caso 17d: sem jangada-consumo, a barra é a de quando o consumo falha" \
+  bash -c '[ "$1" = "$2" ] && jq -e ".class == \"vazio\"" <<<"$1" >/dev/null' _ "$barra_sem" "$barra_falho"
 git -C "$tmp/projeto" checkout -q -- metricas.txt
 
 # Caso 17c: rodadas simultâneas de sessões diferentes gravam linhas inteiras
