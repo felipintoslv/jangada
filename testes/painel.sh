@@ -13,6 +13,7 @@ falha() { printf 'FALHA %s\n' "$*"; falhas=$((falhas + 1)); }
 conferir() { local d="$1"; shift; if "$@"; then ok "$d"; else falha "$d"; fi; }
 
 export PYTHONDONTWRITEBYTECODE=1
+export JANGADA_CORE_PY="$repo_jangada/default"
 
 if ! python3 -c 'import pyarrow' 2>/dev/null; then
   echo "pyarrow do Python ausente; testes do painel ignorados"

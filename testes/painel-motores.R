@@ -1,4 +1,5 @@
 # Regressões de ausência, desempenho e filtros sobre dados sintéticos.
+Sys.setenv(JANGADA_CORE_PY = file.path(getwd(), "default"))
 source("default/painel/indicadores.R")
 source("default/painel/hoje.R")
 stopifnot(is.na(soma_medida(c(NA, Inf, -1))), soma_medida(c(NA, 0)) == 0)
