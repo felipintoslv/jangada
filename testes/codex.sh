@@ -49,9 +49,15 @@ rodar() {
 git init -q -b main "$tmp/projeto"
 git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -q --allow-empty -m inicio
 printf 'JANGADA_WORKTREES=%s\n' "$tmp/worktrees" >"$tmp/config/jangada/jangada.conf"
-rodar "$repo_jangada/bin/jangada-agente" --perfil codex-codex --projeto "$tmp/projeto" \
+# Autorrevisão e revisor agy não são perfis padrão: ficam em perfis do usuário.
+mkdir -p "$tmp/config/jangada/agentes"
+printf 'COMANDO=codex\nJANGADA_VALIDAR_REVISOR=codex\nJANGADA_DELEGAR=local\n' \
+  >"$tmp/config/jangada/agentes/codex-mesmo.conf"
+printf 'COMANDO=codex\nJANGADA_VALIDAR_REVISOR=agy\nJANGADA_VALIDAR_MODELO=gemini-3.8-flash-high\nJANGADA_DELEGAR=agy\n' \
+  >"$tmp/config/jangada/agentes/codex-flash.conf"
+rodar "$repo_jangada/bin/jangada-agente" --perfil codex-mesmo --projeto "$tmp/projeto" \
   --nome tarefa --prompt $'primeira linha\nsegunda linha' >"$tmp/saida" 2>&1
-conferir "perfil codex-codex cria a sessão" [ "$?" = 0 ]
+conferir "perfil de autorrevisão do Codex cria a sessão" [ "$?" = 0 ]
 conferir "worktree próprio" test -f "$tmp/worktrees/projeto/tarefa/.git"
 conferir "revisor e delegação no estado" jq -e '.agente == "codex" and .revisor == "codex" and .delegar == "local" and .isolar' \
   "$tmp/state/jangada/agentes/projeto--tarefa.json"
@@ -61,12 +67,20 @@ conferir "lançamento isolado pelo adaptador" grep -q 'jangada-isolar -- .*janga
 conferir "metadados externos para revisão" jq -e '.revisor == "codex" and .agente == "codex"' \
   "$tmp/state/jangada/revisoes/projeto--tarefa.json"
 
-rodar "$repo_jangada/bin/jangada-agente" --perfil codex-agy --projeto "$tmp/projeto" \
+rodar "$repo_jangada/bin/jangada-agente" --perfil codex-flash --projeto "$tmp/projeto" \
   --nome tarefa-agy --prompt "Implemente a tarefa" >"$tmp/saida" 2>&1
-conferir "perfil codex-agy cria a sessão" [ "$?" = 0 ]
+conferir "perfil do Codex com revisor agy cria a sessão" [ "$?" = 0 ]
 conferir "Codex com revisor e delegação agy" jq -e '.agente == "codex" and .revisor == "agy" and .delegar == "agy" and .isolar' \
   "$tmp/state/jangada/agentes/projeto--tarefa-agy.json"
 conferir "revisor Flash explícito no ambiente" grep -q 'JANGADA_VALIDAR_MODELO=gemini-3.8-flash-high' "$tmp/tmux.ambiente"
+
+rodar "$repo_jangada/bin/jangada-agente" --perfil codex-claude --projeto "$tmp/projeto" \
+  --nome tarefa-padrao --prompt "Implemente a tarefa" >"$tmp/saida" 2>&1
+conferir "perfil codex-claude cria a sessão" [ "$?" = 0 ]
+conferir "codex-claude: revisor Claude e delegação agy" jq -e '.agente == "codex" and .perfil == "codex-claude" and .revisor == "claude" and .delegar == "agy" and .isolar' \
+  "$tmp/state/jangada/agentes/projeto--tarefa-padrao.json"
+conferir "codex-claude: sem modelo de revisor do agy no ambiente" \
+  bash -c '! grep -q JANGADA_VALIDAR_MODELO "$1"' _ "$tmp/tmux.ambiente"
 
 rodar "$repo_jangada/bin/jangada-codex" -- codex >"$tmp/saida" 2>&1
 conferir "adaptador sem isolamento recusa antes de chamar CLI" [ "$?" != 0 ]

@@ -879,8 +879,8 @@ class Interface(unittest.TestCase):
 
     def test_perfil_preserva_escolha_de_revisor_e_delegacao_no_lancamento(self):
         (self.raiz / 'perfis.json').write_text(json.dumps([
-            {'nome': 'codex-agy', 'descricao': 'Codex implementa, agy revisa'},
-            {'nome': 'claude-claude', 'descricao': 'Claude implementa e revisa'},
+            {'nome': 'codex-claude', 'descricao': 'Codex implementa, Claude revisa'},
+            {'nome': 'claude-codex', 'descricao': 'Claude implementa, Codex revisa'},
         ]))
         self.janela.nova_tarefa()
         form = self.janela.formulario
@@ -893,17 +893,17 @@ class Interface(unittest.TestCase):
         aguardar(arquivo.exists)
         argumentos = json.loads(arquivo.read_text())
         self.assertEqual(argumentos[:3], ['--janela', '--projeto', str(self.raiz)])
-        self.assertEqual(argumentos[5:7], ['--perfil', 'codex-agy'])
+        self.assertEqual(argumentos[5:7], ['--perfil', 'codex-claude'])
 
     def test_catalogo_de_agentes_vem_do_jangada_agente(self):
         (self.raiz / 'principais.json').write_text(json.dumps([
             {'nome': 'claude', 'instalado': True}, {'nome': 'codex', 'instalado': False},
         ]))
-        (self.raiz / 'perfis.json').write_text(json.dumps([{'nome': 'claude-agy', 'descricao': ''}]))
+        (self.raiz / 'perfis.json').write_text(json.dumps([{'nome': 'claude-codex', 'descricao': ''}]))
         self.janela.nova_tarefa()
         form = self.janela.formulario
-        aguardar(lambda: form.agente.itemText(1) == 'claude-agy')
-        self.assertEqual([form.agente.itemText(i) for i in range(form.agente.count())], ['claude', 'claude-agy'])
+        aguardar(lambda: form.agente.itemText(1) == 'claude-codex')
+        self.assertEqual([form.agente.itemText(i) for i in range(form.agente.count())], ['claude', 'claude-codex'])
         self.assertNotIn('agy', [form.agente.itemText(i) for i in range(form.agente.count())])
 
     def test_catalogo_com_agente_fora_do_formato_e_recusado(self):

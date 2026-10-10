@@ -173,7 +173,8 @@ restaurar '{}'
 conferir "caso 10: o protocolo é refeito das fontes" \
   bash -c '[[ ! -L "$1" ]] && ! grep -q SEGREDO-PLANTADO "$2" && grep -q SEGREDO-PLANTADO "$3"' _ "$estado/protocolo-s.md" "$log" "$tmp/segredo"
 
-restaurar "{\"agente\":\"codex\", \"perfil\":\"codex-codex\", \"revisor\":\"codex\", \"conversa\":\"$uuid\", \"isolar\":false}"
+printf 'COMANDO=codex\nJANGADA_VALIDAR_REVISOR=codex\nJANGADA_DELEGAR=local\n' >"$tmp/config/jangada/agentes/codex-mesmo.conf"
+restaurar "{\"agente\":\"codex\", \"perfil\":\"codex-mesmo\", \"revisor\":\"codex\", \"conversa\":\"$uuid\", \"isolar\":false}"
 conferir "caso 11: Codex retoma isolado com UUID e revisor Codex" \
   bash -c 'grep -q "^isolado|.*codex .*--no-daemon.*resume $2" "$1" && grep -qx JANGADA_VALIDAR_REVISOR=codex "$3"' _ "$log" "$uuid" "$tmp/ambiente"
 conferir "caso 11: protocolo de delegação do Codex refeito" grep -q 'Não tente chamar subagentes do Claude' "$estado/protocolo-s.md"
@@ -206,6 +207,41 @@ conferir "caso 15: a limpeza de órfãos preserva o contexto da rodada" \
 conferir "caso 15: o contexto da rodada não aparece como sessão" \
   bash -c '! grep -q "validacao-s-r1" "$1"' _ "$tmp/lista"
 conferir "caso 15: o estado órfão de sessão continua sendo limpo" test ! -e "$estado/morta.json"
+
+# Caso 16: a migração dos perfis troca, no estado, o perfil padrão que saiu
+# pelo novo do mesmo executor, mantém o revisor e não mexe em perfil do usuário.
+migracao="$repo_jangada/migrations/202610101200-perfis-claude-codex.sh"
+migrar() {
+  env XDG_STATE_HOME="$tmp/state" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" "$@" \
+    bash "$migracao" >"$tmp/migracao" 2>&1
+}
+rm -f "$estado"/*.json "$estado"/*.bak
+printf '{"agente":"claude","perfil":"claude-agy","revisor":"agy"}\n' >"$estado/a.json"
+printf '{"agente":"codex","perfil":"codex-codex"}\n' >"$estado/b.json"
+printf '{"agente":"codex","perfil":"codex"}\n' >"$estado/c.json"
+printf '{"agente":"claude","perfil":"claude-claude"}\n' >"$estado/d.json"
+printf '{"agente":"claude","perfil":"solto"}\n' >"$estado/e.json"
+printf 'COMANDO=claude\n' >"$tmp/config/jangada/agentes/claude-claude.conf"
+migrar JANGADA_SIMULAR=1
+conferir "caso 16: a simulação não altera o estado" \
+  bash -c '[ "$(jq -r .perfil "$1/a.json")" = claude-agy ] && ! ls "$1"/*.bak >/dev/null 2>&1' _ "$estado"
+migrar; rc=$?
+conferir "caso 16: a migração termina sem erro" [ "$rc" = 0 ]
+conferir "caso 16: perfil do Claude vira claude-codex e o revisor do estado fica" \
+  jq -e '.perfil == "claude-codex" and .revisor == "agy" and .agente == "claude"' "$estado/a.json"
+conferir "caso 16: perfil do Codex vira codex-claude com o revisor que o antigo fixava" \
+  bash -c 'jq -e ".perfil == \"codex-claude\" and .revisor == \"codex\"" "$1/b.json" >/dev/null &&
+           jq -e ".perfil == \"codex-claude\" and .revisor == \"claude\"" "$1/c.json" >/dev/null' _ "$estado"
+conferir "caso 16: perfil com cópia do usuário e perfil pessoal não mudam" \
+  bash -c '[ "$(jq -c . "$1/d.json")" = "{\"agente\":\"claude\",\"perfil\":\"claude-claude\"}" ] &&
+           [ "$(jq -r .perfil "$1/e.json")" = solto ]' _ "$estado"
+conferir "caso 16: o estado alterado ganha cópia de segurança" \
+  bash -c 'ls "$1"/a.json.jangada-*.bak >/dev/null 2>&1' _ "$estado"
+rm -f "$estado"/*.bak
+migrar
+conferir "caso 16: a segunda execução não altera nada" \
+  bash -c 'grep -q "nenhuma sessão guardava perfil retirado" "$2" && ! ls "$1"/*.bak >/dev/null 2>&1' _ "$estado" "$tmp/migracao"
+rm -f "$tmp/config/jangada/agentes/claude-claude.conf"
 
 if ((falhas)); then
   echo "$falhas falha(s); saídas em $tmp (mantido)"

@@ -149,29 +149,29 @@ conferir "caso Codex: Claude revisa por padrão" [ "$rc" = 0 ]
 conferir "caso Codex: pedido identifica o autor" grep -q 'agente (Codex)' "$tmp/falso/claude.pedido"
 sessao_de codex codex
 validar 'STATUS: APROVADO'; rc=$?
-conferir "caso codex-codex: autorrevisão recusada" [ "$rc" = 3 ]
-conferir "caso codex-codex: revisão pelo mesmo modelo explícita" grep -q 'revisão pelo mesmo modelo' "$tmp/falso/codex.pedido"
-conferir "caso codex-codex: terminal, hooks e integrações desativados" \
+conferir "caso Codex revisa Codex: autorrevisão recusada" [ "$rc" = 3 ]
+conferir "caso Codex revisa Codex: revisão pelo mesmo modelo explícita" grep -q 'revisão pelo mesmo modelo' "$tmp/falso/codex.pedido"
+conferir "caso Codex revisa Codex: terminal, hooks e integrações desativados" \
   bash -c 'for a in --no-daemon --ignore-user-config --ignore-rules --ephemeral read-only shell_tool unified_exec multi_agent hooks code_mode plugins apps; do grep -qx -- "$a" "$1" || exit 1; done' _ "$tmp/falso/codex.args"
-conferir "caso codex-codex: revisor passa pelo isolamento" grep -qx -- --revisar "$tmp/falso/codex.isolar"
-conferir "caso codex-codex: revisão sem ambiente da sessão" \
+conferir "caso Codex revisa Codex: revisor passa pelo isolamento" grep -qx -- --revisar "$tmp/falso/codex.isolar"
+conferir "caso Codex revisa Codex: revisão sem ambiente da sessão" \
   bash -c '[[ "$(head -n2 "$1" | paste -sd " ")" == "sem-sessao 1" ]]' _ "$tmp/falso/codex.ambiente"
-conferir "caso codex-codex: pasta do projeto não é a pasta do revisor" \
+conferir "caso Codex revisa Codex: pasta do projeto não é a pasta do revisor" \
   bash -c '[[ "$(tail -n1 "$1")" != "$2" ]]' _ "$tmp/falso/codex.ambiente" "$tmp/projeto"
 sessao_de codex codex
 validar 'STATUS: REVISAR\n1. arquivo.txt:1: corrigir'; rc=$?
-conferir "caso codex-codex: reprovação normalizada" [ "$rc" = 3 ]
+conferir "caso Codex revisa Codex: reprovação normalizada" [ "$rc" = 3 ]
 sessao_de codex codex
 validar 'resposta sem status'; rc=$?
-conferir "caso codex-codex: resposta sem status não aprova" [ "$rc" = 3 ]
+conferir "caso Codex revisa Codex: resposta sem status não aprova" [ "$rc" = 3 ]
 sessao_de codex mesmo
 validar 'STATUS: APROVADO' --modelo modelo-teste; rc=$?
-conferir "caso codex-codex: mesmo e seleção de modelo" \
+conferir "caso Codex revisa Codex: mesmo e seleção de modelo" \
   bash -c '[[ "$1" == 3 ]] && grep -qx modelo-teste "$2"' _ "$rc" "$tmp/falso/codex.args"
 sessao_de codex codex
 FALSO_CODEX_ERRO=1 validar 'STATUS: APROVADO' --revisor codex; rc=$?
-conferir "caso codex-codex: falha do processo não aprova" [ "$rc" = 1 ]
-conferir "caso codex-codex: com --revisor, a falha não passa a outro modelo" test ! -e "$tmp/falso/claude.pedido"
+conferir "caso Codex revisa Codex: falha do processo não aprova" [ "$rc" = 1 ]
+conferir "caso Codex revisa Codex: com --revisor, a falha não passa a outro modelo" test ! -e "$tmp/falso/claude.pedido"
 
 # O modelo do autor só entra depois que os outros falharam: revisando o
 # próprio trabalho, ele tende a concordar.
@@ -283,20 +283,50 @@ conferir "caso 7: a marca diz que a revisão não foi independente" \
 conferir "caso 7: a métrica registra a autorrevisão" \
   bash -c '[ "$(tail -n1 "$1" | jq -r .independente)" = false ]' _ "$tmp/estado/jangada/validar.jsonl"
 
-# Caso 8: perfis codex-agy e claude-claude definem variáveis esperadas.
+# Caso 8: os perfis padrão são só claude-codex e codex-claude, com revisor de
+# outro provedor e delegação ao agy. Autorrevisão e revisor agy ficam em
+# perfis do usuário, montados aqui.
+mkdir -p "$tmp/config/jangada/agentes" "$tmp/semperfis"
+printf 'COMANDO=codex\nJANGADA_VALIDAR_REVISOR=agy\nJANGADA_VALIDAR_MODELO=gemini-3.8-flash-high\nJANGADA_DELEGAR=agy\n' \
+  >"$tmp/config/jangada/agentes/codex-flash.conf"
+printf 'COMANDO=claude\nJANGADA_VALIDAR_REVISOR=claude\nJANGADA_DELEGAR=claude\n' \
+  >"$tmp/config/jangada/agentes/claude-mesmo.conf"
 (
   export JANGADA_PATH="$repo_jangada" XDG_CONFIG_HOME="$tmp/config"
   # shellcheck source=bin/jangada-config
   source "$repo_jangada/bin/jangada-config"
-  jangada_perfil codex-agy
+  jangada_perfil codex-flash
   [[ "$PERFIL_COMANDO" == "codex" ]] || exit 1
   [[ " ${PERFIL_AMBIENTE[*]} " == *" JANGADA_VALIDAR_REVISOR=agy "* ]] || exit 1
 
-  jangada_perfil claude-claude
+  jangada_perfil claude-mesmo
   [[ "$PERFIL_COMANDO" == "claude" ]] || exit 1
   [[ " ${PERFIL_AMBIENTE[*]} " == *" JANGADA_VALIDAR_REVISOR=claude "* ]] || exit 1
+
+  jangada_perfil claude-codex
+  [[ "$PERFIL_COMANDO" == "claude" ]] || exit 1
+  [[ " ${PERFIL_AMBIENTE[*]} " == *" JANGADA_VALIDAR_REVISOR=codex "* ]] || exit 1
+  [[ " ${PERFIL_AMBIENTE[*]} " != *" JANGADA_VALIDAR_MODELO="* ]] || exit 1
+
+  jangada_perfil codex-claude
+  [[ "$PERFIL_COMANDO" == "codex" ]] || exit 1
+  [[ " ${PERFIL_AMBIENTE[*]} " == *" JANGADA_VALIDAR_REVISOR=claude "* ]] || exit 1
+  [[ " ${PERFIL_AMBIENTE[*]} " != *" JANGADA_VALIDAR_MODELO="* ]] || exit 1
 ); rc=$?
-conferir "caso 8: perfis codex-agy e claude-claude definem comando e revisor" [ "$rc" = 0 ]
+conferir "caso 8: perfis padrão e do usuário definem comando e revisor" [ "$rc" = 0 ]
+env -u JANGADA_DELEGAR -u JANGADA_VALIDAR_REVISOR PATH="$tmp/bin:$PATH" JANGADA_PATH="$repo_jangada" \
+  XDG_CONFIG_HOME="$tmp/semperfis" XDG_STATE_HOME="$tmp/estado" \
+  "$repo_jangada/bin/jangada-agente" --perfis >"$tmp/perfis.json" 2>/dev/null
+conferir "caso 8: --perfis devolve só claude-codex e codex-claude, com revisor e delegação" \
+  jq -e 'map({nome, executor, revisor: .permissoes.revisor, delegacao: .permissoes.delegacao}) == [
+    {nome: "claude-codex", executor: "claude", revisor: "codex", delegacao: "agy"},
+    {nome: "codex-claude", executor: "codex", revisor: "claude", delegacao: "agy"}]' "$tmp/perfis.json"
+env PATH="$tmp/bin:$PATH" JANGADA_PATH="$repo_jangada" XDG_CONFIG_HOME="$tmp/semperfis" XDG_STATE_HOME="$tmp/estado" \
+  JANGADA_AGENTE_ESCOLHER=0 "$repo_jangada/bin/jangada-agente" --projeto "$tmp/projeto" --direto --perfil claude-agy \
+  </dev/null >"$tmp/saida.log" 2>&1; rc=$?
+conferir "caso 8: perfil retirado dá o erro de perfil inexistente com a lista" \
+  bash -c '[ "$1" = 1 ] && grep -q "perfil não encontrado" "$2" && grep -q "perfis existentes: claude-codex codex-claude *$" "$2"' \
+  _ "$rc" "$tmp/saida.log"
 conferir "caso 8: nenhum perfil pronto abre o agy como agente principal" \
   bash -c '! grep -lx "COMANDO=agy" "$1"/default/agentes/*.conf' _ "$repo_jangada"
 
@@ -318,22 +348,22 @@ exit 0
 EOF
 chmod +x "$tmp/bin/tmux"
 
-# 10a: Perfil codex-agy prevalece sobre JANGADA_VALIDAR_REVISOR=claude global
+# 10a: Perfil com revisor agy prevalece sobre JANGADA_VALIDAR_REVISOR=claude global
 rm -f "$estado/"*.json
 env -u TMUX -u HYPRLAND_INSTANCE_SIGNATURE PATH="$tmp/bin:$PATH" \
   XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
   JANGADA_AGENTE_ESCOLHER=0 JANGADA_VALIDAR_REVISOR=claude \
-  "$repo_jangada/bin/jangada-agente" --projeto "$tmp/projeto" --direto --perfil codex-agy </dev/null >/dev/null 2>&1
-conferir "caso 10a: perfil codex-agy prevalece sobre global claude" \
+  "$repo_jangada/bin/jangada-agente" --projeto "$tmp/projeto" --direto --perfil codex-flash </dev/null >/dev/null 2>&1
+conferir "caso 10a: revisor agy do perfil prevalece sobre global claude" \
   [ "$(jq -r '.revisor // ""' "$estado/projeto.json")" = "agy" ]
 
-# 10b: Perfil claude-claude prevalece sobre JANGADA_VALIDAR_REVISOR=agy global
+# 10b: Perfil de autorrevisão prevalece sobre JANGADA_VALIDAR_REVISOR=agy global
 rm -f "$estado/"*.json
 env -u TMUX -u HYPRLAND_INSTANCE_SIGNATURE PATH="$tmp/bin:$PATH" \
   XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
   JANGADA_AGENTE_ESCOLHER=0 JANGADA_VALIDAR_REVISOR=agy \
-  "$repo_jangada/bin/jangada-agente" --projeto "$tmp/projeto" --direto --perfil claude-claude </dev/null >/dev/null 2>&1
-conferir "caso 10b: perfil claude-claude prevalece sobre global agy" \
+  "$repo_jangada/bin/jangada-agente" --projeto "$tmp/projeto" --direto --perfil claude-mesmo </dev/null >/dev/null 2>&1
+conferir "caso 10b: revisor claude do perfil prevalece sobre global agy" \
   [ "$(jq -r '.revisor // ""' "$estado/projeto.json")" = "claude" ]
 
 # 10c: Opção explícita --revisor prevalece sobre o perfil
@@ -341,8 +371,8 @@ rm -f "$estado/"*.json
 env -u TMUX -u HYPRLAND_INSTANCE_SIGNATURE PATH="$tmp/bin:$PATH" \
   XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config" JANGADA_PATH="$repo_jangada" \
   JANGADA_AGENTE_ESCOLHER=0 \
-  "$repo_jangada/bin/jangada-agente" --projeto "$tmp/projeto" --direto --perfil claude-claude --revisor agy </dev/null >/dev/null 2>&1
-conferir "caso 10c: --revisor agy explícito prevalece sobre perfil claude-claude" \
+  "$repo_jangada/bin/jangada-agente" --projeto "$tmp/projeto" --direto --perfil claude-mesmo --revisor agy </dev/null >/dev/null 2>&1
+conferir "caso 10c: --revisor agy explícito prevalece sobre o perfil" \
   [ "$(jq -r '.revisor // ""' "$estado/projeto.json")" = "agy" ]
 
 # 10d: JANGADA_VALIDAR_REVISOR=mesmo global resolve para o agente padrão
@@ -1212,13 +1242,13 @@ delegar_de() { jq -r .delegar "$estado/semr.json"; }
 agente_em "$tmp/semr"
 conferir "caso 13g: o Claude sem a variável delega ao agy" \
   bash -c '[ "$1" = agy ] && grep -q "jangada-delegar PAPEL" "$2"' _ "$(delegar_de)" "$estado/protocolo-semr.md"
-agente_em "$tmp/semr" --perfil claude-claude
-conferir "caso 13g: o perfil claude-claude usa os subagentes do Claude" \
+agente_em "$tmp/semr" --perfil claude-mesmo
+conferir "caso 13g: perfil com JANGADA_DELEGAR=claude usa os subagentes do Claude" \
   bash -c '[ "$1" = claude ] && ! grep -q "jangada-delegar" "$2" && grep -q "Nunca .general-purpose." "$2"' \
   _ "$(delegar_de)" "$estado/protocolo-semr.md"
 JANGADA_DELEGAR=claude agente_em "$tmp/semr"
 conferir "caso 13g: JANGADA_DELEGAR global vale sem a chave no perfil" [ "$(delegar_de)" = claude ]
-JANGADA_DELEGAR=agy agente_em "$tmp/semr" --perfil claude-claude
+JANGADA_DELEGAR=agy agente_em "$tmp/semr" --perfil claude-mesmo
 conferir "caso 13g: a chave do perfil vence a global" [ "$(delegar_de)" = claude ]
 env PATH="$tmp/semagy:/usr/bin:/bin" bash -c 'source "$1/bin/jangada-config"; jangada_delegacao claude agy' _ "$repo_jangada" >"$tmp/delegar.txt"
 conferir "caso 13g: sem o agy instalado, agy vira claude" [ "$(cat "$tmp/delegar.txt")" = claude ]

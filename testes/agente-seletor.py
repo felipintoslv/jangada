@@ -57,21 +57,40 @@ class Seletor(unittest.TestCase):
 
     def test_revisor_global_e_autorrevisao(self):
         self.ambiente['JANGADA_VALIDAR_REVISOR'] = 'codex'
+        perfis = self.config / 'agentes'
+        perfis.mkdir()
+        (perfis / 'codex-global.conf').write_text('COMANDO=codex\n')
         opcoes = self.menu()
         padrao = next(linha for linha in opcoes.splitlines() if linha.startswith('padrão'))
         self.assertIn('claude implementa; codex revisa', padrao)
-        self.assertIn('autorrevisão pelo mesmo provedor', opcoes)
+        perfil = next(linha for linha in opcoes.splitlines() if linha.startswith('codex-global'))
+        self.assertIn('codex implementa; codex revisa', perfil)
+        self.assertIn('autorrevisão pelo mesmo provedor', perfil)
         self.assertNotIn('economiza', opcoes)
         self.assertIn('Fila e orçamento', (self.pasta / 'argumentos').read_text())
 
     def test_revisao_cruzada_por_padrao(self):
+        perfis = self.config / 'agentes'
+        perfis.mkdir()
+        (perfis / 'claude-flash.conf').write_text(
+            'COMANDO=claude\nJANGADA_VALIDAR_REVISOR=agy\n'
+            'JANGADA_VALIDAR_MODELO=gemini-3.8-flash-high\nJANGADA_DELEGAR=agy\n')
         opcoes = self.menu().splitlines()
         padrao = next(linha for linha in opcoes if linha.startswith('padrão'))
         self.assertIn('claude implementa; codex revisa', padrao)
         self.assertIn('delegação ao agy', padrao)
-        perfil = next(linha for linha in opcoes if linha.startswith('claude-agy\t'))
+        perfil = next(linha for linha in opcoes if linha.startswith('claude-flash\t'))
         self.assertIn('claude implementa; agy revisa (gemini-3.8-flash-high)', perfil)
         self.assertIn('delegação ao agy', perfil)
+        self.assertEqual([linha.split('\t')[0] for linha in opcoes],
+                         ['padrão', 'claude-codex', 'claude-flash', 'codex-claude'])
+        perfil = next(linha for linha in opcoes if linha.startswith('claude-codex\t'))
+        self.assertIn('claude implementa; codex revisa;', perfil)
+        self.assertIn('delegação ao agy', perfil)
+        perfil = next(linha for linha in opcoes if linha.startswith('codex-claude\t'))
+        self.assertIn('codex implementa; claude revisa;', perfil)
+        self.assertIn('demais papéis no agy', perfil)
+        self.assertNotIn('autorrevisão', '\n'.join(opcoes))
         (self.config / 'jangada.conf').write_text('JANGADA_AGENTE=codex\n')
         padrao = next(linha for linha in self.menu().splitlines()
                       if linha.startswith('padrão'))
@@ -89,12 +108,12 @@ class Seletor(unittest.TestCase):
     def test_perfil_personalizado_usa_valores_efetivos(self):
         perfis = self.config / 'agentes'
         perfis.mkdir()
-        (perfis / 'codex-agy.conf').write_text(
+        (perfis / 'codex-claude.conf').write_text(
             'COMANDO=codex\nDESCRICAO=descrição antiga\n'
-            'JANGADA_VALIDAR_REVISOR=claude\nJANGADA_DELEGAR=local\n')
+            'JANGADA_VALIDAR_REVISOR=agy\nJANGADA_DELEGAR=local\n')
         linha = next(linha for linha in self.menu().splitlines()
-                     if linha.startswith('codex-agy'))
-        self.assertIn('claude revisa', linha)
+                     if linha.startswith('codex-claude'))
+        self.assertIn('agy revisa', linha)
         self.assertIn('demais papéis nesta sessão', linha)
         self.assertNotIn('descrição antiga', linha)
 
@@ -115,7 +134,7 @@ class Seletor(unittest.TestCase):
 
     def test_agente_ausente_recusa_antes_de_criar_estado(self):
         (self.bin / 'codex').unlink()
-        resultado = subprocess.run([str(RAIZ / 'bin/jangada-agente'), '--perfil', 'codex',
+        resultado = subprocess.run([str(RAIZ / 'bin/jangada-agente'), '--perfil', 'codex-claude',
                                    '--projeto', str(self.pasta), '--nome', 'tarefa'],
                                   capture_output=True, text=True, env=self.ambiente, timeout=15)
         self.assertEqual(resultado.returncode, 1)
@@ -143,7 +162,7 @@ class Seletor(unittest.TestCase):
         (self.config / 'jangada.conf').write_text('JANGADA_AGENTE=codex\n')
         opcoes = self.menu().splitlines()
         self.assertTrue(any(linha.startswith('padrão\t') for linha in opcoes))
-        self.assertTrue(any(linha.startswith('codex\t') for linha in opcoes))
+        self.assertTrue(any(linha.startswith('codex-claude\t') for linha in opcoes))
 
 
 if __name__ == '__main__':

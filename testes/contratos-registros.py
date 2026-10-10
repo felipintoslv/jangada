@@ -264,7 +264,7 @@ class Gerador:
     def abrir_sessao(self):
         """SESSAO.json criado pelo jangada-agente (seção 4)."""
         self.rodar(self.comando('jangada-agente'), '--agente', 'claude', '--revisor', 'agy',
-                   '--perfil', 'claude-agy', '--atividade', 'atv-1', '--tarefa-id', 'tarefa-1',
+                   '--perfil', 'claude-codex', '--atividade', 'atv-1', '--tarefa-id', 'tarefa-1',
                    '--projeto', self.projeto, '--nome', 'tarefa', '--prompt', 'tarefa de teste')
         return self.sessao()
 
@@ -361,7 +361,7 @@ def main():
         conferir('o SESSAO.json leva o perfil e os vínculos dados ao jangada-agente',
                  {campo: (registros['SESSAO.json'][0][1] or {}).get(campo)
                   for campo in ('perfil', 'atividade', 'tarefa_id')}
-                 == {'perfil': 'claude-agy', 'atividade': 'atv-1', 'tarefa_id': 'tarefa-1'})
+                 == {'perfil': 'claude-codex', 'atividade': 'atv-1', 'tarefa_id': 'tarefa-1'})
         conferir('os hooks e a troca de foco gravam seis eventos',
                  [e.get('estado') for _, e in registros['eventos-agentes.jsonl']]
                  == ['inicio', 'trabalhando', 'subagente-inicio', 'subagente-fim', 'aguardando', 'foco'],
