@@ -2,7 +2,8 @@
 # Testa o comando reverter do jangada shell, no bash e no zsh: antes de pedir
 # confirmação ele mostra os commits, as alterações e os arquivos não
 # rastreados que se perdem; ao confirmar, guarda o HEAD num ramo de cópia
-# antes do reset; ao recusar, não muda nada.
+# antes do reset; ao recusar, não muda nada. Confere também o cabeçalho de
+# abertura do console (Jangada Core), com a logo e sem o arquivo dela.
 #
 # Uso: testes/reverter.sh
 set -uo pipefail
@@ -44,11 +45,37 @@ reverter_em() {
     "$sh" -c '. "$1/shell/jangada-shell.sh"; reverter' _ "$repo_jangada" 2>&1)
 }
 
+# Abre o console no shell dado, com a cópia do jangada em $2, e pede a ajuda.
+console_em() {
+  printf 'ajuda\n' | SHELL="$1" JANGADA_PATH="$2" "$repo_jangada/bin/jangada-shell" 2>&1
+}
+
+# Cópia do jangada sem o arquivo da logo.
+mkdir -p "$tmp/semlogo/shell"
+ln -s "$repo_jangada/shell/jangada-shell.sh" "$tmp/semlogo/shell/jangada-shell.sh"
+
 for sh in bash zsh; do
   if ! command -v "$sh" >/dev/null 2>&1; then
     ok "$sh ausente, pulado"
     continue
   fi
+
+  saida="$(console_em "$sh" "$repo_jangada")"
+  conferir "$sh: cabeçalho traz Jangada Core" \
+    grep -qx "Jangada Core: Console de Agentes" <<<"$saida"
+  conferir "$sh: ajuda traz Jangada Core" \
+    grep -qx "Jangada Core: Comandos Disponíveis:" <<<"$saida"
+  conferir "$sh: cabeçalho mostra a logo" grep -qF '| (*) \' <<<"$saida"
+  # Só até a linha do nome: o prompt do zsh emite sequências de cor depois.
+  logo="$(sed '/^Jangada Core: Console/q' <<<"$saida")"
+  conferir "$sh: logo sai sem marcador nem cor fora do terminal" \
+    bash -c '! grep -q -e "^\$[1-4]" -e "$(printf "\033")\[[0-9]*m" <<<"$1"' _ "$logo"
+  conferir "$sh: nome antigo não aparece" bash -c '! grep -q "Jangada Shell" <<<"$1"' _ "$saida"
+  saida="$(console_em "$sh" "$tmp/semlogo")"
+  conferir "$sh: sem o arquivo da logo, o console abre" \
+    grep -qx "Jangada Core: Console de Agentes" <<<"$saida"
+  conferir "$sh: sem o arquivo da logo, não desenha nada" \
+    bash -c '! grep -qF "(*)" <<<"$1"' _ "$saida"
 
   # Recusa: mostra tudo e não muda nada.
   wt="$(preparar "$sh-n")"

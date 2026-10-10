@@ -926,7 +926,7 @@ e não mexe na instalada. Para testar a cópia de trabalho sem instalar, rode
 | `testes/bluetooth.sh` | `jangada-bluetooth` com bluetoothctl falso: parear não confia no aparelho sem a escolha no menu |
 | `testes/snapshot.sh` | `jangada-snapshot` com snapper falso: os do agente ficam fora da limpeza do snapper e só os mais recentes ficam |
 | `testes/calendario.sh` | `jangada-calendario`: JSON corrompido guardado à parte, gravação atômica e gravações simultâneas sem perda |
-| `testes/reverter.sh` | `reverter` do Jangada Core, no bash e no zsh: prévia do que se perde e ramo de cópia |
+| `testes/reverter.sh` | `reverter` do Jangada Core, no bash e no zsh: prévia do que se perde e ramo de cópia; cabeçalho de abertura do console |
 | `testes/aninhado.sh` | sobe um Hyprland aninhado com a configuração (`--sem-usuario` só os padrões) e confere `configerrors` e o número de atalhos |
 
 A cada push, o GitHub Actions (`.github/workflows/verificar.yml`) roda o
