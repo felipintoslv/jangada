@@ -564,6 +564,45 @@ integrar_teste g1 s
 recusa "git status falha" g1 'o git status falhou' "$antes"
 conferir "git status falha: a suíte não roda" test ! -e "$tmp/verificar-chamado"
 
+# Filtro do git ligado por .gitattributes no candidato, definido no config,
+# no config.worktree ou por include: recusa antes da suíte, e o comando do
+# filtro não roda.
+cat >"$tmp/bin/git" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >>"$tmp/git-chamadas"
+exec "$git_real" "\$@"
+EOF
+for via in config worktree include; do
+  preparar "f$via"
+  printf '*.txt filter=mal\n' >"$wts/proj/f$via/.gitattributes"
+  git -C "$wts/proj/f$via" add .gitattributes
+  git -C "$wts/proj/f$via" commit --quiet -m filtro
+  marca "f$via" "$revisoes"
+  case "$via" in
+    config) alvo="$proj/.git/config" ;;
+    worktree)
+      git -C "$proj" config extensions.worktreeConfig true
+      alvo="$proj/.git/config.worktree"
+      ;;
+    include)
+      alvo="$tmp/filtro.inc"
+      git -C "$proj" config include.path "$alvo"
+      ;;
+  esac
+  git config --file "$alvo" filter.mal.smudge "touch '$tmp/filtro-rodou'; cat"
+  git config --file "$alvo" filter.mal.process "touch '$tmp/filtro-rodou'"
+  antes="$(foto)"
+  integrar_teste "f$via" s
+  recusa "filtro ($via)" "f$via" 'define filter\.mal\.' "$antes"
+  conferir "filtro ($via): a suíte não roda" test ! -e "$tmp/verificar-chamado"
+  conferir "filtro ($via): o comando do filtro não roda" test ! -e "$tmp/filtro-rodou"
+  git config --file "$alvo" --remove-section filter.mal
+  case "$via" in
+    worktree) git -C "$proj" config --unset extensions.worktreeConfig; rm -f "$alvo" ;;
+    include) git -C "$proj" config --unset include.path ;;
+  esac
+done
+
 # Escrita concorrente recria, durante o avanço, um caminho que o commit
 # remove: como arquivo ou como link pendente. O comando avisa, sai com erro
 # e não apaga o que foi recriado.

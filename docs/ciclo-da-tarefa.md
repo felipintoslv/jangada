@@ -210,7 +210,10 @@ não libera. As etapas, na ordem:
 1. O estado da sessão tem de ser igual à cópia protegida em
    `revisoes/SESSAO.json`. A worktree da tarefa tem de estar limpa, e a
    cópia principal, na base e sem alterações, inclusive arquivos novos e
-   submódulos.
+   submódulos. A configuração local da cópia principal, com o
+   `config.worktree` e o que entra por include, não pode definir chave
+   `filter.*`: o comando recusa antes de qualquer `git status` e de novo sob
+   a trava, porque o filtro rodaria comando ao gravar os arquivos.
 2. Se a base andou, o ramo é refeito sobre ela com `git rebase` na worktree
    da tarefa. O commit muda, e o comando recusa pedindo
    `jangada-validar` para o commit novo. Um conflito deixa o rebase parado na

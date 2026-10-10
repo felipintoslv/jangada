@@ -319,6 +319,22 @@ principal_alterada() {
   [[ -n "$saida" ]]
 }
 
+# Um filter.* do repositório roda o comando dele quando o avanço grava um
+# arquivo que o .gitattributes do candidato liga ao filtro, e quando o git
+# status relê esse arquivo. Vale o escopo local, que inclui o config.worktree
+# e o que entra por include ou includeIf. Uma falha do git config conta como
+# filtro.
+filtro_local() {
+  local lista chave
+  if ! lista="$(jangada_git_seguro -C "$raiz" config --includes --show-scope --name-only --list)"; then
+    echo "o git config falhou em $raiz" >&2
+    return 0
+  fi
+  chave="$(awk -F'\t' '($1 == "local" || $1 == "worktree") && $2 ~ /^filter\./ { print $2; exit }' <<<"$lista")"
+  [[ -n "$chave" ]] || return 1
+  echo "a configuração local de $raiz define $(tr -d '\000-\037\177' <<<"$chave")" >&2
+}
+
 # Roda sob a trava do repositório: entre a conferência e o avanço passam a
 # confirmação e a suíte, e nesse meio outra sessão pode ter sido integrada ou
 # o usuário pode ter editado a cópia principal. Tudo é conferido de novo, e
@@ -337,6 +353,10 @@ integrar_sob_trava() {
   if [[ "$(jangada_git_seguro -C "$raiz" rev-parse --abbrev-ref HEAD)" != "$base" \
         || "$(jangada_git_seguro -C "$raiz" rev-parse --verify --quiet HEAD || true)" != "$ponta_base" ]]; then
     echo "a base $base mudou depois da conferência (era ${ponta_base:0:12})" >&2
+    return 11
+  fi
+  if filtro_local; then
+    echo "a cópia principal ($raiz) passou a ter filtro do git depois da conferência" >&2
     return 11
   fi
   if principal_alterada; then
@@ -384,6 +404,8 @@ if ((integrar)); then
     '.raiz == $r and .worktree == $w and .ramo == $m and .base == $b' \
     "$JANGADA_ESTADO/revisoes/$s.json" >/dev/null 2>&1 \
     || negar "ramo, base, raiz ou worktree do estado diferem da cópia protegida em $JANGADA_ESTADO/revisoes/$s.json"
+  # Antes de qualquer git status, que também roda o filtro.
+  ! filtro_local || negar "a cópia principal ($raiz) tem filtro do git configurado, que rodaria comando no avanço"
   if [[ -n "$worktree" && -d "$worktree" && -n "$(jangada_git_seguro -C "$worktree" status --porcelain --ignore-submodules=all)" ]]; then
     jangada_git_seguro -C "$worktree" status --short --ignore-submodules=all | head -20 | tr -d '\000-\010\013-\037\177' >&2
     negar "o worktree $worktree tem alterações sem commit"
