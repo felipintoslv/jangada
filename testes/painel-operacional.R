@@ -18,8 +18,17 @@ n <- list(projetos = projetos, atividades = list(list(projeto = ids[1], titulo =
 jsonlite::write_json(n, file.path(cache_teste, "nucleo.json"), auto_unbox = TRUE)
 jsonlite::write_json(list(), file.path(cache_teste, "coleta.json"))
 options(jangada.painel.cache = cache_teste, jangada.painel.chave = file.path(cache_teste, "ausente"))
-aplicacao <- shiny::shinyAppDir("default/painel")
+# O app roda de uma cópia fora do jangada: visual, logo e monitoramento vêm
+# do JANGADA_PATH, não do getwd().
+raiz_teste <- getwd()
+Sys.setenv(JANGADA_PATH = raiz_teste)
+copia_app <- file.path(cache_teste, "fora")
+dir.create(copia_app)
+file.copy("default/painel", copia_app, recursive = TRUE)
+aplicacao <- shiny::shinyAppDir(file.path(copia_app, "painel"))
 ambiente <- environment(aplicacao$serverFuncSource())
+stopifnot(grepl("marca-jangada", ambiente$marca, fixed = TRUE),
+          length(ambiente$cores) > 0L)
 jsonlite::write_json(list(projetos = "inválido"), file.path(cache_teste, "nucleo.json"))
 stopifnot(length(ambiente$carregar_cache(cache_teste)$nucleo$erros) == 1L)
 jsonlite::write_json(n, file.path(cache_teste, "nucleo.json"), auto_unbox = TRUE)
@@ -48,13 +57,14 @@ ambiente$tabela <- function(d, ...) {
   if (identical(names(d), c("Projeto", "Tarefa", "Critérios", "Motivo", "Artefato"))) chamadas$pendentes <- d
   tabela_original(d, ...)
 }
-ambiente$system2 <- function(...) {
+ambiente$system2 <- function(comando, argumentos, ...) {
   chamadas$n <- chamadas$n + 1L
+  chamadas$programa <- argumentos
   jsonlite::toJSON(list(data = "2026-10-08T10:00:00Z", cpu_ticks = list(total = chamadas$n * 100, ocioso = chamadas$n * 20),
     memoria_bytes = list(total = 30.5 * 1024^3, usada = 9.2 * 1024^3),
     gpu = list(list(indice = 0, uso_percentual_medido = 24, memoria_usada_mib = 1285, memoria_total_mib = 8188)), modelos_carregados = list(), erros = list()), auto_unbox = TRUE, null = "null")
 }
-antes <- tools::md5sum(list.files(cache_teste, full.names = TRUE))
+antes <- tools::md5sum(list.files(cache_teste, full.names = TRUE, recursive = TRUE))
 shiny::testServer(aplicacao, {
   session$setInputs(painel = "Operacional", secao_operacional = "Projetos", op_projeto = ids[1], op_detalhe = paste("tarefa", ids[2], "T1", sep = "|"))
   stopifnot(grepl("Selecione", output$op_detalhes$html), chamadas$n == 0L)
@@ -90,6 +100,9 @@ shiny::testServer(aplicacao, {
   session$setInputs(op_agente = "")
   session$setInputs(painel = "Operacional", secao_operacional = "Monitoramento")
   primeira <- output$op_monitoramento$html
+  monitoramento <- file.path(raiz_teste, "default/nucleo/monitoramento.py")
+  stopifnot(identical(chamadas$programa, shQuote(monitoramento)),
+            file.exists(monitoramento))
   stopifnot(chamadas$n == 1L, grepl("não registrado", primeira),
     grepl("9,2 de 30,5 GiB", primeira), grepl("1.285 de 8.188 MiB", primeira),
     grepl("24%", primeira), grepl("nenhum", primeira), !grepl("<pre", primeira, fixed = TRUE))
@@ -109,6 +122,6 @@ SemToken <- R6::R6Class("SessaoSemToken", inherit = shiny::MockShinySession, por
 shiny::testServer(aplicacao, session = SemToken$new(), {
   stopifnot(session$isClosed(), chamadas$n == 2L)
 })
-stopifnot(identical(antes, tools::md5sum(list.files(cache_teste, full.names = TRUE))))
+stopifnot(identical(antes, tools::md5sum(list.files(cache_teste, full.names = TRUE, recursive = TRUE))))
 unlink(cache_teste, recursive = TRUE)
 message("Painel operacional: identidade, ausência, autenticação, leitura e monitoramento conferidos")

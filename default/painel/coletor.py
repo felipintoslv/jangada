@@ -53,7 +53,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import subagentes  # noqa: E402
 import orquestracao  # noqa: E402
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, os.environ.get('JANGADA_CORE_PY') or os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from nucleo.consultas import consultar, catalogos  # noqa: E402
 
 INICIO = time.monotonic()
@@ -851,7 +851,7 @@ def main():
     retrato = orquestracao.coletar(ESTADO, [Path(p) for p in projetos], projeto_de)
     gravar_json(os.path.join(cache, 'orquestracao.json'), retrato)
     operacional = consultar(ESTADO)
-    publico = catalogos(Path(__file__).resolve().parents[2])
+    publico = catalogos(Path(os.path.abspath(__file__)).parents[2])
     operacional['erros'].extend(publico.pop('erros'))
     operacional.update(publico)
     operacional['data'] = agora.astimezone(FUSO).isoformat(timespec='seconds')

@@ -6,20 +6,23 @@ from pathlib import Path
 import sqlite3
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'orquestracao'))
+# Sem JANGADA_CORE_PY, a pasta acima desta pelo caminho recebido, sem seguir links.
+NUCLEO = Path(os.environ.get('JANGADA_CORE_PY') or os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, str(NUCLEO / 'orquestracao'))
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from nucleo.consultas import banco_leitura  # noqa: E402
-from estado import Estado  # noqa: E402
+sys.path.insert(0, str(NUCLEO))
+from nucleo.consultas import banco_leitura, consumo_tarefa, listar_provedores, listar_tarefas  # noqa: E402
 from metricas_projeto import calcular, ler_precos  # noqa: E402
-from saude import Saude  # noqa: E402
 
 
-class Consulta(Estado):
+class Consulta:
     def __init__(self, caminho):
         self.pasta = Path(caminho).absolute().parent
         self.leitura = banco_leitura(caminho)
         self.db = self.leitura.__enter__()
+
+    def listar(self):
+        return listar_tarefas(self.db, self.pasta)
 
     def fechar(self):
         self.leitura.__exit__(None, None, None)
@@ -48,7 +51,7 @@ def coletar(raiz, projetos, projeto_de):
             estados = {t['id']: t['status'] for t in tarefas}
             for tarefa in tarefas:
                 spec = tarefa['especificacao']
-                consumo = consulta.consumo(tarefa['id'])
+                consumo = consumo_tarefa(consulta.db, tarefa['id'])
                 chamadas = consumo['chamadas'] if tarefa['status'] != 'RUNNING' else None
                 segundos = consumo['segundos'] if chamadas is not None else None
                 dependencias = [d for d in spec.get('dependencias', []) if estados.get(d) != 'COMPLETED']
@@ -76,9 +79,7 @@ def coletar(raiz, projetos, projeto_de):
         consulta = None
         try:
             consulta = Consulta(arquivo)
-            saude = Saude.__new__(Saude)
-            saude.db = consulta.db
-            resultado['provedores'] = saude.listar()
+            resultado['provedores'] = listar_provedores(consulta.db)
         except (sqlite3.Error, OSError, ValueError, KeyError, TypeError) as erro:
             resultado['erros'].append(f'provedores: {type(erro).__name__}')
         finally:

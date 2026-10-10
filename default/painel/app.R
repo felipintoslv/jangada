@@ -6,7 +6,11 @@
 library(shiny)
 library(bslib)
 
-pasta_app <- getwd()
+# A pasta do app vem do JANGADA_PATH: o getwd() do Shiny segue links e
+# daria a pasta física.
+raiz_jangada <- Sys.getenv("JANGADA_PATH")
+if (!nzchar(raiz_jangada)) stop("JANGADA_PATH não definido")
+pasta_app <- file.path(raiz_jangada, "default/painel")
 source(file.path(pasta_app, "indicadores.R"), local = TRUE)
 source(file.path(pasta_app, "hoje.R"), local = TRUE)
 source(file.path(pasta_app, "operacional.R"), local = TRUE)
@@ -116,7 +120,7 @@ filtros <- sidebar(
   uiOutput("coleta")
 )
 
-marca <- paste(readLines(file.path(pasta_app, "../logo/jangada-symbolic.svg"), warn = FALSE), collapse = "")
+marca <- paste(readLines(file.path(raiz_jangada, "default/logo/jangada-symbolic.svg"), warn = FALSE), collapse = "")
 marca <- gsub('fill="#000000"', 'fill="currentColor"', marca, fixed = TRUE)
 marca <- sub('<svg ', '<svg class="marca-jangada" aria-hidden="true" ', marca, fixed = TRUE)
 

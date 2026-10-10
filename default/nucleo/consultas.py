@@ -2,6 +2,7 @@
 
 import contextlib
 import json
+import math
 import os
 from pathlib import Path
 import sqlite3
@@ -9,6 +10,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'orquestracao'))
@@ -67,6 +69,59 @@ def banco_leitura(caminho):
             yield db
         finally:
             db.close()
+
+
+def listar_tarefas(db, pasta):
+    resultado = []
+    for linha in db.execute('SELECT * FROM tarefas ORDER BY criado,id'):
+        item = conferir_conclusao(pasta, dict(linha))
+        item['especificacao'] = json.loads(item['especificacao'])
+        item['resultado'] = json.loads(item['resultado']) if item['resultado'] else None
+        resultado.append(item)
+    return resultado
+
+
+def consumo_tarefa(db, identificador):
+    chamadas, segundos = 0, 0
+    for linha in db.execute('SELECT evento,dados FROM eventos WHERE tarefa=? AND evento IN (?,?)',
+                            (identificador, 'execucao_encerrada', 'reserva_expirada')):
+        if linha['evento'] == 'reserva_expirada':
+            chamadas = None
+            continue
+        resultado = json.loads(linha['dados']).get('resultado')
+        metrica = resultado.get('metricas') if isinstance(resultado, dict) else None
+        if not isinstance(metrica, dict):
+            chamadas = None
+            continue
+        quantidade = metrica.get('chamadas')
+        duracao = metrica.get('segundos')
+        if type(quantidade) is not int or quantidade < 0:
+            chamadas = None
+        elif chamadas is not None:
+            chamadas += quantidade
+        if type(duracao) is int and duracao >= 0:
+            segundos += duracao
+        else:
+            chamadas = None
+    return {'chamadas': chamadas, 'segundos': segundos}
+
+
+def listar_provedores(db):
+    mapa = {linha['id']: dict(linha) for linha in db.execute('SELECT * FROM provedores')}
+    for provedor in ('local', 'agy'):
+        mapa.setdefault(provedor, {'id': provedor, 'status': 'UNKNOWN', 'pausado': 0,
+                                   'falhas': 0, 'motivo': 'sem observação', 'atualizado': 0,
+                                   'valido_ate': 0, 'cota': None, 'modelo': None})
+    agora = time.time()
+    for item in mapa.values():
+        if item['pausado']:
+            item.update(status='UNAVAILABLE', motivo='provedor pausado')
+        elif item['valido_ate'] <= agora:
+            item.update(status='UNKNOWN', motivo='observação ausente ou expirada', cota=None)
+        elif item['id'] in {'agy', 'codex'} and item['status'] == 'AVAILABLE' and item['cota'] is None:
+            item.update(status='UNKNOWN', motivo='cota não confirmada')
+        item['espera_segundos'] = max(0, math.ceil(item['valido_ate'] - agora)) if item['status'] == 'COOLDOWN' else 0
+    return [mapa[nome] for nome in sorted(mapa)]
 
 
 def agregado(estados):

@@ -1,7 +1,8 @@
 # A mesma validação de cores serve ao painel e à Central Qt.
 carregar_fichas <- function() {
-  reserva <- jsonlite::read_json(file.path(pasta_app, "../visual/padrao.json"))
-  programa <- file.path(pasta_app, "../visual/fichas.py")
+  visual <- file.path(raiz_jangada, "default/visual")
+  reserva <- jsonlite::read_json(file.path(visual, "padrao.json"))
+  programa <- file.path(visual, "fichas.py")
   resposta <- tryCatch(
     system2("python3", c(shQuote(programa), "--json"), stdout = TRUE, stderr = FALSE),
     error = function(e) character()

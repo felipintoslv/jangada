@@ -12,6 +12,7 @@ import urllib.request
 from estado import IDENTIFICADOR, serializar
 from executor import CAPACIDADES
 from cota_codex import consultar, percentual
+from nucleo.consultas import listar_provedores
 
 ESTADOS = {'AVAILABLE', 'DEGRADED', 'UNKNOWN', 'UNAVAILABLE', 'COOLDOWN',
            'QUOTA_LOW', 'QUOTA_EXHAUSTED', 'AUTH_ERROR', 'RATE_LIMITED', 'NETWORK_ERROR'}
@@ -71,21 +72,7 @@ class Saude:
                             (provedor, agora, 'observado', serializar({'status': status, 'motivo': motivo, 'cota': cota})))
 
     def listar(self):
-        mapa = {linha['id']: dict(linha) for linha in self.db.execute('SELECT * FROM provedores')}
-        for provedor in ('local', 'agy'):
-            mapa.setdefault(provedor, {'id': provedor, 'status': 'UNKNOWN', 'pausado': 0,
-                                       'falhas': 0, 'motivo': 'sem observação', 'atualizado': 0,
-                                       'valido_ate': 0, 'cota': None, 'modelo': None})
-        agora = time.time()
-        for item in mapa.values():
-            if item['pausado']:
-                item.update(status='UNAVAILABLE', motivo='provedor pausado')
-            elif item['valido_ate'] <= agora:
-                item.update(status='UNKNOWN', motivo='observação ausente ou expirada', cota=None)
-            elif item['id'] in {'agy', 'codex'} and item['status'] == 'AVAILABLE' and item['cota'] is None:
-                item.update(status='UNKNOWN', motivo='cota não confirmada')
-            item['espera_segundos'] = max(0, math.ceil(item['valido_ate'] - agora)) if item['status'] == 'COOLDOWN' else 0
-        return [mapa[nome] for nome in sorted(mapa)]
+        return listar_provedores(self.db)
 
     def pausar(self, provedor, pausado):
         if not isinstance(provedor, str) or not IDENTIFICADOR.fullmatch(provedor) or type(pausado) is not bool:

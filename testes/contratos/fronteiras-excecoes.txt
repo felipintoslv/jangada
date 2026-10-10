@@ -4,15 +4,6 @@
 # foi criada (M3-03). A lista só diminui: quem retira um acoplamento retira a
 # exceção no mesmo commit, e o teto de cada contrato fica em testes/fronteiras.sh.
 
-# K5 (leitura da fila e dos projetos, M3-07): o painel importa e herda as
-# classes de escrita Estado e Saude; passa a ler por nucleo.consultas.
-# default/painel/orquestracao.py:13
-K5 default/painel/orquestracao.py from estado import Estado  # noqa: E402
-# default/painel/orquestracao.py:15
-K5 default/painel/orquestracao.py from saude import Saude  # noqa: E402
-# default/painel/orquestracao.py:18
-K5 default/painel/orquestracao.py class Consulta(Estado):
-
 # K6 (resumo de entrega opcional, M3-08): o Core chama comandos do Monitor.
 # bin/jangada-agentes:635
 K6 bin/jangada-agentes consumo="$("$JANGADA_PATH/bin/jangada-consumo" --curto 2>/dev/null || true)"

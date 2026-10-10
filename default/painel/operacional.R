@@ -244,7 +244,7 @@ operacional_server <- function(input, output, session, dados) {
   output$op_monitoramento <- renderUI({
     req(identical(input$painel, "Operacional"), identical(input$secao_operacional, "Monitoramento"))
     invalidateLater(5000, session)
-    programa <- file.path(pasta_app, "../nucleo/monitoramento.py")
+    programa <- file.path(raiz_jangada, "default/nucleo/monitoramento.py")
     resposta <- tryCatch(system2("python3", shQuote(programa), stdout = TRUE, stderr = FALSE),
                          error = function(e) character())
     if (!length(resposta) || !is.null(attr(resposta, "status"))) return(p("Medições indisponíveis."))

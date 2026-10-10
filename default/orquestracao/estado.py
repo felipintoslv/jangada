@@ -8,6 +8,7 @@ import os
 import pathlib
 import re
 import sqlite3
+import sys
 import tempfile
 import time
 import uuid
@@ -17,6 +18,9 @@ from metricas_projeto import amostragem, identidade
 from projetos import ler_projeto, especificacao_atual, provedor_de, trava_projetos, executor_permitido
 from supervisao import amostravel, aprovacao_valida, elegivel as elegivel_supervisao, pendente as supervisao_pendente
 from confianca import exigir_controlador, autorizar_conclusao, conferir_conclusao, auditar_recusa
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from nucleo.consultas import consumo_tarefa, listar_tarefas  # noqa: E402
 
 ESTADOS = {
     'QUEUED', 'RUNNING', 'COMPLETED', 'REVIEW_REQUIRED', 'REVISION_REQUIRED',
@@ -329,37 +333,10 @@ class Estado:
                 self.evento(tarefa['id'], 'criada', {'especificacao': tarefa})
 
     def listar(self):
-        resultado = []
-        for linha in self.db.execute('SELECT * FROM tarefas ORDER BY criado,id'):
-            item = conferir_conclusao(self.pasta, dict(linha))
-            item['especificacao'] = json.loads(item['especificacao'])
-            item['resultado'] = json.loads(item['resultado']) if item['resultado'] else None
-            resultado.append(item)
-        return resultado
+        return listar_tarefas(self.db, self.pasta)
 
     def consumo(self, identificador):
-        chamadas, segundos = 0, 0
-        for linha in self.db.execute('SELECT evento,dados FROM eventos WHERE tarefa=? AND evento IN (?,?)',
-                                     (identificador, 'execucao_encerrada', 'reserva_expirada')):
-            if linha['evento'] == 'reserva_expirada':
-                chamadas = None
-                continue
-            resultado = json.loads(linha['dados']).get('resultado')
-            metrica = resultado.get('metricas') if isinstance(resultado, dict) else None
-            if not isinstance(metrica, dict):
-                chamadas = None
-                continue
-            quantidade = metrica.get('chamadas')
-            duracao = metrica.get('segundos')
-            if type(quantidade) is not int or quantidade < 0:
-                chamadas = None
-            elif chamadas is not None:
-                chamadas += quantidade
-            if type(duracao) is int and duracao >= 0:
-                segundos += duracao
-            else:
-                chamadas = None
-        return {'chamadas': chamadas, 'segundos': segundos}
+        return consumo_tarefa(self.db, identificador)
 
     def reservar(self, duracao=660):
         if not isinstance(duracao, (int, float)) or not math.isfinite(duracao) or duracao <= 0:
