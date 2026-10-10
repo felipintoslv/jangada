@@ -522,6 +522,48 @@ conferir "objeto forjado durante o avanço: nada é desfeito" grep -q 'Nada foi 
 mantida "objeto forjado durante o avanço" o1
 cp "$tmp/objeto-o1" "$objeto"
 git -C "$proj" show HEAD:o1.txt >"$proj/o1.txt"
+# O índice guarda o tamanho do arquivo forjado, e o git não refaz o hash
+# quando o tamanho difere.
+git -C "$proj" read-tree HEAD
+
+# Git de fora da trava move a base para um ancestral do candidato logo antes
+# do merge: o --ff-only aceita, e o reflog só detecta depois do avanço.
+preparar w1
+echo w2 >"$wts/proj/w1/w2.txt"
+git -C "$wts/proj/w1" add w2.txt
+git -C "$wts/proj/w1" commit --quiet -m w2
+marca w1 "$revisoes"
+concorrente="$(git -C "$proj" rev-parse agente/w1~1)"
+cat >"$tmp/bin/git" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >>"$tmp/git-chamadas"
+if [[ " \$* " == *" merge --ff-only "* && ! -e "$tmp/concorreu" ]]; then
+  touch "$tmp/concorreu"
+  "$git_real" -C "$proj" merge --quiet --ff-only "$concorrente"
+fi
+exec "$git_real" "\$@"
+EOF
+integrar_teste w1 s
+conferir "base movida antes do merge: sai com erro ($rc)" test "$rc" -ne 0
+conferir "base movida antes do merge: avisa" grep -q 'a base mudou depois da última conferência' "$tmp/saida"
+conferir "base movida antes do merge: nada é desfeito" grep -q 'Nada foi desfeito' "$tmp/saida"
+conferir "base movida antes do merge: o HEAD concorrente fica no histórico e no reflog" \
+  bash -c 'git -C "$1" merge-base --is-ancestor "$2" main && [ "$(git -C "$1" rev-parse "main@{1}")" = "$2" ]' _ "$proj" "$concorrente"
+mantida "base movida antes do merge" w1
+
+# git status que falha sem saída conta como alteração.
+cat >"$tmp/bin/git" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >>"$tmp/git-chamadas"
+[[ " \$* " != *" status --porcelain --untracked-files=all "* ]] || exit 128
+exec "$git_real" "\$@"
+EOF
+preparar g1
+marca g1 "$revisoes"
+antes="$(foto)"
+integrar_teste g1 s
+recusa "git status falha" g1 'o git status falhou' "$antes"
+conferir "git status falha: a suíte não roda" test ! -e "$tmp/verificar-chamado"
 
 # Nenhuma chamada desta seção enviou ao remoto, atualizou a cópia instalada
 # ou descartou trabalho.
