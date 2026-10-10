@@ -380,12 +380,8 @@ linhas independentes desse arquivo, a tarefa volta ao `jangada-validar` para
 novo parecer. O coordenador não resolve conflito de conteúdo por conta
 própria.
 
-Divergência registrada, sem ajuste: a aceitação da M3-11a exige parecer para
-o novo SHA sempre que o rebase mudar o SHA, e o rebase sobre um `main` que
-avançou sempre muda. Pela M3-11a, a segunda tarefa de cada par precisa de
-novo parecer em todos os casos; pela D11, só quando o rebase passa de juntar
-linhas independentes de `modulos.txt`. Fica para o usuário decidir qual das
-duas vale na integração pelo botão ou por alt+i.
+A exigência da M3-11a continua valendo: se o rebase mudar o SHA, a
+integração pede parecer para o novo SHA.
 
 A conferir no código: se a M3-15 pode subir antes da M3-14. O usuário não
 decidiu esse ponto. A ordem M3-13, M3-14, M3-15 e a dependência da M3-15
