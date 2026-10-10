@@ -169,7 +169,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-mapa [PASTA]` | mapa compacto do repositório (arquivos e assinaturas de funções) para dar contexto a um agente |
 | `jangada-worktree-preparar` | leva para um worktree novo os arquivos ignorados que o projeto precisa (chamado pelo `jangada-agente`) |
 | `jangada-validar` | confere a entrega localmente e manda o diff ao revisor configurado (Claude, agy ou Codex) e devolve `STATUS: APROVADO` ou `REVISAR`; ferramenta aplicável ausente, validação pulada e autorrevisão não aprovam; o agente chama antes de entregar |
-| `jangada-shell` | inicia subshell enriquecida com comandos diretos de agentes e projetos |
+| `jangada-shell` | inicia subshell enriquecida com comandos diretos de agentes e projetos. O console se apresenta como Jangada Core; o comando continua sendo `jangada-shell` |
 | `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir, integrar ou encerrar (`--proximo`, `--anterior`, `--restaurar`) |
 | `jangada-agente-fim` | encerra uma sessão e remove o worktree após conferência; na baseline 2026-10, `--integrar` está bloqueado e mantém sessão, ramo e worktree. Use revisão independente e integração manual supervisionada. Veja [estabilização](docs/estabilizacao/RELATORIO_PRONTIDAO.md) |
 | `jangada-consumo` | tokens do Claude Code no bloco de 5 horas em andamento (também na dica da barra) |
@@ -379,7 +379,7 @@ externas. Veja
    `~/.local/state/jangada/revisoes/`, que o agente isolado não alcança: sem
    uma aprovação dali para o commit atual do ramo, o `--integrar` pede
    confirmação para mesclar (`--sem-revisao` pula a revisão). No
-   jangada shell, `revisar` roda o mesmo comando no diretório atual. Cada
+   Jangada Core, `revisar` roda o mesmo comando no diretório atual. Cada
    rodada acrescenta uma linha a `~/.local/state/jangada/validar.jsonl`
    (resultado, etapa, revisor, rodada, linhas alteradas, apontamentos e
    segundos), e `jangada-validar --metricas` resume por projeto e revisor:
@@ -598,7 +598,7 @@ o comando direto. Os perfis `verificacao` e `verificacao-rede` criam outro
 isolamento para retirar as credenciais, mesmo com `JANGADA_AGENTE_ISOLAR=0`.
 A variável sozinha não basta: vale só com a marca
 `/tmp/.jangada-isolado` montada pelo bwrap, que um processo de fora cria
-como arquivo mas não como ponto de montagem. A função `revisar` do jangada shell e o
+como arquivo mas não como ponto de montagem. A função `revisar` do Jangada Core e o
 `.jangada/preparar.sh` do worktree também rodam isolados.
 
 Limites conhecidos: o agente lê todo o chaveiro pelo D-Bus; as conversas e a
@@ -926,7 +926,7 @@ e não mexe na instalada. Para testar a cópia de trabalho sem instalar, rode
 | `testes/bluetooth.sh` | `jangada-bluetooth` com bluetoothctl falso: parear não confia no aparelho sem a escolha no menu |
 | `testes/snapshot.sh` | `jangada-snapshot` com snapper falso: os do agente ficam fora da limpeza do snapper e só os mais recentes ficam |
 | `testes/calendario.sh` | `jangada-calendario`: JSON corrompido guardado à parte, gravação atômica e gravações simultâneas sem perda |
-| `testes/reverter.sh` | `reverter` do jangada shell, no bash e no zsh: prévia do que se perde e ramo de cópia |
+| `testes/reverter.sh` | `reverter` do Jangada Core, no bash e no zsh: prévia do que se perde e ramo de cópia |
 | `testes/aninhado.sh` | sobe um Hyprland aninhado com a configuração (`--sem-usuario` só os padrões) e confere `configerrors` e o número de atalhos |
 
 A cada push, o GitHub Actions (`.github/workflows/verificar.yml`) roda o

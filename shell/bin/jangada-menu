@@ -19,7 +19,7 @@ if [[ "${1:-}" == "area-transferencia" ]]; then
 fi
 
 opcao="$(printf '%s\n' \
-  "Jangada Shell (Console de agentes)" \
+  "Jangada Core (Console de agentes)" \
   "Nova tarefa" \
   "Central de tarefas" \
   "Restaurar agentes interrompidos" \
@@ -46,7 +46,7 @@ opcao="$(printf '%s\n' \
   "Sair da sessão" | menu)" || exit 0
 
 case "$opcao" in
-  "Jangada Shell (Console de agentes)") exec "$b/jangada-shell" --janela ;;
+  "Jangada Core (Console de agentes)") exec "$b/jangada-shell" --janela ;;
   "Nova tarefa") exec "$b/jangada-tarefas" --nova ;;
   "Central de tarefas") exec "$b/jangada-tarefas" ;;
   "Restaurar agentes interrompidos")

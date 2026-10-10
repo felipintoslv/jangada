@@ -30,7 +30,7 @@ if ((janela)); then
   [[ -n "$destino" ]] && args+=("$destino")
   # Um console por destino basta: sem destino, foca o que já estiver aberto.
   [[ -z "$destino" ]] && jangada_focar_classe org.jangada.shell && exit 0
-  exec "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.shell --titulo "Jangada Shell" -e "$0" "${args[@]}"
+  exec "$JANGADA_PATH/bin/jangada-terminal" --classe org.jangada.shell --titulo "Jangada Core" -e "$0" "${args[@]}"
 fi
 
 [[ -n "$destino" ]] && cd -- "$destino"
@@ -55,6 +55,43 @@ reafirmar_caminho() {
   printf 'export JANGADA_PATH=%q\n' "$JANGADA_PATH"
 }
 
+# Cabeçalho de abertura, o mesmo texto para o zsh e o bash. A logo está no
+# formato do fastfetch: cada linha começa com um marcador de cor, de $1 a $4.
+abertura() {
+  cat << 'EOF'
+
+_jangada_abertura() {
+  local logo="$JANGADA_PATH/shell/temas/logo/jangada.txt" linha cor fim
+  echo ""
+  if [[ -r "$logo" ]]; then
+    while IFS= read -r linha || [[ -n "$linha" ]]; do
+      cor=""
+      fim=""
+      if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+        fim=$'\033[0m'
+        case "$linha" in
+          '$1'*) cor=$'\033[97m' ;;
+          '$2'*|'$3'*) cor=$'\033[33m' ;;
+          '$4'*) cor=$'\033[36m' ;;
+          *) fim="" ;;
+        esac
+      fi
+      case "$linha" in
+        '$'[1-4]*) linha="${linha:2}" ;;
+      esac
+      printf '%s%s%s\n' "$cor" "$linha" "$fim"
+    done < "$logo"
+  fi
+  echo "Jangada Core: Console de Agentes"
+  echo "Diretório atual: $PWD"
+  echo "Digite 'ajuda' para listar os comandos. 'exit' para sair."
+  echo ""
+}
+_jangada_abertura
+unset -f _jangada_abertura
+EOF
+}
+
 # Detecta a shell do usuário
 sh_bin="${SHELL:-/bin/bash}"
 case "$sh_bin" in
@@ -68,14 +105,8 @@ case "$sh_bin" in
 if [[ -f "$JANGADA_PATH/shell/jangada-shell.sh" ]]; then
   source "$JANGADA_PATH/shell/jangada-shell.sh"
 fi
-
-# Banner inicial
-echo ""
-echo "⛵ Jangada Shell: Console de Agentes"
-echo "Diretório atual: $PWD"
-echo "Digite 'ajuda' para listar os comandos. 'exit' para sair."
-echo ""
 EOF
+      abertura
     } > "$tmp_dir/.zshrc"
     ZDOTDIR="$tmp_dir" zsh -i
     ;;
@@ -89,13 +120,8 @@ EOF
 if [[ -f "$JANGADA_PATH/shell/jangada-shell.sh" ]]; then
   source "$JANGADA_PATH/shell/jangada-shell.sh"
 fi
-
-echo ""
-echo "⛵ Jangada Shell: Console de Agentes"
-echo "Diretório atual: $PWD"
-echo "Digite 'ajuda' para listar os comandos. 'exit' para sair."
-echo ""
 EOF
+      abertura
     } > "$tmp_dir/.bashrc"
     bash --rcfile "$tmp_dir/.bashrc" -i
     ;;

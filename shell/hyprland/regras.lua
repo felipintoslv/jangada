@@ -40,7 +40,7 @@ hl.window_rule({
   center = true,
 })
 
--- Janelas de agentes e do Jangada Shell: borda de outra cor para distinguir
+-- Janelas de agentes e do Jangada Core: borda de outra cor para distinguir
 -- dos terminais comuns.
 hl.window_rule({
   name = "janela-agente",

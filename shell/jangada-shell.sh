@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Funções e comandos injetados na sessão do jangada shell.
+# Funções e comandos injetados na sessão do Jangada Core.
 # Compatível com bash e zsh. Sem comandos perigosos, sem eval desprotegido.
 
 # Garante que variáveis críticas existam
@@ -347,10 +347,10 @@ trocar() {
   fi
 }
 
-# Ajuda dos comandos do jangada shell
+# Ajuda dos comandos do Jangada Core
 ajuda() {
   echo ""
-  echo "⛵ Jangada Shell: Comandos Disponíveis:"
+  echo "Jangada Core: Comandos Disponíveis:"
   echo ""
   echo "  agente            cria um agente (Claude ou agy) em worktree; o outro modelo revisa"
   echo "  revisar           manda o diff do diretório atual para o outro modelo revisar"
@@ -366,7 +366,7 @@ ajuda() {
   echo "  trocar            muda rapidamente para outro projeto com fzf"
   echo "  fim <sessao>      encerra uma sessão de agente e limpa o worktree"
   echo "  ajuda             exibe esta lista de comandos"
-  echo "  exit              sai do jangada shell e volta ao terminal normal"
+  echo "  exit              sai do Jangada Core e volta ao terminal normal"
   echo ""
   echo "Nota: Comandos de hardware e sessão ficam na barra (Waybar) e no menu central (SUPER+ESC)."
   echo ""
