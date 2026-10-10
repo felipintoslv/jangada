@@ -79,8 +79,8 @@ tarefas de escrita do backlog sobem por `jangada-agente`, uma worktree cada.
 
 ## Decisões em aberto
 
-Cada item traz a recomendação adotada nos documentos. Mudar a resposta muda
-o inventário, não o método.
+Os itens D1 a D7 trazem a recomendação adotada nos documentos. D8 permanece
+sem recomendação fechada. Mudar a resposta muda o inventário, não o método.
 
 | # | Decisão | Recomendação | Alternativa |
 |---|---|---|---|
@@ -91,6 +91,7 @@ o inventário, não o método.
 | D5 | `testes/` ou `tests/`, e `scripts/` | Manter `testes/` (regra 7) e não criar `scripts/` | Renomear |
 | D6 | Limpeza de sessões órfãs | Sai da consulta e vira ação explícita, chamada pelo próprio Shell | Manter como está e registrar exceção |
 | D7 | Quando retirar os links de compatibilidade | Só em versão posterior, com migração própria e autorização | Nunca retirar |
+| D8 | Destino dos 20 acoplamentos `sem-contrato` da M3-03, não retirados por K3 a K6 (ver situação em [04-backlog.md](04-backlog.md#m3-03-teste-de-fronteira)) | Em aberto; decidir cada item antes do portão da M3-11 | Contrato, mudança de módulo ou exceção permanente |
 
 ## Conflito a resolver antes da Fase 3
 

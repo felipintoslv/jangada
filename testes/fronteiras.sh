@@ -20,6 +20,14 @@
 # pkill que avisa a barra conta pela palavra waybar, e pkill -P de processo
 # filho não conta.
 #
+# Limites conhecidos: a leitura usa expressões regulares, linha a linha,
+# e não interpreta o shell. O teste detecta acoplamento acidental, não código
+# escrito para escapar dele. Em "cat <<" sem aspas no delimitador, não
+# acompanha uma substituição aberta numa linha e fechada em outra. O texto
+# após uma substituição na mesma linha é conferido junto e pode ser apontado
+# demais. Chamadas montadas em variável ou construídas por eval podem escapar
+# quando o nome do comando não aparece numa das formas reconhecidas.
+#
 # Exceções em testes/contratos/fronteiras-excecoes.txt, no formato
 # CONTRATO ARQUIVO TRECHO, em que TRECHO é a linha do código sem os espaços
 # das pontas. A lista é igual aos acoplamentos: acoplamento fora dela falha, e

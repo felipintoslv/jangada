@@ -110,10 +110,24 @@ alguns caminhos de estado (linha 325).
 | Agente | Core (`claude`), revisor `codex` |
 | Arquivos permitidos | `testes/fronteiras.sh`, `testes/contratos/fronteiras-excecoes.txt`, `testes/contratos/modulos.txt` |
 | Dependências | M3-01 |
-| Aceitação | passa no `main`; cada exceção cita arquivo, linha e contrato; acrescentar um `hyprctl` em arquivo do Core faz falhar |
+| Aceitação | passa no `main`; cada exceção cita arquivo, linha e contrato ou a marca provisória `sem-contrato`; acrescentar um `hyprctl` em arquivo do Core faz falhar |
 | Testes | `testes/verificar.sh` |
 | Riscos | falso positivo em comentário ou texto de ajuda |
 | Reversão | `git revert`; só arquivos novos |
+
+Situação em 09/10/2026: M3-03 entregue no commit `e654742` e integrada ao
+`main` por aceitação humana, sem parecer aprovado. O `jangada-validar`
+atingiu o limite de três rodadas com `REVISAR`. Foram aceitos dois pontos:
+os limites da leitura por expressão regular, registrados no cabeçalho de
+`testes/fronteiras.sh`, e a pendência dos 20 acoplamentos que nenhum contrato
+de K3 a K6 retira, registrados como `sem-contrato` em
+`testes/contratos/fronteiras-excecoes.txt`. A lista contém seis aberturas de
+janela ou terminal do Shell pelo Core e uma chamada para criar snapshot pelo
+Shell; quatro chamadas do Core ao Hyprland; oito leituras diretas de arquivo
+de estado pelo Shell; e uma abertura de sessão de agente por
+`jangada-verificar` (6 + 1 + 4 + 8 + 1 = 20). Cada item precisa de contrato,
+de mudança de módulo ou de exceção permanente decidida antes do portão da
+M3-11 (D8).
 
 ### M3-04 Aviso de mudança de estado (K3)
 
