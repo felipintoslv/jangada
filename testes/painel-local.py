@@ -206,6 +206,13 @@ else:
                          {"delegar:nova": ["vazia", "vazia"], "delegar:fechada": ["concluida"]})
         self.assertEqual(sub.resumir([], dels, [], agora)["tarefas"][0]["coordenador"], None)
 
+    def test_ramo_so_entra_na_tarefa_com_vinculo(self):
+        # Duas sessões na mesma pasta e uma conversa anterior a elas.
+        sessoes = [dict(sessao="um", pasta="/p", conversa="c-um"), dict(sessao="dois", pasta="/p", conversa="")]
+        self.assertEqual([sub.sessao_do_ramo(c, sessoes) for c in (
+            "claude:c-um", "claude:c-antiga", "agy:c-um", "delegar:dois", "delegar:?")],
+            ["um", None, None, "dois", None])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -506,12 +506,24 @@ def sessoes(pasta=None):
         if not isinstance(d, dict) or not isinstance(d.get("sessao"), str):
             continue
         t = {k: d[k] if isinstance(d.get(k), str) else "" for k in ("dir", "raiz", "coordenador", "agente",
-                                                                     "revisor", "desde")}
+                                                                     "revisor", "desde", "conversa")}
         comando = t["agente"].split()
         saida.append({"sessao": d["sessao"], "pasta": t["dir"] or t["raiz"], "coordenador": t["coordenador"] or "dono",
                       "autor": os.path.basename(comando[0]) if comando else "", "revisor": t["revisor"],
-                      "desde": t["desde"]})
+                      "desde": t["desde"], "conversa": t["conversa"]})
     return saida
+
+
+def sessao_do_ramo(conversa, sessoes):
+    """Sessão a que o ramo da árvore pertence, ou None. Delegação traz o nome
+    da sessão; conversa do Claude só entra pela conversa gravada no registro.
+    A pasta não serve de vínculo: outra conversa e outra sessão podem usá-la."""
+    origem, _, nome = conversa.partition(":")
+    if origem == "delegar":
+        return nome if nome != "?" else None
+    if origem == "claude":
+        return next((s["sessao"] for s in sessoes if s.get("conversa") == nome), None)
+    return None
 
 
 def pareceres():
@@ -698,10 +710,8 @@ def resumir(subs, dels, ents, agora, sessoes=(), pareceres=()):
         for conv, filhos in sorted(convs.items()):
             tok = sum(f["tokens"] or 0 for f in filhos if f["origem"] == "claude")
             ret = sum(f["retorno_tokens"] or 0 for f in filhos if f["origem"] == "claude")
-            origem, _, nome = conv.partition(":")
-            sessao = nome if origem == "delegar" and nome != "?" else next(
-                (s["sessao"] for s in sessoes if mesma_pasta(s["pasta"], pasta)), None)
-            ramos.append({"pasta": pasta, "conversa": conv, "sessao": sessao, "n": len(filhos), "tokens_claude": tok,
+            ramos.append({"pasta": pasta, "conversa": conv, "sessao": sessao_do_ramo(conv, sessoes),
+                          "n": len(filhos), "tokens_claude": tok,
                           "retorno_tokens": ret, "razao": round(tok / ret, 1) if tok and ret else None,
                           "passos_agy": sum(f["passos"] or 0 for f in filhos), "filhos": filhos})
 

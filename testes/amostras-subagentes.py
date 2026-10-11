@@ -13,7 +13,8 @@ principal (1.000 tokens sem o cache lido) e três subagentes do Claude:
 Em RAIZ/agy: um subagente "self" (Code Reviewer) com 5 passos, um de
 escrita. Em RAIZ/state/jangada/delegacoes.jsonl: uma delegação atendida e
 uma recusada por cota. Em RAIZ/state/jangada/agentes/s.json: a sessão "s",
-coordenada pelo claude, com o agy de revisor (e de explorador delegado). Em
+coordenada pelo claude na conversa sess1, com o agy de revisor (e de
+explorador delegado). Em
 RAIZ/state/jangada/revisoes/validar.jsonl: as duas rodadas dessa sessão.
 """
 import datetime
@@ -127,7 +128,7 @@ gravar(os.path.join(estado, "delegacoes.jsonl"), [
 ])
 os.makedirs(os.path.join(estado, "agentes"), exist_ok=True)
 json.dump({"sessao": "s", "dir": pasta, "raiz": pasta, "agente": "claude --model opus", "revisor": "agy",
-           "coordenador": "claude", "desde": T(0)},
+           "coordenador": "claude", "conversa": "sess1", "desde": T(0)},
           open(os.path.join(estado, "agentes", "s.json"), "w"))
 os.makedirs(os.path.join(estado, "revisoes"), exist_ok=True)
 rodada = {"projeto": "proj", "rotulo": "s", "etapa": "revisor", "revisor": "agy", "autor": "claude"}

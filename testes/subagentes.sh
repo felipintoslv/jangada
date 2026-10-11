@@ -267,8 +267,9 @@ conferir "indicadores 9: a tarefa tem coordenador, autor e revisor com o último
   [.tarefas[] | {sessao, coordenador, autor, revisor}]
   == [{sessao: "s", coordenador: "claude", autor: "claude", revisor: {agente: "agy", rodada: 2, resultado: "aprovado"}}]
   ' "$tmp/ind.json"
-conferir "indicadores 9: todo ramo da pasta é da tarefa e a delegação leva resultado, tempo e motivo" jqok -e '
-  ([.arvore[] | .sessao] | unique == ["s"])
+conferir "indicadores 9: só a conversa do registro e as delegações são da tarefa; a delegação leva resultado, tempo e motivo" jqok -e '
+  ([.arvore[] | {conversa, sessao}] | sort_by(.conversa)
+    == [{conversa: "agy:c1", sessao: null}, {conversa: "claude:sess1", sessao: "s"}, {conversa: "delegar:s", sessao: "s"}])
   and ([.arvore[] | select(.conversa == "delegar:s") | .filhos[] | {papel, destino, resultado, segundos, tokens, motivo}]
     == [{papel: "explorador", destino: "agy", resultado: "concluida", segundos: 40, tokens: 9000, motivo: ""},
         {papel: "leitor", destino: "agy", resultado: "recusada", segundos: 40, tokens: null,
@@ -289,8 +290,9 @@ if command -v Rscript >/dev/null 2>&1 \
         revisor$group == "revisor", explorador$group == "delegacao", leitor$group == "recusa",
         liga("t:s:coordenador", "t:s:autor"), liga("t:s:autor", "t:s:revisor"),
         liga("t:s:autor", explorador$id), liga("t:s:autor", leitor$id),
-        !any(a$nos$group %in% c("pasta", "conversa")), !anyDuplicated(a$nos$id),
-        nrow(a$nos) == 3 + 6, nrow(a$arestas) == 2 + 6,
+        sum(a$nos$group == "pasta") == 1, sum(a$nos$group == "conversa") == 1, !anyDuplicated(a$nos$id),
+        liga("r:agy:c1", no("self - agy")$id),
+        nrow(a$nos) == 3 + 5 + 3, nrow(a$arestas) == 2 + 5 + 2,
         grepl("resultado: concluida, 40 s", explorador$title, fixed = TRUE),
         grepl("tokens 9000", explorador$title, fixed = TRUE),
         grepl("resultado: recusada, 40 s<br>motivo: cota de 5 horas do Gemini em 15%, abaixo de 20%",
