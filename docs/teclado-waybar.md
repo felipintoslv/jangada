@@ -1,8 +1,8 @@
 # Teclado na bandeja com escalas 1 e 2
 
 O contorno troca somente `input-keyboard-symbolic` de 32px do Breeze na
-busca de ícones da Waybar. Confirmar a identidade do item por D-Bus e
-verificar o resultado gráfico nas duas escalas são requisitos da entrega.
+busca de ícones da Waybar. A identidade do item foi confirmada por D-Bus;
+verificar o resultado gráfico nas duas escalas continua sendo requisito da entrega.
 
 ## Evidência e causa
 
@@ -10,7 +10,15 @@ Em 11/10/2026, a máquina tinha Waybar 0.15.0-3, Fcitx5 5.1.23-1,
 Breeze Icons 6.30.0-1, GTK 3.24.52-2 e librsvg 2.63.2-1.
 As capturas autorizadas mostram teclado no HDMI-A-2, escala 1, e quadrado
 na posição correspondente no DP-3, escala 2. Elas comprovam o defeito
-inicial, sem identificar o processo nem comprovar o resultado do contorno.
+inicial, sem comprovar o resultado do contorno.
+
+A leitura do coordenador no host, em 11/10/2026, identificou o objeto
+`:1.39/StatusNotifierItem`, com `Id=Fcitx`,
+`IconName=input-keyboard-symbolic`, `IconThemePath` vazio e `Title=Input Method`.
+O outro item registrado era o Steam. A versão consultada foi Waybar 0.15.0.
+O registro original está em `.jangada/diagnostico-coordenador.md`, linhas 1 a 9,
+fora da entrega. Esses dados confirmam que o Fcitx publica o nome do
+recurso defeituoso e usa a busca do tema GTK, sem caminho próprio.
 
 A [Waybar 0.15.0](https://github.com/Alexays/Waybar/blob/0.15.0/src/modules/sni/item.cpp#L393-L409)
 multiplica `icon-size` pela escala e carrega o ícone simbolicamente.
@@ -26,7 +34,7 @@ essa regra quanto `Gtk.IconInfo.load_symbolic` num barramento privado
 tornaram os 1.024 pixels do segundo arquivo opacos; o desenho desapareceu.
 O arquivo de 16px manteve 170 pixels transparentes.
 Isso comprova a incompatibilidade desse recurso com a recoloração do GTK.
-Sua ligação com o item das capturas depende da consulta abaixo.
+O nome publicado pelo item real coincide com esse recurso.
 
 O [Fcitx5 5.1.23](https://github.com/fcitx/fcitx5/blob/5.1.23/src/modules/notificationitem/notificationitem.cpp#L78-L104)
 usa `input-keyboard-symbolic` fora do KDE quando o estado pede um teclado.
@@ -55,10 +63,10 @@ diretamente com a busca original, sem passar pelo lançador.
 A sessão principal não foi alterada. Esta entrega contorna um recurso
 externo; não modifica a implementação da Waybar nem o Breeze instalado.
 
-## Leituras necessárias fora do isolamento
+## Conferência da identidade por D-Bus
 
-O D-Bus e o Wayland reais estão inacessíveis nesta tarefa. O coordenador
-precisa obter os itens da bandeja, sem mudar a sessão:
+Para repetir a leitura do coordenador, obtenha os itens da bandeja
+fora do isolamento, sem mudar a sessão:
 
 ```sh
 busctl --user get-property org.kde.StatusNotifierWatcher /StatusNotifierWatcher org.kde.StatusNotifierWatcher RegisteredStatusNotifierItems
@@ -73,8 +81,9 @@ for propriedade in Id IconName IconThemePath Status Menu ItemIsMenu; do
 done
 ```
 
-Confirmar `Id=Fcitx` e `IconName=input-keyboard-symbolic` no estado defeituoso.
-Se forem diferentes, investigar antes de considerar o diagnóstico fechado.
+Confirme `Id=Fcitx`, `IconName=input-keyboard-symbolic` e `IconThemePath`
+vazio no estado defeituoso. Os endereços do barramento podem mudar.
+Se as propriedades diferirem, investigue antes de aplicar esse diagnóstico.
 
 ## Reprodução gráfica sem tocar a sessão principal
 

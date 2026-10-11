@@ -29,6 +29,7 @@ cat >"$tmp/leituras" <<'FIM'
 /usr/share/quickshell
 /usr/share/noctalia-shell
 /usr/share/xsessions
+/usr/share/icons
 /usr/lib/modules
 /usr/local/bin
 ~/.local/bin
