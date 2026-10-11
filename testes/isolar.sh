@@ -294,6 +294,17 @@ grep -q 'FALSO-LOGIN' "$HOME/.codex/auth.json" || exit 1
 ! echo 'configuração adulterada' >"$HOME/.codex/config.toml" || exit 1
 ! echo 'login adulterado' >"$HOME/.codex/auth.json" || exit 1
 ! touch "$HOME/.codex/skills/invadido" || exit 1
+# A proteção interna do Codex monta cada raiz gravável e cobre o .git dela;
+# sem o .git, o bwrap cria o ponto de montagem dentro da raiz.
+while (($#)); do
+  if [[ "$1" == --add-dir ]]; then
+    printf '%s\n' "$2" >>"$HOME/.codex/raizes-teste"
+    bwrap --ro-bind / / --bind "$2" "$2" --ro-bind /dev/null "$2/.git" true || exit 1
+    rm -f "$2/.git"
+    shift
+  fi
+  shift
+done
 [[ "$(cat "$HOME/.codex/historico-teste")" == conversa ]]
 EOF
   chmod +x "$tmp/wt/codex-bin/codex"
@@ -302,6 +313,8 @@ EOF
   conferir "caso Codex real: dados graváveis e configuração protegida" [ "$?" = 0 ]
   conferir "caso Codex real: histórico persiste no estado" test -f "$casa/.local/state/jangada/codex/teste-codex/historico-teste"
   conferir "caso Codex real: histórico não contamina pasta global" test ! -e "$casa/.codex/historico-teste"
+  conferir "caso Codex real: a raiz gravável extra é só a pasta das sessões e aceita a montagem aninhada" \
+    [ "$(cat "$casa/.local/state/jangada/codex/teste-codex/raizes-teste" 2>/dev/null)" = "$casa/.local/state/jangada/agentes" ]
   isolar "$tmp/wt" JANGADA_AGENTE_ISOLAR=0 JANGADA_SESSAO=teste-revisor "$repo_jangada/bin/jangada-isolar" -- \
     "$repo_jangada/bin/jangada-codex" --revisar -- "$tmp/wt/codex-bin/codex" >"$tmp/codex-revisor.log" 2>&1
   conferir "caso Codex real: revisor isolado mesmo com isolamento global desligado" [ "$?" = 0 ]

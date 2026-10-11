@@ -91,7 +91,7 @@ printf 'Regra com aspas: "texto"\nSegunda linha\n' >"$protocolo"
 rodar JANGADA_ISOLADO=1 JANGADA_MARCA_ISOLADO=/ "$repo_jangada/bin/jangada-codex" --protocolo "$protocolo" -- codex --model modelo 'pedido com espaço'
 conferir "adaptador executa Codex" [ "$?" = 0 ]
 # Confere o TOML que o CLI realmente receberá, incluindo comandos dos hooks.
-python3 - "$tmp/codex.args" "$protocolo" "$repo_jangada" <<'PY'
+python3 - "$tmp/codex.args" "$protocolo" "$repo_jangada" "$tmp/state/jangada" <<'PY'
 import pathlib, sys, tomllib
 args = pathlib.Path(sys.argv[1]).read_bytes().decode().split("\0")[:-1]
 cfg = {}
@@ -103,6 +103,10 @@ assert cfg["approvals_reviewer"] == "user"
 assert cfg["projects"][sys.argv[3]]["trust_level"] == "trusted"
 assert "--no-daemon" in args and "workspace-write" in args and "on-request" in args
 assert not any("bypass" in arg for arg in args)
+# A raiz do estado é somente leitura no isolamento: como raiz gravável, a
+# proteção interna do Codex não consegue montá-la e todo comando falha.
+assert [args[i + 1] for i, arg in enumerate(args) if arg == "--add-dir"] == [sys.argv[4] + "/agentes"]
+assert not any("writable_roots" in arg for arg in args)
 assert args.count("pedido com espaço") == 1
 hooks = {}
 for i, arg in enumerate(args):
