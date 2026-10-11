@@ -77,8 +77,14 @@ navegador.fullscreen = 0
 eventos['window.fullscreen'](); assert(not blur())
 -- Jogo pessoal e mudança de classe; maximizar não equivale a tela cheia.
 hl.config({ decoration = { blur = { enabled = true } } })
-game = janela('3', 'meu-jogo'); game.tags = { 'vidro-jogo*' }; janelas[2] = game
-eventos['window.update_rules'](); assert(not blur())
+assert(regras['vidro-jogo-pessoal'].match.tag == 'vidro-jogo')
+game = janela('3', 'meu-jogo'); janelas[2] = game
+for _, tag in ipairs({ 'vidro-jogo', 'vidro-jogo*' }) do
+  game.tags = { tag }
+  eventos['window.update_rules'](); assert(not blur())
+  game.tags = {}
+  eventos['window.update_rules'](); assert(blur())
+end
 game.tags = {}; game.class = 'gamescope'
 eventos['window.class'](); assert(not blur())
 game.class = 'terminal'; game.fullscreen = 1
@@ -89,6 +95,10 @@ eventos['config.reloaded'](); assert(not blur())
 navegador.fullscreen = 0
 eventos['window.fullscreen'](); assert(blur())
 iniciar(true)
+-- A regra precisa existir antes de qualquer evento ou recarga.
+assert(regras['vidro-desligado'].force_rgbx and regras['vidro-desligado'].no_blur)
+eventos['hyprland.start']()
+assert(regras['vidro-desligado'].opacity == '1 override 1 override 1 override')
 eventos['config.reloaded']()
 assert(not blur() and configs['decoration.active_opacity'] == 1 and configs['decoration.inactive_opacity'] == 1)
 assert(regras['vidro-desligado'].force_rgbx)

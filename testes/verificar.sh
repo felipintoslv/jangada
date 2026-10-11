@@ -66,6 +66,9 @@ passo "vidro fosco"
 if [[ -n "$lua_bin" ]]; then
   "$lua_bin" testes/vidro-fosco.lua "$PWD" || falha "vidro fosco: eventos Lua"
 fi
+if ! command -v matugen >/dev/null; then
+  echo "AVISO: matugen ausente; contraste do vidro e geração real de tema não serão verificados"
+fi
 python3 testes/vidro-fosco.py || falha "vidro fosco: fundos e migração"
 
 passo "JSON"

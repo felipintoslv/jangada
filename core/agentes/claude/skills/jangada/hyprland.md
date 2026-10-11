@@ -82,6 +82,9 @@ pausar num laço, use `sleep` dentro de `timeout ... bash -c 'until ...'`, não
 
 - `window.fullscreen` na API Lua é número, não booleano: 0 normal,
   1 maximizado, 2 tela cheia, 3 ambos. Lua considera inclusive 0 verdadeiro.
+- Regras necessárias na inicialização devem ser registradas na carga do
+  módulo; não dependa de `config.reloaded` para criá-las antes da primeira
+  janela. A regra de vidro desligado também é reaplicada após ajustes pessoais.
 - `config.reloaded` acontece após aplicação dos ajustes pessoais. Fotografe
   ali o valor efetivo se precisar suspender um recurso numa recarga.
 - `window.close` pode emitir enquanto a janela ainda aparece na consulta:

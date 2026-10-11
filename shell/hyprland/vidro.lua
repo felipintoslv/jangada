@@ -13,6 +13,8 @@ local function opaca(nome, match)
   })
 end
 
+if desligado then opaca("vidro-desligado", { class = ".*" }) end
+
 opaca("vidro-tela-cheia", { fullscreen = true })
 opaca("vidro-video", { class = "^(mpv|vlc|org\\.videolan\\.VLC|com\\.github\\.celluloid_player\\.Celluloid)$" })
 opaca("vidro-video-separado", {

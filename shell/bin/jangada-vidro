@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Aplica JANGADA_VIDRO e JANGADA_VIDRO_ALPHA sem regenerar cores ou papel de parede.
 # --arquivos: altera apenas os fundos, sem recarregar processos ou compositor.
+# --tema: preserva folhas pessoais da barra ao regenerar cores.
 # --migrar: adapta apenas arquivos que correspondem aos modelos antigos gerados.
 set -euo pipefail
 # shellcheck source=bin/jangada-config
@@ -11,8 +12,8 @@ source "$JANGADA_PATH/install/lib.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-interface-processos"
 modo="${1:-}"
 case "$modo" in
-  ''|--arquivos|--migrar) ;;
-  -h|--ajuda) sed -n '2,4s/^# //p' "$0"; exit 0 ;;
+  ''|--arquivos|--migrar|--tema) ;;
+  -h|--ajuda) sed -n '2,5s/^# //p' "$0"; exit 0 ;;
   *) echo "jangada-vidro: opção desconhecida" >&2; exit 1 ;;
 esac
 [[ $# -le 1 ]] || { echo "jangada-vidro: argumentos em excesso" >&2; exit 1; }
@@ -57,6 +58,13 @@ for indice, (relativo, modelo) in enumerate([
     if not arquivo.is_file():
         continue
     texto = arquivo.read_text()
+    if modo == '--tema' and modelo == 'style.css.modelo':
+        padrao = (repo / 'shell/waybar' / modelo).read_text().replace('@JANGADA_PATH@', str(repo))
+        sem_bloco = re.sub(r'/\* jangada-vidro: início \*/.*?/\* jangada-vidro: fim \*/\n?',
+                           '', texto, flags=re.S)
+        if sem_bloco.strip() != padrao.strip():
+            print(f'aviso: mantido fundo pessoal de {relativo}; use jangada-vidro para ajustá-lo explicitamente')
+            continue
     if modo == '--migrar':
         if modelo == 'style.css.modelo':
             antigo = (repo / 'shell/waybar' / modelo).read_text().replace('@JANGADA_PATH@', str(repo))

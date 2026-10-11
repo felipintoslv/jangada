@@ -64,7 +64,9 @@ Nesse caso, ajuste esse seletor pessoal para que use a opacidade desejada.
 `JANGADA_SIMULAR=1 jangada-vidro` mostra a operação sem gravar ou recarregar.
 
 Ao gerar outro tema, `jangada-tema` faz cópias dos arquivos afetados e
-reaplica as preferências de vidro. A regeneração continua substituindo os
+reaplica as preferências de vidro aos modelos da barra intactos ou já
+adaptados. Uma folha pessoal diferente é preservada, com aviso; só o
+comando explícito `jangada-vidro` adapta seus fundos. A regeneração continua substituindo os
 modelos de cores; alterações pessoais neles ficam nas cópias de segurança.
 
 ## Vídeo e jogos
@@ -163,3 +165,64 @@ descartável e sem disputar o serviço de notificações da sessão principal.
 O aninhado usa Wayland, sem DRM real. Consumo e memória de vídeo exigem
 medição posterior na máquina, com aprovação do dono. Testes pulados por
 falta de compositor não contam como testes gráficos aprovados.
+
+### Cenários reprodutíveis no aninhado
+
+Estes cenários aguardam execução externa aprovada. Não foram confirmados
+na sessão isolada do autor. Execute a partir do worktree:
+
+```sh
+testes/aninhado.sh --sem-usuario --vidro-desligado --manter
+testes/aninhado.sh --sem-usuario --jogo-pessoal --manter
+```
+
+Cada comando imprime a assinatura exclusiva da instância e a pasta
+descartável. Abra outro terminal e copie a assinatura impressa para
+`sig_teste`. Nunca use a assinatura da sessão principal:
+
+```sh
+sig_teste='ASSINATURA-IMPRESSA-PELO-TESTE'
+hypr_teste() { HYPRLAND_INSTANCE_SIGNATURE="$sig_teste" hyprctl "$@"; }
+hypr_teste configerrors
+hypr_teste binds -j
+```
+
+Guarde `binds.json` e `binds.erro` da pasta impressa antes de encerrar.
+A contagem usa a resposta JSON original; resposta inválida reprova, sem
+supor o formato textual. Compare também `hypr_teste binds` para registrar
+o formato oferecido pela versão instalada.
+
+No primeiro cenário, antes de qualquer recarga, confira:
+
+```sh
+hypr_teste getoption decoration:blur:enabled
+hypr_teste getoption decoration:active_opacity
+hypr_teste dispatch 'hl.dsp.exec_cmd("ghostty --config-default-files=false --gtk-single-instance=false --background-opacity=0.5")'
+```
+
+O desfoque deve estar falso e a opacidade global deve ser 1. Inspecione
+a janela com transparência própria sobre fundo contrastante: deve estar
+opaca desde a abertura. Registre também `hypr_teste clients -j`.
+Não recarregue até guardar a evidência inicial. O teste Lua verifica a
+criação da regra `vidro-desligado` antes de qualquer evento; a inspeção
+real precisa confirmar seu efeito na janela.
+
+No segundo cenário, registre o desfoque inicialmente ligado. A regra
+pessoal real `tag = "+vidro-jogo"` já está na configuração descartável:
+
+```sh
+hypr_teste dispatch 'hl.dsp.exec_cmd("ghostty --config-default-files=false --gtk-single-instance=false --class=org.jangada.teste_jogo")'
+hypr_teste clients -j
+hypr_teste eval 'for _, w in ipairs(hl.get_windows()) do if w.class == "org.jangada.teste_jogo" then for _, tag in ipairs(w.tags) do print(tag) end end end'
+hypr_teste getoption decoration:blur:enabled
+```
+
+Registre a saída Lua e as etiquetas de `clients -j`; não deduza o formato
+Lua a partir da saída JSON. O módulo aceita `vidro-jogo` e `vidro-jogo*`,
+ambos exercitados na API imitada, mas a aplicação real da regra ainda
+precisa ser confirmada. A janela etiquetada deve ficar opaca e suspender
+o desfoque sem entrar em tela cheia. Feche-a pela própria janela, consulte
+a chave novamente e confirme a restauração. Repita com duas janelas,
+fechando uma por vez, e com `usuario.lua` descartável definindo
+`blur.enabled = false`: ao sair, deve continuar falso. Enter no terminal
+do roteiro encerra o compositor de teste e remove a pasta temporária.

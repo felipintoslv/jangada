@@ -3,8 +3,11 @@
 # desta cópia do jangada, e confere configerrors e atalhos. Só roda dentro de
 # uma sessão Wayland; fora dela sai com "pulado" e código 0.
 #
-# Uso: testes/aninhado.sh [--sem-usuario]
+# Uso: testes/aninhado.sh [--sem-usuario] [--vidro-desligado] [--jogo-pessoal] [--manter]
 #   --sem-usuario  carrega só os padrões, sem ~/.config/jangada/hypr
+#   --vidro-desligado  preferências descartáveis com vidro desligado desde a carga
+#   --jogo-pessoal     regra real +vidro-jogo para a classe org.jangada.teste_jogo
+#   --manter           espera Enter antes de encerrar a instância de teste
 #
 # Fica de fora o default.hypr.inicio: ele roda dbus-update-activation-environment
 # --systemd --all e trocaria o ambiente da sessão em uso pelo da instância de
@@ -14,7 +17,18 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 repo="$PWD"
 usuario=1
-[[ "${1:-}" == --sem-usuario ]] && usuario=0
+desligado=0
+jogo_pessoal=0
+manter=0
+for opcao in "$@"; do
+  case "$opcao" in
+    --sem-usuario) usuario=0 ;;
+    --vidro-desligado) desligado=1 ;;
+    --jogo-pessoal) jogo_pessoal=1 ;;
+    --manter) manter=1 ;;
+    *) echo "opção desconhecida: $opcao" >&2; exit 1 ;;
+  esac
+done
 
 if [[ -z "${WAYLAND_DISPLAY:-}" ]] || ! command -v Hyprland >/dev/null; then
   echo "pulado: exige uma sessão Wayland e o Hyprland instalado"
@@ -44,10 +58,19 @@ trap encerrar EXIT
       [[ -f "$cfg_usuario/$m.lua" ]] && echo "require(\"$m\")"
     done
   fi
+  if ((jogo_pessoal)); then
+    echo 'hl.window_rule({ match = { class = "^org[.]jangada[.]teste_jogo$" }, tag = "+vidro-jogo" })'
+  fi
 } >"$tmp/hyprland.lua"
 
 config_teste="${XDG_CONFIG_HOME:-$HOME/.config}"
-((usuario)) || config_teste="$tmp/config"
+if ((!usuario || desligado)); then
+  config_teste="$tmp/config"
+  mkdir -p "$config_teste/jangada"
+  if ((desligado)); then
+    echo 'JANGADA_VIDRO=0' >"$config_teste/jangada/jangada.conf"
+  fi
+fi
 
 antes="$(ls "$runtime/hypr" 2>/dev/null | sort)"
 env -u HYPRLAND_INSTANCE_SIGNATURE JANGADA_PATH="$repo" XDG_CONFIG_HOME="$config_teste" \
@@ -77,12 +100,19 @@ if [[ -n "$erros" ]]; then
 else
   echo "ok    sem erros de configuração"
 fi
-n="$(HYPRLAND_INSTANCE_SIGNATURE="$sig" hyprctl binds 2>/dev/null | awk '/^bind/ {n++} END {print n+0}')"
+HYPRLAND_INSTANCE_SIGNATURE="$sig" hyprctl binds -j >"$tmp/binds.json" 2>"$tmp/binds.erro"
+n="$(jq 'if type == "array" then length else 0 end' "$tmp/binds.json" 2>/dev/null || echo 0)"
 if ((n > 0)); then
   echo "ok    $n atalhos registrados"
 else
-  echo "FALHA: nenhum atalho registrado"
+  echo "FALHA: nenhum atalho registrado ou resposta JSON inválida"
+  cat "$tmp/binds.erro" "$tmp/binds.json"
   falhas=$((falhas + 1))
 fi
 ((falhas == 0)) && echo "configuração carregada sem erros no Hyprland aninhado"
+if ((manter)); then
+  printf 'instância aninhada: %s\nconfiguração e saída de binds: %s\n' "$sig" "$tmp"
+  echo 'Use somente essa assinatura nos comandos de conferência. Enter encerra o teste.'
+  read -r _
+fi
 exit $((falhas > 0))

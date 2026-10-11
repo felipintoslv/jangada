@@ -229,7 +229,7 @@ case "${1:-}" in
     # tentaria abrir um arquivo chamado Null. Sem a linha, ele usa a cor.
     sed -i '/^[[:space:]]*path = Null$/d' "$JANGADA_CONFIG/hyprlock/hyprlock.conf" 2>/dev/null || true
     : >"$papeis_hyprlock" 2>/dev/null || true
-    "$JANGADA_PATH/bin/jangada-vidro" --arquivos
+    "$JANGADA_PATH/bin/jangada-vidro" --tema
     recarregar
     aviso_sddm ""
     ;;
@@ -255,7 +255,7 @@ case "${1:-}" in
     python3 "$JANGADA_PATH/default/visual/fichas.py" "$JANGADA_CONFIG/fichas.json"
     salvar_papel "$img"
     aplicar_papel "$img"
-    "$JANGADA_PATH/bin/jangada-vidro" --arquivos
+    "$JANGADA_PATH/bin/jangada-vidro" --tema
     recarregar
     aviso_sddm "$img"
     "$JANGADA_PATH/bin/jangada-gancho" pos-tema "$img"

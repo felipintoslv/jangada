@@ -66,6 +66,10 @@ with tempfile.TemporaryDirectory() as pasta:
 
     comando = str(repo / 'bin/jangada-vidro')
     conf.write_text('JANGADA_VIDRO=0\n')
+    pessoal_barra = barra.read_bytes()
+    r = rodar(comando, '--tema')
+    assert 'mantido fundo pessoal' in r.stdout
+    assert barra.read_bytes() == pessoal_barra
     rodar(comando, '--arquivos')
     assert 'background: alpha(@superficie, 1)' in barra.read_text()
     assert 'font-size: 17px' in barra.read_text()
@@ -158,5 +162,12 @@ else:
         assert any(p.read_text() == pessoal for p in (config / 'fuzzel').glob('*.bak'))
         assert re.search(r'^background=[a-f0-9]{6}ff$', (config / 'fuzzel/fuzzel.ini').read_text(), re.M)
         assert 'alpha(@superficie, 1)' in (config / 'waybar/style.css').read_text()
-        print('ok: geração real do tema respeita vidro desligado e preserva original em cópias no mesmo segundo')
+        pessoal_barra = (config / 'waybar/style.css').read_text() + '\n.modules-left { background: #123456; }\n'
+        (config / 'waybar/style.css').write_text(pessoal_barra)
+        r = subprocess.run([str(repo / 'bin/jangada-tema'), '--cor', '#fff4d5'],
+                           env=ambiente, capture_output=True, text=True)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert 'mantido fundo pessoal' in r.stdout
+        assert (config / 'waybar/style.css').read_text() == pessoal_barra
+        print('ok: geração real do tema preserva folha pessoal e respeita vidro desligado e preserva original em cópias no mesmo segundo')
 
