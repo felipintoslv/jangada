@@ -171,14 +171,13 @@ for pasta in "${caminhos_dados[@]}"; do
   [[ "$pasta" != /usr/share ]] || dados_barra+=("$icones")
   dados_barra+=("$pasta")
 done
-export XDG_DATA_DIRS
-XDG_DATA_DIRS="$(IFS=:; printf '%s' "${dados_barra[*]}")"
+busca_icones="$(IFS=:; printf '%s' "${dados_barra[*]}")"
 
 # Sinaliza apenas a barra desta sessão e configuração antes de abrir a nova.
 jangada_interface_sinalizar waybar TERM
 sleep 0.3
 if [[ -f "$estilo" ]]; then
-  exec waybar -c "$gerado" -s "$estilo"
+  exec env XDG_DATA_DIRS="$busca_icones" waybar -c "$gerado" -s "$estilo"
 else
-  exec waybar -c "$gerado"
+  exec env XDG_DATA_DIRS="$busca_icones" waybar -c "$gerado"
 fi

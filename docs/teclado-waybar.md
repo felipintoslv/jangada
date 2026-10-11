@@ -1,8 +1,8 @@
 # Teclado na bandeja com escalas 1 e 2
 
 O contorno troca somente `input-keyboard-symbolic` de 32px do Breeze na
-busca de ícones da Waybar. A confirmação gráfica e a identidade do item
-da sessão principal ainda estão pendentes.
+busca de ícones da Waybar. Confirmar a identidade do item por D-Bus e
+verificar o resultado gráfico nas duas escalas são requisitos da entrega.
 
 ## Evidência e causa
 
@@ -41,6 +41,8 @@ dos temas `breeze` e `breeze-dark` e um SVG próprio de teclado, sem fundo.
 Acrescenta essa busca imediatamente antes de `/usr/share` em `XDG_DATA_DIRS`.
 Os caminhos pessoais anteriores e `XDG_DATA_HOME` mantêm sua prioridade.
 Uma busca personalizada que exclua `/usr/share` permanece intacta.
+Os processos iniciados pela Waybar herdam essa busca, inclusive nos cliques.
+O ambiente do terminal e da sessão principal conserva a busca original.
 
 O tema escolhido, os demais recursos, os nomes e imagens publicados pelo
 Fcitx5 continuam os mesmos. Cliques, menu e rolagem seguem no item nativo.
@@ -105,23 +107,60 @@ Se forem diferentes, investigar antes de considerar o diagnóstico fechado.
    antes e depois. Encerre os processos de teste, o barramento privado e
    a instância aninhada. Não use encerramento global de Waybar ou Fcitx5.
 
-## Verificação nesta tarefa
+## Verificação reproduzível
 
-Passaram `testes/barra.sh`, `testes/contratos-interface.sh` e
-`testes/interface.sh`. O teste específico roda dentro de `barra.sh`.
-A consulta real de GTK, sem carregar imagens, confirmou que a sobreposição
-troca apenas o teclado de 32px: teclado de 16px, `fcitx`, `fcitx-pinyin`,
-`input-keyboard` e `network-wireless-symbolic` conservaram os caminhos.
-No carregamento simbólico pelo GTK real, o recurso próprio manteve
-733 pixels transparentes. A reprodução por `rsvg-convert` deu o mesmo resultado.
-Isso não substitui o teste gráfico de estados e ações, que permanece pendente.
+Execute `jangada-filtrar -- testes/barra.sh`,
+`jangada-filtrar -- testes/contratos-interface.sh`,
+`jangada-filtrar -- testes/interface.sh` e
+`jangada-filtrar -- env --default-signal=INT,QUIT testes/verificar.sh`.
+O teste específico roda dentro de `barra.sh` e confere a estrutura do SVG;
+a recoloração é uma conferência manual adicional, não um teste automatizado.
 
-`testes/verificar.sh` terminou com código 1. A repetição autorizada fora
-do sandbox interno, mantendo o isolamento do Jangada, levou 383 segundos.
-Há uma pendência desta mudança: registrar `/usr/share/icons` entre as
-leituras em `testes/regra1.sh`, arquivo fora do escopo inicial.
-O registro foi solicitado ao coordenador e ainda não foi autorizado.
-Outras falhas atingiram testes de agentes, isolamento, delegação e painel.
-A falha de `agente-seletor.py` também ocorreu numa cópia da base sem
-esta mudança. As demais não foram individualmente reproduzidas na base;
-a suíte completa não está aprovada.
+Para reproduzir a recoloração sem compositor, use GTK 3 com os módulos
+Python já instalados na máquina investigada. No worktree, em terminal
+com suporte a barramento privado, execute:
+
+```sh
+env GIO_USE_VFS=local dbus-run-session -- python3 - <<'PY'
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import gi
+gi.require_version("Gtk", "3.0")
+from gi.repository import Gtk, Gdk
+
+color = Gdk.RGBA()
+color.parse("#e8e5e3")
+with TemporaryDirectory() as temp:
+    icons = Path(temp) / "icons"
+    overlay = icons / "breeze"
+    (overlay / "devices/32").mkdir(parents=True)
+    (overlay / "index.theme").symlink_to("/usr/share/icons/breeze/index.theme")
+    (overlay / "devices/32/input-keyboard-symbolic.svg").symlink_to(
+        Path("shell/waybar/icones/input-keyboard-symbolic.svg").resolve())
+    for corrected in (False, True):
+        theme = Gtk.IconTheme.new()
+        theme.set_custom_theme("breeze")
+        if corrected:
+            theme.set_search_path([str(icons)] + theme.get_search_path())
+        for size in (16, 32):
+            info = theme.lookup_icon("input-keyboard-symbolic", size,
+                                     Gtk.IconLookupFlags.FORCE_SIZE)
+            pixbuf, symbolic = info.load_symbolic(color, None, None, None)
+            pixels = pixbuf.get_pixels()
+            stride = pixbuf.get_rowstride()
+            channels = pixbuf.get_n_channels()
+            assert symbolic and pixbuf.get_has_alpha()
+            clear = sum(pixels[y * stride + x * channels + channels - 1] == 0
+                        for y in range(pixbuf.get_height())
+                        for x in range(pixbuf.get_width()))
+            print(corrected, size, info.get_filename(), clear)
+            if corrected:
+                assert clear > 0
+PY
+```
+
+Nas versões investigadas, o original tem 170 pixels transparentes em 16px
+e zero em 32px. Com o contorno, o segundo valor passa a 733.
+Confira também os caminhos de `fcitx`, `fcitx-pinyin`, `input-keyboard` e
+`network-wireless-symbolic`: devem permanecer os mesmos antes e depois.
+Essa reprodução não substitui os testes gráficos de estados e ações.

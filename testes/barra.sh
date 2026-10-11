@@ -216,6 +216,18 @@ done
 
 # Caso 12: sobreposição por nome e tamanho, sem fixar os estados do Fcitx5.
 icones="$tmp/state/jangada/waybar/icones"
+for ambiente in ausente vazio; do
+  if [[ "$ambiente" == ausente ]]; then
+    dados_ambiente=(env -u XDG_DATA_DIRS)
+  else
+    dados_ambiente=(env XDG_DATA_DIRS=)
+  fi
+  PATH="$tmp/bin:$PATH" XDG_CONFIG_HOME="$tmp/config" XDG_STATE_HOME="$tmp/state" \
+    FALSO_DADOS="$tmp/dados" JANGADA_PATH="$repo_jangada" \
+    "${dados_ambiente[@]}" bin/jangada-barra 2>"$tmp/erro-barra" || falha "caso 12: variável $ambiente"
+  conferir "caso 12: variável $ambiente usa a busca padrão com a sobreposição" \
+    [ "$(cat "$tmp/dados")" = "/usr/local/share:$icones:/usr/share" ]
+done
 for tema in breeze breeze-dark; do
   indice="/usr/share/icons/$tema/index.theme"
   [[ -f "$indice" ]] || continue
@@ -225,6 +237,18 @@ for tema in breeze breeze-dark; do
     [ "$(readlink "$icones/icons/$tema/devices/32/input-keyboard-symbolic.svg")" = \
       "$repo_jangada/default/waybar/icones/input-keyboard-symbolic.svg" ]
 done
+if [[ -f /usr/share/icons/breeze/index.theme || -f /usr/share/icons/breeze-dark/index.theme ]]; then
+  mkdir -p "$tmp/falha-state/jangada/waybar"
+  touch "$tmp/falha-state/jangada/waybar/icones"
+  if PATH="$tmp/bin:$PATH" XDG_CONFIG_HOME="$tmp/config" XDG_STATE_HOME="$tmp/falha-state" \
+    FALSO_DADOS="$tmp/dados-falha" JANGADA_PATH="$repo_jangada" \
+    bin/jangada-barra 2>"$tmp/erro-barra"; then
+    falha "caso 12: erro na criação da sobreposição deveria interromper o lançador"
+  else
+    conferir "caso 12: erro na sobreposição não inicia Waybar com busca incompleta" \
+      [ ! -e "$tmp/dados-falha" ]
+  fi
+fi
 PATH="$tmp/bin:$PATH" XDG_CONFIG_HOME="$tmp/config" XDG_STATE_HOME="$tmp/state" \
   XDG_DATA_DIRS="$tmp/pessoal:/usr/local/share:/usr/share" FALSO_DADOS="$tmp/dados" \
   JANGADA_PATH="$repo_jangada" bin/jangada-barra 2>"$tmp/erro-barra" || falha "caso 12: jangada-barra"

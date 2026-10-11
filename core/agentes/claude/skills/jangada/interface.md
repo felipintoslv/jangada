@@ -13,7 +13,8 @@ links de compatibilidade e continuam sendo os usados pelo código.
   o recurso de 16px não contém esse fundo. `jangada-barra` sobrepõe somente
   esse nome e tamanho, mantendo nomes de estados e imagens textuais.
   `tray.icons` seleciona por aplicativo nessa versão, sem distinguir estados
-  do Fcitx5. Identifique o item por D-Bus antes de atribuir o defeito a ele.
+  do Fcitx5. A ligação com o item das capturas está pendente de confirmação
+  por D-Bus; o defeito do recurso foi reproduzido no GTK real.
   Evidência, limites e roteiro gráfico em `docs/teclado-waybar.md`.
 
 - O módulo nativo `mpris` fica fora das listas de módulos por padrão.
