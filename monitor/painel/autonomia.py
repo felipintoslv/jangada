@@ -26,7 +26,10 @@ def filtrar(dados, pedido):
         [s for s in registros['subagentes'] if dentro(s, 'inicio')],
         [d for d in registros['delegacoes'] if dentro(d, 'data')],
         [e for e in registros['entregas'] if dentro(e, 'data')],
-        dt.datetime.now().astimezone())
+        dt.datetime.now().astimezone(),
+        # Sessão aberta não tem período; cache de antes destas chaves não as traz.
+        [s for s in registros.get('sessoes', []) if not projetos or s.get('projeto') in projetos],
+        registros.get('pareceres', []))
 
 
 if __name__ == '__main__':

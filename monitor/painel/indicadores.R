@@ -602,20 +602,46 @@ tabela_lista <- function(itens, campos) {
     vapply(itens, function(i) if (is.null(i[[k]])) NA_character_ else as.character(i[[k]]), "")))
 }
 
-# Árvore de delegação em rede: pasta, conversa (ramo) e cada filho.
-arvore_rede <- function(ramos) {
-  if (!length(ramos)) return(NULL)
-  nos <- list(); arestas <- list()
+# Árvore de delegação em rede. Cada tarefa tem um nó por função (coordenador,
+# autor, revisor), e a mesma IA em duas funções fica em dois nós. Os filhos do
+# ramo de uma tarefa saem do autor; os demais, de pasta e conversa.
+arvore_rede <- function(ramos, tarefas = NULL) {
+  if (!length(ramos) && !length(tarefas)) return(NULL)
+  nos <- list(); arestas <- list(); autores <- list()
+  nome <- function(x) if (is.null(x) || !nzchar(x)) "?" else x
+  for (t in tarefas) {
+    coordenador <- paste0("t:", t$sessao, ":coordenador"); autor <- paste0("t:", t$sessao, ":autor")
+    nos[[coordenador]] <- data.frame(id = coordenador, label = paste("coordenador -", nome(t$coordenador)),
+                                     group = "coordenador", value = 3, title = paste("tarefa", esc(t$sessao)))
+    nos[[autor]] <- data.frame(id = autor, label = paste("autor -", nome(t$autor)), group = "autor", value = 3,
+                               title = paste0("tarefa ", esc(t$sessao), "<br>", esc(nome(t$pasta))))
+    arestas[[length(arestas) + 1]] <- data.frame(from = coordenador, to = autor)
+    if (!is.null(t$revisor)) {
+      revisor <- paste0("t:", t$sessao, ":revisor")
+      parecer <- if (is.null(t$revisor$rodada)) "sem parecer" else
+        paste0("r", t$revisor$rodada, ": ", nome(t$revisor$resultado))
+      rotulo <- paste("revisor -", nome(t$revisor$agente))
+      if (!is.null(t$revisor$rodada)) rotulo <- paste0(rotulo, "\n", parecer)
+      nos[[revisor]] <- data.frame(id = revisor, label = rotulo, group = "revisor", value = 2,
+                                   title = paste0("tarefa ", esc(t$sessao), "<br>última rodada: ", esc(parecer)))
+      arestas[[length(arestas) + 1]] <- data.frame(from = autor, to = revisor)
+    }
+    autores[[t$sessao]] <- autor
+  }
   for (r in ramos) {
-    pasta <- paste0("p:", r$pasta); ramo <- paste0("r:", r$conversa)
-    nos[[pasta]] <- data.frame(id = pasta, label = basename(r$pasta), group = "pasta", value = 3, title = esc(r$pasta))
-    nos[[ramo]] <- data.frame(id = ramo, label = sub(":.*", "", r$conversa), group = "conversa", value = 2,
-      title = paste0(esc(r$conversa), "<br>", esc(r$n), " filho(s), ", esc(r$tokens_claude), " tokens no Claude, razão ",
-                     if (is.null(r$razao)) "-" else esc(r$razao), ", ", esc(r$passos_agy), " passos no agy"))
-    arestas[[length(arestas) + 1]] <- data.frame(from = pasta, to = ramo)
+    ramo <- if (is.null(r$sessao)) NULL else autores[[r$sessao]]
+    if (is.null(ramo)) {
+      pasta <- paste0("p:", r$pasta); ramo <- paste0("r:", r$conversa)
+      nos[[pasta]] <- data.frame(id = pasta, label = basename(r$pasta), group = "pasta", value = 3, title = esc(r$pasta))
+      nos[[ramo]] <- data.frame(id = ramo, label = sub(":.*", "", r$conversa), group = "conversa", value = 2,
+        title = paste0(esc(r$conversa), "<br>", esc(r$n), " filho(s), ", esc(r$tokens_claude), " tokens no Claude, razão ",
+                       if (is.null(r$razao)) "-" else esc(r$razao), ", ", esc(r$passos_agy), " passos no agy"))
+      arestas[[length(arestas) + 1]] <- data.frame(from = pasta, to = ramo)
+    }
     for (f in r$filhos) {
       id <- paste0("f:", f$origem, ":", f$id, ":", length(nos))
-      grupo <- if (isTRUE(f$recusa)) "recusa" else if (is.null(f$origem)) "?" else f$origem
+      grupo <- if (identical(f$resultado, "vazia")) "vazia" else if (isTRUE(f$recusa)) "recusa" else
+        if (is.null(f$origem)) "?" else f$origem
       agente <- if (identical(f$origem, "delegacao")) f$destino else f$origem
       if (identical(agente, "codex-economico")) agente <- "codex"
       rotulo <- if (is.null(f$papel) || !nzchar(f$papel)) "?" else f$papel
@@ -629,7 +655,10 @@ arvore_rede <- function(ramos) {
                        if (is.null(f$modelo)) "" else paste0(", modelo ", esc(f$modelo)),
                        "<br>profundidade ", if (is.null(f$profundidade)) "-" else esc(f$profundidade),
                        ", tokens ", if (is.null(f$tokens)) "-" else esc(f$tokens),
-                       ", retorno ", if (is.null(f$retorno_tokens)) "-" else esc(f$retorno_tokens)))
+                       ", retorno ", if (is.null(f$retorno_tokens)) "-" else esc(f$retorno_tokens),
+                       if (is.null(f$resultado)) "" else paste0("<br>resultado: ", esc(f$resultado)),
+                       if (is.null(f$segundos)) "" else paste0(", ", esc(f$segundos), " s"),
+                       if (is.null(f$motivo) || !nzchar(f$motivo)) "" else paste0("<br>motivo: ", esc(f$motivo))))
       arestas[[length(arestas) + 1]] <- data.frame(from = ramo, to = id)
     }
   }

@@ -174,6 +174,38 @@ else:
         self.assertEqual(len(d["chamadas_local"]), 1)
         self.assertIsNone(d["chamadas_local"][0]["tokens_entrada"])
 
+    def test_tarefas_do_grafo(self):
+        agora = sub.dt.datetime.now().astimezone()
+        with tempfile.TemporaryDirectory() as pasta:
+            # Registro de antes do campo coordenador, um com o campo e um que não é sessão.
+            Path(pasta, "antiga.json").write_text(json.dumps(
+                {"sessao": "antiga", "dir": "/a", "agente": "/usr/bin/codex --full-auto", "desde": "2026-10-01T10:00:00Z"}))
+            Path(pasta, "nova.json").write_text(json.dumps(
+                {"sessao": "nova", "dir": "/n", "agente": "claude", "revisor": "codex", "coordenador": "codex"}))
+            Path(pasta, "outro.json").write_text("[]")
+            sessoes = sub.sessoes(pasta)
+        self.assertEqual([(s["sessao"], s["coordenador"], s["autor"], s["revisor"]) for s in sessoes],
+                         [("antiga", "dono", "codex", ""), ("nova", "codex", "claude", "codex")])
+        dels = [sub.delegacao_limpa(d) for d in (
+            dict(sessao="nova", pasta="/n", papel="leitor", destino="agy", recusa=True,
+                 motivo="o agy devolveu resposta vazia", segundos=7),
+            dict(sessao="nova", pasta="/n", papel="redator", destino="local", recusa=False, palavras=0),
+            dict(sessao="fechada", pasta="/f", papel="auditor", destino="agy", recusa=False, palavras=30))]
+        pareceres = [
+            # Anterior à abertura da sessão "antiga": é de outra tarefa de mesmo nome.
+            dict(rotulo="antiga", data="2026-09-30T10:00:00Z", rodada=3, resultado="limite", revisor="agy", autor="codex"),
+            dict(rotulo="fechada", data="2026-10-02T10:00:00Z", rodada=1, resultado="revisar", revisor="claude", autor="codex")]
+        ind = sub.resumir([], dels, [], agora, sessoes, pareceres)
+        tarefas = {t["sessao"]: t for t in ind["tarefas"]}
+        self.assertEqual(tarefas["antiga"]["revisor"], None)
+        self.assertEqual(tarefas["nova"]["revisor"], {"agente": "codex", "rodada": None, "resultado": None})
+        # A sessão encerrada perdeu o registro: sem coordenador, com o que o parecer diz.
+        self.assertEqual((tarefas["fechada"]["coordenador"], tarefas["fechada"]["autor"], tarefas["fechada"]["revisor"]),
+                         (None, "codex", {"agente": "claude", "rodada": 1, "resultado": "revisar"}))
+        self.assertEqual({r["conversa"]: [f["resultado"] for f in r["filhos"]] for r in ind["arvore"]},
+                         {"delegar:nova": ["vazia", "vazia"], "delegar:fechada": ["concluida"]})
+        self.assertEqual(sub.resumir([], dels, [], agora)["tarefas"][0]["coordenador"], None)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -96,7 +96,8 @@ cores_grupos <- c(
   "sessão" = "#888888", "arquivo" = cores[["primaria"]], "arquivo em várias sessões" = alerta,
   "comum" = cores[["primaria"]], "rara" = "#888888",
   "pasta" = "#888888", "conversa" = "#5f7f8f", "claude" = cores[["primaria"]], "agy" = cores[["atencao"]],
-  "delegacao" = "#b08968", "recusa" = alerta)
+  "delegacao" = "#b08968", "recusa" = alerta, "vazia" = "#c9a227",
+  "coordenador" = "#7a6fa3", "autor" = "#5f8f6f", "revisor" = "#8f7f5f")
 
 cartao <- function(titulo, ..., cob = NULL) {
   card(full_screen = TRUE, card_header(titulo), card_body(...), if (!is.null(cob)) card_footer(cob))
@@ -342,7 +343,7 @@ ui <- page_navbar(
     ),
     layout_columns(col_widths = c(7, 5),
       cartao("Árvore hierárquica de delegação", visNetwork::visNetworkOutput("e_arvore", height = "480px"),
-             cob = div(class = "cobertura", "Pasta, conversa (ou sessão, nas delegações) e cada subagente ou delegação.")),
+             cob = div(class = "cobertura", "Por tarefa: coordenador, autor, revisor (com a última rodada) e cada subagente ou delegação, com o resultado na cor e no detalhe. Tarefa encerrada perde o registro e fica sem coordenador; o que não é de tarefa sai de pasta e conversa.")),
       navset_card_underline(title = "Métricas de conformidade", full_screen = TRUE,
         nav_panel("Compressão", DT::DTOutput("e_compressao"),
                   p(class = "cobertura", "Claude: tokens do subagente por token devolvido. agy: passos por mil tokens devolvidos, série à parte.")),
@@ -1090,7 +1091,7 @@ server <- function(input, output, session) {
                                                        c("faixa", "com verificador", "sem verificador"))))
   output$e_agy <- DT::renderDT(tabela(setNames(tabela_comparar(sub()$validacao$agy, "primeira_pct"),
                                                c("faixa", "com agy", "sem agy"))))
-  output$e_arvore <- visNetwork::renderVisNetwork(grafo(arvore_rede(sub()$arvore)))
+  output$e_arvore <- visNetwork::renderVisNetwork(grafo(arvore_rede(sub()$arvore, sub()$tarefas)))
   output$e_compressao <- DT::renderDT({
     c <- sub()$compressao
     p <- c$claude$por_papel

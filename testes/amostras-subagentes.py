@@ -12,7 +12,9 @@ principal (1.000 tokens sem o cache lido) e três subagentes do Claude:
   a3  sessão antiga: sem totais nem retorno na conversa mãe.
 Em RAIZ/agy: um subagente "self" (Code Reviewer) com 5 passos, um de
 escrita. Em RAIZ/state/jangada/delegacoes.jsonl: uma delegação atendida e
-uma recusada por cota.
+uma recusada por cota. Em RAIZ/state/jangada/agentes/s.json: a sessão "s",
+coordenada pelo claude, com o agy de revisor (e de explorador delegado). Em
+RAIZ/state/jangada/revisoes/validar.jsonl: as duas rodadas dessa sessão.
 """
 import datetime
 import json
@@ -122,4 +124,17 @@ gravar(os.path.join(estado, "delegacoes.jsonl"), [
     dict(comum, data=T(6), papel="leitor", destino="agy", codigo_saida=4,
          palavras=0, tokens_retorno=20, passos=None, tokens_agy=None, cota_antes=15.0, cota_depois=None,
          recusa=True, motivo="cota de 5 horas do Gemini em 15%, abaixo de 20%", conversa=""),
+])
+os.makedirs(os.path.join(estado, "agentes"), exist_ok=True)
+json.dump({"sessao": "s", "dir": pasta, "raiz": pasta, "agente": "claude --model opus", "revisor": "agy",
+           "coordenador": "claude", "desde": T(0)},
+          open(os.path.join(estado, "agentes", "s.json"), "w"))
+os.makedirs(os.path.join(estado, "revisoes"), exist_ok=True)
+rodada = {"projeto": "proj", "rotulo": "s", "etapa": "revisor", "revisor": "agy", "autor": "claude"}
+gravar(os.path.join(estado, "revisoes", "validar.jsonl"), [
+    # Parecer de outra tarefa de mesmo nome, anterior a esta sessão.
+    dict(rodada, data=T(-60), rodada=3, resultado="limite"),
+    dict(rodada, data=T(7), rodada=1, resultado="revisar"),
+    dict(rodada, data=T(8), rodada=2, resultado="aprovado"),
+    dict(rodada, data=T(9), rodada=3, resultado="revisar", etapa="local"),
 ])

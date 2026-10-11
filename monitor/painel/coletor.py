@@ -835,7 +835,7 @@ def main():
         if not isinstance(memo, dict):
             memo = {}
         autonomia = subagentes.indicadores(memo=memo, guardar_registros=True)
-        for grupo, campo in (("subagentes", "pasta"), ("delegacoes", "pasta")):
+        for grupo, campo in (("subagentes", "pasta"), ("delegacoes", "pasta"), ("sessoes", "pasta")):
             for item in autonomia['registros'][grupo]:
                 item['projeto'] = projeto_de(item[campo]) if item.get(campo) else slug(item.get('projeto'))
         for item in autonomia['registros']['entregas']:

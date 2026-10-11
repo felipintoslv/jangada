@@ -263,6 +263,42 @@ conferir "indicadores 8: origem e destino dos filhos chegam ao JSON" jqok -e '
     and ([$filhos[] | select(.origem == "delegacao") | .destino] == ["agy", "agy"])
     and ([$filhos[] | select(.recusa) | {origem, destino, papel}]
       == [{origem: "delegacao", destino: "agy", papel: "leitor"}])' "$tmp/ind.json"
+conferir "indicadores 9: a tarefa tem coordenador, autor e revisor com o último parecer do revisor" jqok -e '
+  [.tarefas[] | {sessao, coordenador, autor, revisor}]
+  == [{sessao: "s", coordenador: "claude", autor: "claude", revisor: {agente: "agy", rodada: 2, resultado: "aprovado"}}]
+  ' "$tmp/ind.json"
+conferir "indicadores 9: todo ramo da pasta é da tarefa e a delegação leva resultado, tempo e motivo" jqok -e '
+  ([.arvore[] | .sessao] | unique == ["s"])
+  and ([.arvore[] | select(.conversa == "delegar:s") | .filhos[] | {papel, destino, resultado, segundos, tokens, motivo}]
+    == [{papel: "explorador", destino: "agy", resultado: "concluida", segundos: 40, tokens: 9000, motivo: ""},
+        {papel: "leitor", destino: "agy", resultado: "recusada", segundos: 40, tokens: null,
+         motivo: "cota de 5 horas do Gemini em 15%, abaixo de 20%"}])' "$tmp/ind.json"
+if command -v Rscript >/dev/null 2>&1 \
+  && Rscript -e 'for (p in c("jsonlite", "htmltools")) if (!requireNamespace(p, quietly = TRUE)) quit(status = 1)' 2>/dev/null; then
+  conferir "grafo: coordenador, autor, revisor e delegações, com o agy em duas funções" \
+    Rscript -e '
+      source("monitor/painel/indicadores.R")
+      ind <- jsonlite::fromJSON(commandArgs(TRUE)[1], simplifyVector = FALSE)
+      a <- arvore_rede(ind$arvore, ind$tarefas)
+      no <- function(rotulo) a$nos[a$nos$label == rotulo, ]
+      liga <- function(de, para) any(a$arestas$from == de & a$arestas$to == para)
+      revisor <- no("revisor - agy\nr2: aprovado"); explorador <- no("explorador - agy"); leitor <- no("leitor - agy")
+      stopifnot(
+        nrow(no("coordenador - claude")) == 1, nrow(no("autor - claude")) == 1, nrow(revisor) == 1,
+        nrow(explorador) == 1, nrow(leitor) == 1, revisor$id != explorador$id,
+        revisor$group == "revisor", explorador$group == "delegacao", leitor$group == "recusa",
+        liga("t:s:coordenador", "t:s:autor"), liga("t:s:autor", "t:s:revisor"),
+        liga("t:s:autor", explorador$id), liga("t:s:autor", leitor$id),
+        !any(a$nos$group %in% c("pasta", "conversa")), !anyDuplicated(a$nos$id),
+        nrow(a$nos) == 3 + 6, nrow(a$arestas) == 2 + 6,
+        grepl("resultado: concluida, 40 s", explorador$title, fixed = TRUE),
+        grepl("tokens 9000", explorador$title, fixed = TRUE),
+        grepl("resultado: recusada, 40 s<br>motivo: cota de 5 horas do Gemini em 15%, abaixo de 20%",
+              leitor$title, fixed = TRUE))
+    ' "$tmp/ind.json"
+else
+  echo "R, jsonlite ou htmltools ausentes; teste do grafo ignorado"
+fi
 subagentes >"$tmp/ind.txt"
 conferir "indicadores: texto para o terminal" grep -q "^7. Desvios do protocolo" "$tmp/ind.txt"
 

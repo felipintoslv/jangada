@@ -320,6 +320,33 @@ else
         nrow(nos) == length(filhos), nrow(a$arestas) == length(filhos) + 1,
         grepl("modelo qwen3:4b", nos$title[2], fixed = TRUE))
     '
+  conferir "caso 5: a árvore põe coordenador, autor e revisor por tarefa e marca a delegação vazia" \
+    Rscript -e '
+      source("monitor/painel/indicadores.R")
+      ramos <- list(
+        list(pasta = "/p", conversa = "delegar:a--b", sessao = "a--b", n = 2, tokens_claude = 0, passos_agy = 0,
+             filhos = list(
+               list(origem = "delegacao", id = "1", destino = "agy", papel = "pesquisador", resultado = "vazia",
+                    recusa = TRUE, segundos = 7, motivo = "o agy devolveu <b>resposta vazia</b>"),
+               list(origem = "delegacao", id = "2", destino = "agy", papel = "pesquisador", resultado = "concluida"))),
+        list(pasta = "/q", conversa = "claude:c", n = 1, tokens_claude = 0, passos_agy = 0,
+             filhos = list(list(origem = "claude", id = "3", papel = "explorador"))))
+      tarefas <- list(
+        list(sessao = "a--b", pasta = "/p", coordenador = "codex", autor = "claude",
+             revisor = list(agente = "agy", rodada = 1, resultado = "revisar")),
+        list(sessao = "fechada", pasta = "", coordenador = NULL, autor = NULL, revisor = NULL))
+      a <- arvore_rede(ramos, tarefas)
+      vazia <- a$nos[a$nos$group == "vazia", ]
+      stopifnot(
+        all(c("coordenador - codex", "autor - claude", "revisor - agy\nr1: revisar", "coordenador - ?", "autor - ?")
+            %in% a$nos$label),
+        sum(a$nos$label == "pesquisador - agy") == 2, nrow(vazia) == 1, !any(a$nos$group == "recusa"),
+        grepl("resultado: vazia, 7 s<br>motivo: o agy devolveu &lt;b&gt;resposta vazia&lt;/b&gt;", vazia$title, fixed = TRUE),
+        !any(grepl("t:fechada:revisor", a$nos$id, fixed = TRUE)),
+        sum(a$nos$group == "pasta") == 1, a$nos$label[a$nos$group == "pasta"] == "q",
+        any(a$arestas$from == "t:a--b:autor" & a$arestas$to == vazia$id),
+        nrow(arvore_rede(list(), tarefas)$nos) == 5, is.null(arvore_rede(list())))
+    '
   conferir "caso 5: indicadores em R sobre o cache" \
     [ "$(cd default/painel && Rscript -e '
       source("indicadores.R")
@@ -404,9 +431,11 @@ print(json.dumps(coletor.validacoes(), default=str))' | Rscript -e '
         session$setInputs(periodo = c(Sys.Date() - 30, Sys.Date()), projeto = NULL, agente = NULL, par = NULL)
         cat(output$e_fracao, output$e_recusas, output$e_desvios, grepl("recusa", output$e_arvore),
             grepl("com agy", output$e_tokens), grepl("explorador - agy", output$e_arvore, fixed = TRUE),
-            grepl("leitor - agy", output$e_arvore, fixed = TRUE))
+            grepl("leitor - agy", output$e_arvore, fixed = TRUE),
+            grepl("coordenador - dono", output$e_arvore, fixed = TRUE),
+            grepl("autor - claude", output$e_arvore, fixed = TRUE))
       })
-    ' "$cache" 2>/dev/null)" = "50% 50% 3 TRUE TRUE TRUE TRUE" ]
+    ' "$cache" 2>/dev/null)" = "50% 50% 3 TRUE TRUE TRUE TRUE TRUE TRUE" ]
   # Antes da primeira coleta com o módulo não há subagentes.json.
   cp -r "$cache" "$tmp/cache-sem-sub" && rm -f "$tmp/cache-sem-sub/subagentes.json"
   conferir "caso 5: a aba de subagentes sem subagentes.json" \

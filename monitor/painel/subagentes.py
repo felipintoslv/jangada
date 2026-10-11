@@ -493,6 +493,49 @@ def aprovacao(g):
             "rodadas_media": round(sum(e["rodadas"] or 0 for e in g) / len(g), 2) if g else None}
 
 
+def sessoes(pasta=None):
+    """Sessões abertas: quem coordena, escreve e revisa cada tarefa. Registro
+    sem o campo coordenador é de antes dele: o coordenador é o dono."""
+    saida = []
+    for arq in sorted(glob.glob(os.path.join(pasta or os.path.join(ESTADO, "agentes"), "*.json"))):
+        try:
+            with open(arq, encoding="utf-8") as f:
+                d = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if not isinstance(d, dict) or not isinstance(d.get("sessao"), str):
+            continue
+        t = {k: d[k] if isinstance(d.get(k), str) else "" for k in ("dir", "raiz", "coordenador", "agente",
+                                                                     "revisor", "desde")}
+        comando = t["agente"].split()
+        saida.append({"sessao": d["sessao"], "pasta": t["dir"] or t["raiz"], "coordenador": t["coordenador"] or "dono",
+                      "autor": os.path.basename(comando[0]) if comando else "", "revisor": t["revisor"],
+                      "desde": t["desde"]})
+    return saida
+
+
+def pareceres():
+    """Última rodada que chegou ao revisor, por rótulo (o nome da sessão)."""
+    ultimo = {}
+    for arq in ("validar.jsonl", os.path.join("revisoes", "validar.jsonl")):
+        for d in linhas_json(os.path.join(ESTADO, arq)):
+            t, rotulo = instante(d.get("data")), d.get("rotulo")
+            if d.get("etapa") != "revisor" or t is None or not isinstance(rotulo, str):
+                continue
+            if rotulo not in ultimo or t >= ultimo[rotulo][0]:
+                ultimo[rotulo] = (t, {"rotulo": rotulo, "data": d.get("data"), "rodada": d.get("rodada"),
+                                      "resultado": d.get("resultado"), "revisor": d.get("revisor"),
+                                      "autor": d.get("autor")})
+    return [p for _, p in ultimo.values()]
+
+
+def resultado_delegacao(d):
+    """concluida, recusada ou vazia (o destino respondeu sem texto)."""
+    if "resposta vazia" in (d.get("motivo") or "") or (not d.get("recusa") and d.get("palavras") == 0):
+        return "vazia"
+    return "recusada" if d.get("recusa") else "concluida"
+
+
 def indicadores(agora=None, memo=None, guardar_registros=False):
     """Os oito indicadores da etapa 4 da especificação de subagentes. O memo
     ({"claude": {}, "agy": {}}, guardado entre coletas) evita reler os
@@ -507,13 +550,15 @@ def indicadores(agora=None, memo=None, guardar_registros=False):
         subs = claude(memo=memo["claude"]) + agy(memo=memo["agy"])
     dels = delegacoes()
     ents = entregas_aprovadas()
-    resumo = resumir(subs, dels, ents, agora)
+    abertas, ultimos = sessoes(), pareceres()
+    resumo = resumir(subs, dels, ents, agora, abertas, ultimos)
     if guardar_registros:
-        resumo['registros'] = dict(subagentes=subs, delegacoes=dels, entregas=ents)
+        resumo['registros'] = dict(subagentes=subs, delegacoes=dels, entregas=ents,
+                                   sessoes=abertas, pareceres=ultimos)
     return resumo
 
 
-def resumir(subs, dels, ents, agora):
+def resumir(subs, dels, ents, agora, sessoes=(), pareceres=()):
     """Calcula os indicadores sobre registros já lidos, inclusive recortes do painel."""
     atendidas = [d for d in dels if not d.get("recusa")]
     recusas = [d for d in dels if d.get("recusa")]
@@ -634,7 +679,8 @@ def resumir(subs, dels, ents, agora):
                      "profundidade": 1, "tokens": d.get("tokens_agy"), "passos": d.get("passos"),
                      "retorno_tokens": d.get("tokens_retorno"), "razao": None, "recusa": d.get("recusa")})
         filho = ramo[-1]
-        filho.update(destino=d.get("destino"), modelo=d.get("modelo"))
+        filho.update(destino=d.get("destino"), modelo=d.get("modelo"), resultado=resultado_delegacao(d),
+                     segundos=d.get("segundos"), motivo=d.get("motivo") or "")
         filho["id"] = d.get("delegacao_id") or filho["id"]
         if d.get("destino") == "local":
             entrada = uso_local(d, "tokens_local_entrada")
@@ -652,9 +698,32 @@ def resumir(subs, dels, ents, agora):
         for conv, filhos in sorted(convs.items()):
             tok = sum(f["tokens"] or 0 for f in filhos if f["origem"] == "claude")
             ret = sum(f["retorno_tokens"] or 0 for f in filhos if f["origem"] == "claude")
-            ramos.append({"pasta": pasta, "conversa": conv, "n": len(filhos), "tokens_claude": tok,
+            origem, _, nome = conv.partition(":")
+            sessao = nome if origem == "delegar" and nome != "?" else next(
+                (s["sessao"] for s in sessoes if mesma_pasta(s["pasta"], pasta)), None)
+            ramos.append({"pasta": pasta, "conversa": conv, "sessao": sessao, "n": len(filhos), "tokens_claude": tok,
                           "retorno_tokens": ret, "razao": round(tok / ret, 1) if tok and ret else None,
                           "passos_agy": sum(f["passos"] or 0 for f in filhos), "filhos": filhos})
+
+    # 9. Tarefas: quem coordena, escreve e revisa. A sessão encerrada perde o
+    # registro: sobra o que o último parecer diz, sem o coordenador.
+    tarefas = {s["sessao"]: {"sessao": s["sessao"], "pasta": s["pasta"], "coordenador": s["coordenador"],
+                             "autor": s["autor"] or None, "desde": s["desde"],
+                             "revisor": {"agente": s["revisor"], "rodada": None, "resultado": None}
+                             if s["revisor"] else None}
+               for s in sessoes}
+    for nome in sorted({r["sessao"] for r in ramos if r["sessao"]} - set(tarefas)):
+        tarefas[nome] = {"sessao": nome, "pasta": "", "coordenador": None, "autor": None, "desde": "",
+                         "revisor": None}
+    for p in pareceres:
+        t = tarefas.get(p["rotulo"])
+        # O rótulo se repete entre tarefas de mesmo nome: parecer anterior à
+        # abertura desta sessão é de outra.
+        if t is None or (instante(p["data"]) or 0) < (instante(t["desde"]) or 0):
+            continue
+        t["autor"] = t["autor"] or p["autor"] or None
+        t["revisor"] = {"agente": p["revisor"] or (t["revisor"] or {}).get("agente") or "",
+                        "rodada": p["rodada"], "resultado": p["resultado"]}
 
     return {
         "data": agora.isoformat(timespec="seconds"), "pouco_dado": POUCO_DADO,
@@ -663,6 +732,7 @@ def resumir(subs, dels, ents, agora):
                      for destino in sorted({d.get('destino') or '?' for d in atendidas})},
         "tokens_por_entrega": tokens, "fracao_agy": fracao, "compressao": compressao, "cota_agy": cota,
         "validacao": validacao, "qualidade": qualidade, "desvios": desvios, "arvore": ramos,
+        "tarefas": list(tarefas.values()),
         "local": resumo_local(dels),
     }
 
