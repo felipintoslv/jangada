@@ -226,7 +226,7 @@ para pastas, escreva `/dados` no `.gitignore`, sem a barra final, porque o
 padrão `dados/` não cobre um link. Um worktree reaproveitado não é preparado de
 novo.
 
-## Skills do Claude Code e do agy
+## Skills do Claude Code, do agy e do Codex
 
 A etapa de agentes liga cada pasta de `default/claude/skills` em
 `~/.claude/skills/<nome>` e, se o agy estiver instalado, em
@@ -249,9 +249,13 @@ tarefa combina com a descrição dela, mesmo abertos em outro projeto:
   com a escolha do tipo pela relação a mostrar, o tema padrão (`tema_dv.R` e
   `tema_dv.py`, copiados para o projeto), título e fonte em comentário fora
   da imagem e a checklist de 41 itens.
+- `coordenador`: papel da sessão que abre, acompanha e confere tarefas de
+  agentes em qualquer projeto. Não vai para o agy; é a única ligada ao Codex,
+  em `~/.codex/skills/coordenador`. Veja
+  [docs/ciclo-da-tarefa.md](docs/ciclo-da-tarefa.md#coordenador).
 
-O agy lê o mesmo `SKILL.md`, sem ajuste no frontmatter. Uma pasta ou link
-alheio com o mesmo nome nas duas pastas fica como está, com aviso.
+O agy e o Codex leem o mesmo `SKILL.md`, sem ajuste no frontmatter. Uma pasta
+ou link alheio com o mesmo nome nessas pastas fica como está, com aviso.
 
 ## Ciclo de uma tarefa com agentes
 
@@ -913,6 +917,7 @@ e não mexe na instalada. Para testar a cópia de trabalho sem instalar, rode
 | `testes/barra.sh` | módulo `custom/indicadores`, barra em pé do `jangada-barra` e a migração que o acrescenta |
 | `testes/painel.sh` | coletor do painel sobre registros de exemplo e, com os pacotes R, o app no ar |
 | `testes/conversa.py` | janela de conversa local com Ollama falso: resposta progressiva, parada, raciocínio vazado, recusa, trava e proteções |
+| `testes/skills.sh` | instalação das skills num HOME temporário: Claude Code com todas, agy sem a `coordenador`, Codex só com ela, link alheio preservado e a migração sem Codex |
 | `testes/subagentes.sh`, `testes/delegar.sh` | papéis de subagente e a instalação deles; `jangada-delegar` com agy falso, cota por grupo e troca de modelo |
 | `testes/agente-seletor.py` | seletor do `jangada-agente` num terminal falso, sem executar modelos nem criar sessões |
 | `testes/interface.sh` | identificação da interface sem abrir janelas nem tocar em outras sessões |

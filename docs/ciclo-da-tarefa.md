@@ -36,6 +36,22 @@ O fluxograma recomenda commit antes da revisão, para que a aprovação
 identifique uma entrega limpa. O comando também revisa alterações sem commit,
 mas registra a aprovação como `sujo`, sem avançar o ponto da próxima entrega.
 
+## Coordenador
+
+A skill `coordenador` define o papel da sessão que conversa com o dono,
+transforma o pedido em tarefas, acompanha e confere a entrega antes de
+integrar. Ela vale para qualquer projeto e roda numa sessão comum, fora do
+isolamento, aberta na pasta do projeto. O texto fica em
+`default/claude/skills/coordenador/SKILL.md`; só a descrição entra no contexto
+até a skill ser chamada.
+
+- Claude Code: `/coordenador`, ou pedir para coordenar as tarefas do projeto.
+- Codex: `$coordenador` na mensagem, ou o mesmo pedido em texto. Conferido
+  no Codex 0.162.1, que lê `~/.codex/skills/coordenador/SKILL.md` pelo link.
+
+O estado entre conversas fica em `.jangada/coordenacao.md`, na raiz do
+projeto e fora do controle de versão.
+
 ## Abertura da sessão
 
 ```mermaid
