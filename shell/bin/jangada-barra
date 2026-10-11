@@ -153,6 +153,27 @@ if ! posicao_waybar "$JANGADA_BARRA_POSICAO" >/dev/null; then
 fi
 gerar_config "$JANGADA_BARRA_POSICAO"
 
+# GTK recolore o retângulo transparente do teclado simbólico de 32px do
+# Breeze. Sobreponha só esse recurso, mantendo os temas e caminhos pessoais.
+icones="$JANGADA_ESTADO/waybar/icones"
+for tema in breeze breeze-dark; do
+  indice="/usr/share/icons/$tema/index.theme"
+  [[ -f "$indice" ]] || continue
+  pasta="$icones/icons/$tema"
+  mkdir -p "$pasta/devices/32"
+  ln -sfn "$indice" "$pasta/index.theme"
+  ln -sfn "$JANGADA_PATH/default/waybar/icones/input-keyboard-symbolic.svg" \
+    "$pasta/devices/32/input-keyboard-symbolic.svg"
+done
+IFS=: read -r -a caminhos_dados <<<"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+dados_barra=()
+for pasta in "${caminhos_dados[@]}"; do
+  [[ "$pasta" != /usr/share ]] || dados_barra+=("$icones")
+  dados_barra+=("$pasta")
+done
+export XDG_DATA_DIRS
+XDG_DATA_DIRS="$(IFS=:; printf '%s' "${dados_barra[*]}")"
+
 # Sinaliza apenas a barra desta sessão e configuração antes de abrir a nova.
 jangada_interface_sinalizar waybar TERM
 sleep 0.3

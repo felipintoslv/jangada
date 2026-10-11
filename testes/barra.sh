@@ -46,11 +46,11 @@ conferir "caso 2: base.css troca a folga na barra em pé" \
 # Caso 3: barra em pé gerada pelo jangada-barra, com waybar e pkill falsos.
 mkdir -p "$tmp/bin" "$tmp/config/jangada"
 printf '#!/bin/sh\nexit 1\n' >"$tmp/bin/pkill"
-printf '#!/bin/sh\nexit 0\n' >"$tmp/bin/waybar"
+printf '#!/bin/sh\nprintf "%%s" "$XDG_DATA_DIRS" >"$FALSO_DADOS"\n' >"$tmp/bin/waybar"
 chmod +x "$tmp/bin/"*
 echo "JANGADA_BARRA_POSICAO=esquerda" >"$tmp/config/jangada/jangada.conf"
 PATH="$tmp/bin:$PATH" XDG_CONFIG_HOME="$tmp/config" XDG_STATE_HOME="$tmp/state" \
-  JANGADA_PATH="$repo_jangada" bin/jangada-barra 2>"$tmp/erro-barra" || falha "caso 3: jangada-barra: $(cat "$tmp/erro-barra")"
+  FALSO_DADOS="$tmp/dados" JANGADA_PATH="$repo_jangada" bin/jangada-barra 2>"$tmp/erro-barra" || falha "caso 3: jangada-barra: $(cat "$tmp/erro-barra")"
 gerado="$tmp/state/jangada/waybar/borda.jsonc"
 if [[ -f "$gerado" ]]; then
   sem_comentario "$gerado" >"$tmp/borda.json"
@@ -213,6 +213,29 @@ for modulo in tarefas painel atualizacoes; do
     falha "caso 11: jangada-$modulo --waybar: $(cat "$tmp/modulos/$modulo.erro")"
   fi
 done
+
+# Caso 12: sobreposição por nome e tamanho, sem fixar os estados do Fcitx5.
+icones="$tmp/state/jangada/waybar/icones"
+for tema in breeze breeze-dark; do
+  indice="/usr/share/icons/$tema/index.theme"
+  [[ -f "$indice" ]] || continue
+  conferir "caso 12: $tema mantém o índice original" \
+    [ "$(readlink "$icones/icons/$tema/index.theme")" = "$indice" ]
+  conferir "caso 12: $tema substitui só o teclado de 32px" \
+    [ "$(readlink "$icones/icons/$tema/devices/32/input-keyboard-symbolic.svg")" = \
+      "$repo_jangada/default/waybar/icones/input-keyboard-symbolic.svg" ]
+done
+PATH="$tmp/bin:$PATH" XDG_CONFIG_HOME="$tmp/config" XDG_STATE_HOME="$tmp/state" \
+  XDG_DATA_DIRS="$tmp/pessoal:/usr/local/share:/usr/share" FALSO_DADOS="$tmp/dados" \
+  JANGADA_PATH="$repo_jangada" bin/jangada-barra 2>"$tmp/erro-barra" || falha "caso 12: jangada-barra"
+conferir "caso 12: caminhos pessoais precedem a sobreposição" \
+  [ "$(cat "$tmp/dados")" = "$tmp/pessoal:/usr/local/share:$icones:/usr/share" ]
+PATH="$tmp/bin:$PATH" XDG_CONFIG_HOME="$tmp/config" XDG_STATE_HOME="$tmp/state" \
+  XDG_DATA_DIRS="$tmp/pessoal" FALSO_DADOS="$tmp/dados" \
+  JANGADA_PATH="$repo_jangada" bin/jangada-barra 2>"$tmp/erro-barra" || falha "caso 12: caminho exclusivo"
+conferir "caso 12: busca exclusiva do usuário permanece exclusiva" \
+  [ "$(cat "$tmp/dados")" = "$tmp/pessoal" ]
+conferir "caso 12: recurso simbólico e estados preservados" python3 testes/teclado-waybar.py
 
 if ((falhas)); then
   echo "$falhas teste(s) da barra falharam"

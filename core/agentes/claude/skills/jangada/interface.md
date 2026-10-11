@@ -7,6 +7,15 @@ links de compatibilidade e continuam sendo os usados pelo código.
 
 ## Waybar
 
+- Com Breeze Icons 6.30.0 e GTK 3.24.52, o teclado simbólico de 32px
+  contém um retângulo transparente que a recoloração do GTK preenche.
+  Waybar 0.15.0 solicita 32px para `icon-size=16` na escala 2;
+  o recurso de 16px não contém esse fundo. `jangada-barra` sobrepõe somente
+  esse nome e tamanho, mantendo nomes de estados e imagens textuais.
+  `tray.icons` seleciona por aplicativo nessa versão, sem distinguir estados
+  do Fcitx5. Identifique o item por D-Bus antes de atribuir o defeito a ele.
+  Evidência, limites e roteiro gráfico em `docs/teclado-waybar.md`.
+
 - O módulo nativo `mpris` fica fora das listas de módulos por padrão.
   Na Waybar 0.15.0, quedas locais em 22/09 e 01/10/2026 passaram por
   `Gtk::Widget::set_visible` e `libplayerctl`, semelhantes ao relato
