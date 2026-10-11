@@ -358,7 +358,7 @@ resultado.
 ## 4. SESSAO.json
 
 - **Caminho:** `$JANGADA_ESTADO/agentes/SESSAO.json`.
-- **Quem escreve:** `bin/jangada-agente:377` a `:390` cria;
+- **Quem escreve:** `bin/jangada-agente:499` a `:516` cria;
   `bin/jangada-hook-claude` (linha 82), `bin/jangada-hook-agy` e
   `bin/jangada-hook-codex` atualizam `estado`, `mensagem`, `atualizado` e
   `conversa`;
@@ -373,7 +373,7 @@ resultado.
    "desde": "2026-09-26T18:01:48-03:00", "atualizado": "2026-09-26T23:41:38-03:00",
    "inicio": "fbaec5e...", "revisor": "agy",
    "conversa": "bf9108eb-a715-46b6-8a8f-0b090376baa5", "validacao": "r1: APROVADO (agy)",
-   "delegar": "agy"}
+   "delegar": "agy", "coordenador": "dono"}
   ```
 
 - **Campos:** `sessao`, `dir`, `raiz`, `worktree`, `ramo`, `base`,
@@ -383,7 +383,8 @@ resultado.
   `jangada-projeto sessao-iniciar`), e quando houver `tarefa`, `perfil`,
   `atividade` e `tarefa_id` (vínculos dados por `--atividade` e
   `--tarefa-id`), `inicio` (commit),
-  `revisor`, `conversa`, `validacao`, `delegar` (sempre gravado) e
+  `revisor`, `conversa`, `validacao`, `delegar` (sempre gravado),
+  `coordenador` (sempre gravado) e
   `pid` (só o antigo par; nenhum script grava hoje, e o
   `jangada-agente-fim` não o lê nem mata processo por ele).
 - `jangada-agente-fim` (função `conferir_estado`) recusa, sem alterar nada,
@@ -399,6 +400,11 @@ resultado.
   `isolar`: recompõe o comando a partir de `agente`, `dir`, `perfil`,
   `conversa` e `revisor` validados, e só `JANGADA_AGENTE_ISOLAR=0` na
   configuração tira o isolamento.
+- `coordenador` é declarado na abertura por `--coordenador` do
+  `jangada-agente`. Sem a opção, vale `JANGADA_COORDENADOR`; sem os dois,
+  vale `"dono"`. Hooks e `jangada-validar` não o alteram. Serve só para
+  exibição na Central e no painel: nenhuma permissão, revisão ou integração
+  depende dele.
 - `conversa` é o `sessionId` do Claude (nome do `.jsonl`) ou o
   `conversationId` do agy (nome do `.db`). É o único lugar que liga a sessão
   do jangada à conversa.
