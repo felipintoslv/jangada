@@ -40,6 +40,10 @@ nomes() { find "$1" -mindepth 1 -maxdepth 1 -printf '%f\n' 2>/dev/null | sort | 
 todas="$(find "$origem/" -mindepth 2 -maxdepth 2 -name SKILL.md -printf '%h\n' | sed 's#.*/##' | sort | paste -sd,)"
 
 conferir "coordenador: no máximo 120 linhas" [ "$(wc -l <"$origem/coordenador/SKILL.md")" -le 120 ]
+conferir "coordenador: o comando de abertura declara quem coordena" \
+  grep -q '^jangada-agente --janela --coordenador VOCE ' "$origem/coordenador/SKILL.md"
+conferir "coordenador: o nome declarado é claude ou codex" \
+  grep -q '`VOCE` é `claude` ou `codex`' "$origem/coordenador/SKILL.md"
 conferir "coordenador: sem arquivo auxiliar" [ "$(nomes "$origem/coordenador")" = SKILL.md ]
 
 instalar JANGADA_SIMULAR=1 -- 'ligar_skill_claude; ligar_skill_agy; ligar_skill_codex'

@@ -51,6 +51,13 @@ até a skill ser chamada.
 - Codex: `$coordenador` na mensagem, ou o mesmo pedido em texto. Conferido
   no Codex 0.162.1, que lê `~/.codex/skills/coordenador/SKILL.md` pelo link.
 
+Ao abrir uma tarefa, a skill passa `--coordenador claude` ou
+`--coordenador codex` ao `jangada-agente`, que grava o nome no campo
+`coordenador` do registro da sessão. Sem a opção, vale `JANGADA_COORDENADOR`
+e, sem ela, "dono"; registro sem o campo é lido como "dono". O nome é só o
+que foi declarado: a Central de Tarefas e o grafo do painel o mostram ao lado
+do autor e do revisor, e ele não muda nenhuma permissão.
+
 O estado entre conversas fica em `.jangada/coordenacao.md`, na raiz do
 projeto e fora do controle de versão.
 

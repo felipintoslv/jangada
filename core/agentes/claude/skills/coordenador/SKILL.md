@@ -42,9 +42,10 @@ Grave o pedido num arquivo e passe por `--prompt-arquivo`. Ele traz:
 ## Abrir
 
 ```
-jangada-agente --janela --projeto PASTA --nome NOME --perfil PERFIL --prompt-arquivo ARQ
+jangada-agente --janela --coordenador VOCE --projeto PASTA --nome NOME --perfil PERFIL --prompt-arquivo ARQ
 ```
 
+- `VOCE` é `claude` ou `codex`, o agente que coordena; a Central e o painel mostram.
 - Perfis: `claude-codex` (Claude escreve, Codex revisa) e `codex-claude`
   (Codex escreve, Claude revisa). Escolha olhando a cota de cada provedor.
 - Com o Codex como autor, o dono precisa aprovar na janela dele os commits, o
@@ -83,9 +84,8 @@ apresente o resultado e espere.
 
 ## O que é sempre do dono
 
-Assinar, enviar ao remoto, instalar ou atualizar, e qualquer afrouxamento de
-proteção. Ao passar comandos ao dono, ponha um por bloco e diga o que esperar
-antes do seguinte.
+Assinar, enviar ao remoto, instalar ou atualizar e afrouxar qualquer proteção.
+Passe comandos ao dono um por bloco e diga o que esperar antes do seguinte.
 
 ## Estado entre conversas
 
