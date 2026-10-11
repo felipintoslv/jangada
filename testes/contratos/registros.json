@@ -95,6 +95,7 @@
       "atualizado": {"tipo": ["data"], "obrigatorio": true},
       "execucao": {"tipo": ["texto"], "obrigatorio": true},
       "delegar": {"tipo": ["texto"], "obrigatorio": true},
+      "coordenador": {"tipo": ["texto"], "obrigatorio": true},
       "tarefa": {"tipo": ["texto"], "obrigatorio": false},
       "perfil": {"tipo": ["texto"], "obrigatorio": false},
       "atividade": {"tipo": ["texto"], "obrigatorio": false},

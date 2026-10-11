@@ -265,8 +265,19 @@ class Gerador:
         """SESSAO.json criado pelo jangada-agente (seção 4)."""
         self.rodar(self.comando('jangada-agente'), '--agente', 'claude', '--revisor', 'agy',
                    '--perfil', 'claude-codex', '--atividade', 'atv-1', '--tarefa-id', 'tarefa-1',
+                   '--coordenador', 'claude',
                    '--projeto', self.projeto, '--nome', 'tarefa', '--prompt', 'tarefa de teste')
         return self.sessao()
+
+    def coordenador_de(self, nome, **variaveis):
+        """Coordenador gravado numa sessão aberta sem a opção --coordenador."""
+        # Pasta própria para o tmux falso, que só conhece uma sessão por pasta.
+        falso = self.tmp / f'falso-{nome}'
+        falso.mkdir()
+        self.rodar(self.comando('jangada-agente'), '--agente', 'claude', '--projeto', self.projeto,
+                   '--nome', nome, '--prompt', 'tarefa de teste', FALSO_DIR=str(falso), **variaveis)
+        arquivo = self.estado / 'agentes' / f'projeto--{nome}.json'
+        return json.loads(arquivo.read_text(encoding='utf-8')).get('coordenador') if arquivo.is_file() else None
 
     def hooks(self):
         """eventos-agentes.jsonl (seção 8) e os campos que os hooks põem no SESSAO.json."""
@@ -362,6 +373,11 @@ def main():
                  {campo: (registros['SESSAO.json'][0][1] or {}).get(campo)
                   for campo in ('perfil', 'atividade', 'tarefa_id')}
                  == {'perfil': 'claude-codex', 'atividade': 'atv-1', 'tarefa_id': 'tarefa-1'})
+        conferir('o --coordenador fica no SESSAO.json e sobrevive aos hooks e ao jangada-validar',
+                 [(registro or {}).get('coordenador') for _, registro in registros['SESSAO.json']] == ['claude'] * 3)
+        conferir('sem --coordenador, o SESSAO.json diz "dono"', gerador.coordenador_de('sem-opcao') == 'dono')
+        conferir('JANGADA_COORDENADOR vale como a opção',
+                 gerador.coordenador_de('pela-variavel', JANGADA_COORDENADOR='codex') == 'codex')
         conferir('os hooks e a troca de foco gravam seis eventos',
                  [e.get('estado') for _, e in registros['eventos-agentes.jsonl']]
                  == ['inicio', 'trabalhando', 'subagente-inicio', 'subagente-fim', 'aguardando', 'foco'],
