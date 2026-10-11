@@ -40,8 +40,10 @@ mas registra a aprovação como `sujo`, sem avançar o ponto da próxima entrega
 
 A skill `coordenador` define o papel da sessão que conversa com o dono,
 transforma o pedido em tarefas, acompanha e confere a entrega antes de
-integrar. Ela vale para qualquer projeto e roda numa sessão comum, fora do
-isolamento, aberta na pasta do projeto. O texto fica em
+integrar. O coordenador pode ser o Claude ou o Codex. Ela vale para qualquer
+projeto e roda numa sessão comum, fora do isolamento, aberta na pasta do
+projeto. No Codex, abrir tarefa, ler o estado, verificar e integrar passam
+pela aprovação do dono na tela. O texto fica em
 `default/claude/skills/coordenador/SKILL.md`; só a descrição entra no contexto
 até a skill ser chamada.
 
