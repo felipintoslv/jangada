@@ -615,8 +615,14 @@ arvore_rede <- function(ramos) {
     arestas[[length(arestas) + 1]] <- data.frame(from = pasta, to = ramo)
     for (f in r$filhos) {
       id <- paste0("f:", f$origem, ":", f$id, ":", length(nos))
-      grupo <- if (isTRUE(f$recusa)) "recusa" else f$origem
-      nos[[id]] <- data.frame(id = id, label = if (is.null(f$papel)) "?" else f$papel, group = grupo,
+      grupo <- if (isTRUE(f$recusa)) "recusa" else if (is.null(f$origem)) "?" else f$origem
+      agente <- if (identical(f$origem, "delegacao")) f$destino else f$origem
+      if (identical(agente, "codex-economico")) agente <- "codex"
+      rotulo <- if (is.null(f$papel) || !nzchar(f$papel)) "?" else f$papel
+      if (rotulo != "?" && length(agente) == 1 && agente %in% c("agy", "local", "claude", "codex")) {
+        rotulo <- paste(rotulo, agente, sep = " - ")
+      }
+      nos[[id]] <- data.frame(id = id, label = rotulo, group = grupo,
         value = 1 + log10(1 + num_ou_na(if (is.null(f$tokens)) 0 else f$tokens)) / 2,
         title = paste0(esc(f$origem), " ", esc(f$id),
                        if (is.null(f$destino)) "" else paste0("<br>destino ", esc(f$destino)),
