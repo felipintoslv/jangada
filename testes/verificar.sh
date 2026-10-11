@@ -78,6 +78,7 @@ for d in default/claude/skills/*/; do
   grep -qx "name: ${d##*/}" <<<"$cab" || falha "skill ${d##*/}: sem name igual à pasta"
   grep -q '^description:' <<<"$cab" || falha "skill ${d##*/}: sem description"
 done
+testes/skills.sh || falha "testes/skills.sh"
 
 # O tema de gráficos tem um arquivo por linguagem; as cores não podem divergir.
 cores_do_tema() { grep -o '^ *"\?[a-z]\+"\? *[=:] *"#[0-9A-Fa-f]\{6\}"' "$1" | tr -d ' "' | tr '=' ':' | sort; }
