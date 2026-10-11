@@ -27,6 +27,9 @@ class PainelLocal(unittest.TestCase):
         self.assertEqual(ind["fracao_agy"]["por_papel"]["leitor"], {"claude": 0, "agy": 0, "local": 1})
         self.assertEqual(ind["local"]["tokens_entrada"], 120)
         self.assertEqual(ind["arvore"][0]["filhos"][0]["tokens"], 165)
+        filho = json.loads(json.dumps(ind))["arvore"][0]["filhos"][0]
+        self.assertEqual(filho["origem"], "delegacao")
+        self.assertEqual(filho["destino"], "local")
         self.assertEqual(ind["qualidade"]["por_destino"]["local"]["total"], 1)
         self.assertEqual(ind["qualidade"]["delegacoes"]["total"], 1)
 
@@ -58,6 +61,7 @@ class PainelLocal(unittest.TestCase):
         self.assertEqual(indicadores['fracao_agy']['fracao_codex_economico_pct'], 100)
         self.assertEqual(indicadores['fracao_agy']['por_papel']['leitor']['codex-economico'], 1)
         self.assertEqual(indicadores['arvore'][0]['filhos'][0]['tokens'], 22)
+        self.assertEqual(indicadores['arvore'][0]['filhos'][0]['destino'], 'codex-economico')
         self.assertEqual(entrega['codex_economico']['n'], 1)
         self.assertEqual(entrega['n'], 1)
         invalida = sub.delegacao_limpa(dict(tokens_codex_entrada=True, tokens_codex_saida=float('nan')))

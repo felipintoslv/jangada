@@ -13,6 +13,7 @@ falha() { printf 'FALHA %s\n' "$*"; falhas=$((falhas + 1)); }
 conferir() { local d="$1"; shift; if "$@"; then ok "$d"; else falha "$d"; fi; }
 
 export PYTHONDONTWRITEBYTECODE=1
+export JANGADA_PATH="$repo_jangada"
 export JANGADA_CORE_PY="$repo_jangada/default"
 
 if ! python3 -c 'import pyarrow' 2>/dev/null; then
@@ -292,6 +293,33 @@ if ! command -v Rscript >/dev/null 2>&1 \
   || ! Rscript -e 'for (p in c("shiny", "bslib", "bsicons", "plotly", "visNetwork", "igraph", "DT", "arrow", "jsonlite", "htmltools")) if (!requireNamespace(p, quietly = TRUE)) quit(status = 1)' 2>/dev/null; then
   echo "R ou pacotes do app ausentes; caso 5 ignorado"
 else
+  conferir "caso 5: a árvore mostra papel e agente sem alterar recusas" \
+    Rscript -e '
+      source("monitor/painel/indicadores.R")
+      filhos <- list(
+        list(origem = "delegacao", destino = "agy", papel = "leitor"),
+        list(origem = "delegacao", destino = "local", papel = "redator", modelo = "qwen3:4b"),
+        list(origem = "claude", destino = "agy", papel = "pesquisador"),
+        list(origem = "delegacao", destino = "agy", papel = "leitor", recusa = TRUE),
+        list(origem = "delegacao", destino = "agy"),
+        list(origem = "delegacao", destino = "codex-economico", papel = "explorador"),
+        list(origem = "codex", papel = "explorador"),
+        list(origem = "agy", papel = "pesquisador"),
+        list(origem = "delegacao", destino = "claude", papel = "pesquisador"),
+        list(origem = "delegacao", papel = "leitor"),
+        list(papel = "leitor"),
+        list(origem = "desconhecida", papel = "leitor"),
+        list(origem = "claude", papel = ""))
+      a <- arvore_rede(list(list(pasta = "/p", conversa = "c:1", n = length(filhos),
+        tokens_claude = 0, passos_agy = 0, filhos = filhos)))
+      nos <- a$nos[startsWith(a$nos$id, "f:"), ]
+      stopifnot(identical(nos$label, c("leitor - agy", "redator - local", "pesquisador - claude",
+        "leitor - agy", "?", "explorador - codex", "explorador - codex", "pesquisador - agy",
+        "pesquisador - claude", "leitor", "leitor", "leitor", "?")),
+        nos$group[4] == "recusa", sum(nos$group == "recusa") == 1,
+        nrow(nos) == length(filhos), nrow(a$arestas) == length(filhos) + 1,
+        grepl("modelo qwen3:4b", nos$title[2], fixed = TRUE))
+    '
   conferir "caso 5: indicadores em R sobre o cache" \
     [ "$(cd default/painel && Rscript -e '
       source("indicadores.R")
@@ -375,9 +403,10 @@ print(json.dumps(coletor.validacoes(), default=str))' | Rscript -e '
       shiny::testServer(shiny::shinyAppDir("."), {
         session$setInputs(periodo = c(Sys.Date() - 30, Sys.Date()), projeto = NULL, agente = NULL, par = NULL)
         cat(output$e_fracao, output$e_recusas, output$e_desvios, grepl("recusa", output$e_arvore),
-            grepl("com agy", output$e_tokens))
+            grepl("com agy", output$e_tokens), grepl("explorador - agy", output$e_arvore, fixed = TRUE),
+            grepl("leitor - agy", output$e_arvore, fixed = TRUE))
       })
-    ' "$cache" 2>/dev/null)" = "50% 50% 3 TRUE TRUE" ]
+    ' "$cache" 2>/dev/null)" = "50% 50% 3 TRUE TRUE TRUE TRUE" ]
   # Antes da primeira coleta com o módulo não há subagentes.json.
   cp -r "$cache" "$tmp/cache-sem-sub" && rm -f "$tmp/cache-sem-sub/subagentes.json"
   conferir "caso 5: a aba de subagentes sem subagentes.json" \

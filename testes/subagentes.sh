@@ -257,6 +257,12 @@ conferir "indicadores 7: desvios" jqok -e '.desvios | (.edicoes | length) == 2 a
   and (.generico | length) == 3 and ([.claude_sem_recusa[].id] == ["a1"])' "$tmp/ind.json"
 conferir "indicadores 8: árvore por pasta e conversa" jqok -e '[.arvore[] | .conversa] | sort
   == ["agy:c1", "claude:sess1", "delegar:s"]' "$tmp/ind.json"
+conferir "indicadores 8: origem e destino dos filhos chegam ao JSON" jqok -e '
+  [.arvore[] | .filhos[]] as $filhos
+  | ([$filhos[] | select(.origem == "claude")] | length) == 3
+    and ([$filhos[] | select(.origem == "delegacao") | .destino] == ["agy", "agy"])
+    and ([$filhos[] | select(.recusa) | {origem, destino, papel}]
+      == [{origem: "delegacao", destino: "agy", papel: "leitor"}])' "$tmp/ind.json"
 subagentes >"$tmp/ind.txt"
 conferir "indicadores: texto para o terminal" grep -q "^7. Desvios do protocolo" "$tmp/ind.txt"
 
