@@ -517,7 +517,8 @@ def sessoes(pasta=None):
 def sessao_do_ramo(conversa, sessoes):
     """Sessão a que o ramo da árvore pertence, ou None. Delegação traz o nome
     da sessão; conversa do Claude só entra pela conversa gravada no registro.
-    A pasta não serve de vínculo: outra conversa e outra sessão podem usá-la."""
+    A pasta não serve de vínculo: outra conversa e outra sessão podem usá-la.
+    O ramo "delegar-anterior" é de outra tarefa com o mesmo nome."""
     origem, _, nome = conversa.partition(":")
     if origem == "delegar":
         return nome if nome != "?" else None
@@ -685,8 +686,13 @@ def resumir(subs, dels, ents, agora, sessoes=(), pareceres=()):
         ramo.append({"origem": x["origem"], "id": x["id"], "papel": x["papel"] or x["tipo"],
                      "profundidade": x["profundidade"], "tokens": x["tokens"], "passos": x["passos"],
                      "retorno_tokens": x["retorno_tokens"], "razao": x["razao"]})
+    abertura = {s["sessao"]: instante(s["desde"]) for s in sessoes}
     for d in dels:
-        ramo = arvore.setdefault(d.get("pasta") or "?", {}).setdefault(f'delegar:{d.get("sessao") or "?"}', [])
+        # O nome da sessão se repete: delegação anterior à abertura da sessão
+        # de hoje, ou sem data, fica num ramo à parte, fora da tarefa.
+        desde = abertura.get(d.get("sessao"))
+        origem = "delegar-anterior" if desde is not None and (instante(d.get("data")) or 0) < desde else "delegar"
+        ramo = arvore.setdefault(d.get("pasta") or "?", {}).setdefault(f'{origem}:{d.get("sessao") or "?"}', [])
         ramo.append({"origem": "delegacao", "id": d.get("conversa") or "", "papel": d.get("papel"),
                      "profundidade": 1, "tokens": d.get("tokens_agy"), "passos": d.get("passos"),
                      "retorno_tokens": d.get("tokens_retorno"), "razao": None, "recusa": d.get("recusa")})

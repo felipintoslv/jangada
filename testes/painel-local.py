@@ -206,6 +206,18 @@ else:
                          {"delegar:nova": ["vazia", "vazia"], "delegar:fechada": ["concluida"]})
         self.assertEqual(sub.resumir([], dels, [], agora)["tarefas"][0]["coordenador"], None)
 
+    def test_delegacao_de_outra_execucao_do_mesmo_nome_fica_fora_da_tarefa(self):
+        sessoes = [dict(sessao="t", pasta="/p", coordenador="claude", autor="codex", revisor="",
+                        desde="2026-10-05T10:00:00Z", conversa="")]
+        dels = [sub.delegacao_limpa(dict(sessao="t", pasta="/p", papel=papel, destino="agy", recusa=False,
+                                         palavras=9, data=data))
+                for papel, data in (("leitor", "2026-10-04T10:00:00Z"), ("auditor", "2026-10-05T11:00:00Z"),
+                                    ("redator", None))]
+        ind = sub.resumir([], dels, [], sub.dt.datetime.now().astimezone(), sessoes)
+        self.assertEqual({r["conversa"]: (r["sessao"], [f["papel"] for f in r["filhos"]]) for r in ind["arvore"]},
+                         {"delegar-anterior:t": (None, ["leitor", "redator"]), "delegar:t": ("t", ["auditor"])})
+        self.assertEqual([t["sessao"] for t in ind["tarefas"]], ["t"])
+
     def test_ramo_so_entra_na_tarefa_com_vinculo(self):
         # Duas sessões na mesma pasta e uma conversa anterior a elas.
         sessoes = [dict(sessao="um", pasta="/p", conversa="c-um"), dict(sessao="dois", pasta="/p", conversa="")]
