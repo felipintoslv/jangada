@@ -38,9 +38,20 @@ atualização pelo fluxo habitual do `jangada-update`.
 `bin/jangada-agente` chama `bin/jangada-codex` dentro do
 `bin/jangada-isolar`. O adaptador acrescenta o protocolo por
 `developer_instructions`, mantém `workspace-write`, pede permissões ao
-usuário e usa `--no-daemon`. A pasta de estado é permitida ao isolamento
-interno do Codex; as montagens do bubblewrap continuam limitando a escrita
-aos arquivos de estado liberados pela Jangada.
+usuário e usa `--no-daemon`.
+
+Do estado da Jangada, a proteção interna do Codex recebe como raiz gravável
+só `$JANGADA_ESTADO/agentes` (`--add-dir`), onde ficam o estado da sessão, o
+protocolo e os pareceres. A raiz de `$JANGADA_ESTADO` não entra: ela é
+somente leitura no bubblewrap, e o Codex precisa criar pontos de montagem
+(`.git`, `.codex`, `.agents`, `.aws`) dentro de cada raiz gravável antes de rodar
+qualquer comando. Esses pontos aparecem em `agentes/` durante o comando e
+somem no fim; nada na Jangada lista entradas ocultas dessa pasta.
+`validar.jsonl`, `eventos-agentes.jsonl`, `delegacoes.jsonl` e `local.lock`
+seguem graváveis no bubblewrap, mas não são raízes do Codex, que só aceita
+pastas. Um comando que grave neles, na pasta do worktree dentro do `.git`
+comum (commit) ou que use a rede (`jangada-validar`, `jangada-delegar`) ainda
+passa pelo pedido de permissão do Codex.
 
 O Codex exige isolamento, inclusive com `--sem-isolar` ou
 `JANGADA_AGENTE_ISOLAR=0`. A chamada direta ao adaptador sem isolamento é

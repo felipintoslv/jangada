@@ -65,6 +65,15 @@ leitura. A pasta original não pode ficar gravável: seus hooks, regras e
 plugins seriam executados fora do isolamento. `CODEX_SQLITE_HOME` aponta
 para a pasta montada, sem mudar `CODEX_HOME`.
 
+A proteção interna do Codex (bwrap aninhado) cria `.git`, `.codex`,
+`.agents` e `.aws` como pontos de montagem dentro de cada raiz gravável e
+os remove ao sair. Raiz somente leitura no `jangada-isolar` faz todo
+comando falhar com `bwrap: Can't create file ...: Read-only file system`;
+arquivo como raiz derruba o CLI. Por isso `--add-dir` recebe só
+`$JANGADA_ESTADO/agentes`. `codex sandbox -c 'sandbox_mode="workspace-write"'
+-c 'sandbox_workspace_write.writable_roots=[...]' -- COMANDO` reproduz a
+montagem sem pedido ao modelo.
+
 Na restauração, UUID vai por `resume UUID`. Sem UUID, `resume --last` só
 vale no worktree próprio; direto no projeto abre conversa nova.
 O revisor Codex recebe só o pedido completo numa pasta vazia, sem terminal,
