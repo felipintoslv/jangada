@@ -88,9 +88,13 @@ if ((!confia)); then
 fi
 chave_pasta="$(jq -Rn --arg p "$pasta_codex" '$p')"
 
+# Raiz gravável extra: só a pasta das sessões. A proteção interna do Codex
+# cria pontos de montagem (.git, .codex, .agents) dentro de cada raiz, e a
+# raiz do estado é somente leitura no isolamento: com ela todo comando falha.
+# Os arquivos graváveis do estado não entram: o Codex só aceita pasta.
 args=("$@" --no-daemon --sandbox workspace-write --ask-for-approval on-request
       -c "projects={$chave_pasta={trust_level=\"trusted\"}}"
-      --add-dir "$JANGADA_ESTADO" -c 'approvals_reviewer="user"'
+      --add-dir "$JANGADA_ESTADO/agentes" -c 'approvals_reviewer="user"'
       -c "log_dir=$(jq -Rn --arg p "${CODEX_HOME:-$HOME/.codex}/log" '$p')")
 if [[ -n "$protocolo" ]]; then
   [[ -r "$protocolo" ]] || { echo "jangada-codex: protocolo ausente" >&2; exit 1; }
