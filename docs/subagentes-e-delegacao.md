@@ -1043,6 +1043,9 @@ comprova independência ou qualidade real das respostas.
   subagentes. O `bin/jangada-subagentes` mostra os indicadores, o resumo de
   uma entrega (`--entrega`, que o `jangada-validar` grava no campo
   `subagentes` do `validar.jsonl`) e os registros crus (`--registros`).
+  No painel, cada nó filho da árvore hierárquica mostra o papel e o agente,
+  separados por ` - `; nas recusas, mostra o destino tentado quando registrado.
+  O modelo permanece na dica ao passar o mouse.
 
 Os campos de cada arquivo estão em [registros](registros.md).
 
