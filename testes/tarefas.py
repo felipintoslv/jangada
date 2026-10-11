@@ -749,6 +749,18 @@ class Interface(unittest.TestCase):
         self.assertFalse(self.janela.abrir.isEnabled())
         self.assertIn('Confira o caminho', self.janela.status.text())
 
+    def test_detalhe_mostra_coordenador_autor_e_revisor(self):
+        # Registro antigo, sem os campos: o coordenador é o dono.
+        detalhe = self.janela.detalhes.toPlainText()
+        self.assertIn('Coordenador: dono\nAutor: codex\nRevisor: Não informado\n', detalhe)
+        (self.estado / 'projeto--um.json').write_text(json.dumps(
+            {'agente': 'codex', 'coordenador': 'claude', 'revisor': 'agy', 'raiz': '/tmp/projeto'}))
+        sessao = ler_lista(self.lista.read_text(), self.estado)['projeto--um']
+        self.assertEqual((sessao.coordenador, sessao.agente, sessao.revisor), ('claude', 'codex', 'agy'))
+        self.janela.atualizar()
+        self.esperar_consulta()
+        self.assertIn('Coordenador: claude\nAutor: codex\nRevisor: agy\n', self.janela.detalhes.toPlainText())
+
     def test_registro_invalido_e_link(self):
         (self.estado / 'ruim.json').write_text('não é JSON')
         (self.estado / 'link.json').symlink_to(self.estado / 'projeto--um.json')

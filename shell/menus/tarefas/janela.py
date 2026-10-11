@@ -578,7 +578,7 @@ class Janela(QMainWindow):
         self.linha_tempo.setPlainText('\n\n'.join(self.eventos.get(s.nome, [])))
         self.linha_tempo.verticalScrollBar().setValue(self.linha_tempo.verticalScrollBar().maximum())
         self.abrir.setText('Retomar no terminal' if s.estado == 'interrompido' else 'Abrir terminal')
-        self.detalhes.setPlainText(f"Estado: {ROTULOS.get(estado, estado)}\nAgente: {s.agente}\nProjeto: {s.projeto}\n\nSessão\n{s.nome}\n\nTarefa\n{s.tarefa or 'Não informada'}\n\nRamo\n{s.ramo or 'Não informado'}\n\nDiretório\n{s.dir or 'Não informado'}\n\nÚltima atualização\n{s.atualizado or 'Não informada'}\n\nMensagem da sessão\n{s.mensagem or 'Sem mensagem'}")
+        self.detalhes.setPlainText(f"Estado: {ROTULOS.get(estado, estado)}\nCoordenador: {s.coordenador}\nAutor: {s.agente}\nRevisor: {s.revisor}\nProjeto: {s.projeto}\n\nSessão\n{s.nome}\n\nTarefa\n{s.tarefa or 'Não informada'}\n\nRamo\n{s.ramo or 'Não informado'}\n\nDiretório\n{s.dir or 'Não informado'}\n\nÚltima atualização\n{s.atualizado or 'Não informada'}\n\nMensagem da sessão\n{s.mensagem or 'Sem mensagem'}")
         if not self.real:
             self.exibir_atividade(s.mensagem or 'Sem atividade registrada.', s.nome)
         else:
