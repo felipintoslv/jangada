@@ -12,6 +12,7 @@ default/hypr/jangada.lua
 default/hypr/ajudantes.lua
 default/hypr/ambiente.lua
 default/hypr/aparencia.lua
+default/hypr/vidro.lua
 default/hypr/entrada.lua
 default/hypr/regras.lua
 default/hypr/atalhos.lua

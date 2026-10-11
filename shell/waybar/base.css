@@ -25,7 +25,7 @@ window#waybar {
 .modules-left,
 .modules-center,
 .modules-right {
-  background: alpha(@superficie, 0.92);
+  background: alpha(@superficie, 0.88);
   border: 1px solid alpha(@texto, 0.12);
   border-radius: 8px;
   padding: 0 4px;
@@ -58,7 +58,7 @@ window#waybar {
 
 #custom-agentes.aguardando {
   color: @texto_primario;
-  background: @atencao;
+  background: @primaria;
   font-weight: bold;
 }
 
@@ -208,4 +208,15 @@ window#waybar.vertical .modules-right {
   padding: 4px 0;
 }
 
-#custom-agentes.erro, #custom-agentes.interrompido { color: @texto_primario; background: @atencao; }
+#custom-agentes.erro, #custom-agentes.interrompido { color: @texto_primario; background: @primaria; }
+
+#workspaces button.urgent {
+  color: @texto_primario;
+  background: @primaria;
+  font-weight: bold;
+}
+
+#workspaces button:hover {
+  color: @texto_primario;
+  background: @primaria;
+}

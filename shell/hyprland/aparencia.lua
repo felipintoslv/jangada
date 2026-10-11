@@ -23,8 +23,8 @@ hl.config({
 
   decoration = {
     rounding = 8,
-    active_opacity = 1.0,
-    inactive_opacity = 0.97,
+    active_opacity = j.conf.JANGADA_VIDRO == "0" and 1.0 or 0.88,
+    inactive_opacity = j.conf.JANGADA_VIDRO == "0" and 1.0 or 0.78,
     shadow = {
       enabled = true,
       range = 6,
@@ -32,9 +32,16 @@ hl.config({
       color = cores.sombra,
     },
     blur = {
-      enabled = true,
-      size = 4,
-      passes = 2,
+      enabled = j.conf.JANGADA_VIDRO ~= "0",
+      size = 10,
+      passes = 3,
+      noise = 0.02,
+      contrast = 1.0,
+      brightness = 0.6,
+      vibrancy = 0.2,
+      vibrancy_darkness = 0.5,
+      popups = true,
+      ignore_opacity = true,
     },
   },
 
@@ -57,3 +64,5 @@ hl.animation({ leaf = "global", enabled = true, speed = 8, bezier = "default" })
 hl.animation({ leaf = "windows", enabled = true, speed = 4, bezier = "suave", style = "popin 90%" })
 hl.animation({ leaf = "fade", enabled = true, speed = 3, bezier = "suave" })
 hl.animation({ leaf = "workspaces", enabled = true, speed = 3, bezier = "suave", style = "slide" })
+
+require("default.hypr.vidro")

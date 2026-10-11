@@ -60,4 +60,5 @@ jangada-update
 jangada-validar
 jangada-verificar
 jangada-versao
+jangada-vidro
 jangada-worktree-preparar

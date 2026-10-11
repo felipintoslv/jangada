@@ -11,3 +11,8 @@
 --
 -- Abrir um programa ao iniciar:
 -- j.ao_iniciar("nm-applet")
+--
+-- Ajustar o vidro fosco (JANGADA_VIDRO=1 em jangada.conf):
+-- hl.config({ decoration = { active_opacity = 0.94, inactive_opacity = 0.86,
+--   blur = { size = 7, passes = 2 } } })
+-- Para desligar janelas, barra, menus e notificações: JANGADA_VIDRO=0 e jangada-vidro.
