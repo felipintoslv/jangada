@@ -49,9 +49,20 @@ qualquer comando. Esses pontos aparecem em `agentes/` durante o comando e
 somem no fim; nada na Jangada lista entradas ocultas dessa pasta.
 `validar.jsonl`, `eventos-agentes.jsonl`, `delegacoes.jsonl` e `local.lock`
 seguem graváveis no bubblewrap, mas não são raízes do Codex, que só aceita
-pastas. Um comando que grave neles, na pasta do worktree dentro do `.git`
-comum (commit) ou que use a rede (`jangada-validar`, `jangada-delegar`) ainda
-passa pelo pedido de permissão do Codex.
+pastas.
+
+Continuam passando pelo pedido de permissão do Codex, porque a proteção
+interna dele não libera a rede nem escrita fora da pasta de trabalho, do
+`/tmp` e de `agentes/`:
+
+- `git commit`, que grava na pasta do worktree dentro do `.git` comum;
+- `jangada-validar`, que chama o revisor pela rede e grava no login dele
+  (`~/.claude` ou `~/.codex`) e em `validar.jsonl`;
+- `jangada-delegar`, que usa a rede (agy ou Ollama) e grava em
+  `~/.gemini/antigravity-cli`, `delegacoes.jsonl` e `local.lock`.
+
+Aprovado o pedido, o comando roda só com as montagens do bubblewrap, que já
+liberam esses caminhos.
 
 O Codex exige isolamento, inclusive com `--sem-isolar` ou
 `JANGADA_AGENTE_ISOLAR=0`. A chamada direta ao adaptador sem isolamento é
