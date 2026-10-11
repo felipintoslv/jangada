@@ -194,6 +194,13 @@ flowchart TD
 Em simulação a marca não é gravada: gravar faria a execução seguinte, a de
 verdade, pular uma migração que nunca foi aplicada.
 
+## Migração do vidro fosco
+
+`202610111800-vidro-fosco.sh` adapta fundos gerados que ainda correspondem
+aos modelos anteriores. Arquivos pessoais ficam intactos, sem recarga da
+sessão. A decisão, os limites e a verificação de repetibilidade estão em
+[vidro fosco](vidro-fosco.md#atualização-de-instalações-existentes).
+
 ## Testes
 
 | Arquivo | O que cobre |

@@ -35,6 +35,8 @@ hl = {
     registro.regras = registro.regras + 1
   end,
   layer_rule = function() end,
+  get_windows = function() return {} end,
+  get_config = function() return true end,
   curve = function() end,
   animation = function(t) assert(t.leaf, "animation sem leaf") end,
   gesture = function() end,

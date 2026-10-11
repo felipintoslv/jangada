@@ -62,6 +62,12 @@ if [[ -n "$lua_bin" ]]; then
   rm -rf "$tmp_cfg"
 fi
 
+passo "vidro fosco"
+if [[ -n "$lua_bin" ]]; then
+  "$lua_bin" testes/vidro-fosco.lua "$PWD" || falha "vidro fosco: eventos Lua"
+fi
+python3 testes/vidro-fosco.py || falha "vidro fosco: fundos e migração"
+
 passo "JSON"
 jq empty default/claude/hooks.json || falha "hooks.json"
 jq empty default/agy/hooks.json || falha "agy/hooks.json"

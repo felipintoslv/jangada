@@ -12,3 +12,8 @@ Regras:
    Hyprland que foi renomeada e a versão em que isso aconteceu).
 4. Numa instalação nova, todas as migrações existentes são marcadas como
    aplicadas (etapa `install/90-migracoes.sh`), porque os padrões já estão atualizados.
+
+`202610111800-vidro-fosco.sh` adapta apenas fundos dos modelos antigos
+intactos de Waybar, Fuzzel e Mako. Preserva arquivos personalizados e
+preferências; não regenera cores nem recarrega processos. Veja
+[vidro fosco](../docs/vidro-fosco.md#atualização-de-instalações-existentes).

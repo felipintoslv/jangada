@@ -77,3 +77,18 @@ então não testa GPU nem `AQ_DRM_DEVICES`; num monitor aninhado pequeno, janela
 maior que a tela fica com `x` negativo, e isso é o centro correto. Para
 pausar num laço, use `sleep` dentro de `timeout ... bash -c 'until ...'`, não
 `read -t`.
+
+## Vidro e suspensão de desfoque
+
+- `window.fullscreen` na API Lua é número, não booleano: 0 normal,
+  1 maximizado, 2 tela cheia, 3 ambos. Lua considera inclusive 0 verdadeiro.
+- `config.reloaded` acontece após aplicação dos ajustes pessoais. Fotografe
+  ali o valor efetivo se precisar suspender um recurso numa recarga.
+- `window.close` pode emitir enquanto a janela ainda aparece na consulta:
+  exclua seu endereço para não deixar o desfoque suspenso após fechar um jogo.
+- `decoration.blur.enabled=false` também suspende camadas, menus sobrepostos
+  e pré-cálculo do fundo, conforme `shouldBlur` em `Renderer.cpp` e `preRender`
+  em `OpenGL.cpp` do Hyprland 0.55. Não comprova liberação de memória de vídeo.
+- Uma regra `opacity="1"` multiplica a opacidade global. Para vídeo opaco,
+  use `"1 override 1 override 1 override"`; `force_rgbx` ignora alpha do cliente.
+- Detalhes e roteiro gráfico em [vidro fosco](../../../../../docs/vidro-fosco.md).

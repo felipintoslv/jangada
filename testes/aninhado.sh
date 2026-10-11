@@ -46,8 +46,11 @@ trap encerrar EXIT
   fi
 } >"$tmp/hyprland.lua"
 
+config_teste="${XDG_CONFIG_HOME:-$HOME/.config}"
+((usuario)) || config_teste="$tmp/config"
+
 antes="$(ls "$runtime/hypr" 2>/dev/null | sort)"
-env -u HYPRLAND_INSTANCE_SIGNATURE JANGADA_PATH="$repo" \
+env -u HYPRLAND_INSTANCE_SIGNATURE JANGADA_PATH="$repo" XDG_CONFIG_HOME="$config_teste" \
   setsid -f Hyprland --config "$tmp/hyprland.lua" >"$tmp/saida.log" 2>&1
 
 # A instância nova é a pasta que apareceu em $XDG_RUNTIME_DIR/hypr, pronta
@@ -74,7 +77,7 @@ if [[ -n "$erros" ]]; then
 else
   echo "ok    sem erros de configuração"
 fi
-n="$(HYPRLAND_INSTANCE_SIGNATURE="$sig" hyprctl binds -j 2>/dev/null | jq length 2>/dev/null || echo 0)"
+n="$(HYPRLAND_INSTANCE_SIGNATURE="$sig" hyprctl binds 2>/dev/null | awk '/^bind/ {n++} END {print n+0}')"
 if ((n > 0)); then
   echo "ok    $n atalhos registrados"
 else

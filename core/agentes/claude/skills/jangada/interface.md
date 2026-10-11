@@ -122,3 +122,16 @@ Depois de trocar cores ou papel de parede, rode `jangada-sddm aplicar`.
 - Ao herdar `shiny::MockShinySession` nos testes, confira `portable` e
   `lock_objects` do gerador. No Shiny instalado ambos são `FALSE`; o
   ambiente pai precisa ser o namespace do Shiny para resolver `ReactiveValues`.
+
+## Fundos do vidro fosco
+
+`jangada-vidro` altera alpha de fundos hexadecimais de Fuzzel e Mako e um
+bloco delimitado na folha pessoal da Waybar. Não regenera cores. A migração
+confere o conteúdo integral dos modelos antigos, além da marca de geração,
+para preservar personalizações. A marca sozinha não prova que ninguém editou.
+O desligamento ignora alpha próprio das janelas no compositor; não exige
+reescrever a configuração pessoal do Ghostty. Noctalia mantém seus ajustes.
+
+O Fuzzel usa `launcher` como espaço de nomes padrão, conforme
+`fuzzel.ini(5)`, não `fuzzel`. A regra de camada precisa casar com esse nome;
+se o usuário definir outro `namespace`, precisa ajustar também a regra Lua.

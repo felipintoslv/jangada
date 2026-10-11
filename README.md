@@ -132,6 +132,11 @@ O `jangada-sessao` define `AQ_DRM_DEVICES` antes de o compositor subir, escolhen
 
 O papel de parede aparece inteiro em todas as telas. Numa tela de proporção diferente da imagem, como um monitor 21:9 com uma figura 16:9, o `jangada-tema` gera uma versão com as medidas da tela (em `~/.cache/jangada/papel`) e a entrega ao swaybg e ao hyprlock; o tema de login faz a mesma conta em cada tela. `JANGADA_PAPEL_AJUSTE` escolhe como completar o espaço que sobra: `espelho` (padrão, reflete a borda da figura), `desfoque`, `cor` ou `cobrir` (o comportamento antigo, que corta a figura).
 
+O [vidro fosco](docs/vidro-fosco.md) é ligado por padrão para janelas e
+componentes. `JANGADA_VIDRO=0` em `jangada.conf`, seguido de `jangada-vidro`,
+desliga transparência e desfoque. Jogos identificados e tela cheia suspendem
+o desfoque; vídeos embutidos numa página não são detectados automaticamente.
+
 ## Tela de login (SDDM)
 
 `jangada-sddm aplicar` instala o tema `jangada` em `/usr/share/sddm/themes/jangada` e faz o SDDM ler as sessões de `/usr/local/share/jangada/sessoes`, que só contém o jangada. Os arquivos de sessão dos outros pacotes (Hyprland, niri, Plasma) não são movidos nem apagados; `jangada-sddm restaurar` remove `/etc/sddm.conf.d/zz-jangada.conf` e todas voltam a aparecer. O prefixo `zz-` faz o arquivo ser lido depois do `kde_settings.conf`, que de outro modo imporia o tema escolhido no Plasma.
