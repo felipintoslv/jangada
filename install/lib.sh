@@ -174,13 +174,19 @@ carregador_boot() {
 # relatorio-academico) em <pasta>/<nome>, apontando para o repositório
 # instalado: o jangada-update as atualiza junto com o resto. Um link antigo do
 # jangada (outro JANGADA_PATH) é trocado; uma pasta ou link alheio com o mesmo
-# nome fica como está, com aviso. Uso: ligar_skills <pasta> <agente>.
+# nome fica como está, com aviso. O filtro so:<nome> liga só essa skill e
+# menos:<nome> liga todas as outras.
+# Uso: ligar_skills <pasta> <agente> [filtro].
 ligar_skills() {
-  local pasta="$1" agente="$2" origem nome destino atual
+  local pasta="$1" agente="$2" filtro="${3:-}" origem nome destino atual
   for origem in "$JANGADA_PATH"/default/claude/skills/*/; do
     origem="${origem%/}"
     [[ -f "$origem/SKILL.md" ]] || continue
     nome="${origem##*/}"
+    case "$filtro" in
+      so:*) [[ "$nome" == "${filtro#so:}" ]] || continue ;;
+      menos:*) [[ "$nome" != "${filtro#menos:}" ]] || continue ;;
+    esac
     destino="$pasta/$nome"
     if [[ -L "$destino" ]]; then
       atual="$(readlink "$destino")"
@@ -207,8 +213,14 @@ ligar_skill_claude() { ligar_skills "$HOME/.claude/skills" "Claude Code"; }
 
 # Skills no Antigravity: ~/.gemini/config/skills/<nome>, a raiz global que o
 # agy percorre em toda conversa (a mesma pasta do hooks.json). O agy aceita o
-# link simbólico e o frontmatter do Claude Code como está.
-ligar_skill_agy() { ligar_skills "$HOME/.gemini/config/skills" "agy"; }
+# link simbólico e o frontmatter do Claude Code como está. A coordenador fica
+# de fora: o agy não abre sessão principal.
+ligar_skill_agy() { ligar_skills "$HOME/.gemini/config/skills" "agy" menos:coordenador; }
+
+# Skill coordenador no Codex: skills/coordenador na pasta do Codex (CODEX_HOME
+# ou ~/.codex). O Codex 0.162 segue o link simbólico e lê o mesmo SKILL.md,
+# com name e description no frontmatter. As demais skills não são ligadas.
+ligar_skill_codex() { ligar_skills "${CODEX_HOME:-$HOME/.codex}/skills" "Codex" so:coordenador; }
 
 # Liga os papéis de subagente do Claude Code (default/claude/agents/*.md) em
 # ~/.claude/agents/<papel>.md, com as mesmas regras de ligar_skills: link

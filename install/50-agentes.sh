@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Etapa 50: camada de agentes (tmux isolado, hooks e skills do Claude Code e do agy).
+# Etapa 50: camada de agentes (tmux isolado, hooks e skills do Claude Code, do agy e do Codex).
 
 executar mkdir -p "$JANGADA_ESTADO/agentes"
 
@@ -22,6 +22,11 @@ if tem_comando agy || [[ -d "$HOME/.gemini" ]]; then
   mesclar_hooks_agy
   ligar_skill_agy
   mesclar_agentes_agy
+fi
+
+# Codex: só a skill coordenador, para a sessão comum que coordena tarefas.
+if tem_comando codex || [[ -d "${CODEX_HOME:-$HOME/.codex}" ]]; then
+  ligar_skill_codex
 fi
 
 # Painel de indicadores (jangada-painel): opcional. Só avisa o que falta;

@@ -55,6 +55,7 @@ entrar aqui do mesmo jeito.
 | `~/.claude/settings.json`, `~/.claude/skills`, `~/.claude/agents` | `install/50-agentes.sh`, migrações | hooks das sessões e links para as skills e os subagentes de `default/claude` (link para `core/agentes/claude`) |
 | `~/.claude` (`settings.local.json`, `CLAUDE.md`, `commands`, `hooks`, `plugins`, `output-styles`, `shell-snapshots`, `session-env`, `ide`) | `jangada-isolar` | criados vazios quando faltam, para o bind do isolamento |
 | `~/.gemini/config` (`hooks.json`, `agents.json`, `skills`) | `install/50-agentes.sh`, migrações | hooks, subagentes e skills do agy |
+| `~/.codex/skills` (ou `skills` na pasta de `CODEX_HOME`) | `install/50-agentes.sh`, migrações | link para a skill `coordenador` |
 | `~/.gemini/antigravity-cli` (`settings.json`, `bin`) | `jangada-worktree-preparar`, `jangada-agente-fim`, `jangada-isolar` | confiança do agy no worktree e pasta bin para montar isolada; o original fica em `settings.json.jangada-orig` |
 | `~/.local/share/jangada-worktrees` | `jangada-agente` | worktrees das sessões de agente |
 | Repositórios em `JANGADA_PROJETOS` | `jangada-agente`, `jangada-agente-fim` | ramos `agente/*`, registro dos worktrees e a integração que o usuário confirma |
