@@ -813,6 +813,16 @@ command -v agy >/dev/null 2>&1 || recusar "agy não instalado" indisponivel
 # principal, ou a pasta que o usuário já confiou.
 conf_agy="${JANGADA_AGY_SETTINGS:-$HOME/.gemini/antigravity-cli/settings.json}"
 if ! jangada_agy_confia "$pasta"; then
+  # Só diagnóstico: quem sincroniza a confiança é a abertura ou a retomada da
+  # tarefa, fora do isolamento.
+  principal="$(jangada_git_seguro -C "$pasta" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p' || true)"
+  retomar="fora da sessão isolada, rode jangada-agentes --confianca ${JANGADA_SESSAO:-SESSAO}"
+  if [[ -n "$principal" && "$principal" != "$pasta" ]]; then
+    if jangada_agy_confia "$principal"; then
+      recusar "o agy não confia em $pasta: a raiz $principal está autorizada, mas este worktree ainda não recebeu a confiança derivada ($retomar)" destino_proibido
+    fi
+    recusar "o agy não confia na raiz $principal deste worktree (abra o agy nela, responda à pergunta de confiança e, $retomar)" destino_proibido
+  fi
   recusar "o agy não confia em $pasta (abra o agy nessa pasta e responda à pergunta de confiança, ou trabalhe num worktree do jangada)" destino_proibido
 fi
 # Com --agent de nome desconhecido o agy roda o agente padrão, com todas as
