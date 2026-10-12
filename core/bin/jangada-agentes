@@ -15,6 +15,7 @@
 #   jangada-agentes --proximo  foca o próximo agente ativo ou que espera (SUPER+N)
 #   jangada-agentes --anterior volta ao agente focado antes do atual (SUPER+SHIFT+N)
 #   jangada-agentes --restaurar [S]  reabre as sessões interrompidas (ou só S)
+#   jangada-agentes --confianca S  repete só a conferência da confiança do agy na tarefa S
 #   jangada-agentes --limpar-concluidos  lista as sessões concluídas e, confirmado, encerra todas
 #
 # Sessões terminadas em "concluido" ou "aguardando" continuam na lista depois de
@@ -244,6 +245,30 @@ refazer_protocolo() {
   printf '%s\n' "$estado_dir/protocolo-$s.md"
 }
 
+# Confere a confiança do agy na tarefa S e sincroniza a do worktree. A raiz e
+# o worktree vêm da cópia protegida da sessão, que o isolamento oculta, e
+# ainda passam pela conferência do Git; o estado gravável pelo agente não é
+# lido. Não recria a tarefa nem roda a preparação do worktree.
+confianca() {
+  local s="$1" perguntar="$2" copia raiz worktree
+  if [[ ! "$s" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+    echo "nome de sessão inválido: $s" >&2
+    return 1
+  fi
+  if [[ -n "${JANGADA_ISOLADO:-}" ]]; then
+    echo "a confiança do agy só é conferida fora da sessão isolada" >&2
+    return 1
+  fi
+  copia="$JANGADA_ESTADO/revisoes/$s.json"
+  raiz="$(jq -r '.raiz // "" | tostring' "$copia" 2>/dev/null)" || raiz=""
+  worktree="$(jq -r '.worktree // "" | tostring' "$copia" 2>/dev/null)" || worktree=""
+  if [[ "$raiz" != /* || ! -d "$raiz" ]]; then
+    echo "$s: sem registro protegido da raiz; confiança do agy não conferida" >&2
+    return 1
+  fi
+  jangada_agy_conferir_tarefa "$raiz" "$worktree" "$perguntar" "$s"
+}
+
 # Reabre a sessão S no tmux: na mesma pasta, com o mesmo agente e na mesma
 # conversa. Sem o id (instalação sem o hook novo) usa --continue, que retoma a
 # conversa mais recente daquela pasta.
@@ -310,6 +335,11 @@ restaurar() {
     [[ "$v" =~ ^JANGADA_DELEGAR=(.*)$ ]] && delegar="${BASH_REMATCH[1]}"
   done
   delegar="$(jangada_delegacao "$base" "$delegar")"
+
+  # Sem perguntar: a retomada pode vir da Central, sem terminal de quem responda.
+  if [[ "$delegar" == agy || "$(jangada_revisor "$base" "$rev")" == agy ]]; then
+    confianca "$s" 0 || true
+  fi
 
   cmd="$exe"
   [[ -n "$args" ]] && cmd+=" $args"
@@ -609,6 +639,9 @@ case "${1:-}" in
   --lista|--lista-atualizada)
     listar
     ;;
+  --confianca)
+    confianca "${2:?informe a sessão}" 1
+    ;;
   --limpar-orfaos)
     limpar_orfaos
     ;;
@@ -782,7 +815,7 @@ case "${1:-}" in
     focar "$s"
     ;;
   -h|--ajuda)
-    sed -n '2,26s/^# \{0,1\}//p' "$0"
+    sed -n '2,27s/^# \{0,1\}//p' "$0"
     ;;
   *)
     echo "opção desconhecida: $1" >&2; exit 1

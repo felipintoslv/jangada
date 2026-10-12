@@ -365,7 +365,36 @@ sessao="$repo"
 estado_dir="$JANGADA_ESTADO/agentes"
 mkdir -p "$estado_dir"
 
-if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
+# Precedência do revisor:
+# 1. Opção --revisor dada na linha de comando
+# 2. JANGADA_VALIDAR_REVISOR definido no perfil
+# 3. JANGADA_VALIDAR_REVISOR global (jangada.conf)
+if ((!revisor_dado)); then
+  for _env in "${PERFIL_AMBIENTE[@]}"; do
+    if [[ "$_env" =~ ^JANGADA_VALIDAR_REVISOR=(.*)$ ]]; then
+      revisor="${BASH_REMATCH[1]}"
+    fi
+  done
+fi
+# Destino dos subagentes: JANGADA_DELEGAR do perfil, depois o global.
+delegar="${JANGADA_DELEGAR:-}"
+for _env in "${PERFIL_AMBIENTE[@]}"; do
+  [[ "$_env" =~ ^JANGADA_DELEGAR=(.*)$ ]] && delegar="${BASH_REMATCH[1]}"
+done
+[[ -z "$delegacao_dada" ]] || delegar="$delegacao_dada"
+delegar="$(jangada_delegacao "$agente" "$delegar")"
+revisor_efetivo="$(jangada_revisor "$agente" "$revisor")"
+
+# Confiança do agy, só para quem delega ou revisa por ele. Sessão nova, com
+# terminal, pode oferecer a pergunta nativa do agy na raiz; sessão que já
+# existe só sincroniza. Pendência não impede a abertura.
+sessao_nova=0
+"${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null || sessao_nova=1
+if [[ "$delegar" == agy || "$revisor_efetivo" == agy ]]; then
+  jangada_agy_conferir_tarefa "$raiz" "$worktree" "$sessao_nova" "$sessao" || true
+fi
+
+if ((sessao_nova)); then
   ((snapshot)) && "$JANGADA_PATH/bin/jangada-snapshot" --agente "antes do agente $sessao" || true
 
   cmd_agente="$agente"
@@ -387,24 +416,6 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
   # numa sessão restaurada.
   base_agente="$(basename "${agente%% *}")"
   cmd_codex="$cmd_agente"
-  # Precedência do revisor:
-  # 1. Opção --revisor dada na linha de comando
-  # 2. JANGADA_VALIDAR_REVISOR definido no perfil
-  # 3. JANGADA_VALIDAR_REVISOR global (jangada.conf)
-  if ((!revisor_dado)); then
-    for _env in "${PERFIL_AMBIENTE[@]}"; do
-      if [[ "$_env" =~ ^JANGADA_VALIDAR_REVISOR=(.*)$ ]]; then
-        revisor="${BASH_REMATCH[1]}"
-      fi
-    done
-  fi
-  # Destino dos subagentes: JANGADA_DELEGAR do perfil, depois o global.
-  delegar="${JANGADA_DELEGAR:-}"
-  for _env in "${PERFIL_AMBIENTE[@]}"; do
-    [[ "$_env" =~ ^JANGADA_DELEGAR=(.*)$ ]] && delegar="${BASH_REMATCH[1]}"
-  done
-  [[ -z "$delegacao_dada" ]] || delegar="$delegacao_dada"
-  delegar="$(jangada_delegacao "$agente" "$delegar")"
   if ((!isolar_dado)); then
     for _env in "${PERFIL_AMBIENTE[@]}"; do
       [[ "$_env" =~ ^JANGADA_AGENTE_ISOLAR=(.*)$ ]] && isolar="${BASH_REMATCH[1]}"
@@ -418,8 +429,6 @@ if ! "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
     cmd_agente="$(printf '%q' "$JANGADA_PATH/bin/jangada-isolar") -- $cmd_agente"
     cmd_base="$cmd_agente"
   fi
-  revisor_efetivo="$(jangada_revisor "$agente" "$revisor")"
-
   protocolo="$JANGADA_PATH/default/agentes/protocolo.md"
   [[ "${JANGADA_AGENTE_PROTOCOLO:-1}" != 0 && -r "$protocolo" ]] || protocolo=""
   if ! command -v "$revisor_efetivo" >/dev/null 2>&1; then
