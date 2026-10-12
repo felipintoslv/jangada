@@ -1,0 +1,294 @@
+#!/usr/bin/env bash
+# Testa a confiança do agy na abertura, no reaproveitamento e na retomada de
+# tarefas: o worktree só herda a confiança de uma raiz que o usuário autorizou
+# no próprio agy, e a sincronização não refaz a preparação do worktree.
+#
+# O settings.json do agy é um arquivo temporário (HOME falso). O agy, o tmux,
+# o claude e o codex são falsos: nada vai para a rede. O agy falso só grava a
+# raiz em trustedWorkspaces com FALSO_AUTORIZA=1, no papel do usuário que
+# responde à pergunta nativa.
+#
+# Uso: testes/confianca-agy-fluxo.sh
+set -uo pipefail
+cd "$(dirname "$0")/.." || exit 1
+repo_jangada="$PWD"
+falhas=0
+ok()    { printf 'ok    %s\n' "$*"; }
+falha() { printf 'FALHA %s\n' "$*"; falhas=$((falhas + 1)); }
+conferir() { local d="$1"; shift; if "$@"; then ok "$d"; else falha "$d"; fi; }
+jqok() { jq "$@" >/dev/null; }
+
+tmp="$(realpath "$(mktemp -d)")"
+trap 'rm -rf "$tmp"' EXIT
+conf_agy="$tmp/home/.gemini/antigravity-cli/settings.json"
+estado="$tmp/state/jangada"
+raiz="$tmp/projetos/app"
+wts="$tmp/home/.local/share/jangada-worktrees/app"
+mkdir -p "$tmp/bin" "$tmp/sem-agy" "${conf_agy%/*}" "$tmp/config/jangada" "$estado/agentes" \
+  "$estado/revisoes" "$raiz" "$tmp/arbitraria" "$tmp/outro"
+
+cat >"$tmp/bin/agy" <<'EOF'
+#!/usr/bin/env bash
+pwd >>"$FALSO_DIR/agy.chamadas"
+if [[ "${FALSO_AUTORIZA:-0}" == 1 ]]; then
+  c="$HOME/.gemini/antigravity-cli/settings.json"
+  jq --arg w "$PWD" '.trustedWorkspaces += [$w]' "$c" >"$c.novo" && mv "$c.novo" "$c"
+fi
+exit 0
+EOF
+cat >"$tmp/bin/tmux" <<'EOF'
+#!/usr/bin/env bash
+case " $* " in
+  *" has-session "*) [[ -e "$FALSO_DIR/sessao-viva" ]]; exit ;;
+esac
+exit 0
+EOF
+printf '#!/bin/sh\nexit 0\n' >"$tmp/bin/claude"
+cp "$tmp/bin/claude" "$tmp/bin/codex"
+chmod +x "$tmp/bin"/*
+# PATH sem nenhum agy, nem o do sistema.
+for pasta in /usr/bin /bin; do
+  for arquivo in "$pasta"/*; do
+    nome="${arquivo##*/}"
+    [[ "$nome" == agy || -L "$tmp/sem-agy/$nome" ]] || ln -s "$arquivo" "$tmp/sem-agy/$nome"
+  done
+done
+for nome in tmux claude codex; do ln -sf "$tmp/bin/$nome" "$tmp/sem-agy/$nome"; done
+
+git -C "$raiz" init -q -b main
+printf '.env\n' >"$raiz/.gitignore"
+printf '.env\n' >"$raiz/.worktreeinclude"
+echo SEGREDO=raiz >"$raiz/.env"
+mkdir "$raiz/.jangada" "$raiz/sub"
+echo 'touch .preparou' >"$raiz/.jangada/preparar.sh"
+git -C "$raiz" add .gitignore .worktreeinclude .jangada
+git -C "$raiz" -c user.name=t -c user.email=t@t commit -qm inicio
+git -C "$tmp/outro" init -q -b main
+git -C "$tmp/outro" -c user.name=t -c user.email=t@t commit -qm inicio --allow-empty
+git -C "$tmp/outro" worktree add -q -b agente/x "$tmp/outro-wt"
+
+# Roda um comando do jangada no ambiente falso, sem terminal.
+rodar() {
+  env -u JANGADA_ISOLADO -u JANGADA_SESSAO -u JANGADA_DELEGAR -u JANGADA_VALIDAR_REVISOR \
+    -u JANGADA_AGY_SETTINGS -u TMUX -u WAYLAND_DISPLAY -u HYPRLAND_INSTANCE_SIGNATURE \
+    HOME="$tmp/home" XDG_CONFIG_HOME="$tmp/config" XDG_STATE_HOME="$tmp/state" \
+    PATH="${CAMINHO:-$tmp/bin:$PATH}" JANGADA_PATH="$repo_jangada" FALSO_DIR="$tmp" \
+    JANGADA_AGENTE_ESCOLHER=0 "$@" </dev/null >"$tmp/saida" 2>&1
+}
+# O mesmo num pseudoterminal, com RESPOSTA digitada na pergunta.
+rodar_tty() {
+  local resposta="$1"; shift
+  printf '%s\n' "$resposta" | env -u JANGADA_ISOLADO -u JANGADA_SESSAO -u JANGADA_DELEGAR \
+    -u JANGADA_VALIDAR_REVISOR -u JANGADA_AGY_SETTINGS -u TMUX -u WAYLAND_DISPLAY \
+    -u HYPRLAND_INSTANCE_SIGNATURE HOME="$tmp/home" XDG_CONFIG_HOME="$tmp/config" \
+    XDG_STATE_HOME="$tmp/state" PATH="$tmp/bin:$PATH" JANGADA_PATH="$repo_jangada" \
+    FALSO_DIR="$tmp" JANGADA_AGENTE_ESCOLHER=0 \
+    script -qec "$(printf '%q ' "$@")" /dev/null >"$tmp/saida" 2>&1
+}
+abrir() { rodar "$repo_jangada/bin/jangada-agente" --projeto "$raiz" --agente claude "$@"; }
+so_confianca() { rodar "$repo_jangada/bin/jangada-worktree-preparar" --so-confianca "$@"; }
+confiaveis() { jq -c '.trustedWorkspaces' "$conf_agy"; }
+vazio() { echo '{"trustedWorkspaces": [], "outra": 1}' >"$conf_agy"; }
+so_raiz() { jq -n --arg w "$raiz" '{trustedWorkspaces: [$w], outra: 1}' >"$conf_agy"; }
+chamadas_agy() { [[ -e "$tmp/agy.chamadas" ]] && wc -l <"$tmp/agy.chamadas" || echo 0; }
+
+# Dentro de uma sessão isolada do jangada nenhuma sessão nova é registrada
+# (trava do confianca.py). A conferência da confiança vem antes do registro,
+# então só as conferências que dependem da sessão aberta são puladas.
+autoridade=1
+if grep -q ' /tmp/\.jangada-sem-autoridade ' /proc/self/mountinfo 2>/dev/null; then
+  autoridade=0
+  echo "aviso: sessão isolada; conferências de sessão aberta puladas"
+fi
+
+# Caso 1: raiz sem confiança e sem terminal. A tarefa abre, o agy fica
+# indisponível e a saída diz como retomar.
+vazio
+abrir --nome nova1
+conferir "caso 1: nada é confiado" test "$(confiaveis)" = '[]'
+conferir "caso 1: informa a raiz" grep -qF "o agy não confia na raiz $raiz" "$tmp/saida"
+conferir "caso 1: diz como retomar a conferência" grep -qF "jangada-agentes --confianca app--nova1" "$tmp/saida"
+conferir "caso 1: sem terminal, o agy não é aberto" test "$(chamadas_agy)" = 0
+if ((autoridade)); then
+  conferir "caso 1: a tarefa abre mesmo sem a confiança" test -f "$estado/agentes/app--nova1.json"
+  conferir "caso 1: a preparação completa copiou o ignorado" test -f "$wts/nova1/.env"
+fi
+
+# Tarefa já existente, com trabalho do agente no worktree, que a
+# sincronização não pode desfazer. A cópia protegida é a que o jangada-agente
+# grava em revisoes/ ao abrir a sessão.
+git -C "$raiz" worktree add -q -b agente/t1 "$wts/t1"
+echo SEGREDO=agente >"$wts/t1/.env"
+jq -n --arg r "$raiz" --arg w "$wts/t1" '{sessao:"app--t1", raiz:$r, worktree:$w, ramo:"agente/t1", base:"main"}' \
+  >"$estado/revisoes/app--t1.json"
+intacto() { grep -qx SEGREDO=agente "$wts/t1/.env" && [[ ! -e "$wts/t1/.preparou" ]]; }
+
+# Caso 2: com terminal. Recusa da oferta, agy aberto sem resposta e, por fim,
+# a autorização dada pelo usuário dentro do agy.
+if command -v script >/dev/null 2>&1 && script -qec true /dev/null >/dev/null 2>&1; then
+  rodar_tty n "$repo_jangada/bin/jangada-agente" --projeto "$raiz" --agente claude --nome t1
+  conferir "caso 2: oferta recusada não abre o agy" test "$(chamadas_agy)" = 0
+  conferir "caso 2: oferta recusada não confia em nada" test "$(confiaveis)" = '[]'
+  conferir "caso 2: oferta recusada mantém a pendência" grep -q "confiança do agy pendente" "$tmp/saida"
+  rodar_tty s "$repo_jangada/bin/jangada-agente" --projeto "$raiz" --agente claude --nome t1
+  conferir "caso 2: aceita a oferta, o agy abre uma vez, na raiz" \
+    bash -c '[ "$(cat "$1")" = "$2" ]' _ "$tmp/agy.chamadas" "$raiz"
+  conferir "caso 2: agy fechado sem resposta não vale como autorização" test "$(confiaveis)" = '[]'
+  conferir "caso 2: pergunta sem resposta mantém a pendência" grep -q "confiança do agy pendente" "$tmp/saida"
+  rm -f "$tmp/agy.chamadas"
+  FALSO_AUTORIZA=1 rodar_tty s "$repo_jangada/bin/jangada-agente" --projeto "$raiz" --agente claude --nome t1
+  conferir "caso 2: autorizada no agy, a raiz e o worktree ficam confiáveis" \
+    jqok -e --arg r "$raiz" --arg w "$wts/t1" '.trustedWorkspaces == [$r, $w]' "$conf_agy"
+  conferir "caso 2: sem pendência depois da autorização" bash -c '! grep -q pendente "$1"' _ "$tmp/saida"
+  rm -f "$tmp/agy.chamadas"
+else
+  echo "aviso: sem pseudoterminal (script); caso 2 pulado"
+fi
+
+# Caso 3: raiz autorizada antes da criação.
+so_raiz
+abrir --nome nova2
+conferir "caso 3: worktree novo herda a confiança da raiz" \
+  jqok -e --arg r "$raiz" --arg w "$wts/nova2" '.trustedWorkspaces == [$r, $w]' "$conf_agy"
+conferir "caso 3: guarda o settings.json original" test -f "$conf_agy.jangada-orig"
+
+# Caso 4: raiz autorizada depois da criação; o reaproveitamento sincroniza
+# sem copiar, sem rodar .jangada/preparar.sh e sem sobrescrever.
+so_raiz
+abrir --nome t1
+conferir "caso 4: reaproveitamento sincroniza a confiança" \
+  jqok -e --arg r "$raiz" --arg w "$wts/t1" '.trustedWorkspaces == [$r, $w]' "$conf_agy"
+conferir "caso 4: sem cópia e sem rodar .jangada/preparar.sh" intacto
+conferir "caso 4: o resto do settings.json fica" jqok -e '.outra == 1' "$conf_agy"
+abrir --nome t1
+conferir "caso 4: repetir não duplica a confiança" \
+  jqok -e --arg r "$raiz" --arg w "$wts/t1" '.trustedWorkspaces == [$r, $w]' "$conf_agy"
+
+# Caso 5: sessão que já existe só sincroniza.
+so_raiz
+touch "$tmp/sessao-viva"
+abrir --nome t1
+rm -f "$tmp/sessao-viva"
+conferir "caso 5: sessão já aberta recebe a confiança" \
+  jqok -e --arg w "$wts/t1" '.trustedWorkspaces | index($w)' "$conf_agy"
+
+# Caso 6: perfil que não usa o agy não recebe o fluxo.
+vazio
+abrir --nome t1 --delegacao local --revisor codex
+conferir "caso 6: sem agy no perfil, nenhum aviso" bash -c '! grep -q "agy" "$1"' _ "$tmp/saida"
+so_raiz
+abrir --nome t1 --delegacao local --revisor codex
+conferir "caso 6: sem agy no perfil, nada é sincronizado" \
+  jqok -e --arg r "$raiz" '.trustedWorkspaces == [$r]' "$conf_agy"
+conferir "caso 6: o agy não é aberto" test "$(chamadas_agy)" = 0
+
+# Caso 7: atualização explícita de tarefa existente, pela cópia protegida.
+vazio
+rodar "$repo_jangada/bin/jangada-agentes" --confianca app--t1
+conferir "caso 7: raiz sem confiança devolve erro" test "$?" = 1
+rodar "$repo_jangada/bin/jangada-agentes" --confianca app--t1
+conferir "caso 7: raiz sem confiança informa e não grava" \
+  bash -c 'grep -qF "não confia na raiz $2" "$1" && [ "$3" = "[]" ]' _ "$tmp/saida" "$raiz" "$(confiaveis)"
+so_raiz
+rodar "$repo_jangada/bin/jangada-agentes" --confianca app--t1
+conferir "caso 7: depois da autorização, a opção sincroniza" \
+  jqok -e --arg r "$raiz" --arg w "$wts/t1" '.trustedWorkspaces == [$r, $w]' "$conf_agy"
+conferir "caso 7: sem cópia nem preparação" intacto
+
+# Caso 8: estado manipulado pelo agente. O JSON gravável não decide nada.
+so_raiz
+jq -n --arg r "$tmp/outro" --arg w "$tmp/arbitraria" '{raiz:$r, worktree:$w, dir:$w}' >"$estado/agentes/app--t1.json"
+rodar "$repo_jangada/bin/jangada-agentes" --confianca app--t1
+conferir "caso 8: pasta declarada no estado gravável não é confiada" \
+  jqok -e --arg r "$raiz" --arg w "$wts/t1" '.trustedWorkspaces == [$r, $w]' "$conf_agy"
+so_raiz
+jq -n --arg r "$raiz" --arg w "$tmp/arbitraria" '{raiz:$r, worktree:$w}' >"$estado/agentes/forjada.json"
+rodar "$repo_jangada/bin/jangada-agentes" --confianca forjada
+conferir "caso 8: sessão sem cópia protegida é recusada" \
+  bash -c 'grep -q "sem registro protegido" "$1" && [ "$2" = 1 ]' _ "$tmp/saida" "$(jq '.trustedWorkspaces | length' "$conf_agy")"
+rodar "$repo_jangada/bin/jangada-agentes" --confianca '../agentes/forjada'
+conferir "caso 8: nome de sessão com caminho é recusado" grep -q "nome de sessão inválido" "$tmp/saida"
+
+# Caso 9: correspondência pelo Git. Só worktree registrado da raiz autorizada.
+so_raiz
+so_confianca "$raiz" "$tmp/arbitraria"
+conferir "caso 9: pasta comum não é worktree da raiz (código 3)" test "$?" = 3
+so_confianca "$raiz" "$tmp/outro-wt"
+conferir "caso 9: worktree de outro repositório é recusado" test "$?" = 3
+so_confianca "$raiz" "$tmp/outro"
+conferir "caso 9: outro repositório é recusado" test "$?" = 3
+so_confianca "$raiz" "$raiz/sub"
+conferir "caso 9: subpasta da raiz é recusada" test "$?" = 3
+so_confianca "$raiz/sub" "$wts/t1"
+conferir "caso 9: raiz que não é topo de repositório é recusada" test "$?" = 3
+git clone -q "$raiz" "$tmp/clone"
+so_confianca "$raiz" "$tmp/clone"
+conferir "caso 9: clone da raiz não é worktree dela" test "$?" = 3
+ln -s "$tmp/arbitraria" "$tmp/atalho"
+so_confianca "$raiz" "$tmp/atalho"
+conferir "caso 9: link para pasta estranha é recusado" test "$?" = 3
+conferir "caso 9: nenhuma recusa alterou a confiança" \
+  jqok -e --arg r "$raiz" '.trustedWorkspaces == [$r]' "$conf_agy"
+jq -n --arg w "$tmp/outro" '{trustedWorkspaces: [$w]}' >"$conf_agy"
+so_confianca "$raiz" "$wts/t1"
+conferir "caso 9: outra raiz autorizada não vale para esta (código 2)" test "$?" = 2
+conferir "caso 9: raiz nova não é gravada" jqok -e --arg w "$tmp/outro" '.trustedWorkspaces == [$w]' "$conf_agy"
+ln -s "$wts/t1" "$tmp/atalho-wt"
+so_raiz
+so_confianca "$raiz" "$tmp/atalho-wt"
+conferir "caso 9: caminho com link é resolvido antes de gravar" \
+  jqok -e --arg r "$raiz" --arg w "$wts/t1" '.trustedWorkspaces == [$r, $w]' "$conf_agy"
+
+# Caso 10: a gravação é conferida.
+so_raiz
+mv "$conf_agy" "$tmp/settings-real"
+ln -s "$tmp/settings-real" "$conf_agy"
+so_confianca "$raiz" "$wts/t1"
+conferir "caso 10: gravação não confirmada devolve 4" test "$?" = 4
+conferir "caso 10: o alvo do link não é alterado" \
+  jqok -e --arg r "$raiz" '.trustedWorkspaces == [$r]' "$tmp/settings-real"
+rm -f "$conf_agy"
+so_confianca "$raiz" "$wts/t1"
+conferir "caso 10: sem settings.json, a raiz conta como não autorizada" test "$?" = 2
+conferir "caso 10: o settings.json não é criado" test ! -e "$conf_agy"
+
+# Caso 11: o processo isolado não sincroniza nem aciona o fluxo.
+so_raiz
+rodar env JANGADA_ISOLADO=1 "$repo_jangada/bin/jangada-worktree-preparar" --so-confianca "$raiz" "$wts/t1"
+conferir "caso 11: isolado, a sincronização é recusada (código 5)" test "$?" = 5
+rodar env JANGADA_ISOLADO=1 "$repo_jangada/bin/jangada-agentes" --confianca app--t1
+conferir "caso 11: isolado, a opção explícita é recusada" \
+  bash -c 'grep -q "fora da sessão isolada" "$1"' _ "$tmp/saida"
+conferir "caso 11: isolado, nada é gravado" jqok -e --arg r "$raiz" '.trustedWorkspaces == [$r]' "$conf_agy"
+
+# Caso 12: sem o agy instalado. A delegação cai nos subagentes do Claude; com
+# revisor agy, a conferência é adiada sem gravar nem travar.
+so_raiz
+CAMINHO="$tmp/sem-agy" rodar "$repo_jangada/bin/jangada-agentes" --confianca app--t1
+conferir "caso 12: sem agy, a conferência avisa e não grava" \
+  bash -c 'grep -q "agy não instalado" "$1" && [ "$2" = 1 ]' _ "$tmp/saida" "$(jq '.trustedWorkspaces | length' "$conf_agy")"
+CAMINHO="$tmp/sem-agy" abrir --nome t1 --revisor agy
+conferir "caso 12: sem agy, a abertura segue" \
+  bash -c 'grep -q "agy não instalado" "$1" && [ "$2" = 1 ]' _ "$tmp/saida" "$(jq '.trustedWorkspaces | length' "$conf_agy")"
+
+# Caso 13: restauração de sessão interrompida.
+jq -n --arg d "$wts/t1" --arg a "$(date -Iseconds)" \
+  '{estado:"trabalhando", agente:"claude", dir:$d, worktree:$d, atualizado:$a}' >"$estado/agentes/app--t1.json"
+vazio
+rodar "$repo_jangada/bin/jangada-agentes" --restaurar app--t1
+conferir "caso 13: restauração sem confiança avisa e não grava" \
+  bash -c 'grep -qF "não confia na raiz $2" "$1" && [ "$3" = "[]" ]' _ "$tmp/saida" "$raiz" "$(confiaveis)"
+((autoridade)) && conferir "caso 13: restauração sem confiança segue" grep -q "restaurada: app--t1" "$tmp/saida"
+conferir "caso 13: restauração não abre o agy" test "$(chamadas_agy)" = 0
+so_raiz
+jq '.estado = "trabalhando"' "$estado/agentes/app--t1.json" >"$tmp/json" && cp "$tmp/json" "$estado/agentes/app--t1.json"
+rodar "$repo_jangada/bin/jangada-agentes" --restaurar app--t1
+conferir "caso 13: restauração sincroniza depois da autorização" \
+  jqok -e --arg r "$raiz" --arg w "$wts/t1" '.trustedWorkspaces == [$r, $w]' "$conf_agy"
+conferir "caso 13: restauração não copia nem prepara" intacto
+
+if ((falhas)); then
+  echo "$falhas falha(s)"
+  exit 1
+fi
+echo "confiança do agy na abertura e na retomada: tudo passou"

@@ -359,6 +359,29 @@ jq -n --arg w "$(realpath "$tmp/raiz")" '{trustedWorkspaces: [$w]}' >"$conf_agy"
 preparar
 conferir "caso 17: raiz confiável, worktree confiável" \
   jqok -e --arg w "$(realpath "$tmp/wt")" '.trustedWorkspaces | index($w)' "$conf_agy"
+
+# A recusa distingue a raiz sem autorização do worktree que ainda não recebeu
+# a confiança derivada, diz o passo de cada caso e não concede nada.
+delegar_wt() {
+  (cd "$tmp/wt" && env -u JANGADA_DELEGAR -u JANGADA_ISOLADO -u XDG_CACHE_HOME -u XDG_STATE_HOME -u XDG_CONFIG_HOME \
+    HOME="$tmp/home" PATH="$tmp/bin:$PATH" JANGADA_PATH="$repo_jangada" FALSO_DIR="$tmp/falso" \
+    FALSO_COTA=0.9 FALSO_RESPOSTA="relatorio em a.sh:1" JANGADA_SESSAO=raiz--t \
+    "$repo_jangada/bin/jangada-delegar" explorador "mapeie" >/dev/null 2>"$tmp/erro-wt"
+    echo $? >"$tmp/codigo-wt")
+}
+jq -n --arg w "$(realpath "$tmp/raiz")" '{trustedWorkspaces: [$w]}' >"$conf_agy"
+delegar_wt
+conferir "caso 17b: worktree sem sincronização recusa com código 4 e o passo" \
+  bash -c '[ "$(cat "$1")" = 4 ] && grep -q "ainda não recebeu a confiança derivada" "$2" && grep -q "jangada-agentes --confianca raiz--t" "$2"' \
+  _ "$tmp/codigo-wt" "$tmp/erro-wt"
+conferir "caso 17b: a recusa não sincroniza o worktree" \
+  jqok -e --arg w "$(realpath "$tmp/raiz")" '.trustedWorkspaces == [$w]' "$conf_agy"
+echo '{"trustedWorkspaces": []}' >"$conf_agy"
+delegar_wt
+conferir "caso 17c: raiz sem autorização recusa com código 4 e nomeia a raiz" \
+  bash -c '[ "$(cat "$1")" = 4 ] && grep -qF "não confia na raiz $3" "$2" && grep -q "pergunta de confiança" "$2"' \
+  _ "$tmp/codigo-wt" "$tmp/erro-wt" "$(realpath "$tmp/raiz")"
+conferir "caso 17c: a recusa não autoriza a raiz" jqok -e '.trustedWorkspaces == []' "$conf_agy"
 jq -n --arg w "$(realpath "$tmp/projeto")" '{trustedWorkspaces: [$w]}' >"$conf_agy"
 
 # O leitor sem o jangada-hook-leitor no agy teria no terminal o
