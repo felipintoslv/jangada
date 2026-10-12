@@ -346,12 +346,18 @@ conferir "caso 13: registro protegido sem agy não recebe o fluxo na restauraç�
 
 # Caso 14: projetos homônimos. Duas raízes com o mesmo nome de pasta e a
 # mesma tarefa dão o mesmo identificador de sessão; a chamada feita pelo
-# segundo projeto anexa à sessão do primeiro e não leva confiança a pasta
-# nenhuma. A raiz e o worktree da sessão aberta vêm do registro protegido.
+# segundo projeto anexa à sessão do primeiro sem criar worktree, sem preparar
+# e sem levar confiança a pasta nenhuma. A raiz e o worktree da sessão aberta
+# vêm do registro protegido.
 raiz_b="$tmp/homonimo/app"
-mkdir -p "$raiz_b"
+mkdir -p "$raiz_b/.jangada"
 git -C "$raiz_b" init -q -b main
-git -C "$raiz_b" -c user.name=t -c user.email=t@t commit -qm inicio --allow-empty
+printf '.env\n' >"$raiz_b/.gitignore"
+printf '.env\n' >"$raiz_b/.worktreeinclude"
+echo SEGREDO=homonimo >"$raiz_b/.env"
+echo 'touch "$FALSO_DIR/preparou-homonimo"' >"$raiz_b/.jangada/preparar.sh"
+git -C "$raiz_b" add .gitignore .worktreeinclude .jangada
+git -C "$raiz_b" -c user.name=t -c user.email=t@t commit -qm inicio
 registro() {
   jq -n --arg s "$1" --arg r "$2" --arg w "$3" \
     '{sessao:$s, raiz:$r, worktree:$w, agente:"claude", delegar:"agy", revisor:"codex"}
@@ -360,6 +366,11 @@ registro() {
 duas_raizes() { jq -n --arg a "$raiz" --arg b "$raiz_b" '{trustedWorkspaces: [$a, $b]}' >"$conf_agy"; }
 so_as_raizes() { jqok -e --arg a "$raiz" --arg b "$raiz_b" '.trustedWorkspaces == [$a, $b]' "$conf_agy"; }
 abrir_b() { rodar "$repo_jangada/bin/jangada-agente" --projeto "$raiz_b" --agente claude "$@"; }
+sem_preparo_b() {
+  [[ ! -e "$tmp/preparou-homonimo" ]] && ! grep -rqsx SEGREDO=homonimo "$wts" \
+    && [[ -z "$(git -C "$raiz_b" branch --list 'agente/*')" ]] \
+    && [[ "$(git -C "$raiz_b" worktree list | wc -l)" == 1 ]]
+}
 touch "$tmp/sessao-viva"
 
 # O worktree da sessão do primeiro projeto continua no lugar.
@@ -369,29 +380,41 @@ abrir_b --nome t1
 conferir "caso 14: chamada do homônimo é recusada com a pasta da sessão aberta" \
   grep -qF "a sessão app--t1 já existe e é de outra pasta (raiz $raiz, worktree $wts/t1)" "$tmp/saida"
 conferir "caso 14: chamada do homônimo não sincroniza nada" so_as_raizes
+conferir "caso 14: chamada do homônimo não cria worktree, não copia e não prepara" sem_preparo_b
+conferir "caso 14: o worktree da sessão aberta fica como estava" intacto
 abrir --nome t1
 conferir "caso 14: a chamada do projeto da sessão sincroniza o worktree dela" \
   jqok -e --arg a "$raiz" --arg b "$raiz_b" --arg w "$wts/t1" '.trustedWorkspaces == [$a, $b, $w]' "$conf_agy"
 
-# O worktree do primeiro projeto sumiu e o homônimo cria o dele no mesmo
-# caminho: o worktree é do segundo, a sessão aberta continua a do primeiro.
+# O worktree do primeiro projeto sumiu: o homônimo não cria o dele no mesmo
+# caminho, e o projeto da sessão também não recria nem prepara.
 git -C "$raiz" worktree add -q -b agente/h1 "$wts/h1"
 registro app--h1 "$raiz" "$wts/h1"
 git -C "$raiz" worktree remove --force "$wts/h1"
 duas_raizes
 abrir_b --nome h1
-conferir "caso 14: o homônimo criou o worktree dele no caminho da sessão" \
-  test "$(git -C "$wts/h1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" = "$raiz_b/.git"
-conferir "caso 14: worktree do homônimo não recebe a confiança da sessão alheia" so_as_raizes
+conferir "caso 14: o homônimo não cria worktree no caminho da sessão alheia" test ! -e "$wts/h1"
+conferir "caso 14: sem cópia, sem preparação e sem ramo no homônimo" sem_preparo_b
+conferir "caso 14: nada é confiado" so_as_raizes
 conferir "caso 14: a recusa cita a raiz da sessão aberta" grep -qF "é de outra pasta (raiz $raiz," "$tmp/saida"
-# Agora o worktree registrado existe, mas o Git diz que ele não é da raiz
-# registrada.
+abrir --nome h1
+conferir "caso 14: worktree registrado que sumiu é recusado e não é recriado" \
+  bash -c 'grep -q "o worktree do registro protegido dela não existe" "$1" && [ ! -e "$2" ]' _ "$tmp/saida" "$wts/h1"
+conferir "caso 14: worktree que sumiu não é confiado" so_as_raizes
+
+# O caminho registrado existe, mas é worktree do homônimo: os caminhos da
+# chamada batem com o registro e quem recusa é o Git.
+git -C "$raiz_b" worktree add -q -b copia/h1 "$wts/h1"
 abrir --nome h1
 conferir "caso 14: worktree que diverge da raiz registrada é recusado pelo Git" \
   grep -qF "$wts/h1 não é worktree do repositório em $raiz" "$tmp/saida"
 conferir "caso 14: worktree divergente não é confiado" so_as_raizes
 rodar "$repo_jangada/bin/jangada-agentes" --confianca app--h1
-conferir "caso 14: a opção explícita também recusa o worktree divergente" so_as_raizes
+conferir "caso 14: a opção explícita também recusa o worktree divergente" \
+  bash -c 'grep -qF "não é worktree do repositório em" "$1"' _ "$tmp/saida"
+conferir "caso 14: a opção explícita não confia no worktree divergente" so_as_raizes
+git -C "$raiz_b" worktree remove --force "$wts/h1"
+git -C "$raiz_b" branch -qD copia/h1
 
 # Sessão direta na raiz, sem worktree.
 registro app "$raiz" ""
@@ -401,6 +424,10 @@ conferir "caso 14: sessão direta do homônimo é recusada" \
   grep -qF "a sessão app já existe e é de outra pasta (raiz $raiz)" "$tmp/saida"
 conferir "caso 14: sessão direta do homônimo não recebe a conferência da raiz dele" \
   bash -c '! grep -q "não confia na raiz" "$1" && [ "$2" = "[]" ]' _ "$tmp/saida" "$(confiaveis)"
+registro app--t1 "$raiz" ""
+abrir --nome t1
+conferir "caso 14: chamada com worktree não vale para registro sem worktree" \
+  bash -c 'grep -q "é de outra pasta" "$1" && [ "$2" = "[]" ]' _ "$tmp/saida" "$(confiaveis)"
 
 # Registro protegido ausente, ilegível ou com caminho que não serve.
 recusado() { grep -q "$1" "$tmp/saida" && so_as_raizes && [[ "$(chamadas_agy)" == 0 ]]; }
@@ -409,24 +436,34 @@ rm -f "$estado/revisoes/app--t1.json"
 abrir --nome t1
 conferir "caso 14: sessão aberta sem registro protegido é recusada" recusado "sem registro protegido válido"
 abrir --nome t1 --delegacao local --revisor codex
-conferir "caso 14: sem registro e sem agy na chamada, nenhum aviso" bash -c '! grep -q "agy" "$1"' _ "$tmp/saida"
+conferir "caso 14: sem registro, as opções da chamada não dispensam a recusa" recusado "sem registro protegido válido"
 echo lixo >"$estado/revisoes/app--t1.json"
 abrir --nome t1
 conferir "caso 14: registro protegido ilegível é recusado" recusado "sem registro protegido válido"
 registro app--t1 "" "$wts/t1"
 abrir --nome t1
-conferir "caso 14: registro sem raiz é recusado" recusado "não aponta raiz e worktree existentes"
+conferir "caso 14: registro sem raiz é recusado" recusado "sem registro protegido válido"
+registro app--t1 "projetos/app" "$wts/t1"
+abrir --nome t1
+conferir "caso 14: registro com raiz relativa é recusado" recusado "sem registro protegido válido"
+registro app--t1 "$raiz" "$wts/t1"
+jq 'del(.agente)' "$estado/revisoes/app--t1.json" >"$tmp/json" && cp "$tmp/json" "$estado/revisoes/app--t1.json"
+abrir --nome t1
+conferir "caso 14: registro sem agente é recusado" recusado "sem registro protegido válido"
+rodar "$repo_jangada/bin/jangada-agentes" --confianca app--t1
+conferir "caso 14: a opção explícita devolve erro para registro sem agente" test "$?" = 1
+conferir "caso 14: a opção explícita diz que o registro é inválido" recusado "sem registro protegido válido"
+jq '.agente = 7' "$estado/revisoes/app--t1.json" >"$tmp/json" && cp "$tmp/json" "$estado/revisoes/app--t1.json"
+rodar "$repo_jangada/bin/jangada-agentes" --confianca app--t1
+conferir "caso 14: a opção explícita recusa agente de tipo errado" recusado "sem registro protegido válido"
 registro app--t1 "$raiz" "$tmp/sumiu"
 abrir --nome t1
-conferir "caso 14: registro com worktree inexistente é recusado" recusado "não aponta raiz e worktree existentes"
-registro app--t1 "$raiz" "projetos/app"
-abrir --nome t1
-conferir "caso 14: registro com caminho relativo é recusado" recusado "não aponta raiz e worktree existentes"
+conferir "caso 14: registro com worktree inexistente é recusado" recusado "o worktree do registro protegido dela não existe"
 registro app--t1 "$raiz" "$tmp/arbitraria"
 abrir --nome t1
 conferir "caso 14: registro com outro worktree é recusado" recusado "é de outra pasta"
 # O estado gravável pelo agente aponta a pasta desta chamada; não vale.
-jq -n --arg r "$raiz" --arg w "$wts/t1" '{raiz:$r, worktree:$w, dir:$w, delegar:"agy"}' >"$estado/agentes/app--t1.json"
+jq -n --arg r "$raiz" --arg w "$wts/t1" '{raiz:$r, worktree:$w, dir:$w, agente:"claude", delegar:"agy"}' >"$estado/agentes/app--t1.json"
 rm -f "$estado/revisoes/app--t1.json"
 abrir --nome t1
 conferir "caso 14: o estado gravável não substitui o registro protegido" recusado "sem registro protegido válido"

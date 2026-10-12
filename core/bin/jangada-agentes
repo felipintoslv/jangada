@@ -261,10 +261,10 @@ confianca() {
     return 1
   fi
   copia="$JANGADA_ESTADO/revisoes/$s.json"
-  raiz="$(jq -r '.raiz // "" | tostring' "$copia" 2>/dev/null)" || raiz=""
-  worktree="$(jq -r '.worktree // "" | tostring' "$copia" 2>/dev/null)" || worktree=""
+  raiz="$(jq -r 'select(.agente | strings | length > 0) | .raiz | strings' "$copia" 2>/dev/null)" || raiz=""
+  worktree="$(jq -r '.worktree // "" | strings' "$copia" 2>/dev/null)" || worktree=""
   if [[ "$raiz" != /* || ! -d "$raiz" ]]; then
-    echo "$s: sem registro protegido da raiz; confiança do agy não conferida" >&2
+    echo "$s: sem registro protegido válido (agente e raiz); confiança do agy não conferida" >&2
     return 1
   fi
   if ! jangada_agy_tarefa_usa "$s"; then
