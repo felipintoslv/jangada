@@ -544,6 +544,36 @@ jangada_agy_sincronizar_worktree() {
   jangada_agy_confia "$worktree" || return 4
 }
 
+# Valida o registro protegido da tarefa SESSAO (a cópia em revisoes/, que o
+# agente isolado não grava) e deixa a raiz e o worktree dela, resolvidos, em
+# JANGADA_AGY_REG_RAIZ e JANGADA_AGY_REG_WORKTREE; worktree vazio é sessão
+# direta na raiz. Devolve 1 com registro ausente, ilegível, de outra sessão
+# ou com campo de tipo errado: agente é texto não vazio, raiz é caminho
+# absoluto de pasta que existe, worktree é nulo, vazio ou caminho absoluto, e
+# delegar e revisor são nulos ou texto. Devolve 2 quando o worktree
+# registrado não existe mais; a raiz fica resolvida e o worktree, como está
+# no registro.
+jangada_agy_registro_tarefa() {
+  local copia="$JANGADA_ESTADO/revisoes/$1.json"
+  JANGADA_AGY_REG_RAIZ=""; JANGADA_AGY_REG_WORKTREE=""
+  [[ -f "$copia" && ! -L "$copia" ]] || return 1
+  jq -e --arg s "$1" '
+    def texto: type == "string";
+    def caminho: texto and startswith("/");
+    type == "object" and .sessao == $s
+    and (.agente | texto and length > 0)
+    and (.raiz | caminho)
+    and (.worktree | . == null or . == "" or caminho)
+    and (.delegar | . == null or texto)
+    and (.revisor | . == null or texto)' "$copia" >/dev/null 2>&1 || return 1
+  JANGADA_AGY_REG_RAIZ="$(realpath -e -- "$(jq -r '.raiz' "$copia")" 2>/dev/null)" || JANGADA_AGY_REG_RAIZ=""
+  [[ -n "$JANGADA_AGY_REG_RAIZ" && -d "$JANGADA_AGY_REG_RAIZ" ]] || return 1
+  JANGADA_AGY_REG_WORKTREE="$(jq -r '.worktree // ""' "$copia")"
+  [[ -n "$JANGADA_AGY_REG_WORKTREE" ]] || return 0
+  [[ -d "$JANGADA_AGY_REG_WORKTREE" ]] || return 2
+  JANGADA_AGY_REG_WORKTREE="$(realpath -e -- "$JANGADA_AGY_REG_WORKTREE")"
+}
+
 # Diz se a tarefa SESSAO delega ou revisa pelo agy, pela cópia protegida da
 # sessão, que o agente isolado não grava. Cópia antiga, sem o destino da
 # delegação ou sem o revisor, vale o da configuração.

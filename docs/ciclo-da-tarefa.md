@@ -119,8 +119,11 @@ essa autorização ao worktree da tarefa.
   dão o mesmo identificador de sessão. A chamada feita pelo segundo projeto
   anexa à sessão do primeiro e recebe o aviso com a raiz dela. Anexar não cria
   worktree, não copia arquivos, não roda `.jangada/preparar.sh` e, nesse caso,
-  não sincroniza nada. Sessão aberta sem registro protegido válido, ou com
-  worktree registrado que não existe mais, também fica sem a conferência.
+  não sincroniza nada.
+- Registro protegido ausente, ilegível, com campo de tipo errado ou com
+  worktree que não existe mais: a abertura, a restauração e o
+  `jangada-agentes --confianca SESSAO` avisam e não conferem nem sincronizam;
+  a opção explícita devolve erro. A sessão abre ou volta do mesmo jeito.
 - Raiz autorizada: o `jangada-worktree-preparar --so-confianca RAIZ WORKTREE`
   confirma pelo Git que o worktree é registrado no repositório da raiz
   (`git worktree list` lido na raiz e a pasta `.git` comum lida no worktree,

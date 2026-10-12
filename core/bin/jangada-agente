@@ -401,29 +401,30 @@ revisor_efetivo="$(jangada_revisor "$agente" "$revisor")"
 # registro protegido, não desta chamada: a chamada feita por um projeto
 # homônimo não pode levar confiança a uma pasta que não é a da sessão aberta.
 # Pendência não impede a abertura.
-sessao_nova=0
-"${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null || sessao_nova=1
+sessao_nova=$((!anexar))
+if ((sessao_nova)) && "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null; then
+  sessao_nova=0
+fi
 if ((sessao_nova)); then
   if [[ "$delegar" == agy || "$revisor_efetivo" == agy ]]; then
     jangada_agy_conferir_tarefa "$raiz" "$worktree" 1 "$sessao" || true
   fi
 elif ((anexar)); then
-  copia="$JANGADA_ESTADO/revisoes/$sessao.json"
-  raiz_reg="$(jq -r 'select(.agente | strings | length > 0) | .raiz | strings' "$copia" 2>/dev/null)" || raiz_reg=""
-  worktree_reg="$(jq -r '.worktree // "" | strings' "$copia" 2>/dev/null)" || worktree_reg=""
-  raiz_real=""; worktree_real=""
-  [[ "$raiz_reg" != /* ]] || raiz_real="$(realpath -e -- "$raiz_reg" 2>/dev/null)" || raiz_real=""
-  [[ "$worktree_reg" != /* ]] || worktree_real="$(realpath -e -- "$worktree_reg" 2>/dev/null)" || worktree_real=""
-  if [[ -z "$raiz_real" ]]; then
+  registro=0
+  jangada_agy_registro_tarefa "$sessao" || registro=$?
+  raiz_reg="$JANGADA_AGY_REG_RAIZ"; worktree_reg="$JANGADA_AGY_REG_WORKTREE"
+  if ((registro == 1)); then
     echo "a sessão $sessao já existe sem registro protegido válido: confiança do agy não conferida." >&2
-  elif [[ "$raiz_real" != "$(realpath -e -- "$raiz" 2>/dev/null)" ]] \
-    || [[ -z "$worktree_reg" && -n "$worktree" ]] \
-    || [[ -n "$worktree_real" && "$worktree_real" != "$(realpath -e -- "${worktree:-$raiz/.git/sem-worktree}" 2>/dev/null)" ]]; then
-    echo "a sessão $sessao já existe e é de outra pasta (raiz $raiz_real${worktree_reg:+, worktree $worktree_reg}), não de $raiz: esta chamada não cria worktree nem confere a confiança do agy." >&2
-  elif [[ -n "$worktree_reg" && -z "$worktree_real" ]]; then
+  elif [[ "$raiz_reg" != "$(realpath -e -- "$raiz" 2>/dev/null)" ]] \
+    || { [[ -z "$worktree_reg" ]] && [[ -n "$worktree" ]]; } \
+    || { [[ -n "$worktree_reg" ]] && [[ -z "$worktree" ]]; } \
+    || { ((registro == 0)) && [[ -n "$worktree_reg" ]] \
+         && [[ "$worktree_reg" != "$(realpath -e -- "$worktree" 2>/dev/null)" ]]; }; then
+    echo "a sessão $sessao já existe e é de outra pasta (raiz $raiz_reg${worktree_reg:+, worktree $worktree_reg}), não de $raiz: esta chamada não cria worktree nem confere a confiança do agy." >&2
+  elif ((registro == 2)); then
     echo "a sessão $sessao já existe, mas o worktree do registro protegido dela não existe: confiança do agy não conferida." >&2
   elif jangada_agy_tarefa_usa "$sessao"; then
-    jangada_agy_conferir_tarefa "$raiz_real" "$worktree_real" 0 "$sessao" || true
+    jangada_agy_conferir_tarefa "$raiz_reg" "$worktree_reg" 0 "$sessao" || true
   fi
 fi
 

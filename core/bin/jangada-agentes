@@ -251,7 +251,7 @@ refazer_protocolo() {
 # estado gravável pelo agente não é lido. Tarefa que não delega nem revisa
 # pelo agy fica como está. Não recria a tarefa nem roda a preparação.
 confianca() {
-  local s="$1" perguntar="$2" copia raiz worktree
+  local s="$1" perguntar="$2" registro=0
   if [[ ! "$s" =~ ^[A-Za-z0-9_.-]+$ ]]; then
     echo "nome de sessão inválido: $s" >&2
     return 1
@@ -260,18 +260,19 @@ confianca() {
     echo "a confiança do agy só é conferida fora da sessão isolada" >&2
     return 1
   fi
-  copia="$JANGADA_ESTADO/revisoes/$s.json"
-  raiz="$(jq -r 'select(.agente | strings | length > 0) | .raiz | strings' "$copia" 2>/dev/null)" || raiz=""
-  worktree="$(jq -r '.worktree // "" | strings' "$copia" 2>/dev/null)" || worktree=""
-  if [[ "$raiz" != /* || ! -d "$raiz" ]]; then
-    echo "$s: sem registro protegido válido (agente e raiz); confiança do agy não conferida" >&2
+  jangada_agy_registro_tarefa "$s" || registro=$?
+  if ((registro == 1)); then
+    echo "$s: sem registro protegido válido; confiança do agy não conferida" >&2
+    return 1
+  elif ((registro == 2)); then
+    echo "$s: o worktree do registro protegido não existe; confiança do agy não conferida" >&2
     return 1
   fi
   if ! jangada_agy_tarefa_usa "$s"; then
     echo "$s: a tarefa não delega nem revisa pelo agy; nada a conferir" >&2
     return 0
   fi
-  jangada_agy_conferir_tarefa "$raiz" "$worktree" "$perguntar" "$s"
+  jangada_agy_conferir_tarefa "$JANGADA_AGY_REG_RAIZ" "$JANGADA_AGY_REG_WORKTREE" "$perguntar" "$s"
 }
 
 # Reabre a sessão S no tmux: na mesma pasta, com o mesmo agente e na mesma
@@ -342,9 +343,12 @@ restaurar() {
   delegar="$(jangada_delegacao "$base" "$delegar")"
 
   # Sem perguntar: a retomada pode vir da Central, sem terminal de quem
-  # responda. Quem diz se a tarefa usa o agy é o registro protegido dela.
-  if jangada_agy_tarefa_usa "$s"; then
-    confianca "$s" 0 || true
+  # responda. Quem diz se a tarefa usa o agy é o registro protegido dela;
+  # sem registro válido a sessão volta, com o aviso e sem a conferência.
+  if [[ -z "${JANGADA_ISOLADO:-}" ]]; then
+    if ! jangada_agy_registro_tarefa "$s" || jangada_agy_tarefa_usa "$s"; then
+      confianca "$s" 0 || true
+    fi
   fi
 
   cmd="$exe"

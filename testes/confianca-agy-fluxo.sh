@@ -462,12 +462,64 @@ conferir "caso 14: registro com worktree inexistente é recusado" recusado "o wo
 registro app--t1 "$raiz" "$tmp/arbitraria"
 abrir --nome t1
 conferir "caso 14: registro com outro worktree é recusado" recusado "é de outra pasta"
+# Campo de tipo errado não vira sessão direta nem provedor padrão.
+tipo_errado() {
+  registro app--t1 "$raiz" "$wts/t1"
+  jq "$1" "$estado/revisoes/app--t1.json" >"$tmp/json" && cp "$tmp/json" "$estado/revisoes/app--t1.json"
+}
+for filtro in '.worktree = 7' '.worktree = {"a": 1}' '.worktree = ["/tmp"]' '.worktree = false' \
+  '.worktree = "wts/t1"' '.raiz = 7' '.raiz = null' '.delegar = 7' '.revisor = {"a": 1}' \
+  '.sessao = "app--outra"' 'del(.sessao)' '[.]'; do
+  tipo_errado "$filtro"
+  abrir --nome t1
+  conferir "caso 14: abertura recusa registro com $filtro" recusado "sem registro protegido válido"
+  rodar "$repo_jangada/bin/jangada-agentes" --confianca app--t1
+  conferir "caso 14: a opção explícita devolve erro com $filtro" test "$?" = 1
+  conferir "caso 14: a opção explícita recusa registro com $filtro" recusado "sem registro protegido válido"
+done
+registro app--t1 "$raiz" "$tmp/sumiu"
+rodar "$repo_jangada/bin/jangada-agentes" --confianca app--t1
+conferir "caso 14: a opção explícita devolve erro com worktree inexistente" test "$?" = 1
+conferir "caso 14: a opção explícita diz que o worktree registrado não existe" \
+  recusado "o worktree do registro protegido não existe"
 # O estado gravável pelo agente aponta a pasta desta chamada; não vale.
 jq -n --arg r "$raiz" --arg w "$wts/t1" '{raiz:$r, worktree:$w, dir:$w, agente:"claude", delegar:"agy"}' >"$estado/agentes/app--t1.json"
 rm -f "$estado/revisoes/app--t1.json"
 abrir --nome t1
 conferir "caso 14: o estado gravável não substitui o registro protegido" recusado "sem registro protegido válido"
 rm -f "$tmp/sessao-viva"
+
+# Restauração com registro protegido ausente ou inválido: a sessão volta, com
+# o aviso e sem confiança.
+restaurar_t1() {
+  jq -n --arg d "$wts/t1" --arg a "$(date -Iseconds)" \
+    '{estado:"trabalhando", agente:"claude", dir:$d, worktree:$d, raiz:$d, delegar:"agy", atualizado:$a}' \
+    >"$estado/agentes/app--t1.json"
+  rodar "$repo_jangada/bin/jangada-agentes" --restaurar app--t1
+}
+duas_raizes
+rm -f "$estado/revisoes/app--t1.json"
+restaurar_t1
+conferir "caso 14: restauração sem registro protegido avisa e não confia" recusado "app--t1: sem registro protegido válido"
+((autoridade)) && conferir "caso 14: restauração sem registro protegido segue" grep -q "restaurada: app--t1" "$tmp/saida"
+echo lixo >"$estado/revisoes/app--t1.json"
+restaurar_t1
+conferir "caso 14: restauração com registro ilegível avisa e não confia" recusado "app--t1: sem registro protegido válido"
+tipo_errado '.worktree = 7'
+restaurar_t1
+conferir "caso 14: restauração com worktree de tipo errado avisa e não confia" recusado "app--t1: sem registro protegido válido"
+((autoridade)) && conferir "caso 14: restauração com registro inválido segue" grep -q "restaurada: app--t1" "$tmp/saida"
+tipo_errado 'del(.agente)'
+restaurar_t1
+conferir "caso 14: restauração com registro sem agente avisa e não confia" recusado "app--t1: sem registro protegido válido"
+registro app--t1 "$raiz" "$tmp/sumiu"
+restaurar_t1
+conferir "caso 14: restauração com worktree registrado inexistente avisa e não confia" \
+  recusado "o worktree do registro protegido não existe"
+registro app--t1 "$raiz" "$wts/t1"
+restaurar_t1
+conferir "caso 14: restauração com registro válido sincroniza" \
+  jqok -e --arg a "$raiz" --arg b "$raiz_b" --arg w "$wts/t1" '.trustedWorkspaces == [$a, $b, $w]' "$conf_agy"
 
 if ((falhas)); then
   echo "$falhas falha(s)"
