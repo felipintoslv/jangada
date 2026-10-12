@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Confere a retirada do atalho em configurações temporárias."""
+"""Confere o atalho e a migração com configurações temporárias."""
 import json
 import os
 from pathlib import Path
@@ -9,15 +9,8 @@ import tempfile
 import unittest
 
 REPO = Path(__file__).resolve().parents[1]
-ANTIGA = REPO / 'migrations/202610121200-barra-sambura.sh'
-MIGRACAO = REPO / 'migrations/202610122100-retirar-barra-sambura.sh'
+MIGRACAO = REPO / 'migrations/202610121200-barra-sambura.sh'
 MODULO = 'custom/sambura'
-ORIGINAL = {
-    'format': 'Samburá',
-    'tooltip': True,
-    'tooltip-format': 'Abrir Samburá',
-    'on-click': 'setsid -f "${JANGADA_PROJETOS:-$HOME/Projetos}/sambura/bin/sambura"',
-}
 
 
 def carregar(texto):
@@ -35,122 +28,133 @@ class Sambura(unittest.TestCase):
         self.alvo.parent.mkdir(parents=True)
         self.ambiente = dict(os.environ, XDG_CONFIG_HOME=str(self.tmp),
                              JANGADA_PATH=str(REPO), JANGADA_SIMULAR='0')
+        self.padrao = carregar((REPO / 'shell/waybar/config.jsonc').read_text())
 
-    def migrar(self, simular=False, script=MIGRACAO):
+    def migrar(self, simular=False):
         ambiente = dict(self.ambiente, JANGADA_SIMULAR=str(int(simular)))
-        return subprocess.run(['bash', str(script)], env=ambiente,
+        return subprocess.run(['bash', str(MIGRACAO)], env=ambiente,
                               capture_output=True, text=True)
 
     def copias(self):
         return list(self.alvo.parent.glob('config.jsonc.jangada-*.bak'))
 
-    def conferir_migracao(self):
-        resultado = self.migrar()
-        self.assertEqual(resultado.returncode, 0, resultado.stderr)
-        return self.alvo.read_text()
+    def test_padrao_e_clique(self):
+        self.assertEqual(self.padrao['modules-left'][:2], ['custom/menu', MODULO])
+        modulo = self.padrao[MODULO]
+        self.assertEqual(modulo['format'], 'Samburá')
+        self.assertTrue(modulo['tooltip'])
+        self.assertEqual(modulo['tooltip-format'], 'Abrir Samburá')
+        comando = modulo['on-click']
+        self.assertTrue(comando.startswith('setsid -f '))
+        # O programa falso permanece vivo após o retorno do comando da barra.
+        projetos = self.tmp / 'projetos com espaços'
+        executavel = projetos / 'sambura/bin/sambura'
+        executavel.parent.mkdir(parents=True)
+        executavel.write_text('#!/bin/sh\ntouch "$MARCA"\nsleep 1\ntouch "$FIM"\n')
+        executavel.chmod(0o755)
+        marca, fim = self.tmp / 'marca', self.tmp / 'fim'
+        ambiente = dict(self.ambiente, JANGADA_PROJETOS=str(projetos),
+                         MARCA=str(marca), FIM=str(fim))
+        subprocess.run(['sh', '-c', comando], env=ambiente, check=True, timeout=0.5,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.assertFalse(fim.exists())
+        subprocess.run(['sh', '-c', 'while [ ! -f "$FIM" ]; do sleep 0.05; done'],
+                       env=ambiente, check=True, timeout=3)
+        self.assertTrue(marca.exists())
+        # Sem projetos definidos, confira a expansão sem abrir o programa real.
+        binario = self.tmp / 'bin'
+        binario.mkdir()
+        setsid = binario / 'setsid'
+        setsid.write_text('#!/bin/sh\nprintf "%s" "$2"\n')
+        setsid.chmod(0o755)
+        ambiente.pop('JANGADA_PROJETOS')
+        ambiente['PATH'] = str(binario) + os.pathsep + ambiente['PATH']
+        resultado = subprocess.run(['sh', '-c', comando], env=ambiente, check=True,
+                                   capture_output=True, text=True)
+        self.assertEqual(resultado.stdout, str(Path.home() / 'Projetos/sambura/bin/sambura'))
 
-    def test_padrao_e_estilo_sem_sambura(self):
-        padrao = carregar((REPO / 'shell/waybar/config.jsonc').read_text())
-        self.assertNotIn(MODULO, padrao)
-        for lista in ('modules-left', 'modules-center', 'modules-right'):
-            self.assertNotIn(MODULO, padrao[lista])
-        self.assertEqual(padrao['modules-left'], ['custom/menu', 'hyprland/workspaces',
-                         'custom/agentes', 'custom/indicadores', 'hyprland/window'])
-        self.assertNotIn('#custom-sambura', (REPO / 'shell/waybar/base.css').read_text())
-        self.assertNotIn(MODULO, (REPO / 'shell/bin/jangada-barra').read_text())
-
-    def test_migracao_preserva_jsonc_simula_e_repete(self):
+    def test_migracao_preserva_jsonc(self):
         antes = '''{
  // custom/sambura em comentário não é um módulo
- "modules-right": ["clock", /* pessoal */ "custom/menu", "custom/sambura",],
+ "modules-right": ["clock", /* pessoal */ "custom/menu",],
  "clock": {"format": "http://exemplo//*texto*/"},
  "custom/menu": {"on-click": "menu pessoal"},
  "height": 47,
- "custom/sambura": %s,
-}''' % json.dumps(ORIGINAL)
+}'''
         self.alvo.write_text(antes)
         self.assertEqual(self.migrar(simular=True).returncode, 0)
         self.assertEqual(self.alvo.read_text(), antes)
         self.assertEqual(self.copias(), [])
-        depois = self.conferir_migracao()
+        resultado = self.migrar()
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+        depois = self.alvo.read_text()
+        dados = carregar(depois)
         esperado = carregar(antes)
-        esperado['modules-right'].remove(MODULO)
-        del esperado[MODULO]
-        self.assertEqual(carregar(depois), esperado)
-        for trecho in ['// custom/sambura em comentário não é um módulo',
-                       '/* pessoal */', '"height": 47,',
-                       '"clock": {"format": "http://exemplo//*texto*/"}',
-                       '"custom/menu": {"on-click": "menu pessoal"}']:
-            self.assertIn(trecho, depois)
+        esperado['modules-right'].append(MODULO)
+        esperado[MODULO] = self.padrao[MODULO]
+        self.assertEqual(dados, esperado)
+        self.assertIn('// custom/sambura em comentário', depois)
+        self.assertIn('/* pessoal */', depois)
         self.assertEqual(len(self.copias()), 1)
         self.assertEqual(self.copias()[0].read_text(), antes)
-        self.assertEqual(self.conferir_migracao(), depois)
+        self.assertEqual(self.migrar().returncode, 0)
+        self.assertEqual(self.alvo.read_text(), depois)
         self.assertEqual(len(self.copias()), 1)
 
-    def test_modulos_personalizados_e_parciais_intactos(self):
-        for definicao in [None, {'format': 'Meu Samburá', 'on-click': 'pessoal'},
-                          dict(ORIGINAL, **{'on-click': 'pessoal'}),
-                          dict(ORIGINAL, rotate=90), dict(ORIGINAL, tooltip=1)]:
-            with self.subTest(definicao=definicao):
-                dados = {'modules-left': ['custom/menu', MODULO, 'custom/sambura#pessoal'],
-                         'group/pessoal': {'modules': [MODULO]}}
-                if definicao is not None:
-                    dados[MODULO] = definicao
-                antes = json.dumps(dados)
-                self.alvo.write_text(antes)
-                self.assertEqual(self.conferir_migracao(), antes)
-                self.assertEqual(self.copias(), [])
+    def test_texto_sem_simbolo_e_legibilidade(self):
+        css = (REPO / 'shell/waybar/base.css').read_text()
+        menu = re.search(r'^#custom-menu \{([^}]+)\}', css, re.M)[1]
+        sambura = re.search(r'^#custom-sambura \{([^}]+)\}', css, re.M)[1]
+        self.assertIn('background-image: -gtk-recolor(url("../logo/jangada-symbolic.svg"));', menu)
+        self.assertNotIn('background-', sambura)
+        self.assertIn('padding: 0 8px;', sambura)
+        self.assertIn('color: @primaria;', sambura)
+        self.assertNotIn('font-size: 0', sambura)
+        self.assertIn('#custom-sambura:hover {\n  color: @atencao;', css)
+        vertical = re.search(r'window#waybar.vertical #custom-sambura \{([^}]+)\}', css)[1]
+        self.assertIn('padding: 8px 0;', vertical)
+        self.assertNotIn('background-', vertical)
 
-    def test_posicoes_virgulas_e_definicao_isolada(self):
-        for lista in [[MODULO], [MODULO, 'clock'], ['clock', MODULO],
-                      ['clock', MODULO, 'tray'], [MODULO, MODULO],
-                      ['clock', MODULO, MODULO], []]:
-            for campo in ('modules-left', 'modules-center', 'modules-right'):
-                for primeiro in (True, False):
-                    with self.subTest(lista=lista, campo=campo, primeiro=primeiro):
-                        dados = {campo: lista, 'custom/sambura#pessoal': {'format': 'pessoal'}}
-                        if primeiro:
-                            dados = {MODULO: ORIGINAL, **dados}
-                        else:
-                            dados[MODULO] = ORIGINAL
-                        self.alvo.write_text(json.dumps(dados))
-                        depois = carregar(self.conferir_migracao())
-                        del dados[MODULO]
-                        dados[campo] = [item for item in lista if item != MODULO]
-                        self.assertEqual(depois, dados)
+    def test_modulo_pessoal_e_insercao_parcial(self):
+        for lista, definido in [(['custom/menu'], True), ([MODULO], False),
+                                (['custom/menu', MODULO], True)]:
+            with self.subTest(lista=lista, definido=definido):
+                dados = {'modules-left': lista}
+                if definido:
+                    dados[MODULO] = {'format': 'Meu Samburá', 'on-click': 'pessoal'}
+                self.alvo.write_text(json.dumps(dados))
+                self.assertEqual(self.migrar().returncode, 0)
+                depois = carregar(self.alvo.read_text())
+                self.assertEqual(depois['modules-left'].count(MODULO), 1)
+                self.assertEqual(depois[MODULO], dados.get(MODULO, self.padrao[MODULO]))
+                texto = self.alvo.read_text()
+                self.assertEqual(self.migrar().returncode, 0)
+                self.assertEqual(self.alvo.read_text(), texto)
 
-    def test_sem_copia_sem_modulo_e_invalido(self):
+    def test_sem_copia_sem_menu_e_invalido(self):
         self.assertEqual(self.migrar().returncode, 0)
         self.assertFalse(self.alvo.exists())
-        for texto in ['{"modules-left":["clock"]}', '{"modules-left": [',
-                      '{"custom/sambura": {}, "custom/sambura": {}}', '[{}, 1]']:
+        for texto in ['{"modules-left":["clock"]}', '{"modules-left": [']:
             self.alvo.write_text(texto)
             resultado = self.migrar()
-            self.assertEqual(resultado.returncode == 0, texto == '{"modules-left":["clock"]}')
+            self.assertEqual(resultado.returncode == 0, texto.endswith('}'))
             self.assertEqual(self.alvo.read_text(), texto)
             self.assertEqual(self.copias(), [])
 
     def test_varias_barras(self):
-        pessoal = dict(ORIGINAL, **{'on-click': 'pessoal'})
-        antes = [{'modules-left': ['custom/menu', MODULO, 'clock'], MODULO: ORIGINAL},
-                 {'modules-center': [MODULO], MODULO: pessoal, 'position': 'bottom'},
-                 {'modules-right': [MODULO]}, {'modules-right': ['tray']},
-                 {'modules-left': [MODULO], 'modules-right': [MODULO], MODULO: ORIGINAL}]
+        antes = [{'modules-left': ['custom/menu', 'clock']},
+                 {'modules-center': ['custom/menu'], 'position': 'bottom'},
+                 {'modules-right': ['tray']}]
         self.alvo.write_text(json.dumps(antes))
-        depois = carregar(self.conferir_migracao())
-        self.assertEqual(depois[0], {'modules-left': ['custom/menu', 'clock']})
-        self.assertEqual(depois[1:4], antes[1:4])
-        self.assertEqual(depois[4], {'modules-left': [], 'modules-right': []})
+        self.assertEqual(self.migrar().returncode, 0)
+        depois = carregar(self.alvo.read_text())
+        for barra, lista in zip(depois[:2], ['modules-left', 'modules-center']):
+            self.assertEqual(barra[lista][:2], ['custom/menu', MODULO])
+            self.assertEqual(barra[MODULO], self.padrao[MODULO])
+        self.assertEqual(depois[2], antes[2])
         texto = self.alvo.read_text()
-        self.assertEqual(self.conferir_migracao(), texto)
-
-    def test_migracao_antiga_pendente_com_padroes_novos(self):
-        antes = '{"modules-left": ["custom/menu", "clock"], "height": 47}'
-        self.alvo.write_text(antes)
-        resultado = self.migrar(script=ANTIGA)
-        self.assertEqual(resultado.returncode, 0, resultado.stderr)
-        self.assertEqual(carregar(self.alvo.read_text())[MODULO], ORIGINAL)
-        self.assertEqual(carregar(self.conferir_migracao()), carregar(antes))
+        self.assertEqual(self.migrar().returncode, 0)
+        self.assertEqual(self.alvo.read_text(), texto)
 
 
 if __name__ == '__main__':
