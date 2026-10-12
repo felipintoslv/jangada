@@ -506,6 +506,88 @@ jangada_agy_ajustar_confianca() {
   return 0
 }
 
+# Diz se WORKTREE é worktree registrado do repositório cuja pasta de trabalho
+# é RAIZ, pelo Git e pelos dois lados: a lista de worktrees lida na raiz e a
+# pasta .git comum lida no worktree. Os caminhos chegam resolvidos. O estado
+# da sessão é gravável pelo agente isolado e não entra nesta conferência.
+_jangada_agy_worktree_da_raiz() {
+  local raiz="$1" worktree="$2" linha topo comum_r comum_w achou=0
+  for linha in "$raiz" "$worktree"; do
+    topo="$(jangada_git_seguro -C "$linha" rev-parse --show-toplevel 2>/dev/null)" || return 1
+    [[ "$(realpath -e -- "$topo" 2>/dev/null)" == "$linha" ]] || return 1
+  done
+  comum_r="$(jangada_git_seguro -C "$raiz" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  comum_w="$(jangada_git_seguro -C "$worktree" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  comum_r="$(realpath -e -- "$comum_r" 2>/dev/null)" && comum_w="$(realpath -e -- "$comum_w" 2>/dev/null)" || return 1
+  [[ "$comum_r" == "$comum_w" ]] || return 1
+  while IFS= read -r -d '' linha; do
+    [[ "$linha" == "worktree "* ]] || continue
+    [[ "$(realpath -e -- "${linha#worktree }" 2>/dev/null)" == "$worktree" ]] && achou=1
+  done < <(jangada_git_seguro -C "$raiz" worktree list --porcelain -z 2>/dev/null)
+  ((achou))
+}
+
+# Confiança derivada: WORKTREE entra em trustedWorkspaces só quando o agy já
+# confia em RAIZ e o Git confirma que WORKTREE é worktree dela. A raiz nunca
+# é gravada aqui: quem a autoriza é o usuário, na pergunta do próprio agy.
+# Roda só fora do isolamento. Devolve 0 com o worktree confiável (conferido
+# depois da gravação), 2 se o agy não confia na raiz, 3 se o worktree não
+# corresponde à raiz, 4 se a gravação não foi confirmada e 5 no isolamento.
+jangada_agy_sincronizar_worktree() {
+  local raiz worktree
+  [[ -z "${JANGADA_ISOLADO:-}" ]] || return 5
+  raiz="$(realpath -e -- "$1" 2>/dev/null)" && worktree="$(realpath -e -- "$2" 2>/dev/null)" || return 3
+  [[ "$raiz" != "$worktree" ]] && _jangada_agy_worktree_da_raiz "$raiz" "$worktree" || return 3
+  jangada_agy_confia "$raiz" || return 2
+  jangada_agy_confia "$worktree" && return 0
+  jangada_agy_ajustar_confianca adicionar "$worktree"
+  jangada_agy_confia "$worktree" || return 4
+}
+
+# Conferência da confiança do agy ao abrir ou retomar uma tarefa que delega
+# ou revisa pelo agy. WORKTREE vazio é sessão direta na raiz. Com PERGUNTAR=1,
+# terminal e agy instalado, oferece abrir o agy na raiz; a resposta à pergunta
+# de confiança é do usuário, dentro do agy, e o que vale depois é o
+# settings.json relido, nunca o tempo passado nem a saída do agy.
+# Uso: jangada_agy_conferir_tarefa RAIZ WORKTREE PERGUNTAR SESSAO
+# Devolve 0 se o agy atende na pasta da tarefa.
+jangada_agy_conferir_tarefa() {
+  local raiz="$1" worktree="$2" perguntar="$3" sessao="$4" r=0 resposta=""
+  [[ -z "${JANGADA_ISOLADO:-}" ]] || return 0
+  _jangada_agy_conferir() {
+    if [[ -n "$worktree" ]]; then
+      "$JANGADA_PATH/bin/jangada-worktree-preparar" --so-confianca "$raiz" "$worktree" >/dev/null
+    else
+      jangada_agy_confia "$raiz" || return 2
+    fi
+  }
+  if ! command -v agy >/dev/null 2>&1; then
+    echo "agy não instalado: confiança da tarefa não conferida. Depois de instalar, rode: jangada-agentes --confianca $sessao" >&2
+    return 1
+  fi
+  _jangada_agy_conferir || r=$?
+  if ((r == 2)); then
+    echo "o agy não confia na raiz $raiz" >&2
+    if ((perguntar)) && [[ -t 0 && -t 2 ]]; then
+      read -r -p "abrir o agy em $raiz para você responder à pergunta de confiança? [s/N] " resposta || resposta=""
+      if [[ "$resposta" =~ ^[sS]$ ]]; then
+        echo "responda à pergunta do agy e saia dele para continuar" >&2
+        (cd "$raiz" && env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 agy) || true
+        r=0
+        _jangada_agy_conferir || r=$?
+      fi
+    fi
+  fi
+  ((r == 0)) && return 0
+  echo "confiança do agy pendente: delegação e revisão pelo agy ficam indisponíveis nesta tarefa." >&2
+  if ((r == 2)); then
+    echo "Para retomar, abra o agy em $raiz, responda à pergunta de confiança e rode: jangada-agentes --confianca $sessao" >&2
+  else
+    echo "Para repetir a conferência, rode fora da sessão isolada: jangada-agentes --confianca $sessao" >&2
+  fi
+  return 1
+}
+
 # Executa comando ou função sob trava da pasta. A trava é a própria pasta
 # aberta só para leitura: um arquivo de trava aberto para escrita seguiria um
 # link simbólico posto pelo agente isolado e truncaria o alvo fora do isolamento.

@@ -3,7 +3,12 @@
 # projeto precisa para rodar (.Renviron, .env, dados locais).
 #
 # Uso: jangada-worktree-preparar [opções] RAIZ WORKTREE
-#   --simular    mostra o que seria feito, sem fazer
+#   --simular        mostra o que seria feito, sem fazer
+#   --so-confianca   só confere e sincroniza a confiança do agy no worktree:
+#                    não copia, não liga e não roda .jangada/preparar.sh.
+#                    Sai com 0 (worktree confiável), 2 (o agy não confia na
+#                    raiz), 3 (o worktree não é da raiz), 4 (gravação não
+#                    confirmada) ou 5 (sessão isolada)
 #
 # Lê três arquivos na raiz do repositório, todos opcionais:
 #   .worktreeinclude       padrões no formato do .gitignore; o que casar e for
@@ -21,11 +26,12 @@ set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
-simular=0
+simular=0; so_confianca=0
 while (($#)); do
   case "$1" in
     --simular) simular=1; shift ;;
-    -h|--ajuda) sed -n '2,20s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    --so-confianca) so_confianca=1; shift ;;
+    -h|--ajuda) sed -n '2,25s/^# \{0,1\}//p' "$0"; exit 0 ;;
     --) shift; break ;;
     -*) echo "opção desconhecida: $1" >&2; exit 1 ;;
     *) break ;;
@@ -43,6 +49,37 @@ copia_max_mb="${JANGADA_WORKTREE_COPIA_MAX:-500}"
 [[ "$copia_max_mb" =~ ^[0-9]+$ ]] || copia_max_mb=500
 
 avisar() { printf 'preparar: %s\n' "$*" >&2; }
+
+# Confiança de pasta para o Antigravity (agy), que evita a pergunta
+# interativa ao rodar o agy no worktree. A confiança libera os agentes, as
+# regras e o MCP da pasta, então o worktree só herda a do repositório
+# principal: se o usuário não confiou na raiz, o agy pergunta no worktree
+# como perguntaria nela.
+sincronizar_confianca() {
+  local r=0
+  if ((simular)); then
+    if jangada_agy_confia "$raiz"; then
+      echo "adicionaria $worktree a trustedWorkspaces"
+    else
+      echo "preparar: o agy não confia em $raiz; o worktree fica sem confiança"
+    fi
+    return 0
+  fi
+  jangada_agy_sincronizar_worktree "$raiz" "$worktree" || r=$?
+  case "$r" in
+    2) echo "preparar: o agy não confia em $raiz; o worktree fica sem confiança" ;;
+    3) avisar "$worktree não é worktree do repositório em $raiz; confiança do agy não alterada" ;;
+    4) avisar "a gravação da confiança do agy em $worktree não foi confirmada" ;;
+    5) avisar "sessão isolada não altera a confiança do agy" ;;
+  esac
+  return "$r"
+}
+
+if ((so_confianca)); then
+  codigo=0
+  sincronizar_confianca || codigo=$?
+  exit "$codigo"
+fi
 
 # Recusa caminho absoluto e qualquer ".." : tudo tem de ficar dentro das duas
 # pastas, e o arquivo de padrões vem do repositório, que pode ser de terceiros.
@@ -185,17 +222,7 @@ if [[ -f "$raiz/.jangada/preparar.sh" ]]; then
   fi
 fi
 
-# 4. Confiança de pasta para o Antigravity (agy).
-# Evita a pergunta interativa de segurança por caminho absoluto ao abrir um
-# agente agy no worktree recém-criado. A confiança libera os agentes, as regras
-# e o MCP da pasta, então o worktree só herda a do repositório principal: se o
-# usuário não confiou na raiz, o agy pergunta no worktree como perguntaria nela.
-if ! jangada_agy_confia "$raiz"; then
-  echo "preparar: o agy não confia em $raiz; o worktree fica sem confiança"
-elif ((simular)); then
-  echo "adicionaria $worktree a trustedWorkspaces"
-else
-  jangada_agy_ajustar_confianca adicionar "$worktree" || true
-fi
+# 4. Confiança do agy no worktree.
+sincronizar_confianca || true
 
 exit 0
