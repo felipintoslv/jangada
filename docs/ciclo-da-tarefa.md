@@ -91,7 +91,8 @@ flowchart TD
 - `bin/jangada-worktree-preparar` leva ao worktree o que o git não leva: o que
   casa com `.worktreeinclude` e é ignorado pelo git é copiado, o que está em
   `.jangada/links` vira link e `.jangada/preparar.sh` roda por último.
-- Só o worktree recém-criado passa pela preparação completa. No
+- Só o worktree recém-criado passa pela preparação completa, chamada com
+  `--sem-confianca`: a confiança do agy fica para a conferência adiante. No
   reaproveitado e na sessão retomada nada é copiado nem executado: roda só a
   conferência da confiança do agy.
 - Revisor: `--revisor`, depois o `JANGADA_VALIDAR_REVISOR` do perfil, depois o

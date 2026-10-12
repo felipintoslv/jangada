@@ -24,7 +24,7 @@ conf_agy="$tmp/home/.gemini/antigravity-cli/settings.json"
 estado="$tmp/state/jangada"
 raiz="$tmp/projetos/app"
 wts="$tmp/home/.local/share/jangada-worktrees/app"
-mkdir -p "$tmp/bin" "$tmp/sem-agy" "${conf_agy%/*}" "$tmp/config/jangada" "$estado/agentes" \
+mkdir -p "$tmp/bin" "$tmp/sem-agy" "${conf_agy%/*}" "$tmp/config/jangada/agentes" "$estado/agentes" \
   "$estado/revisoes" "$raiz" "$tmp/arbitraria" "$tmp/outro"
 
 cat >"$tmp/bin/agy" <<'EOF'
@@ -199,6 +199,10 @@ abrir --nome t1 --delegacao local --revisor codex
 conferir "caso 6: sem agy no perfil, nada é sincronizado" \
   jqok -e --arg r "$raiz" '.trustedWorkspaces == [$r]' "$conf_agy"
 conferir "caso 6: o agy não é aberto" test "$(chamadas_agy)" = 0
+abrir --nome nova3 --delegacao local --revisor codex
+conferir "caso 6: worktree novo de perfil sem agy não recebe a confiança" \
+  jqok -e --arg r "$raiz" '.trustedWorkspaces == [$r]' "$conf_agy"
+((autoridade)) && conferir "caso 6: o worktree novo foi preparado" test -f "$wts/nova3/.env"
 
 # Caso 7: atualização explícita de tarefa existente, pela cópia protegida.
 so_raiz
@@ -320,6 +324,25 @@ rodar "$repo_jangada/bin/jangada-agentes" --restaurar app--t1
 conferir "caso 13: restauração sincroniza depois da autorização" \
   jqok -e --arg r "$raiz" --arg w "$wts/t1" '.trustedWorkspaces == [$r, $w]' "$conf_agy"
 conferir "caso 13: restauração não copia nem prepara" intacto
+# Provedores calculados na restauração divergem do registro protegido.
+printf 'COMANDO=claude\nJANGADA_DELEGAR=local\n' >"$tmp/config/jangada/agentes/semagy.conf"
+estado_t1() {
+  jq -n --arg d "$wts/t1" --arg a "$(date -Iseconds)" --arg p "$1" --arg v "$2" \
+    '{estado:"trabalhando", agente:"claude", dir:$d, worktree:$d, atualizado:$a, perfil:$p, revisor:$v}
+     | with_entries(select(.value != ""))' >"$estado/agentes/app--t1.json"
+}
+so_raiz
+copia_protegida agy codex
+estado_t1 semagy codex
+rodar "$repo_jangada/bin/jangada-agentes" --restaurar app--t1
+conferir "caso 13: registro protegido com agy sincroniza, apesar do perfil do estado" \
+  jqok -e --arg r "$raiz" --arg w "$wts/t1" '.trustedWorkspaces == [$r, $w]' "$conf_agy"
+vazio
+copia_protegida local codex
+estado_t1 "" ""
+rodar "$repo_jangada/bin/jangada-agentes" --restaurar app--t1
+conferir "caso 13: registro protegido sem agy não recebe o fluxo na restauração" \
+  bash -c '! grep -q "não confia" "$1" && [ "$2" = "[]" ]' _ "$tmp/saida" "$(confiaveis)"
 
 if ((falhas)); then
   echo "$falhas falha(s)"

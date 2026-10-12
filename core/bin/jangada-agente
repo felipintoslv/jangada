@@ -354,8 +354,9 @@ if ((eh_git)) && [[ -n "$nome" ]]; then
     ramo_novo=1
   fi
   # Só num worktree recém-criado: o reaproveitado já tem o que precisa, e o
-  # que o agente mudou ali não pode ser sobrescrito.
-  ((worktree_novo)) && "$JANGADA_PATH/bin/jangada-worktree-preparar" "$raiz" "$worktree"
+  # que o agente mudou ali não pode ser sobrescrito. A confiança do agy fica
+  # para a conferência adiante, que conhece os provedores da tarefa.
+  ((worktree_novo)) && "$JANGADA_PATH/bin/jangada-worktree-preparar" --sem-confianca "$raiz" "$worktree"
   dir="$worktree"
 fi
 

@@ -341,8 +341,9 @@ restaurar() {
   done
   delegar="$(jangada_delegacao "$base" "$delegar")"
 
-  # Sem perguntar: a retomada pode vir da Central, sem terminal de quem responda.
-  if [[ "$delegar" == agy || "$(jangada_revisor "$base" "$rev")" == agy ]]; then
+  # Sem perguntar: a retomada pode vir da Central, sem terminal de quem
+  # responda. Quem diz se a tarefa usa o agy é o registro protegido dela.
+  if jangada_agy_tarefa_usa "$s"; then
     confianca "$s" 0 || true
   fi
 

@@ -4,6 +4,8 @@
 #
 # Uso: jangada-worktree-preparar [opções] RAIZ WORKTREE
 #   --simular        mostra o que seria feito, sem fazer
+#   --sem-confianca  prepara sem mexer na confiança do agy (tarefa que não
+#                    delega nem revisa por ele)
 #   --so-confianca   só confere e sincroniza a confiança do agy no worktree:
 #                    não copia, não liga e não roda .jangada/preparar.sh.
 #                    Sai com 0 (worktree confiável), 2 (o agy não confia na
@@ -26,12 +28,13 @@ set -euo pipefail
 # shellcheck source=bin/jangada-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
-simular=0; so_confianca=0
+simular=0; so_confianca=0; sem_confianca=0
 while (($#)); do
   case "$1" in
     --simular) simular=1; shift ;;
     --so-confianca) so_confianca=1; shift ;;
-    -h|--ajuda) sed -n '2,25s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    --sem-confianca) sem_confianca=1; shift ;;
+    -h|--ajuda) sed -n '2,27s/^# \{0,1\}//p' "$0"; exit 0 ;;
     --) shift; break ;;
     -*) echo "opção desconhecida: $1" >&2; exit 1 ;;
     *) break ;;
@@ -223,6 +226,6 @@ if [[ -f "$raiz/.jangada/preparar.sh" ]]; then
 fi
 
 # 4. Confiança do agy no worktree.
-sincronizar_confianca || true
+((sem_confianca)) || sincronizar_confianca || true
 
 exit 0
