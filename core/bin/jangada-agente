@@ -387,10 +387,16 @@ revisor_efetivo="$(jangada_revisor "$agente" "$revisor")"
 
 # Confiança do agy, só para quem delega ou revisa por ele. Sessão nova, com
 # terminal, pode oferecer a pergunta nativa do agy na raiz; sessão que já
-# existe só sincroniza. Pendência não impede a abertura.
-sessao_nova=0
+# existe só sincroniza, e quem diz se ela usa o agy é o registro protegido
+# dela, não as opções desta chamada. Pendência não impede a abertura.
+sessao_nova=0; usa_agy=0
 "${JANGADA_TMUX[@]}" has-session -t "=$sessao" 2>/dev/null || sessao_nova=1
-if [[ "$delegar" == agy || "$revisor_efetivo" == agy ]]; then
+if ((sessao_nova)); then
+  [[ "$delegar" != agy && "$revisor_efetivo" != agy ]] || usa_agy=1
+elif jangada_agy_tarefa_usa "$sessao"; then
+  usa_agy=1
+fi
+if ((usa_agy)); then
   jangada_agy_conferir_tarefa "$raiz" "$worktree" "$sessao_nova" "$sessao" || true
 fi
 
@@ -529,7 +535,7 @@ if ((sessao_nova)); then
   # isolamento, a cópia cairia na pasta que some no fim.
   if [[ -z "${JANGADA_ISOLADO:-}" ]]; then
     (umask 077; mkdir -p "$JANGADA_ESTADO/revisoes") \
-      && jq '{sessao, raiz, worktree, ramo, base, agente, desde, tarefa, inicio, revisor, execucao, atividade, tarefa_id}
+      && jq '{sessao, raiz, worktree, ramo, base, agente, desde, tarefa, inicio, revisor, delegar, execucao, atividade, tarefa_id}
              | with_entries(select(.value != null))' "$estado_dir/$sessao.json" \
            >"$JANGADA_ESTADO/revisoes/$sessao.json" \
       || echo "aviso: não gravei a cópia da sessão em $JANGADA_ESTADO/revisoes" >&2

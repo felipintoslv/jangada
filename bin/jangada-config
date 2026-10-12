@@ -544,6 +544,19 @@ jangada_agy_sincronizar_worktree() {
   jangada_agy_confia "$worktree" || return 4
 }
 
+# Diz se a tarefa SESSAO delega ou revisa pelo agy, pela cópia protegida da
+# sessão, que o agente isolado não grava. Cópia antiga, sem o destino da
+# delegação ou sem o revisor, vale o da configuração.
+jangada_agy_tarefa_usa() {
+  local copia="$JANGADA_ESTADO/revisoes/$1.json" agente delegar revisor
+  agente="$(jq -er '.agente | strings' "$copia" 2>/dev/null)" || return 1
+  delegar="$(jq -r '.delegar // "" | tostring' "$copia")"
+  revisor="$(jq -r '.revisor // "" | tostring' "$copia")"
+  [[ -n "$delegar" ]] || delegar="$(jangada_delegacao "$agente" "${JANGADA_DELEGAR:-}")"
+  [[ -n "$revisor" ]] || revisor="$(jangada_revisor "$agente" "${JANGADA_VALIDAR_REVISOR:-}")"
+  [[ "$delegar" == agy || "$revisor" == agy ]]
+}
+
 # Conferência da confiança do agy ao abrir ou retomar uma tarefa que delega
 # ou revisa pelo agy. WORKTREE vazio é sessão direta na raiz. Com PERGUNTAR=1,
 # terminal e agy instalado, oferece abrir o agy na raiz; a resposta à pergunta

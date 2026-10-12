@@ -119,8 +119,11 @@ fi
 # grava em revisoes/ ao abrir a sessão.
 git -C "$raiz" worktree add -q -b agente/t1 "$wts/t1"
 echo SEGREDO=agente >"$wts/t1/.env"
-jq -n --arg r "$raiz" --arg w "$wts/t1" '{sessao:"app--t1", raiz:$r, worktree:$w, ramo:"agente/t1", base:"main"}' \
-  >"$estado/revisoes/app--t1.json"
+copia_protegida() {
+  jq -n --arg r "$raiz" --arg w "$wts/t1" --arg d "$1" --arg v "$2" \
+    '{sessao:"app--t1", raiz:$r, worktree:$w, ramo:"agente/t1", base:"main", agente:"claude", delegar:$d, revisor:$v}' \
+    >"$estado/revisoes/app--t1.json"
+}
 intacto() { grep -qx SEGREDO=agente "$wts/t1/.env" && [[ ! -e "$wts/t1/.preparou" ]]; }
 
 # Caso 2: com terminal. Recusa da oferta, agy aberto sem resposta e, por fim,
@@ -164,13 +167,28 @@ abrir --nome t1
 conferir "caso 4: repetir não duplica a confiança" \
   jqok -e --arg r "$raiz" --arg w "$wts/t1" '.trustedWorkspaces == [$r, $w]' "$conf_agy"
 
-# Caso 5: sessão que já existe só sincroniza.
+# Caso 5: sessão que já existe só sincroniza, e os provedores valem os do
+# registro protegido da tarefa, não os da chamada que anexa.
 so_raiz
+copia_protegida agy codex
 touch "$tmp/sessao-viva"
-abrir --nome t1
-rm -f "$tmp/sessao-viva"
-conferir "caso 5: sessão já aberta recebe a confiança" \
+abrir --nome t1 --delegacao local --revisor codex
+conferir "caso 5: sessão já aberta com agy recebe a confiança, apesar das opções da chamada" \
   jqok -e --arg w "$wts/t1" '.trustedWorkspaces | index($w)' "$conf_agy"
+so_raiz
+copia_protegida local agy
+abrir --nome t1 --delegacao local --revisor codex
+conferir "caso 5: revisor agy no registro também conta" \
+  jqok -e --arg w "$wts/t1" '.trustedWorkspaces | index($w)' "$conf_agy"
+so_raiz
+copia_protegida local codex
+abrir --nome t1
+conferir "caso 5: sessão já aberta sem agy não recebe o fluxo, apesar dos padrões da chamada" \
+  bash -c '! grep -q "agy" "$1" && [ "$2" = 1 ]' _ "$tmp/saida" "$(jq '.trustedWorkspaces | length' "$conf_agy")"
+vazio
+abrir --nome t1
+conferir "caso 5: sessão já aberta sem agy não recebe aviso de raiz" bash -c '! grep -q "agy" "$1"' _ "$tmp/saida"
+rm -f "$tmp/sessao-viva"
 
 # Caso 6: perfil que não usa o agy não recebe o fluxo.
 vazio
@@ -183,6 +201,18 @@ conferir "caso 6: sem agy no perfil, nada é sincronizado" \
 conferir "caso 6: o agy não é aberto" test "$(chamadas_agy)" = 0
 
 # Caso 7: atualização explícita de tarefa existente, pela cópia protegida.
+so_raiz
+copia_protegida local codex
+rodar "$repo_jangada/bin/jangada-agentes" --confianca app--t1
+conferir "caso 7: tarefa sem agy não é sincronizada pela opção explícita" \
+  bash -c 'grep -q "não delega nem revisa pelo agy" "$1" && [ "$2" = 1 ]' _ "$tmp/saida" "$(jq '.trustedWorkspaces | length' "$conf_agy")"
+vazio
+if command -v script >/dev/null 2>&1 && script -qec true /dev/null >/dev/null 2>&1; then
+  FALSO_AUTORIZA=1 rodar_tty s "$repo_jangada/bin/jangada-agentes" --confianca app--t1
+  conferir "caso 7: tarefa sem agy não abre o agy nem com terminal" \
+    bash -c '[ "$1" = 0 ] && [ "$2" = "[]" ]' _ "$(chamadas_agy)" "$(confiaveis)"
+fi
+copia_protegida agy codex
 vazio
 rodar "$repo_jangada/bin/jangada-agentes" --confianca app--t1
 conferir "caso 7: raiz sem confiança devolve erro" test "$?" = 1
@@ -197,6 +227,7 @@ conferir "caso 7: sem cópia nem preparação" intacto
 
 # Caso 8: estado manipulado pelo agente. O JSON gravável não decide nada.
 so_raiz
+copia_protegida agy codex
 jq -n --arg r "$tmp/outro" --arg w "$tmp/arbitraria" '{raiz:$r, worktree:$w, dir:$w}' >"$estado/agentes/app--t1.json"
 rodar "$repo_jangada/bin/jangada-agentes" --confianca app--t1
 conferir "caso 8: pasta declarada no estado gravável não é confiada" \
@@ -264,6 +295,7 @@ conferir "caso 11: isolado, nada é gravado" jqok -e --arg r "$raiz" '.trustedWo
 # Caso 12: sem o agy instalado. A delegação cai nos subagentes do Claude; com
 # revisor agy, a conferência é adiada sem gravar nem travar.
 so_raiz
+copia_protegida local agy
 CAMINHO="$tmp/sem-agy" rodar "$repo_jangada/bin/jangada-agentes" --confianca app--t1
 conferir "caso 12: sem agy, a conferência avisa e não grava" \
   bash -c 'grep -q "agy não instalado" "$1" && [ "$2" = 1 ]' _ "$tmp/saida" "$(jq '.trustedWorkspaces | length' "$conf_agy")"
@@ -275,12 +307,14 @@ conferir "caso 12: sem agy, a abertura segue" \
 jq -n --arg d "$wts/t1" --arg a "$(date -Iseconds)" \
   '{estado:"trabalhando", agente:"claude", dir:$d, worktree:$d, atualizado:$a}' >"$estado/agentes/app--t1.json"
 vazio
+copia_protegida agy codex
 rodar "$repo_jangada/bin/jangada-agentes" --restaurar app--t1
 conferir "caso 13: restauração sem confiança avisa e não grava" \
   bash -c 'grep -qF "não confia na raiz $2" "$1" && [ "$3" = "[]" ]' _ "$tmp/saida" "$raiz" "$(confiaveis)"
 ((autoridade)) && conferir "caso 13: restauração sem confiança segue" grep -q "restaurada: app--t1" "$tmp/saida"
 conferir "caso 13: restauração não abre o agy" test "$(chamadas_agy)" = 0
 so_raiz
+copia_protegida agy codex
 jq '.estado = "trabalhando"' "$estado/agentes/app--t1.json" >"$tmp/json" && cp "$tmp/json" "$estado/agentes/app--t1.json"
 rodar "$repo_jangada/bin/jangada-agentes" --restaurar app--t1
 conferir "caso 13: restauração sincroniza depois da autorização" \

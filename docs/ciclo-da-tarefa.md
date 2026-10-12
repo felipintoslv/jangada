@@ -111,7 +111,9 @@ essa autorização ao worktree da tarefa.
 
 - Quando confere: ao abrir a tarefa, ao reaproveitar o worktree, ao anexar a
   uma sessão que já existe e ao restaurar (`jangada-agentes --restaurar` e
-  `--focar`). Só quando a delegação ou o revisor da tarefa é o agy.
+  `--focar`). Só quando a delegação ou o revisor da tarefa é o agy; numa
+  sessão que já existe, valem os provedores do registro protegido dela, não
+  as opções da chamada.
 - Raiz autorizada: o `jangada-worktree-preparar --so-confianca RAIZ WORKTREE`
   confirma pelo Git que o worktree é registrado no repositório da raiz
   (`git worktree list` lido na raiz e a pasta `.git` comum lida no worktree,

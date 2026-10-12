@@ -245,10 +245,11 @@ refazer_protocolo() {
   printf '%s\n' "$estado_dir/protocolo-$s.md"
 }
 
-# Confere a confiança do agy na tarefa S e sincroniza a do worktree. A raiz e
-# o worktree vêm da cópia protegida da sessão, que o isolamento oculta, e
-# ainda passam pela conferência do Git; o estado gravável pelo agente não é
-# lido. Não recria a tarefa nem roda a preparação do worktree.
+# Confere a confiança do agy na tarefa S e sincroniza a do worktree. A raiz,
+# o worktree e os provedores vêm da cópia protegida da sessão, que o
+# isolamento oculta; os caminhos ainda passam pela conferência do Git, e o
+# estado gravável pelo agente não é lido. Tarefa que não delega nem revisa
+# pelo agy fica como está. Não recria a tarefa nem roda a preparação.
 confianca() {
   local s="$1" perguntar="$2" copia raiz worktree
   if [[ ! "$s" =~ ^[A-Za-z0-9_.-]+$ ]]; then
@@ -265,6 +266,10 @@ confianca() {
   if [[ "$raiz" != /* || ! -d "$raiz" ]]; then
     echo "$s: sem registro protegido da raiz; confiança do agy não conferida" >&2
     return 1
+  fi
+  if ! jangada_agy_tarefa_usa "$s"; then
+    echo "$s: a tarefa não delega nem revisa pelo agy; nada a conferir" >&2
+    return 0
   fi
   jangada_agy_conferir_tarefa "$raiz" "$worktree" "$perguntar" "$s"
 }
