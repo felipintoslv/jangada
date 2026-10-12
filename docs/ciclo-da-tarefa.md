@@ -16,7 +16,8 @@ forma de uso. O mapa das pastas está na seção Estrutura do [README](../README
 Os perfis padrão são `claude-codex` (Claude implementa, Codex revisa) e
 `codex-claude` (Codex implementa, Claude revisa), os dois com delegação ao
 agy. O agy só atende em pasta marcada como confiável nele; se recusar, a
-sessão principal faz o trabalho.
+sessão principal faz o trabalho. A seção Confiança do agy, abaixo, descreve
+como a tarefa recebe essa confiança.
 As diferenças de protocolo, hooks e revisão estão em [Codex](codex.md).
 
 ```mermaid
@@ -77,7 +78,10 @@ flowchart TD
     F --> P[jangada-worktree-preparar]
     P --> I
     H --> I[agente, perfil, revisor,<br>destino dos subagentes, isolar]
-    I --> J[protocolo: protocolo.md<br>+ protocolo-delegar-*.md<br>+ protocolo-r.md se houver R]
+    I --> Q{delega ou revisa<br>pelo agy?}
+    Q -- sim --> S[confere a confiança do agy]
+    Q -- não --> J
+    S --> J[protocolo: protocolo.md<br>+ protocolo-delegar-*.md<br>+ protocolo-r.md se houver R]
     J --> K[sessão tmux]
     K --> L[estado: iniciado]
 ```
@@ -87,6 +91,9 @@ flowchart TD
 - `bin/jangada-worktree-preparar` leva ao worktree o que o git não leva: o que
   casa com `.worktreeinclude` e é ignorado pelo git é copiado, o que está em
   `.jangada/links` vira link e `.jangada/preparar.sh` roda por último.
+- Só o worktree recém-criado passa pela preparação completa. No
+  reaproveitado e na sessão retomada nada é copiado nem executado: roda só a
+  conferência da confiança do agy.
 - Revisor: `--revisor`, depois o `JANGADA_VALIDAR_REVISOR` do perfil, depois o
   da configuração; sem nenhum, Codex revisa Claude e Claude revisa Codex.
   Fora de sessão e nas sessões antigas do agy, o padrão é Claude.
@@ -96,6 +103,37 @@ flowchart TD
   [subagentes e delegação](subagentes-e-delegacao.md).
 - Com isolamento, o comando começa por `jangada-isolar --`; veja
   [isolamento](isolamento.md).
+### Confiança do agy
+
+A confiança do agy vale para o caminho exato da pasta. Quem autoriza a raiz
+do projeto é o proprietário, na pergunta do próprio agy. O jangada só estende
+essa autorização ao worktree da tarefa.
+
+- Quando confere: ao abrir a tarefa, ao reaproveitar o worktree, ao anexar a
+  uma sessão que já existe e ao restaurar (`jangada-agentes --restaurar` e
+  `--focar`). Só quando a delegação ou o revisor da tarefa é o agy.
+- Raiz autorizada: o `jangada-worktree-preparar --so-confianca RAIZ WORKTREE`
+  confirma pelo Git que o worktree é registrado no repositório da raiz
+  (`git worktree list` lido na raiz e a pasta `.git` comum lida no worktree,
+  com os caminhos resolvidos), grava o worktree em `trustedWorkspaces` e relê
+  o arquivo para confirmar. Repetir não duplica a entrada.
+- Raiz sem autorização: o `jangada-agente` informa a raiz. Com terminal e
+  sessão nova, pergunta se abre o agy nela. Você responde à pergunta de
+  confiança dentro do agy e sai; o jangada relê o `settings.json` e sincroniza
+  o worktree se a raiz estiver lá. Fechar o agy sem responder não autoriza
+  nada.
+- Pendência: sem terminal, sem o agy instalado, com a oferta recusada ou com a
+  pergunta sem resposta, a tarefa abre do mesmo jeito. O `jangada-delegar`
+  recusa o agy nela e a sessão principal faz o trabalho.
+- Para retomar depois, numa tarefa já aberta: abra o agy na raiz do projeto,
+  responda à pergunta e rode `jangada-agentes --confianca SESSAO` num terminal
+  fora da sessão do agente. O comando não recria a tarefa, não copia arquivos
+  e não roda `.jangada/preparar.sh`.
+- O que o jangada não faz: gravar a raiz, confiar em pasta que o Git não
+  aponta como worktree da raiz autorizada, ler a raiz ou o worktree do estado
+  da sessão (gravável pelo agente; vale a cópia em `revisoes/`) e sincronizar
+  de dentro do isolamento.
+
 Os estados do ciclo são:
 
 | Estado | Quando aparece |
@@ -311,4 +349,5 @@ prazo para sair.
 | `testes/update.sh` | a integração não mexe na cópia instalada, não envia ao remoto, não assina nem roda ganchos; atualização e assinatura continuam ensaiadas com Git sintético |
 | `testes/eventos.sh` | histórico de estados gravado pelos hooks e pela troca de foco |
 | `testes/restaurar.sh` | volta de uma sessão interrompida |
+| `testes/confianca-agy-fluxo.sh` | confiança do agy na abertura, no reaproveitamento e na retomada |
 | `testes/contratos-consulta.sh` | consultas de `jangada-agentes` sem gravar no estado e limpeza explícita das órfãs |

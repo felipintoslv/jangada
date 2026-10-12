@@ -133,7 +133,7 @@ conferência de processo zumbi e o prazo; outros erros continuam sendo falhas.
 |---|---|
 | `jangada-agente` | escolhe projeto, cria worktree `agente/<nome>` e abre o agente numa sessão `tmux -L jangada`; `--prompt`/`--prompt-arquivo` já entregam a tarefa, `--perfil` escolhe o agente, `--sem-isolar` abre fora do bubblewrap |
 | `jangada-isolar` | roda o agente no bubblewrap: sistema somente leitura, pasta da tarefa gravável; `--mostrar` imprime a chamada ao `bwrap` |
-| `jangada-worktree-preparar` | copia para o worktree novo os ignorados do `.worktreeinclude`, liga o que está em `.jangada/links` e roda `.jangada/preparar.sh` |
+| `jangada-worktree-preparar` | copia para o worktree novo os ignorados do `.worktreeinclude`, liga o que está em `.jangada/links` e roda `.jangada/preparar.sh`; com `--so-confianca`, só sincroniza a confiança do agy |
 | `jangada-hook-claude` | chamado pelos hooks do Claude Code; grava o estado e notifica |
 | `jangada-hook-agy` | o mesmo para o agy, pelo `~/.gemini/config/hooks.json` (PreInvocation e Stop) |
 | `jangada-hook-leitor` | PreToolUse do leitor: só comandos de leitura no terminal; no Claude pelo frontmatter do agente, no agy (`--agy`) pelo `PreToolUse` do `run_command` no `~/.gemini/config/hooks.json` |
@@ -521,6 +521,18 @@ atualize a cópia instalada com `jangada-update`.
   repositório principal, o `jangada-worktree-preparar` não confia no
   worktree, e o agy abre com a pergunta "Do you trust the contents of this
   project?", que o usuário responde na janela.
+- A preparação do worktree roda uma vez, na criação. Raiz autorizada no agy
+  depois disso deixava a tarefa sem confiança para sempre, e o
+  `jangada-delegar` recusava com código 4. Agora a conferência é separada da
+  preparação (`jangada-worktree-preparar --so-confianca`, sem cópia e sem
+  `.jangada/preparar.sh`) e roda na abertura, no reaproveitamento e na
+  restauração de tarefa que delega ou revisa pelo agy. Para tarefa já aberta:
+  `jangada-agentes --confianca SESSAO`, fora do isolamento.
+  A sincronização exige que o Git aponte o worktree como registrado na raiz
+  autorizada, lê a raiz da cópia em `revisoes/` (o estado em `agentes/` é
+  gravável pelo agente) e relê o `settings.json` depois de gravar. A raiz
+  nunca é gravada pelo jangada: fechar o agy sem responder não vale como
+  autorização.
   A pasta `~/.gemini/antigravity-cli` é gravável pelo agente isolado, e o
   fim da sessão regrava o `settings.json` de fora do isolamento: se o arquivo
   virou link simbólico, o jangada não mexe nele, e a troca é por rename

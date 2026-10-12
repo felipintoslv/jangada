@@ -274,7 +274,15 @@ flowchart TD
 - A pasta é a raiz do repositório atual, que o agy precisa confiar; um
   worktree do jangada entra em `trustedWorkspaces` pelo
   `jangada-worktree-preparar`, só se a raiz já estiver lá, e sai no
-  `jangada-agente-fim`.
+  `jangada-agente-fim`. A abertura e a retomada da tarefa repetem essa
+  conferência; veja Confiança do agy no
+  [ciclo da tarefa](ciclo-da-tarefa.md).
+- A recusa por confiança sai com código 4 e diz o caso. "A raiz está
+  autorizada, mas este worktree ainda não recebeu a confiança derivada": rode
+  `jangada-agentes --confianca SESSAO` fora da sessão isolada. "O agy não
+  confia na raiz": abra o agy na raiz, responda à pergunta de confiança e
+  rode o mesmo comando. O `jangada-delegar` só diagnostica; ele não grava a
+  confiança.
 - A cota vem de `agy -p "/usage"`, guardada por `JANGADA_DELEGAR_CACHE`
   minutos (5), com no máximo uma consulta por execução. O agy separa dois
   grupos: `gemini-*` (Flash e Pro dividem a mesma cota) e `3p-*` (Claude e
