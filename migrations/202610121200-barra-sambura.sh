@@ -7,7 +7,7 @@ alvo="$JANGADA_CONFIG/waybar/config.jsonc"
 [[ -f "$alvo" ]] || { ok "sem cópia própria da barra; nada a migrar"; exit 0; }
 novo="$(mktemp)"
 trap 'rm -f "$novo"' EXIT
-python3 - "$alvo" "$novo" "$(dirname "${BASH_SOURCE[0]}")/../shell/waybar/config.jsonc" <<'PY'
+python3 - "$alvo" "$novo" <<'PY'
 import json
 from pathlib import Path
 import re
@@ -26,9 +26,14 @@ def ler(texto):
 
 texto = Path(sys.argv[1]).read_text()
 tokens, dados = ler(texto)
-_, padrao_barra = ler(Path(sys.argv[3]).read_text())
 modulo = 'custom/sambura'
-definicao = json.dumps(padrao_barra[modulo], ensure_ascii=False, indent=2)
+# Definição histórica independente dos padrões das versões seguintes.
+definicao = json.dumps({
+    'format': 'Samburá',
+    'tooltip': True,
+    'tooltip-format': 'Abrir Samburá',
+    'on-click': 'setsid -f "${JANGADA_PROJETOS:-$HOME/Projetos}/sambura/bin/sambura"',
+}, ensure_ascii=False, indent=2)
 pilha = []
 fins = {}
 raizes = []

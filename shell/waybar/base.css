@@ -127,24 +127,6 @@ window#waybar {
   color: @atencao;
 }
 
-#custom-sambura {
-  color: @primaria;
-  padding: 0 8px 0 36px;
-  background-image: -gtk-recolor(url("../logo/jangada-symbolic.svg"));
-  background-repeat: no-repeat;
-  background-position: 8px center;
-  background-size: 20px 20px;
-}
-
-#custom-sambura:hover {
-  color: @atencao;
-}
-
-window#waybar.vertical #custom-sambura {
-  padding: 32px 0 8px;
-  background-position: center 8px;
-}
-
 #custom-sessao {
   color: @texto_suave;
 }
