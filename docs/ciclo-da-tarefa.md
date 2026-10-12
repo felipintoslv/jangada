@@ -113,8 +113,13 @@ essa autorização ao worktree da tarefa.
 - Quando confere: ao abrir a tarefa, ao reaproveitar o worktree, ao anexar a
   uma sessão que já existe e ao restaurar (`jangada-agentes --restaurar` e
   `--focar`). Só quando a delegação ou o revisor da tarefa é o agy; numa
-  sessão que já existe, valem os provedores do registro protegido dela, não
-  as opções da chamada.
+  sessão que já existe, valem os provedores, a raiz e o worktree do registro
+  protegido dela, não os da chamada.
+- Projetos homônimos: duas raízes com o mesmo nome de pasta e a mesma tarefa
+  dão o mesmo identificador de sessão. A chamada feita pelo segundo projeto
+  anexa à sessão do primeiro, recebe o aviso com a raiz dela e não sincroniza
+  nada. Sessão aberta sem registro protegido, ou com registro que não aponta
+  pastas existentes, também fica sem a conferência.
 - Raiz autorizada: o `jangada-worktree-preparar --so-confianca RAIZ WORKTREE`
   confirma pelo Git que o worktree é registrado no repositório da raiz
   (`git worktree list` lido na raiz e a pasta `.git` comum lida no worktree,
