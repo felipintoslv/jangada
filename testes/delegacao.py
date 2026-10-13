@@ -2,6 +2,9 @@
 """Verifica o contrato das referências documentais."""
 
 import importlib.util
+import json
+import os
+import shutil
 import pathlib
 import subprocess
 import sys
@@ -91,6 +94,122 @@ class Referencias(unittest.TestCase):
         VALIDAR.verificar(texto, [str(self.fonte), str(outra)], ["Destino"])
         with self.assertRaises(ValueError):
             VALIDAR.verificar(texto.replace("outra.txt:1", ""), [str(self.fonte), str(outra)], ["Destino"])
+
+
+class PadraoAgy(unittest.TestCase):
+    """Roteamento com transporte falso, sem rede nem execução do isolamento."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.pasta = pathlib.Path(self.tmp.name)
+        self.bin = self.pasta / 'bin'
+        self.bin.mkdir()
+        self.home = self.pasta / 'home'
+        self.projeto = self.pasta / 'projeto'
+        self.projeto.mkdir()
+        self.fonte = self.projeto / 'fonte.txt'
+        self.fonte.write_text('Conteúdo autorizado.\n')
+        shutil.copyfile(RAIZ / 'bin/jangada-config', self.bin / 'jangada-config')
+        shutil.copyfile(RAIZ / 'core/bin/jangada-delegar', self.bin / 'jangada-delegar')
+        (self.pasta / 'default').symlink_to(RAIZ / 'default')
+        # Este transporte só executa o provedor falso da própria fixture.
+        self.script('jangada-isolar', '[[ "$1" == -- ]] && shift\nexec "$@"\n')
+        self.script('agy', """if [[ "$1" == agents ]]; then echo leitor; echo redator; exit 0; fi
+if [[ "${2:-}" == /usage ]]; then
+  printf '{"command":{"data":{"groups":[{"buckets":[{"id":"gemini-5h","remaining_fraction":%s}]}]}}}\n' "${COTA_FALSA:-0.9}"
+  exit 0
+fi
+printf '%s\n' "$@" >>"$LOG_FALSO"
+jq -n --arg r 'Informação conferida em fonte.txt:1' '{status:"SUCCESS",response:$r}'
+""")
+        for nome in ('ollama', 'curl'):
+            self.script(nome, 'echo local >>"$LOG_LOCAL"\nexit 99\n')
+        conf = self.home / '.gemini/antigravity-cli/settings.json'
+        conf.parent.mkdir(parents=True)
+        conf.write_text(json.dumps({'trustedWorkspaces': [str(self.projeto)]}))
+        hooks = self.home / '.gemini/config/hooks.json'
+        hooks.parent.mkdir(parents=True)
+        hooks.write_text(json.dumps({'hooks': {'PreToolUse': [{
+            'matcher': 'run_command', 'hooks': [{'command': str(self.bin / 'jangada-hook-leitor') + ' --agy'}]
+        }]}}))
+        self.env = {k: v for k, v in os.environ.items() if not k.startswith('JANGADA_')}
+        self.env.update(HOME=str(self.home), PATH=str(self.bin) + ':/usr/bin:/bin',
+                        XDG_CONFIG_HOME=str(self.pasta / 'config'),
+                        XDG_STATE_HOME=str(self.pasta / 'estado'),
+                        XDG_CACHE_HOME=str(self.pasta / 'cache'), JANGADA_PATH=str(self.pasta),
+                        LOG_FALSO=str(self.pasta / 'agy.log'), LOG_LOCAL=str(self.pasta / 'local.log'))
+
+    def script(self, nome, corpo):
+        arquivo = self.bin / nome
+        arquivo.write_text('#!/usr/bin/bash\n' + corpo)
+        arquivo.chmod(0o755)
+
+    def delegar(self, *opcoes, papel='leitor'):
+        resultado = subprocess.run(['bash', str(self.bin / 'jangada-delegar'), papel,
+                                    'Confira a fonte autorizada', *opcoes, '--json',
+                                    '--arquivos', str(self.fonte)], cwd=self.projeto,
+                                   env=self.env, text=True, capture_output=True, timeout=15)
+        self.assertIn(resultado.returncode, (0, 4), resultado.stderr)
+        self.assertFalse((self.pasta / 'local.log').exists(), 'houve chamada local automática')
+        return json.loads(resultado.stdout)
+
+    def test_autores_sem_perfil_incluem_leitor_e_redator(self):
+        for autor in ('claude', 'codex'):
+            self.env['JANGADA_AGENTE'] = autor
+            for papel in ('leitor', 'redator'):
+                with self.subTest(autor=autor, papel=papel):
+                    r = self.delegar('--permitir-remoto', papel=papel)
+                    self.assertEqual((r['destino'], r['codigo_saida']), ('agy', 0))
+        self.assertIn(str(self.fonte), (self.pasta / 'agy.log').read_text())
+
+    def test_capacidades_padrao_sem_alternativa_local(self):
+        for capacidade in ('leitura_documental', 'resumo_curto', 'analise_documental'):
+            with self.subTest(capacidade=capacidade):
+                r = self.delegar('--capacidade', capacidade, '--permitir-remoto')
+                self.assertEqual((r['destino'], r['verificacao']), ('agy', 'referencias_validas'))
+                self.assertEqual([t['destino'] for t in r['tentativas']], ['agy'])
+
+    def test_autorizacao_exigida_tambem_sem_capacidade(self):
+        for opcoes in ((), ('--capacidade', 'resumo_curto')):
+            r = self.delegar(*opcoes)
+            self.assertEqual(r['codigo_saida'], 4)
+            self.assertEqual(r['tentativas'][0]['motivo_codigo'], 'destino_proibido')
+            self.assertFalse((self.pasta / 'agy.log').exists())
+
+    def test_cota_baixa_bloqueia_sem_ollama(self):
+        self.env['COTA_FALSA'] = '0.1'
+        r = self.delegar('--capacidade', 'resumo_curto', '--permitir-remoto')
+        self.assertEqual(r['motivo_codigo'], 'sem_executor')
+        self.assertEqual(len(r['tentativas']), 1)
+        self.assertEqual(r['tentativas'][0]['motivo_codigo'], 'cota_insuficiente')
+        self.assertFalse((self.pasta / 'agy.log').exists())
+
+    def test_falta_de_confianca_bloqueia(self):
+        (self.home / '.gemini/antigravity-cli/settings.json').write_text('{"trustedWorkspaces":[]}')
+        r = self.delegar('--capacidade', 'resumo_curto', '--permitir-remoto')
+        self.assertEqual(r['tentativas'][0]['motivo_codigo'], 'destino_proibido')
+        self.assertFalse((self.pasta / 'agy.log').exists())
+
+    def test_agy_ausente_preserva_destino_e_registra_recusa(self):
+        (self.bin / 'agy').unlink()
+        r = self.delegar('--permitir-remoto')
+        self.assertEqual((r['destino'], r['motivo_codigo']), ('agy', 'indisponivel'))
+
+    def test_configuracao_local_explicita_nao_autoriza_agy(self):
+        config = self.pasta / 'config/jangada/jangada.conf'
+        config.parent.mkdir(parents=True)
+        config.write_text('JANGADA_DELEGAR=local\n')
+        r = self.delegar('--destino', 'agy', '--permitir-remoto')
+        self.assertEqual(r['motivo_codigo'], 'destino_proibido')
+        self.assertFalse((self.pasta / 'agy.log').exists())
+
+    def test_configuracao_antiga_vazia_herda_agy(self):
+        config = self.pasta / 'config/jangada/jangada.conf'
+        config.parent.mkdir(parents=True)
+        config.write_text('JANGADA_DELEGAR=\n')
+        r = self.delegar('--permitir-remoto')
+        self.assertEqual((r['destino'], r['codigo_saida']), ('agy', 0))
 
 
 if __name__ == "__main__":

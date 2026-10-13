@@ -27,7 +27,7 @@ JANGADA_VALIDAR_REVISOR="${JANGADA_VALIDAR_REVISOR:-}"
 # dele; definido, mesmo vazio, substitui a lista.
 JANGADA_AGENTE_ISOLAR="${JANGADA_AGENTE_ISOLAR:-1}"
 JANGADA_ISOLAR_ESCRITA="${JANGADA_ISOLAR_ESCRITA:-}"
-JANGADA_DELEGAR="${JANGADA_DELEGAR:-}"
+JANGADA_DELEGAR="${JANGADA_DELEGAR:-agy}"
 JANGADA_PROJETOS="$HOME/Projetos"
 JANGADA_WORKTREES="$HOME/.local/share/jangada-worktrees"
 JANGADA_PAPEL=
@@ -64,7 +64,7 @@ JANGADA_CODEX_COTA_MIN="${JANGADA_CODEX_COTA_MIN:-25}"
 # Modelos do agy na delegação, em ordem de tentativa: o seguinte entra quando
 # a cota do anterior acaba. Os gemini-* dividem uma cota; os demais, outra.
 JANGADA_DELEGAR_MODELOS="${JANGADA_DELEGAR_MODELOS:-gemini-3.8-flash-high claude-sonnet-5-5-high gpt-oss-120b-medium}"
-# Delegação local (modelo no Ollama) para leitor e redator.
+# Delegação local explicitamente escolhida, para leitor e redator.
 JANGADA_LOCAL_MODELO="${JANGADA_LOCAL_MODELO:-qwen3:4b}"
 JANGADA_LOCAL_CTX="${JANGADA_LOCAL_CTX:-8192}"
 JANGADA_LOCAL_VRAM_MIN="${JANGADA_LOCAL_VRAM_MIN:-4000}"
@@ -203,17 +203,11 @@ jangada_perfil() {
   [[ -n "$PERFIL_COMANDO" ]] || PERFIL_COMANDO="$JANGADA_AGENTE"
 }
 
-# Destino dos subagentes de uma sessão: agy (jangada-delegar manda ao agy),
-# claude (subagentes do Claude) ou local (leitor e redator no Ollama, demais
-# papéis na própria sessão).
-# Uso: jangada_delegacao COMANDO [JANGADA_DELEGAR]. Sem valor, vale agy para o
-# Claude e local para o Codex, que só aceita agy ou local. Sem o agy
-# instalado, agy vira claude, para o protocolo não mandar a um comando que só
-# recusaria. O agy não abre mais sessão principal: nativo (subagentes do
-# próprio agy) só aparece ao restaurar uma sessão antiga, e no Claude vira
-# claude.
+# Destino dos subagentes: agy por padrão para Claude e Codex.
+# Escolhas explícitas locais são preservadas; falta do agy não troca o destino.
+# O destino nativo só atende à restauração de sessões antigas do agy.
 jangada_delegacao() {
-  local _base _valor="${2:-}"
+  local _base _valor="${2:-agy}"
   _base="$(basename "${1%% *}")"
   if [[ "$_base" == agy ]]; then
     echo nativo
@@ -229,7 +223,6 @@ jangada_delegacao() {
     nativo) _valor=claude ;;
     *) _valor=agy ;;
   esac
-  [[ "$_valor" == agy ]] && ! command -v agy >/dev/null 2>&1 && _valor=claude
   echo "$_valor"
 }
 

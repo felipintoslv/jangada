@@ -165,13 +165,13 @@ if ((!agente_dado)) && [[ -z "$perfil" && -t 0 && "${JANGADA_AGENTE_ESCOLHER:-1}
         claude) printf '; subagentes do Claude' ;;
         local) printf '; leitor e redator no Ollama, demais papéis nesta sessão' ;;
         agy)
-          [[ "$base" == codex ]] && printf '; leitor e redator no Ollama, demais papéis no agy' || printf '; delegação ao agy'
+          printf '; delegação ao agy, inclusive leitor e redator'
           command -v agy >/dev/null 2>&1 || printf '; delegação indisponível: agy não instalado'
           ;;
       esac
       isolamento=1 # Mesmo os perfis antigos precisam do Bubblewrap.
       [[ "$isolamento" == 0 ]] && printf '; sem isolamento' || printf '; isolado'
-      if [[ "$destino" == local || "$base" == codex ]]; then
+      if [[ "$destino" == local ]]; then
         command -v ollama >/dev/null 2>&1 || printf '; delegação local indisponível: Ollama não instalado'
       fi
       printf '\n'

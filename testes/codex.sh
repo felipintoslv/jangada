@@ -82,6 +82,15 @@ conferir "codex-claude: revisor Claude e delegação agy" jq -e '.agente == "cod
 conferir "codex-claude: sem modelo de revisor do agy no ambiente" \
   bash -c '! grep -q JANGADA_VALIDAR_MODELO "$1"' _ "$tmp/tmux.ambiente"
 
+conferir "codex-claude: protocolo manda leitor e redator ao agy" grep -q 'inclusive leitor e redator' \
+  "$tmp/state/jangada/agentes/protocolo-projeto--tarefa-padrao.md"
+rodar "$repo_jangada/bin/jangada-agente" --agente codex --projeto "$tmp/projeto" \
+  --nome tarefa-sem-perfil --prompt "Implemente a tarefa" >"$tmp/saida" 2>&1
+conferir "Codex sem perfil cria sessão com agy" jq -e '.agente == "codex" and .perfil == "" and .delegar == "agy"' \
+  "$tmp/state/jangada/agentes/projeto--tarefa-sem-perfil.json"
+conferir "Codex sem perfil entrega protocolo com leitor e redator" grep -q 'inclusive leitor e redator' \
+  "$tmp/state/jangada/agentes/protocolo-projeto--tarefa-sem-perfil.md"
+
 rodar "$repo_jangada/bin/jangada-codex" -- codex >"$tmp/saida" 2>&1
 conferir "adaptador sem isolamento recusa antes de chamar CLI" [ "$?" != 0 ]
 conferir "recusa não executa Codex" test ! -e "$tmp/codex.args"

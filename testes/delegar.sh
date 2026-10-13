@@ -106,6 +106,11 @@ mkdir -p "$tmp/home/.gemini/config"
 sed "s|@JANGADA_PATH@|$repo_jangada|g" default/agy/hooks.json >"$tmp/home/.gemini/config/hooks.json"
 
 delegar() {
+  local autorizacao=()
+  # Casos antigos sem capacidade autorizam somente o provedor falso.
+  if [[ " $* " != *" --capacidade "* && "${SEM_AUTORIZACAO:-0}" != 1 ]]; then
+    autorizacao=(--permitir-remoto)
+  fi
   rm -f "$tmp/falso/agy.args"
   (cd "$tmp/projeto" && env -u JANGADA_DELEGAR -u JANGADA_DELEGAR_MODELOS -u JANGADA_ISOLADO -u XDG_CACHE_HOME -u XDG_STATE_HOME -u XDG_CONFIG_HOME \
     -u JANGADA_DELEGAR_ROTEAMENTO_ID -u JANGADA_DELEGAR_TENTATIVAS -u JANGADA_DELEGAR_CHAMADAS_RESTANTES \
@@ -135,12 +140,13 @@ delegar() {
     ${LOCAL_VRAM_MIN:+JANGADA_LOCAL_VRAM_MIN="$LOCAL_VRAM_MIN"} \
     ${LOCAL_ESPERA:+JANGADA_LOCAL_ESPERA="$LOCAL_ESPERA"} \
     ${LOCAL_FATIAS_MAX:+JANGADA_LOCAL_FATIAS_MAX="$LOCAL_FATIAS_MAX"} \
-    "$repo_jangada/bin/jangada-delegar" "$@" >"$tmp/saida" 2>"$tmp/erro")
+    "$repo_jangada/bin/jangada-delegar" "${autorizacao[@]}" "$@" >"$tmp/saida" 2>"$tmp/erro")
   echo $? >"$tmp/codigo"
 }
 codigo() { cat "$tmp/codigo"; }
 
 delegar explorador "mapeie"
+[[ "$(codigo)" = 0 ]] || cat "$tmp/erro" >&2
 conferir "caso 1: código 0" [ "$(codigo)" = 0 ]
 conferir "caso 1: imprime o relatório" grep -qx "relatorio em a.sh:1" "$tmp/saida"
 conferir "caso 1: o agy recebe o papel, que o hook do leitor lê" grep -qx explorador "$tmp/falso/agy.papel"
@@ -166,7 +172,7 @@ COTA=0.15 delegar leitor "leia"
 conferir "caso 3: cota baixa recusa com código 4" [ "$(codigo)" = 4 ]
 conferir "caso 3: agy não é chamado" test ! -e "$tmp/falso/agy.args"
 conferir "caso 3: diz a cota" grep -q "15%" "$tmp/erro"
-conferir "caso 3: indica o subagente do Claude" grep -q "subagente leitor do Claude" "$tmp/saida"
+conferir "caso 3: informa bloqueio do apoio" grep -q "Delegação bloqueada" "$tmp/saida"
 conferir "caso 3: recusa registrada com o motivo" \
   jqok -se 'last | .recusa and .codigo_saida == 4 and (.motivo | test("15"))' "$reg"
 
@@ -223,7 +229,7 @@ conferir "caso 4: consulta o /usage uma vez, não uma por modelo" \
 rm -f "$tmp/home/.cache/jangada/agy-usage.json"
 CODIGO=1 delegar pesquisador "busque"
 conferir "caso 5: agy falhou, recusa com código 4" [ "$(codigo)" = 4 ]
-conferir "caso 5: indica o subagente do Claude" grep -q "subagente pesquisador do Claude" "$tmp/saida"
+conferir "caso 5: informa bloqueio do apoio" grep -q "Delegação bloqueada" "$tmp/saida"
 
 LOG='Agent "explorador" not found, using default' delegar explorador "mapeie"
 conferir "caso 6: agente não achado, recusa" [ "$(codigo)" = 4 ]
@@ -273,7 +279,7 @@ jq -n --arg w "$tmp/atalho" '{trustedWorkspaces: [$w]}' >"$conf_agy"
 (cd "$tmp/atalho" && env -u JANGADA_DELEGAR -u XDG_CACHE_HOME -u XDG_STATE_HOME -u XDG_CONFIG_HOME \
   HOME="$tmp/home" PATH="$tmp/bin:$PATH" JANGADA_PATH="$repo_jangada" FALSO_DIR="$tmp/falso" \
   FALSO_COTA=0.9 FALSO_RESPOSTA="relatorio em a.sh:1" PWD="$tmp/atalho" \
-  "$repo_jangada/bin/jangada-delegar" explorador "mapeie" >/dev/null 2>&1)
+  "$repo_jangada/bin/jangada-delegar" --permitir-remoto explorador "mapeie" >/dev/null 2>&1)
 conferir "caso 14b: pasta confiada pelo link simbólico é aceita" [ $? = 0 ]
 jq -n --arg w "$(realpath "$tmp/projeto")" '{trustedWorkspaces: [$w]}' >"$conf_agy"
 
@@ -366,7 +372,7 @@ delegar_wt() {
   (cd "$tmp/wt" && env -u JANGADA_DELEGAR -u JANGADA_ISOLADO -u XDG_CACHE_HOME -u XDG_STATE_HOME -u XDG_CONFIG_HOME \
     HOME="$tmp/home" PATH="$tmp/bin:$PATH" JANGADA_PATH="$repo_jangada" FALSO_DIR="$tmp/falso" \
     FALSO_COTA=0.9 FALSO_RESPOSTA="relatorio em a.sh:1" JANGADA_SESSAO=raiz--t \
-    "$repo_jangada/bin/jangada-delegar" explorador "mapeie" >/dev/null 2>"$tmp/erro-wt"
+    "$repo_jangada/bin/jangada-delegar" --permitir-remoto explorador "mapeie" >/dev/null 2>"$tmp/erro-wt"
     echo $? >"$tmp/codigo-wt")
 }
 jq -n --arg w "$(realpath "$tmp/raiz")" '{trustedWorkspaces: [$w]}' >"$conf_agy"
@@ -812,6 +818,58 @@ AGENTE=codex DELEGAR=local delegar --destino agy leitor "leia"
 conferir "recusa no Codex: orienta continuar na sessão" grep -q "nesta sessão do Codex" "$tmp/saida"
 conferir "recusa no Codex: não recomenda Claude" bash -c '! grep -q Claude "$1"' _ "$tmp/saida"
 
+# Política nova, sem configuração pessoal: nenhuma chamada local automática.
+: >"$ollama_reqs"
+for autor in claude codex; do
+  for papel_padrao in leitor redator; do
+    AGENTE="$autor" RESPOSTA='Relatório em doc1.txt:1' delegar "$papel_padrao" "leia ou revise" \
+      --json --arquivos "$tmp/projeto/doc1.txt"
+    conferir "padrão $autor/$papel_padrao: agy sem perfil" jqok -e \
+      '.destino == "agy" and .codigo_saida == 0' "$tmp/saida"
+    conferir "padrão $autor/$papel_padrao: fonte entregue" grep -qx "$tmp/projeto/doc1.txt" "$tmp/falso/agy.args"
+  done
+  AGENTE="$autor" SEM_AUTORIZACAO=1 delegar leitor "leia" --json --arquivos "$tmp/projeto/doc1.txt"
+  conferir "padrão $autor: falta de autorização bloqueia" jqok -e \
+    '.motivo_codigo == "destino_proibido" and .chamadas_executor == 0' "$tmp/saida"
+  conferir "padrão $autor: sem autorização não chama agy" test ! -e "$tmp/falso/agy.args"
+done
+for capacidade_padrao in leitura_documental resumo_curto analise_documental; do
+  RESPOSTA='Relatório em doc1.txt:1' delegar leitor "compare" --capacidade "$capacidade_padrao" \
+    --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+  conferir "padrão $capacidade_padrao: somente agy" jqok -e \
+    '.destino == "agy" and .codigo_saida == 0 and (.tentativas | length) == 1' "$tmp/saida"
+  delegar leitor "compare" --capacidade "$capacidade_padrao" --json --arquivos "$tmp/projeto/doc1.txt"
+  conferir "padrão $capacidade_padrao: sem autorização bloqueia" jqok -e \
+    '.motivo_codigo == "sem_executor" and .tentativas[0].motivo_codigo == "destino_proibido"' "$tmp/saida"
+  rm -f "$cache_cota"
+  COTA=0.1 delegar leitor "compare" --capacidade "$capacidade_padrao" --permitir-remoto --json \
+    --arquivos "$tmp/projeto/doc1.txt"
+  conferir "padrão $capacidade_padrao: cota baixa sem alternativa local" jqok -e \
+    '.motivo_codigo == "sem_executor" and (.tentativas | length) == 1
+      and .tentativas[0].destino == "agy" and .tentativas[0].motivo_codigo == "cota_insuficiente"' "$tmp/saida"
+  rm -f "$cache_cota"
+done
+USAGE_FALHA=1 delegar leitor "compare" --capacidade resumo_curto --permitir-remoto --json \
+  --arquivos "$tmp/projeto/doc1.txt"
+conferir "padrão: cota desconhecida sem alternativa local" jqok -e \
+  '.motivo_codigo == "sem_executor" and .tentativas[0].motivo_codigo == "cota_desconhecida"
+    and (.tentativas | length) == 1' "$tmp/saida"
+cp "$conf_agy" "$tmp/confianca-copia.json"
+printf '{"trustedWorkspaces":[]}\n' >"$conf_agy"
+delegar leitor "compare" --capacidade resumo_curto --permitir-remoto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "padrão: falta de confiança não chama agy" test ! -e "$tmp/falso/agy.args"
+conferir "padrão: confiança bloqueada e rastreável" jqok -e \
+  '.tentativas[0].motivo_codigo == "destino_proibido" and .chamadas_executor == 0' "$tmp/saida"
+mv "$tmp/confianca-copia.json" "$conf_agy"
+conferir "padrão: Ollama não recebeu nenhuma chamada" test ! -s "$ollama_reqs"
+
+# Compatibilidade: somente uma política pessoal explícita habilita a ordem antiga.
+mkdir -p "$tmp/home/.config/jangada"
+politica_local() {
+  printf '{"leitura_documental":["local","agy"],"resumo_curto":["local","agy"],"analise_documental":["agy","local"]}\n' \
+    >"$tmp/home/.config/jangada/delegacao.json"
+}
+politica_local
 # Roteamento documental usa os mesmos executores falsos dos casos anteriores.
 printf 'Relatório em doc1.txt:1\n' >"$ollama_resp"
 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "resuma" \
@@ -887,6 +945,7 @@ delegar leitor "resuma" --capacidade resumo_curto --permitir-remoto --json --arq
 conferir "política: rejeita executor não integrado" jqok -e '.motivo_codigo == "politica_invalida"' "$tmp/saida"
 conferir "política: não executa agy" test ! -e "$tmp/falso/agy.args"
 rm -f "$tmp/home/.config/jangada/delegacao.json"
+politica_local
 
 # Negação de ferramenta e restrição de perfil não são falhas recuperáveis.
 NEGADO=ReadUrlContent RESPOSTA='Relatório em doc1.txt:1' OLLAMA_URL="http://127.0.0.1:$porta_ollama" \

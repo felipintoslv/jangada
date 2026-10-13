@@ -89,12 +89,15 @@ class Seletor(unittest.TestCase):
         self.assertIn('delegação ao agy', perfil)
         perfil = next(linha for linha in opcoes if linha.startswith('codex-claude\t'))
         self.assertIn('codex implementa; claude revisa;', perfil)
-        self.assertIn('demais papéis no agy', perfil)
+        self.assertIn('delegação ao agy, inclusive leitor e redator', perfil)
+        self.assertNotIn('Ollama', perfil)
         self.assertNotIn('autorrevisão', '\n'.join(opcoes))
         (self.config / 'jangada.conf').write_text('JANGADA_AGENTE=codex\n')
         padrao = next(linha for linha in self.menu().splitlines()
                       if linha.startswith('padrão'))
         self.assertIn('codex implementa; claude revisa', padrao)
+        self.assertIn('delegação ao agy, inclusive leitor e redator', padrao)
+        self.assertNotIn('Ollama', padrao)
 
     def test_opcao_explicita_prevalece_sobre_perfis(self):
         opcoes = self.menu('--revisor', 'mesmo')
@@ -122,15 +125,17 @@ class Seletor(unittest.TestCase):
         (self.bin / 'ollama').unlink()
         opcoes = self.menu()
         self.assertIn('INDISPONÍVEL: codex não instalado', opcoes)
-        self.assertIn('Ollama não instalado', opcoes)
+        self.assertNotIn('Ollama não instalado', opcoes)
+        self.assertIn('Ollama não instalado', self.menu('--delegacao', 'local'))
 
-    def test_revisor_ausente_e_delegacao_alternativa(self):
+    def test_revisor_ausente_nao_troca_delegacao(self):
         (self.bin / 'agy').unlink()
         (self.bin / 'codex').unlink()
         padrao = next(linha for linha in self.menu().splitlines()
                       if linha.startswith('padrão'))
         self.assertIn('revisão indisponível: codex não instalado', padrao)
-        self.assertIn('subagentes do Claude', padrao)
+        self.assertIn('delegação indisponível: agy não instalado', padrao)
+        self.assertNotIn('subagentes do Claude', padrao)
 
     def test_agente_ausente_recusa_antes_de_criar_estado(self):
         (self.bin / 'codex').unlink()

@@ -1,5 +1,5 @@
 {
-  "leitura_documental": ["local", "agy"],
-  "resumo_curto": ["local", "agy"],
-  "analise_documental": ["agy", "local"]
+  "leitura_documental": ["agy"],
+  "resumo_curto": ["agy"],
+  "analise_documental": ["agy"]
 }

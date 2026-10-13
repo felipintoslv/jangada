@@ -109,6 +109,9 @@ conferir "caso 1: retoma a conversa e recebe o protocolo" \
   bash -c 'grep -q -- "--resume $2" "$1" && grep -q -- "--append-system-prompt" "$1" && grep -q "Subagentes" "$1"' _ "$log" "$uuid"
 conferir "caso 1: o estado passa a iniciado" [ "$(jq -r .estado "$estado/s.json")" = iniciado ]
 
+conferir "restauração Claude sem perfil: destino padrão agy" grep -qx JANGADA_DELEGAR=agy "$tmp/ambiente"
+conferir "restauração Claude: leitor e redator no agy" grep -q 'também para leitor e redator' "$estado/protocolo-s.md"
+
 # Caso 2: comando com um segundo comando depois do ";". O .comando é ignorado.
 restaurar "{\"conversa\":\"$uuid\", \"comando\":\"claude; touch $invadido #\"}"
 conferir "caso 2: o comando gravado no estado não roda" [ ! -e "$invadido" ]
@@ -177,10 +180,13 @@ printf 'COMANDO=codex\nJANGADA_VALIDAR_REVISOR=codex\nJANGADA_DELEGAR=local\n' >
 restaurar "{\"agente\":\"codex\", \"perfil\":\"codex-mesmo\", \"revisor\":\"codex\", \"conversa\":\"$uuid\", \"isolar\":false}"
 conferir "caso 11: Codex retoma isolado com UUID e revisor Codex" \
   bash -c 'grep -q "^isolado|.*codex .*--no-daemon.*resume $2" "$1" && grep -qx JANGADA_VALIDAR_REVISOR=codex "$3"' _ "$log" "$uuid" "$tmp/ambiente"
+conferir "restauração Codex: perfil local explícito preservado" grep -qx JANGADA_DELEGAR=local "$tmp/ambiente"
 conferir "caso 11: protocolo de delegação do Codex refeito" grep -q 'Não tente chamar subagentes do Claude' "$estado/protocolo-s.md"
 restaurar "{\"agente\":\"codex\", \"dir\":\"$tmp/wt/proj/tarefa\", \"worktree\":\"$tmp/wt/proj/tarefa\"}"
 conferir "caso 12: Codex sem UUID no worktree retoma por pasta" grep -q 'resume --last' "$log"
-restaurar '{"agente":"codex"}'
+restaurar '{"agente":"codex", "delegar":"local"}'
+conferir "restauração Codex: destino antigo do estado não vira preferência" grep -qx JANGADA_DELEGAR=agy "$tmp/ambiente"
+conferir "restauração Codex: leitor e redator no agy" grep -q 'inclusive leitor e redator' "$estado/protocolo-s.md"
 conferir "caso 13: Codex direto sem UUID abre conversa nova" \
   bash -c 'test -s "$1" && ! grep -q "resume" "$1"' _ "$log"
 
