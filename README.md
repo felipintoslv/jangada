@@ -159,7 +159,7 @@ A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é n
 | `jangada-tarefas` | central gráfica de tarefas (`--nova`, `--waybar`, `--simular`) |
 | `jangada-agente` | escolhe o agente (Claude ou Codex; o agy fica só de suporte), o projeto e cria um worktree, e abre o agente numa sessão tmux, isolado pelo `jangada-isolar` (`--prompt`, `--prompt-arquivo`, `--perfil`) |
 | `jangada-isolar` | roda um comando no bubblewrap, com o sistema somente leitura e a pasta atual gravável; `--mostrar` imprime a chamada ao `bwrap` |
-| `jangada-delegar PAPEL "pedido"` | delega ao Ollama (`--destino local --arquivos ARQUIVOS`, só leitor e redator) ou ao agy (`--destino agy`, modelos de `JANGADA_DELEGAR_MODELOS`); `--capacidade` permite seleção documental para leitor, com autorização remota explícita e referências verificadas; `--json` explica a decisão (ver [delegação](docs/subagentes-e-delegacao.md)) |
+| `jangada-delegar PAPEL "pedido"` | delega por padrão ao agy (`--permitir-remoto`, modelos de `JANGADA_DELEGAR_MODELOS`); Ollama exige escolha explícita (`--destino local --arquivos ARQUIVOS`, só leitor e redator); `--capacidade` permite seleção documental para leitor, com autorização remota explícita e referências verificadas; `--json` explica a decisão (ver [delegação](docs/subagentes-e-delegacao.md)) |
 | `jangada-conversa` | Conversa de Pescador, a janela de conversa direta com o modelo local do Ollama: resposta progressiva, escolha do modelo e parada; sem histórico, ferramentas ou verificação, e com a trava e as proteções de jogo e memória de vídeo do destino local |
 | `jangada-avaliar-ollama` | repete três casos de leitura com fontes sintéticas, compara fatos e referências com um gabarito e registra recusas, tempo e variação; não promove o modelo nem chama provedores remotos |
 | `jangada-fila` | mostra a fila persistente do projeto; `--importar PLANO.json` acrescenta tarefas, `--json` detalha o estado, `--revisao` lista o que aguarda revisão e `--metricas` resume consumo, revisões e custo estimado pelos preços de `precos.json` (ver [fila](docs/subagentes-e-delegacao.md#fila-persistente-de-projetos)) |
@@ -292,20 +292,20 @@ O fluxo completo, com fluxogramas, está em
 
 | No seletor | Implementa | Revisa | Delegação padrão |
 |---|---|---|---|
-| `padrão` (Claude na configuração inicial) | Claude | Codex | agy, com alternativa no Claude |
-| `claude-codex` | Claude | Codex | agy, com alternativa no Claude |
-| `codex-claude` | Codex | Claude | leitor e redator no Ollama, demais papéis no agy |
+| `padrão` (Claude na configuração inicial) | Claude | Codex | agy para todos os papéis |
+| `claude-codex` | Claude | Codex | agy para todos os papéis |
+| `codex-claude` | Codex | Claude | agy para todos os papéis |
 
 Os perfis padrão são esses dois: autor e revisor ficam sempre em provedores
 diferentes e as delegações vão ao agy. O agy só atende em pasta marcada como
-confiável nele; se recusar, a sessão principal faz o trabalho. Autorrevisão,
+confiável nele; se recusar, registra bloqueio e a sessão principal pode continuar a investigação. Autorrevisão,
 revisor agy e os destinos `claude` e `local` continuam disponíveis por
 `--revisor`, `--delegacao` ou perfil pessoal em `~/.config/jangada/agentes`
 (modelo em `default/agentes/exemplo.conf`).
 
 O agy não abre sessão principal: o `jangada-agente` recusa `--agente agy` e
-todo perfil com `COMANDO=agy`. Ele atende as delegações e a revisão, ao lado
-do Ollama. Uma sessão antiga do agy aberta sem perfil ainda é restaurada.
+todo perfil com `COMANDO=agy`. Ele atende as delegações padrão e a revisão. O Ollama permanece disponível
+para delegação explicitamente escolhida. Uma sessão antiga do agy aberta sem perfil ainda é restaurada.
 
 O seletor identifica autorrevisão quando executor e revisor usam o mesmo
 provedor. Ele informa programas ausentes e recusa um executor indisponível
@@ -316,18 +316,10 @@ separadamente. As descrições são calculadas; `DESCRICAO` em perfis antigos
 continua sendo lida, mas não substitui os valores efetivos no seletor.
 
 O Codex usa os worktrees e o tmux da Jangada, sem criar worktree próprio
-nem conectar ao servidor compartilhado do CLI. Toda sessão do Codex usa
-primeiro o Ollama para leitor e redator. No perfil `codex-claude`, os demais
-papéis são delegados ao agy; com `JANGADA_DELEGAR=local` (o padrão do Codex
-sem perfil), ficam na sessão.
-
-```mermaid
-flowchart LR
-    A{Sessão do Codex} -- codex-claude --> C[Revisão: Claude]
-    A -- sem perfil --> P[Revisão: Claude]
-    C --> D[Leitor e redator: Ollama<br>Outros papéis: agy]
-    P --> L[Leitor e redator: Ollama<br>Outros papéis: na sessão]
-```
+nem conectar ao servidor compartilhado do CLI. Claude e Codex usam agy por
+padrão para todos os papéis, inclusive leitor e redator, também sem perfil. Não há encaminhamento automático ao Ollama.
+Uma preferência local explícita continua válida; falta de agy, confiança,
+cota ou autorização bloqueia a delegação padrão.
 
 O revisor Codex recebe o pedido completo, sem terminal ou ferramentas
 externas. Veja
@@ -470,11 +462,11 @@ perfil (ou global), e o seletor mostra o destino:
 
 | `JANGADA_DELEGAR` | Perfis | Efeito |
 |---|---|---|
-| `agy` | `padrão` (Claude), `claude-codex`, `codex-claude` | `jangada-delegar PAPEL` manda ao agy; o subagente do Claude só se ele recusar. No Codex, leitor e redator vão antes ao Ollama |
+| `agy` | `padrão` (Claude ou Codex), `claude-codex`, `codex-claude` | todos os papéis vão ao agy com autorização da tarefa; recusa registra bloqueio |
 | `claude` | só perfil pessoal ou `--delegacao claude` | subagentes do Claude dos papéis, nunca `general-purpose` |
-| `local` | Codex sem perfil; perfil pessoal ou `--delegacao local` | leitor e redator no Ollama; os demais papéis na própria sessão |
+| `local` | perfil pessoal ou `--delegacao local` | leitor e redator no Ollama; os demais papéis na própria sessão |
 
-`jangada-delegar PAPEL "pedido" [--arquivo SAIDA]` roda o agente do papel
+`jangada-delegar PAPEL "pedido" --permitir-remoto [--arquivo SAIDA]` roda o agente do papel
 no agy, com `--sandbox`,
 na raiz do repositório atual, e imprime só o relatório. A pasta precisa ser confiável para o agy (o worktree da sessão
 é, e as outras só se você já respondeu à pergunta do agy nelas): o
@@ -494,8 +486,8 @@ sem cota legível é pulado, e o seguinte da lista é tentado. Se o agy responde
 que a cota acabou no meio da chamada, o comando também passa ao seguinte. Por
 isso o padrão põe depois do Flash dois modelos do outro grupo.
 
-O comando recusa, com código 4 e uma linha indicando o subagente do Claude
-do mesmo papel, quando nenhum modelo da lista tem cota, quando a
+O comando recusa, com código 4 e uma linha indicando o bloqueio do apoio,
+quando nenhum modelo da lista tem cota, quando a
 pasta não é confiável, quando o `agy agents` não lista o papel, quando o
 agy falha ou passa de 300 segundos (`JANGADA_DELEGAR_TEMPO`) e quando o
 perfil não delega ao agy. Sem terminal, o agy só roda os comandos listados
@@ -526,7 +518,7 @@ Regras de decisão:
 - Se o verificador não subir a aprovação na primeira rodada em 30
   entregas, ele sai.
 
-Sem o agy instalado, `agy` vira `claude`. Subagente não revisa a entrega: o
+Sem o agy instalado, o destino continua `agy` e registra bloqueio. Subagente não revisa a entrega: o
 `verificador` confere regras e testes, não o mérito, e o `jangada-validar`
 continua com o revisor de sempre.
 

@@ -5,3 +5,6 @@
    - Subagente e delegação não revisam a entrega nem substituem o
      `jangada-validar`. O verificador confere regras e testes, não o mérito
      da solução.
+   - Destino configurado não comprova participação. Confira a contribuição
+     recebida e registre seu aproveitamento, ou o bloqueio e seu motivo.
+     Delegação não substitui a revisão independente da entrega.

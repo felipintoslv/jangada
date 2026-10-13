@@ -35,6 +35,8 @@ Grave o pedido num arquivo e passe por `--prompt-arquivo`. Ele traz:
 - o que está fora do escopo;
 - critério de pronto que dê para verificar;
 - restrições do projeto;
+- uma subtarefa útil de apoio pelo `jangada-delegar --destino agy`, inclusive
+  leitura e redação, com escopo e fontes autorizados para envio remoto;
 - "ao terminar, rode `jangada-validar` e pare no parecer; no limite de
   rodadas, pare e não use `--forcar`";
 - "não envie ao remoto e não integre".
@@ -58,6 +60,10 @@ jangada-agente --janela --coordenador VOCE --projeto PASTA --nome NOME --perfil 
 - A sessão se chama `PROJETO--NOME`. O estado fica em
   `~/.local/state/jangada/agentes/SESSAO.json` e os pareceres em
   `validacao-SESSAO-rN.md`, na mesma pasta.
+- Cobre a execução do apoio pelo agy e confira o relatório nas fontes.
+  Registre contribuição e aproveitamento, ou recusa e motivo rastreável.
+  Perfil com `JANGADA_DELEGAR=agy` não comprova participação. Não use
+  alternativa automática local; delegação não substitui revisão independente.
 - Não digite na sessão do autor como se fosse o dono. Se precisar mandar
   mensagem, identifique-se como coordenador.
 - Não responda pedido de permissão de outro agente sem autorização do dono

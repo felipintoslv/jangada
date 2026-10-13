@@ -74,66 +74,63 @@ existente por migração, como `migrations/202609272200-subagentes-novos.sh`.
 
 ```mermaid
 flowchart TD
-    A{Agente da sessão} -- Claude --> C{JANGADA_DELEGAR}
-    C -- claude --> CL[Subagente do Claude]
-    C -- local --> L{Leitor ou redator?}
-    L -- sim --> OL[Ollama com arquivos explícitos]
-    L -- não --> CL
-    OL -- recusa --> CL
-    C -- vazio ou agy --> G{agy instalado?}
-    G -- não --> CL
-    G -- sim --> AG[jangada-delegar ao agy]
-    AG -- recusa --> CL
-    A -- Codex --> X{Leitor ou redator?}
-    X -- sim --> XL[Ollama com arquivos explícitos]
-    XL -- recusa --> S[Investigar na sessão]
-    X -- não --> D{JANGADA_DELEGAR = agy?}
-    D -- não --> S
-    D -- sim --> XA[jangada-delegar ao agy]
-    XA -- recusa --> S
+    A[Claude ou Codex] --> C{Destino configurado}
+    C -- vazio ou agy --> AG[jangada-delegar ao agy<br>Todos os papéis]
+    AG --> P{Autorização, acesso,<br>confiança e cota?}
+    P -- sim --> R[Relatório a conferir]
+    P -- não --> B[Bloqueio registrado]
+    C -- local explícito --> OL[Ollama com arquivos explícitos<br>Leitor e redator]
+    C -- claude explícito --> CL[Subagentes do Claude]
 ```
 
-`jangada_delegacao` em `bin/jangada-config` decide o destino. No Claude,
-o perfil prevalece sobre a configuração global. No Codex, vale `agy` quando
-configurado; nos demais casos, `local`. O agy não abre sessão principal: ele
-só recebe delegações e revisa. O destino `nativo` (subagentes do próprio
-agy) resta para sessões antigas do agy restauradas.
+`jangada_delegacao` em `bin/jangada-config` usa agy por padrão para Claude
+e Codex, inclusive leitor e redator e sessões sem perfil. O perfil prevalece
+sobre a configuração global. Sem agy instalado, o destino continua agy e
+a chamada registra recusa, sem alternativa local automática.
 
 | Agente e destino | Protocolo em `default/agentes/` | Regra |
 |---|---|---|
-| Claude, `agy` | `protocolo-delegar-agy.md` | primeiro agy; na recusa, subagente do Claude |
-| Claude, `claude` | `protocolo-delegar-claude.md` | subagentes do Claude |
+| Claude, `agy` | `protocolo-delegar-agy.md` | todos os papéis no agy; recusa registra bloqueio |
+| Claude, `claude` explícito | `protocolo-delegar-claude.md` | subagentes do Claude |
 | agy restaurado, `nativo` | `protocolo-delegar-nativo.md` | subagentes do próprio agy |
-| Claude, `local` | `protocolo-delegar-local.md` | leitor e redator primeiro no Ollama; demais papéis no Claude |
-| Codex, `local` ou `agy` | `protocolo-delegar-codex.md` | leitor e redator primeiro no Ollama; outros papéis no agy se permitido, ou na sessão |
+| Claude, `local` explícito | `protocolo-delegar-local.md` | leitor e redator no Ollama; demais papéis no Claude |
+| Codex, `agy` ou `local` explícito | `protocolo-delegar-codex.md` | agy para todos; escolha local restringe leitor e redator ao Ollama |
 
-O Codex não chama subagentes do Claude. Mesmo no perfil `codex-claude`,
-que delega ao agy, leitor e redator passam primeiro pelo destino local.
-
-Os dois perfis padrão, `claude-codex` e `codex-claude`, usam o destino `agy`.
-O agy só atende em pasta marcada como confiável nele; se recusar, a sessão
-principal faz o trabalho. Os destinos `claude` e `local` valem por
-`--delegacao` ou perfil pessoal. Os perfis e seus revisores estão em
-[Codex](codex.md).
+O Codex não chama subagentes do Claude. O agy só recebe delegações e revisa;
+o destino `nativo` resta para sessões antigas do agy restauradas.
 
 Todos recebem também `default/agentes/protocolo-delegar.md`: citar fontes,
-conferir o que decide a mudança, não editar e não substituir o
-`jangada-validar`. Uma recusa local não autoriza enviar documentos
-confidenciais a outro provedor. As setas de recusa para o Claude exigem
-aviso ao usuário antes desse envio, conforme o protocolo local.
+conferir contribuição e aproveitamento, não editar nem substituir revisão
+independente pelo `jangada-validar`. Perfil com destino agy não comprova
+participação; o coordenador cobra apoio executado ou bloqueio rastreável.
+
+### Instalações existentes e restauração
+
+Sem preferência explícita, os comandos passam a herdar agy do repositório.
+A restauração recompõe destino e protocolo pelo perfil e configuração atual,
+sem usar o destino gravado no estado. Não é necessária migração nem regravação
+de configuração pessoal para isso. Sessões já abertas mantêm seu ambiente
+e devem ser retomadas para receber o protocolo atualizado.
+
+Preferências explícitas em `jangada.conf`, perfis pessoais e
+`delegacao.json` são preservadas. Configurações antigas que escolhem local
+continuam locais, inclusive políticas com alternativas locais. Para adotar
+a política nova, o dono deve escolher `JANGADA_DELEGAR=agy` e ajustar ou
+retirar sua política pessoal. Para compatibilidade local, use
+`--delegacao local`, `JANGADA_DELEGAR=local` ou `--destino local` explicitamente.
+Nenhuma dessas escolhas autoriza envio remoto de dados confidenciais.
 
 ## jangada-delegar
 
 O destino pode ser explícito: `--destino local` ou `--destino agy`.
-Sem essa opção, o comando usa o destino definido pela configuração.
+Sem essa opção, o comando usa o destino definido pela configuração, agy por padrão.
 `JANGADA_DELEGAR=claude` recusa ambos; `JANGADA_DELEGAR=local` recusa o agy.
 
 ### Seleção por capacidade
 
 `--capacidade` ativa seleção para o papel `leitor`, com fontes em
 `--arquivos`. As capacidades disponíveis são `leitura_documental`,
-`resumo_curto` e `analise_documental`. Sem essa opção, as chamadas mantêm
-a seleção anterior.
+`resumo_curto` e `analise_documental`. Sem essa opção, o destino padrão também é agy.
 
 ```sh
 jangada-delegar leitor "Compare os documentos" \
@@ -141,15 +138,16 @@ jangada-delegar leitor "Compare os documentos" \
   --arquivos fontes/a.txt fontes/b.txt
 ```
 
-A ordem vem de `default/delegacao/roteamento.json`. Um arquivo opcional
+A política padrão em `default/delegacao/roteamento.json` contém somente agy
+para as três capacidades, sem alternativa local automática. Um arquivo opcional
 `~/.config/jangada/delegacao.json` substitui essa política: contém um objeto
 com capacidades e listas de destinos, sem comandos. Aceita apenas `local`,
 `agy` e `codex-economico`, sem repetições. Capacidade ausente ou configuração inválida recusa
 a execução. Claude e Codex não são alternativas automáticas.
 
-O agy exige `--permitir-remoto` nesta tarefa e um perfil que permita o
+Com ou sem `--capacidade`, o agy exige `--permitir-remoto` nesta tarefa e um perfil que permita o
 destino. A autorização não vence `JANGADA_DELEGAR=local`. Sem autorização,
-a seleção descarta o agy; uma falha local nunca autoriza envio remoto.
+a seleção padrão registra bloqueio; uma falha local nunca autoriza envio remoto.
 `--destino` explícito restringe a seleção a esse destino.
 
 Cada candidato é tentado uma vez. Permitem tentar o próximo destino
@@ -301,8 +299,8 @@ flowchart TD
   `permissions.allow` do `settings.json` do agy.
 - O relatório conta as frases sem fonte (`caminho:linha`, URL, página ou
   célula), que entram no registro.
-- Na recusa, o comando orienta conforme o agente da sessão: subagente do
-  Claude ou investigação na sessão do Codex.
+- Na recusa, o comando pede registro e aviso do bloqueio. No Codex, a
+  investigação pode continuar na sessão, sem declarar o apoio concluído.
   O `jangada-delegar` nunca chama o Claude.
 
 ## Avaliação controlada do Ollama
@@ -423,7 +421,7 @@ e preservou cerca de 2,0 GB de folga, atendendo a margem mínima de 1,5 GB.
   ao limite de memória; uma marca expirada não libera a delegação.
 - Falhas e privacidade: em qualquer falha (Ollama inacessível, modelo ausente,
   jogo aberto, memória insuficiente ou contexto estourado), o comando recusa com código 4
-  apontando o subagente do Claude, sem redirecionar dados para a nuvem. O protocolo
+  informando o bloqueio, sem redirecionar dados para a nuvem. O protocolo
   da sessão orienta o agente a consultar o usuário antes de recorrer ao Claude em
   documentos confidenciais.
 
@@ -842,6 +840,9 @@ Perfis disponíveis:
 | `balanced` | política existente por capacidade |
 | `quality` | agy explícito, com revisão do conteúdo pendente |
 | `offline` | somente local, sem permissão remota |
+
+Com a política padrão contendo somente agy, `offline` não tem executor
+elegível. Uso local exige política ou destino explicitamente escolhidos.
 
 Envio remoto exige `--permitir-remoto`, `permitir_remoto: true` no plano e
 perfil de sessão compatível. Os perfis não ampliam as permissões da sessão.

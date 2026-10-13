@@ -40,9 +40,9 @@ provedor fora das listas.
 | Provedor | Tipo | Funções | Observação |
 |---|---|---|---|
 | `claude` | `cli` | principal, revisor | Protocolo por `--append-system-prompt`; revisa com `sonnet`; primeira reserva |
-| `agy` | `cli` | revisor, delegacao | Segunda reserva |
+| `agy` | `cli` | revisor, delegacao | Destino padrão de todos os papéis de delegação; segunda reserva da revisão |
 | `codex` | `cli` | principal, revisor | Protocolo pelo `jangada-codex`; terceira reserva |
-| `ollama` | `ollama` | delegacao | Só descrito. Endereço e modelo seguem em `JANGADA_OLLAMA_URL` e `JANGADA_LOCAL_MODELO` |
+| `ollama` | `ollama` | delegacao | Compatibilidade por escolha explícita, sem uso automático na política padrão. Endereço e modelo seguem em `JANGADA_OLLAMA_URL` e `JANGADA_LOCAL_MODELO` |
 
 ## Limites
 

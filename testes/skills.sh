@@ -39,7 +39,7 @@ instalar() {
 nomes() { find "$1" -mindepth 1 -maxdepth 1 -printf '%f\n' 2>/dev/null | sort | paste -sd,; }
 todas="$(find "$origem/" -mindepth 2 -maxdepth 2 -name SKILL.md -printf '%h\n' | sed 's#.*/##' | sort | paste -sd,)"
 
-conferir "coordenador: no máximo 120 linhas" [ "$(wc -l <"$origem/coordenador/SKILL.md")" -le 120 ]
+conferir "coordenador: no máximo 130 linhas" [ "$(wc -l <"$origem/coordenador/SKILL.md")" -le 130 ]
 conferir "coordenador: o comando de abertura declara quem coordena" \
   grep -q '^jangada-agente --janela --coordenador VOCE ' "$origem/coordenador/SKILL.md"
 conferir "coordenador: o nome declarado é claude ou codex" \
