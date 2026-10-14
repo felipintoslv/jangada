@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+# Prova o percurso R com código e links copiados, sem módulos de apresentação.
+set -uo pipefail
+cd "$(dirname "$0")/.." || exit 1
+repo_jangada="$PWD"
+if ! Rscript --vanilla -e 'stopifnot(requireNamespace("lintr", quietly = TRUE))' >/dev/null 2>&1; then
+  echo 'UNAVAILABLE: prova Core independente exige R e lintr reais' >&2
+  exit 1
+fi
+marca="${JANGADA_MARCA_ISOLADO:-/tmp/.jangada-isolado}"
+if ! awk -v m="$marca" '$5 == m { a = 1 } END { exit !a }' /proc/self/mountinfo; then
+  pasta_marca="$(mktemp -d)"
+  JANGADA_MARCA_ISOLADO="$pasta_marca/marca" \
+    bwrap --dev-bind / / --ro-bind /dev/null "$pasta_marca/marca" -- bash "$0"
+  rc=$?
+  rm -rf "$pasta_marca"
+  exit "$rc"
+fi
+unset JANGADA_VALIDAR_REVISOR JANGADA_DELEGAR
+falhas=0
+conferir() {
+  local descricao="$1"; shift
+  if "$@"; then printf 'ok    %s\n' "$descricao"
+  else printf 'FALHA %s\n' "$descricao"; falhas=$((falhas + 1)); fi
+}
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+copia="$tmp/jangada"
+mkdir -p "$copia/bin" "$copia/default" "$tmp/bin" "$tmp/falso" \
+  "$tmp/config/jangada" "$tmp/estado/jangada/agentes" "$tmp/projeto"
+cp -a core "$copia/core"
+cp -a bin/jangada-config bin/jangada-gancho "$copia/bin/"
+for comando in jangada-validar jangada-isolar; do
+  cp -a "bin/$comando" "$copia/bin/"
+done
+for recurso in orquestracao nucleo provedores; do
+  cp -a "default/$recurso" "$copia/default/"
+done
+conferir 'Shell físico ausente' test ! -e "$copia/shell"
+conferir 'Monitor físico ausente' test ! -e "$copia/monitor"
+conferir 'padrão legado ausente na cópia mínima' test ! -e "$copia/default/r"
+conferir 'fachada copiada resolve para o Core copiado' \
+  test "$(realpath "$copia/bin/jangada-validar")" = "$copia/core/bin/jangada-validar"
+conferir 'compatibilidade completa resolve para a fonte única' \
+  test "$(realpath default/r/lintr)" = "$repo_jangada/core/validacao/lintr"
+conferir 'compatibilidade é link relativo' \
+  test "$(readlink shell/integracoes/r/lintr)" = '../../../core/validacao/lintr'
+cat >"$tmp/bin/claude" <<'FALSO'
+#!/usr/bin/env bash
+cat >"$FALSO_DIR/pedido"
+printf 'STATUS: APROVADO\n'
+FALSO
+chmod +x "$tmp/bin/claude"
+export PATH="$tmp/bin:$PATH" FALSO_DIR="$tmp/falso"
+export JANGADA_ISOLAR_ESCRITA="$tmp/falso"
+export XDG_STATE_HOME="$tmp/estado" XDG_CONFIG_HOME="$tmp/config"
+export JANGADA_PATH="$copia" JANGADA_SESSAO=s JANGADA_ISOLADO=1
+git -C "$tmp/projeto" init -q -b main
+printf 'x <- 1\n' >"$tmp/projeto/exemplo.R"
+git -C "$tmp/projeto" add exemplo.R
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm inicio
+git -C "$tmp/projeto" checkout -qb agente/x
+printf 'cat("novo\\n")\n' >>"$tmp/projeto/exemplo.R"
+nova_sessao() {
+  rm -f "$tmp/estado/jangada/agentes/validacao-s"* "$tmp/falso/pedido"
+  printf '{"sessao":"s","agente":"codex","revisor":"claude","base":"main","tarefa":"R sintético"}\n' \
+    >"$tmp/estado/jangada/agentes/s.json"
+}
+validar() {
+  "$copia/bin/jangada-validar" --revisor claude "$tmp/projeto" >"$tmp/saida" 2>&1
+}
+nova_sessao
+validar; rc=$?
+conferir 'sem .lintr da base: aprovação com R real' test "$rc" = 0
+conferir 'padrão Core gera aviso na linha nova' \
+  grep -q 'exemplo.R:2: \[undesirable_function_linter\]' "$tmp/saida"
+conferir 'achado do padrão é aviso' grep -q 'aviso do lintr (padrão do jangada' "$tmp/saida"
+conferir 'revisão falsa chamada' test -s "$tmp/falso/pedido"
+
+nova_sessao
+printf 'linters: file.create("%s")\n' "$tmp/regra-executada" >"$tmp/projeto/.lintr"
+printf 'invisible(file.create("%s"))\n' "$tmp/perfil-executado" >"$tmp/projeto/.Rprofile"
+validar; rc=$?
+conferir 'regra nova e perfil do worktree não impedem validação' test "$rc" = 0
+conferir 'regra gravável não executada' test ! -e "$tmp/regra-executada"
+conferir 'perfil gravável não executado' test ! -e "$tmp/perfil-executado"
+conferir 'regra nova ignorada explicitamente' grep -q 'não está na base' "$tmp/saida"
+conferir 'padrão Core ainda aplicado' grep -q 'exemplo.R:2: \[undesirable_function_linter\]' "$tmp/saida"
+conferir 'revisão chamada com regra nova ignorada' test -s "$tmp/falso/pedido"
+
+# A regra da base difere do padrão: só ela proíbe message(). O worktree tenta
+# desativá-la. Assim, reprovar comprova também a prioridade da base.
+git -C "$tmp/projeto" checkout -q main
+printf 'linters: list(undesirable_function_linter(fun = c(message = "regra da base")))\n' >"$tmp/projeto/.lintr"
+git -C "$tmp/projeto" add .lintr
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm regras
+git -C "$tmp/projeto" checkout -q agente/x
+git -C "$tmp/projeto" -c user.name=t -c user.email=t@t merge -q main
+printf 'linters: list()\n' >"$tmp/projeto/.lintr"
+printf 'message("novo")\n' >>"$tmp/projeto/exemplo.R"
+nova_sessao
+validar; rc=$?
+conferir 'regra da base reprova com código 3' test "$rc" = 3
+conferir 'regra da base aponta violação nova' grep -q 'exemplo.R:3:.*regra da base' "$tmp/saida"
+conferir 'revisor poupado na reprovação local' test ! -e "$tmp/falso/pedido"
+conferir 'perfil continua sem executar' test ! -e "$tmp/perfil-executado"
+
+# A falta do recurso obrigatório não pode ser confundida com nenhum achado.
+nova_sessao
+git -C "$tmp/projeto" checkout -q -- .lintr
+git -C "$tmp/projeto" checkout -q agente/x~1
+mv "$copia/core/validacao/lintr" "$tmp/padrao"
+validar; rc=$?
+conferir 'padrão indisponível reprova' test "$rc" = 3
+conferir 'falha do lintr explícita' grep -q 'FAILED: lintr falhou' "$tmp/saida"
+conferir 'sem padrão não chama revisor' test ! -e "$tmp/falso/pedido"
+((falhas == 0)) || cat "$tmp/saida"
+exit $((falhas > 0))

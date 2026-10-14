@@ -1,0 +1,10 @@
+linters: list(
+    undesirable_function_linter(fun = c(
+      cat     = "use message(), cli::cli_inform() ou logger; cat() só em métodos print",
+      print   = "use message() ou cli::cli_inform(); print() só em métodos print",
+      browser = "remova antes de entregar"
+    )),
+    commented_code_linter(),
+    object_usage_linter(),
+    seq_linter()
+  )

@@ -789,7 +789,7 @@ verificar_local() {
 
   # 3. lintr nos arquivos R, só nas linhas que a mudança tocou, para um cat()
   # antigo em código legado não barrar a entrega. Com .lintr no projeto, o
-  # achado reprova; sem ele, vale default/r/lintr e o achado só vira aviso.
+  # achado reprova; sem ele, vale core/validacao/lintr e o achado só vira aviso.
   local r_arqs=()
   while IFS= read -r arq; do
     [[ -n "$arq" && -f "$dir/$arq" ]] || continue
@@ -800,7 +800,7 @@ verificar_local() {
     if [[ -n "${regras[.lintr]:-}" ]]; then
       bloqueia=1; config="${regras[.lintr]}"
     else
-      config="$JANGADA_PATH/default/r/lintr"
+      config="$JANGADA_PATH/core/validacao/lintr"
       [[ -f "$dir/.lintr" ]] &&
         printf 'jangada-validar: o .lintr do worktree não está na base e não foi usado; ele passa a valer depois de integrado\n' >&2
     fi

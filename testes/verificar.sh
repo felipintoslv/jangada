@@ -161,6 +161,7 @@ passo "jangada-validar com claude e agy falsos"
 python3 testes/agente-seletor.py || falha "testes/agente-seletor.py"
 if command -v git >/dev/null && command -v jq >/dev/null; then
   testes/validar.sh || falha "testes/validar.sh"
+  testes/core-independente.sh || falha "testes/core-independente.sh"
 else
   echo "git ou jq ausente; etapa ignorada"
 fi

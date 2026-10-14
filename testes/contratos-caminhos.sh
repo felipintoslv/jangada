@@ -53,10 +53,23 @@ conferir "todo módulo de require(\"default.hypr.*\") está na lista:$faltam" [ 
 copia() {
   rm -rf "$tmp/copia" "$tmp/fora"
   mkdir "$tmp/copia" "$tmp/fora"
+  # Copia também links intermediários antes dos arquivos: default/r/lintr
+  # contém dois saltos, e --parents sozinho materializa default/r como pasta.
+  local c parcial parte
+  while IFS= read -r c; do
+    parcial=""
+    while IFS= read -r parte; do
+      parcial+="${parcial:+/}$parte"
+      if [[ -L "$parcial" ]]; then
+        cp -a --parents "$(realpath --relative-to=. "$parcial")" "$tmp/copia"
+        cp -a --parents "$parcial" "$tmp/copia"
+      fi
+    done < <(tr '/' '\n' <<<"$c")
+  done < <(caminhos)
   caminhos | xargs -d '\n' cp -a --parents -t "$tmp/copia"
   # Caminho da lista que é link precisa do destino na cópia para existir.
   caminhos | while IFS= read -r c; do [[ -L "$c" ]] && realpath --relative-to=. "$c"; done |
-    xargs -r -d '\n' cp -a --parents -t "$tmp/copia"
+    sort -u | xargs -r -d '\n' cp -a --parents -t "$tmp/copia"
 }
 copia
 conferir "cópia intacta dos caminhos passa" [ -z "$(problemas "$tmp/copia")" ]
@@ -73,7 +86,8 @@ conferir "link absoluto é apontado" \
   grep -qxF "link absoluto: shell/jangada.sh" <<<"$(problemas "$tmp/copia")"
 copia
 mv "$tmp/copia/default/claude/agents" "$tmp/fora/agents"
-ln -s ../../../fora/agents "$tmp/copia/default/claude/agents"
+ln -s "$(realpath --relative-to="$(realpath "$tmp/copia/default/claude")" "$tmp/fora/agents")" \
+  "$tmp/copia/default/claude/agents"
 conferir "link para fora do repositório é apontado" \
   grep -qxF "link para fora do repositório: default/claude/agents" <<<"$(problemas "$tmp/copia")"
 

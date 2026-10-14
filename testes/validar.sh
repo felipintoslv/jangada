@@ -65,6 +65,7 @@ EOF
 chmod +x "$tmp/bin/"*
 mkdir -p "$tmp/falso-jangada/bin"
 ln -s "$repo_jangada/default" "$tmp/falso-jangada/default"
+ln -s "$repo_jangada/core" "$tmp/falso-jangada/core"
 for f in "$repo_jangada"/bin/*; do
   [[ "${f##*/}" == jangada-isolar ]] || ln -s "$f" "$tmp/falso-jangada/bin/${f##*/}"
 done
@@ -510,7 +511,7 @@ if Rscript -e 'quit(status = !requireNamespace("lintr", quietly = TRUE))' >/dev/
 
   # 12c: com .lintr na base, o achado reprova antes do revisor.
   git -C "$tmp/projeto" checkout -q main
-  cp "$repo_jangada/default/r/lintr" "$tmp/projeto/.lintr"
+  cp "$repo_jangada/core/validacao/lintr" "$tmp/projeto/.lintr"
   git -C "$tmp/projeto" add .lintr
   git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "regras do lintr"
   git -C "$tmp/projeto" checkout -q agente/x
@@ -594,7 +595,7 @@ if Rscript -e 'quit(status = !requireNamespace("lintr", quietly = TRUE))' >/dev/
     conferir "caso 12h: o .lintr da base não grava no host" test ! -e "$tmp/lintr-no-host"
     rm -f "$tmp/estado/jangada/revisoes/validar.jsonl" "$tmp/estado/jangada/revisoes/validacao-s"*
     git -C "$tmp/projeto" checkout -q main
-    cp "$repo_jangada/default/r/lintr" "$tmp/projeto/.lintr"
+    cp "$repo_jangada/core/validacao/lintr" "$tmp/projeto/.lintr"
     git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qam "lintr de volta"
     git -C "$tmp/projeto" checkout -q agente/x
     git -C "$tmp/projeto" -c user.name=t -c user.email=t@t merge -q main -m "traz o .lintr de volta"
