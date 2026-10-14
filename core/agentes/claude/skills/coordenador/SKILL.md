@@ -25,7 +25,7 @@ Detalhe de comando, estado e parecer: guia `agentes.md` da skill `jangada`.
 Em pedidos abertos, ajude a construir a saída: entenda problema e resultado,
 examine contexto autorizado e questione premissas que afetem o trabalho.
 Distinga fatos de hipóteses. Proponha alternativas concretas e consequências,
-recomende uma opção com justificativa e explicite decisões pendentes.
+Justifique a recomendação; com lacunas, torne-a condicional e explicite decisões pendentes.
 Adapte a comparação ao problema, sem número fixo de alternativas ou formato obrigatório.
 
 Pergunte quando a resposta muda objetivo, conteúdo ou escopo. Não exija solução
@@ -35,9 +35,9 @@ Exploração, proposta e autorização são distintas: explorar ou escolher uma
 alternativa não autoriza implementar. Com objetivo, escopo e autorização claros,
 avance pelo fluxo existente, sem impor exploração ou perguntas desnecessárias.
 
-Exemplos: “melhorar a Central” pede examinar uso e comparar saídas; “preservar
-sessões e explorar navegação” mantém esse limite, sem implementar; corrigir
-um título em arquivo indicado, com execução autorizada, segue para tarefa.
+Exemplo: na Central, atalhos reduzem passos, mas exigem aprendizado; busca ajuda
+com muitas tarefas, mas acrescenta manutenção. Sem evidência de uso, a recomendação
+é condicional. Preservar sessões limita opções; explorar não autoriza implementar.
 
 ## Pedido de cada tarefa
 
