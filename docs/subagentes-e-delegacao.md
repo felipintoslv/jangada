@@ -90,11 +90,11 @@ a chamada registra recusa, sem alternativa local automática.
 
 | Agente e destino | Protocolo em `default/agentes/` | Regra |
 |---|---|---|
-| Claude, `agy` | `protocolo-delegar-agy.md` | todos os papéis no agy; recusa registra bloqueio |
+| Claude, `agy` | `protocolo-delegar-agy.md` | todos no agy; recusa registrada |
 | Claude, `claude` explícito | `protocolo-delegar-claude.md` | subagentes do Claude |
 | agy restaurado, `nativo` | `protocolo-delegar-nativo.md` | subagentes do próprio agy |
-| Claude, `local` explícito | `protocolo-delegar-local.md` | leitor e redator no Ollama; demais papéis no Claude |
-| Codex, `agy` ou `local` explícito | `protocolo-delegar-codex.md` | agy para todos; escolha local restringe leitor e redator ao Ollama |
+| Claude, `local` | `protocolo-delegar-local.md` | escolha local explícita |
+| Codex, `agy` ou `local` | `protocolo-delegar-codex.md` | agy; local explícito |
 
 O Codex não chama subagentes do Claude. O agy só recebe delegações e revisa;
 o destino `nativo` resta para sessões antigas do agy restauradas.
@@ -145,8 +145,8 @@ com capacidades e listas de destinos, sem comandos. Aceita apenas `local`,
 `agy` e `codex-economico`, sem repetições. Capacidade ausente ou configuração inválida recusa
 a execução. Claude e Codex não são alternativas automáticas.
 
-Com ou sem `--capacidade`, o agy exige `--permitir-remoto` nesta tarefa e um perfil que permita o
-destino. A autorização não vence `JANGADA_DELEGAR=local`. Sem autorização,
+Com ou sem `--capacidade`, o agy exige `--permitir-remoto` nesta tarefa e um
+perfil que permita o destino. A autorização não vence `JANGADA_DELEGAR=local`. Sem autorização,
 a seleção padrão registra bloqueio; uma falha local nunca autoriza envio remoto.
 `--destino` explícito restringe a seleção a esse destino.
 

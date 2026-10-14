@@ -86,7 +86,8 @@ conferir "codex-claude: protocolo manda leitor e redator ao agy" grep -q 'inclus
   "$tmp/state/jangada/agentes/protocolo-projeto--tarefa-padrao.md"
 rodar "$repo_jangada/bin/jangada-agente" --agente codex --projeto "$tmp/projeto" \
   --nome tarefa-sem-perfil --prompt "Implemente a tarefa" >"$tmp/saida" 2>&1
-conferir "Codex sem perfil cria sessão com agy" jq -e '.agente == "codex" and .perfil == "" and .delegar == "agy"' \
+conferir "Codex sem perfil lança sessão nova" [ "$?" = 0 ]
+conferir "Codex sem perfil cria sessão com agy" jq -e '.agente == "codex" and (has("perfil") | not) and .delegar == "agy" and .isolar' \
   "$tmp/state/jangada/agentes/projeto--tarefa-sem-perfil.json"
 conferir "Codex sem perfil entrega protocolo com leitor e redator" grep -q 'inclusive leitor e redator' \
   "$tmp/state/jangada/agentes/protocolo-projeto--tarefa-sem-perfil.md"

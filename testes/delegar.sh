@@ -106,11 +106,6 @@ mkdir -p "$tmp/home/.gemini/config"
 sed "s|@JANGADA_PATH@|$repo_jangada|g" default/agy/hooks.json >"$tmp/home/.gemini/config/hooks.json"
 
 delegar() {
-  local autorizacao=()
-  # Casos antigos sem capacidade autorizam somente o provedor falso.
-  if [[ " $* " != *" --capacidade "* && "${SEM_AUTORIZACAO:-0}" != 1 ]]; then
-    autorizacao=(--permitir-remoto)
-  fi
   rm -f "$tmp/falso/agy.args"
   (cd "$tmp/projeto" && env -u JANGADA_DELEGAR -u JANGADA_DELEGAR_MODELOS -u JANGADA_ISOLADO -u XDG_CACHE_HOME -u XDG_STATE_HOME -u XDG_CONFIG_HOME \
     -u JANGADA_DELEGAR_ROTEAMENTO_ID -u JANGADA_DELEGAR_TENTATIVAS -u JANGADA_DELEGAR_CHAMADAS_RESTANTES \
@@ -140,12 +135,12 @@ delegar() {
     ${LOCAL_VRAM_MIN:+JANGADA_LOCAL_VRAM_MIN="$LOCAL_VRAM_MIN"} \
     ${LOCAL_ESPERA:+JANGADA_LOCAL_ESPERA="$LOCAL_ESPERA"} \
     ${LOCAL_FATIAS_MAX:+JANGADA_LOCAL_FATIAS_MAX="$LOCAL_FATIAS_MAX"} \
-    "$repo_jangada/bin/jangada-delegar" "${autorizacao[@]}" "$@" >"$tmp/saida" 2>"$tmp/erro")
+    "$repo_jangada/bin/jangada-delegar" "$@" >"$tmp/saida" 2>"$tmp/erro")
   echo $? >"$tmp/codigo"
 }
 codigo() { cat "$tmp/codigo"; }
 
-delegar explorador "mapeie"
+delegar --permitir-remoto explorador "mapeie"
 conferir "caso 1: código 0" [ "$(codigo)" = 0 ]
 conferir "caso 1: imprime o relatório" grep -qx "relatorio em a.sh:1" "$tmp/saida"
 conferir "caso 1: o agy recebe o papel, que o hook do leitor lê" grep -qx explorador "$tmp/falso/agy.papel"
@@ -154,7 +149,7 @@ conferir "caso 1: Flash high para o explorador" grep -qx -- gemini-3.8-flash-hig
 conferir "caso 1: roda com --sandbox" grep -qx -- --sandbox "$tmp/falso/agy.args"
 conferir "caso 1: roda na pasta atual" [ "$(cat "$tmp/falso/agy.pasta")" = "$tmp/projeto" ]
 
-delegar verificador "confira"
+delegar --permitir-remoto verificador "confira"
 conferir "caso 2: Flash high para o verificador" grep -qx -- gemini-3.8-flash-high "$tmp/falso/agy.args"
 # Antes da primeira, depois de cada uma; o antes da segunda vem do cache.
 conferir "caso 2: cota do antes vem do cache" [ "$(wc -l <"$tmp/falso/usage.chamadas")" = 3 ]
@@ -167,7 +162,7 @@ conferir "caso 2: linha com os campos" jqok -e 'select(.papel == "verificador")
 
 
 rm -f "$tmp/home/.cache/jangada/agy-usage.json"
-COTA=0.15 delegar leitor "leia"
+COTA=0.15 delegar --permitir-remoto leitor "leia"
 conferir "caso 3: cota baixa recusa com código 4" [ "$(codigo)" = 4 ]
 conferir "caso 3: agy não é chamado" test ! -e "$tmp/falso/agy.args"
 conferir "caso 3: diz a cota" grep -q "15%" "$tmp/erro"
@@ -177,7 +172,7 @@ conferir "caso 3: recusa registrada com o motivo" \
 
 # A cota semanal zerada recusa mesmo com a de 5 horas cheia.
 rm -f "$tmp/home/.cache/jangada/agy-usage.json"
-SEMANAL=0 COTA=0.99 delegar leitor "leia"
+SEMANAL=0 COTA=0.99 delegar --permitir-remoto leitor "leia"
 conferir "caso 3b: cota semanal zerada recusa" [ "$(codigo)" = 4 ]
 conferir "caso 3b: agy não é chamado" test ! -e "$tmp/falso/agy.args"
 conferir "caso 3b: motivo é a cota" \
@@ -185,7 +180,7 @@ conferir "caso 3b: motivo é a cota" \
 
 # Sem cota no Gemini, o modelo seguinte da lista atende pelo outro grupo.
 rm -f "$tmp/home/.cache/jangada/agy-usage.json"
-SEMANAL=0 TERCEIROS=0.8 delegar leitor "leia"
+SEMANAL=0 TERCEIROS=0.8 delegar --permitir-remoto leitor "leia"
 conferir "caso 3c: Gemini sem cota passa ao modelo seguinte" [ "$(codigo)" = 0 ]
 conferir "caso 3c: chama o Sonnet do agy" grep -qx -- claude-sonnet-5-5-high "$tmp/falso/agy.args"
 conferir "caso 3c: registra o modelo usado e a cota do grupo dele" \
@@ -193,7 +188,7 @@ conferir "caso 3c: registra o modelo usado e a cota do grupo dele" \
 
 # O /usage diz que há cota, mas o agy responde que acabou: tenta o seguinte.
 rm -f "$tmp/home/.cache/jangada/agy-usage.json"
-TERCEIROS=0.8 ESGOTADO=gemini-3.8-flash-high delegar leitor "leia"
+TERCEIROS=0.8 ESGOTADO=gemini-3.8-flash-high delegar --permitir-remoto leitor "leia"
 conferir "caso 3d: modelo esgotado na chamada passa ao seguinte" [ "$(codigo)" = 0 ]
 conferir "caso 3d: avisa da troca" grep -q "tentando o próximo modelo" "$tmp/erro"
 conferir "caso 3d: registra o modelo que respondeu" \
@@ -201,51 +196,51 @@ conferir "caso 3d: registra o modelo que respondeu" \
 
 # Sem o grupo dos demais modelos no /usage, a cota deles é desconhecida.
 rm -f "$tmp/home/.cache/jangada/agy-usage.json"
-ESGOTADO=gemini-3.8-flash-high delegar leitor "leia"
+ESGOTADO=gemini-3.8-flash-high delegar --permitir-remoto leitor "leia"
 conferir "caso 3e: esgotado e sem outro grupo, recusa" [ "$(codigo)" = 4 ]
 conferir "caso 3e: motivo é a cota do primeiro modelo" \
   jqok -se 'last | .motivo_codigo == "cota_insuficiente" and .modelo == "gemini-3.8-flash-high"' "$reg"
 
 rm -f "$tmp/home/.cache/jangada/agy-usage.json"
-MODELOS="gemini-3.1-pro-high" delegar leitor "leia"
+MODELOS="gemini-3.1-pro-high" delegar --permitir-remoto leitor "leia"
 conferir "caso 3f: JANGADA_DELEGAR_MODELOS troca o modelo" grep -qx -- gemini-3.1-pro-high "$tmp/falso/agy.args"
 rm -f "$tmp/home/.cache/jangada/agy-usage.json"
-COTA='"invalida"' TERCEIROS=0.8 delegar leitor "leia"
+COTA='"invalida"' TERCEIROS=0.8 delegar --permitir-remoto leitor "leia"
 conferir "cota parcial: grupo ilegível não impede outro válido" [ "$(codigo)" = 0 ]
 conferir "cota parcial: usa somente o grupo válido" grep -qx -- claude-sonnet-5-5-high "$tmp/falso/agy.args"
 rm -f "$tmp/home/.cache/jangada/agy-usage.json"
-MODELOS="claude-sonnet-5-5-high gemini-3.8-flash-high" delegar leitor "leia"
+MODELOS="claude-sonnet-5-5-high gemini-3.8-flash-high" delegar --permitir-remoto leitor "leia"
 conferir "cota parcial: primeiro grupo ausente permite Gemini" [ "$(codigo)" = 0 ]
 conferir "cota parcial: preserva ordem e pula cota desconhecida" grep -qx -- gemini-3.8-flash-high "$tmp/falso/agy.args"
 chamadas_antes="$(wc -l <"$tmp/falso/usage.chamadas")"
 
 rm -f "$tmp/home/.cache/jangada/agy-usage.json"
-USAGE_FALHA=1 delegar leitor "leia"
+USAGE_FALHA=1 delegar --permitir-remoto leitor "leia"
 conferir "caso 4: /usage falhou, recusa" [ "$(codigo)" = 4 ]
 conferir "caso 4: consulta o /usage uma vez, não uma por modelo" \
   [ "$(wc -l <"$tmp/falso/usage.chamadas")" = "$((chamadas_antes + 1))" ]
 
 rm -f "$tmp/home/.cache/jangada/agy-usage.json"
-CODIGO=1 delegar pesquisador "busque"
+CODIGO=1 delegar --permitir-remoto pesquisador "busque"
 conferir "caso 5: agy falhou, recusa com código 4" [ "$(codigo)" = 4 ]
 conferir "caso 5: informa bloqueio do apoio" grep -q "Delegação bloqueada" "$tmp/saida"
 
-LOG='Agent "explorador" not found, using default' delegar explorador "mapeie"
+LOG='Agent "explorador" not found, using default' delegar --permitir-remoto explorador "mapeie"
 conferir "caso 6: agente não achado, recusa" [ "$(codigo)" = 4 ]
 conferir "caso 6: diz o motivo" grep -q "não achou o agente" "$tmp/erro"
 rm -f "$tmp/home/.gemini/antigravity-cli/log/cli-1.log"
 
-RESPOSTA="$(yes palavra | head -n 700 | paste -sd ' ')" delegar explorador "mapeie"
+RESPOSTA="$(yes palavra | head -n 700 | paste -sd ' ')" delegar --permitir-remoto explorador "mapeie"
 conferir "caso 7: relatório longo sai cortado" [ "$(head -n 1 "$tmp/saida" | wc -w)" = 600 ]
 arq="$(sed -n 's/.*completo em \(.*\)\]$/\1/p' "$tmp/saida")"
 conferir "caso 7: arquivo completo existe" [ "$(wc -w <"${arq:-/nada}" 2>/dev/null)" = 700 ]
 
-RESPOSTA="curto" delegar explorador "mapeie" --arquivo "$tmp/rel.md"
+RESPOSTA="curto" delegar --permitir-remoto explorador "mapeie" --arquivo "$tmp/rel.md"
 conferir "caso 8: --arquivo grava o relatório" grep -qx curto "$tmp/rel.md"
 
 RESPOSTA="$(printf '%s\n' "# Um título comprido sem fonte nenhuma" "- a função está em bin/jangada-validar:82, perto do fim" \
   "- esta afirmação comprida não tem fonte alguma" "- a norma está em https://exemplo.org/norma, item 3")" \
-  delegar leitor "leia"
+  delegar --permitir-remoto leitor "leia"
 conferir "caso 8b: conta as afirmações sem fonte" jqok -se 'last | .sem_fonte == 1' "$reg"
 
 DELEGAR=claude delegar explorador "mapeie"
@@ -255,17 +250,17 @@ conferir "caso 9: registrada com destino claude" jqok -se 'last | .destino == "c
 DELEGAR=nativo delegar explorador "mapeie"
 conferir "caso 10: sessão do agy aponta o invoke_subagent" grep -q invoke_subagent "$tmp/erro"
 
-RESPOSTA="" NEGADO=ReadUrlContent delegar pesquisador "busque"
+RESPOSTA="" NEGADO=ReadUrlContent delegar --permitir-remoto pesquisador "busque"
 conferir "caso 12: ação negada sem resposta recusa e diz o quê" \
   bash -c '[ "$1" = 4 ] && grep -q "negou ReadUrlContent" "$2"' _ "$(codigo)" "$tmp/erro"
-NEGADO=ReadUrlContent delegar pesquisador "busque"
+NEGADO=ReadUrlContent delegar --permitir-remoto pesquisador "busque"
 conferir "caso 13: ação negada com resposta avisa e entrega" \
   bash -c '[ "$1" = 0 ] && grep -q "negou: ReadUrlContent" "$2"' _ "$(codigo)" "$tmp/erro"
 conferir "caso 13: pedido manda seguir depois da negação" grep -q "não pare" "$tmp/falso/agy.args"
 
 # Pasta sem confiança do agy: recusa, sem confiar por conta própria.
 jq '.trustedWorkspaces = []' "$conf_agy" >"$tmp/conf" && cp "$tmp/conf" "$conf_agy"
-delegar explorador "mapeie"
+delegar --permitir-remoto explorador "mapeie"
 conferir "caso 14: pasta sem confiança recusa sem chamar o agy" \
   bash -c '[ "$1" = 4 ] && [ ! -e "$2" ] && grep -q "não confia" "$3"' _ "$(codigo)" "$tmp/falso/agy.args" "$tmp/erro"
 conferir "caso 14: o settings.json do agy fica como estava" jqok -e '.trustedWorkspaces == []' "$conf_agy"
@@ -283,7 +278,7 @@ conferir "caso 14b: pasta confiada pelo link simbólico é aceita" [ $? = 0 ]
 jq -n --arg w "$(realpath "$tmp/projeto")" '{trustedWorkspaces: [$w]}' >"$conf_agy"
 
 # Papel que o agy não carregou: o agy rodaria o agente padrão.
-AGENTES="leitor" delegar explorador "mapeie"
+AGENTES="leitor" delegar --permitir-remoto explorador "mapeie"
 conferir "caso 15: papel ausente no agy recusa antes do pedido" \
   bash -c '[ "$1" = 4 ] && [ ! -e "$2" ] && grep -q "install.sh 50" "$3"' _ "$(codigo)" "$tmp/falso/agy.args" "$tmp/erro"
 
@@ -392,10 +387,10 @@ jq -n --arg w "$(realpath "$tmp/projeto")" '{trustedWorkspaces: [$w]}' >"$conf_a
 # O leitor sem o jangada-hook-leitor no agy teria no terminal o
 # permissions.allow do usuário inteiro.
 jq 'del(.jangada.PreToolUse)' "$tmp/home/.gemini/config/hooks.json" >"$tmp/h" && cp "$tmp/h" "$tmp/home/.gemini/config/hooks.json"
-delegar leitor "leia"
+delegar --permitir-remoto leitor "leia"
 conferir "caso 18: leitor sem o hook no agy recusa antes do pedido" \
   bash -c '[ "$1" = 4 ] && [ ! -e "$2" ] && grep -q "hook do leitor" "$3"' _ "$(codigo)" "$tmp/falso/agy.args" "$tmp/erro"
-delegar explorador "mapeie"
+delegar --permitir-remoto explorador "mapeie"
 conferir "caso 18: os outros papéis não dependem do hook" [ "$(codigo)" = 0 ]
 sed "s|@JANGADA_PATH@|$repo_jangada|g" default/agy/hooks.json >"$tmp/home/.gemini/config/hooks.json"
 
@@ -733,7 +728,7 @@ conferir "caso 41: erro indica restricao ao destino local" grep -q "restringe a 
 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local leitor --arquivos "$tmp/projeto/doc1.txt" -- "pedido posicional apos tracos"
 conferir "caso 42: argumentos posicionais apos -- tratados corretamente" [ "$(codigo)" = 0 ]
 conferir "caso 42: pedido apos -- enviado ao modelo" grep -q "pedido posicional apos tracos" "$ollama_reqs"
-delegar -- explorador "pedido apos tracos agy"
+delegar --permitir-remoto -- explorador "pedido apos tracos agy"
 conferir "caso 42b: papel e pedido apos -- com agy" [ "$(codigo)" = 0 ]
 
 # 25. Marca de jogo ativo no estado
@@ -800,17 +795,17 @@ conferir "caso 47: protocolo contém instrução de delegação local" grep -q "
 
 # Cotas antigas ou inválidas nunca autorizam uma chamada.
 cache_cota="$tmp/home/.cache/jangada/agy-usage.json"
-delegar leitor "leia"
+delegar --permitir-remoto leitor "leia"
 touch -d '10 minutes ago' "$cache_cota"
-USAGE_FALHA=1 delegar leitor "leia" --json
+USAGE_FALHA=1 delegar --permitir-remoto leitor "leia" --json
 conferir "cota expirada: falha de atualização recusa antes do pedido" test ! -e "$tmp/falso/agy.args"
 conferir "cota expirada: motivo estruturado" jqok -e '.motivo_codigo == "cota_desconhecida"' "$tmp/saida"
 rm -f "$cache_cota"
-COTA='"invalida"' delegar leitor "leia" --json
+COTA='"invalida"' delegar --permitir-remoto leitor "leia" --json
 conferir "cota textual: recusa estruturada" jqok -e '.motivo_codigo == "cota_desconhecida"' "$tmp/saida"
-COTA=1.5 delegar leitor "leia" --json
+COTA=1.5 delegar --permitir-remoto leitor "leia" --json
 conferir "cota fora da faixa: recusa" [ "$(codigo)" = 4 ]
-COTA=0 delegar leitor "leia" --json
+COTA=0 delegar --permitir-remoto leitor "leia" --json
 conferir "cota zero: insuficiente" jqok -e '.motivo_codigo == "cota_insuficiente"' "$tmp/saida"
 rm -f "$cache_cota"
 AGENTE=codex DELEGAR=local delegar --destino agy leitor "leia"
@@ -821,13 +816,13 @@ conferir "recusa no Codex: não recomenda Claude" bash -c '! grep -q Claude "$1"
 : >"$ollama_reqs"
 for autor in claude codex; do
   for papel_padrao in leitor redator; do
-    AGENTE="$autor" RESPOSTA='Relatório em doc1.txt:1' delegar "$papel_padrao" "leia ou revise" \
+    AGENTE="$autor" RESPOSTA='Relatório em doc1.txt:1' delegar --permitir-remoto "$papel_padrao" "leia ou revise" \
       --json --arquivos "$tmp/projeto/doc1.txt"
     conferir "padrão $autor/$papel_padrao: agy sem perfil" jqok -e \
       '.destino == "agy" and .codigo_saida == 0' "$tmp/saida"
     conferir "padrão $autor/$papel_padrao: fonte entregue" grep -qx "$tmp/projeto/doc1.txt" "$tmp/falso/agy.args"
   done
-  AGENTE="$autor" SEM_AUTORIZACAO=1 delegar leitor "leia" --json --arquivos "$tmp/projeto/doc1.txt"
+  AGENTE="$autor" delegar leitor "leia" --json --arquivos "$tmp/projeto/doc1.txt"
   conferir "padrão $autor: falta de autorização bloqueia" jqok -e \
     '.motivo_codigo == "destino_proibido" and .chamadas_executor == 0' "$tmp/saida"
   conferir "padrão $autor: sem autorização não chama agy" test ! -e "$tmp/falso/agy.args"

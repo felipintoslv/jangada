@@ -17,8 +17,8 @@ Os perfis padrão são `claude-codex` (Claude implementa, Codex revisa) e
 `codex-claude` (Codex implementa, Claude revisa), os dois com delegação ao
 agy para todos os papéis, inclusive leitor e redator. O agy só atende em
 pasta marcada como confiável nele; uma recusa registra bloqueio do apoio.
-A sessão principal pode continuar a investigação. A seção Confiança do agy, abaixo, descreve
-como a tarefa recebe essa confiança.
+A sessão principal pode continuar a investigação. A seção Confiança do agy,
+abaixo, descreve como a tarefa recebe essa confiança.
 As diferenças de protocolo, hooks e revisão estão em [Codex](codex.md).
 
 ```mermaid

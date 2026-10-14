@@ -599,6 +599,14 @@ Testes de 27/09/2026, agy 1.2.12:
 - Flash e Pro dividem o grupo `gemini-*`; trocar entre eles não rende cota.
   Os modelos Claude e GPT do agy usam o grupo `3p-*`. Por isso
   `JANGADA_DELEGAR_MODELOS` põe depois do Flash modelos do outro grupo.
+- Falha ao iniciar `agy agents` não comprova ausência de um papel.
+  No sandbox do Codex, soquete local proibido e logs somente leitura fizeram
+  a consulta sair com código 1, sem catálogo. Capture código e erro antes
+  de conferir nomes; registre `indisponivel`, sem ampliar permissões.
+- Sob `pipefail`, `agy agents | grep -qx PAPEL` pode recusar um papel presente.
+  O `grep -q` termina na primeira correspondência; saída posterior provoca
+  SIGPIPE no produtor. Capture o catálogo completo de uma consulta bem-sucedida
+  e depois confira o nome, como faz `jangada-delegar`.
 - `agy agents` lista um nome por linha só dos agentes que carregaram (um
   `model:` inválido some da lista). Em 27/09/2026, com a saída num cano ou
   num arquivo e sem terminal (`setsid`, `</dev/null`), a lista saiu inteira.

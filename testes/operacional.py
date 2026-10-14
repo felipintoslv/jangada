@@ -191,6 +191,7 @@ class Operacional(unittest.TestCase):
         self.assertFalse(raiz.exists())
 
     def test_corrupcao_alheia_nao_impede_conferencia_e_roteamento(self):
+        (self.config / 'delegacao.json').write_text(json.dumps({'leitura_documental': ['local']}))
         cadastrar(self.estado, self.projeto)
         self.estado.importar([self.tarefa()])
         outra = self.raiz / 'outro-projeto'
@@ -513,6 +514,7 @@ class Operacional(unittest.TestCase):
         self.assertNotIn('estado', dict(self.estado.db.execute('SELECT * FROM atividades').fetchone()))
 
     def test_modos_nao_confundem_perfil_e_exigem_confirmacao(self):
+        (self.config / 'delegacao.json').write_text(json.dumps({'leitura_documental': ['local']}))
         cadastrar(self.estado, self.projeto)
         self.estado.importar([self.tarefa()])
         with patch.dict(os.environ, {'JANGADA_DELEGAR': 'local'}):
@@ -526,6 +528,7 @@ class Operacional(unittest.TestCase):
             self.assertIsNone(automatico['executor'])
 
     def test_automatico_exige_saude_atual_e_politica(self):
+        (self.config / 'delegacao.json').write_text(json.dumps({'leitura_documental': ['local']}))
         cadastrar(self.estado, self.projeto)
         self.estado.importar([self.tarefa()])
         global_estado = Estado(self.estado_raiz / 'agentes/runtime', raiz=self.estado_raiz)
