@@ -4,15 +4,17 @@ import http.server
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import unittest
 from unittest.mock import patch
 
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'default'))
-from nucleo import monitoramento
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'monitor/painel'))
+import monitoramento
 
 
 class Monitoramento(unittest.TestCase):
@@ -86,6 +88,23 @@ class Monitoramento(unittest.TestCase):
         self.redirecionar = False
         self.corpo = b'{"models": [{"size": NaN}]}'
         self.assertIsNone(self.coletar()['modelos_carregados'])
+        for corpo in ('JSON inválido'.encode(), b'{"models": {}}', b'x' * (1024 * 1024 + 1)):
+            self.corpo = corpo
+            dados = self.coletar()
+            self.assertIsNone(dados['modelos_carregados'])
+            self.assertIn('modelos carregados indisponíveis', dados['erros'])
+
+    def test_gpu_e_servidor_indisponiveis_nao_inventam_medidas(self):
+        with patch.object(monitoramento.shutil, 'which', return_value='/falso/nvidia-smi'), \
+                patch.object(monitoramento.subprocess, 'run', side_effect=subprocess.TimeoutExpired('nvidia-smi', 2)), \
+                patch.object(monitoramento.urllib.request, 'build_opener') as construir:
+            construir.return_value.open.side_effect = monitoramento.urllib.error.URLError('servidor indisponível')
+            dados = monitoramento.coletar()
+        self.assertIsNone(dados['gpu'])
+        self.assertIsNone(dados['modelos_carregados'])
+        self.assertIn('medição da GPU indisponível', dados['erros'])
+        self.assertIn('modelos carregados indisponíveis', dados['erros'])
+        self.assertEqual(self.pedidos, [])
 
     def test_endereco_remoto_e_malformado_nao_faz_pedido(self):
         for host in ('http://externo.example', 'https://externo.example', 'http://[inválido', 'http://usuario@0.0.0.0',
@@ -97,11 +116,41 @@ class Monitoramento(unittest.TestCase):
 
     def test_comando_json_nao_abre_terminal(self):
         raiz = Path(__file__).resolve().parents[1]
-        ambiente = dict(os.environ, JANGADA_PATH=str(raiz), OLLAMA_HOST='http://127.0.0.1:' + str(self.servidor.server_port))
-        resposta = subprocess.run([str(raiz / 'bin/jangada-monitor'), '--json'], env=ambiente,
-                                  capture_output=True, text=True, timeout=15)
+        with tempfile.TemporaryDirectory() as pasta:
+            copia = Path(pasta)
+            (copia / 'bin').mkdir()
+            (copia / 'default').mkdir()
+            shutil.copytree(raiz / 'monitor', copia / 'monitor', symlinks=True)
+            shutil.copytree(raiz / 'shell/bin', copia / 'shell/bin', symlinks=True)
+            shutil.copy2(raiz / 'bin/jangada-config', copia / 'bin/jangada-config')
+            (copia / 'bin/jangada-monitor').symlink_to('../shell/bin/jangada-monitor')
+            (copia / 'default/painel').symlink_to('../monitor/painel')
+            (copia / 'bin/jangada-terminal').write_text('#!/bin/sh\necho terminal-aberto >&2\nexit 99\n')
+            (copia / 'bin/jangada-terminal').chmod(0o755)
+            ambiente = dict(os.environ, JANGADA_PATH=str(copia), XDG_CONFIG_HOME=str(copia / 'config'),
+                            OLLAMA_HOST='http://127.0.0.1:' + str(self.servidor.server_port))
+            falsos = copia / 'falsos'
+            falsos.mkdir()
+            gpu = falsos / 'nvidia-smi'
+            gpu.write_text('#!/bin/sh\nexit 1\n')
+            gpu.chmod(0o755)
+            ambiente['PATH'] = str(falsos) + os.pathsep + os.environ['PATH']
+            resposta = subprocess.run([str(copia / 'bin/jangada-monitor'), '--json'], env=ambiente,
+                                      capture_output=True, text=True, timeout=15)
+            self.assertFalse((copia / 'core').exists())
+            shutil.rmtree(copia / 'monitor')
+            ausente = subprocess.run([str(copia / 'bin/jangada-monitor'), '--json'], env=ambiente,
+                                    capture_output=True, text=True, timeout=15)
+            self.assertEqual(ausente.returncode, 1)
+            self.assertEqual(ausente.stdout, '')
+            self.assertIn('módulo Monitor ausente ou incompleto', ausente.stderr)
+            self.assertNotIn('terminal-aberto', ausente.stderr)
         self.assertEqual(resposta.returncode, 0, resposta.stderr)
+        self.assertNotIn('terminal-aberto', resposta.stderr)
         dados = json.loads(resposta.stdout)
+        self.assertEqual(set(dados), {'data', 'cpu_ticks', 'memoria_bytes', 'gpu', 'modelos_carregados', 'erros'})
+        self.assertIsNone(dados['gpu'])
+        self.assertIn('medição da GPU indisponível', dados['erros'])
         self.assertGreater(dados['cpu_ticks']['total'], 0)
         self.assertEqual(dados['modelos_carregados'], [])
         self.assertEqual(self.pedidos, ['/api/ps'])

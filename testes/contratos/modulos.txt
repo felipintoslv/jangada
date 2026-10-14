@@ -43,6 +43,7 @@ core default/agy/
 core default/tmux/
 core default/provedores/
 core default/nucleo/
+monitor default/nucleo/monitoramento.py
 core default/orquestracao/
 core default/delegacao/
 
@@ -103,7 +104,7 @@ shell shell/
 # Os quatro comandos são links para monitor/bin, e default/painel, para
 # monitor/painel. default/nucleo/monitoramento.py é link para
 # monitor/painel/monitoramento.py e, alcançado antes por default/nucleo/,
-# conta como Core neste teste.
+# conta como Monitor pela classificação específica, antes da pasta Core.
 monitor bin/jangada-painel
 monitor bin/jangada-consumo
 monitor bin/jangada-subagentes

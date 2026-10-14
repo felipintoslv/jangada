@@ -152,8 +152,10 @@ problemas() {
       NR == FNR { if ($0 !~ /^#/ && NF) { mod[++n] = $1; cam[n] = $2 }; next }
       {
         c = 0
+        exato = 0
+        for (i = 1; i <= n; i++) if ($0 == cam[i]) exato = 1
         for (i = 1; i <= n; i++)
-          if ($0 == cam[i] || (cam[i] ~ /\/$/ && index($0, cam[i]) == 1)) { c++; m = mod[i]; usado[i] = 1 }
+          if ($0 == cam[i] || (!exato && cam[i] ~ /\/$/ && index($0, cam[i]) == 1)) { c++; m = mod[i]; usado[i] = 1 }
         if (c == 0) print "!sem módulo: " $0
         else if (c > 1) print "!mais de um módulo: " $0
         else print m "\t" $0
@@ -254,6 +256,11 @@ conferir "acoplamento retirado com a exceção ainda na lista é apontado" \
   apontado "exceção sem acoplamento: bin/jangada-fila: pkill -RTMIN+10 -x waybar 2>/dev/null || true"
 sed -i '\|^K3 bin/jangada-fila |d' "$tmp/copia/testes/contratos/fronteiras-excecoes.txt"
 conferir "lista menor que o teto passa" [ -z "$(problemas "$tmp/copia")" ]
+
+copia
+acrescentar default/nucleo/monitoramento.py 'from estado import Estado'
+conferir "diagnóstico legado pertence ao Monitor e recusa classe de escrita" \
+  apontado "fora da lista: default/nucleo/monitoramento.py:$(wc -l <"$tmp/copia/default/nucleo/monitoramento.py"): from estado import Estado"
 
 copia
 acrescentar bin/jangada-painel '"$JANGADA_PATH/bin/jangada-task" cancelar x'

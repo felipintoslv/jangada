@@ -28,3 +28,5 @@ default/claude/hooks.json
 default/r/lintr
 shell/integracoes/r/lintr
 core/validacao/lintr
+default/nucleo/monitoramento.py
+default/painel/monitoramento.py

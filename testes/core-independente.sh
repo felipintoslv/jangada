@@ -1,12 +1,8 @@
 #!/usr/bin/env bash
-# Prova o percurso R com código e links copiados, sem módulos de apresentação.
+# Prova consultas, validação e percurso R sem módulos de apresentação.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 repo_jangada="$PWD"
-if ! Rscript --vanilla -e 'stopifnot(requireNamespace("lintr", quietly = TRUE))' >/dev/null 2>&1; then
-  echo 'UNAVAILABLE: prova Core independente não executada; exige R e lintr reais' >&2
-  exit 77
-fi
 marca="${JANGADA_MARCA_ISOLADO:-/tmp/.jangada-isolado}"
 if ! awk -v m="$marca" '$5 == m { a = 1 } END { exit !a }' /proc/self/mountinfo; then
   pasta_marca="$(mktemp -d)"
@@ -33,11 +29,34 @@ cp -a bin/jangada-config bin/jangada-gancho "$copia/bin/"
 for comando in jangada-validar jangada-isolar; do
   cp -a "bin/$comando" "$copia/bin/"
 done
-for recurso in orquestracao nucleo provedores; do
+for recurso in orquestracao nucleo provedores delegacao; do
   cp -a "default/$recurso" "$copia/default/"
 done
 conferir 'Shell físico ausente' test ! -e "$copia/shell"
 conferir 'Monitor físico ausente' test ! -e "$copia/monitor"
+conferir 'link legado de diagnóstico é opcional e está pendurado' \
+  test -L "$copia/default/nucleo/monitoramento.py"
+conferir 'diagnóstico indisponível não é importação obrigatória' \
+  test ! -e "$copia/default/nucleo/monitoramento.py"
+PYTHONPATH="$copia/core" python3 -B - "$tmp/consulta" <<'PY'
+import json
+from pathlib import Path
+import sys
+from nucleo import acoes, consultas
+import delegacao
+import orquestracao
+
+estado = Path(sys.argv[1])
+(estado / 'agentes').mkdir(parents=True)
+sessao = estado / 'agentes/sintetica.json'
+sessao.write_text(json.dumps({'sessao': 'sintetica', 'raiz': str(estado), 'estado': 'trabalhando'}))
+antes = {str(p): p.read_bytes() for p in estado.rglob('*') if p.is_file()}
+dados = consultas.consultar(estado)
+assert dados['erros'] == [], dados['erros']
+assert dados['sessoes'][0]['estado'] == 'Executando', dados
+assert antes == {str(p): p.read_bytes() for p in estado.rglob('*') if p.is_file()}
+PY
+conferir 'importações Core e consulta sintética sem Monitor, sem escrita na origem' test "$?" = 0
 conferir 'padrão legado ausente na cópia mínima' test ! -e "$copia/default/r"
 conferir 'fachada copiada resolve para o Core copiado' \
   test "$(realpath "$copia/bin/jangada-validar")" = "$copia/core/bin/jangada-validar"
@@ -60,7 +79,6 @@ printf 'x <- 1\n' >"$tmp/projeto/exemplo.R"
 git -C "$tmp/projeto" add exemplo.R
 git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm inicio
 git -C "$tmp/projeto" checkout -qb agente/x
-printf 'cat("novo\\n")\n' >>"$tmp/projeto/exemplo.R"
 nova_sessao() {
   rm -f "$tmp/estado/jangada/agentes/validacao-s"* "$tmp/falso/pedido"
   printf '{"sessao":"s","agente":"codex","revisor":"claude","base":"main","tarefa":"R sintético"}\n' \
@@ -69,6 +87,28 @@ nova_sessao() {
 validar() {
   "$copia/bin/jangada-validar" --revisor claude "$tmp/projeto" >"$tmp/saida" 2>&1
 }
+printf 'conteúdo sintético\n' >"$tmp/projeto/exemplo.txt"
+git -C "$tmp/projeto" add exemplo.txt
+nova_sessao
+validar; rc=$?
+conferir 'validação sem R e sem Monitor chama revisão' test "$rc" = 0
+conferir 'revisão sem diagnóstico foi chamada' test -s "$tmp/falso/pedido"
+conferir 'resumo opcional ausente registrado explicitamente' \
+  grep -q 'resumo de subagentes não gravado' "$tmp/saida"
+printf '#!/bin/bash\nif then\n' >"$tmp/projeto/exemplo.sh"
+git -C "$tmp/projeto" add exemplo.sh
+nova_sessao
+validar; rc=$?
+conferir 'sem Monitor a sintaxe inválida continua reprovando' test "$rc" = 3
+conferir 'erro obrigatório não chega ao revisor' test ! -e "$tmp/falso/pedido"
+rm "$tmp/projeto/exemplo.sh"
+git -C "$tmp/projeto" add -u
+if ((falhas)); then cat "$tmp/saida"; exit 1; fi
+if ! Rscript --vanilla -e 'stopifnot(requireNamespace("lintr", quietly = TRUE))' >/dev/null 2>&1; then
+  echo 'UNAVAILABLE: prova R do Core independente não executada; exige R e lintr reais' >&2
+  exit 77
+fi
+printf 'cat("novo\\n")\n' >>"$tmp/projeto/exemplo.R"
 nova_sessao
 validar; rc=$?
 conferir 'sem .lintr da base: aprovação com R real' test "$rc" = 0

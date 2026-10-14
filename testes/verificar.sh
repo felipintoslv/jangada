@@ -164,7 +164,7 @@ if command -v git >/dev/null && command -v jq >/dev/null; then
   testes/core-independente.sh
   rc_core=$?
   if ((rc_core == 77)); then
-    echo "IGNORADO: prova Core independente não executada por falta de R ou lintr"
+    echo "IGNORADO: percurso R do Core independente não executado por falta de R ou lintr"
   elif ((rc_core != 0)); then
     falha "testes/core-independente.sh"
   fi
