@@ -23,7 +23,8 @@ Executa R e lintr reais pelo isolamento de verificação, sem rede, com revisor 
 Confere aviso na linha R nova e chamada do revisor sem `.lintr` da base.
 Uma regra diferente na base proíbe `message()`; alterá-la no worktree não evita reprovação nem aciona o revisor.
 Também confere proteção contra regra/perfil graváveis e reprovação explícita quando o padrão Core desaparece.
-Sem R/lintr reais, o teste falha com `UNAVAILABLE`, sem alegar prova atendida.
+Sem R/lintr reais, o teste sai com código 77 e `UNAVAILABLE`, sem alegar prova atendida.
+A suíte geral registra a prova não executada como etapa ignorada, sem reprovar por essa ausência.
 
 O contrato de caminhos inclui os três acessos ao padrão e copia também os links intermediários.
 Os casos negativos existentes de caminho ausente, link absoluto e saída do repositório permanecem ativos.
@@ -35,20 +36,3 @@ A prova cobre somente a validação R e a compatibilidade desse recurso.
 O link de monitoramento A3, as leituras A4/A5 e a compatibilidade de sessões M1.3 permanecem pendentes.
 A ausência do resumo opcional do Monitor não elimina verificações obrigatórias.
 Este resultado não demonstra independência completa do Core nem autoriza instalação, integração ou publicação.
-
-## Verificação nesta sessão
-
-A prova sintética passou com R/lintr reais e isolamento real: 23 conferências.
-O terminal inicialmente bloqueou o soquete interno do bubblewrap; a repetição teve aprovação técnica nesta janela.
-Os testes de caminhos e fronteiras, a análise shellcheck dos scripts alterados e a equivalência literal das regras passaram.
-
-`testes/validar.sh` terminou com 36 falhas, reproduzidas com os mesmos apontamentos numa cópia da base original.
-Os casos R passaram, exceto 12h, que falhou também na base; isso não comprova sua proteção externa neste ambiente.
-`testes/verificar.sh` foi executado e apresentou falhas, incluindo sessões e isolamento.
-A suíte externa pelo coordenador permanece necessária; esses resultados não são registrados como sucesso.
-Os registros completos estão na pasta operacional `.jangada/` desta worktree.
-
-O apoio agy concluiu a análise de compatibilidade, ID `4300b094-0653-42e0-ad04-129ed0c15841`, com saída 0.
-Pedido, fontes, relatório e aproveitamento conferido estão em `.jangada/evidencias-agy/`.
-A recomendação de fonte única foi mantida; o atendimento de M1.1 inteiro e referências fora das fontes foram desconsiderados.
-Esse apoio não substitui o parecer Claude de `jangada-validar`.

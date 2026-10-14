@@ -161,7 +161,13 @@ passo "jangada-validar com claude e agy falsos"
 python3 testes/agente-seletor.py || falha "testes/agente-seletor.py"
 if command -v git >/dev/null && command -v jq >/dev/null; then
   testes/validar.sh || falha "testes/validar.sh"
-  testes/core-independente.sh || falha "testes/core-independente.sh"
+  testes/core-independente.sh
+  rc_core=$?
+  if ((rc_core == 77)); then
+    echo "IGNORADO: prova Core independente não executada por falta de R ou lintr"
+  elif ((rc_core != 0)); then
+    falha "testes/core-independente.sh"
+  fi
 else
   echo "git ou jq ausente; etapa ignorada"
 fi

@@ -4,8 +4,8 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 repo_jangada="$PWD"
 if ! Rscript --vanilla -e 'stopifnot(requireNamespace("lintr", quietly = TRUE))' >/dev/null 2>&1; then
-  echo 'UNAVAILABLE: prova Core independente exige R e lintr reais' >&2
-  exit 1
+  echo 'UNAVAILABLE: prova Core independente não executada; exige R e lintr reais' >&2
+  exit 77
 fi
 marca="${JANGADA_MARCA_ISOLADO:-/tmp/.jangada-isolado}"
 if ! awk -v m="$marca" '$5 == m { a = 1 } END { exit !a }' /proc/self/mountinfo; then

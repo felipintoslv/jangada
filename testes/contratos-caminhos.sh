@@ -86,6 +86,8 @@ conferir "link absoluto é apontado" \
   grep -qxF "link absoluto: shell/jangada.sh" <<<"$(problemas "$tmp/copia")"
 copia
 mv "$tmp/copia/default/claude/agents" "$tmp/fora/agents"
+# A cópia preserva default/claude como link para core/agentes/claude; a
+# referência externa deve partir desse destino físico.
 ln -s "$(realpath --relative-to="$(realpath "$tmp/copia/default/claude")" "$tmp/fora/agents")" \
   "$tmp/copia/default/claude/agents"
 conferir "link para fora do repositório é apontado" \
