@@ -15,7 +15,7 @@ uma chamada direta por uma indireta.
 | K6 | Resumo de entrega opcional | Core | `jangada-validar` | chama comando do Monitor |
 | K7 | Formato dos registros | Core | Monitor | documentado, sem teste de formato |
 | K8 | Módulos da Waybar | Shell | Core, Monitor | existe, sem teste único |
-| K9 | Fronteira entre módulos | Revisor | todos | teste ativo; observação pública da Central cobre A5 |
+| K9 | Fronteira entre módulos | Revisor | todos | teste ativo; contrato público da Central delimita A5 |
 | K10 | Abertura de interface e foco de janela | compartilhado | Core chama, Shell executa | Core chama `jangada-terminal`, `jangada-tarefas` e `hyprctl` direto |
 
 ## K1. Fachada de comandos
@@ -258,11 +258,6 @@ M3-10c. São no máximo seis.
 | `bin/jangada-verificar:76`, `exec jangada-agente` com `--agente` | Monitor chama comando que altera estado | ação pedida pelo usuário por opção explícita; passa pela fachada K1 |
 | `shell/jangada-shell.sh:271`, `repassar` | Shell lê arquivo de estado | lê o último parecer e a tarefa; não há consulta do Core que devolva o parecer, e criá-la seria funcionalidade nova; dívida para depois da 3.0 |
 | `default/tarefas/central.py:121`, caminho padrão do modo `--simular`, se a M3-10c mostrar que é preciso | Shell monta caminho do estado | modo simulado sem `--estado`; ver o caminho único em K5 |
-
-A dívida A5 foi retirada da lista: a interface recebe os caminhos por
-consulta pública, sem selecionar pastas ou arquivos internos. A lista de
-exceções desta tarefa reduz apenas os dois itens de observação; as demais
-decisões permanecem.
 
 `default/tarefas/dados.py`, em `registro(pasta, nome)`, não está na lista
 porque o teste não o aponta; o destino fica para a M3-10c (ver K5).

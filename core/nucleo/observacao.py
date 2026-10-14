@@ -6,6 +6,7 @@ import stat
 import sys
 
 LIMITE_CAMINHOS = 4096
+LIMITE_COMPRIMENTO = 4096
 LIMITE_SAIDA = 1024 * 1024
 
 
@@ -28,11 +29,12 @@ def existentes(caminho):
 
 def adicionar(caminhos, caminho):
     nome = str(caminho)
-    if len(nome) > 4096:
-        raise ValueError('A observação contém um caminho longo demais.')
+    if len(nome) > LIMITE_COMPRIMENTO or any(ord(c) < 32 for c in nome):
+        return False
     caminhos.add(nome)
     if len(caminhos) > LIMITE_CAMINHOS:
         raise ValueError('A observação excedeu o limite de caminhos.')
+    return True
 
 
 def observar(estado):
@@ -43,7 +45,8 @@ def observar(estado):
     bases = (estado / 'agentes', estado / 'revisoes', estado / 'agentes/projetos')
     for base in bases:
         pasta = existentes(base)
-        adicionar(caminhos, pasta)
+        if not adicionar(caminhos, pasta):
+            continue
         if pasta != base or not base.is_dir() or base.is_symlink():
             continue
         with os.scandir(base) as itens:
@@ -54,13 +57,18 @@ def observar(estado):
         if base.name == 'projetos':
             with os.scandir(base) as projetos:
                 for projeto in projetos:
-                    if not projeto.is_dir(follow_symlinks=False):
+                    try:
+                        if len(projeto.path) > LIMITE_COMPRIMENTO or any(ord(c) < 32 for c in projeto.path):
+                            continue
+                        if not projeto.is_dir(follow_symlinks=False):
+                            continue
+                        adicionar(caminhos, projeto.path)
+                        with os.scandir(projeto.path) as itens:
+                            for item in itens:
+                                if item.name.startswith('tarefas.sqlite') and item.is_file(follow_symlinks=False):
+                                    adicionar(caminhos, item.path)
+                    except (FileNotFoundError, PermissionError):
                         continue
-                    adicionar(caminhos, projeto.path)
-                    with os.scandir(projeto.path) as itens:
-                        for item in itens:
-                            if item.name.startswith('tarefas.sqlite') and item.is_file(follow_symlinks=False):
-                                adicionar(caminhos, item.path)
     resposta = json.dumps({'versao': 1, 'caminhos': sorted(caminhos)}, ensure_ascii=False)
     if len(resposta.encode('utf-8')) > LIMITE_SAIDA:
         raise ValueError('A observação excedeu o limite de saída.')

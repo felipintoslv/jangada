@@ -362,8 +362,10 @@ estado_observacao = observacao_xdg / 'jangada'
 (estado_observacao / 'agentes/projetos/um').mkdir(parents=True)
 (estado_observacao / 'revisoes').mkdir()
 (estado_observacao / 'agentes/sessao.json').write_text('{}')
+(estado_observacao / 'agentes/x\n.json').write_text('{}')
 (estado_observacao / 'revisoes/validacao-s-r1.json').write_text('{}')
 (estado_observacao / 'agentes/projetos/um/tarefas.sqlite').write_bytes(b'')
+(estado_observacao / 'agentes/projetos/um/tarefas.sqlite-wal').write_bytes(b'')
 (estado_observacao / 'agentes/projetos/atalho').symlink_to(tmp, target_is_directory=True)
 (estado_observacao / 'agentes/link.json').symlink_to(estado_observacao / 'agentes/sessao.json')
 antes = retrato()
@@ -375,7 +377,25 @@ assert set(observacao['caminhos']) == {
     str(estado_observacao / 'agentes'), str(estado_observacao / 'agentes/sessao.json'),
     str(estado_observacao / 'revisoes'), str(estado_observacao / 'revisoes/validacao-s-r1.json'),
     str(estado_observacao / 'agentes/projetos'), str(estado_observacao / 'agentes/projetos/um'),
-    str(estado_observacao / 'agentes/projetos/um/tarefas.sqlite')}
+    str(estado_observacao / 'agentes/projetos/um/tarefas.sqlite'),
+    str(estado_observacao / 'agentes/projetos/um/tarefas.sqlite-wal')}
+assert str(estado_observacao / 'agentes/x\n.json') not in observacao['caminhos']
+# Bases ausentes são representadas pelo antepassado existente mais próximo.
+agentes = estado_observacao / 'agentes'
+agentes.rename(agentes.with_name('agentes-originais'))
+r = consultar('--observacao-json')
+assert r.returncode == 0, r.stderr
+assert set(json.loads(r.stdout)['caminhos']) == {
+    str(estado_observacao), str(estado_observacao / 'revisoes'),
+    str(estado_observacao / 'revisoes/validacao-s-r1.json')}
+agentes.with_name('agentes-originais').rename(agentes)
+projetos_ausentes = agentes / 'projetos'
+projetos_ausentes.rename(projetos_ausentes.with_name('projetos-originais'))
+r = consultar('--observacao-json')
+assert r.returncode == 0, r.stderr
+assert str(agentes) in json.loads(r.stdout)['caminhos']
+assert str(projetos_ausentes) not in json.loads(r.stdout)['caminhos']
+projetos_ausentes.with_name('projetos-originais').rename(projetos_ausentes)
 # Área vinculada nunca é percorrida; a consulta observa seu antepassado.
 projetos = estado_observacao / 'agentes/projetos'
 projetos.rename(projetos.with_name('projetos-originais'))
@@ -389,10 +409,48 @@ assert str(externo / 'segredo.json') not in json.loads(r.stdout)['caminhos']
 projetos.unlink()
 projetos.with_name('projetos-originais').rename(projetos)
 
-# Excesso de volume recusa a lista inteira.
+# Projetos removidos ou inacessíveis durante a leitura são omitidos; falha de base é explícita.
+spec_observacao = importlib.util.spec_from_file_location('observacao', repo / 'core/nucleo/observacao.py')
+modulo_observacao = importlib.util.module_from_spec(spec_observacao)
+spec_observacao.loader.exec_module(modulo_observacao)
+scandir_original = modulo_observacao.os.scandir
+projeto_um = projetos / 'um'
+def scandir_projeto_com_falha(caminho):
+    if str(caminho) == str(projeto_um):
+        raise FileNotFoundError('projeto removido')
+    return scandir_original(caminho)
+with patch.object(modulo_observacao.os, 'scandir', side_effect=scandir_projeto_com_falha):
+    parcial = json.loads(modulo_observacao.observar(estado_observacao))
+assert str(projeto_um) in parcial['caminhos']
+assert str(projeto_um / 'tarefas.sqlite') not in parcial['caminhos']
+def scandir_projeto_sem_permissao(caminho):
+    if str(caminho) == str(projeto_um):
+        raise PermissionError('projeto sem permissão')
+    return scandir_original(caminho)
+with patch.object(modulo_observacao.os, 'scandir', side_effect=scandir_projeto_sem_permissao):
+    parcial = json.loads(modulo_observacao.observar(estado_observacao))
+assert str(projeto_um) in parcial['caminhos']
+assert str(projeto_um / 'tarefas.sqlite-wal') not in parcial['caminhos']
+def scandir_base_com_falha(caminho):
+    if str(caminho) == str(estado_observacao / 'revisoes'):
+        raise PermissionError('base sem permissão')
+    return scandir_original(caminho)
+with patch.object(modulo_observacao.os, 'scandir', side_effect=scandir_base_com_falha):
+    try:
+        modulo_observacao.observar(estado_observacao)
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError('falha de leitura da base deveria recusar a consulta')
+assert not modulo_observacao.adicionar(set(), Path('/' + 'x' * 4096))
+
+# O limite exato de caminhos é aceito e o próximo caminho recusa a lista inteira.
 volume = estado_observacao / 'revisoes'
-for indice in range(4090):
+for indice in range(4088):
     (volume / f'volume-{indice}.json').touch()
+r = consultar('--observacao-json')
+assert r.returncode == 0 and len(json.loads(r.stdout)['caminhos']) == 4096, r.stderr
+(volume / 'volume-extra.json').touch()
 r = consultar('--observacao-json')
 assert r.returncode == 1 and not r.stdout and r.stderr
 for arquivo in volume.glob('volume-*.json'):

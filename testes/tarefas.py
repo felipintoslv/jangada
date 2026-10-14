@@ -28,7 +28,7 @@ import janela
 from janela import Janela
 import central
 from central import encaminhar, receber
-from dados import barra, idade, ler_lista, ler_observacao, pasta_sessoes, resumo_barra
+from dados import LIMITE, barra, idade, ler_lista, ler_observacao, pasta_sessoes, resumo_barra
 from argparse import Namespace
 APP = QApplication([])
 
@@ -80,6 +80,7 @@ class Interface(unittest.TestCase):
         self.comando = self.bin / 'jangada-agentes'
         self.observados = self.raiz / 'observados'
         self.observados.mkdir()
+        (self.observados / 'aviso.json').write_text('{}')
         self.comando.write_text("#!/usr/bin/env python3\nimport pathlib, sys, json\npasta = pathlib.Path(__file__).resolve().parent.parent\nif sys.argv[1] == '--observacao-json':\n    if (pasta / 'falhar_observacao').exists():\n        print('Falha de observação simulada', file=sys.stderr)\n        sys.exit(1)\n    print(json.dumps({'versao': 1, 'caminhos': [str(pasta / 'observados'), str(pasta / 'observados' / 'aviso.json')]}))\nelif sys.argv[1] in ('--lista-json',):\n    if (pasta / 'falhar').exists():\n        print('Erro de consulta simulado', file=sys.stderr)\n        sys.exit(1)\n    dados = json.loads((pasta / 'lista').read_text())\n    if (pasta / 'apresentacao.json').exists():\n        detalhe = json.loads((pasta / 'apresentacao.json').read_text())\n        for sessao in dados['sessoes']:\n            if sessao['nome'] == 'projeto--um':\n                sessao.update(detalhe)\n                sessao['projeto'] = pathlib.Path(sessao['raiz']).name\n    print(json.dumps(dados, ensure_ascii=False))\nelif sys.argv[1] == '--previa':\n    previa = pasta / ('previa-' + sys.argv[2])\n    print(previa.read_text() if previa.exists() else 'Atividade da sessão ' + sys.argv[2])\nelse:\n    (pasta / 'acao.json').write_text(json.dumps(sys.argv[1:]))\n")
         self.comando.chmod(448)
         self.criar_comando = self.bin / 'jangada-agente'
@@ -762,6 +763,73 @@ class Interface(unittest.TestCase):
         self.assertEqual(self.janela.sessoes, anterior)
         self.assertEqual(self.janela.timer.interval(), 30000)
         self.assertIn('Atualização periódica mantida', self.janela.status.text())
+        self.janela.atualizar()
+        self.esperar_consulta()
+        self.assertIn('Falha de observação simulada', self.janela.status.text())
+        (self.raiz / 'falhar_observacao').unlink()
+        self.janela.atualizar()
+        self.esperar_consulta()
+        self.assertNotIn('Falha de observação simulada', self.janela.status.text())
+
+    def test_timeout_e_limite_de_saida_da_observacao(self):
+        original = self.comando.read_text()
+        self.janela.observacao_limite.setInterval(30)
+        lento = original.replace("    print(json.dumps({'versao': 1, 'caminhos': [",
+                                "    import time\n    time.sleep(3)\n    print(json.dumps({'versao': 1, 'caminhos': [", 1)
+        self.comando.write_text(lento)
+        self.janela.observar_estado()
+        aguardar(lambda: self.janela.consulta_observacao.state() == QProcess.ProcessState.NotRunning)
+        self.assertIn('Tempo da consulta', self.janela.observacao_falha)
+        grande = original.replace("    print(json.dumps({'versao': 1, 'caminhos': [",
+                                  "    sys.stdout.write('x' * (1024 * 1024 + 1))\n    sys.exit(0)\n    print(json.dumps({'versao': 1, 'caminhos': [", 1)
+        self.comando.write_text(grande)
+        self.janela.observacao_limite.setInterval(1000)
+        self.janela.observar_estado()
+        aguardar(lambda: self.janela.consulta_observacao.state() == QProcess.ProcessState.NotRunning)
+        self.assertIn('excedeu o limite', self.janela.observacao_falha)
+        self.comando.write_text(original)
+
+    def test_failed_to_start_da_consulta_de_observacao_e_persistente(self):
+        with patch.object(self.janela, 'preparar',
+                          side_effect=lambda processo, argumentos: processo.setProgram('/caminho/inexistente')):
+            self.janela.observar_estado()
+            aguardar(lambda: 'Não foi possível iniciar a consulta' in self.janela.status.text())
+        self.assertIn('Atualização periódica mantida', self.janela.status.text())
+
+    def test_recusa_parcial_de_addpaths_preserva_caminhos_anteriores(self):
+        caminhos_anteriores = set(self.janela.observador.directories() + self.janela.observador.files())
+        novo = str(self.observados / 'novo.json')
+        self.janela.observacao_saida = bytearray(json.dumps({'versao': 1, 'caminhos': [
+            str(self.observados), novo]}).encode())
+        with patch.object(self.janela, 'observacao_ler'):
+            with patch.object(self.janela.observador, 'addPaths', return_value=[novo]):
+                self.janela.observacao_fim(0, QProcess.ExitStatus.NormalExit)
+        caminhos_atuais = set(self.janela.observador.directories() + self.janela.observador.files())
+        self.assertTrue(caminhos_anteriores <= caminhos_atuais)
+        self.assertIn('não aceitou todos', self.janela.observacao_falha)
+
+    def test_criacao_de_projeto_observado_atualiza_dados(self):
+        pasta_projeto = self.observados / 'projeto-novo'
+        self.janela.observar_estado()
+        aguardar(lambda: str(self.observados) in self.janela.observador.directories())
+        dados = json.loads(self.lista.read_text())
+        dados['sessoes'].append(json.loads(carga(
+            'aguardando\tprojeto--novo\t/tmp/novo\thoje\tagente/novo\tNova tarefa\n'))['sessoes'][0])
+        self.lista.write_text(json.dumps(dados))
+        pasta_projeto.mkdir()
+        self.janela.observador.directoryChanged.emit(str(self.observados))
+        aguardar(lambda: 'projeto--novo' in self.janela.sessoes)
+        pasta_projeto.rmdir()
+
+    def test_eventos_continuos_respeitam_prazo_maximo(self):
+        inicio = time.monotonic()
+        limite = inicio + 1.25
+        while time.monotonic() < limite and self.janela.consulta.state() == QProcess.ProcessState.NotRunning:
+            self.janela.mudanca_estado()
+            APP.processEvents()
+            time.sleep(0.04)
+        self.assertNotEqual(self.janela.consulta.state(), QProcess.ProcessState.NotRunning)
+        self.assertLess(time.monotonic() - inicio, 1.25)
 
     def test_timer_atualiza_sem_intervencao(self):
         self.lista.write_text(self.lista.read_text().replace('aguardando', 'concluido'))

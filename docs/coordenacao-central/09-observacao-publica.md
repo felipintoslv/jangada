@@ -16,12 +16,18 @@ pastas nem arquivos. Estado ausente, portanto, produz uma lista de
 antepassados, que será recalculada no próximo aviso ou na atualização
 periódica.
 
+Falhas ao enumerar as pastas-base de sessões, revisões ou projetos recusam a
+consulta. Se um projeto desaparecer ou ficar sem permissão durante a leitura,
+ele é omitido nesta resposta e será considerado novamente na próxima consulta.
+Nomes com caracteres de controle e caminhos acima do limite são omitidos. O
+limite total de caminhos ou da resposta continua sendo uma falha explícita.
+
 ## Limites e falhas
 
 O envelope da versão 1 exige `versao` inteiro e `caminhos` como lista de
 caminhos absolutos, únicos, sem caracteres de controle e com até 4.096
 caracteres cada. São aceitos até 4.096 caminhos e 1 MiB de resposta. Erro de
-leitura, caminho inválido, volume excedido, JSON inválido ou versão
+leitura de base, volume excedido, JSON inválido ou versão
 desconhecida recusa a resposta inteira com código diferente de zero e
 diagnóstico em `stderr`.
 

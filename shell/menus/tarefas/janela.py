@@ -419,6 +419,7 @@ class Janela(QMainWindow):
         self.observacao_saida = bytearray()
         self.observacao_diagnostico = bytearray()
         self.observacao_falha = ''
+        self.observacao_erro_atual = ''
         self.observacao_limite = QTimer(self)
         self.observacao_limite.setSingleShot(True)
         self.observacao_limite.setInterval(1000)
@@ -714,7 +715,7 @@ class Janela(QMainWindow):
         self.observacao_pendente = False
         self.observacao_saida.clear()
         self.observacao_diagnostico.clear()
-        self.observacao_falha = ''
+        self.observacao_erro_atual = ''
         self.iniciar(self.consulta_observacao, ['--observacao-json'])
         self.observacao_limite.start()
 
@@ -722,7 +723,7 @@ class Janela(QMainWindow):
         saida = bytes(self.consulta_observacao.readAllStandardOutput())
         erro = bytes(self.consulta_observacao.readAllStandardError())
         if len(self.observacao_saida) + len(self.observacao_diagnostico) + len(saida) + len(erro) > LIMITE:
-            self.observacao_falha = 'A observação excedeu o limite de leitura.'
+            self.observacao_erro_atual = 'A observação excedeu o limite de leitura.'
             self.consulta_observacao.kill()
             return
         self.observacao_saida.extend(saida)
@@ -731,8 +732,8 @@ class Janela(QMainWindow):
     def observacao_fim(self, codigo, tipo):
         self.observacao_limite.stop()
         self.observacao_ler()
-        if self.observacao_falha:
-            self.observacao_erro_texto(self.observacao_falha)
+        if self.observacao_erro_atual:
+            self.observacao_erro_texto(self.observacao_erro_atual)
         elif codigo != 0 or tipo != QProcess.ExitStatus.NormalExit:
             detalhe = self.observacao_diagnostico.decode('utf-8', 'replace')
             self.observacao_erro_texto('Não foi possível consultar os caminhos de observação. ' + detalhe)
@@ -751,7 +752,11 @@ class Janela(QMainWindow):
                 else:
                     if atuais - caminhos:
                         self.observador.removePaths(sorted(atuais - caminhos))
+                    falha_anterior = self.observacao_falha
                     self.observacao_falha = ''
+                    self.observacao_erro_atual = ''
+                    if falha_anterior:
+                        self.status.setText('Observação restabelecida.')
         if self.observacao_pendente and not self.fechando:
             self.observar_estado()
 
@@ -765,7 +770,7 @@ class Janela(QMainWindow):
             self.observacao_erro_texto('Não foi possível iniciar a consulta de observação. Atualização periódica mantida.')
 
     def observacao_expirar(self):
-        self.observacao_falha = 'Tempo da consulta de observação esgotado.'
+        self.observacao_erro_atual = 'Tempo da consulta de observação esgotado.'
         self.consulta_observacao.kill()
 
     def mudanca_estado(self, *_):
@@ -842,7 +847,10 @@ class Janela(QMainWindow):
     def falha(self, mensagem):
         self.dados_validos = False
         self.selecionar()
-        self.status.setText(mensagem + ' Últimos dados preservados; ações indisponíveis até atualizar.')
+        texto = mensagem + ' Últimos dados preservados; ações indisponíveis até atualizar.'
+        if self.observacao_falha:
+            texto += ' ' + self.observacao_falha + ' Atualização periódica mantida.'
+        self.status.setText(texto)
 
     def consulta_erro(self, erro):
         if erro == QProcess.ProcessError.FailedToStart:
