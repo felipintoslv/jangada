@@ -871,6 +871,7 @@ done
 # como quando o consumo falha.
 mkdir -p "$tmp/sem-monitor/bin" "$tmp/consumo-falho" "$tmp/casa/.claude/projects"
 ln -s "$repo_jangada/default" "$tmp/sem-monitor/default"
+ln -s "$repo_jangada/core" "$tmp/sem-monitor/core"
 for f in "$repo_jangada"/bin/*; do
   case "${f##*/}" in
     jangada-subagentes|jangada-consumo) ;;
