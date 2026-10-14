@@ -248,7 +248,7 @@ class Disponibilidade(unittest.TestCase):
                                   cwd=self.pasta, env=ambiente, capture_output=True, text=True, timeout=30)
         self.assertEqual(processo.returncode, 4, processo.stderr)
         resultado = json.loads(processo.stdout)
-        self.assertEqual(len(resultado['tentativas']), 2)
+        self.assertEqual([t['destino'] for t in resultado['tentativas']], ['agy'])
         self.assertTrue(all(t['chamadas'] == 0 for t in resultado['tentativas']))
         self.assertTrue(all(t['motivo_codigo'] == 'provedor_pausado' for t in resultado['tentativas']))
 

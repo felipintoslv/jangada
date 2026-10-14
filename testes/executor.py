@@ -679,6 +679,9 @@ class Execucao(unittest.TestCase):
         shutil.copytree(RAIZ / 'default/orquestracao', self.raiz / 'default/orquestracao')
         shutil.copytree(RAIZ / 'default/nucleo', self.raiz / 'default/nucleo')
         shutil.copyfile(RAIZ / 'default/delegacao/roteamento.json', self.raiz / 'default/delegacao/roteamento.json')
+        config = self.pasta / 'config-cli/jangada'
+        config.mkdir(parents=True)
+        (config / 'delegacao.json').write_text(json.dumps({'leitura_documental': ['local']}))
         plano = self.projeto / 'plano.json'
         plano.write_text(json.dumps([self.tarefa()]), encoding='utf-8')
         ambiente = os.environ.copy()

@@ -312,7 +312,7 @@ class Gerador:
         por cota e uma ao modelo local, que grava as medidas de cada chamada."""
         codigos = []
         for cota in ('0.9', '0.1'):
-            feito = self.como_agente(self.comando('jangada-delegar'), 'explorador', 'mapeie', pasta=self.projeto,
+            feito = self.como_agente(self.comando('jangada-delegar'), 'explorador', 'mapeie', '--permitir-remoto', pasta=self.projeto,
                                      FALSO_COTA=cota, FALSO_RESPOSTA='relatorio em a.sh:1',
                                      JANGADA_DELEGAR_CACHE='0')
             codigos.append(feito.returncode)

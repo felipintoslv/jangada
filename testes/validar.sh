@@ -1251,7 +1251,7 @@ conferir "caso 13g: JANGADA_DELEGAR global vale sem a chave no perfil" [ "$(dele
 JANGADA_DELEGAR=agy agente_em "$tmp/semr" --perfil claude-mesmo
 conferir "caso 13g: a chave do perfil vence a global" [ "$(delegar_de)" = claude ]
 env PATH="$tmp/semagy:/usr/bin:/bin" bash -c 'source "$1/bin/jangada-config"; jangada_delegacao claude agy' _ "$repo_jangada" >"$tmp/delegar.txt"
-conferir "caso 13g: sem o agy instalado, agy vira claude" [ "$(cat "$tmp/delegar.txt")" = claude ]
+conferir "caso 13g: sem o agy instalado, destino agy fica bloqueado" [ "$(cat "$tmp/delegar.txt")" = agy ]
 conferir "caso 13g: todo destino tem o texto comum de não editar e não revisar" \
   bash -c 'for m in agy claude nativo local; do test -r "$1/default/agentes/protocolo-delegar-$m.md" || exit 1; done
            grep -q "não editam arquivos" "$1/default/agentes/protocolo-delegar.md"' _ "$repo_jangada"
