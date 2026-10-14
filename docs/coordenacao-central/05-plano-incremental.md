@@ -264,3 +264,21 @@ Também mostrou falha de confiança do agy no seletor e falhas encadeadas no tes
 A saída condensada omitiu outras ocorrências; não permite atribuir toda falha ao isolamento nem declarar ausência de regressão.
 Não houve repetição fora da proteção, ajuste de teste ou aplicação de configuração para fazer passar.
 A suíte precisa de conferência posterior em ambiente autorizado antes de qualquer implementação ou integração.
+
+### Execução desta continuação
+
+Em 13/10/2026, o mesmo comando rodou nesta worktree, baseada em `main` no commit `50ba7a0`.
+Resultado: código 1, duração de 398 segundos e 6.967 linhas geradas, segundo `jangada-filtrar`.
+O filtro mostrou seis erros de criação de sockets em `testes/monitoramento.py`, com `PermissionError: Operation not permitted`.
+Mostrou também falha de confiança do agy em `testes/agente-seletor.py` e falhas encadeadas em `testes/validar.sh`.
+Outras 2.349 ocorrências foram omitidas pelo filtro; não são uma contagem de testes falhos.
+Sem examinar essa parcela, não atribuir todas as falhas ao ambiente nem declarar a suíte aprovada ou ausência de regressão.
+Não houve repetição fora da proteção, alteração de testes ou configuração para obter aprovação.
+A conferência externa pelo coordenador continua necessária antes de integrar.
+
+Conferência local dos documentos: seis arquivos, 29 links locais válidos, incluindo âncoras, e nenhum travessão.
+O diff está restrito aos seis caminhos permitidos; o diagnóstico conserva versão/data e foi confrontado com os trechos citados.
+As seis fontes oficiais Gas Town da tabela do [04](04-gas-town-riscos.md) estão acessíveis nesta consulta.
+Esta worktree não contém `.jangada/validar.sh`; não foi copiado estado privado da raiz para acrescentar esse arquivo.
+A execução direta da suíte acima registra a verificação exigida por AGENTS.md, independentemente do portão local do validador.
+O parecer de `jangada-validar` fica no registro operacional desta nova sessão e precisa corresponder à versão final completa contra `main`.
