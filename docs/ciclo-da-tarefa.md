@@ -42,13 +42,7 @@ mas registra a aprovação como `sujo`, sem avançar o ponto da próxima entrega
 
 A skill `coordenador` define o papel da sessão que conversa com o dono,
 explora problemas e alternativas, transforma decisões autorizadas em tarefas,
-acompanha e confere a entrega antes de integrar. Em pedidos abertos, examina
-contexto permitido, compara consequências e recomenda uma opção justificada.
-Pergunta por decisões que mudam objetivo, conteúdo ou escopo, sem reconfirmar
-escolhas recebidas. Exploração e proposta não autorizam implementação.
-Pedidos claros e autorizados seguem direto pelo fluxo existente.
-A passagem para execução delimita objetivo decidido, contexto, arquivos,
-limites, critérios de pronto e origem da autorização aplicável.
+acompanha e confere a entrega antes de integrar; explorar não autoriza implementar.
 O coordenador pode ser o Claude ou o Codex. A skill vale para qualquer
 projeto e roda numa sessão comum, fora do isolamento, aberta na pasta do
 projeto. No Codex, abrir tarefa, ler o estado, verificar e integrar passam
@@ -71,9 +65,8 @@ Um coordenador por projeto é a prática do fluxo, sem identidade persistente
 ou isolamento de conversas implementados no Core por essa skill.
 O estado entre conversas fica em `.jangada/coordenacao.md`, na raiz do
 projeto e fora do controle de versão; históricos não são importados automaticamente.
-Veja a [exploração e seus exemplos](coordenacao-central/02-coordenador-contextos.md#exploração-antes-de-abrir-tarefas)
-e o [marco M2.0](coordenacao-central/05-plano-incremental.md#fase-2-coordenador-mínimo-preservando-sessões),
-distintos das propostas de infraestrutura futura.
+Veja [exploração e exemplos](coordenacao-central/02-coordenador-contextos.md#exploração-antes-de-abrir-tarefas)
+e [M2.0](coordenacao-central/05-plano-incremental.md#fase-2-coordenador-mínimo-preservando-sessões).
 
 ## Abertura da sessão
 
