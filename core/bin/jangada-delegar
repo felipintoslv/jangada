@@ -830,7 +830,17 @@ if ! jangada_agy_confia "$pasta"; then
 fi
 # Com --agent de nome desconhecido o agy roda o agente padrão, com todas as
 # ferramentas, e só o log avisa: confere antes de mandar o pedido.
-if ! agy_limpo agents 2>/dev/null | grep -qx -- "$papel"; then
+erro_catalogo="$(mktemp)"
+codigo_catalogo=0
+catalogo="$(agy_limpo agents 2>"$erro_catalogo")" || codigo_catalogo=$?
+if ((codigo_catalogo)); then
+  diagnostico_catalogo="$(tail -c 600 "$erro_catalogo")"
+  rm -f "$erro_catalogo"
+  recusar "consulta dos papéis do agy falhou (código $codigo_catalogo): $diagnostico_catalogo" indisponivel
+fi
+rm -f "$erro_catalogo"
+# Consumir o catálogo completo evita SIGPIPE do produtor após uma correspondência.
+if ! grep -Fx -- "$papel" <<<"$catalogo" >/dev/null; then
   recusar "o agy não achou o agente $papel (rode ./install.sh 50)" capacidade_incompativel
 fi
 # O leitor lê documentos de fora; o que o limita no terminal é o

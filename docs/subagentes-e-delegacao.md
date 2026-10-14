@@ -289,6 +289,13 @@ flowchart TD
   usa o valor expirado.
   Uma resposta atual com cota válida de algum grupo configurado pode ser usada.
   Grupo ausente ou ilegível é pulado, sem bloquear modelos de outro grupo válido.
+- A consulta `agy agents` deve terminar com sucesso antes de conferir o papel.
+  Falha de inicialização, inclusive soquete local proibido pelo ambiente,
+  registra `indisponivel` com diagnóstico; não significa papel ausente.
+  O comando consome o catálogo completo para evitar que saída antecipada
+  do `grep` provoque SIGPIPE no produtor sob `pipefail`.
+  Ao testar o comando do worktree, use os recursos da instalação protegida
+  quando os hooks reais apontarem a ela. Não regrave hooks nem amplie permissões.
 - Os modelos vêm de `JANGADA_DELEGAR_MODELOS`, em ordem de preferência
   (padrão `gemini-3.8-flash-high claude-sonnet-5-5-high gpt-oss-120b-medium`).
   O modelo com cota desconhecida ou abaixo de `JANGADA_DELEGAR_COTA_MIN`

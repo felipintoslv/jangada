@@ -146,7 +146,6 @@ delegar() {
 codigo() { cat "$tmp/codigo"; }
 
 delegar explorador "mapeie"
-[[ "$(codigo)" = 0 ]] || cat "$tmp/erro" >&2
 conferir "caso 1: código 0" [ "$(codigo)" = 0 ]
 conferir "caso 1: imprime o relatório" grep -qx "relatorio em a.sh:1" "$tmp/saida"
 conferir "caso 1: o agy recebe o papel, que o hook do leitor lê" grep -qx explorador "$tmp/falso/agy.papel"

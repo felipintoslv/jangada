@@ -196,6 +196,31 @@ jq -n --arg r 'Informação conferida em fonte.txt:1' '{status:"SUCCESS",respons
         r = self.delegar('--permitir-remoto')
         self.assertEqual((r['destino'], r['motivo_codigo']), ('agy', 'indisponivel'))
 
+    def test_catalogo_falho_nao_e_confundido_com_papel_ausente(self):
+        for saida in ('', 'echo leitor;'):
+            with self.subTest(saida=saida):
+                self.script('agy', f'{saida} echo "soquete local proibido" >&2; exit 1\n')
+                r = self.delegar('--permitir-remoto')
+                self.assertEqual(r['motivo_codigo'], 'indisponivel')
+                self.assertIn('código 1', r['motivo'])
+                self.assertIn('soquete local proibido', r['motivo'])
+                self.assertEqual(r['chamadas_executor'], 0)
+
+    def test_catalogo_completo_evitar_saida_antecipada_do_grep(self):
+        arquivo = self.bin / 'agy'
+        corpo = arquivo.read_text().replace(
+            'then echo leitor; echo redator; exit 0; fi',
+            'then echo leitor; sleep 0.05; printf "outro\\n%.0s" {1..100000}; exit 0; fi')
+        arquivo.write_text(corpo)
+        r = self.delegar('--permitir-remoto')
+        self.assertEqual((r['destino'], r['codigo_saida']), ('agy', 0))
+
+    def test_catalogo_valido_sem_papel_recusa_antes_da_geracao(self):
+        self.script('agy', 'echo explorador\n')
+        r = self.delegar('--permitir-remoto')
+        self.assertEqual(r['motivo_codigo'], 'capacidade_incompativel')
+        self.assertEqual(r['chamadas_executor'], 0)
+
     def test_configuracao_local_explicita_nao_autoriza_agy(self):
         config = self.pasta / 'config/jangada/jangada.conf'
         config.parent.mkdir(parents=True)
