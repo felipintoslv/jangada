@@ -72,6 +72,142 @@ for opcao in "${consultas[@]}"; do
     cmp -s <(cut -f1-3,5- "$tmp/antes$opcao") <(cut -f1-3,5- "$tmp/depois$opcao")
 done
 
+python3 - "$repo_jangada" "$tmp" <<'PYTEST' || falhas=$((falhas + 1))
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+repo, tmp = map(Path, sys.argv[1:])
+origem = tmp / 'json-state'
+pasta = origem / 'jangada/agentes'
+ambiente = dict(os.environ, PATH=str(tmp / 'bin') + ':' + os.environ['PATH'],
+                HOME=str(tmp / 'home'), XDG_CONFIG_HOME=str(tmp / 'config'),
+                XDG_STATE_HOME=str(origem), JANGADA_PATH=str(repo))
+for nome in ('JANGADA_ISOLADO', 'TMUX', 'JANGADA_AGENTES_GUARDAR'):
+    ambiente.pop(nome, None)
+
+
+def consultar(opcao='--lista-json'):
+    return subprocess.run([str(repo / 'bin/jangada-agentes'), opcao],
+                          capture_output=True, env=ambiente, timeout=5)
+
+
+def retrato():
+    return [(str(p.relative_to(origem)), p.lstat().st_mode,
+             hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() and not p.is_symlink() else '')
+            for p in sorted(origem.rglob('*')) if not p.is_fifo()]
+
+
+# Estado ausente não recebe diretórios, inclusive nas consultas antigas.
+for opcao in ('--lista-json', '--lista', '--lista-atualizada', '--waybar'):
+    r = consultar(opcao)
+    assert r.returncode == 0, r.stderr
+    assert not origem.exists()
+assert json.loads(consultar().stdout)['sessoes'][0]['nome'] == 'viva'
+tmux = tmp / 'bin/tmux'
+original_tmux = tmux.read_text()
+tmux.write_text('#!/bin/sh\nexit 0\n')
+assert json.loads(consultar().stdout) == {'versao': 1, 'sessoes': []}
+assert not origem.exists()
+tmux.write_text('#!/bin/sh\necho ../../fora\n')
+r = consultar()
+assert r.returncode == 1 and not r.stdout and not origem.exists()
+tmux.write_text(original_tmux)
+pasta.mkdir(parents=True)
+agora = subprocess.check_output(['date', '-Iseconds'], text=True).strip()
+texto = 'ação\nlinha dois\t雪 &lt;b&gt; <b>literal</b>'
+viva = dict(estado='aguardando', dir=str(tmp / 'pasta'), atualizado=agora,
+            ramo='agente/<ramo>&lt;', tarefa=texto, agente='codex', raiz='/projeto/raiz',
+            mensagem=texto, desde=agora, inicio='a' * 40, coordenador='claude',
+            revisor='claude', comando='segredo que não sai', conversa='privada')
+(pasta / 'viva.json').write_text(json.dumps(viva))
+(pasta / 'retida.json').write_text(json.dumps(dict(estado='concluido', atualizado=agora)))
+(pasta / 'interrompida.json').write_text(json.dumps(dict(estado='interrompido', atualizado=agora)))
+(pasta / 'restauravel.json').write_text(json.dumps(dict(agente='codex', dir=str(tmp / 'pasta'))))
+(pasta / 'expirada.json').write_text(json.dumps(dict(estado='concluido', atualizado='2000-01-01')))
+(pasta / 'pid.json').write_text(json.dumps(dict(estado='ativo', pid=os.getpid())))
+# Contextos e pareceres não são abertos, mesmo quando não são arquivos regulares.
+(pasta / 'revisao-um-r1.json').write_text('não é JSON')
+os.mkfifo(pasta / 'validacao-um-r1.contexto.json')
+(pasta / 'delegacao-exemplo.json').write_text('não é sessão')
+antes = retrato()
+r = consultar()
+assert r.returncode == 0, r.stderr
+resultado = json.loads(r.stdout)
+assert resultado['versao'] == 1
+sessoes = {s['nome']: s for s in resultado['sessoes']}
+assert set(sessoes) == {'viva', 'retida', 'interrompida', 'restauravel', 'pid'}
+assert sessoes['restauravel']['estado'] == 'interrompido'
+assert sessoes['viva']['tarefa'] == texto == sessoes['viva']['mensagem']
+assert sessoes['viva']['desde'] == agora
+assert sessoes['viva']['projeto'] == 'raiz'
+assert not {'inicio', 'comando', 'conversa', 'pid'} & sessoes['viva'].keys()
+assert retrato() == antes
+for opcao in ('--lista', '--lista-atualizada'):
+    r = consultar(opcao)
+    assert r.returncode == 0, r.stderr
+    linha = next(l for l in r.stdout.decode().splitlines() if l.split('\t')[1] == 'viva')
+    assert linha == '\t'.join(('aguardando', 'viva', str(tmp / 'pasta'), agora,
+                               'agente/&lt;ramo&gt;&amp;lt;', 'ação'))
+    assert retrato() == antes
+
+# Todo erro recusa a resposta integral; nunca publica uma lista parcial.
+ruim = pasta / 'ruim.json'
+for conteudo in ('{', '[]', json.dumps(dict(mensagem=[])),
+                 json.dumps(dict(tarefa='x' * 16001)), json.dumps(dict(pid=True)),
+                 'x' * (1024 * 1024 + 1)):
+    ruim.write_text(conteudo)
+    antes = retrato()
+    r = consultar()
+    assert r.returncode == 1 and not r.stdout and r.stderr, (conteudo[:30], r)
+    assert retrato() == antes
+ruim.unlink()
+for tipo in ('link', 'fifo', 'diretorio'):
+    if tipo == 'link':
+        ruim.symlink_to(pasta / 'viva.json')
+    elif tipo == 'fifo':
+        os.mkfifo(ruim)
+    else:
+        ruim.mkdir()
+    r = consultar()
+    assert r.returncode == 1 and not r.stdout and r.stderr, tipo
+    ruim.rmdir() if tipo == 'diretorio' else ruim.unlink()
+(pasta / 'nome inválido.json').write_text('{}')
+assert consultar().returncode == 1
+(pasta / 'nome inválido.json').unlink()
+# A pasta de sessões também não pode ser link.
+pasta.rename(pasta.with_name('originais'))
+pasta.symlink_to(pasta.with_name('originais'), target_is_directory=True)
+assert consultar().returncode == 1
+pasta.unlink()
+pasta.with_name('originais').rename(pasta)
+# Resposta agregada limitada, mesmo com cada registro dentro do limite.
+for i in range(80):
+    (pasta / f'grande-{i}.json').write_text(json.dumps(dict(estado='concluido', atualizado=agora, tarefa='x' * 16000)))
+r = consultar()
+assert r.returncode == 1 and not r.stdout and b'1 MiB' in r.stderr
+for p in pasta.glob('grande-*.json'):
+    p.unlink()
+# Core e fachada funcionam sem pastas Shell e Monitor.
+minimo = tmp / 'core-sem-interface'
+(minimo / 'bin').mkdir(parents=True)
+(minimo / 'core/nucleo').mkdir(parents=True)
+for nome, fonte in (('bin/jangada-config', 'bin/jangada-config'),
+                    ('bin/jangada-agentes', 'core/bin/jangada-agentes'),
+                    ('core/nucleo/sessoes.py', 'core/nucleo/sessoes.py')):
+    shutil.copy2(repo / fonte, minimo / nome)
+ambiente['JANGADA_PATH'] = str(minimo)
+r = subprocess.run([str(minimo / 'bin/jangada-agentes'), '--lista-json'],
+                   env=ambiente, capture_output=True, timeout=5)
+assert r.returncode == 0, r.stderr
+assert json.loads(r.stdout) == resultado
+print('consulta JSON: seleção, TSV, limites, recusas e Core sem interface passaram')
+PYTEST
+
 if ((falhas)); then
   echo "$falhas falha(s)"
   exit 1

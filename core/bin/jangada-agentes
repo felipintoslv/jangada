@@ -8,6 +8,7 @@
 #   jangada-agentes --monitor  tabela no terminal atualizada a cada 2 segundos
 #   jangada-agentes --waybar   saída JSON para o módulo da barra
 #   jangada-agentes --focar S  foca a janela da sessão S ou abre uma nova
+#   jangada-agentes --lista-json  consulta pública versionada, com campos de apresentação
 #   jangada-agentes --lista    lista simples: estado, sessão, diretório
 #   jangada-agentes --lista-atualizada  o mesmo que --lista; não limpa órfãos
 #   jangada-agentes --limpar-orfaos  remove os estados de sessões que já não existem
@@ -32,7 +33,10 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
 estado_dir="$JANGADA_ESTADO/agentes"
-mkdir -p "$estado_dir"
+case "${1:-}" in
+  --lista|--lista-atualizada|--lista-json|--waybar) ;;
+  *) mkdir -p "$estado_dir" ;;
+esac
 
 # Horas que um estado final continua visível depois de o processo sair.
 guardar_horas="${JANGADA_AGENTES_GUARDAR:-24}"
@@ -102,37 +106,7 @@ eh_estado() {
 
 # Uma linha por sessão: estado<TAB>sessão<TAB>diretório<TAB>atualizado<TAB>ramo<TAB>tarefa
 listar() {
-  local s arq vivas pid dados estado dir atualizado ramo tarefa
-  vivas="$(sessoes_vivas)"
-  while read -r s; do
-    [[ -n "$s" ]] || continue
-    arq="$estado_dir/$s.json"
-    if [[ -f "$arq" ]]; then
-      dados="$(jq -r '[ (.estado // "ativo"), (.dir // ""), (.atualizado // ""), ((.ramo // "") | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;")), ((.tarefa // "") | split("\n") | (.[0] // "") | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;") | if length > 50 then .[0:47] + "..." else . end) ] | map(tostring | gsub("[\t\n\u001f]"; " ")) | join("\u001f")' "$arq" 2>/dev/null || printf 'ativo%s%s%s%s' "$US" "$US" "$US" "$US")"
-    else
-      dados="$(printf 'ativo%s%s%s%s' "$US" "$US" "$US" "$US")"
-    fi
-    IFS="$US" read -r estado dir atualizado ramo tarefa <<<"$dados"
-    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado" "$ramo" "$tarefa"
-  done <<<"$vivas"
-
-  for arq in "$estado_dir"/*.json; do
-    eh_estado "$arq" || continue
-    s="$(basename "$arq" .json)"
-    grep -qxF "$s" <<<"$vivas" && continue
-    pid="$(jq -r '.pid // empty' "$arq" 2>/dev/null || true)"
-    dados="$(jq -r '[ (.estado // "ativo"), (.dir // ""), (.atualizado // ""), ((.ramo // "") | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;")), ((.tarefa // "") | split("\n") | (.[0] // "") | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;") | if length > 50 then .[0:47] + "..." else . end) ] | map(tostring | gsub("[\t\n\u001f]"; " ")) | join("\u001f")' "$arq" 2>/dev/null || printf 'ativo%s%s%s%s' "$US" "$US" "$US" "$US")"
-    IFS="$US" read -r estado dir atualizado ramo tarefa <<<"$dados"
-    # Ou o processo ainda responde, ou o ciclo terminou e o resultado fica à
-    # vista até alguém encerrar a sessão.
-    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-      printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado" "$ramo" "$tarefa"
-    elif guardado "$estado" "$atualizado"; then
-      printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$estado" "$s" "$dir" "$atualizado" "$ramo" "$tarefa"
-    elif [[ -z "$pid" && "$estado" != interrompido ]] && ! estado_final "$estado" && restauravel "$arq"; then
-      printf '%s\t%s\t%s\t%s\t%s\t%s\n' interrompido "$s" "$dir" "$atualizado" "$ramo" "$tarefa"
-    fi
-  done
+  sessoes_vivas | python3 "$JANGADA_CORE_PY/nucleo/sessoes.py" "$estado_dir" "$guardar_horas" "${1:-tsv}"
 }
 
 # Remove arquivos de estado de sessões que já não existem. Um ciclo que terminou
@@ -646,6 +620,9 @@ icone() {
 }
 
 case "${1:-}" in
+  --lista-json)
+    listar json
+    ;;
   --lista|--lista-atualizada)
     listar
     ;;

@@ -24,6 +24,7 @@ jangada="$tmp/jangada"
 log="$tmp/log"
 mkdir -p "$tmp/bin" "$tmp/setsid" "$tmp/sessoes" "$tmp/casa" "$tmp/state/jangada/agentes" "$tmp/config/jangada" "$jangada/bin"
 ln -s "$repo_jangada/default" "$jangada/default"
+ln -s "$repo_jangada/core" "$jangada/core"
 
 # Cada falso grava uma linha "NOME PID [ARG]..." no registro. O jangada-terminal
 # espera FALSO_ESPERA segundos depois de gravar, para o teste ver se ele ficou
