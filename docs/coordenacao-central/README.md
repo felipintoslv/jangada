@@ -24,8 +24,8 @@ Autor e coordenador: Codex. Revisor independente exigido: Claude, pelo fluxo de 
 
 ## Base e método
 
-Código examinado em 13/10/2026 no commit `50ba7a0dd2d265279d4d5e1851be864914c92539`.
-Identificação Git: `jangada-pre-modularizacao-3.0-126-g50ba7a0`.
+Código examinado em 13/10/2026 no commit `6e7b751a16f51f1de9db4916ccbe92e292f125f7`.
+Identificação Git: `jangada-pre-modularizacao-3.0-132-g6e7b751`.
 Localizadores do diagnóstico referem-se a essa versão, não à instalação ativa.
 
 Foram consultados README, AGENTS, CLAUDE, ciclo, registros, isolamento, provedores, delegação e documentos 01 a 06 da modularização 3.0.
@@ -70,8 +70,9 @@ A direção recebida acima está definida. As escolhas abaixo dizem respeito à 
 
 D1/D9 condicionam contratos; D2/D3/D5/D6/D10 condicionam qualquer novo registro ou operação de coordenação.
 D11 permite melhorar exploração e apoio agy antes de ampliar infraestrutura.
-A correção dos padrões/protocolos para essa preferência pertence à tarefa separada `delegacao-agy-padrao`.
-Esta entrega registra a direção e a divergência atual, sem editar configuração, código ou skill.
+Os padrões/protocolos agy e a cobrança de apoio na skill já estão corrigidos no repositório local.
+A instalação não recebeu essa atualização. Exploração de alternativas e identidade persistente permanecem propostas.
+Esta entrega é documental; o estado de verificação está no [05](05-plano-incremental.md).
 A preferência global não autoriza envio de dados confidenciais; fontes, destino e permissão técnica continuam sujeitos a conferência.
 D4/D8 só habilitam expansões após avaliação e decisão separadas.
 

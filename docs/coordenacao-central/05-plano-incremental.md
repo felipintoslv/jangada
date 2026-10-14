@@ -73,7 +73,7 @@ Dependências: D1/D9 e linha de base conferida em ambiente de teste autorizado.
 
 ### Fase 2: coordenador mínimo, preservando sessões
 
-M2.0: proposta de evolução da skill com exploração de alternativas e apoio agy.
+M2.0: evolução da skill com exploração de alternativas; preservar a cobrança de apoio agy já existente no repositório.
 Adotar em tarefa própria o texto do [02](02-coordenador-contextos.md#proposta-textual-para-a-skill-atual), após avaliação do dono.
 Ensaiar exemplos em diálogo sintético: problema sem solução pronta, premissa duvidosa, recomendação e decisão de conteúdo pendente.
 Não pedir aprovação repetida de escolha já recebida nem iniciar implementação por interpretar exploração como autorização.
@@ -91,8 +91,8 @@ D10 rege qualquer canal novo; o coordenador mínimo não depende de acrescentar 
 
 M2.3: apoio agy protegido e acompanhamento.
 A decisão do dono é `JANGADA_DELEGAR=agy` para todas as delegações, inclusive leitor/redator, sem local primeiro ou alternativa Ollama.
-A correção dos padrões/protocolos pertence a `delegacao-agy-padrao`, tarefa separada; esta sessão só documenta a dependência.
-Seu resultado deverá ser conferido antes de declarar a política efetiva nos clientes e perfis, sem editar esses arquivos aqui.
+Os padrões/protocolos e a cobrança de apoio já estão corrigidos no repositório local, conforme A21 do [01](01-diagnostico.md).
+A instalação ainda não recebeu a atualização; aplicação autorizada e retomada dos clientes são condições para conferir a política efetiva.
 Preferência global não autoriza enviar fontes confidenciais.
 Escolher subtarefa útil, registrar fontes/destino e exigir relatório com evidências; autor confere a contribuição adotada.
 Perfil com agy não comprova chamada ou trabalho efetivo.
@@ -208,53 +208,16 @@ Não pressupõe reescrita do Core, troca de banco, três repositórios ou substi
 Implementação futura preserva fachada, dados, evidências e clientes até que uma mudança seja demonstrada e autorizada.
 Reversão não restaura código antigo sobre esquema incompatível sem conferência; migração e serviço exigem tarefas próprias.
 
-## Participação de apoio nesta tarefa documental
+## Verificação e limitações
 
-### Tentativa desta continuação
+Registro em 13/10/2026, base de código `6e7b751`.
+A correção agy está integrada em `main` local; a instalação não foi atualizada.
+O apoio documental desta sessão usou leitor, os seis documentos e a skill, com destino agy e autorização remota explícitos.
+O fluxo então instalado recusou leitor ausente, código 4, sem relatório. Isso registra bloqueio, não participação efetiva nem diagnóstico do catálogo corrigido.
+C6/C18 continuam exigindo contribuição conferida para atender participação; não houve uso do Ollama nem contorno de proteção.
 
-Em 13/10/2026, nesta worktree, o autor repetiu a conferência de cobertura por `jangada-delegar leitor`.
-Usou `JANGADA_DELEGAR=agy`, `--destino agy`, `--capacidade analise_documental`, `--permitir-remoto` e `--arquivos` com os seis documentos deste conjunto e `core/agentes/claude/skills/coordenador/SKILL.md`, fontes autorizadas.
-O pedido delimitou recorte inicial, conversas/tarefas, exploração, apoio exclusivo agy, revisão Claude e separação das expansões futuras.
-Pediu comparação da proposta textual com a skill atual e lacunas com caminho:linha; não pediu revisão final nem edição.
-
-Resultado desta chamada: código 4, duração de zero segundos e três linhas, conforme `jangada-filtrar`.
-Recusas: “o agy não achou o agente leitor” e “nenhum executor elegível concluiu a delegação”.
-Não houve relatório nem contribuição de conteúdo. O autor conferiu a saída e o requisito de papel instalado no catálogo do agy.
-O bloqueio foi comunicado durante a tarefa e registrado aqui; C6/C18 continuam pendentes quanto à participação efetiva.
-A investigação do papel pertence à tarefa paralela. Esta continuação não instalou agentes nem alterou confiança, cota ou proteções.
-Não usou Ollama, outro destino ou nova sessão principal; a recusa não autoriza contorno.
-
-Na retomada de 13/10/2026, após 22h38, nova chamada protegida usou essas fontes e pediu conferência de contratos, registros e pendências de verificação.
-Manteve `JANGADA_DELEGAR=agy` e os mesmos parâmetros, com `JANGADA_PATH=/home/felipinto/.local/share/jangada` para usar o fluxo instalado.
-Resultado: código 4, zero segundos, três linhas e as mesmas recusas por leitor ausente; nenhum relatório foi produzido.
-O autor conferiu a saída e conservou o bloqueio de C6/C18; a chamada não comprova disponibilidade do modelo.
-A correção `6e7b751`, informada pelo coordenador, ainda não foi integrada nem instalada; não é capacidade instalada comprovada nesta tarefa.
-
-## Conferência desta entrega documental
-
-### Execução desta continuação
-
-Os seis documentos foram importados pelo Git de `3376c94`, sobre `main` em `50ba7a0`.
-Nenhum commit ou código da tarefa paralela `delegacao-agy-padrao` foi incorporado.
-Registros da tarefa antiga não são evidência desta entrega.
-
-Em 13/10/2026, nesta worktree, foi executado:
-
-```sh
-JANGADA_PATH="$PWD" jangada-filtrar -- bash testes/verificar.sh
-```
-Resultado: código 1, duração de 398 segundos e 6.967 linhas geradas, segundo `jangada-filtrar`.
-O filtro mostrou seis erros de criação de sockets em `testes/monitoramento.py`, com `PermissionError: Operation not permitted`.
-Mostrou também falha de confiança do agy em `testes/agente-seletor.py` e falhas encadeadas em `testes/validar.sh`.
-Outras 2.349 ocorrências foram omitidas pelo filtro; não são uma contagem de testes falhos.
-Sem examinar essa parcela, não atribuir todas as falhas ao ambiente nem declarar a suíte aprovada ou ausência de regressão.
-Não houve repetição fora da proteção, alteração de testes ou configuração para obter aprovação.
-A conferência externa pelo coordenador continua necessária antes de integrar.
-A suíte completa não foi repetida após a correção dos documentos; a verificação continua pendente.
-
-Conferência local dos documentos: destinos e âncoras dos links locais válidos; nenhum travessão encontrado.
-O diff está restrito aos seis caminhos permitidos; o diagnóstico conserva versão/data e foi confrontado com os trechos citados.
-As seis fontes oficiais Gas Town da tabela do [04](04-gas-town-riscos.md) estão acessíveis nesta consulta.
-Esta worktree não contém `.jangada/validar.sh`; não foi copiado estado privado da raiz para acrescentar esse arquivo.
-A suíte com código 1 não cumpriu a regra 6 de AGENTS.md. A verificação permanece pendente em ambiente autorizado.
-O parecer de `jangada-validar` fica no registro operacional desta nova sessão e precisa corresponder à versão final completa contra `main`.
+O coordenador executou `testes/verificar.sh` fora do isolamento na árvore `649992e`, após rebase sobre essa base.
+Resultado confirmado pelo controlador: código 0 e última linha “tudo certo”, sem reprodução da suíte pelo autor nesta base.
+Os ajustes seguintes alteram somente os seis documentos; links, âncoras, referências e escopo passaram na conferência específica.
+A revisão final protegida fica com o coordenador; parecer da base anterior não aprova o novo candidato.
+Aprovação do planejamento não autoriza implementar, integrar ou instalar as etapas propostas.

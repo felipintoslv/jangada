@@ -87,7 +87,8 @@ Os riscos futuros decorrem das novas fronteiras do [02](02-coordenador-contextos
 A seleção proposta separa coordenar, executar, revisar e apoiar leitura.
 O [01](01-diagnostico.md#provedores-examinados) identifica os adaptadores examinados e suas restrições.
 Como fato do código examinado, Claude/Codex têm sessões principais e revisão; agy tem apoio e revisão; Ollama tem conversa local e apoio delimitado.
-A política recebida para a proposta é outra: todas as delegações usam `JANGADA_DELEGAR=agy`, inclusive leitor/redator.
+O repositório já usa agy por padrão para todos os papéis; escolhas locais explícitas permanecem por compatibilidade.
+Neste planejamento, a política recebida exige `JANGADA_DELEGAR=agy` em toda delegação, inclusive leitor/redator.
 Não há local primeiro nem alternativa Ollama; indisponibilidade, confiança, cota ou permissão insuficiente viram bloqueio comunicado.
 Claude permanece o revisor independente desta tarefa; preferência de delegação não modifica essa função.
 Isso não comprova que qualquer um já ofereça o novo protocolo de coordenador persistente.
@@ -97,7 +98,7 @@ Critérios de seleção: adequação demonstrada à função, disponibilidade ob
 conectividade, custo conhecido, contexto suportado e independência em relação ao autor.
 Desconhecido permanece desconhecido. Modelos de apoio devem ser avaliados dentro do destino agy autorizado.
 A preferência global não autoriza envio de documentos confidenciais.
-Correção dos padrões/protocolos fica na tarefa separada `delegacao-agy-padrao`, sem ampliar escopo desta entrega.
+Os padrões/protocolos e a cobrança de apoio foram corrigidos no repositório local, conforme A21 do [01](01-diagnostico.md).
 O dono já escolheu o destino agy para delegação; demais funções e modelos continuam configuráveis conforme autorização.
 Alternativa entre modelos do agy só usa candidatos autorizados e registra motivo/modelo efetivo; falha não muda para Ollama.
 

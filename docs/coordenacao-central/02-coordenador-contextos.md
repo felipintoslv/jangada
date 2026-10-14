@@ -137,7 +137,9 @@ Texto sugerido para uma seção anterior a “Pedido de cada tarefa” em
 > Ao acompanhar executores, espere eventos ou consulte o estado; não mantenha o modelo gerando continuamente.
 > Revisão, integração, publicação e instalação conservam suas autorizações e portões próprios.
 
-O texto complementa a skill; não elimina suas conferências de escopo, revisão e integração.
+A skill do repositório já exige apoio agy com contribuição conferida ou bloqueio rastreável, conforme A21 do [01](01-diagnostico.md).
+O texto consolida esse requisito existente com as propostas de exploração e identidade persistente.
+Não elimina as conferências de escopo, revisão e integração.
 Aplicá-lo ou instalá-lo exige tarefa própria. Esta proposta não autoriza iniciar delegação em tarefas futuras sem a autorização aplicável.
 
 ### Exemplos e critérios observáveis
@@ -156,7 +158,8 @@ Aplicá-lo ou instalá-lo exige tarefa própria. Esta proposta não autoriza ini
 A responsabilidade do coordenador inclui participação concreta do agy como trabalhador de apoio.
 Todas as delegações usam `JANGADA_DELEGAR=agy`, inclusive leitor/redator, sem local primeiro ou alternativa Ollama.
 Preferência global não autoriza envio de dados confidenciais; conferir autorização e política das fontes a cada subtarefa.
-Os padrões atuais ainda precisam de correção em `delegacao-agy-padrao`; a skill e os protocolos ativos não mudam nesta entrega.
+Padrões/protocolos e cobrança de apoio já estão corrigidos no repositório local, conforme A21.
+A instalação ainda não recebeu essa atualização; a verificação operacional está no [05](05-plano-incremental.md#verificação-e-limitações).
 Escolher algo útil à tarefa, como leitura de fontes ou análise de cobertura, sem pedir nova entrega principal ou revisão final.
 Destino explícito e fontes autorizadas delimitam o envio; capacidade documental pode usar papel leitor.
 O fluxo descrito em [delegação](../subagentes-e-delegacao.md#seleção-por-capacidade) exige os parâmetros aplicáveis, perfil permitido e conferências de confiança/cota.

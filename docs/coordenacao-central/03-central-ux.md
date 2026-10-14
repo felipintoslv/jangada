@@ -95,7 +95,8 @@ Novo botão de autorização só pode entrar após prova de D10, não como atalh
 O coordenador escolhe uma subtarefa útil de apoio agy e exige relatório com referências.
 Toda delegação usa `JANGADA_DELEGAR=agy`, inclusive leitura/redação; a interface não oferece local primeiro nem troca para Ollama.
 A preferência global não dispensa autorização para enviar fontes confidenciais.
-A correção dos padrões fica em `delegacao-agy-padrao`; apresentação da opção não deve fingir que o padrão ativo já mudou.
+O repositório já contém os padrões agy corrigidos, conforme A21 do [01](01-diagnostico.md).
+A interface distingue a versão instalada da versão do repositório; padrão corrigido não comprova chamada efetiva.
 A Central pode apresentar o vínculo da contribuição e seu bloqueio, sem comandar envio por lógica própria.
 Cota, confiança, acesso ou permissão insuficientes aparecem como pendência de apoio.
 Não mostrar “agy participou” a partir do perfil configurado; resultado efetivo e uso conferido precisam existir.

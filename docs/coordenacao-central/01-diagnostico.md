@@ -4,7 +4,7 @@ O recorte atualizado preserva o fluxo atual: um coordenador por projeto, várias
 A separação física em Core, Shell e Monitor existe. A independência funcional completa ainda não está demonstrada.
 O campo de exibição do coordenador e a conversa local não constituem o coordenador persistente pedido.
 
-Base: commit `50ba7a0dd2d265279d4d5e1851be864914c92539`, examinado em 13/10/2026.
+Base: commit `6e7b751a16f51f1de9db4916ccbe92e292f125f7`, examinado em 13/10/2026.
 Localizadores abaixo usam caminho real e linha inicial do trecho.
 “Fato” significa comportamento identificado no código; “limitação” restringe o que ele comprova.
 “Hipótese” pede medição ou ensaio futuro; “proposta” descreve mudança ainda não autorizada.
@@ -54,7 +54,7 @@ O teste futuro de remoção deve examinar arquivos de configuração e links, al
 | A4 | Fato: Central lê JSON de sessão diretamente | `shell/menus/tarefas/dados.py:89` abre arquivo; `:104` complementa a listagem com esses campos | Variável de caminho e leitura segura não substituem contrato de consulta |
 | A5 | Fato: Central conhece estrutura interna para vigiar estado | `shell/menus/tarefas/janela.py:692` observa revisões, projetos, JSON e SQLite; `:425` agrupa avisos e consulta periodicamente | Mudança de armazenamento afeta a interface; substituir por eventos e consulta incremental |
 | A6 | Fato: coordenador é declaração para exibição | `core/bin/jangada-agente:17`, `:106`, `:548`; `shell/menus/tarefas/dados.py:73`, `:116`; `janela.py:581` | Nome não autentica identidade, permissões, vínculos ou contexto |
-| A7 | Fato: coordenação atual é protocolo de sessão e arquivo textual | `core/agentes/claude/skills/coordenador/SKILL.md:11`, `:90` prevê `.jangada/coordenacao.md` | Útil como prática; texto gravável não é decisão humana autenticada nem armazenamento isolado de vários coordenadores |
+| A7 | Fato: coordenação atual é protocolo de sessão e arquivo textual | `core/agentes/claude/skills/coordenador/SKILL.md:11`, `:98` prevê `.jangada/coordenacao.md` | Útil como prática; texto gravável não é decisão humana autenticada nem armazenamento isolado de vários coordenadores |
 | A8 | Fato: conversa local guarda mensagens em memória e chama Ollama diretamente | `shell/menus/conversa/janela.py:54`, `:181`, `:229`, `:258`, `:264` | Há contexto durante a janela; não há persistência própria identificada. Fechar aborta a chamada local |
 | A9 | Fato: fila, atividades, eventos e execuções persistem separadamente | `core/orquestracao/estado.py:148` a `:174`; reserva cria execução em `:195`; consulta conjunta em `core/nucleo/consultas.py:138` | Base reutilizável para tarefas e proveniência; não há tabelas de coordenadores e mensagens nesses esquemas |
 | A10 | Fato: escrita autoritativa exige controlador | `core/orquestracao/confianca.py:23`, `:28`, `:68`; `core/orquestracao/estado.py:118` | Modelo isolado não recebe autoridade ao ganhar o título de coordenador |
@@ -66,7 +66,7 @@ O teste futuro de remoção deve examinar arquivos de configuração e links, al
 | A16 | Fato: revisão e integração têm portões distintos | `core/bin/jangada-validar:1193`, `:1225`; `core/bin/jangada-agente-fim:199`, `:349`, `:437`, `:454` | Preservar independência, commit/árvore/base exatos, confirmação humana e avanço rápido |
 | A17 | Fato: integração pela Central fixa candidato antes do gesto | `shell/menus/tarefas/janela.py:849`, `:857`, `:927`; `:1057` bloqueia fechamento durante integração | Reutilizar apresentação e confirmação; corrigir rótulos que confundam integração e encerramento em trabalho futuro |
 | A18 | Fato: aviso especial de atualização não cobre pastas reais | `bin/jangada-update:99`; conferência de processos em `:31` a `:55` fica no modo `--somente-codigo` | Não generalizar essa proteção para toda atualização; versionamento de sessões ainda precisa de contrato |
-| A19 | Fato: configuração concentra partes dos módulos | `bin/jangada-config:6`, `:76`, `:682`, `:727` | Configuração é lida sem execução; funções gráficas estão na parte compartilhada. Extração seletiva pode reduzir acoplamento |
+| A19 | Fato: configuração concentra partes dos módulos | `bin/jangada-config:6`, `:76`, `:675`, `:720` | Configuração é lida sem execução; funções gráficas estão na parte compartilhada. Extração seletiva pode reduzir acoplamento |
 | A20 | Limitação: isolamento atual não estabelece fronteira de leitura entre conversas | `core/bin/jangada-isolar:21`, `:112`, `:462`, `:514`, `:525`; [isolamento](../isolamento.md#modelo-de-ameaça) | Escrita controlada e registros protegidos não garantem sigilo de diálogos entre coordenadores |
 
 A16 confirma integração existente no código, apesar de textos datados que dizem “bloqueada”.
@@ -97,22 +97,23 @@ conversa usa trava local em `shell/menus/conversa/janela.py:161`.
 
 ## Delegação atual e decisão do dono
 
-A21, fato: o protocolo atual de Codex manda leitor/redator primeiro ao destino local,
-em `core/agentes/perfis/protocolo-delegar-codex.md:2` a `:4`.
-A função `jangada_delegacao` em `bin/jangada-config:215` também tem alternativas e padrões anteriores;
-por exemplo, Codex sem escolha agy usa local e Claude sem agy disponível muda de destino.
-Esses fatos não representam a política agora escolhida pelo dono.
+A21, fato: o repositório usa agy por padrão para todos os papéis de Claude/Codex, inclusive leitor/redator.
+Evidências: `bin/jangada-config:30`, `:209`; `core/agentes/perfis/protocolo-delegar-codex.md:2`; `core/delegacao/roteamento.json:2`.
+Escolhas locais explícitas continuam disponíveis por compatibilidade; ausência de agy não muda automaticamente o destino.
+`core/bin/jangada-delegar:391` exige autorização remota; `:834` distingue falha do catálogo de papel ausente.
+A skill exige subtarefa agy autorizada e contribuição conferida ou bloqueio rastreável em `core/agentes/claude/skills/coordenador/SKILL.md:38`, `:63`.
+Essas correções estão integradas em `main` local; a instalação ainda não foi atualizada.
 
 Diretriz recebida em 13/10/2026: todas as delegações usam `JANGADA_DELEGAR=agy`, inclusive leitor/redator.
 Não há local primeiro, troca silenciosa ou alternativa Ollama na proposta.
 Recusa por disponibilidade, confiança, cota, acesso ou permissão é bloqueio a comunicar.
 Preferência global não autoriza enviar conteúdo confidencial.
-Corrigir padrões/protocolo é responsabilidade da tarefa separada `delegacao-agy-padrao`, sem alteração nesta sessão.
+A política exclusiva agy deste planejamento mantém as autorizações das fontes e não usa as opções locais de compatibilidade.
 
 ## Recorte de reaproveitamento inicial e futuro
 
-Os fatos A1 a A21 não mudam com a decisão do dono de 13/10/2026.
-O que muda é a prioridade: melhorar a skill e as ligações do fluxo atual antes de substituir sessões ou ampliar infraestrutura.
+A1 a A20 continuam presentes na base examinada; A21 registra os padrões agy corrigidos no repositório.
+A prioridade seguinte é melhorar exploração e ligações do fluxo atual antes de substituir sessões ou ampliar infraestrutura.
 
 | Uso inicial | Evidência reaproveitada | Ampliação que não é condição inicial |
 |---|---|---|
@@ -125,7 +126,8 @@ O que muda é a prioridade: melhorar a skill e as ligações do fluxo atual ante
 
 Os testes iniciais de dois coordenadores usam projetos distintos, não coordenadores no mesmo projeto.
 O isolamento de duas conversas do mesmo coordenador continua no aceite inicial.
-A skill deve melhorar exploração e exigir evidência do apoio, sem alterar sua versão ativa nesta tarefa.
+A skill do repositório já exige evidência do apoio; exploração e identidade persistente ainda precisam evoluir.
+Esta tarefa não modifica a skill.
 
 ## Provedores examinados
 
