@@ -106,7 +106,7 @@ eh_estado() {
 
 # Uma linha por sessão: estado<TAB>sessão<TAB>diretório<TAB>atualizado<TAB>ramo<TAB>tarefa
 listar() {
-  sessoes_vivas | python3 "$JANGADA_CORE_PY/nucleo/sessoes.py" "$estado_dir" "$guardar_horas" "${1:-tsv}"
+  sessoes_vivas | python3 "$JANGADA_CORE_PY/nucleo/sessoes.py" "$estado_dir" "$guardar_horas" "$guardar_interrompido_horas" "${1:-tsv}"
 }
 
 # Remove arquivos de estado de sessões que já não existem. Um ciclo que terminou

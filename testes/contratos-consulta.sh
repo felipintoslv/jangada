@@ -116,6 +116,12 @@ assert not origem.exists()
 tmux.write_text('#!/bin/sh\necho ../../fora\n')
 r = consultar()
 assert r.returncode == 1 and not r.stdout and not origem.exists()
+for opcao in ('--lista', '--lista-atualizada', '--waybar'):
+    r = consultar(opcao)
+    assert r.returncode == 0 and r.stderr
+    assert not origem.exists()
+    if opcao == '--waybar':
+        assert json.loads(r.stdout)['class'] == 'vazio'
 tmux.write_text(original_tmux)
 pasta.mkdir(parents=True)
 agora = subprocess.check_output(['date', '-Iseconds'], text=True).strip()
@@ -205,6 +211,46 @@ r = subprocess.run([str(minimo / 'bin/jangada-agentes'), '--lista-json'],
                    env=ambiente, capture_output=True, timeout=5)
 assert r.returncode == 0, r.stderr
 assert json.loads(r.stdout) == resultado
+# Retenção recebe ambos os prazos e funciona sem date, ou com date que recusa.
+from datetime import datetime, timedelta
+retencao = tmp / 'retencao'
+retencao.mkdir()
+(retencao / 'antiga.json').write_text(json.dumps(dict(estado='interrompido',
+    atualizado=(datetime.now().astimezone() - timedelta(hours=1)).isoformat())))
+sem_data = tmp / 'sem-data'
+sem_data.mkdir()
+for date_disponivel in (False, True):
+    if date_disponivel:
+        (sem_data / 'date').write_text('#!/bin/sh\nexit 1\n')
+        (sem_data / 'date').chmod(0o700)
+    for prazo, esperado in (('168', ['antiga']), ('0', [])):
+        r = subprocess.run([sys.executable, str(repo / 'core/nucleo/sessoes.py'),
+                            str(retencao), '24', prazo, 'json'], input='', text=True,
+                           capture_output=True, env=dict(ambiente, PATH=str(sem_data)), timeout=5)
+        assert r.returncode == 0, r.stderr
+        assert [s['nome'] for s in json.loads(r.stdout)['sessoes']] == esperado
+
+# O TSV não valida metadados que não apresenta nem limita a tarefa antes do resumo.
+ambiente['JANGADA_PATH'] = str(repo)
+for chave in ('WAYLAND_DISPLAY', 'HYPRLAND_INSTANCE_SIGNATURE', 'DISPLAY'):
+    ambiente.pop(chave, None)
+viva['mensagem'] = []
+viva['tarefa'] = 'x' * 16001
+(pasta / 'viva.json').write_text(json.dumps(viva))
+assert consultar().returncode == 1
+r = consultar('--lista')
+assert r.returncode == 0, r.stderr
+linha = next(l for l in r.stdout.decode().splitlines() if l.split('\t')[1] == 'viva')
+assert linha.split('\t')[-1] == 'x' * 47 + '...'
+r = consultar('--waybar')
+assert r.returncode == 0 and json.loads(r.stdout)['class'] == 'aguardando', r.stderr
+ruim.write_text('{')
+r = consultar('--waybar')
+assert r.returncode == 0 and json.loads(r.stdout)['class'] == 'aguardando', r.stderr
+assert r.stderr
+r = consultar('--proximo')
+assert r.returncode == 0, r.stderr
+
 print('consulta JSON: seleção, TSV, limites, recusas e Core sem interface passaram')
 PYTEST
 

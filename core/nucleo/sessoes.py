@@ -1,5 +1,6 @@
 """Consulta de apresentação de sessões, sem escrita nem dependência gráfica."""
 
+from datetime import datetime
 import html
 import json
 import os
@@ -27,42 +28,76 @@ def eh_sessao(nome):
             and not re.fullmatch(r'validacao-.+-r[0-9]+\.contexto\.json', nome))
 
 
-def registro(pasta_fd, nome):
+def registro(pasta_fd, nome, estrito):
     try:
-        fd = os.open(nome + '.json', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
-                     dir_fd=pasta_fd)
-    except FileNotFoundError:
+        try:
+            fd = os.open(nome + '.json', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                         dir_fd=pasta_fd)
+        except FileNotFoundError:
+            return {}
+        with os.fdopen(fd, 'rb') as arquivo:
+            info = os.fstat(arquivo.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size > LIMITE:
+                raise ValueError('Registro deve ser regular e ter no máximo 1 MiB.')
+            bruto = arquivo.read(LIMITE + 1)
+        if len(bruto) > LIMITE:
+            raise ValueError('Registro excedeu 1 MiB.')
+        dados = json.loads(bruto)
+        if not isinstance(dados, dict):
+            raise ValueError('Registro deve ser objeto JSON.')
+        if estrito:
+            for campo in CAMPOS:
+                valor = dados.get(campo)
+                if valor is not None and (not isinstance(valor, str) or len(valor) > TEXTO_MAX):
+                    raise ValueError('Campo de apresentação inválido: ' + campo)
+            pid = dados.get('pid')
+            if pid is not None and (type(pid) is not int or pid <= 0 or pid > 2147483647):
+                raise ValueError('PID inválido.')
+        return dados
+    except (OSError, ValueError, RecursionError):
+        if estrito:
+            raise
+        sys.stderr.write('Registro inseguro ou ilegível ignorado na consulta TSV.\n')
         return {}
-    with os.fdopen(fd, 'rb') as arquivo:
-        info = os.fstat(arquivo.fileno())
-        if not stat.S_ISREG(info.st_mode) or info.st_size > LIMITE:
-            raise ValueError('Registro deve ser regular e ter no máximo 1 MiB.')
-        bruto = arquivo.read(LIMITE + 1)
-    if len(bruto) > LIMITE:
-        raise ValueError('Registro excedeu 1 MiB.')
-    dados = json.loads(bruto)
-    if not isinstance(dados, dict):
-        raise ValueError('Registro deve ser objeto JSON.')
-    for campo in CAMPOS:
-        valor = dados.get(campo)
-        if valor is not None and (not isinstance(valor, str) or len(valor) > TEXTO_MAX):
-            raise ValueError('Campo de apresentação inválido: ' + campo)
-    pid = dados.get('pid')
-    if pid is not None and (type(pid) is not int or pid <= 0 or pid > 2147483647):
-        raise ValueError('PID inválido.')
-    return dados
+
+
+def texto_legado(valor, padrao=''):
+    if valor is None or valor is False:
+        valor = padrao
+    return valor if isinstance(valor, str) else json.dumps(valor, ensure_ascii=False, separators=(',', ':'))
+
+
+def campos_legados(dados):
+    ramo = dados.get('ramo')
+    tarefa = dados.get('tarefa')
+    ramo = '' if ramo is None or ramo is False else ramo
+    tarefa = '' if tarefa is None or tarefa is False else tarefa
+    if isinstance(ramo, str) and isinstance(tarefa, str):
+        s = {campo: texto_legado(dados.get(campo)) for campo in ('dir', 'atualizado')}
+        s.update(estado=texto_legado(dados.get('estado'), 'ativo'), ramo=ramo, tarefa=tarefa)
+    else:
+        s = dict(estado='ativo', dir='', atualizado='', ramo='', tarefa='')
+    s['agente'] = texto_legado(dados.get('agente'))
+    return s
 
 
 def vencido(quando, horas):
     if not quando:
         return True
     comando = shutil.which('gdate') or shutil.which('date')
-    resultado = subprocess.run([comando, '-d', quando, '+%s'], capture_output=True,
-                               timeout=2, check=False)
-    try:
-        marca = int(resultado.stdout) if resultado.returncode == 0 else None
-    except ValueError:
-        marca = None
+    marca = None
+    if comando:
+        resultado = subprocess.run([comando, '-d', quando, '+%s'], capture_output=True,
+                                   timeout=2, check=False)
+        try:
+            marca = int(resultado.stdout) if resultado.returncode == 0 else None
+        except ValueError:
+            pass
+    if marca is None:
+        try:
+            marca = int(datetime.fromisoformat(quando).timestamp())
+        except (ValueError, OverflowError, OSError):
+            pass
     return marca is None or int(time.time()) - marca > horas * 3600
 
 
@@ -70,15 +105,19 @@ def pid_vivo(pid):
     if pid is None:
         return False
     try:
-        os.kill(pid, 0)
+        os.kill(int(pid), 0)
         return True
-    except OSError:
+    except (OSError, ValueError, TypeError, OverflowError):
         return False
 
 
-def selecionar(pasta, vivas, horas):
-    if any(not nome_valido(s) for s in vivas):
+def selecionar(pasta, vivas, horas, horas_interrompido, estrito):
+    if estrito and any(not nome_valido(s) for s in vivas):
         raise ValueError('Nome de sessão inválido.')
+    if not estrito:
+        if any(not nome_valido(s) for s in vivas):
+            sys.stderr.write('Nome de sessão inválido ignorado na consulta TSV.\n')
+        vivas = [s for s in vivas if nome_valido(s)]
     try:
         pasta_fd = os.open(pasta, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     except FileNotFoundError:
@@ -90,41 +129,52 @@ def selecionar(pasta, vivas, horas):
                 for entrada in entradas:
                     if eh_sessao(entrada.name):
                         nomes.append(entrada.name[:-5])
-                        if len(nomes) > 4096:
+                        if estrito and len(nomes) > 4096:
                             raise ValueError('Consulta excedeu 4096 registros.')
         nomes = list(dict.fromkeys(vivas + sorted(nomes)))
-        if len(nomes) > 4096:
+        if estrito and len(nomes) > 4096:
             raise ValueError('Consulta excedeu 4096 sessões.')
         sessoes = []
         tamanho = 0
         for nome in nomes:
             if not nome_valido(nome):
-                raise ValueError('Nome de sessão inválido.')
-            dados = registro(pasta_fd, nome) if pasta_fd is not None else {}
-            s = {campo: dados.get(campo) or '' for campo in CAMPOS}
+                if estrito:
+                    raise ValueError('Nome de sessão inválido.')
+                sys.stderr.write('Nome de sessão inválido ignorado na consulta TSV.\n')
+                continue
+            dados = registro(pasta_fd, nome, estrito) if pasta_fd is not None else {}
+            s = ({campo: dados.get(campo) or '' for campo in CAMPOS}
+                 if estrito else campos_legados(dados))
             s['nome'] = nome
-            s['estado'] = s['estado'] or 'ativo'
+            if estrito:
+                s['estado'] = s['estado'] or 'ativo'
             estado = s['estado']
             pid = dados.get('pid')
+            if pid is False or pid == '':
+                pid = None
+            if not estrito and pid is not None:
+                pid = texto_legado(pid)
+            dir_restaurar = s['dir'] if estrito else texto_legado(dados.get('dir'))
             final = estado in ('concluido', 'aguardando')
             if nome not in vivas and not pid_vivo(pid):
                 guardado = ((final or estado == 'interrompido') and
-                            not vencido(s['atualizado'], horas if final else 168))
+                            not vencido(s['atualizado'], horas if final else horas_interrompido))
                 if not guardado:
                     restauravel = (pid is None and estado != 'interrompido' and not final
-                                   and s['agente'] and s['agente'] != 'par' and s['dir']
-                                   and Path(s['dir']).is_dir())
+                                   and s['agente'] and s['agente'] != 'par' and dir_restaurar
+                                   and Path(dir_restaurar).is_dir())
                     if not restauravel:
                         continue
                     s['estado'] = 'interrompido'
-            s['raiz'] = s['raiz'] or s['dir']
-            s['projeto'] = Path(s['raiz']).name or 'Sem projeto'
-            s['agente'] = s['agente'] or 'Não informado'
-            s['coordenador'] = s['coordenador'] or 'dono'
-            s['revisor'] = s['revisor'] or 'Não informado'
-            tamanho += len(json.dumps(s, ensure_ascii=False).encode('utf-8'))
-            if tamanho > LIMITE:
-                raise ValueError('Resposta excedeu 1 MiB.')
+            if estrito:
+                s['raiz'] = s['raiz'] or s['dir']
+                s['projeto'] = Path(s['raiz']).name or 'Sem projeto'
+                s['agente'] = s['agente'] or 'Não informado'
+                s['coordenador'] = s['coordenador'] or 'dono'
+                s['revisor'] = s['revisor'] or 'Não informado'
+                tamanho += len(json.dumps(s, ensure_ascii=False).encode('utf-8'))
+                if tamanho > LIMITE:
+                    raise ValueError('Resposta excedeu 1 MiB.')
             sessoes.append(s)
         return sessoes
     finally:
@@ -145,7 +195,7 @@ def emitir(sessoes, formato):
                       html.escape(s['ramo'], quote=False), tarefa]
             linhas.append('\t'.join(re.sub(r'[\t\n\x1f]', ' ', c) for c in campos))
         saida = ''.join(linha + '\n' for linha in linhas)
-    if len(saida.encode('utf-8')) > LIMITE:
+    if formato == 'json' and len(saida.encode('utf-8')) > LIMITE:
         raise ValueError('Resposta excedeu 1 MiB.')
     sys.stdout.write(saida)
 
@@ -155,11 +205,13 @@ if __name__ == '__main__':
         bruto = sys.stdin.buffer.read(LIMITE + 1)
         if len(bruto) > LIMITE:
             raise ValueError('Lista de sessões vivas excedeu 1 MiB.')
-        vivas = list(dict.fromkeys(bruto.decode('utf-8').splitlines()))
+        vivas = list(dict.fromkeys(s for s in bruto.decode('utf-8').splitlines() if s))
         horas = int(sys.argv[2])
-        if horas < 0:
+        horas_interrompido = int(sys.argv[3])
+        if horas < 0 or horas_interrompido < 0:
             raise ValueError('Retenção inválida.')
-        emitir(selecionar(sys.argv[1], vivas, horas), sys.argv[3])
+        formato = sys.argv[4]
+        emitir(selecionar(sys.argv[1], vivas, horas, horas_interrompido, formato == 'json'), formato)
     except (OSError, ValueError, RecursionError, subprocess.SubprocessError) as erro:
         sys.stderr.write('Não foi possível consultar sessões: ' + str(erro) + '\n')
         sys.exit(1)

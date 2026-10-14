@@ -717,7 +717,7 @@ class Interface(unittest.TestCase):
         sem_raiz = ler_lista(carga('ativo\tsem-raiz\t/tmp/worktree\t\t\tTarefa\n'))
         self.assertEqual(sem_raiz['sem-raiz'].raiz, '/tmp/worktree')
 
-    def test_observador_acompanha_substituicao_atomica(self):
+    def test_observador_avisa_troca_atomica_e_consulta_conteudo_do_mock(self):
         self.assertEqual(self.janela.timer.interval(), 30000)
         registro = self.estado / 'aviso.json'
         registro.write_text('{}')

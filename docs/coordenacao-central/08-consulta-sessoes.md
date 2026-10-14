@@ -69,16 +69,24 @@ O contador aplica escape HTML uma vez ao montar a dica da barra.
 - Registro: arquivo regular, até 1 MiB; abertura relativa ao descritor da
   pasta, sem seguir links e sem bloquear em FIFO. A pasta final não pode ser link.
 - Cada campo de apresentação: até 16.000 caracteres, sem truncamento.
-- Até 4.096 registros candidatos e sessões; resposta UTF-8 até 1 MiB.
+- Consulta JSON: até 4.096 registros candidatos e sessões; resposta UTF-8 até 1 MiB.
 - Central e contador: prazo de 10 segundos e limite agregado de 1 MiB
   para saída normal e diagnóstico, conferidos durante o transporte.
 
 Na origem, campo ausente ou nulo usa o padrão documentado; outro tipo
 recusa a consulta. PID, quando presente, exige inteiro positivo até 2.147.483.647.
 Registro que não seja objeto JSON, arquivo inseguro, nome inválido ou limite
-excedido recusa a resposta inteira, inclusive nas consultas TSV.
+excedido recusa a resposta JSON inteira.
 O comando sai com código 1, diagnóstico em stderr e nenhuma lista parcial.
-Isso substitui o silêncio anterior para registros inválidos ou inseguros.
+O TSV continua tolerante: ignora campos de apresentação que não usa e preserva
+seu resumo mesmo quando a tarefa ultrapassa 16.000 caracteres.
+Registros inseguros ou ilegíveis usam os campos vazios anteriores, com aviso
+em stderr; nomes inválidos são ignorados com aviso. Assim, um registro ruim
+não interrompe a barra nem os consumidores internos do TSV.
+Nomes inválidos vindos do tmux recusam o JSON; linhas vazias são ignoradas.
+A mesma seleção aplica os prazos recebidos de `jangada-agentes` aos dois formatos.
+A retenção usa `date` por registro sem processo, com alternativa ISO pelo Python
+quando não há comando disponível ou ele rejeita a data. Esse custo não foi medido.
 
 Na resposta pública, campos obrigatórios ausentes, nulos ou de tipo inesperado,
 nomes repetidos, estado vazio, JSON inválido ou versão desconhecida são erros.
@@ -93,7 +101,9 @@ Não há paginação; adequação a grande volume não foi medida.
 `testes/contratos-consulta.sh` compara hashes e caminhos antes/depois das
 consultas K4 e verifica estado inexistente sem criação de pastas.
 Usa sessões sintéticas vivas, com PID, retidas, restauráveis e expiradas;
-confere TSV, dados completos e Core funcionando sem Shell ou Monitor.
+confere TSV tolerante, barra e foco com registro inválido, dados completos
+e Core funcionando sem Shell ou Monitor. Verifica retenção sem `date`, com
+data recusada pelo comando e com prazo de interrupção recebido do chamador.
 Também verifica JSON inválido, nomes inválidos, tipos, limites, links,
 FIFO, diretórios e exclusão de contextos/pareceres.
 
