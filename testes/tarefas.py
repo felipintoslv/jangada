@@ -28,7 +28,7 @@ import janela
 from janela import Janela
 import central
 from central import encaminhar, receber
-from dados import barra, idade, ler_lista, pasta_sessoes, resumo_barra
+from dados import barra, idade, ler_lista, ler_observacao, pasta_sessoes, resumo_barra
 from argparse import Namespace
 APP = QApplication([])
 
@@ -78,7 +78,9 @@ class Interface(unittest.TestCase):
         self.bin = self.raiz / 'bin'
         self.bin.mkdir()
         self.comando = self.bin / 'jangada-agentes'
-        self.comando.write_text("#!/usr/bin/env python3\nimport pathlib, sys, json\npasta = pathlib.Path(__file__).resolve().parent.parent\nif sys.argv[1] in ('--lista-json',):\n    if (pasta / 'falhar').exists():\n        print('Erro de consulta simulado', file=sys.stderr)\n        sys.exit(1)\n    dados = json.loads((pasta / 'lista').read_text())\n    if (pasta / 'apresentacao.json').exists():\n        detalhe = json.loads((pasta / 'apresentacao.json').read_text())\n        for sessao in dados['sessoes']:\n            if sessao['nome'] == 'projeto--um':\n                sessao.update(detalhe)\n                sessao['projeto'] = pathlib.Path(sessao['raiz']).name\n    print(json.dumps(dados, ensure_ascii=False))\nelif sys.argv[1] == '--previa':\n    previa = pasta / ('previa-' + sys.argv[2])\n    print(previa.read_text() if previa.exists() else 'Atividade da sessão ' + sys.argv[2])\nelse:\n    (pasta / 'acao.json').write_text(json.dumps(sys.argv[1:]))\n")
+        self.observados = self.raiz / 'observados'
+        self.observados.mkdir()
+        self.comando.write_text("#!/usr/bin/env python3\nimport pathlib, sys, json\npasta = pathlib.Path(__file__).resolve().parent.parent\nif sys.argv[1] == '--observacao-json':\n    if (pasta / 'falhar_observacao').exists():\n        print('Falha de observação simulada', file=sys.stderr)\n        sys.exit(1)\n    print(json.dumps({'versao': 1, 'caminhos': [str(pasta / 'observados'), str(pasta / 'observados' / 'aviso.json')]}))\nelif sys.argv[1] in ('--lista-json',):\n    if (pasta / 'falhar').exists():\n        print('Erro de consulta simulado', file=sys.stderr)\n        sys.exit(1)\n    dados = json.loads((pasta / 'lista').read_text())\n    if (pasta / 'apresentacao.json').exists():\n        detalhe = json.loads((pasta / 'apresentacao.json').read_text())\n        for sessao in dados['sessoes']:\n            if sessao['nome'] == 'projeto--um':\n                sessao.update(detalhe)\n                sessao['projeto'] = pathlib.Path(sessao['raiz']).name\n    print(json.dumps(dados, ensure_ascii=False))\nelif sys.argv[1] == '--previa':\n    previa = pasta / ('previa-' + sys.argv[2])\n    print(previa.read_text() if previa.exists() else 'Atividade da sessão ' + sys.argv[2])\nelse:\n    (pasta / 'acao.json').write_text(json.dumps(sys.argv[1:]))\n")
         self.comando.chmod(448)
         self.criar_comando = self.bin / 'jangada-agente'
         self.criar_comando.write_text(self.comando.read_text().replace(
@@ -94,6 +96,22 @@ class Interface(unittest.TestCase):
 
     def esperar_consulta(self):
         aguardar(lambda: self.janela.consulta.state() == QProcess.ProcessState.NotRunning)
+        aguardar(lambda: self.janela.consulta_observacao.state() == QProcess.ProcessState.NotRunning)
+
+    def test_parser_de_observacao_valida_referencias_opacas_e_recusa_entrada_invalida(self):
+        caminhos = ['/fora/do/estado/arquivo.json', '/referencia/opaca']
+        self.assertEqual(ler_observacao(json.dumps({'versao': 1, 'caminhos': caminhos})), caminhos)
+        for dados in ({'versao': True, 'caminhos': []}, {'versao': 2, 'caminhos': []},
+                      {'versao': 1, 'caminhos': [{}]},
+                      {'versao': 1, 'caminhos': ['/a', '/a']},
+                      {'versao': 1, 'caminhos': ['relativo']},
+                      {'versao': 1, 'caminhos': ['/a\n']},
+                      {'versao': 1, 'caminhos': ['/x' * 2049]},
+                      {'versao': 1, 'caminhos': ['/a'] * 4097}):
+            with self.subTest(dados=dados), self.assertRaises(ValueError):
+                ler_observacao(json.dumps(dados))
+        with self.assertRaises(ValueError):
+            ler_observacao(json.dumps({'versao': 1, 'caminhos': ['/x' * 200000]}))
 
     def test_marca_carrega_com_transparencia_e_preserva_titulo_quando_ausente(self):
         marcas = [rotulo for rotulo in self.janela.findChildren(QLabel)
@@ -717,11 +735,12 @@ class Interface(unittest.TestCase):
         sem_raiz = ler_lista(carga('ativo\tsem-raiz\t/tmp/worktree\t\t\tTarefa\n'))
         self.assertEqual(sem_raiz['sem-raiz'].raiz, '/tmp/worktree')
 
-    def test_observador_avisa_troca_atomica_e_consulta_conteudo_do_mock(self):
+    def test_observador_publico_avisa_troca_atomica_fora_da_estrutura_de_estado(self):
         self.assertEqual(self.janela.timer.interval(), 30000)
-        registro = self.estado / 'aviso.json'
+        registro = self.observados / 'aviso.json'
         registro.write_text('{}')
         self.janela.observar_estado()
+        aguardar(lambda: str(self.observados) in self.janela.observador.directories())
         dados = json.loads((self.raiz / 'apresentacao.json').read_text())
         dados['mensagem'] = 'Aviso recebido por evento'
         novo = registro.with_suffix('.tmp')
@@ -735,8 +754,18 @@ class Interface(unittest.TestCase):
         novo.replace(registro)
         aguardar(lambda: 'Segunda substituição' in self.janela.ultima_atividade.text())
 
+    def test_falha_da_observacao_mantem_dados_e_reserva_periodica(self):
+        (self.raiz / 'falhar_observacao').touch()
+        anterior = dict(self.janela.sessoes)
+        self.janela.observar_estado()
+        aguardar(lambda: self.janela.consulta_observacao.state() == QProcess.ProcessState.NotRunning)
+        self.assertEqual(self.janela.sessoes, anterior)
+        self.assertEqual(self.janela.timer.interval(), 30000)
+        self.assertIn('Atualização periódica mantida', self.janela.status.text())
+
     def test_timer_atualiza_sem_intervencao(self):
         self.lista.write_text(self.lista.read_text().replace('aguardando', 'concluido'))
+        self.janela.timer.setInterval(30)
         self.janela.timer.start()
         try:
             aguardar(lambda: self.janela.sessoes.get('projeto--um') and

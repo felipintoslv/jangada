@@ -9,6 +9,7 @@
 #   jangada-agentes --waybar   saída JSON para o módulo da barra
 #   jangada-agentes --focar S  foca a janela da sessão S ou abre uma nova
 #   jangada-agentes --lista-json  consulta pública versionada, com campos de apresentação
+#   jangada-agentes --observacao-json  caminhos públicos para avisos de mudança
 #   jangada-agentes --lista    lista simples: estado, sessão, diretório
 #   jangada-agentes --lista-atualizada  o mesmo que --lista; não limpa órfãos
 #   jangada-agentes --limpar-orfaos  remove os estados de sessões que já não existem
@@ -34,7 +35,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
 estado_dir="$JANGADA_ESTADO/agentes"
 case "${1:-}" in
-  --lista|--lista-atualizada|--lista-json|--waybar) ;;
+  --lista|--lista-atualizada|--lista-json|--observacao-json|--waybar) ;;
   *) mkdir -p "$estado_dir" ;;
 esac
 
@@ -622,6 +623,9 @@ icone() {
 case "${1:-}" in
   --lista-json)
     listar json
+    ;;
+  --observacao-json)
+    exec python3 "$JANGADA_CORE_PY/nucleo/observacao.py" "$JANGADA_ESTADO"
     ;;
   --lista|--lista-atualizada)
     listar

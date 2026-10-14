@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout,
                             QPlainTextEdit, QPushButton, QSplitter, QTabWidget,
                             QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 from dados import (LIMITE, NOME, ORDEM, ROTULOS, Sessao,
-                   estado_exibido, idade, ler_lista, pasta_sessoes, simuladas)
+                   estado_exibido, idade, ler_lista, ler_observacao, pasta_sessoes, simuladas)
 
 sys.dont_write_bytecode = True
 # Com default/tarefas acessada por link, __file__ aponta para a pasta física;
@@ -411,6 +411,19 @@ class Janela(QMainWindow):
         self.consulta_diagnostico = bytearray()
         self.consulta_falha = ''
         self.consulta_total = 0
+        self.consulta_observacao = QProcess(self)
+        self.consulta_observacao.finished.connect(self.observacao_fim)
+        self.consulta_observacao.errorOccurred.connect(self.observacao_erro)
+        self.consulta_observacao.readyReadStandardOutput.connect(self.observacao_ler)
+        self.consulta_observacao.readyReadStandardError.connect(self.observacao_ler)
+        self.observacao_saida = bytearray()
+        self.observacao_diagnostico = bytearray()
+        self.observacao_falha = ''
+        self.observacao_limite = QTimer(self)
+        self.observacao_limite.setSingleShot(True)
+        self.observacao_limite.setInterval(1000)
+        self.observacao_limite.timeout.connect(self.observacao_expirar)
+        self.observacao_pendente = False
         self.acao = QProcess(self)
         self.acao.finished.connect(self.acao_fim)
         self.acao.errorOccurred.connect(self.acao_erro)
@@ -445,7 +458,6 @@ class Janela(QMainWindow):
         self.limite_evento.timeout.connect(self.atualizar)
         self.atualizacao_pendente = False
         if real:
-            self.observar_estado()
             self.timer.start()
         self.atualizar()
 
@@ -696,23 +708,65 @@ class Janela(QMainWindow):
         processo.start()
 
     def observar_estado(self):
-        caminhos = set()
-        pastas = [self.estado_dir, self.estado_dir.parent / 'revisoes', self.estado_dir / 'projetos']
-        pastas.extend(p for p in (self.estado_dir / 'projetos').glob('*') if p.is_dir() and not p.is_symlink())
-        for pasta in pastas:
-            if pasta.is_dir():
-                caminhos.add(str(pasta))
-                caminhos.update(str(p) for p in pasta.glob('*.json') if p.is_file())
-                caminhos.update(str(p) for p in pasta.glob('tarefas.sqlite*') if p.is_file() and not p.is_symlink())
+        if self.consulta_observacao.state() != QProcess.ProcessState.NotRunning:
+            self.observacao_pendente = True
+            return
+        self.observacao_pendente = False
+        self.observacao_saida.clear()
+        self.observacao_diagnostico.clear()
+        self.observacao_falha = ''
+        self.iniciar(self.consulta_observacao, ['--observacao-json'])
+        self.observacao_limite.start()
+
+    def observacao_ler(self):
+        saida = bytes(self.consulta_observacao.readAllStandardOutput())
+        erro = bytes(self.consulta_observacao.readAllStandardError())
+        if len(self.observacao_saida) + len(self.observacao_diagnostico) + len(saida) + len(erro) > LIMITE:
+            self.observacao_falha = 'A observação excedeu o limite de leitura.'
+            self.consulta_observacao.kill()
+            return
+        self.observacao_saida.extend(saida)
+        self.observacao_diagnostico.extend(erro[:max(0, 500 - len(self.observacao_diagnostico))])
+
+    def observacao_fim(self, codigo, tipo):
+        self.observacao_limite.stop()
+        self.observacao_ler()
+        if self.observacao_falha:
+            self.observacao_erro_texto(self.observacao_falha)
+        elif codigo != 0 or tipo != QProcess.ExitStatus.NormalExit:
+            detalhe = self.observacao_diagnostico.decode('utf-8', 'replace')
+            self.observacao_erro_texto('Não foi possível consultar os caminhos de observação. ' + detalhe)
+        else:
+            try:
+                caminhos = set(ler_observacao(self.observacao_saida.decode('utf-8')))
+            except (UnicodeDecodeError, ValueError) as erro:
+                self.observacao_erro_texto(str(erro))
             else:
-                while not pasta.is_dir() and pasta != pasta.parent:
-                    pasta = pasta.parent
-                caminhos.add(str(pasta))
-        atuais = set(self.observador.directories() + self.observador.files())
-        if atuais - caminhos:
-            self.observador.removePaths(sorted(atuais - caminhos))
-        if caminhos - atuais:
-            self.observador.addPaths(sorted(caminhos - atuais))
+                atuais = set(self.observador.directories() + self.observador.files())
+                novos = caminhos - atuais
+                recusados = self.observador.addPaths(sorted(novos)) if novos else []
+                if recusados:
+                    self.observador.removePaths(sorted(novos - set(recusados)))
+                    self.observacao_erro_texto('O sistema não aceitou todos os caminhos de observação.')
+                else:
+                    if atuais - caminhos:
+                        self.observador.removePaths(sorted(atuais - caminhos))
+                    self.observacao_falha = ''
+        if self.observacao_pendente and not self.fechando:
+            self.observar_estado()
+
+    def observacao_erro_texto(self, mensagem):
+        self.observacao_falha = mensagem.strip() or 'Consulta de observação inválida.'
+        self.status.setText(self.observacao_falha + ' Atualização periódica mantida.')
+
+    def observacao_erro(self, erro):
+        if erro == QProcess.ProcessError.FailedToStart:
+            self.observacao_limite.stop()
+            self.observacao_erro_texto('Não foi possível iniciar a consulta de observação. Atualização periódica mantida.')
+
+    def observacao_expirar(self):
+        self.observacao_falha = 'Tempo da consulta de observação esgotado.'
+        self.consulta_observacao.kill()
 
     def mudanca_estado(self, *_):
         self.atualizacao_pendente = True
@@ -781,6 +835,8 @@ class Janela(QMainWindow):
             self.falha(str(exc))
             return
         self.status.setText('Atualizado às ' + datetime.now().strftime('%H:%M:%S') if sessoes else 'Nenhuma sessão disponível. Abra um agente pelo jangada.')
+        if self.observacao_falha:
+            self.status.setText(self.status.text() + ' ' + self.observacao_falha + ' Atualização periódica mantida.')
         self.mostrar(sessoes)
 
     def falha(self, mensagem):
@@ -1087,10 +1143,10 @@ exit "$resultado"
             return
         self.fechando = True
         self.operacional.fechar()
-        for timer in (self.timer, self.evento_estado, self.limite_evento, self.espera,
+        for timer in (self.timer, self.evento_estado, self.limite_evento, self.observacao_limite, self.espera,
                       self.tempo_acao, self.tempo_previa, self.tempo_finalizacao):
             timer.stop()
-        for processo in (self.consulta, self.acao, self.previa, self.integracao):
+        for processo in (self.consulta, self.consulta_observacao, self.acao, self.previa, self.integracao):
             if processo.state() != QProcess.ProcessState.NotRunning:
                 processo.kill()
                 processo.waitForFinished(1000)

@@ -31,9 +31,3 @@ permanente shell/jangada-shell.sh local estado_dir="${JANGADA_ESTADO:-${XDG_STAT
 # parecer e a tarefa. Não há consulta do Core que devolva o parecer, e criá-la
 # seria funcionalidade nova; dívida para depois da 3.0.
 permanente shell/jangada-shell.sh local estado_dir="${JANGADA_ESTADO:-${XDG_STATE_HOME:-$HOME/.local/state}/jangada}/agentes"
-# default/tarefas/janela.py:694, observar_estado. O Shell monta caminho do
-# estado: só vigia mudança de arquivo, sem ler o conteúdo.
-permanente default/tarefas/janela.py pastas = [self.estado_dir, self.estado_dir.parent / 'revisoes', self.estado_dir / 'projetos']
-# default/tarefas/janela.py:700, observar_estado. O Shell monta caminho do
-# estado: só vigia mudança de arquivo, sem ler o conteúdo.
-permanente default/tarefas/janela.py caminhos.update(str(p) for p in pasta.glob('tarefas.sqlite*') if p.is_file() and not p.is_symlink())

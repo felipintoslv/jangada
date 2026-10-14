@@ -115,6 +115,26 @@ def ler_lista(saida):
     return sessoes
 
 
+def ler_observacao(saida):
+    if len(saida.encode('utf-8')) > LIMITE:
+        raise ValueError('A observação excedeu o limite de leitura.')
+    try:
+        dados = json.loads(saida)
+    except (ValueError, RecursionError) as erro:
+        raise ValueError('A consulta de observação não contém JSON válido.') from erro
+    if not isinstance(dados, dict) or type(dados.get('versao')) is not int or dados['versao'] != 1:
+        raise ValueError('Versão da observação desconhecida.')
+    caminhos = dados.get('caminhos')
+    if not isinstance(caminhos, list) or len(caminhos) > 4096:
+        raise ValueError('A observação não contém uma lista de caminhos válida.')
+    if any(not isinstance(c, str) or not c.startswith('/') or len(c) > 4096
+           or any(ord(letra) < 32 for letra in c) for c in caminhos):
+        raise ValueError('A observação contém um caminho inválido.')
+    if len(set(caminhos)) != len(caminhos):
+        raise ValueError('A observação contém caminhos repetidos.')
+    return caminhos
+
+
 def consultar(comando, ambiente):
     with subprocess.Popen(comando, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                           env=ambiente) as processo:

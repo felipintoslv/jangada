@@ -346,6 +346,69 @@ assert r.returncode == 0 and r.stderr and r.stdout
 r = consultar('--waybar')
 assert r.returncode == 0 and r.stderr and json.loads(r.stdout)
 
+# A consulta pública de observação descobre caminhos no Core sem gravar estado.
+observacao_xdg = tmp / 'observacao-xdg'
+observacao_xdg.mkdir()
+ambiente['XDG_STATE_HOME'] = str(observacao_xdg)
+origem = observacao_xdg
+antes = retrato()
+r = consultar('--observacao-json')
+assert r.returncode == 0 and not r.stderr, r.stderr
+assert json.loads(r.stdout) == {'versao': 1, 'caminhos': [str(observacao_xdg)]}
+assert not (observacao_xdg / 'jangada').exists()
+assert retrato() == antes
+
+estado_observacao = observacao_xdg / 'jangada'
+(estado_observacao / 'agentes/projetos/um').mkdir(parents=True)
+(estado_observacao / 'revisoes').mkdir()
+(estado_observacao / 'agentes/sessao.json').write_text('{}')
+(estado_observacao / 'revisoes/validacao-s-r1.json').write_text('{}')
+(estado_observacao / 'agentes/projetos/um/tarefas.sqlite').write_bytes(b'')
+(estado_observacao / 'agentes/projetos/atalho').symlink_to(tmp, target_is_directory=True)
+(estado_observacao / 'agentes/link.json').symlink_to(estado_observacao / 'agentes/sessao.json')
+antes = retrato()
+r = consultar('--observacao-json')
+assert r.returncode == 0 and not r.stderr, r.stderr
+observacao = json.loads(r.stdout)
+assert observacao['versao'] == 1
+assert set(observacao['caminhos']) == {
+    str(estado_observacao / 'agentes'), str(estado_observacao / 'agentes/sessao.json'),
+    str(estado_observacao / 'revisoes'), str(estado_observacao / 'revisoes/validacao-s-r1.json'),
+    str(estado_observacao / 'agentes/projetos'), str(estado_observacao / 'agentes/projetos/um'),
+    str(estado_observacao / 'agentes/projetos/um/tarefas.sqlite')}
+# Área vinculada nunca é percorrida; a consulta observa seu antepassado.
+projetos = estado_observacao / 'agentes/projetos'
+projetos.rename(projetos.with_name('projetos-originais'))
+externo = tmp / 'fora-da-origem'
+externo.mkdir()
+(externo / 'segredo.json').write_text('{}')
+projetos.symlink_to(externo, target_is_directory=True)
+r = consultar('--observacao-json')
+assert r.returncode == 0, r.stderr
+assert str(externo / 'segredo.json') not in json.loads(r.stdout)['caminhos']
+projetos.unlink()
+projetos.with_name('projetos-originais').rename(projetos)
+
+# Excesso de volume recusa a lista inteira.
+volume = estado_observacao / 'revisoes'
+for indice in range(4090):
+    (volume / f'volume-{indice}.json').touch()
+r = consultar('--observacao-json')
+assert r.returncode == 1 and not r.stdout and r.stderr
+for arquivo in volume.glob('volume-*.json'):
+    arquivo.unlink()
+
+if os.geteuid() != 0:
+    revisoes = estado_observacao / 'revisoes'
+    modo = revisoes.stat().st_mode & 0o7777
+    revisoes.chmod(0)
+    try:
+        r = consultar('--observacao-json')
+        assert r.returncode == 1 and not r.stdout and r.stderr
+    finally:
+        revisoes.chmod(modo)
+assert retrato() == antes
+print('observação JSON: antepassado, caminhos limitados e sem efeitos passaram')
 print('consulta JSON: seleção, TSV, limites, recusas e Core sem interface passaram')
 PYTEST
 
