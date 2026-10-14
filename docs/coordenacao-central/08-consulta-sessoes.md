@@ -86,7 +86,12 @@ insegura e falha na varredura deixam só as sessões vivas, com aviso.
 Texto que não pode ser codificado em UTF-8 usa os campos vazios no TSV.
 Assim, um registro ruim
 não interrompe a barra nem os consumidores internos do TSV.
-Nomes inválidos vindos do tmux recusam o JSON; linhas vazias são ignoradas.
+Nomes inválidos vindos do tmux são ignorados com aviso em stderr nos dois
+formatos, pois podem pertencer a sessões alheias ao jangada. Isso inclui
+nomes com espaços ou acentos. Linhas vazias são ignoradas sem aviso.
+Nomes inválidos de registros de sessão continuam recusando o JSON.
+Sessões tmux com nomes reservados a pareceres, contextos ou relatórios
+aparecem com os campos padrão; os arquivos correspondentes não são abertos.
 A mesma seleção aplica os prazos recebidos de `jangada-agentes` aos dois formatos.
 A retenção usa `date` por registro sem processo, com alternativa ISO pelo Python
 quando não há comando disponível, ele rejeita a data, falha ou excede dois segundos. Esse custo não foi medido.
@@ -96,6 +101,11 @@ nomes repetidos, estado vazio, JSON inválido ou versão desconhecida são erros
 Não há retorno à leitura dos arquivos internos.
 A Central preserva os últimos dados, mostra o erro e bloqueia ações até
 uma consulta válida. O contador mostra `Tarefas · erro`.
+Ao esgotar o prazo ou exceder o limite de saída, os consumidores encerram
+somente o processo direto. Não encerram seu grupo de processos: o auxiliar
+Python e seus filhos podem continuar até terminarem. O prazo de dois segundos
+de cada chamada a `date` não limita o tempo total de todos os registros.
+O prazo de transporte protege a interface, sem garantir cancelamento dos filhos.
 A consulta não copia comandos, protocolos, credenciais ou históricos dos modelos.
 Não há paginação; adequação a grande volume não foi medida.
 
@@ -109,6 +119,8 @@ e Core funcionando sem Shell ou Monitor. Verifica retenção sem `date`, com
 data recusada pelo comando e com prazo de interrupção recebido do chamador.
 Também verifica JSON inválido, nomes inválidos, tipos, limites, links,
 FIFO, diretórios e exclusão de contextos/pareceres.
+Confere nomes tmux com espaços, acentos e travessia ignorados com aviso,
+e nomes reservados sem abertura dos arquivos, mesmo com FIFO ou JSON inválido.
 O TSV é conferido também com pasta linkada, sem leitura ou substituída por
 arquivo, e com falha de varredura. A retenção é conferida com `date` lento
 ou com falha de execução, sem perder a alternativa ISO.

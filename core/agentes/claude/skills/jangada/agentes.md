@@ -15,6 +15,18 @@ Não omita o WAL: ele pode conter transações confirmadas que ainda não
 chegaram ao banco principal. Mudanças durante a cópia exigem nova tentativa
 ou erro explícito, sem apresentar uma consulta incompleta como sucesso.
 
+## Consulta de sessões
+
+O `tmux list-sessions` traz também sessões alheias ao jangada. Nomes com
+espaços ou acentos não devem derrubar a consulta: são ignorados com aviso.
+Filtre nomes reservados a pareceres e contextos antes de abrir o registro,
+inclusive quando o nome vem do tmux, para não carregar relatórios como sessões.
+
+Um `mkdir -p` no início do comando cria estado mesmo numa opção de leitura.
+A consulta precisa dispensá-lo também quando a pasta de estado não existe.
+Na retenção, `date` pode rejeitar a data ou exceder o prazo; a alternativa
+ISO deve tratar a exceção do prazo, além do código de saída não zero.
+
 ## Codex
 
 O `account/rateLimits/read` separa limites por grupo de consumo. Para a cota

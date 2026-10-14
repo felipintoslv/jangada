@@ -112,12 +112,9 @@ def pid_vivo(pid):
 
 
 def selecionar(pasta, vivas, horas, horas_interrompido, estrito):
-    if estrito and any(not nome_valido(s) for s in vivas):
-        raise ValueError('Nome de sessão inválido.')
-    if not estrito:
-        if any(not nome_valido(s) for s in vivas):
-            sys.stderr.write('Nome de sessão inválido ignorado na consulta TSV.\n')
-        vivas = [s for s in vivas if nome_valido(s)]
+    if any(not nome_valido(s) for s in vivas):
+        sys.stderr.write('Nome tmux alheio ao contrato de sessões ignorado.\n')
+    vivas = [s for s in vivas if nome_valido(s)]
     try:
         pasta_fd = os.open(pasta, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     except FileNotFoundError:
@@ -155,7 +152,8 @@ def selecionar(pasta, vivas, horas, horas_interrompido, estrito):
                     raise ValueError('Nome de sessão inválido.')
                 sys.stderr.write('Nome de sessão inválido ignorado na consulta TSV.\n')
                 continue
-            dados = registro(pasta_fd, nome, estrito) if pasta_fd is not None else {}
+            dados = (registro(pasta_fd, nome, estrito)
+                     if pasta_fd is not None and eh_sessao(nome + '.json') else {})
             s = ({campo: dados.get(campo) or '' for campo in CAMPOS}
                  if estrito else campos_legados(dados))
             if not estrito:

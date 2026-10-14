@@ -113,9 +113,17 @@ original_tmux = tmux.read_text()
 tmux.write_text('#!/bin/sh\nexit 0\n')
 assert json.loads(consultar().stdout) == {'versao': 1, 'sessoes': []}
 assert not origem.exists()
+tmux.write_text("#!/bin/sh\nprintf '%s\\n' viva 'meu trabalho' 'ação' '../../fora'\n")
+for opcao in ('--lista-json', '--lista', '--lista-atualizada', '--waybar'):
+    r = consultar(opcao)
+    assert r.returncode == 0 and r.stderr and not origem.exists()
+    if opcao == '--lista-json':
+        assert [s['nome'] for s in json.loads(r.stdout)['sessoes']] == ['viva']
+    elif opcao == '--waybar':
+        assert json.loads(r.stdout)['text'] == '󰚩 1'
+    else:
+        assert [l.split('\t')[1] for l in r.stdout.decode().splitlines()] == ['viva']
 tmux.write_text('#!/bin/sh\necho ../../fora\n')
-r = consultar()
-assert r.returncode == 1 and not r.stdout and not origem.exists()
 for opcao in ('--lista', '--lista-atualizada', '--waybar'):
     r = consultar(opcao)
     assert r.returncode == 0 and r.stderr
@@ -140,6 +148,18 @@ viva = dict(estado='aguardando', dir=str(tmp / 'pasta'), atualizado=agora,
 (pasta / 'revisao-um-r1.json').write_text('não é JSON')
 os.mkfifo(pasta / 'validacao-um-r1.contexto.json')
 (pasta / 'delegacao-exemplo.json').write_text('não é sessão')
+tmux.write_text("#!/bin/sh\nprintf '%s\\n' viva revisao-um-r1 validacao-um-r1.contexto delegacao-exemplo\n")
+antes = retrato()
+for opcao in ('--lista-json', '--lista', '--lista-atualizada'):
+    r = consultar(opcao)
+    assert r.returncode == 0, r.stderr
+    if opcao == '--lista-json':
+        reservadas = {s['nome']: s for s in json.loads(r.stdout)['sessoes']}
+        for nome in ('revisao-um-r1', 'validacao-um-r1.contexto', 'delegacao-exemplo'):
+            assert reservadas[nome]['estado'] == 'ativo'
+            assert reservadas[nome]['mensagem'] == reservadas[nome]['tarefa'] == ''
+    assert retrato() == antes
+tmux.write_text(original_tmux)
 antes = retrato()
 r = consultar()
 assert r.returncode == 0, r.stderr
@@ -274,6 +294,17 @@ sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location('sessoes', repo / 'core/nucleo/sessoes.py')
 modulo = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(modulo)
+abrir_original = modulo.os.open
+def abrir_sessao(caminho, *args, **kwargs):
+    assert str(caminho) not in ('revisao-um-r1.json', 'validacao-um-r1.contexto.json',
+                              'delegacao-exemplo.json'), caminho
+    return abrir_original(caminho, *args, **kwargs)
+with patch.object(modulo.os, 'open', side_effect=abrir_sessao):
+    for estrito in (True, False):
+        selecionadas = modulo.selecionar(pasta, ['revisao-um-r1',
+            'validacao-um-r1.contexto', 'delegacao-exemplo'], 24, 168, estrito)
+        assert [s['nome'] for s in selecionadas[:3]] == [
+            'revisao-um-r1', 'validacao-um-r1.contexto', 'delegacao-exemplo']
 with patch.object(modulo.os, 'scandir', side_effect=OSError('varredura indisponível')):
     legado = modulo.selecionar(pasta, ['viva'], 24, 168, False)
     assert [s['nome'] for s in legado] == ['viva']
