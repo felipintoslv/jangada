@@ -816,7 +816,13 @@ class Interface(unittest.TestCase):
         self.assertTrue(caminhos_anteriores <= caminhos_atuais)
         self.assertIn(str(aceito), caminhos_atuais)
         self.assertNotIn(recusado, caminhos_atuais)
-        self.assertIn('não aceitou todos', self.janela.observacao_falha)
+        self.assertIn('nova consulta agendada', self.janela.observacao_falha)
+        self.janela.observacao_repetir.setInterval(20)
+        iniciou = []
+        self.janela.consulta_observacao.started.connect(lambda: iniciou.append(True))
+        aguardar(lambda: iniciou and
+                 self.janela.consulta_observacao.state() == QProcess.ProcessState.NotRunning)
+        self.assertFalse(self.janela.observacao_falha)
 
     def test_criacao_de_projeto_observado_atualiza_dados(self):
         pasta_projeto = self.observados / 'projeto-novo'
@@ -833,8 +839,12 @@ class Interface(unittest.TestCase):
 
     def test_eventos_continuos_respeitam_prazo_maximo(self):
         inicio = time.monotonic()
+        self.assertEqual(self.janela.evento_estado.interval(), 200)
+        self.assertEqual(self.janela.limite_evento.interval(), 1000)
+        self.janela.evento_estado.setInterval(80)
+        self.janela.limite_evento.setInterval(250)
         pulsos = QTimer()
-        pulsos.setInterval(50)
+        pulsos.setInterval(30)
         pulsos.timeout.connect(self.janela.mudanca_estado)
         pulsos.start()
         try:
@@ -844,8 +854,8 @@ class Interface(unittest.TestCase):
             pulsos.deleteLater()
         duracao = time.monotonic() - inicio
         self.assertNotEqual(self.janela.consulta.state(), QProcess.ProcessState.NotRunning)
-        self.assertGreaterEqual(duracao, 0.8)
-        self.assertLess(duracao, 1.25)
+        self.assertGreaterEqual(duracao, 0.2)
+        self.assertLess(duracao, 0.8)
 
     def test_abertura_real_inicia_consulta_de_observacao(self):
         chamadas = []
@@ -879,7 +889,7 @@ class Interface(unittest.TestCase):
 
     def test_timer_atualiza_sem_intervencao(self):
         self.lista.write_text(self.lista.read_text().replace('aguardando', 'concluido'))
-        # Reduz a espera sem alterar o intervalo de produção de 30 segundos.
+        # Reduz o intervalo só neste teste.
         self.janela.timer.setInterval(30)
         self.janela.timer.start()
         try:

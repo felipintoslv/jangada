@@ -357,6 +357,14 @@ assert r.returncode == 0 and not r.stderr, r.stderr
 assert json.loads(r.stdout) == {'versao': 1, 'caminhos': [str(observacao_xdg)]}
 assert not (observacao_xdg / 'jangada').exists()
 assert retrato() == antes
+estado_pai_link = tmp / 'observacao-xdg-link'
+estado_pai_link.symlink_to(observacao_xdg, target_is_directory=True)
+ambiente['XDG_STATE_HOME'] = str(estado_pai_link)
+r = consultar('--observacao-json')
+assert r.returncode == 0 and json.loads(r.stdout) == {
+    'versao': 1, 'caminhos': [str(observacao_xdg)]}
+assert not (observacao_xdg / 'jangada').exists()
+ambiente['XDG_STATE_HOME'] = str(observacao_xdg)
 
 estado_observacao = observacao_xdg / 'jangada'
 (estado_observacao / 'agentes/projetos/um').mkdir(parents=True)

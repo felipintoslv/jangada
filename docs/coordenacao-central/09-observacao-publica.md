@@ -14,8 +14,10 @@ Quando uma área ainda não existe, a resposta inclui o antepassado existente
 mais próximo para detectar sua criação. Uma consulta sem estado não cria
 pastas nem arquivos. Estado ausente, portanto, produz uma lista de
 antepassados, que será recalculada no próximo aviso ou na atualização
-periódica. Componentes simbólicos não são seguidos; o caminho observado fica
-no diretório ancestral real anterior ao link.
+periódica. Componentes simbólicos abaixo da raiz não são seguidos; o caminho
+observado fica no diretório ancestral real anterior ao link. A raiz de estado
+configurada é resolvida primeiro, inclusive quando ela ou um dos pais usa
+links simbólicos.
 
 Falhas ao enumerar as pastas-base de sessões, revisões ou projetos recusam a
 consulta. Se um projeto desaparecer ou ficar sem permissão durante a leitura,

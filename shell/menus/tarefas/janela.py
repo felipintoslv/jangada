@@ -424,6 +424,11 @@ class Janela(QMainWindow):
         self.observacao_limite.setSingleShot(True)
         self.observacao_limite.setInterval(1000)
         self.observacao_limite.timeout.connect(self.observacao_expirar)
+        self.observacao_repetir = QTimer(self)
+        self.observacao_repetir.setSingleShot(True)
+        self.observacao_repetir.setInterval(250)
+        self.observacao_repetir.timeout.connect(self.observar_estado)
+        self.observacao_retentativa = False
         self.observacao_pendente = False
         self.acao = QProcess(self)
         self.acao.finished.connect(self.acao_fim)
@@ -749,11 +754,15 @@ class Janela(QMainWindow):
                 if atuais - caminhos:
                     self.observador.removePaths(sorted(atuais - caminhos))
                 if recusados:
-                    self.observacao_erro_texto('O sistema não aceitou todos os caminhos de observação.')
+                    self.observacao_erro_texto('Alguns caminhos mudaram durante a observação; nova consulta agendada.')
+                    if not self.observacao_retentativa:
+                        self.observacao_retentativa = True
+                        self.observacao_repetir.start()
                 else:
                     falha_anterior = self.observacao_falha
                     self.observacao_falha = ''
                     self.observacao_erro_atual = ''
+                    self.observacao_retentativa = False
                     if falha_anterior:
                         self.status.setText('Observação restabelecida.')
         if self.observacao_pendente and not self.fechando:
@@ -1150,7 +1159,8 @@ exit "$resultado"
             return
         self.fechando = True
         self.operacional.fechar()
-        for timer in (self.timer, self.evento_estado, self.limite_evento, self.observacao_limite, self.espera,
+        for timer in (self.timer, self.evento_estado, self.limite_evento, self.observacao_limite,
+                      self.observacao_repetir, self.espera,
                       self.tempo_acao, self.tempo_previa, self.tempo_finalizacao):
             timer.stop()
         for processo in (self.consulta, self.consulta_observacao, self.acao, self.previa, self.integracao):

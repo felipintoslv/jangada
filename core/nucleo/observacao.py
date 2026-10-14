@@ -11,9 +11,22 @@ LIMITE_ENTRADAS = 16384
 LIMITE_SAIDA = 1024 * 1024
 
 
-def existentes(caminho):
-    atual = Path(caminho.anchor)
-    for parte in caminho.parts[1:]:
+def existentes(caminho, estado):
+    atual = estado
+    while True:
+        try:
+            info = atual.lstat()
+        except FileNotFoundError:
+            if atual == atual.parent:
+                raise ValueError('Não há antepassado existente para observar.')
+            atual = atual.parent
+            continue
+        if stat.S_ISDIR(info.st_mode):
+            break
+        if atual == atual.parent:
+            raise ValueError('Não há diretório existente para observar.')
+        atual = atual.parent
+    for parte in caminho.relative_to(atual).parts:
         seguinte = atual / parte
         try:
             info = seguinte.lstat()
@@ -39,6 +52,7 @@ def observar(estado):
     estado = Path(estado)
     if not estado.is_absolute() or any(ord(c) < 32 for c in str(estado)):
         raise ValueError('A pasta de estado precisa ser absoluta e válida.')
+    estado = estado.resolve()
     caminhos = set()
     entradas = 0
     bases = (estado / 'agentes', estado / 'revisoes', estado / 'agentes/projetos')
@@ -50,7 +64,7 @@ def observar(estado):
             raise ValueError('A observação excedeu o limite de entradas lidas.')
 
     for base in bases:
-        pasta = existentes(base)
+        pasta = existentes(base, estado)
         if not adicionar(caminhos, pasta):
             continue
         if pasta != base or not base.is_dir() or base.is_symlink():
