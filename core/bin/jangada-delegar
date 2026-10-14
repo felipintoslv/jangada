@@ -265,6 +265,10 @@ contar_chamada() {
   chamadas_executor=$((chamadas_executor + 1))
 }
 
+if [[ "$perfil_delegar" == nativo || "$destino" == nativo ]]; then
+  recusar "delegação nativa não usa jangada-delegar; nesta sessão do agy, use invoke_subagent com o papel $papel" destino_proibido
+fi
+
 if [[ -n "$capacidade" ]]; then
   limite_chamadas="${JANGADA_DELEGAR_CHAMADAS_RESTANTES:-${JANGADA_DELEGAR_CHAMADAS_MAX:-8}}"
   tempo_total="${JANGADA_DELEGAR_TEMPO_TOTAL:-600}"
@@ -377,9 +381,6 @@ if [[ -n "$capacidade" ]]; then
   fi
 fi
 
-if [[ "$perfil_delegar" == nativo ]]; then
-  recusar "numa sessão do agy, use invoke_subagent com o papel $papel" destino_proibido
-fi
 if [[ "$perfil_delegar" == claude || "$destino" == claude ]]; then
   recusar "o perfil da sessão não delega ao agy nem ao destino local (JANGADA_DELEGAR=claude)" destino_proibido
 fi

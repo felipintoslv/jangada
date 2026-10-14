@@ -206,7 +206,7 @@ jq -n --arg r 'Informação conferida em fonte.txt:1' '{status:"SUCCESS",respons
                 self.assertIn('soquete local proibido', r['motivo'])
                 self.assertEqual(r['chamadas_executor'], 0)
 
-    def test_catalogo_completo_evitar_saida_antecipada_do_grep(self):
+    def test_catalogo_completo_evita_saida_antecipada_do_grep(self):
         arquivo = self.bin / 'agy'
         corpo = arquivo.read_text().replace(
             'then echo leitor; echo redator; exit 0; fi',
@@ -220,6 +220,40 @@ jq -n --arg r 'Informação conferida em fonte.txt:1' '{status:"SUCCESS",respons
         r = self.delegar('--permitir-remoto')
         self.assertEqual(r['motivo_codigo'], 'capacidade_incompativel')
         self.assertEqual(r['chamadas_executor'], 0)
+
+    def test_codex_sem_escolha_local_nao_encaminha_ao_ollama(self):
+        self.env['JANGADA_AGENTE'] = 'codex'
+        for preferencia in ('claude', 'nativo', 'desconhecido'):
+            self.env['JANGADA_DELEGAR'] = preferencia
+            with self.subTest(preferencia=preferencia):
+                r = self.delegar()
+                self.assertEqual(r['codigo_saida'], 4)
+                self.assertEqual(r['motivo_codigo'], 'destino_proibido')
+                self.assertFalse((self.pasta / 'agy.log').exists())
+
+    def test_codex_preferencia_desconhecida_exige_autorizacao_para_agy(self):
+        self.env.update(JANGADA_AGENTE='codex', JANGADA_DELEGAR='desconhecido')
+        r = self.delegar('--permitir-remoto')
+        self.assertEqual((r['destino'], r['codigo_saida']), ('agy', 0))
+
+    def test_delegacao_codex_preserva_somente_local_explicito(self):
+        for preferencia in ('', 'agy', 'claude', 'nativo', 'desconhecido', 'local'):
+            with self.subTest(preferencia=preferencia):
+                r = subprocess.run(
+                    ['bash', '-c', 'source "$1"; jangada_delegacao codex "$2"', '_',
+                     str(self.bin / 'jangada-config'), preferencia], env=self.env,
+                    text=True, capture_output=True, check=True)
+                self.assertEqual(r.stdout.strip(), 'local' if preferencia == 'local' else 'agy')
+
+    def test_sessao_agy_restaurada_recusa_destino_nativo(self):
+        self.env['JANGADA_AGENTE'] = 'agy'
+        for opcoes in ((), ('--capacidade', 'resumo_curto', '--permitir-remoto')):
+            with self.subTest(opcoes=opcoes):
+                r = self.delegar(*opcoes)
+                self.assertEqual(r['motivo_codigo'], 'destino_proibido')
+                self.assertIn('invoke_subagent', r['motivo'])
+                self.assertEqual(r['chamadas_executor'], 0)
+                self.assertFalse((self.pasta / 'agy.log').exists())
 
     def test_configuracao_local_explicita_nao_autoriza_agy(self):
         config = self.pasta / 'config/jangada/jangada.conf'

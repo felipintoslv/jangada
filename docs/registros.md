@@ -573,6 +573,7 @@ subagente tem `.db` próprio.
     delegação à entrega.
   - `destino`: `agy`, `claude` (perfil sem agy; recusa), `local` (Ollama local)
     ou `codex-economico` (modelo explicitamente configurado).
+    `nativo` identifica recusa numa sessão antiga do agy restaurada.
     Vazio quando a seleção por capacidade termina sem executor.
   - `modelo`: Flash com o esforço do papel (no agy) ou modelo local (ex.: `qwen3:4b`).
   - `codigo_saida`: 0 atendida, 4 recusada.

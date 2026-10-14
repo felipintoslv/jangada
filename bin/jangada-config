@@ -214,8 +214,8 @@ jangada_delegacao() {
     return 0
   fi
   if [[ "$_base" == codex ]]; then
-    [[ "$_valor" == agy ]] && { echo agy; return 0; }
-    echo local
+    [[ "$_valor" == local ]] && { echo local; return 0; }
+    echo agy
     return 0
   fi
   case "$_valor" in
