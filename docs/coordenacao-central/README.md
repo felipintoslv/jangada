@@ -78,9 +78,5 @@ D4/D8 só habilitam expansões após avaliação e decisão separadas.
 ## Verificação e limites
 
 O resultado datado da suíte está no [05](05-plano-incremental.md).
-A revisão segue o fluxo obrigatório e seu limite normal; parecer de versão anterior não aprova o escopo atualizado.
-A aprovação r3 da tarefa anterior corresponde a `3e61b3d`, antes da atualização completa de `3376c94`.
-Esta continuação exige nova revisão Claude dos seis documentos completos contra `main`, sem reutilizar aquele parecer.
-No limite, preservar documentos e commits, parar e relatar; nunca usar `--forcar`.
 Inspector, acessórios da Waybar, memória automaticamente compartilhada, hierarquias complexas e autonomia irrestrita continuam fora da proposta.
 A reorganização visual não cria capacidade privilegiada, e aprovação documental não autoriza implementação ou integração.

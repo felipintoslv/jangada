@@ -224,7 +224,7 @@ O bloqueio foi comunicado durante a tarefa e registrado aqui; C6/C18 continuam p
 A investigação do papel pertence à tarefa paralela. Esta continuação não instalou agentes nem alterou confiança, cota ou proteções.
 Não usou Ollama, outro destino ou nova sessão principal; a recusa não autoriza contorno.
 
-Na retomada de 13/10/2026, após 22h38, nova chamada protegida usou essas fontes e pediu conferência das cinco correções do parecer r1.
+Na retomada de 13/10/2026, após 22h38, nova chamada protegida usou essas fontes e pediu conferência de contratos, registros e pendências de verificação.
 Manteve `JANGADA_DELEGAR=agy` e os mesmos parâmetros, com `JANGADA_PATH=/home/felipinto/.local/share/jangada` para usar o fluxo instalado.
 Resultado: código 4, zero segundos, três linhas e as mesmas recusas por leitor ausente; nenhum relatório foi produzido.
 O autor conferiu a saída e conservou o bloqueio de C6/C18; a chamada não comprova disponibilidade do modelo.
@@ -250,7 +250,7 @@ Outras 2.349 ocorrências foram omitidas pelo filtro; não são uma contagem de 
 Sem examinar essa parcela, não atribuir todas as falhas ao ambiente nem declarar a suíte aprovada ou ausência de regressão.
 Não houve repetição fora da proteção, alteração de testes ou configuração para obter aprovação.
 A conferência externa pelo coordenador continua necessária antes de integrar.
-Na retomada para corrigir r1, a suíte completa não foi repetida, conforme orientação do coordenador.
+A suíte completa não foi repetida após a correção dos documentos; a verificação continua pendente.
 
 Conferência local dos documentos: destinos e âncoras dos links locais válidos; nenhum travessão encontrado.
 O diff está restrito aos seis caminhos permitidos; o diagnóstico conserva versão/data e foi confrontado com os trechos citados.
