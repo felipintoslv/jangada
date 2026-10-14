@@ -6,7 +6,6 @@ Contratos, identidade e isolamento evoluem sem pressupor novo serviço ou envio 
 
 Múltiplos coordenadores no mesmo projeto, transferências e arbitragem entre eles ficam para evolução futura.
 Dois coordenadores nos ensaios iniciais pertencem a dois projetos distintos.
-Esta atualização prevalece sobre a exigência anterior de coexistência no mesmo projeto desde a fase 2.
 Todos os marcos abaixo são propostas para tarefas futuras, não autorização de implementação nesta entrega.
 
 O [01](01-diagnostico.md) preserva o diagnóstico; o [02](02-coordenador-contextos.md) traz definição, contexto e proposta textual da skill.
@@ -15,7 +14,8 @@ O [04](04-gas-town-riscos.md) mantém riscos e limites da referência oficial.
 
 ## Contratos necessários ao fluxo atual
 
-Complementar os K1 a K10 existentes sem alterá-los nesta tarefa.
+Complementar os [contratos K1 a K10 da modularização](../modularizacao-3.0/03-contratos.md), sem alterá-los nesta tarefa.
+K1 preserva a fachada pública dos comandos, suas opções, códigos de saída e formatos; K2 preserva os caminhos legados por links relativos versionados.
 Melhorar uma prática da skill não exige implantar todas as superfícies novas antes de seu uso.
 Nova operação que mude estado, alcance ou autoridade exige contrato e prova próprios antes de habilitação.
 
@@ -210,34 +210,10 @@ Reversão não restaura código antigo sobre esquema incompatível sem conferên
 
 ## Participação de apoio nesta tarefa documental
 
-### Registro anterior, importado de `3376c94`
-
-O registro abaixo pertence à tarefa de planejamento anterior. Não comprova uma delegação nesta nova sessão.
-
-Subtarefa escolhida: conferir cobertura do recorte atualizado e da proposta da skill, com lacunas objetivas e referências caminho:linha.
-Fontes: os seis documentos permitidos e a skill atual, sem históricos privados.
-Destino solicitado: agy explícito, papel leitor, capacidade `analise_documental`, no fluxo protegido.
-A decisão adicional exige `JANGADA_DELEGAR=agy` em toda delegação, sem primeiro destino local nem alternativa Ollama.
-Em 13/10/2026, a chamada protegida usou `jangada-delegar leitor`, `--destino agy`,
-`--capacidade analise_documental`, `--permitir-remoto` e `--arquivos` com essas sete fontes.
-Pedido: confrontar recorte inicial, exploração, proposta da skill, apoio agy e evoluções futuras, citando todas as fontes por caminho:linha.
-
-Resultado: código 4, com recusa “o agy não achou o agente leitor” e “nenhum executor elegível concluiu a delegação”.
-Fonte da evidência: saída condensada dessa chamada por `jangada-filtrar`, que informou duração de zero segundos.
-Após a decisão adicional, uma segunda tentativa incluiu explicitamente `JANGADA_DELEGAR=agy` no ambiente e manteve `--destino agy`.
-Usou as mesmas sete fontes, acrescentando ao pedido a conferência da exclusividade agy e da tarefa separada de padrões.
-Também terminou com código 4 e a mesma recusa por agente leitor ausente, sem relatório.
-Não houve contribuição de conteúdo para aproveitar; o apoio permanece bloqueado, não comprovado.
-O autor conferiu a recusa e o requisito de catálogo descrito em [delegação](../subagentes-e-delegacao.md#destino-agy).
-A evidência foi aproveitada para registrar o bloqueio e conservar critérios C6/C18 sem declarar participação efetiva.
-Não permite concluir disponibilidade, cota ou competência do modelo, pois a chamada não chegou a produzir relatório.
-Não houve instalação de agente, nova sessão principal, troca de destino, alteração de confiança ou proteção afrouxada.
-Claude permanece o revisor independente.
-
 ### Tentativa desta continuação
 
 Em 13/10/2026, nesta worktree, o autor repetiu a conferência de cobertura por `jangada-delegar leitor`.
-Usou `JANGADA_DELEGAR=agy`, `--destino agy`, `--capacidade analise_documental`, `--permitir-remoto` e `--arquivos` com as mesmas sete fontes autorizadas.
+Usou `JANGADA_DELEGAR=agy`, `--destino agy`, `--capacidade analise_documental`, `--permitir-remoto` e `--arquivos` com os seis documentos deste conjunto e `core/agentes/claude/skills/coordenador/SKILL.md`, fontes autorizadas.
 O pedido delimitou recorte inicial, conversas/tarefas, exploração, apoio exclusivo agy, revisão Claude e separação das expansões futuras.
 Pediu comparação da proposta textual com a skill atual e lacunas com caminho:linha; não pediu revisão final nem edição.
 
@@ -248,26 +224,25 @@ O bloqueio foi comunicado durante a tarefa e registrado aqui; C6/C18 continuam p
 A investigação do papel pertence à tarefa paralela. Esta continuação não instalou agentes nem alterou confiança, cota ou proteções.
 Não usou Ollama, outro destino ou nova sessão principal; a recusa não autoriza contorno.
 
+Na retomada de 13/10/2026, após 22h38, nova chamada protegida usou essas fontes e pediu conferência das cinco correções do parecer r1.
+Manteve `JANGADA_DELEGAR=agy` e os mesmos parâmetros, com `JANGADA_PATH=/home/felipinto/.local/share/jangada` para usar o fluxo instalado.
+Resultado: código 4, zero segundos, três linhas e as mesmas recusas por leitor ausente; nenhum relatório foi produzido.
+O autor conferiu a saída e conservou o bloqueio de C6/C18; a chamada não comprova disponibilidade do modelo.
+A correção `6e7b751`, informada pelo coordenador, ainda não foi integrada nem instalada; não é capacidade instalada comprovada nesta tarefa.
+
 ## Conferência desta entrega documental
 
-### Execução anterior, importada de `3376c94`
+### Execução desta continuação
 
-Em 13/10/2026, executado na cópia da tarefa anterior com ambiente de teste do projeto:
+Os seis documentos foram importados pelo Git de `3376c94`, sobre `main` em `50ba7a0`.
+Nenhum commit ou código da tarefa paralela `delegacao-agy-padrao` foi incorporado.
+Registros da tarefa antiga não são evidência desta entrega.
+
+Em 13/10/2026, nesta worktree, foi executado:
 
 ```sh
 JANGADA_PATH="$PWD" jangada-filtrar -- bash testes/verificar.sh
 ```
-
-Resultado: código 1, duração informada pelo filtro de 391 segundos, 6.967 linhas de saída condensadas.
-O filtro mostrou `PermissionError: Operation not permitted` ao criar sockets nos testes de monitoramento.
-Também mostrou falha de confiança do agy no seletor e falhas encadeadas no teste do validador.
-A saída condensada omitiu outras ocorrências; não permite atribuir toda falha ao isolamento nem declarar ausência de regressão.
-Não houve repetição fora da proteção, ajuste de teste ou aplicação de configuração para fazer passar.
-A suíte precisa de conferência posterior em ambiente autorizado antes de qualquer implementação ou integração.
-
-### Execução desta continuação
-
-Em 13/10/2026, o mesmo comando rodou nesta worktree, baseada em `main` no commit `50ba7a0`.
 Resultado: código 1, duração de 398 segundos e 6.967 linhas geradas, segundo `jangada-filtrar`.
 O filtro mostrou seis erros de criação de sockets em `testes/monitoramento.py`, com `PermissionError: Operation not permitted`.
 Mostrou também falha de confiança do agy em `testes/agente-seletor.py` e falhas encadeadas em `testes/validar.sh`.
@@ -275,10 +250,11 @@ Outras 2.349 ocorrências foram omitidas pelo filtro; não são uma contagem de 
 Sem examinar essa parcela, não atribuir todas as falhas ao ambiente nem declarar a suíte aprovada ou ausência de regressão.
 Não houve repetição fora da proteção, alteração de testes ou configuração para obter aprovação.
 A conferência externa pelo coordenador continua necessária antes de integrar.
+Na retomada para corrigir r1, a suíte completa não foi repetida, conforme orientação do coordenador.
 
-Conferência local dos documentos: seis arquivos, 29 links locais válidos, incluindo âncoras, e nenhum travessão.
+Conferência local dos documentos: destinos e âncoras dos links locais válidos; nenhum travessão encontrado.
 O diff está restrito aos seis caminhos permitidos; o diagnóstico conserva versão/data e foi confrontado com os trechos citados.
 As seis fontes oficiais Gas Town da tabela do [04](04-gas-town-riscos.md) estão acessíveis nesta consulta.
 Esta worktree não contém `.jangada/validar.sh`; não foi copiado estado privado da raiz para acrescentar esse arquivo.
-A execução direta da suíte acima registra a verificação exigida por AGENTS.md, independentemente do portão local do validador.
+A suíte com código 1 não cumpriu a regra 6 de AGENTS.md. A verificação permanece pendente em ambiente autorizado.
 O parecer de `jangada-validar` fica no registro operacional desta nova sessão e precisa corresponder à versão final completa contra `main`.

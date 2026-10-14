@@ -11,8 +11,7 @@ Isolamento de vários coordenadores e a UX desta proposta são requisitos própr
 Leitura web em 13/10/2026 do repositório oficial `gastownhall/gastown`, ramo `main`.
 Não houve clone, instalação ou execução. As páginas são móveis; o acesso usado não fixou SHA da referência.
 A comparação descreve documentação acessível nessa consulta, não prova de comportamento operacional ou auditoria de segurança.
-A tentativa anterior de ler `docs/concepts/hooks.md` retornou erro; Hooks foi examinado no README e glossário efetivamente acessíveis.
-Nesta continuação, as seis fontes da tabela foram acessadas novamente; a diferença documental sobre o ciclo dos Polecats permanece verificável.
+Hooks foi examinado no README e glossário oficiais listados abaixo.
 
 | Fonte | Trechos examinados e uso |
 |---|---|

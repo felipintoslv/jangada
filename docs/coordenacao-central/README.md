@@ -27,8 +27,6 @@ Autor e coordenador: Codex. Revisor independente exigido: Claude, pelo fluxo de 
 Código examinado em 13/10/2026 no commit `50ba7a0dd2d265279d4d5e1851be864914c92539`.
 Identificação Git: `jangada-pre-modularizacao-3.0-126-g50ba7a0`.
 Localizadores do diagnóstico referem-se a essa versão, não à instalação ativa.
-Nesta continuação, os seis documentos foram importados pelo Git do commit `3376c94`, sobre `main` em `50ba7a0`.
-Nenhum commit ou código da tarefa paralela `delegacao-agy-padrao` foi incorporado.
 
 Foram consultados README, AGENTS, CLAUDE, ciclo, registros, isolamento, provedores, delegação e documentos 01 a 06 da modularização 3.0.
 Os registros de estabilização e modularização foram tratados como datados, com achados atuais confrontados com o código.
