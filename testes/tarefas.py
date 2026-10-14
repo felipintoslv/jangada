@@ -798,14 +798,24 @@ class Interface(unittest.TestCase):
 
     def test_recusa_parcial_de_addpaths_preserva_caminhos_anteriores(self):
         caminhos_anteriores = set(self.janela.observador.directories() + self.janela.observador.files())
-        novo = str(self.observados / 'novo.json')
-        self.janela.observacao_saida = bytearray(json.dumps({'versao': 1, 'caminhos': [
-            str(self.observados), novo]}).encode())
+        aceito = self.observados / 'novo-aceito.json'
+        recusado = str(self.observados / 'novo-recusado.json')
+        aceito.write_text('{}')
+        self.janela.observacao_saida = bytearray(json.dumps({'versao': 1, 'caminhos':
+            sorted(caminhos_anteriores | {str(aceito), recusado})}).encode())
+        adicionar_caminhos = self.janela.observador.addPaths
+
+        def aceitar_parte(caminhos):
+            adicionar_caminhos([caminho for caminho in caminhos if caminho != recusado])
+            return [recusado]
+
         with patch.object(self.janela, 'observacao_ler'):
-            with patch.object(self.janela.observador, 'addPaths', return_value=[novo]):
+            with patch.object(self.janela.observador, 'addPaths', side_effect=aceitar_parte):
                 self.janela.observacao_fim(0, QProcess.ExitStatus.NormalExit)
         caminhos_atuais = set(self.janela.observador.directories() + self.janela.observador.files())
         self.assertTrue(caminhos_anteriores <= caminhos_atuais)
+        self.assertIn(str(aceito), caminhos_atuais)
+        self.assertNotIn(recusado, caminhos_atuais)
         self.assertIn('não aceitou todos', self.janela.observacao_falha)
 
     def test_criacao_de_projeto_observado_atualiza_dados(self):
@@ -823,16 +833,53 @@ class Interface(unittest.TestCase):
 
     def test_eventos_continuos_respeitam_prazo_maximo(self):
         inicio = time.monotonic()
-        limite = inicio + 1.25
-        while time.monotonic() < limite and self.janela.consulta.state() == QProcess.ProcessState.NotRunning:
-            self.janela.mudanca_estado()
-            APP.processEvents()
-            time.sleep(0.04)
+        pulsos = QTimer()
+        pulsos.setInterval(50)
+        pulsos.timeout.connect(self.janela.mudanca_estado)
+        pulsos.start()
+        try:
+            aguardar(lambda: self.janela.consulta.state() != QProcess.ProcessState.NotRunning)
+        finally:
+            pulsos.stop()
+            pulsos.deleteLater()
+        duracao = time.monotonic() - inicio
         self.assertNotEqual(self.janela.consulta.state(), QProcess.ProcessState.NotRunning)
-        self.assertLess(time.monotonic() - inicio, 1.25)
+        self.assertGreaterEqual(duracao, 0.8)
+        self.assertLess(duracao, 1.25)
+
+    def test_abertura_real_inicia_consulta_de_observacao(self):
+        chamadas = []
+        iniciar_original = Janela.iniciar
+
+        def iniciar_registrando(janela_aberta, processo, argumentos):
+            if processo is janela_aberta.consulta_observacao:
+                chamadas.append(argumentos)
+            return iniciar_original(janela_aberta, processo, argumentos)
+
+        with patch.object(Janela, 'iniciar', iniciar_registrando):
+            aberta = Janela(True, self.raiz, self.estado)
+        try:
+            aguardar(lambda: aberta.consulta_observacao.state() == QProcess.ProcessState.NotRunning)
+            self.assertEqual(chamadas, [['--observacao-json']])
+        finally:
+            aberta.close()
+
+    def test_pedido_de_observacao_durante_consulta_reinicia_ao_fim(self):
+        original = self.comando.read_text()
+        lento = original.replace("    print(json.dumps({'versao': 1, 'caminhos': [",
+                                "    import time\n    time.sleep(0.2)\n    print(json.dumps({'versao': 1, 'caminhos': [", 1)
+        self.comando.write_text(lento)
+        chamadas = []
+        self.janela.consulta_observacao.started.connect(lambda: chamadas.append(True))
+        self.janela.observar_estado()
+        self.janela.observar_estado()
+        aguardar(lambda: len(chamadas) == 2 and
+                 self.janela.consulta_observacao.state() == QProcess.ProcessState.NotRunning)
+        self.comando.write_text(original)
 
     def test_timer_atualiza_sem_intervencao(self):
         self.lista.write_text(self.lista.read_text().replace('aguardando', 'concluido'))
+        # Reduz a espera sem alterar o intervalo de produção de 30 segundos.
         self.janela.timer.setInterval(30)
         self.janela.timer.start()
         try:

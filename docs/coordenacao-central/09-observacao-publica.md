@@ -14,7 +14,8 @@ Quando uma área ainda não existe, a resposta inclui o antepassado existente
 mais próximo para detectar sua criação. Uma consulta sem estado não cria
 pastas nem arquivos. Estado ausente, portanto, produz uma lista de
 antepassados, que será recalculada no próximo aviso ou na atualização
-periódica.
+periódica. Componentes simbólicos não são seguidos; o caminho observado fica
+no diretório ancestral real anterior ao link.
 
 Falhas ao enumerar as pastas-base de sessões, revisões ou projetos recusam a
 consulta. Se um projeto desaparecer ou ficar sem permissão durante a leitura,
@@ -24,18 +25,17 @@ limite total de caminhos ou da resposta continua sendo uma falha explícita.
 
 ## Limites e falhas
 
-O envelope da versão 1 exige `versao` inteiro e `caminhos` como lista de
-caminhos absolutos, únicos, sem caracteres de controle e com até 4.096
-caracteres cada. São aceitos até 4.096 caminhos e 1 MiB de resposta. Erro de
-leitura de base, volume excedido, JSON inválido ou versão
-desconhecida recusa a resposta inteira com código diferente de zero e
-diagnóstico em `stderr`.
+O Core lê no máximo 16.384 entradas em uma consulta. O envelope da versão 1
+exige `versao` inteiro e `caminhos` como lista de caminhos absolutos, únicos,
+sem caracteres de controle e com até 4.096 caracteres cada. São aceitos até
+4.096 caminhos e 1 MiB de resposta. Erro de leitura de base, volume excedido,
+JSON inválido ou versão desconhecida recusa a resposta inteira com código
+diferente de zero e diagnóstico em `stderr`.
 
 A Central consulta o contrato de modo assíncrono, com prazo máximo de um
 segundo. Erro ou prazo excedido preserva a lista de observação anterior,
-mostra o erro e mantém a atualização periódica a cada 30 segundos. A consulta
-de sessões continua separada e aplica seus próprios limites. O Shell não lê
-arquivos JSON, bancos SQLite nem monta nomes ou pastas internas.
+mostra o erro e mantém a atualização periódica a cada 30 segundos. O Shell não
+lê arquivos JSON, bancos SQLite nem monta nomes ou pastas internas.
 
 ## Entrega de avisos
 

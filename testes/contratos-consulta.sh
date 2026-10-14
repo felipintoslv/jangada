@@ -380,8 +380,19 @@ assert set(observacao['caminhos']) == {
     str(estado_observacao / 'agentes/projetos/um/tarefas.sqlite'),
     str(estado_observacao / 'agentes/projetos/um/tarefas.sqlite-wal')}
 assert str(estado_observacao / 'agentes/x\n.json') not in observacao['caminhos']
-# Bases ausentes são representadas pelo antepassado existente mais próximo.
+# Um componente intermediário simbólico não abre a árvore apontada.
 agentes = estado_observacao / 'agentes'
+agentes.rename(agentes.with_name('agentes-originais'))
+fora_agentes = tmp / 'fora-agentes'
+fora_agentes.mkdir()
+(fora_agentes / 'segredo.json').write_text('{}')
+agentes.symlink_to(fora_agentes, target_is_directory=True)
+r = consultar('--observacao-json')
+assert r.returncode == 0, r.stderr
+assert str(fora_agentes / 'segredo.json') not in json.loads(r.stdout)['caminhos']
+agentes.unlink()
+agentes.with_name('agentes-originais').rename(agentes)
+# Bases ausentes são representadas pelo antepassado existente mais próximo.
 agentes.rename(agentes.with_name('agentes-originais'))
 r = consultar('--observacao-json')
 assert r.returncode == 0, r.stderr
@@ -421,7 +432,7 @@ def scandir_projeto_com_falha(caminho):
     return scandir_original(caminho)
 with patch.object(modulo_observacao.os, 'scandir', side_effect=scandir_projeto_com_falha):
     parcial = json.loads(modulo_observacao.observar(estado_observacao))
-assert str(projeto_um) in parcial['caminhos']
+assert str(projeto_um) not in parcial['caminhos']
 assert str(projeto_um / 'tarefas.sqlite') not in parcial['caminhos']
 def scandir_projeto_sem_permissao(caminho):
     if str(caminho) == str(projeto_um):
@@ -429,7 +440,7 @@ def scandir_projeto_sem_permissao(caminho):
     return scandir_original(caminho)
 with patch.object(modulo_observacao.os, 'scandir', side_effect=scandir_projeto_sem_permissao):
     parcial = json.loads(modulo_observacao.observar(estado_observacao))
-assert str(projeto_um) in parcial['caminhos']
+assert str(projeto_um) not in parcial['caminhos']
 assert str(projeto_um / 'tarefas.sqlite-wal') not in parcial['caminhos']
 def scandir_base_com_falha(caminho):
     if str(caminho) == str(estado_observacao / 'revisoes'):
@@ -443,6 +454,13 @@ with patch.object(modulo_observacao.os, 'scandir', side_effect=scandir_base_com_
     else:
         raise AssertionError('falha de leitura da base deveria recusar a consulta')
 assert not modulo_observacao.adicionar(set(), Path('/' + 'x' * 4096))
+with patch.object(modulo_observacao, 'LIMITE_ENTRADAS', 1):
+    try:
+        modulo_observacao.observar(estado_observacao)
+    except ValueError as erro:
+        assert 'limite de entradas' in str(erro)
+    else:
+        raise AssertionError('volume de entradas deveria recusar a consulta')
 
 # O limite exato de caminhos é aceito e o próximo caminho recusa a lista inteira.
 volume = estado_observacao / 'revisoes'

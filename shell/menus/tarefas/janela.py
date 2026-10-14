@@ -746,12 +746,11 @@ class Janela(QMainWindow):
                 atuais = set(self.observador.directories() + self.observador.files())
                 novos = caminhos - atuais
                 recusados = self.observador.addPaths(sorted(novos)) if novos else []
+                if atuais - caminhos:
+                    self.observador.removePaths(sorted(atuais - caminhos))
                 if recusados:
-                    self.observador.removePaths(sorted(novos - set(recusados)))
                     self.observacao_erro_texto('O sistema não aceitou todos os caminhos de observação.')
                 else:
-                    if atuais - caminhos:
-                        self.observador.removePaths(sorted(atuais - caminhos))
                     falha_anterior = self.observacao_falha
                     self.observacao_falha = ''
                     self.observacao_erro_atual = ''
