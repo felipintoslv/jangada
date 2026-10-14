@@ -189,8 +189,38 @@ assert consultar().returncode == 1
 pasta.rename(pasta.with_name('originais'))
 pasta.symlink_to(pasta.with_name('originais'), target_is_directory=True)
 assert consultar().returncode == 1
+antes = retrato()
+for opcao in ('--lista', '--lista-atualizada', '--waybar'):
+    r = consultar(opcao)
+    assert r.returncode == 0 and r.stderr, r
+    if opcao == '--waybar':
+        assert json.loads(r.stdout)['text'] == '󰚩 1'
+    else:
+        assert r.stdout.decode().split('\t')[:2] == ['ativo', 'viva']
+    assert retrato() == antes
 pasta.unlink()
 pasta.with_name('originais').rename(pasta)
+# Um arquivo no lugar da pasta também não aborta as consultas TSV.
+pasta.rename(pasta.with_name('originais'))
+pasta.write_text('não é diretório')
+assert consultar().returncode == 1
+for opcao in ('--lista', '--waybar'):
+    r = consultar(opcao)
+    assert r.returncode == 0 and r.stderr
+pasta.unlink()
+pasta.with_name('originais').rename(pasta)
+if os.geteuid() != 0:
+    antes = retrato()
+    modo = pasta.stat().st_mode & 0o7777
+    pasta.chmod(0)
+    try:
+        assert consultar().returncode == 1
+        for opcao in ('--lista', '--waybar'):
+            r = consultar(opcao)
+            assert r.returncode == 0 and r.stderr
+    finally:
+        pasta.chmod(modo)
+    assert retrato() == antes
 # Resposta agregada limitada, mesmo com cada registro dentro do limite.
 for i in range(80):
     (pasta / f'grande-{i}.json').write_text(json.dumps(dict(estado='concluido', atualizado=agora, tarefa='x' * 16000)))
@@ -230,6 +260,32 @@ for date_disponivel in (False, True):
         assert r.returncode == 0, r.stderr
         assert [s['nome'] for s in json.loads(r.stdout)['sessoes']] == esperado
 
+(sem_data / 'date').write_text('#!' + sys.executable + '\nimport time\ntime.sleep(3)\n')
+(sem_data / 'date').chmod(0o700)
+r = subprocess.run([sys.executable, str(repo / 'core/nucleo/sessoes.py'),
+                    str(retencao), '24', '168', 'json'], input='', text=True,
+                   capture_output=True, env=dict(ambiente, PATH=str(sem_data)), timeout=5)
+assert r.returncode == 0 and json.loads(r.stdout)['sessoes'][0]['nome'] == 'antiga', r.stderr
+
+# Falhas de varredura e de execução da data não dependem de permissões do usuário de teste.
+import importlib.util
+from unittest.mock import patch
+sys.dont_write_bytecode = True
+spec = importlib.util.spec_from_file_location('sessoes', repo / 'core/nucleo/sessoes.py')
+modulo = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(modulo)
+with patch.object(modulo.os, 'scandir', side_effect=OSError('varredura indisponível')):
+    legado = modulo.selecionar(pasta, ['viva'], 24, 168, False)
+    assert [s['nome'] for s in legado] == ['viva']
+    try:
+        modulo.selecionar(pasta, ['viva'], 24, 168, True)
+    except OSError:
+        pass
+    else:
+        raise AssertionError('JSON deveria recusar varredura indisponível')
+with patch.object(modulo.subprocess, 'run', side_effect=OSError('date indisponível')):
+    assert modulo.selecionar(retencao, [], 24, 168, True)[0]['nome'] == 'antiga'
+
 # O TSV não valida metadados que não apresenta nem limita a tarefa antes do resumo.
 ambiente['JANGADA_PATH'] = str(repo)
 for chave in ('WAYLAND_DISPLAY', 'HYPRLAND_INSTANCE_SIGNATURE', 'DISPLAY'):
@@ -250,6 +306,14 @@ assert r.returncode == 0 and json.loads(r.stdout)['class'] == 'aguardando', r.st
 assert r.stderr
 r = consultar('--proximo')
 assert r.returncode == 0, r.stderr
+viva['mensagem'] = 'texto'
+viva['tarefa'] = '\ud800'
+(pasta / 'viva.json').write_text(json.dumps(viva))
+assert consultar().returncode == 1
+r = consultar('--lista')
+assert r.returncode == 0 and r.stderr and r.stdout
+r = consultar('--waybar')
+assert r.returncode == 0 and r.stderr and json.loads(r.stdout)
 
 print('consulta JSON: seleção, TSV, limites, recusas e Core sem interface passaram')
 PYTEST

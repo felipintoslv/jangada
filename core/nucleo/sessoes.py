@@ -87,11 +87,11 @@ def vencido(quando, horas):
     comando = shutil.which('gdate') or shutil.which('date')
     marca = None
     if comando:
-        resultado = subprocess.run([comando, '-d', quando, '+%s'], capture_output=True,
-                                   timeout=2, check=False)
         try:
+            resultado = subprocess.run([comando, '-d', quando, '+%s'], capture_output=True,
+                                       timeout=2, check=False)
             marca = int(resultado.stdout) if resultado.returncode == 0 else None
-        except ValueError:
+        except (OSError, ValueError, subprocess.SubprocessError):
             pass
     if marca is None:
         try:
@@ -122,15 +122,28 @@ def selecionar(pasta, vivas, horas, horas_interrompido, estrito):
         pasta_fd = os.open(pasta, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     except FileNotFoundError:
         pasta_fd = None
+    except OSError:
+        if estrito:
+            raise
+        sys.stderr.write('Pasta de sessões inacessível ou insegura ignorada na consulta TSV.\n')
+        pasta_fd = None
     try:
         nomes = []
         if pasta_fd is not None:
-            with os.scandir(pasta_fd) as entradas:
-                for entrada in entradas:
-                    if eh_sessao(entrada.name):
-                        nomes.append(entrada.name[:-5])
-                        if estrito and len(nomes) > 4096:
-                            raise ValueError('Consulta excedeu 4096 registros.')
+            try:
+                with os.scandir(pasta_fd) as entradas:
+                    for entrada in entradas:
+                        if eh_sessao(entrada.name):
+                            nomes.append(entrada.name[:-5])
+                            if estrito and len(nomes) > 4096:
+                                raise ValueError('Consulta excedeu 4096 registros.')
+            except OSError:
+                if estrito:
+                    raise
+                sys.stderr.write('Varredura da pasta de sessões falhou na consulta TSV.\n')
+                nomes = []
+                os.close(pasta_fd)
+                pasta_fd = None
         nomes = list(dict.fromkeys(vivas + sorted(nomes)))
         if estrito and len(nomes) > 4096:
             raise ValueError('Consulta excedeu 4096 sessões.')
@@ -145,6 +158,14 @@ def selecionar(pasta, vivas, horas, horas_interrompido, estrito):
             dados = registro(pasta_fd, nome, estrito) if pasta_fd is not None else {}
             s = ({campo: dados.get(campo) or '' for campo in CAMPOS}
                  if estrito else campos_legados(dados))
+            if not estrito:
+                try:
+                    for valor in s.values():
+                        valor.encode('utf-8')
+                except UnicodeError:
+                    sys.stderr.write('Texto inválido ignorado na consulta TSV.\n')
+                    dados = {}
+                    s = campos_legados(dados)
             s['nome'] = nome
             if estrito:
                 s['estado'] = s['estado'] or 'ativo'
@@ -205,12 +226,13 @@ if __name__ == '__main__':
         bruto = sys.stdin.buffer.read(LIMITE + 1)
         if len(bruto) > LIMITE:
             raise ValueError('Lista de sessões vivas excedeu 1 MiB.')
-        vivas = list(dict.fromkeys(s for s in bruto.decode('utf-8').splitlines() if s))
+        formato = sys.argv[4]
+        nomes = bruto.decode('utf-8', 'strict' if formato == 'json' else 'replace')
+        vivas = list(dict.fromkeys(s for s in nomes.splitlines() if s))
         horas = int(sys.argv[2])
         horas_interrompido = int(sys.argv[3])
         if horas < 0 or horas_interrompido < 0:
             raise ValueError('Retenção inválida.')
-        formato = sys.argv[4]
         emitir(selecionar(sys.argv[1], vivas, horas, horas_interrompido, formato == 'json'), formato)
     except (OSError, ValueError, RecursionError, subprocess.SubprocessError) as erro:
         sys.stderr.write('Não foi possível consultar sessões: ' + str(erro) + '\n')

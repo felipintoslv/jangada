@@ -81,12 +81,15 @@ O comando sai com código 1, diagnóstico em stderr e nenhuma lista parcial.
 O TSV continua tolerante: ignora campos de apresentação que não usa e preserva
 seu resumo mesmo quando a tarefa ultrapassa 16.000 caracteres.
 Registros inseguros ou ilegíveis usam os campos vazios anteriores, com aviso
-em stderr; nomes inválidos são ignorados com aviso. Assim, um registro ruim
+em stderr; nomes inválidos são ignorados com aviso. Pasta inacessível ou
+insegura e falha na varredura deixam só as sessões vivas, com aviso.
+Texto que não pode ser codificado em UTF-8 usa os campos vazios no TSV.
+Assim, um registro ruim
 não interrompe a barra nem os consumidores internos do TSV.
 Nomes inválidos vindos do tmux recusam o JSON; linhas vazias são ignoradas.
 A mesma seleção aplica os prazos recebidos de `jangada-agentes` aos dois formatos.
 A retenção usa `date` por registro sem processo, com alternativa ISO pelo Python
-quando não há comando disponível ou ele rejeita a data. Esse custo não foi medido.
+quando não há comando disponível, ele rejeita a data, falha ou excede dois segundos. Esse custo não foi medido.
 
 Na resposta pública, campos obrigatórios ausentes, nulos ou de tipo inesperado,
 nomes repetidos, estado vazio, JSON inválido ou versão desconhecida são erros.
@@ -106,6 +109,9 @@ e Core funcionando sem Shell ou Monitor. Verifica retenção sem `date`, com
 data recusada pelo comando e com prazo de interrupção recebido do chamador.
 Também verifica JSON inválido, nomes inválidos, tipos, limites, links,
 FIFO, diretórios e exclusão de contextos/pareceres.
+O TSV é conferido também com pasta linkada, sem leitura ou substituída por
+arquivo, e com falha de varredura. A retenção é conferida com `date` lento
+ou com falha de execução, sem perder a alternativa ISO.
 
 `testes/tarefas.py` usa comando fictício com JSON e dados de apresentação
 fora da pasta de sessões. Verifica consulta com registros internos ilegíveis,
