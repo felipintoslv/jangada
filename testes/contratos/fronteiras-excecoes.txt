@@ -37,8 +37,3 @@ permanente default/tarefas/janela.py pastas = [self.estado_dir, self.estado_dir.
 # default/tarefas/janela.py:700, observar_estado. O Shell monta caminho do
 # estado: só vigia mudança de arquivo, sem ler o conteúdo.
 permanente default/tarefas/janela.py caminhos.update(str(p) for p in pasta.glob('tarefas.sqlite*') if p.is_file() and not p.is_symlink())
-
-# Fora da contagem: default/tarefas/dados.py, em registro(pasta, nome), lê o
-# .json da sessão (raiz, desde, tarefa completa, agente e mensagem), campos
-# que a consulta K4 não devolve. O teste não aponta a leitura porque o caminho
-# chega por parâmetro. Fica como exceção por decisão do usuário na M3-10c.

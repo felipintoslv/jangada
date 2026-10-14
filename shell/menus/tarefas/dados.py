@@ -6,7 +6,8 @@ import json
 import os
 from pathlib import Path
 import re
-import stat
+import selectors
+import time
 import subprocess
 
 NOME = re.compile(r"[A-Za-z0-9_.-]+")
@@ -74,10 +75,6 @@ class Sessao:
     revisor: str = 'Não informado'
 
 
-def texto(valor):
-    return valor[:16000] if isinstance(valor, str) else ''
-
-
 def pasta_sessoes(estado=None):
     """Pasta de sessões: a informada ou a que o jangada-config exporta."""
     estado = estado or os.environ.get('JANGADA_SESSOES')
@@ -86,35 +83,70 @@ def pasta_sessoes(estado=None):
     return Path(estado).expanduser()
 
 
-def registro(pasta, nome):
+CAMPOS = ('nome', 'estado', 'dir', 'atualizado', 'ramo', 'tarefa', 'agente',
+          'raiz', 'projeto', 'mensagem', 'desde', 'coordenador', 'revisor')
+
+
+def ler_lista(saida):
+    if len(saida.encode('utf-8')) > LIMITE:
+        raise ValueError('A listagem excedeu o limite de leitura.')
     try:
-        fd = os.open(pasta / (nome + ".json"), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-        with os.fdopen(fd, "rb") as arquivo:
-            if not stat.S_ISREG(os.fstat(arquivo.fileno()).st_mode):
-                return {}
-            bruto = arquivo.read(LIMITE + 1)
-        if len(bruto) > LIMITE:
-            return {}
-        dados = json.loads(bruto)
-        return dados if isinstance(dados, dict) else {}
-    except (OSError, ValueError, UnicodeError):
-        return {}
-
-
-def ler_lista(saida, pasta):
+        dados = json.loads(saida)
+    except (ValueError, RecursionError) as erro:
+        raise ValueError('A consulta não contém JSON válido.') from erro
+    if not isinstance(dados, dict) or type(dados.get('versao')) is not int or dados['versao'] != 1:
+        raise ValueError('Versão da consulta de sessões desconhecida.')
+    lista = dados.get('sessoes')
+    if not isinstance(lista, list) or len(lista) > 4096:
+        raise ValueError('A consulta não contém uma lista de sessões válida.')
     sessoes = {}
-    for linha in saida.splitlines():
-        campos = linha.split('\t')
-        if len(campos) != 6:
-            raise ValueError('A listagem recebida não tem os seis campos esperados.')
-        estado, nome, diretorio, atualizado, ramo, tarefa = campos
-        if not NOME.fullmatch(nome) or nome in ('.', '..'):
-            raise ValueError('A listagem contém um nome de sessão inválido.')
-        dados = registro(pasta, nome)
-        raiz = texto(dados.get('raiz')) or diretorio
-        inicio = texto(dados.get('desde'))
-        sessoes[nome] = Sessao(nome, estado, diretorio, atualizado, html.unescape(ramo), texto(dados.get('tarefa')) or html.unescape(tarefa), texto(dados.get('agente')) or 'Não informado', Path(raiz).name or 'Sem projeto', texto(dados.get('mensagem')), inicio, raiz, texto(dados.get('coordenador')) or 'dono', texto(dados.get('revisor')) or 'Não informado')
+    for s in lista:
+        if not isinstance(s, dict) or any(c not in s or not isinstance(s[c], str)
+                                         or len(s[c]) > 16000 for c in CAMPOS):
+            raise ValueError('Sessão incompleta ou campo de apresentação inválido.')
+        nome = s['nome']
+        if not NOME.fullmatch(nome) or nome in ('.', '..') or len(nome) > 255 or nome in sessoes:
+            raise ValueError('A listagem contém um nome de sessão inválido ou repetido.')
+        if not s['estado']:
+            raise ValueError('A listagem contém estado vazio.')
+        sessoes[nome] = Sessao(nome, s['estado'], s['dir'], s['atualizado'], s['ramo'],
+                              s['tarefa'], s['agente'], s['projeto'], s['mensagem'],
+                              s['desde'], s['raiz'], s['coordenador'], s['revisor'])
     return sessoes
+
+
+def consultar(comando, ambiente):
+    with subprocess.Popen(comando, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          env=ambiente) as processo:
+        try:
+            saida = bytearray()
+            total = 0
+            prazo = time.monotonic() + 10
+            with selectors.DefaultSelector() as seletor:
+                seletor.register(processo.stdout, selectors.EVENT_READ)
+                seletor.register(processo.stderr, selectors.EVENT_READ)
+                while seletor.get_map():
+                    restante = prazo - time.monotonic()
+                    if restante <= 0:
+                        raise ValueError('Tempo de consulta esgotado.')
+                    for chave, _ in seletor.select(restante):
+                        bloco = os.read(chave.fileobj.fileno(), 65536)
+                        if not bloco:
+                            seletor.unregister(chave.fileobj)
+                            continue
+                        total += len(bloco)
+                        if total > LIMITE:
+                            raise ValueError('A listagem excedeu o limite de leitura.')
+                        if chave.fileobj is processo.stdout:
+                            saida.extend(bloco)
+            codigo = processo.wait(timeout=max(0.001, prazo - time.monotonic()))
+            if codigo != 0:
+                raise ValueError('O comando de consulta falhou.')
+            return ler_lista(saida.decode('utf-8'))
+        finally:
+            if processo.poll() is None:
+                processo.kill()
+                processo.wait()
 
 
 def simuladas(passo):
@@ -140,9 +172,6 @@ def barra(args):
         estado = pasta_sessoes(args.estado)
         ambiente = dict(os.environ, JANGADA_PATH=str(jangada),
                         XDG_STATE_HOME=str(estado.parent.parent))
-        resposta = subprocess.run([str(jangada / 'bin/jangada-agentes'), '--lista-atualizada'], capture_output=True, timeout=10, env=ambiente, check=True)
-        if len(resposta.stdout) > LIMITE:
-            raise ValueError('A listagem excedeu o limite de leitura.')
-        return resumo_barra(ler_lista(resposta.stdout.decode('utf-8', 'replace'), estado))
+        return resumo_barra(consultar([str(jangada / 'bin/jangada-agentes'), '--lista-json'], ambiente))
     except (OSError, ValueError, subprocess.SubprocessError):
         return {'text': 'Tarefas · erro', 'class': 'erro', 'tooltip': 'Não foi possível consultar sessões. Clique para abrir a central e conferir o erro.'}

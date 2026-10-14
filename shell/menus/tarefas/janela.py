@@ -405,6 +405,12 @@ class Janela(QMainWindow):
         self.consulta = QProcess(self)
         self.consulta.finished.connect(self.consulta_fim)
         self.consulta.errorOccurred.connect(self.consulta_erro)
+        self.consulta.readyReadStandardOutput.connect(self.consulta_ler)
+        self.consulta.readyReadStandardError.connect(self.consulta_ler)
+        self.consulta_saida = bytearray()
+        self.consulta_diagnostico = bytearray()
+        self.consulta_falha = ''
+        self.consulta_total = 0
         self.acao = QProcess(self)
         self.acao.finished.connect(self.acao_fim)
         self.acao.errorOccurred.connect(self.acao_erro)
@@ -733,8 +739,23 @@ class Janela(QMainWindow):
         elif self.consulta.state() == QProcess.ProcessState.NotRunning:
             self.atualizacao_pendente = False
             self.observar_estado()
-            self.iniciar(self.consulta, ['--lista'])
+            self.consulta_saida.clear()
+            self.consulta_diagnostico.clear()
+            self.consulta_total = 0
+            self.consulta_falha = ''
+            self.iniciar(self.consulta, ['--lista-json'])
             self.espera.start(10000)
+
+    def consulta_ler(self):
+        saida = bytes(self.consulta.readAllStandardOutput())
+        erro = bytes(self.consulta.readAllStandardError())
+        self.consulta_total += len(saida) + len(erro)
+        if self.consulta_total > LIMITE:
+            self.consulta_falha = 'A listagem excedeu o limite de leitura.'
+            self.consulta.kill()
+            return
+        self.consulta_saida.extend(saida)
+        self.consulta_diagnostico.extend(erro[:max(0, 500 - len(self.consulta_diagnostico))])
 
     def consulta_fim(self, codigo, tipo):
         self.espera.stop()
@@ -742,8 +763,12 @@ class Janela(QMainWindow):
             self.evento_estado.start()
         if self.fechando:
             return
-        saida = bytes(self.consulta.readAllStandardOutput())
-        erro = bytes(self.consulta.readAllStandardError()).decode('utf-8', 'replace')[:500]
+        self.consulta_ler()
+        saida = self.consulta_saida
+        erro = self.consulta_diagnostico.decode('utf-8', 'replace')
+        if self.consulta_falha:
+            self.falha(self.consulta_falha)
+            return
         if codigo != 0 or tipo != QProcess.ExitStatus.NormalExit:
             self.falha('Não foi possível consultar as sessões. ' + erro)
             return
@@ -751,7 +776,7 @@ class Janela(QMainWindow):
             self.falha('A listagem excedeu o limite de leitura.')
             return
         try:
-            sessoes = ler_lista(saida.decode('utf-8', 'replace'), self.estado_dir)
+            sessoes = ler_lista(saida.decode('utf-8'))
         except ValueError as exc:
             self.falha(str(exc))
             return
@@ -769,6 +794,7 @@ class Janela(QMainWindow):
             self.falha('Não foi possível iniciar jangada-agentes. Confira o caminho em --jangada.')
 
     def expirar(self):
+        self.consulta_falha = 'Tempo de consulta esgotado.'
         self.consulta.kill()
 
     def pasta_finalizacao(self, nome):

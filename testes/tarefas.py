@@ -28,7 +28,7 @@ import janela
 from janela import Janela
 import central
 from central import encaminhar, receber
-from dados import barra, idade, ler_lista, pasta_sessoes, registro, resumo_barra
+from dados import barra, idade, ler_lista, pasta_sessoes, resumo_barra
 from argparse import Namespace
 APP = QApplication([])
 
@@ -40,6 +40,28 @@ def aguardar(condicao):
     APP.processEvents()
     if not condicao():
         raise AssertionError('O processo não terminou no prazo da verificação')
+
+def carga(tsv):
+    sessoes = []
+    for linha in tsv.splitlines():
+        estado, nome, diretorio, atualizado, ramo, tarefa = linha.split('\t')
+        sessoes.append(dict(nome=nome, estado=estado, dir=diretorio, atualizado=atualizado,
+                            ramo=ramo, tarefa=tarefa, agente='Não informado', raiz=diretorio,
+                            projeto=Path(diretorio).name or 'Sem projeto', mensagem='', desde='',
+                            coordenador='dono', revisor='Não informado'))
+    return json.dumps(dict(versao=1, sessoes=sessoes), ensure_ascii=False)
+
+
+class Lista:
+    def __init__(self, caminho):
+        self.caminho = caminho
+
+    def write_text(self, texto):
+        self.caminho.write_text(texto if texto.startswith('{') else carga(texto))
+
+    def read_text(self):
+        return self.caminho.read_text()
+
 
 class Interface(unittest.TestCase):
 
@@ -56,16 +78,16 @@ class Interface(unittest.TestCase):
         self.bin = self.raiz / 'bin'
         self.bin.mkdir()
         self.comando = self.bin / 'jangada-agentes'
-        self.comando.write_text("#!/usr/bin/env python3\nimport pathlib, sys, json\npasta = pathlib.Path(__file__).resolve().parent.parent\nif sys.argv[1] in ('--lista', '--lista-atualizada'):\n    if (pasta / 'falhar').exists():\n        print('Erro de consulta simulado', file=sys.stderr)\n        sys.exit(1)\n    print((pasta / 'lista').read_text(), end='')\nelif sys.argv[1] == '--previa':\n    previa = pasta / ('previa-' + sys.argv[2])\n    print(previa.read_text() if previa.exists() else 'Atividade da sessão ' + sys.argv[2])\nelse:\n    (pasta / 'acao.json').write_text(json.dumps(sys.argv[1:]))\n")
+        self.comando.write_text("#!/usr/bin/env python3\nimport pathlib, sys, json\npasta = pathlib.Path(__file__).resolve().parent.parent\nif sys.argv[1] in ('--lista-json',):\n    if (pasta / 'falhar').exists():\n        print('Erro de consulta simulado', file=sys.stderr)\n        sys.exit(1)\n    dados = json.loads((pasta / 'lista').read_text())\n    if (pasta / 'apresentacao.json').exists():\n        detalhe = json.loads((pasta / 'apresentacao.json').read_text())\n        for sessao in dados['sessoes']:\n            if sessao['nome'] == 'projeto--um':\n                sessao.update(detalhe)\n                sessao['projeto'] = pathlib.Path(sessao['raiz']).name\n    print(json.dumps(dados, ensure_ascii=False))\nelif sys.argv[1] == '--previa':\n    previa = pasta / ('previa-' + sys.argv[2])\n    print(previa.read_text() if previa.exists() else 'Atividade da sessão ' + sys.argv[2])\nelse:\n    (pasta / 'acao.json').write_text(json.dumps(sys.argv[1:]))\n")
         self.comando.chmod(448)
         self.criar_comando = self.bin / 'jangada-agente'
         self.criar_comando.write_text(self.comando.read_text().replace(
-            "if sys.argv[1] in ('--lista', '--lista-atualizada'):",
-            "if sys.argv[1] == '--capacidades-json':\n    perfis = (pasta / 'perfis.json').read_text() if (pasta / 'perfis.json').exists() else '[]'\n    principais = (pasta / 'principais.json').read_text() if (pasta / 'principais.json').exists() else '[{\"nome\": \"claude\", \"instalado\": true}, {\"nome\": \"codex\", \"instalado\": true}]'\n    print('{\"principais\": ' + principais + ', \"perfis\": ' + perfis + '}')\nelif sys.argv[1] in ('--lista', '--lista-atualizada'):"))
+            "if sys.argv[1] in ('--lista-json',):",
+            "if sys.argv[1] == '--capacidades-json':\n    perfis = (pasta / 'perfis.json').read_text() if (pasta / 'perfis.json').exists() else '[]'\n    principais = (pasta / 'principais.json').read_text() if (pasta / 'principais.json').exists() else '[{\"nome\": \"claude\", \"instalado\": true}, {\"nome\": \"codex\", \"instalado\": true}]'\n    print('{\"principais\": ' + principais + ', \"perfis\": ' + perfis + '}')\nelif sys.argv[1] in ('--lista-json',):"))
         self.criar_comando.chmod(448)
-        self.lista = self.raiz / 'lista'
+        self.lista = Lista(self.raiz / 'lista')
         self.lista.write_text('aguardando\tprojeto--um\t/tmp/projeto\thoje\tagente/um\tTarefa um\ntrabalhando\tprojeto--dois\t/tmp/projeto\thoje\tagente/dois\tTarefa dois\n')
-        (self.estado / 'projeto--um.json').write_text(json.dumps({'agente': 'codex', 'tarefa': "<img src='https://exemplo/imagem'>", 'raiz': '/tmp/projeto', 'mensagem': '<b>Texto puro</b>'}))
+        (self.raiz / 'apresentacao.json').write_text(json.dumps({'agente': 'codex', 'tarefa': "<img src='https://exemplo/imagem'>", 'raiz': '/tmp/projeto', 'mensagem': '<b>Texto puro</b>'}))
         self.janela = Janela(True, self.raiz, self.estado)
         self.janela.timer.stop()
         self.esperar_consulta()
@@ -277,13 +299,14 @@ class Interface(unittest.TestCase):
         (outra / 'projeto--um.json').write_text(json.dumps({'agente': 'da-variavel'}))
         with patch.dict(os.environ, JANGADA_SESSOES=str(outra)):
             self.assertEqual(pasta_sessoes(self.estado), self.estado)
-            self.assertIn('Tarefa um', barra(Namespace(real=True, jangada=self.raiz, estado=None))['tooltip'])
+            self.assertIn('Tarefas 2', barra(Namespace(real=True, jangada=self.raiz, estado=None))['text'])
             aberta = Janela(True, self.raiz)
             aberta.timer.stop()
             try:
                 aguardar(lambda: aberta.consulta.state() == QProcess.ProcessState.NotRunning)
                 self.assertEqual(aberta.estado_dir, outra)
-                self.assertEqual(aberta.sessoes['projeto--um'].agente, 'da-variavel')
+                self.assertEqual(aberta.sessoes['projeto--um'].agente, 'codex')
+                self.assertNotEqual(aberta.sessoes['projeto--um'].agente, 'da-variavel')
             finally:
                 aberta.close()
         with patch.dict(os.environ):
@@ -683,7 +706,7 @@ class Interface(unittest.TestCase):
         self.assertEqual(form.agente.currentText(), 'codex')
 
     def test_nova_tarefa_sugere_raiz_em_vez_de_worktree(self):
-        registro = self.estado / 'projeto--um.json'
+        registro = self.raiz / 'apresentacao.json'
         dados = json.loads(registro.read_text())
         dados['raiz'] = str(self.raiz / 'original')
         registro.write_text(json.dumps(dados))
@@ -691,20 +714,24 @@ class Interface(unittest.TestCase):
         self.esperar_consulta()
         self.janela.nova_tarefa()
         self.assertEqual(self.janela.formulario.projeto.text(), dados['raiz'])
-        sem_raiz = ler_lista('ativo\tsem-raiz\t/tmp/worktree\t\t\tTarefa\n', self.estado)
+        sem_raiz = ler_lista(carga('ativo\tsem-raiz\t/tmp/worktree\t\t\tTarefa\n'))
         self.assertEqual(sem_raiz['sem-raiz'].raiz, '/tmp/worktree')
 
     def test_observador_acompanha_substituicao_atomica(self):
         self.assertEqual(self.janela.timer.interval(), 30000)
-        registro = self.estado / 'projeto--um.json'
-        dados = json.loads(registro.read_text())
+        registro = self.estado / 'aviso.json'
+        registro.write_text('{}')
+        self.janela.observar_estado()
+        dados = json.loads((self.raiz / 'apresentacao.json').read_text())
         dados['mensagem'] = 'Aviso recebido por evento'
         novo = registro.with_suffix('.tmp')
-        novo.write_text(json.dumps(dados))
+        (self.raiz / 'apresentacao.json').write_text(json.dumps(dados))
+        novo.write_text('{}')
         novo.replace(registro)
         aguardar(lambda: 'Aviso recebido por evento' in self.janela.ultima_atividade.text())
         dados['mensagem'] = 'Segunda substituição'
-        novo.write_text(json.dumps(dados))
+        (self.raiz / 'apresentacao.json').write_text(json.dumps(dados))
+        novo.write_text('{}')
         novo.replace(registro)
         aguardar(lambda: 'Segunda substituição' in self.janela.ultima_atividade.text())
 
@@ -753,23 +780,76 @@ class Interface(unittest.TestCase):
         # Registro antigo, sem os campos: o coordenador é o dono.
         detalhe = self.janela.detalhes.toPlainText()
         self.assertIn('Coordenador: dono\nAutor: codex\nRevisor: Não informado\n', detalhe)
-        (self.estado / 'projeto--um.json').write_text(json.dumps(
+        (self.raiz / 'apresentacao.json').write_text(json.dumps(
             {'agente': 'codex', 'coordenador': 'claude', 'revisor': 'agy', 'raiz': '/tmp/projeto'}))
-        sessao = ler_lista(self.lista.read_text(), self.estado)['projeto--um']
+        self.janela.atualizar()
+        self.esperar_consulta()
+        sessao = self.janela.sessoes['projeto--um']
         self.assertEqual((sessao.coordenador, sessao.agente, sessao.revisor), ('claude', 'codex', 'agy'))
         self.janela.atualizar()
         self.esperar_consulta()
         self.assertIn('Coordenador: claude\nAutor: codex\nRevisor: agy\n', self.janela.detalhes.toPlainText())
 
-    def test_registro_invalido_e_link(self):
-        (self.estado / 'ruim.json').write_text('não é JSON')
-        (self.estado / 'link.json').symlink_to(self.estado / 'projeto--um.json')
-        self.assertEqual(registro(self.estado, 'ruim'), {})
-        self.assertEqual(registro(self.estado, 'link'), {})
-        resultado = ler_lista('ativo\truim\t/tmp/projeto\t\t\tSem detalhes\n', self.estado)
-        self.assertEqual(resultado['ruim'].tarefa, 'Sem detalhes')
+    def test_json_invalido_versao_tipos_e_campos_ausentes(self):
+        original = json.loads(self.lista.read_text())
+        for dados in ('não é JSON', dict(versao=2, sessoes=[]), dict(versao=True, sessoes=[]),
+                      dict(versao=1), dict(versao=1, sessoes=[{}])):
+            with self.subTest(dados=dados), self.assertRaises(ValueError):
+                ler_lista(dados if isinstance(dados, str) else json.dumps(dados))
+        for valor in (None, 1, [], {}):
+            original['sessoes'][0]['mensagem'] = valor
+            with self.subTest(valor=valor), self.assertRaises(ValueError):
+                ler_lista(json.dumps(original))
         with self.assertRaises(ValueError):
-            ler_lista('ativo\t../../fora\t/tmp\t\t\t\n', self.estado)
+            ler_lista(carga('ativo\t../../fora\t/tmp\t\t\t\n'))
+
+    def test_consulta_independe_de_arquivos_internos(self):
+        for nome in ('projeto--um', 'projeto--dois'):
+            (self.estado / (nome + '.json')).write_text('registro privado inválido')
+            (self.estado / (nome + '.json')).chmod(0)
+        with patch('dados.os.open', side_effect=AssertionError('Leitura interna proibida')):
+            self.janela.atualizar()
+            self.esperar_consulta()
+            self.assertTrue(self.janela.dados_validos)
+            self.assertEqual(barra(Namespace(real=True, jangada=self.raiz, estado=self.estado))['class'], 'aguardando')
+
+    def test_multilinha_unicode_sem_interpretacao_html(self):
+        texto = 'ação\nsegunda linha\t雪 &lt;b&gt; <b>literal</b>'
+        dados = json.loads(self.lista.read_text())
+        dados['sessoes'][1].update(tarefa=texto, mensagem=texto, ramo='&lt;ramo&gt;',
+                                  desde='2026-10-14T00:00:00+00:00', revisor='claude')
+        self.lista.write_text(json.dumps(dados))
+        self.janela.atualizar()
+        self.esperar_consulta()
+        sessao = self.janela.sessoes['projeto--dois']
+        self.assertEqual(sessao.tarefa, texto)
+        self.assertEqual(sessao.ramo, '&lt;ramo&gt;')
+        self.assertEqual(sessao.inicio, dados['sessoes'][1]['desde'])
+        self.assertEqual(self.janela.selecionada(), 'projeto--um')
+        self.janela.mostrar(self.janela.sessoes)
+        self.assertEqual(sessao.revisor, 'claude')
+
+    def test_falhas_json_timeout_e_excesso_preservam_dados(self):
+        anterior = self.janela.selecionada()
+        for corpo, esperado in (("print('{\"versao\":2,\"sessoes\":[]}')", 'Versão'),
+                                ("print('{\"versao\":1,\"sessoes\":[{}]}')", 'incompleta'),
+                                ("print('x' * (1024 * 1024 + 1))", 'limite'),
+                                ("import sys; sys.stderr.write('x' * (1024 * 1024 + 1))", 'limite'),
+                                ("import sys; sys.stdout.buffer.write(b'\\xff')", 'utf-8'),
+                                ("import time; time.sleep(30)", 'Tempo')):
+            self.comando.write_text('#!/usr/bin/env python3\n' + corpo + '\n')
+            self.janela.atualizar()
+            if esperado == 'Tempo':
+                self.janela.espera.start(20)
+            self.esperar_consulta()
+            self.assertIn(esperado, self.janela.status.text())
+            self.assertEqual(self.janela.selecionada(), anterior)
+            self.assertFalse(self.janela.abrir.isEnabled())
+            if esperado == 'Tempo':
+                with patch('dados.time.monotonic', side_effect=[0, 11]):
+                    self.assertEqual(barra(Namespace(real=True, jangada=self.raiz, estado=self.estado))['class'], 'erro')
+            else:
+                self.assertEqual(barra(Namespace(real=True, jangada=self.raiz, estado=self.estado))['class'], 'erro')
 
     def test_simulacao_nao_executa(self):
         demo = Janela(False, self.raiz, self.estado)
@@ -796,7 +876,7 @@ class Interface(unittest.TestCase):
 
     def test_tooltip_renderiza_html_da_tarefa_como_texto(self):
         tarefa = "<b>Texto</b> & <img src='https://exemplo/imagem'>\n</qt><a href='x'>Outra linha</a>"
-        (self.estado / 'projeto--um.json').write_text(json.dumps({'tarefa': tarefa}))
+        (self.raiz / 'apresentacao.json').write_text(json.dumps({'tarefa': tarefa}))
         self.janela.atualizar()
         self.esperar_consulta()
         item = self.janela.lista.topLevelItem(0).child(0)
