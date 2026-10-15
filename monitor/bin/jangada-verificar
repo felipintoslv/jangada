@@ -155,17 +155,19 @@ echo "== modelo local (Ollama)"
 # e não mede qualidade. Ausência ou falha de acesso é nota, não problema: o
 # uso básico do jangada não depende do Ollama.
 _ollama_url="${JANGADA_OLLAMA_URL:-http://localhost:11434}"
+# A URL pode trazer usuário:senha; as mensagens mostram só o endereço.
+_ollama_rotulo="$(sed -E 's#^([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@]*@#\1#' <<<"$_ollama_url")"
 _ollama_modelo="${JANGADA_LOCAL_MODELO:-qwen3:4b}"
 if ! command -v curl >/dev/null 2>&1; then
   nota "curl ausente; modelo local não verificado"
 elif ! _ollama_tags="$(curl -fsS --max-time 3 "${_ollama_url%/}/api/tags" 2>/dev/null)"; then
-  nota "Ollama inacessível em $_ollama_url; leitor e redator locais ficam indisponíveis"
+  nota "Ollama inacessível em $_ollama_rotulo; leitor e redator locais ficam indisponíveis"
 elif ! jq -e '.models | type == "array"' <<<"$_ollama_tags" >/dev/null 2>&1; then
-  nota "Ollama respondeu em $_ollama_url, mas a lista de modelos é inválida"
+  nota "Ollama respondeu em $_ollama_rotulo, mas a lista de modelos é inválida"
 elif jq -e --arg m "$_ollama_modelo" 'any(.models[]?; .name == $m)' <<<"$_ollama_tags" >/dev/null 2>&1; then
-  ok "modelo $_ollama_modelo instalado em $_ollama_url (presença, não qualidade)"
+  ok "modelo $_ollama_modelo instalado em $_ollama_rotulo (presença, não qualidade)"
 else
-  nota "modelo $_ollama_modelo não instalado em $_ollama_url; leitor e redator locais ficam indisponíveis"
+  nota "modelo $_ollama_modelo não instalado em $_ollama_rotulo; leitor e redator locais ficam indisponíveis"
 fi
 
 echo "== hooks do Claude Code"

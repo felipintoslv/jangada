@@ -81,6 +81,12 @@ conferir "Ollama: inacessível é nota, não falha" \
 verificar_ollama invalido >"$tmp/ollama"
 conferir "Ollama: resposta inválida não vira disponível" \
   bash -c 'grep -q "lista de modelos é inválida" "$1" && ! grep -q "^ ok" "$1"' _ "$tmp/ollama"
+for estado_ollama in disponivel inacessivel invalido; do
+  FALSO_OLLAMA="$estado_ollama" FALSO_CURL_URLS="$tmp/urls-cred" PATH="$tmp/bin:$PATH" JANGADA_PATH="$PWD" \
+    JANGADA_OLLAMA_URL=http://usuario:segredo@ollama.falso:11434 bin/jangada-verificar >"$tmp/ollama-cred" 2>&1
+  conferir "Ollama: credenciais da URL não aparecem na saída ($estado_ollama)" \
+    bash -c '! grep -q "segredo\|usuario" "$1" && grep -q "ollama.falso:11434" "$1"' _ "$tmp/ollama-cred"
+done
 conferir "Ollama: só /api/tags é consultado, sem geração" \
   bash -c 'sort -u "$1" | grep -qx "http://ollama.falso:11434/api/tags" && [ "$(sort -u "$1" | wc -l)" = 1 ]' _ "$tmp/urls"
 
