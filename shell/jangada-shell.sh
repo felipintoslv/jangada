@@ -123,7 +123,7 @@ mudancas() {
 
 # Consulta limitada ao contrato público, sem leitura alternativa do estado.
 _jangada_consulta_terminal() {
-  python3 - "$JANGADA_PATH/bin/jangada-agentes" "$@" <<'PYCONSULTA'
+  python3 -I - "$JANGADA_PATH/bin/jangada-agentes" "$@" <<'PYCONSULTA'
 import json
 import os
 import re

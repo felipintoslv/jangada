@@ -156,14 +156,23 @@ print(os.environ['RESPOSTA'])
     agente.chmod(0o700)
     shell_env = dict(ambiente, JANGADA_PATH=str(fachada), JANGADA_ESTADO='/inacessivel',
                      RESPOSTA=json.dumps(dict(versao=1, sessao='correta')))
+    hostil = base / 'diretorio-hostil'
+    hostil.mkdir()
+    importacao = base / 'importacao-indesejada'
+    (hostil / 'json.py').write_text('from pathlib import Path\nPath(' + repr(str(importacao)) + ').touch()\nraise RuntimeError("importação da pasta atual")\n')
     shells = ['bash'] + (['zsh'] if shutil.which('zsh') else [])
     for shell in shells:
-        def terminal(codigo, **env):
+        def terminal(codigo, cwd=None, **env):
             return subprocess.run([shell, '-c', 'source "$1/shell/jangada-shell.sh"\n' + codigo,
                                    shell, str(repo)], env=dict(shell_env, **env),
-                                  capture_output=True, text=True, timeout=15)
+                                  cwd=cwd, capture_output=True, text=True, timeout=15)
         r = terminal('_jangada_git() { echo /exato; }; _jangada_sessao_atual')
         assert r.returncode == 0 and r.stdout == 'correta\n', r
+        r = terminal('_jangada_git() { echo /exato; }; _jangada_sessao_atual',
+                     cwd=hostil, PYTHONPATH=str(hostil))
+        assert r.returncode == 0 and r.stdout == 'correta\n' and not importacao.exists(), r
+        r = terminal('repassar legada', cwd=hostil, PYTHONPATH=str(hostil), RESPOSTA=json.dumps(resposta))
+        assert r.returncode == 0 and 'r10\nDADO' in r.stdout and not importacao.exists(), r
         r = terminal('_jangada_sessao_atual', JANGADA_SESSAO='ambiente', FALHAR='1')
         assert r.returncode == 0 and r.stdout == 'ambiente\n'
         for payload in ('{', '{"versao":2,"sessao":"errada"}', '{"versao":true,"sessao":"x"}',

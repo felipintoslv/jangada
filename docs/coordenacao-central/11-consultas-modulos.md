@@ -72,7 +72,9 @@ A resposta UTF-8 inteira tem teto de 1 MiB, sem truncamento. O Core sai
 com 1, diagnóstico e stdout vazio em caso de erro.
 
 O terminal valida versão inteira 1, campos e tipos antes de usar a resposta.
-O transporte limita stdout e stderr agregados a 1 MiB e dez segundos.
+O transporte usa Python em modo isolado (`-I`), sem importar módulos da
+pasta atual ou de `PYTHONPATH`. Limita stdout e stderr agregados a 1 MiB e
+dez segundos.
 Falha, JSON malformado ou versão desconhecida não vira ausência de sessão.
 O prazo encerra o processo direto; não promete encerrar seus descendentes.
 Não há retorno à leitura dos arquivos privados.

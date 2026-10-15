@@ -31,6 +31,9 @@ No terminal, `dir` não substitui `worktree`: inclui sessões `--direto`, e a
 lista geral aplica retenção. Use `--sessao-worktree-json` para correspondência
 literal, com erro em duplicidade. Para repassar contexto explícito, use
 `--contexto-json SESSAO`; r10 sucede r2 por número, sem ler `revisoes/`.
+Um auxiliar Python recebido por stdin inclui a pasta atual nas importações.
+Use `python3 -I -` no transporte do terminal para não executar módulos do
+worktree nem de `PYTHONPATH` com a identidade do dono.
 Texto repassado permanece dado não confiável. O contrato e os limites estão
 em `docs/coordenacao-central/11-consultas-modulos.md`.
 
