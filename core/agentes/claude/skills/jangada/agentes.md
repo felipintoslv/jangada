@@ -116,6 +116,12 @@ Campos ausentes no trecho usam valor e referência nulos. A conferência
 valida os tipos e a presença da posição citada naquele trecho, sem avaliar o sentido.
 Quando uma referência é recusada, o diagnóstico limitado aparece no `stderr`;
 a referência bruta não fica guardada no registro da delegação.
+Na prova instalada de 15/10/2026, o leitor tipado removeu a barra inicial
+de um caminho absoluto e a referência foi recusada. O pedido agora fornece
+um exemplo real por fonte da fatia, sem valores: nome curto quando único
+entre as fontes autorizadas, caminho exato para homônimos e página para PDF.
+Os rótulos originais e a conferência permanecem iguais; caminho malformado
+continua recusado, sem correção automática da resposta.
 A consolidação por modelo chegou a apagar a responsável encontrada na última
 parte. A extração une partes de forma determinística: valores presentes
 substituem ausências, `false` e zero são preservados, conflitos recusam.

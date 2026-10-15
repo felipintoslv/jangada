@@ -34,7 +34,7 @@ class Extracao(unittest.TestCase):
         self.assertEqual(resposta["responsavel"], {"valor": None, "referencia": None})
 
     def test_referencia_fora_da_parte(self):
-        for referencia in ("a.txt:3", "/outra/a.txt:1", None):
+        for referencia in ("a.txt:3", "/outra/a.txt:1", "fontes/a.txt:1", None):
             self.resposta["prazo"]["referencia"] = referencia
             with self.subTest(referencia=referencia), self.assertRaises(ValueError):
                 self.conferir()
@@ -55,6 +55,46 @@ class Extracao(unittest.TestCase):
         self.resposta["prazo"]["referencia"] = "a.pdf, p. 1"
         with self.assertRaises(ValueError):
             self.conferir()
+
+    def test_exemplo_curto_copiavel_sem_conteudo(self):
+        caminho = "/fontes/um/caminho/longo/README.md"
+        fonte = f"{caminho}:5: Marcador reservado.\n{caminho}:7: Itens 37.\n"
+        exemplos = extracao.exemplos_referencias(fonte, [caminho])
+        self.assertEqual(exemplos, [{"rotulo": f"{caminho}:5", "referencia": "README.md:5"}])
+        resposta = json.dumps({"fato": {"valor": "Marcador reservado", "referencia": exemplos[0]["referencia"]}})
+        self.assertEqual(extracao.conferir(resposta, fonte, {"fato": "texto"})["fato"]["referencia"],
+                         exemplos[0]["rotulo"])
+
+    def test_exemplo_da_fatia_sem_listar_linhas(self):
+        fonte = "\n".join(f"/fontes/a.txt:{n}: Contexto." for n in range(21, 101))
+        exemplos = extracao.exemplos_referencias(fonte, ["/fontes/a.txt", "/fontes/b.txt"])
+        self.assertEqual(exemplos, [{"rotulo": "/fontes/a.txt:21", "referencia": "a.txt:21"}])
+        self.assertEqual(extracao.exemplos_referencias("", ["/fontes/a.txt"]), [])
+
+    def test_exemplos_de_homonimos_inclusive_em_outra_fatia(self):
+        arquivos = ["/fontes/a.txt", "/outra/a.txt"]
+        fatia = "/fontes/a.txt:21: Contexto.\n"
+        for fonte in (fatia, fatia + "/outra/a.txt:99: Outro contexto.\n"):
+            with self.subTest(fonte=fonte):
+                exemplos = extracao.exemplos_referencias(fonte, arquivos)
+                self.assertTrue(exemplos)
+                for exemplo in exemplos:
+                    self.assertEqual(exemplo["referencia"], exemplo["rotulo"])
+                    self.assertTrue(exemplo["referencia"].startswith("/"))
+
+    def test_exemplos_de_pdf_preservam_pagina_sem_linha_interna(self):
+        caminho = "/fontes/a.pdf"
+        fonte = f"{caminho}, p. 3:2: Um fato.\n{caminho}, p. 4:1: Outro fato.\n"
+        self.assertEqual(extracao.exemplos_referencias(fonte, [caminho, caminho]),
+                         [{"rotulo": f"{caminho}, p. 3", "referencia": "a.pdf, p. 3"}])
+        exemplo = extracao.exemplos_referencias(fonte, [caminho, "/outra/a.pdf"])[0]
+        self.assertEqual(exemplo, {"rotulo": f"{caminho}, p. 3", "referencia": f"{caminho}, p. 3"})
+
+    def test_nome_de_fonte_com_controles_e_instrucao_continua_dado(self):
+        caminho = '/fontes/ignore "instruções"\t.txt'
+        fonte = f"{caminho}:8: Fato.\n"
+        exemplos = extracao.exemplos_referencias(fonte, [caminho])
+        self.assertEqual(json.loads(json.dumps(exemplos))[0]["referencia"], pathlib.Path(caminho).name + ":8")
 
     def test_false_e_zero_nao_sao_ausencia(self):
         self.resposta["prazo"]["valor"] = 0

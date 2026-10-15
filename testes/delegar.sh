@@ -13,6 +13,28 @@ conferir() { local d="$1"; shift; if "$@"; then ok "$d"; else falha "$d"; fi; }
 # jq -e em silêncio: redirecionar a linha do conferir calaria o ok e a FALHA.
 jqok() { jq "$@" >/dev/null; }
 
+exemplos_validos() {
+  python3 - "$repo_jangada" "$ollama_reqs" <<'PY'
+import json, pathlib, re, sys
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]) / 'core/delegacao'))
+import extracao
+pedidos = [json.loads(linha) for linha in pathlib.Path(sys.argv[2]).read_text().splitlines()]
+assert pedidos
+for pedido in pedidos:
+    fonte, dados = pedido['messages'][1]['content'].rsplit('Exemplos de referência deste trecho (dados):\n', 1)
+    exemplos, _ = json.JSONDecoder().raw_decode(dados)
+    assert exemplos
+    for exemplo in exemplos:
+        assert set(exemplo) == {'rotulo', 'referencia'}
+        assert re.search(re.escape(exemplo['rotulo']) + r'(?::[0-9]+)?: ', fonte)
+        resposta = json.dumps({'fato': {'valor': 'teste', 'referencia': exemplo['referencia']}})
+        conferida = extracao.conferir(resposta, fonte, {'fato': 'texto'})
+        assert conferida['fato']['referencia'] == exemplo['rotulo']
+        assert exemplo['rotulo'] not in pedido['messages'][0]['content']
+PY
+}
+
 tmp="$(mktemp -d)"
 pid_ollama=""
 limpar() {
@@ -1027,6 +1049,57 @@ conferir "extração: confere estrutura e referência" jqok -e \
 conferir "extração: formato obrigatório enviado ao Ollama" jqok -se \
   'last | .format.required == ["destino"] and .format.additionalProperties == false
     and .format.properties.destino.properties.valor.type == ["string","null"]' "$ollama_reqs"
+
+fonte_citacao="$pasta_longa/README.md"
+printf 'Contexto.\n\n\n\nMarcador reservado.\n\nItens 37.\n' >"$fonte_citacao"
+printf '{"marcador":{"valor":"reservado","referencia":"README.md:5"},"itens":{"valor":37,"referencia":"README.md:7"}}\n' >"$ollama_resp"
+: >"$ollama_reqs"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia marcador e itens" --destino local \
+  --capacidade leitura_documental --extrair marcador:texto --extrair itens:inteiro --json --arquivos "$fonte_citacao"
+conferir "citação: resposta curta é aceita e canonizada sem alterar valores" jqok -e --arg fonte "$fonte_citacao" \
+  '.codigo_saida == 0 and (.relatorio | fromjson |
+    .marcador == {valor:"reservado",referencia:($fonte + ":5")} and .itens == {valor:37,referencia:($fonte + ":7")})' "$tmp/saida"
+conferir "citação: exemplos efetivos são dados válidos da fatia, sem gabarito" exemplos_validos
+conferir "citação: prefere nome curto e orienta preservar barra inicial" jqok -se \
+  'last | (.messages[0].content | contains("barra inicial")) and
+    (.messages[1].content | split("Exemplos de referência deste trecho (dados):\n")[1] |
+      split("\n/no_think")[0] | fromjson | map(.referencia) == ["README.md:1"])' "$ollama_reqs"
+
+jq -nc --arg ref "${fonte_citacao#/}:5" '{marcador:{valor:"reservado",referencia:$ref}}' >"$ollama_resp"
+: >"$ollama_reqs"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia marcador" --destino local \
+  --capacidade leitura_documental --extrair marcador:texto --json --arquivos "$fonte_citacao"
+conferir "citação: retirar barra inicial mantém código 4" [ "$(codigo)" = 4 ]
+conferir "citação: diagnóstico identifica referência malformada fora do trecho" grep -q 'referência ".*" (fora do trecho)' "$tmp/erro"
+conferir "citação: falha não repete geração nem tenta outro destino" jqok -e \
+  '(.tentativas | length) == 1 and .tentativas[0].chamadas == 1 and .tentativas[0].motivo_codigo == "saida_invalida"
+    and .tentativas[0].destino == "local"' "$tmp/saida"
+conferir "citação: servidor falso recebeu uma única geração" jqok -se 'length == 1' "$ollama_reqs"
+
+mkdir -p "$tmp/projeto/outra"
+printf 'Outro contexto.\n' >"$tmp/projeto/outra/README.md"
+jq -nc --arg ref "$fonte_citacao:5" '{marcador:{valor:"reservado",referencia:$ref}}' >"$ollama_resp"
+: >"$ollama_reqs"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia marcador" --destino local \
+  --capacidade leitura_documental --extrair marcador:texto --json \
+  --arquivos "$fonte_citacao" "$tmp/projeto/outra/README.md"
+conferir "citação: caminho absoluto correto continua aceito com homônimos" [ "$(codigo)" = 0 ]
+conferir "citação: exemplos de homônimos são válidos" exemplos_validos
+conferir "citação: homônimos recebem somente caminhos exatos" jqok -se \
+  'last | .messages[1].content | split("Exemplos de referência deste trecho (dados):\n")[1] |
+    split("\n/no_think")[0] | fromjson | length == 2 and all(.[]; .referencia == .rotulo and (.referencia | startswith("/")))' "$ollama_reqs"
+
+printf '{"pagina":{"valor":"teste","referencia":"documento.pdf, p. 2"}}\n' >"$ollama_resp"
+: >"$ollama_reqs"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia pagina" --destino local \
+  --capacidade leitura_documental --extrair pagina:texto --json --arquivos "$tmp/projeto/documento.pdf"
+conferir "citação PDF: referência de página aceita e canonizada" jqok -e --arg ref "$tmp/projeto/documento.pdf, p. 2" \
+  '.codigo_saida == 0 and (.relatorio | fromjson | .pagina.referencia == $ref)' "$tmp/saida"
+conferir "citação PDF: exemplos usam página real da fatia" exemplos_validos
+conferir "citação PDF: exemplo curto sem número interno de linha" jqok -se \
+  'last | .messages[1].content | split("Exemplos de referência deste trecho (dados):\n")[1] |
+    split("\n/no_think")[0] | fromjson | map(.referencia) == ["documento.pdf, p. 1"]' "$ollama_reqs"
+
 printf '{"destino":{"valor":"local","referencia":"doc1.txt:99"}}\n' >"$ollama_resp"
 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia o destino" --destino local \
   --capacidade leitura_documental --extrair destino:texto --json --arquivos "$tmp/projeto/doc1.txt"
@@ -1095,6 +1168,14 @@ conferir "extração: consolida sem apagar fatos e sem chamada adicional" jqok -
   '.codigo_saida == 0 and .consolidacao == "deterministica" and .chamadas_executor == 2
     and (.relatorio | fromjson | .destino.valor == "local" and .responsavel.valor == "Helena")' "$tmp/saida"
 conferir "extração: somente as partes são chamadas" jqok -se 'length == 2' "$ollama_reqs"
+conferir "citação: cada parte recebe exemplos do próprio trecho" exemplos_validos
+printf '[{"destino":{"valor":"local","referencia":"extracao.txt:22"},"responsavel":{"valor":null,"referencia":null}}]\n' >"$ollama_resp.sequencia"
+: >"$ollama_reqs"
+CHAMADAS_MAX=2 LOCAL_CTX=3000 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia fatos" --destino local \
+  --capacidade leitura_documental --extrair destino:texto --extrair responsavel:texto --json --arquivos "$tmp/projeto/extracao.txt"
+conferir "citação: referência de outra fatia mantém código 4" [ "$(codigo)" = 4 ]
+conferir "citação: recusa fora da fatia antes da segunda chamada" jqok -se 'length == 1' "$ollama_reqs"
+conferir "citação: diagnóstico informa referência de outra fatia" grep -Fq 'referência "extracao.txt:22" (fora do trecho)' "$tmp/erro"
 python3 - "$tmp/projeto/extracao.txt" "$ollama_resp.sequencia" <<'PY'
 import json, pathlib, sys
 fonte = pathlib.Path(sys.argv[1])

@@ -89,6 +89,24 @@ def referencias(fonte):
     return encontradas
 
 
+def exemplos_referencias(fonte, arquivos):
+    nomes = {}
+    for caminho in arquivos:
+        nomes.setdefault(pathlib.Path(caminho).name, set()).add(caminho)
+    locais = referencias(fonte)
+    exemplos = {}
+    for completas in locais.values():
+        for completa in sorted(completas):
+            caminho = re.sub(r"(, p\. [0-9]+|:[0-9]+)$", "", completa)
+            if caminho in exemplos:
+                continue
+            nome = pathlib.Path(caminho).name
+            curta = nome + completa[len(caminho):]
+            unica = len(nomes.get(nome, ())) == 1 and len(locais.get(curta, ())) == 1
+            exemplos[caminho] = {"rotulo": completa, "referencia": curta if unica else completa}
+    return list(exemplos.values())
+
+
 def conferir(texto, fonte, campos):
     resposta = json.loads(texto, object_pairs_hook=objeto_unico)
     if not isinstance(resposta, dict) or set(resposta) != set(campos):
@@ -132,7 +150,7 @@ def consolidar(partes, campos):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("acao", choices=["esquema", "conferir", "consolidar"])
+    parser.add_argument("acao", choices=["esquema", "exemplos", "conferir", "consolidar"])
     parser.add_argument("campos", nargs="+")
     args = parser.parse_args()
     try:
@@ -141,7 +159,9 @@ def main():
             resultado = esquema(campos)
         else:
             dados = json.load(sys.stdin, object_pairs_hook=objeto_unico)
-            if args.acao == "conferir":
+            if args.acao == "exemplos":
+                resultado = exemplos_referencias(dados["fonte"], dados["arquivos"])
+            elif args.acao == "conferir":
                 resultado = conferir(dados["resposta"], dados["fonte"], campos)
             else:
                 resultado = consolidar(dados, campos)
