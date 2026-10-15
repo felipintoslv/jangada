@@ -136,14 +136,27 @@ print(json.dumps({"status":"SUCCESS","response":"dados.txt:1 valor atualizado","
         self.assertEqual((self.raiz / "dados.txt").read_text(), "edição concorrente")
 
     def test_negativos_da_entrega(self):
+        diagnosticos = {"fora": "arquivos fora do contrato", "link": "link recusado",
+                       "hardlink": "link recusado", "falha": "delegação recusada ou falhou"}
         for modo in ("fora", "link", "hardlink", "falha", "prazo"):
             with self.subTest(modo=modo):
                 self.env["FALSO_MODO"] = modo
-                p = self.executar("--prazo", "1", sucesso=False)
+                extras = ("--prazo", "1") if modo == "prazo" else ()
+                p = self.executar(*extras, sucesso=False)
                 resultado = json.loads(p.stdout)
-                self.assertIn(resultado["estado"], ("falhou", "interrompida"))
+                if modo == "prazo":
+                    self.assertEqual(resultado["estado"], "interrompida")
+                    self.assertEqual(resultado["codigo"], 124)
+                else:
+                    self.assertEqual(resultado["estado"], "falhou")
+                    self.assertIn(diagnosticos[modo], resultado["diagnostico"])
                 self.assertNotIn("entrega", resultado)
                 self.assertEqual((self.raiz / "dados.txt").read_text(), "valor=1\n")
+
+    def test_ajuda_preserva_opcoes_de_leitura(self):
+        p = self.chamar("--help", sucesso=False)
+        for opcao in ("--requisito", "--extrair", "--permitir-remoto", "implementador"):
+            self.assertIn(opcao, p.stderr)
 
     def test_caminhos_modelo_e_concorrencia_recusados(self):
         for nome in ("/tmp/fora", "../fora", "x/../../fora", ".git/config", "x//y"):

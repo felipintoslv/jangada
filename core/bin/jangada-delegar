@@ -64,7 +64,7 @@ fi
 executor_contrato=""
 
 
-uso() { sed -n '7,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+uso() { sed -n '7,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 papel=""; pedido=""; arquivo=""; destino_opt=""
 capacidade=""; permitir_remoto=0; permitir_codex=0; modo_json=0
