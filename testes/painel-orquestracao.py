@@ -85,10 +85,6 @@ class Painel(unittest.TestCase):
             self.assertEqual(arquivos_antes, {str(p): (p.read_bytes(), p.stat().st_mtime_ns)
                                              for p in raiz.rglob('*') if p.is_file()})
             estado.db.execute('ROLLBACK')
-            consulta = orquestracao.Consulta(estado.pasta / 'tarefas.sqlite')
-            with self.assertRaises(sqlite3.OperationalError):
-                consulta.db.execute('DELETE FROM tarefas')
-            consulta.fechar()
             for e in bancos:
                 e.fechar()
 

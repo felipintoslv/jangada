@@ -20,6 +20,16 @@ Caminhos usados abaixo:
   O nome da pasta é `jangada-worktrees`, sem barra entre as palavras.
 - `$JANGADA_PROJETOS` = `~/Projetos`.
 
+## Consultas de terminal e Monitor
+
+O terminal consulta por sessão ou árvore de trabalho através de
+`jangada-agentes --contexto-json` e `--sessao-worktree-json`, ambos versão 1.
+O Monitor recebe filas, consumos, métricas e provedores por
+`nucleo.consultas.consultar_filas`, sem descobrir bancos ou receber conexões.
+O [contrato M1.2](coordenacao-central/11-consultas-modulos.md) define campos,
+limites, seleção e erros. Os registros abaixo permanecem inalterados.
+Texto repassado não é autorização; a consulta nunca inclui `revisoes/`.
+
 ## 1. validar.jsonl
 
 Desde a Fase 4 da evolução 2.0, `execucao` é opcional nos eventos de sessão,

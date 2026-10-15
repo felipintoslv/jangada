@@ -1,0 +1,214 @@
+"""Consultas reais em origem sintética, sem controlador, rede ou modelos."""
+
+import hashlib
+import json
+import os
+from pathlib import Path
+import sqlite3
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+
+sys.dont_write_bytecode = True
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / 'core'))
+sys.path.insert(0, str(REPO / 'core/orquestracao'))
+os.environ['JANGADA_CORE_PY'] = str(REPO / 'core')
+sys.path.insert(0, str(REPO / 'monitor/painel'))
+from nucleo import consultas
+from metricas_projeto import calcular
+import orquestracao
+
+
+def retrato(pasta):
+    return sorted((str(p.relative_to(pasta)), p.lstat().st_mode,
+                   os.readlink(p) if p.is_symlink() else hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else '')
+                  for p in pasta.rglob('*'))
+
+
+def criar_banco(caminho):
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    db = sqlite3.connect(caminho, isolation_level=None)
+    db.row_factory = sqlite3.Row
+    db.executescript('''
+        PRAGMA journal_mode=WAL;
+        PRAGMA wal_autocheckpoint=0;
+        CREATE TABLE tarefas (id TEXT, especificacao TEXT, status TEXT, tentativas INTEGER,
+          motivo TEXT, criado REAL, atualizado REAL, resultado TEXT);
+        CREATE TABLE eventos (seq INTEGER PRIMARY KEY, tarefa TEXT, evento TEXT, dados TEXT);
+        CREATE TABLE provedores (id TEXT, status TEXT, pausado INTEGER, falhas INTEGER,
+          motivo TEXT, atualizado REAL, valido_ate REAL, cota REAL, modelo TEXT);
+    ''')
+    return db
+
+
+class ConsultasModulos(unittest.TestCase):
+    def test_filas_conteudo_precos_wal_e_provedores(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp)
+            projeto = raiz / 'projeto'
+            identificador = hashlib.sha256(str(projeto).encode()).hexdigest()
+            banco = raiz / 'agentes/projetos' / identificador / 'tarefas.sqlite'
+            db = criar_banco(banco)
+            runtime = criar_banco(raiz / 'agentes/runtime/tarefas.sqlite')
+            spec = dict(papel='leitor', capacidade='leitura_documental', risco=1,
+                        max_chamadas=4, tempo_total=120, dependencias=[])
+            db.execute('INSERT INTO tarefas VALUES (?,?,?,?,?,?,?,?)',
+                       ('leitura', json.dumps(spec), 'REVIEW_REQUIRED', 1, 'aguarda', 1, 2, None))
+            dependente = dict(spec, dependencias=['leitura'])
+            db.execute('INSERT INTO tarefas VALUES (?,?,?,?,?,?,?,?)',
+                       ('dependente', json.dumps(dependente), 'QUEUED', 0, '', 1, 2, None))
+            db.execute('INSERT INTO eventos VALUES (?,?,?,?)', (1, 'leitura', 'execucao_encerrada',
+                       json.dumps(dict(status='REVIEW_REQUIRED', artefato='relato', resultado=dict(
+                           metricas=dict(chamadas=1, segundos=5), executor='codex-economico',
+                           delegacao=dict(modelo='sintetico', tokens_codex_entrada=100, tokens_codex_saida=20))))))
+            runtime.execute('INSERT INTO provedores VALUES (?,?,?,?,?,?,?,?,?)',
+                            ('codex', 'AVAILABLE', 0, 0, 'observado', 1, 1, 80, 'sintetico'))
+            precos = dict(moeda='BRL', precos={'codex-economico': {'sintetico':
+                          dict(entrada_por_milhao=10, saida_por_milhao=20)}})
+            class Legado:
+                def __init__(self, conexao):
+                    self.db = conexao
+                def listar(self):
+                    tarefas = [dict(r) for r in self.db.execute('SELECT * FROM tarefas ORDER BY criado,id')]
+                    for t in tarefas:
+                        t['especificacao'] = json.loads(t['especificacao'])
+                    return tarefas
+            esperado = calcular(Legado(db), precos)
+            config = raiz / 'config'
+            config.mkdir()
+            (config / 'precos.json').write_text(json.dumps(precos))
+            db.execute('BEGIN IMMEDIATE')
+            db.execute("UPDATE tarefas SET status='FAILED' WHERE id='leitura'")
+            antes = retrato(raiz)
+            consulta = consultas.consultar_filas(raiz, [projeto], precos)
+            self.assertEqual(retrato(raiz), antes)
+            self.assertEqual(consulta['versao'], 1)
+            self.assertEqual(consulta['erros'], [])
+            fila = consulta['projetos'][0]
+            self.assertEqual(fila['caminho'], str(projeto))
+            self.assertEqual(fila['metricas'], esperado)
+            self.assertEqual(fila['consumos']['leitura'], dict(chamadas=1, segundos=5))
+            self.assertEqual(fila['metricas']['custo_estimado'], 0.0014)
+            self.assertEqual({t['id']: t['status'] for t in fila['tarefas']},
+                             dict(leitura='REVIEW_REQUIRED', dependente='QUEUED'))
+            codex = next(p for p in consulta['provedores'] if p['id'] == 'codex')
+            self.assertEqual(codex['status'], 'UNKNOWN')
+            self.assertIsNone(codex['cota'])
+            # O consumidor não pode descobrir, abrir ou sequer testar caminho privado.
+            with patch.object(Path, 'glob', side_effect=AssertionError('descoberta privada')), \
+                    patch.object(Path, 'iterdir', side_effect=AssertionError('descoberta privada')), \
+                    patch.object(Path, 'exists', side_effect=AssertionError('leitura privada')), \
+                    patch.object(orquestracao, 'consultar_filas', return_value=consulta), \
+                    patch.object(orquestracao, 'ler_precos', return_value=precos):
+                painel = orquestracao.coletar('/estado/reposicionado/ausente', [projeto], lambda p: 'Meu projeto')
+            with patch.dict(os.environ, JANGADA_CONFIG=str(config)):
+                real = orquestracao.coletar(raiz, [projeto], lambda p: 'Meu projeto')
+            self.assertEqual(real, painel)
+            self.assertEqual(retrato(raiz), antes)
+            self.assertEqual(painel['erros'], [])
+            self.assertEqual(painel['projetos'], [dict(projeto='Meu projeto', **esperado)])
+            self.assertEqual(painel['provedores'], consulta['provedores'])
+            tarefa = next(t for t in painel['tarefas'] if t['id'] == 'leitura')
+            self.assertEqual(tarefa, dict(projeto='Meu projeto', id='leitura', estado='REVIEW_REQUIRED',
+                papel='leitor', capacidade='leitura_documental', prioridade='normal', tentativas=1,
+                motivo='aguarda', dependencias='', atualizado=2, chamadas=1, segundos=5,
+                limite_chamadas=4, limite_segundos=120, saldo_chamadas=3, saldo_segundos=115))
+            self.assertEqual(next(t for t in painel['tarefas'] if t['id'] == 'dependente')['estado'], 'BLOCKED')
+            with consultas.banco_leitura(banco) as copia:
+                with self.assertRaises(sqlite3.OperationalError):
+                    copia.execute('DELETE FROM tarefas')
+            self.assertEqual(retrato(raiz), antes)
+            db.execute('ROLLBACK')
+            db.close()
+            runtime.close()
+
+    def test_ausencia_erro_versao_links_fifo_e_limites(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp)
+            resposta = consultas.consultar_filas(raiz)
+            self.assertEqual(resposta, dict(versao=1, projetos=[], provedores=[], erros=[]))
+            self.assertEqual(retrato(raiz), [])
+            pasta = raiz / 'agentes/projetos/um'
+            caminho = pasta / 'tarefas.sqlite'
+            db = criar_banco(caminho)
+            db.close()
+            for fonte in ('banco', 'wal', 'shm', 'projeto', 'projetos', 'agentes', 'runtime'):
+                alvo = {'banco': caminho, 'wal': Path(str(caminho) + '-wal'),
+                        'shm': Path(str(caminho) + '-shm'), 'projeto': pasta,
+                        'projetos': pasta.parent, 'agentes': raiz / 'agentes',
+                        'runtime': raiz / 'agentes/runtime'}[fonte]
+                if fonte == 'runtime':
+                    alvo.mkdir()
+                backup = alvo.with_name(alvo.name + '-guardado')
+                existia = alvo.exists()
+                if existia:
+                    alvo.rename(backup)
+                for tipo in ('link', 'fifo'):
+                    if tipo == 'link':
+                        alvo.symlink_to(backup if existia else caminho)
+                    else:
+                        os.mkfifo(alvo)
+                    antes = retrato(raiz)
+                    resultado = consultas.consultar_filas(raiz)
+                    self.assertTrue(resultado['erros'], (fonte, tipo, resultado))
+                    self.assertEqual(retrato(raiz), antes)
+                    alvo.unlink()
+                if existia:
+                    backup.rename(alvo)
+            for valor in ('corrompido', 'versao', 'json', 'tipo'):
+                caminho.unlink()
+                if valor == 'corrompido':
+                    caminho.write_text('não é SQLite')
+                else:
+                    db = criar_banco(caminho)
+                    if valor == 'versao':
+                        db.execute('PRAGMA user_version=9')
+                    else:
+                        db.execute('INSERT INTO tarefas VALUES (?,?,?,?,?,?,?,?)',
+                                   ('x', '{' if valor == 'json' else '[]', 'QUEUED', 0, '', 1, 1, None))
+                    db.close()
+                antes = retrato(raiz)
+                resultado = consultas.consultar_filas(raiz)
+                self.assertEqual(resultado['projetos'], [])
+                self.assertTrue(resultado['erros'], valor)
+                self.assertEqual(retrato(raiz), antes)
+
+    def test_limites_e_fila_vazia(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp)
+            caminho = raiz / 'agentes/projetos/um/tarefas.sqlite'
+            db = criar_banco(caminho)
+            self.assertEqual(consultas.consultar_filas(raiz)['projetos'][0]['tarefas'], [])
+            db.executemany('INSERT INTO eventos VALUES (?,?,?,?)',
+                           ((n, 'x', 'observacao', '{}') for n in range(16385)))
+            self.assertTrue(consultas.consultar_filas(raiz)['erros'])
+            db.execute('DELETE FROM eventos')
+            db.execute('INSERT INTO tarefas VALUES (?,?,?,?,?,?,?,?)',
+                       ('x', json.dumps(dict(papel='leitor', capacidade='x', texto='x' * 1048576)),
+                        'QUEUED', 0, '', 1, 1, None))
+            self.assertTrue(consultas.consultar_filas(raiz)['erros'])
+            db.close()
+            with caminho.open('wb') as arquivo:
+                arquivo.truncate(64 * 1024 * 1024 + 1)
+            antes = retrato(raiz)
+            self.assertTrue(consultas.consultar_filas(raiz)['erros'])
+            self.assertEqual(retrato(raiz), antes)
+
+    def test_consumidor_falhas_nao_viram_sucesso(self):
+        for resposta in (dict(versao=2), dict(versao=True), {},
+                         dict(versao=1, projetos=None, provedores=[], erros=[])):
+            with patch.object(orquestracao, 'consultar_filas', return_value=resposta):
+                resultado = orquestracao.coletar('/ausente', [], str)
+            self.assertTrue(resultado['erros'])
+        with patch.object(orquestracao, 'consultar_filas', side_effect=ValueError('quebrado')):
+            self.assertTrue(orquestracao.coletar('/ausente', [], str)['erros'])
+        with patch.object(orquestracao, 'consultar_filas', return_value=dict(
+                versao=1, projetos=[], provedores=[], erros=[])), \
+                patch.object(orquestracao, 'ler_precos', side_effect=ValueError('preço inválido')):
+            self.assertIn('preço inválido', orquestracao.coletar('/ausente', [], str)['erros'][0])
+
+
+if __name__ == '__main__':
+    unittest.main()

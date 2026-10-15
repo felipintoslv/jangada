@@ -4,6 +4,7 @@ import contextlib
 import json
 import math
 import os
+import re
 from pathlib import Path
 import sqlite3
 import stat
@@ -27,7 +28,7 @@ SESSOES = {'iniciado': 'Executando', 'ativo': 'Executando', 'trabalhando': 'Exec
 
 
 @contextlib.contextmanager
-def banco_leitura(caminho):
+def banco_leitura(caminho, limite=None):
     # Mesmo mode=ro pode criar WAL/SHM na origem. Uma cópia estável inclui o WAL
     # para não perder transações já confirmadas que ainda não chegaram ao banco.
     caminho = Path(caminho)
@@ -47,8 +48,14 @@ def banco_leitura(caminho):
                     info = os.fstat(origem.fileno())
                     if not stat.S_ISREG(info.st_mode):
                         raise ValueError('banco deve ser arquivo regular')
+                    if limite is not None and info.st_size > limite:
+                        raise ValueError('banco excedeu limite de leitura')
                     antes[nome] = (info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+                    tamanho = 0
                     while bloco := origem.read(1024 * 1024):
+                        tamanho += len(bloco)
+                        if limite is not None and tamanho > limite:
+                            raise ValueError('banco excedeu limite de leitura')
                         saida.write(bloco)
             depois = {}
             for nome in antes:
@@ -254,3 +261,122 @@ def catalogos(raiz):
         except (OSError, ValueError, KeyError, subprocess.SubprocessError):
             dados['erros'].append('catálogo indisponível: ' + campo)
     return dados
+
+
+class ConsultaFila:
+    """Adaptador interno para métricas existentes, sobre cópia privada."""
+
+    def __init__(self, db, pasta):
+        self.db, self.pasta = db, pasta
+
+    def listar(self):
+        return listar_tarefas(self.db, self.pasta)
+
+
+def consultar_filas(raiz, projetos=(), precos=None):
+    """Contrato v1: filas, consumo, métricas e provedores, sem caminhos de bancos."""
+    from metricas_projeto import calcular
+
+    raiz = Path(raiz).resolve()
+    caminhos = {chave(Path(p).resolve()): str(Path(p).resolve()) for p in projetos}
+    resultado = dict(versao=1, projetos=[], provedores=[], erros=[])
+    limite = 1024 * 1024
+
+    def conferir_resposta(dados):
+        if len(json.dumps(dados, ensure_ascii=False, allow_nan=False).encode('utf-8')) > limite:
+            raise ValueError('Resposta das filas excedeu 1 MiB.')
+
+    @contextlib.contextmanager
+    def diretorio(pasta):
+        try:
+            fd = os.open(pasta, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        except FileNotFoundError:
+            fd = None
+        try:
+            # O descritor fixa cada componente abaixo da raiz contra troca por link.
+            yield Path('/proc/self/fd') / str(fd) if fd is not None else None
+        finally:
+            if fd is not None:
+                os.close(fd)
+
+    def banco(pasta):
+        for sufixo in ('', '-wal', '-shm'):
+            arquivo = pasta / ('tarefas.sqlite' + sufixo)
+            try:
+                info = arquivo.lstat()
+            except FileNotFoundError:
+                continue
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                raise ValueError('Banco deve ser regular sem link.')
+        return (pasta / 'tarefas.sqlite').exists()
+
+    def conferir_db(db, tabelas):
+        # O esquema legado usa user_version=0. Versão desconhecida exige migração.
+        if db.execute('PRAGMA user_version').fetchone()[0] != 0:
+            raise ValueError('Versão do banco desconhecida.')
+        for tabela in tabelas:
+            quantidade = db.execute('SELECT count(*) FROM ' + tabela).fetchone()[0]
+            if quantidade > 16384:
+                raise ValueError('Fila excedeu 16384 registros por tabela.')
+
+    try:
+        with diretorio(raiz / 'agentes') as agentes:
+            if agentes is None:
+                return resultado
+            try:
+                with diretorio(agentes / 'projetos') as pastas:
+                    nomes = sorted(pastas.iterdir()) if pastas is not None else []
+                    if len(nomes) > 4096:
+                        raise ValueError('Consulta excedeu 4096 projetos.')
+                    for pasta in nomes:
+                        identificador = pasta.name
+                        caminho = caminhos.get(identificador)
+                        try:
+                            if not re.fullmatch(r'[A-Za-z0-9_.-]{1,255}', identificador) or identificador in ('.', '..'):
+                                raise ValueError('Identificador de projeto inválido.')
+                            with diretorio(pasta) as fixa:
+                                if fixa is None or not banco(fixa):
+                                    continue
+                                with banco_leitura(fixa / 'tarefas.sqlite', limite=64 * limite) as db:
+                                    conferir_db(db, ('tarefas', 'eventos'))
+                                    consulta = ConsultaFila(db, raiz / 'agentes/projetos' / identificador)
+                                    tarefas = consulta.listar()
+                                    for tarefa in tarefas:
+                                        spec = tarefa['especificacao']
+                                        if not isinstance(spec, dict) or (tarefa['resultado'] is not None
+                                                and not isinstance(tarefa['resultado'], dict)):
+                                            raise ValueError('Especificação ou resultado deve ser objeto JSON.')
+                                        if (not isinstance(tarefa['id'], str) or not tarefa['id']
+                                                or len(tarefa['id']) > 255 or any(ord(c) < 32 for c in tarefa['id'])
+                                                or not isinstance(tarefa['status'], str)
+                                                or type(tarefa['tentativas']) is not int or tarefa['tentativas'] < 0
+                                                or tarefa['motivo'] is not None and not isinstance(tarefa['motivo'], str)):
+                                            raise ValueError('Campos de tarefa inválidos.')
+                                        if (any(not isinstance(spec.get(c), str) for c in ('papel', 'capacidade'))
+                                                or not isinstance(spec.get('dependencias', []), list)
+                                                or any(not isinstance(d, str) for d in spec.get('dependencias', []))
+                                                or any(type(spec.get(c, padrao)) is not int or spec.get(c, padrao) < 0
+                                                       for c, padrao in (('max_chamadas', 8), ('tempo_total', 600)))):
+                                            raise ValueError('Campos da especificação inválidos.')
+                                    item = dict(id=identificador, caminho=caminho, tarefas=tarefas,
+                                                consumos={t['id']: consumo_tarefa(db, t['id']) for t in tarefas},
+                                                metricas=calcular(consulta, precos))
+                                    conferir_resposta(item)
+                            resultado['projetos'].append(item)
+                        except (OSError, ValueError, KeyError, TypeError, AttributeError, RecursionError, sqlite3.Error) as erro:
+                            resultado['erros'].append(dict(projeto=identificador, caminho=caminho,
+                                                           mensagem=type(erro).__name__ + ': ' + str(erro)))
+            except (OSError, ValueError) as erro:
+                resultado['erros'].append(dict(projeto=None, caminho=None, mensagem=str(erro)))
+            try:
+                with diretorio(agentes / 'runtime') as runtime:
+                    if runtime is not None and banco(runtime):
+                        with banco_leitura(runtime / 'tarefas.sqlite', limite=64 * limite) as db:
+                            conferir_db(db, ('provedores',))
+                            resultado['provedores'] = listar_provedores(db)
+            except (OSError, ValueError, KeyError, TypeError, RecursionError, sqlite3.Error) as erro:
+                resultado['erros'].append(dict(projeto=None, caminho=None, mensagem='provedores: ' + str(erro)))
+    except (OSError, ValueError) as erro:
+        resultado['erros'].append(dict(projeto=None, caminho=None, mensagem=str(erro)))
+    conferir_resposta(resultado)
+    return resultado

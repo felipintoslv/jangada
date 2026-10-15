@@ -197,6 +197,7 @@ passo "painel de indicadores"
 python3 testes/metricas.py || falha "testes/metricas.py"
 python3 testes/painel-local.py || falha "testes/painel-local.py"
 python3 testes/painel-orquestracao.py || falha "testes/painel-orquestracao.py"
+python3 testes/consultas-modulos.py || falha "testes/consultas-modulos.py"
 testes/consulta-terminal.sh || falha "testes/consulta-terminal.sh"
 if command -v Rscript >/dev/null && Rscript -e 'quit(status = if (requireNamespace("arrow", quietly = TRUE) && requireNamespace("shiny", quietly = TRUE)) 0 else 1)' 2>/dev/null; then
   Rscript testes/painel-motores.R || falha "testes/painel-motores.R"

@@ -10,8 +10,8 @@ uma chamada direta por uma indireta.
 | K1 | Fachada de comandos | compartilhado | todos, usuário | existe, sem teste |
 | K2 | Caminhos legados | compartilhado | arquivos do usuário | existe, sem teste |
 | K3 | Aviso de mudança de estado | compartilhado | Core emite, Shell recebe | Core chama a Waybar direto |
-| K4 | Consulta de sessões sem efeito | Core | Shell, Monitor | a consulta limpa órfãos |
-| K5 | Leitura da fila e dos projetos | Core | Monitor, Shell (caminho do estado) | painel herda `Estado`; Shell monta o caminho das sessões |
+| K4 | Consulta de sessões sem efeito | Core | Shell, Monitor | consultas públicas sem escrita; terminal preserva worktree e repasse explícito |
+| K5 | Leitura da fila e dos projetos | Core | Monitor, Shell | Monitor recebe filas, métricas e provedores sem descobrir bancos |
 | K6 | Resumo de entrega opcional | Core | `jangada-validar` | chama comando do Monitor |
 | K7 | Formato dos registros | Core | Monitor | documentado, sem teste de formato |
 | K8 | Módulos da Waybar | Shell | Core, Monitor | existe, sem teste único |
@@ -75,21 +75,24 @@ uma chamada direta por uma indireta.
   gravam nada. A limpeza vira `jangada-agentes --limpar-orfaos`. Para não
   mudar o comportamento percebido, `jangada-tarefas --waybar` (Shell) passa
   a chamar a limpeza antes da consulta. O Monitor usa só a consulta.
-- Acréscimo da D8 (M3-10c): `_jangada_sessao_atual`, em
-  `shell/jangada-shell.sh`, deixa de ler os arquivos `.json` da pasta de
-  sessões e passa a usar `jangada-agentes --lista`. Ponto a conferir na
-  tarefa: hoje a função compara o campo `worktree` de cada arquivo com a
-  raiz do repositório atual e lê todos os arquivos; a consulta devolve o
-  campo `dir` (igual ao `worktree` nas sessões com worktree e igual à
-  `raiz` nas sessões `--direto`) e lista só sessões vivas ou guardadas.
-  Se essa diferença mudar o resultado, a tarefa registra e não acrescenta
-  campo à consulta sem decisão.
+- Situação M1.2: `_jangada_sessao_atual` usa
+  `jangada-agentes --sessao-worktree-json`, sem trocar worktree por dir nem
+  aplicar retenção. `repassar` usa `--contexto-json SESSAO`, que seleciona
+  tarefa e parecer na origem pública anterior. As duas exceções do terminal
+  foram retiradas de K9. Campos, ambiguidades, limites e provas estão no
+  [contrato do recorte](../coordenacao-central/11-consultas-modulos.md).
 - Teste: tira um retrato (`sha256sum`) de `~/.local/state/jangada` em pasta
   temporária com uma sessão órfã falsa, roda as três consultas e confere que
   nada mudou; roda `--limpar-orfaos` e confere que a órfã saiu.
 - Esta é a única mudança de comportamento do plano. Ver decisão D6.
 
 ## K5. Leitura da fila e dos projetos
+
+Situação M1.2: `nucleo.consultas.consultar_filas` concentra a descoberta e
+seleção das filas e provedores. O Monitor recebe dados, consumos e métricas,
+sem conexão SQL nem conhecimento dos caminhos dos bancos. O contrato e as
+provas estão em [11-consultas-modulos.md](../coordenacao-central/11-consultas-modulos.md).
+Os itens abaixo registram o plano anterior da modularização.
 
 - Hoje: `default/painel/orquestracao.py:18` declara `class Consulta(Estado)`
   e `coletor.py:52,56` importa pacotes do Core por `sys.path`.
@@ -250,13 +253,13 @@ Decidido pelo usuário em 10/10/2026 (D8, grupos A e B).
 
 Decididas pelo usuário em 10/10/2026 (D8). Ficam na lista de exceções com
 uma marca própria e o motivo no lugar de `sem-contrato`; a troca é da
-M3-10c. São no máximo seis.
+M3-10c. São no máximo seis. As duas exceções do terminal foram superadas pelas
+consultas públicas do recorte M1.2, sem ampliar o teto de K9.
 
 | Arquivo e trecho | Fronteira | Motivo |
 |---|---|---|
 | `bin/jangada-agente:365`, `jangada-snapshot --agente` com `--snapshot` | Core chama comando do Shell | chamada opcional e tolerante à ausência, na forma do K6; caso de teste mostra que a sessão abre sem o comando |
 | `bin/jangada-verificar:76`, `exec jangada-agente` com `--agente` | Monitor chama comando que altera estado | ação pedida pelo usuário por opção explícita; passa pela fachada K1 |
-| `shell/jangada-shell.sh:271`, `repassar` | Shell lê arquivo de estado | lê o último parecer e a tarefa; não há consulta do Core que devolva o parecer, e criá-la seria funcionalidade nova; dívida para depois da 3.0 |
 | `default/tarefas/central.py:121`, caminho padrão do modo `--simular`, se a M3-10c mostrar que é preciso | Shell monta caminho do estado | modo simulado sem `--estado`; ver o caminho único em K5 |
 
 `default/tarefas/dados.py`, em `registro(pasta, nome)`, não está na lista
