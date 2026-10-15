@@ -93,7 +93,7 @@ jobs:
           [ ! -e "$f" ] || echo 0 >"$f"
 
       - name: Dependências
-        run: pacman -Syu --noconfirm --needed git sudo jq python gitleaks bubblewrap diffutils openssh xdg-dbus-proxy dbus zsh poppler r gcc make gcc-fortran libxml2 pkgconf
+        run: pacman -Syu --noconfirm --needed git sudo jq python gitleaks bubblewrap diffutils openssh xdg-dbus-proxy dbus python-dbus python-gobject zsh poppler r gcc make gcc-fortran libxml2 pkgconf
 
       - name: lintr
         # O xml2 precisa do pkg-config para localizar os cabeçalhos do libxml2.
