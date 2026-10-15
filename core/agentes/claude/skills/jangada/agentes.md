@@ -114,6 +114,8 @@ Para extração, use `--destino local --capacidade leitura_documental` e
 `--extrair campo:tipo`, com `texto`, `inteiro` ou `booleano`.
 Campos ausentes no trecho usam valor e referência nulos. A conferência
 valida os tipos e a presença da posição citada naquele trecho, sem avaliar o sentido.
+Quando uma referência é recusada, o diagnóstico limitado aparece no `stderr`;
+a referência bruta não fica guardada no registro da delegação.
 A consolidação por modelo chegou a apagar a responsável encontrada na última
 parte. A extração une partes de forma determinística: valores presentes
 substituem ausências, `false` e zero são preservados, conflitos recusam.

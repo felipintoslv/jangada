@@ -44,6 +44,32 @@ def objeto_unico(pares):
     return resultado
 
 
+def diagnostico_referencia(nome, referencia, locais):
+    if referencia is None:
+        estado = "ausente"
+    elif not isinstance(referencia, str):
+        estado = "tipo inválido"
+    else:
+        quantidade = len(locais.get(referencia, ()))
+        estado = "fora do trecho" if quantidade == 0 else "ambígua" if quantidade > 1 else "válida"
+    if isinstance(referencia, str):
+        if len(referencia) > 32:
+            inicio = json.dumps(referencia[:12], ensure_ascii=True)[1:-1]
+            fim = json.dumps(referencia[-20:], ensure_ascii=True)[1:-1]
+            exibicao = f'"{inicio}…{fim}"'
+        else:
+            exibicao = json.dumps(referencia, ensure_ascii=True)
+    elif referencia is None:
+        exibicao = "null"
+    elif isinstance(referencia, (dict, list)):
+        exibicao = f"<{type(referencia).__name__}, {len(referencia)} itens>"
+    else:
+        exibicao = f"<{type(referencia).__name__}>"
+    detalhe = f"referência {exibicao} ({estado})"
+    sugestao = "; use caminho:linha ou arquivo, p. N" if estado in {"fora do trecho", "tipo inválido"} else ""
+    return f"referência fora do trecho ou ambígua: {nome}: {detalhe}{sugestao}"
+
+
 def referencias(fonte):
     encontradas = {}
     for linha in fonte.splitlines():
@@ -82,7 +108,7 @@ def conferir(texto, fonte, campos):
         if isinstance(valor, str) and not valor.strip():
             raise ValueError(f"texto vazio não representa um fato: {nome}")
         if not isinstance(referencia, str) or len(locais.get(referencia, ())) != 1:
-            raise ValueError(f"referência fora do trecho ou ambígua: {nome}")
+            raise ValueError(diagnostico_referencia(nome, referencia, locais))
         fato["referencia"] = next(iter(locais[referencia]))
     return resposta
 

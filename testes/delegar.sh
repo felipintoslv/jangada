@@ -1032,6 +1032,36 @@ OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia o destino" -
   --capacidade leitura_documental --extrair destino:texto --json --arquivos "$tmp/projeto/doc1.txt"
 conferir "extração: referência inexistente recusa" jqok -e \
   '.tentativas[0].motivo_codigo == "saida_invalida"' "$tmp/saida"
+conferir "extração: referência inválida mantém código 4" [ "$(codigo)" = 4 ]
+conferir "extração: stderr identifica referência fora do trecho" grep -Fq 'referência "doc1.txt:99" (fora do trecho)' "$tmp/erro"
+python3 - "$repo_jangada/core/delegacao/extracao.py" "$tmp/projeto/doc1.txt" <<'PY'
+import json, pathlib, subprocess, sys
+modulo, fonte = sys.argv[1:]
+absoluto = str(pathlib.Path(fonte).resolve())
+def conferir(referencia, documento):
+    resposta = json.dumps({'destino': {'valor': 'local', 'referencia': referencia}})
+    dados = json.dumps({'resposta': resposta, 'fonte': documento})
+    return subprocess.run([sys.executable, modulo, 'conferir', 'destino:texto'], input=dados, text=True, capture_output=True)
+assert conferir('doc1.txt:1', 'doc1.txt:1: fonte\n').returncode == 0
+assert conferir(f'{absoluto}:1', f'{absoluto}:1: fonte\n').returncode == 0
+for referencia, estado, documento in [
+    ('doc1.txt:999', 'fora do trecho', 'doc1.txt:1: fonte\n'),
+    ('doc1.txt:1:', 'fora do trecho', 'doc1.txt:1: fonte\n'),
+    ('doc1.txt:2', 'ambígua', 'a/doc1.txt:2: A\nb/doc1.txt:2: B\n'),
+    (None, 'ausente', 'doc1.txt:1: fonte\n'),
+]:
+    resultado = conferir(referencia, documento)
+    assert resultado.returncode != 0 and f'({estado})' in resultado.stderr
+for hostil, visivel, oculto in [
+    (['segredo', {'x': 'conteúdo'}], 'list, 2 itens', 'segredo'),
+    ('\x1b[31m' + 'x' * 20000 + 'arquivo.txt:98765', 'arquivo.txt:98765', '\x1b'),
+]:
+    resultado = conferir(hostil, 'doc1.txt:1: fonte\n')
+    assert resultado.returncode != 0 and len(resultado.stderr.encode()) < 350
+    assert visivel in resultado.stderr and oculto not in resultado.stderr
+print('matriz sintética de referências aprovada')
+PY
+conferir "extração: matriz sintética de referência" [ "$?" = 0 ]
 printf '{"destino":{"valor":null,"referencia":null}}\n' >"$ollama_resp"
 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia o destino" --destino local \
   --capacidade leitura_documental --extrair destino:texto --json --arquivos "$tmp/projeto/doc1.txt"
