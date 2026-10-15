@@ -313,7 +313,7 @@ class Metricas(unittest.TestCase):
             fonte2 = next(c for c in cobertura2 if c['fonte'] == 'codex_externo')
             self.assertEqual(fonte2['estado'], 'erro')
             self.assertEqual(fonte2['atualizado'], fonte['atualizado'])
-            self.assertEqual(fonte2['ultima_tentativa'], depois.isoformat())
+            self.assertEqual(dt.datetime.fromisoformat(fonte2['ultima_tentativa']), depois)
             self.assertEqual(fonte2['registros'], 1)
             self.assertTrue(fonte2['dados_preservados'])
             self.assertEqual(cs, cs2)

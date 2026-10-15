@@ -1054,16 +1054,21 @@ git rev-parse --verify --quiet HEAD >/dev/null || exit 1
   # R, .jangada/validar.sh e revisor) roda enquanto a foto existe.
   sessao_de claude agy
   rm -f "$tmp/estado/jangada/revisoes/validacao-s"*
+  # Sem lintr, um arquivo R reprovaria por não ter sido conferido.
+  novo=novo.txt
+  if Rscript -e 'quit(status = !requireNamespace("lintr", quietly = TRUE))' >/dev/null 2>&1; then
+    novo=novo.R
+  fi
   mkdir -p "$tmp/projeto/pasta-real"
-  echo 'h <- 1' >"$tmp/projeto/pasta-real/novo.R"
+  echo 'h <- 1' >"$tmp/projeto/pasta-real/$novo"
   ln -s pasta-real "$tmp/projeto/atalho"
   git -C "$tmp/projeto" add pasta-real atalho
   git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm "caso 20e"
-  printf '#!/usr/bin/env bash\n[[ -L atalho && -f atalho/novo.R && "${JANGADA_ISOLADO:-}" == 1 ]]\n' \
+  printf '#!/usr/bin/env bash\n[[ -L atalho && -f atalho/%s && "${JANGADA_ISOLADO:-}" == 1 ]]\n' "$novo" \
     >"$tmp/projeto/.jangada/validar.sh"
   rm -f "$tmp/falso/agy.visto" "$tmp/falso/agy.pasta" "$tmp/falso/agy.oculto"
   # shellcheck disable=SC2016  # avaliado pelo agy falso, dentro do isolamento
-  FALSO_COMANDO='pwd >"$FALSO_DIR/agy.pasta"; test -L atalho && cat atalho/novo.R >"$FALSO_DIR/agy.visto"
+  FALSO_COMANDO='pwd >"$FALSO_DIR/agy.pasta"; test -L atalho && cat atalho/'"$novo"' >"$FALSO_DIR/agy.visto"
     ls -A "${PWD%/*}" >"$FALSO_DIR/agy.fotos"; ! echo x >invadido 2>/dev/null || echo gravou >>"$FALSO_DIR/agy.fotos"' \
     VALIDAR_FORA=1 validar 'STATUS: APROVADO'; rc=$?
   conferir "caso 20e: entrega com link de pasta é aprovada fora do isolamento ($rc)" [ "$rc" = 0 ]
