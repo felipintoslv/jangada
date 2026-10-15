@@ -297,10 +297,19 @@ class Metricas(unittest.TestCase):
         except ImportError:
             self.skipTest('pyarrow ausente')
         pasta = Path(__file__).resolve().parents[1] / 'default/painel'
-        with patch.object(sys, 'path', [str(pasta)] + sys.path):
+        nucleo = Path(__file__).resolve().parents[1] / 'core'
+        with patch.dict(os.environ, JANGADA_CORE_PY=str(nucleo)), \
+                patch.object(sys, 'path', [str(pasta)] + sys.path):
             spec = importlib.util.spec_from_file_location('coletor_teste', pasta / 'coletor.py')
             coletor = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(coletor)
+            for funcao, relativo in (
+                    (coletor.consultar, 'nucleo/consultas.py'),
+                    (coletor.catalogos, 'nucleo/consultas.py'),
+                    (coletor.orquestracao.consultar_filas, 'nucleo/consultas.py'),
+                    (coletor.orquestracao.ler_precos, 'orquestracao/metricas_projeto.py'),
+                    (coletor.subagentes.resumo_entrega, 'delegacao/entrega.py')):
+                self.assertEqual(Path(funcao.__code__.co_filename).resolve(), nucleo / relativo)
             caminho = self.codex / 'sessions/rollout-a.jsonl'
             self.gravar(caminho, [evento('token_usage_record', {'response_id': 'r1',
                 'usage': {'input_tokens': 8}})])
