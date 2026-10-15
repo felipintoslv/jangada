@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Confere a instalação: pacotes, snapshots, sessão, hooks e erros do Hyprland.
+# Confere a instalação: pacotes, snapshots, sessão, modelo local, hooks e erros
+# do Hyprland.
 # Não altera nada.
 #
 # Uso: jangada-verificar [--diagnostico | --agente]
@@ -12,7 +13,7 @@ set -uo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
 case "${1:-}" in
-  -h|--ajuda) sed -n '2,9s/^# \{0,1\}//p' "$0"; exit 0 ;;
+  -h|--ajuda) sed -n '2,10s/^# \{0,1\}//p' "$0"; exit 0 ;;
   --agente|--diagnostico)
     # O log e o relatório de falha trazem texto de fora (títulos de janela,
     # nomes de arquivo, mensagens de programas) que vai direto a um agente.
@@ -147,6 +148,24 @@ else
   else
     ok "$_gpu ($_origem, driver $_drv); AQ_DRM_DEVICES=$_aq"
   fi
+fi
+
+echo "== modelo local (Ollama)"
+# Só lista os modelos instalados (/api/tags): não gera texto, não envia fontes
+# e não mede qualidade. Ausência ou falha de acesso é nota, não problema: o
+# uso básico do jangada não depende do Ollama.
+_ollama_url="${JANGADA_OLLAMA_URL:-http://localhost:11434}"
+_ollama_modelo="${JANGADA_LOCAL_MODELO:-qwen3:4b}"
+if ! command -v curl >/dev/null 2>&1; then
+  nota "curl ausente; modelo local não verificado"
+elif ! _ollama_tags="$(curl -fsS --max-time 3 "${_ollama_url%/}/api/tags" 2>/dev/null)"; then
+  nota "Ollama inacessível em $_ollama_url; leitor e redator locais ficam indisponíveis"
+elif ! jq -e '.models | type == "array"' <<<"$_ollama_tags" >/dev/null 2>&1; then
+  nota "Ollama respondeu em $_ollama_url, mas a lista de modelos é inválida"
+elif jq -e --arg m "$_ollama_modelo" 'any(.models[]?; .name == $m)' <<<"$_ollama_tags" >/dev/null 2>&1; then
+  ok "modelo $_ollama_modelo instalado em $_ollama_url (presença, não qualidade)"
+else
+  nota "modelo $_ollama_modelo não instalado em $_ollama_url; leitor e redator locais ficam indisponíveis"
 fi
 
 echo "== hooks do Claude Code"

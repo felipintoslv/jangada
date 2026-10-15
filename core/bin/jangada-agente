@@ -183,7 +183,7 @@ if ((!agente_dado)) && [[ -z "$perfil" && -t 0 && "${JANGADA_AGENTE_ESCOLHER:-1}
         claude) printf '; subagentes do Claude' ;;
         local) printf '; leitor e redator no Ollama, demais papéis nesta sessão' ;;
         agy)
-          printf '; delegação ao agy, inclusive leitor e redator'
+          printf '; leitor e redator no Ollama, demais papéis no agy'
           command -v agy >/dev/null 2>&1 || printf '; delegação indisponível: agy não instalado'
           ;;
       esac

@@ -110,7 +110,14 @@ conferir "caso 1: retoma a conversa e recebe o protocolo" \
 conferir "caso 1: o estado passa a iniciado" [ "$(jq -r .estado "$estado/s.json")" = iniciado ]
 
 conferir "restauração Claude sem perfil: destino padrão agy" grep -qx JANGADA_DELEGAR=agy "$tmp/ambiente"
-conferir "restauração Claude: leitor e redator no agy" grep -q 'também para leitor e redator' "$estado/protocolo-s.md"
+conferir "restauração Claude: leitor e redator locais, demais papéis no agy" \
+  bash -c 'grep -q -- "--destino local --arquivos FONTES" "$1" && grep -q -- "--destino agy --permitir-remoto" "$1"' _ "$estado/protocolo-s.md"
+for perfil in claude-codex codex-claude; do
+  restaurar "{\"perfil\":\"$perfil\", \"agente\":\"${perfil%%-*}\"}"
+  conferir "restauração $perfil: leitor e redator locais, demais papéis no agy, sem fallback" \
+    bash -c 'grep -q -- "--destino local --arquivos FONTES" "$1" && grep -q -- "--destino agy --permitir-remoto" "$1" &&
+             grep -q "Não reencaminhe ao agy" "$1"' _ "$estado/protocolo-s.md"
+done
 
 # Caso 2: comando com um segundo comando depois do ";". O .comando é ignorado.
 restaurar "{\"conversa\":\"$uuid\", \"comando\":\"claude; touch $invadido #\"}"
@@ -186,7 +193,8 @@ restaurar "{\"agente\":\"codex\", \"dir\":\"$tmp/wt/proj/tarefa\", \"worktree\":
 conferir "caso 12: Codex sem UUID no worktree retoma por pasta" grep -q 'resume --last' "$log"
 restaurar '{"agente":"codex", "delegar":"local"}'
 conferir "restauração Codex: destino antigo do estado não vira preferência" grep -qx JANGADA_DELEGAR=agy "$tmp/ambiente"
-conferir "restauração Codex: leitor e redator no agy" grep -q 'inclusive leitor e redator' "$estado/protocolo-s.md"
+conferir "restauração Codex: leitor e redator locais, demais papéis no agy" \
+  bash -c 'grep -q "inclusive leitor e redator" "$1" && grep -q -- "--destino local --arquivos FONTES" "$1"' _ "$estado/protocolo-s.md"
 conferir "caso 13: Codex direto sem UUID abre conversa nova" \
   bash -c 'test -s "$1" && ! grep -q "resume" "$1"' _ "$log"
 

@@ -69,12 +69,12 @@ jangada-agente --janela --coordenador VOCE --projeto PASTA --nome NOME --perfil 
 
 - Estado e pareceres da sessão `PROJETO--NOME` ficam em
   `~/.local/state/jangada/agentes`: `SESSAO.json` e `validacao-SESSAO-rN.md`.
-- Cobre apoio protegido pelo `jangada-delegar`, com `--destino agy`,
-  `--permitir-remoto` e `--arquivos FONTES`, para todos os papéis, inclusive
-  leitor e redator. Fontes e envio remoto exigem autorização da tarefa.
-  Confira referências nas fontes; registre pedido, resultado e aproveitamento,
-  ou bloqueio de confiança, cota, acesso ou permissão. Perfil não prova participação;
-  não use Ollama automático. Apoio não substitui revisão independente. Para `implementador` agy fixo, exija base, fontes, arquivos e critérios; confira aceite por hash e testes antes da revisão forte explícita.
+- Cobre apoio protegido pelo `jangada-delegar`: leitor e redator com
+  `--destino local --arquivos FONTES`; demais papéis com `--destino agy
+  --permitir-remoto --arquivos FONTES`. Fontes e envio remoto exigem autorização
+  da tarefa; falha local não autoriza envio remoto. Confira referências nas fontes;
+  registre pedido, resultado e aproveitamento, ou bloqueio. Perfil não prova participação; não use
+  Ollama como alternativa automática ao agy. Apoio não substitui revisão independente. Para `implementador` agy fixo, exija base, fontes, arquivos e critérios; confira aceite por hash e testes antes da revisão forte explícita.
 - Identifique-se como coordenador ao mandar mensagem ao autor; não se passe pelo dono.
 - Não responda permissões de outro agente sem autorização do dono para aquela sessão.
 - Nunca aprove execução fora da proteção, envio ao remoto, instalação,

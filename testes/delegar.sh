@@ -731,6 +731,41 @@ conferir "caso 42: pedido apos -- enviado ao modelo" grep -q "pedido posicional 
 delegar --permitir-remoto -- explorador "pedido apos tracos agy"
 conferir "caso 42b: papel e pedido apos -- com agy" [ "$(codigo)" = 0 ]
 
+# 24b. Os dois perfis padrão (JANGADA_DELEGAR=agy): leitor e redator vão ao
+# Ollama com --destino local; falha local fica local, sem agy nem envio remoto.
+for papel_perfil in leitor redator; do
+  : >"$ollama_reqs"
+  DELEGAR=agy OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local "$papel_perfil" "pedido" --arquivos "$tmp/projeto/doc1.txt"
+  conferir "perfis: $papel_perfil local sob JANGADA_DELEGAR=agy chega ao Ollama" \
+    bash -c '[ "$1" = 0 ] && [ -s "$2" ] && [ ! -e "$3" ]' _ "$(codigo)" "$ollama_reqs" "$tmp/falso/agy.args"
+done
+for falha_local in modelo fora; do
+  : >"$ollama_reqs"
+  : >"$reg"
+  if [[ "$falha_local" == modelo ]]; then
+    DELEGAR=agy LOCAL_MODELO=modelo_inexistente OLLAMA_URL="http://127.0.0.1:$porta_ollama" \
+      delegar --destino local leitor "pedido" --arquivos "$tmp/projeto/doc1.txt"
+  else
+    DELEGAR=agy OLLAMA_URL="http://127.0.0.1:1" delegar --destino local leitor "pedido" --arquivos "$tmp/projeto/doc1.txt"
+  fi
+  conferir "perfis: falha local ($falha_local) recusa com código 4 sem chamar o agy" \
+    bash -c '[ "$1" = 4 ] && [ ! -e "$2" ]' _ "$(codigo)" "$tmp/falso/agy.args"
+  conferir "perfis: falha local ($falha_local) fica registrada no destino local, sem tentativa remota" \
+    jqok -se 'length == 1 and .[0].destino == "local" and .[0].codigo_saida == 4 and .[0].recusa == true' "$reg"
+done
+for papel_remoto in explorador pesquisador verificador auditor arquiteto otimizador supervisor; do
+  : >"$ollama_reqs"
+  DELEGAR=agy OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar --destino local "$papel_remoto" "pedido" --arquivos "$tmp/projeto/doc1.txt"
+  conferir "perfis: $papel_remoto não vai ao destino local" \
+    bash -c '[ "$1" = 4 ] && [ ! -s "$2" ] && [ ! -e "$3" ]' _ "$(codigo)" "$ollama_reqs" "$tmp/falso/agy.args"
+done
+DELEGAR=agy delegar --destino agy explorador "mapeie" --arquivos "$tmp/projeto/doc1.txt"
+conferir "perfis: agy explícito sem --permitir-remoto recusa antes de enviar" \
+  bash -c '[ "$1" = 4 ] && [ ! -e "$2" ]' _ "$(codigo)" "$tmp/falso/agy.args"
+DELEGAR=agy delegar --destino agy --permitir-remoto explorador "mapeie" --arquivos "$tmp/projeto/doc1.txt"
+conferir "perfis: agy explícito com autorização das fontes atende" \
+  bash -c '[ "$1" = 0 ] && [ -e "$2" ]' _ "$(codigo)" "$tmp/falso/agy.args"
+
 # 25. Marca de jogo ativo no estado
 mkdir -p "$tmp/home/.local/state/jangada/marcas"
 # 25a. Fora do isolamento a marca é ignorada

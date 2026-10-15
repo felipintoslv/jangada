@@ -10,7 +10,7 @@ o Codex participa dos dois:
 | Perfil | Implementa | Revisa | Delegação |
 |---|---|---|---|
 | `codex-claude` | Codex | Claude | leitor e redator no Ollama, demais papéis no agy |
-| `claude-codex` | Claude | Codex | agy |
+| `claude-codex` | Claude | Codex | leitor e redator no Ollama, demais papéis no agy |
 
 ```sh
 jangada-agente --perfil codex-claude --nome tarefa --prompt "Implemente a tarefa"
@@ -149,11 +149,16 @@ Com UUID, usa `codex resume UUID`. Sem UUID, num worktree próprio, usa
 `codex resume --last`, com o filtro de pasta do CLI. Sem UUID no modo direto,
 abre uma conversa nova para não retomar a conversa de outro agente.
 
-O perfil `codex-claude` usa `JANGADA_DELEGAR=agy`: todos os papéis de apoio,
-inclusive leitor e redator, passam pelo `jangada-delegar` ao agy, com fontes
-e envio remoto autorizados. A recusa registra bloqueio, sem alternativa
-local automática. `JANGADA_DELEGAR=local` continua uma escolha explícita para
-leitor e redator. O Codex não chama subagentes do Claude.
+Os perfis `codex-claude` e `claude-codex` usam `JANGADA_DELEGAR=agy` e
+recebem a mesma regra de delegação, na abertura e na retomada. Leitor e
+redator usam `jangada-delegar PAPEL ... --destino local --arquivos FONTES`
+(Ollama, sem terminal, Git nem escrita). Os demais papéis usam
+`--destino agy --permitir-remoto`, com fontes e envio remoto autorizados. Uma
+falha local registra o motivo e fica local: não vai ao agy, ao Claude nem ao
+Codex sem decisão explícita. A recusa do agy registra bloqueio, sem
+alternativa local automática. `JANGADA_DELEGAR=local` continua uma escolha
+explícita: os demais papéis ficam na sessão. O Codex não chama subagentes do
+Claude.
 
 ## Cota disponível
 

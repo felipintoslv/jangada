@@ -74,27 +74,31 @@ existente por migração, como `migrations/202609272200-subagentes-novos.sh`.
 
 ```mermaid
 flowchart TD
-    A[Claude ou Codex] --> C{Destino configurado}
-    C -- vazio ou agy --> AG[jangada-delegar ao agy<br>Todos os papéis]
+    A[Claude ou Codex<br>perfis claude-codex e codex-claude] --> C{Papel de apoio}
+    C -- leitor ou redator --> OL[jangada-delegar --destino local<br>Ollama, arquivos explícitos]
+    OL --> F{Falha local?}
+    F -- sim --> FL[Motivo registrado,<br>continua na sessão, sem agy]
+    C -- demais papéis --> AG[jangada-delegar --destino agy<br>--permitir-remoto]
     AG --> P{Autorização, acesso,<br>confiança e cota?}
     P -- sim --> R[Relatório a conferir]
     P -- não --> B[Bloqueio registrado]
-    C -- local explícito --> OL[Ollama com arquivos explícitos<br>Leitor e redator]
-    C -- claude explícito --> CL[Subagentes do Claude]
 ```
 
-`jangada_delegacao` em `bin/jangada-config` usa agy por padrão para Claude
-e Codex, inclusive leitor e redator e sessões sem perfil. O perfil prevalece
-sobre a configuração global. Sem agy instalado, o destino continua agy e
-a chamada registra recusa, sem alternativa local automática.
+`JANGADA_DELEGAR=agy` é o padrão dos dois perfis. O protocolo, na abertura e
+na retomada, manda `--destino` explícito: leitor e redator vão ao Ollama; os
+demais papéis vão ao agy com fontes autorizadas. O comando não escolhe o
+destino por papel: `jangada_delegacao` em `bin/jangada-config` e o padrão do
+comando continuam agy. O perfil prevalece sobre a configuração global. Falha
+local nunca vira envio remoto, e recusa do agy nunca vira chamada local ou ao
+Claude. Sem agy instalado, os demais papéis registram recusa.
 
 | Agente e destino | Protocolo em `default/agentes/` | Regra |
 |---|---|---|
-| Claude, `agy` | `protocolo-delegar-agy.md` | todos no agy; recusa registrada |
+| Claude, `agy` | `protocolo-delegar-agy.md` | leitor e redator no Ollama, demais no agy; recusa registrada |
 | Claude, `claude` explícito | `protocolo-delegar-claude.md` | subagentes do Claude |
 | agy restaurado, `nativo` | `protocolo-delegar-nativo.md` | subagentes do próprio agy |
-| Claude, `local` | `protocolo-delegar-local.md` | escolha local explícita |
-| Codex, `agy` ou `local` | `protocolo-delegar-codex.md` | agy; local explícito |
+| Claude, `local` | `protocolo-delegar-local.md` | escolha local explícita; demais papéis na sessão |
+| Codex, `agy` ou `local` | `protocolo-delegar-codex.md` | mesma regra do Claude com agy; local explícito |
 
 O Codex não chama subagentes do Claude. O agy só recebe delegações e revisa;
 o destino `nativo` resta para sessões antigas do agy restauradas.
@@ -124,6 +128,8 @@ Nenhuma dessas escolhas autoriza envio remoto de dados confidenciais.
 
 O destino pode ser explícito: `--destino local` ou `--destino agy`.
 Sem essa opção, o comando usa o destino definido pela configuração, agy por padrão.
+Os protocolos dos dois perfis padrão sempre passam `--destino`: com
+`JANGADA_DELEGAR=agy`, `--destino local` atende leitor e redator.
 `JANGADA_DELEGAR=claude` recusa ambos; `JANGADA_DELEGAR=local` recusa o agy.
 
 ### Seleção por capacidade
@@ -351,7 +357,11 @@ executado no Ollama na máquina local. Esse destino não gasta cotas externas
 e mantém os dados locais.
 
 Para evitar alucinações e desperdício de contexto, o destino local atende
-exclusivamente os papéis `leitor` e `redator`. O script lê e extrai os
+exclusivamente os papéis `leitor` e `redator`; os demais papéis recusam o
+destino local com `capacidade_incompativel`, sem chamar o Ollama. A falha local
+(Ollama fora, modelo ausente, jogo, memória, contexto, fatias, vaga ou tempo)
+recusa com código 4 e fica registrada no destino local, sem passar ao agy. O
+script lê e extrai os
 arquivos indicados (`--arquivos`), numerando linhas ou páginas, e envia texto
 puro ao modelo. O modelo não possui ferramentas de terminal. O `leitor` roda com
 temperatura zero, para que a mesma entrada dê a mesma resposta; o `redator`

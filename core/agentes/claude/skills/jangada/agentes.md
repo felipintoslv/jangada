@@ -93,10 +93,13 @@ hooks ou ferramentas externas. Mais detalhes em `docs/codex.md`.
 
 ## Peças
 
-O `jangada-delegar --capacidade` seleciona destinos para leitura documental.
-O envio ao agy exige autorização da tarefa (`--permitir-remoto`) e do perfil.
-Uma falha do Ollama não autoriza esse envio. Veja os limites e capacidades
-em `docs/subagentes-e-delegacao.md`.
+Os perfis `claude-codex` e `codex-claude` seguem a mesma regra: `leitor` e
+`redator` com `--destino local --arquivos FONTES`; os demais papéis com
+`--destino agy --permitir-remoto`. O protocolo da abertura e o da retomada
+trazem essa regra. O `jangada-delegar --capacidade` seleciona destinos para
+leitura documental. O envio ao agy exige autorização da tarefa
+(`--permitir-remoto`) e do perfil. Uma falha do Ollama não autoriza esse
+envio. Veja os limites e capacidades em `docs/subagentes-e-delegacao.md`.
 
 No teste real, o qwen3:4b consumiu milhares de tokens de raciocínio para
 devolver apenas localizadores. Com capacidade, o delegador usa `think: false` e

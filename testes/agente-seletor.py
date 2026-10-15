@@ -78,26 +78,24 @@ class Seletor(unittest.TestCase):
         opcoes = self.menu().splitlines()
         padrao = next(linha for linha in opcoes if linha.startswith('padrão'))
         self.assertIn('claude implementa; codex revisa', padrao)
-        self.assertIn('delegação ao agy', padrao)
+        self.assertIn('leitor e redator no Ollama, demais papéis no agy', padrao)
         perfil = next(linha for linha in opcoes if linha.startswith('claude-flash\t'))
         self.assertIn('claude implementa; agy revisa (gemini-3.8-flash-high)', perfil)
-        self.assertIn('delegação ao agy', perfil)
+        self.assertIn('leitor e redator no Ollama, demais papéis no agy', perfil)
         self.assertEqual([linha.split('\t')[0] for linha in opcoes],
                          ['padrão', 'claude-codex', 'claude-flash', 'codex-claude'])
         perfil = next(linha for linha in opcoes if linha.startswith('claude-codex\t'))
         self.assertIn('claude implementa; codex revisa;', perfil)
-        self.assertIn('delegação ao agy', perfil)
+        self.assertIn('leitor e redator no Ollama, demais papéis no agy', perfil)
         perfil = next(linha for linha in opcoes if linha.startswith('codex-claude\t'))
         self.assertIn('codex implementa; claude revisa;', perfil)
-        self.assertIn('delegação ao agy, inclusive leitor e redator', perfil)
-        self.assertNotIn('Ollama', perfil)
+        self.assertIn('leitor e redator no Ollama, demais papéis no agy', perfil)
         self.assertNotIn('autorrevisão', '\n'.join(opcoes))
         (self.config / 'jangada.conf').write_text('JANGADA_AGENTE=codex\n')
         padrao = next(linha for linha in self.menu().splitlines()
                       if linha.startswith('padrão'))
         self.assertIn('codex implementa; claude revisa', padrao)
-        self.assertIn('delegação ao agy, inclusive leitor e redator', padrao)
-        self.assertNotIn('Ollama', padrao)
+        self.assertIn('leitor e redator no Ollama, demais papéis no agy', padrao)
 
     def test_opcao_explicita_prevalece_sobre_perfis(self):
         opcoes = self.menu('--revisor', 'mesmo')
@@ -162,6 +160,30 @@ class Seletor(unittest.TestCase):
         estado = next(arquivo for arquivo in pasta.glob('*.json')
                       if arquivo.name != 'historico.json')
         self.assertIn('jangada-isolar', estado.read_text())
+
+    def regra_de_delegacao(self, perfil):
+        self.script('tmux', '[[ " $* " == *" has-session "* ]] && exit 1\nexit 0\n')
+        pasta = self.pasta / 'estado/jangada/agentes'
+        for antigo in pasta.glob('protocolo-*.md') if pasta.exists() else ():
+            antigo.unlink()
+        resultado = subprocess.run([str(RAIZ / 'bin/jangada-agente'), '--perfil', perfil,
+                                   '--projeto', str(self.pasta), '--direto'],
+                                  capture_output=True, text=True, env=self.ambiente, timeout=15)
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+        texto = next(pasta.glob('protocolo-*.md')).read_text()
+        return texto[texto.index('8. '):texto.index('Cada relatório cita')]
+
+    def test_dois_perfis_padrao_recebem_a_mesma_regra_de_delegacao(self):
+        corpos = {}
+        for perfil in ('claude-codex', 'codex-claude'):
+            regra = self.regra_de_delegacao(perfil)
+            self.assertIn('--destino local --arquivos FONTES', regra, perfil)
+            self.assertIn('--destino agy --permitir-remoto', regra, perfil)
+            self.assertIn('Não reencaminhe ao agy', regra, perfil)
+            self.assertIn('inclusive leitor e redator', regra, perfil)
+            self.assertNotIn('Os papéis incluem', regra, perfil)
+            corpos[perfil] = regra[regra.index('   - Todos os papéis'):regra.index('   - Falha local')]
+        self.assertEqual(corpos['claude-codex'], corpos['codex-claude'])
 
     def test_padrao_codex_e_perfil_codex_tem_identificadores_distintos(self):
         (self.config / 'jangada.conf').write_text('JANGADA_AGENTE=codex\n')
