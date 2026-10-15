@@ -232,8 +232,14 @@ modelos_tarefa="$(jangada_modelos_tarefa "$(basename "${agente%% *}")" "$(jangad
 if [[ "$modelos_tarefa" == '{}' && -n "$revisor_modelo$revisor_esforco" ]]; then
   echo 'opções de modelo do revisor exigem modelo do autor por tarefa' >&2; exit 1
 fi
-if [[ "$modelos_tarefa" != '{}' && -n "${PERFIL_ARGS:-}$JANGADA_AGENTE_ARGS${extras[*]:-}" ]]; then
+args_modelos="$JANGADA_AGENTE_ARGS"
+[[ -z "$perfil" ]] || args_modelos="${PERFIL_ARGS:-}"
+if [[ "$modelos_tarefa" != '{}' && -n "$args_modelos${extras[*]:-}" ]]; then
   echo 'seleção por tarefa exige argumentos do autor vazios; use as opções de modelo e esforço' >&2
+  exit 1
+fi
+if [[ "$modelos_tarefa" != '{}' && -n "${JANGADA_ISOLADO:-}" ]]; then
+  echo 'seleção por tarefa exige abertura pelo controlador fora do isolamento, para preservar o registro protegido' >&2
   exit 1
 fi
 if ! command -v "${agente%% *}" >/dev/null 2>&1; then

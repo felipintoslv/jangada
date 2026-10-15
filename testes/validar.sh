@@ -102,6 +102,35 @@ validar() {
     "$repo_jangada/bin/jangada-validar" "${@:2}" "$tmp/projeto" >"$tmp/saida.log" 2>&1
 }
 
+# Seleção por tarefa passa modelo/esforço e recusa divergência antes do cliente.
+VALIDAR_PATH="$tmp/falso-jangada"
+for autor in codex claude; do
+  if [[ "$autor" == codex ]]; then revisor=claude; autor_modelo=gpt-6-luna; autor_esforco=medium; forte=opus
+  else revisor=codex; autor_modelo=sonnet; autor_esforco=high; forte=gpt-6.1-sol; fi
+  sessao_de "$autor" "$revisor"
+  selecao="$(python3 "$repo_jangada/core/delegacao/modelos.py" "$autor" "$revisor" "$autor_modelo" "$autor_esforco")"
+  jq --argjson s "$selecao" '.modelos_tarefa = $s' "$estado/s.json" >"$tmp/selecao.json"
+  mv "$tmp/selecao.json" "$estado/s.json"
+  validar 'STATUS: APROVADO' --revisor "$revisor" --modelo divergente; rc=$?
+  conferir "modelos $autor: modelo divergente recusado sem cliente" \
+    bash -c '[[ "$1" == 1 ]] && grep -q "modelo diverge" "$2" && ! test -e "$3"' _ "$rc" "$tmp/saida.log" "$tmp/falso/$revisor.pedido"
+  validar 'STATUS: APROVADO' --revisor "$revisor" --esforco medium; rc=$?
+  conferir "modelos $autor: esforço divergente recusado sem cliente" \
+    bash -c '[[ "$1" == 1 ]] && grep -q "esforço diverge" "$2" && ! test -e "$3"' _ "$rc" "$tmp/saida.log" "$tmp/falso/$revisor.pedido"
+  validar 'STATUS: APROVADO' --revisor "$revisor" --modelo "$forte" --esforco high; rc=$?
+  conferir "modelos $autor: seleção explícita compatível aprova" [ "$rc" = 0 ]
+  conferir "modelos $autor: modelo forte chega ao cliente" \
+    bash -c 'grep -A1 -x -- --model "$1" | grep -qxF -- "$2"' _ "$tmp/falso/$revisor.args" "$forte"
+  if [[ "$revisor" == claude ]]; then
+    conferir "modelos: Claude recebe --effort high" \
+      bash -c 'grep -A1 -x -- --effort "$1" | grep -qx high' _ "$tmp/falso/claude.args"
+  else
+    conferir "modelos: Codex recebe model_reasoning_effort" \
+      bash -c 'grep -A1 -x -- -c "$1" | grep -qxF -- "$2"' _ "$tmp/falso/codex.args" 'model_reasoning_effort="high"'
+  fi
+done
+unset VALIDAR_PATH
+
 # Caso 1: sessão do Claude com revisor agy explícito.
 sessao_de claude agy
 validar 'STATUS: REVISAR\n1. arquivo.txt:1: problema'; rc=$?

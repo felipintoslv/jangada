@@ -84,6 +84,17 @@ conferir "codex-claude: sem modelo de revisor do agy no ambiente" \
 
 conferir "codex-claude: protocolo manda leitor e redator ao agy" grep -q 'inclusive leitor e redator' \
   "$tmp/state/jangada/agentes/protocolo-projeto--tarefa-padrao.md"
+rodar JANGADA_AGENTE_ARGS=--version "$repo_jangada/bin/jangada-agente" --perfil codex-claude \
+  --autor-modelo gpt-6-luna --projeto "$tmp/projeto" --nome tarefa-piloto --prompt "Piloto explícito" >"$tmp/saida" 2>&1
+conferir "piloto: perfil ignora argumentos globais que não utiliza" [ "$?" = 0 ]
+conferir "piloto: autor Luna medium e revisor Opus high protegidos" jq -e \
+  '.modelos_tarefa.autor == {provedor:"codex", modelo:"gpt-6-luna", esforco:"medium"}
+   and .modelos_tarefa.revisor == {provedor:"claude", modelo:"opus", esforco:"high"}' \
+  "$tmp/state/jangada/revisoes/projeto--tarefa-piloto.json"
+conferir "piloto: modelo do agy separado do revisor Opus" \
+  bash -c 'grep -q JANGADA_VALIDAR_MODELO=opus "$1" && ! grep -q JANGADA_VALIDAR_MODELO=gemini "$1"' _ "$tmp/tmux.ambiente"
+conferir "piloto: modelo e esforço chegam ao autor" \
+  bash -c 'grep -q -- "--model gpt-6-luna" "$1" && grep -q model_reasoning_effort "$1"' _ "$tmp/tmux.comando"
 rodar "$repo_jangada/bin/jangada-agente" --agente codex --projeto "$tmp/projeto" \
   --nome tarefa-sem-perfil --prompt "Implemente a tarefa" >"$tmp/saida" 2>&1
 conferir "Codex sem perfil lança sessão nova" [ "$?" = 0 ]
