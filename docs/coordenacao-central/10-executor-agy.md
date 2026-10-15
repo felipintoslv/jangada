@@ -1,0 +1,146 @@
+# Piloto de autor, implementador e revisor
+
+O autor delimita a atividade, seleciona especialistas e confere os arquivos.
+O implementador agy escreve numa cópia isolada. O autor inspeciona, aceita e
+testa antes da revisão independente. Nenhum resultado do executor autoriza
+commit, integração ou exclusão. O coordenador continua sendo a sessão externa;
+um nome declarado não comprova identidade, autoridade ou modelo real.
+
+## Modelos por tarefa
+
+| Autor | Esforço | Revisor independente | Esforço |
+|---|---|---|---|
+| Codex `gpt-6-luna` | `medium` | Claude `opus` | `high` |
+| Codex `gpt-6.1-sol` | `high` | Claude `opus` | `high` |
+| Claude `sonnet` ou `opus` | `high` | Codex `gpt-6.1-sol` | `high` |
+
+Exemplo de abertura pelo coordenador, numa tarefa futura:
+
+```sh
+jangada-agente --perfil codex-claude --projeto PASTA --nome TAREFA \
+  --autor-modelo gpt-6-luna --autor-esforco medium \
+  --revisor-modelo opus --revisor-esforco high --prompt-arquivo PEDIDO
+```
+
+Precedência: opções da abertura, campos do perfil pessoal ou padrão, campos
+da configuração global/ambiente. Perfil pessoal de mesmo nome prevalece
+inteiramente sobre o padrão. Os campos são `JANGADA_AUTOR_MODELO`,
+`JANGADA_AUTOR_ESFORCO`, `JANGADA_VALIDAR_MODELO` e `JANGADA_VALIDAR_ESFORCO`.
+Sem modelo do autor, perfis antigos conservam seus argumentos e comportamento.
+No contrato de `--perfis --json`, `modelo` e `modelos_tarefa` mostram a seleção.
+
+A seleção nova usa valores fechados, exige outro provedor forte e recusa
+argumentos adicionais do autor, inclusive `ARGS` antigos. Não mistura duas
+formas de selecionar modelo. Valores incompatíveis falham antes de criar
+worktree. A seleção não troca o modelo de uma sessão já aberta.
+
+A abertura preserva `modelos_tarefa` no registro da sessão e em sua cópia
+protegida em `revisoes/`. Na restauração, essa cópia prevalece sobre mudanças
+posteriores no perfil. Seleção gravável sem cópia protegida é recusada.
+Registros antigos continuam sendo recompostos pela configuração confiável;
+o campo `comando` nunca é executado.
+
+O CLI recebe explicitamente modelo e esforço. Isso registra o pedido ao
+provedor; não é atestado da identidade interna do serviço. Indisponibilidade
+do modelo falha sem trocar a seleção do autor. No piloto, a revisão deve ser
+chamada com `--revisor` explícito, para impedir as alternativas antigas do
+validador: `jangada-validar --revisor claude --modelo opus --esforco high`.
+Para autor Claude, use `--revisor codex --modelo gpt-6.1-sol --esforco high`.
+
+## Implementação delimitada
+
+```sh
+jangada-delegar implementador "Mudar valor para 2 nos dados sintéticos" \
+  --destino agy --permitir-remoto --base SHA_COMPLETO \
+  --arquivos criterios.txt --permitidos dados.txt \
+  --criterio "O teste do autor deve confirmar valor=2"
+```
+
+`--base` deve ser o HEAD exato. Fontes e arquivos existentes permitidos precisam
+coincidir com os objetos da base. `--novos ARQUIVOS` autoriza somente nomes
+exatos também listados em `--permitidos`; o controlador os cria vazios na cópia.
+Não há autorização de diretório, glob, exclusão ou mudança de permissões.
+`--prazo` vai de 1 a 600 segundos; o padrão é 360.
+
+O modelo é sempre `gemini-3.8-flash-high`. A lista de alternativas da delegação
+de leitura não se aplica. `--modelo` só aceita esse valor. Confiança, catálogo,
+cota, prazo e registrador são reaproveitados. Uma trava global disputa a conta
+existente entre leitura e implementação; concorrência é recusada, sem fila ou
+repetição automática. Uma segunda trava protege decisões na mesma tarefa.
+
+O papel novo tem ferramentas de leitura e edição de arquivo, sem terminal ou
+MCP. Os especialistas existentes continuam sem escrita. O agy continua
+recusado como agente principal genérico.
+
+## Fronteira de escrita
+
+O modo `implementacao` do `jangada-isolar` sempre cria Bubblewrap, inclusive
+dentro de uma sessão isolada. A casa e a pasta acima da tarefa começam vazias.
+Só voltam as fontes copiadas, no caminho exato já confiável, sem `.git`.
+A cópia é somente leitura; arquivos permitidos recebem montagens graváveis
+individuais. Arquivos de controle, outras tarefas e estado persistente ficam
+inacessíveis. Caminhos absolutos, travessia, links simbólicos, ligações físicas
+e submódulos são recusados na entrada e na entrega.
+
+O CLI tem estado temporário, configuração filtrada e somente o papel instalado
+copiado para esta execução. Não carrega hooks ou MCP pessoais. Descritores
+extras são fechados; descritores padrão de arquivos regulares e soquetes são
+recusados. O ambiente é reconstruído sem credenciais exportadas.
+
+O D-Bus, quando disponível, exige atributos de keyring já configurados em
+`JANGADA_ISOLAR_KEYRING_ITEM`. Somente leitura dos itens selecionados volta ao
+executor; ele não pode criar, substituir ou excluir credenciais. Não se libera
+o serviço inteiro. Falha de autenticação ou necessidade de renovar login
+impede a prova. O piloto não altera a configuração pessoal para contorná-la.
+
+Montagens de arquivo não aceitam substituição por rename. Se uma ferramenta
+de edição do agy exigir esse mecanismo, a chamada falha e mantém diagnóstico;
+não se libera o diretório. Arquivos temporários do CLI ficam em memória e não
+entram na entrega. Comandos ou patches retornados pelo modelo nunca são
+executados pelo controlador.
+
+## Inspeção, aceite e recuperação
+
+A chamada devolve ID, estado e pasta em `.jangada/implementacoes/ID`.
+`contrato.json` identifica tarefa, execução, atividade, base, modelo, papel,
+fontes com hashes, arquivos e critérios. `registro.json` vincula a delegação
+real e os metadados medidos. `entrega.json` contém hashes da cópia e contrato.
+`estado.json` conserva código e diagnóstico, sem gravar erros brutos do cliente.
+
+O autor lê os arquivos e o relatório como dados, compara o resultado e guarda
+o hash `entrega` devolvido. Só então aplica:
+
+```sh
+jangada-delegar --aceitar ID --base SHA_COMPLETO --entrega HASH_INSPECIONADO
+```
+
+O controlador reconfere base, contrato, resultado e fontes atuais antes de
+copiar apenas arquivos permitidos ao worktree. Resultado alterado, edição
+concorrente ou base divergente são recusados. O autor roda os testes aplicáveis
+e a suíte do projeto; `aceita_pelo_autor` não significa teste ou revisão aprovada.
+Um erro durante a cópia deixa `aceite_parcial`, para inspeção manual; não tenta
+desfazer edições nem reaplicar automaticamente.
+
+```sh
+jangada-delegar --devolver ID --base SHA_COMPLETO --motivo "Critério incompleto"
+```
+
+Devolução conserva os artefatos. Falha, prazo vencido, interrupção, cota desconhecida,
+ação negada ou saída parcial não chegam a `aguarda_autor`. Não há retomada
+automática: examine o estado e delimite outra chamada, se autorizada.
+
+## Demonstração supervisionada pendente
+
+Os testes `testes/implementacao-agy.py` fazem o percurso inteiro com cliente
+falso e uma prova de escrita com Bubblewrap real, sem modelo remoto.
+`testes/modelos-tarefa.py` confere seleção e restauração protegida.
+Isso não comprova ferramentas de escrita do agy real.
+
+Após integração e instalação pelo dono, o fluxo normal registra o papel pela
+etapa 50 ou pela migração `202610141900-executor-agy.sh`. Não execute essa
+instalação a partir do worktree do autor. Confira `agy agents` e a confiança
+da tarefa pelo fluxo normal. Prepare um projeto com somente `dados.txt`
+(`valor=1`) e `criterios.txt`, versionados. Execute o exemplo de delegação,
+inspecione a cópia, aceite pelo hash e teste `valor=2` antes da revisão.
+Se faltar papel, confiança, cota, acesso ao item de login ou escrita em arquivo
+montado, registre o bloqueio e pare, sem configurar permissões pessoais.

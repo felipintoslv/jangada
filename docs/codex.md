@@ -149,16 +149,11 @@ Com UUID, usa `codex resume UUID`. Sem UUID, num worktree próprio, usa
 `codex resume --last`, com o filtro de pasta do CLI. Sem UUID no modo direto,
 abre uma conversa nova para não retomar a conversa de outro agente.
 
-O perfil `codex-claude` usa `JANGADA_DELEGAR=agy`: leitor e redator vão
-primeiro ao Ollama, com arquivos explícitos, e os outros papéis vão pelo
-`jangada-delegar` ao agy, no primeiro modelo de `JANGADA_DELEGAR_MODELOS` com
-cota. O agy só atende em pasta marcada como confiável nele; se recusar, a
-sessão principal faz o trabalho. Sem perfil, ou com `JANGADA_DELEGAR=local`,
-só leitor e redator saem da sessão. Um perfil pessoal com o agy como revisor
-deve fixar `JANGADA_VALIDAR_MODELO` (por exemplo `gemini-3.8-flash-high`),
-para não herdar o modelo principal do agy. O protocolo do Codex não manda chamar
-subagentes do Claude. Recusa local
-nunca autoriza enviar documentos confidenciais a um provedor externo.
+O perfil `codex-claude` usa `JANGADA_DELEGAR=agy`: todos os papéis de apoio,
+inclusive leitor e redator, passam pelo `jangada-delegar` ao agy, com fontes
+e envio remoto autorizados. A recusa registra bloqueio, sem alternativa
+local automática. `JANGADA_DELEGAR=local` continua uma escolha explícita para
+leitor e redator. O Codex não chama subagentes do Claude.
 
 ## Cota disponível
 
@@ -271,3 +266,10 @@ e remoção de credenciais temporárias, sem serviços externos.
 Referências: [CLI](https://learn.chatgpt.com/docs/developer-commands?surface=cli),
 [configuração](https://learn.chatgpt.com/docs/config-file/config-reference) e
 [hooks](https://learn.chatgpt.com/docs/hooks) da documentação oficial.
+
+## Seleção por tarefa no piloto
+
+`--autor-modelo` e `--autor-esforco` selecionam Luna medium ou Sol high.
+O revisor independente é Opus high. A restauração usa `modelos_tarefa`
+protegido, não o comando ou a seleção gravável da sessão.
+Veja o [contrato do piloto](coordenacao-central/10-executor-agy.md).

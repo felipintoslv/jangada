@@ -729,3 +729,11 @@ bordas para conferir assinaturas não entra nessas contagens.
 - **agy sem estado "aguardando"**: o tempo de espera do agy não é medido.
 - **Sessões fora do jangada-agente** (Claude aberto direto no terminal ou
   no VS Code) não geram eventos nem SESSAO.json; só aparecem nas conversas.
+
+## Registros do piloto de implementação
+
+`modelos_tarefa` registra modelo, esforço e provedor de autor e revisor,
+com cópia protegida em `revisoes/SESSAO.json`. Artefatos da implementação
+ficam em `.jangada/implementacoes/ID`, sem autoridade de aprovação.
+O contrato e a entrega são vinculados por hash, tarefa e base exata.
+Veja o [contrato do piloto](coordenacao-central/10-executor-agy.md).

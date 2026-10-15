@@ -369,3 +369,10 @@ prazo para sair.
 | `testes/restaurar.sh` | volta de uma sessão interrompida |
 | `testes/confianca-agy-fluxo.sh` | confiança do agy na abertura, no reaproveitamento e na retomada |
 | `testes/contratos-consulta.sh` | consultas de `jangada-agentes` sem gravar no estado e limpeza explícita das órfãs |
+
+## Piloto com implementador
+
+O piloto permite selecionar autor e revisor por tarefa e delegar uma atividade
+com arquivos exatos ao agy. O autor inspeciona, aceita pelo hash e testa;
+o revisor independente continua obrigatório.
+Veja o [contrato do piloto](coordenacao-central/10-executor-agy.md).

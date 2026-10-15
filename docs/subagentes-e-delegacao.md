@@ -1072,3 +1072,10 @@ Os campos de cada arquivo estão em [registros](registros.md).
 | `testes/subagentes.sh` | papéis do Claude e do agy e a instalação deles; hook do leitor no Claude e no agy (papel pela variável, subagente pelo json da conversa, conversa fora do formato, falha do Python) |
 | `testes/delegar.sh` | `jangada-delegar` com agy falso: recusas (entre elas o leitor sem o hook no agy), cota, corte do relatório e registro |
 | `testes/validar.sh` | o campo `subagentes` e o `subagentes_erro` do `validar.jsonl` |
+
+## Implementador do piloto
+
+A exceção à leitura é o papel `implementador`, exclusivo do caminho protegido
+de implementação. Ele edita uma cópia sem Git e sem terminal; os outros papéis
+continuam sem escrita. Relatório leitor nunca substitui revisão independente.
+Veja o [contrato do piloto](coordenacao-central/10-executor-agy.md).

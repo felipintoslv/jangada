@@ -733,3 +733,26 @@ congelada fica em `fotos/` do estado, e a cópia da suíte do `--integrar`, em
 de `revisoes/` faz o `jangada-isolar` recusar qualquer lançamento. As duas
 pastas ficam ocultas; só a foto escolhida volta, somente leitura.
 Prompts e protocolos são registrados antes de iniciar ou retomar a sessão.
+
+## Piloto do implementador agy
+
+- Selecione modelo e esforço do autor na abertura; `modelos_tarefa` protegido
+  conserva a escolha na restauração, sem executar `.comando`.
+- `jangada-delegar implementador` exige base SHA exata, fontes, arquivos
+  permitidos e critérios. Modelo fixo: `gemini-3.8-flash-high`, sem alternativa.
+- A cópia é somente leitura, com montagens graváveis de arquivos individuais.
+  Um bind de arquivo impede rename; se a ferramenta depender disso, registre
+  falha sem liberar o diretório. Novos arquivos vêm criados vazios na cópia.
+- O modo cria Bubblewrap mesmo dentro da sessão. O CLI só grava em memória,
+  sem Git, hooks pessoais, estado protegido ou terminal do implementador.
+- A prova de kernel mostrou que `/tmp` vazio ainda permite criar arquivos
+  irmãos transitórios. O modo monta a pasta acima da tarefa vazia e somente
+  leitura; um diretório temporário separado atende o CLI, sem virar entrega.
+- D-Bus exige item de keyring já selecionado; o modo não permite CreateItem,
+  SetSecret ou Delete. Renovação de login pode falhar; não amplie acesso.
+- Inspecione fontes, contrato, arquivos e relatório; aceite com ID, base e
+  hash recebido. Teste depois de aceitar. Falha parcial pede inspeção manual.
+- `aceita_pelo_autor` não significa testes passados nem revisão aprovada.
+  Chame revisão forte com provedor explícito, sem alternativas automáticas.
+
+Contrato: [piloto](../../../../../docs/coordenacao-central/10-executor-agy.md).

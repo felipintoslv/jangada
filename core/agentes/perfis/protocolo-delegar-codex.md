@@ -17,3 +17,9 @@
    - O papel `supervisor`, com `analise_documental`, confere somente relatórios
      intermediários autorizados. Não use o Ollama para emitir esse parecer
      nem substitua o `jangada-validar` por supervisão de conteúdo.
+
+   - Exceção delimitada: `jangada-delegar implementador` edita somente cópia
+     isolada, com base exata, fontes, arquivos permitidos e critérios. Modelo
+     fixo `gemini-3.8-flash-high`, sem terminal ou alternativa automática.
+     Inspecione e aceite pelo hash; teste antes da revisão independente.
+     Especialistas de leitura continuam sem escrita; resultado não aprova.
