@@ -10,7 +10,7 @@ import sys
 
 sys.dont_write_bytecode = True
 
-from sessoes import LIMITE, TEXTO_MAX, nome_valido
+from sessoes import LIMITE, TEXTO_MAX, eh_sessao, nome_valido
 
 
 @contextlib.contextmanager
@@ -68,7 +68,8 @@ def sessao_worktree(raiz, worktree):
     achadas = []
     with pasta_leitura(Path(raiz).resolve() / 'agentes') as fd:
         if fd is not None:
-            nomes = [n for n in entradas(fd) if n.endswith('.json')]
+            nomes = [n for n in entradas(fd) if eh_sessao(n)
+                     and not stat.S_ISDIR(os.stat(n, dir_fd=fd, follow_symlinks=False).st_mode)]
             if len(nomes) > 4096:
                 raise ValueError('Consulta excedeu 4096 registros.')
             for nome in nomes:
@@ -95,6 +96,8 @@ def contexto_sessao(raiz, sessao):
         if profundidade > 32:
             raise ValueError('Profundidade de pareceres excedida.')
         for nome in entradas(fd):
+            if not prefixo and nome in ('projetos', 'runtime'):
+                continue
             quantidade += 1
             if quantidade > 16384:
                 raise ValueError('Consulta excedeu 16384 entradas.')

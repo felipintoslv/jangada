@@ -47,6 +47,11 @@ with tempfile.TemporaryDirectory() as tmp:
     assert consulta('--sessao-worktree-json', '/exato')['sessao'] is None
     gravar('legada', dict(worktree='/exato', estado='concluido', atualizado='2000-01-01', tarefa='Ação\n<literal>'))
     assert consulta('--sessao-worktree-json', '/exato')['sessao'] == 'legada'
+    (pasta / 'validacao-legada-r1.contexto.json').write_text('x' * (1024 * 1024 + 1))
+    (pasta / 'revisao-legada-r1.json').write_text('[]')
+    (pasta / 'delegacao-exemplo.json').write_text('{')
+    (pasta / 'pasta.json').mkdir()
+    assert consulta('--sessao-worktree-json', '/exato')['sessao'] == 'legada'
     minimo = base / 'core-sem-interface'
     (minimo / 'bin').mkdir(parents=True)
     (minimo / 'core/nucleo').mkdir(parents=True)
@@ -70,9 +75,19 @@ with tempfile.TemporaryDirectory() as tmp:
     protegido = xdg / 'jangada/revisoes'
     protegido.mkdir()
     (protegido / 'validacao-legada-r99.md').write_text('PROTEGIDO')
+    area_protegida = pasta / 'projetos/um/artefatos'
+    area_protegida.mkdir(parents=True)
+    for indice in range(16385):
+        (area_protegida / str(indice)).touch()
+    (area_protegida / 'validacao-legada-r999.md').write_text('PROTEGIDO')
+    (pasta / 'runtime').mkdir()
+    (pasta / 'runtime/validacao-legada-r1000.md').write_text('PROTEGIDO')
     resposta = consulta('--contexto-json', 'legada')
     assert resposta['parecer'] == dict(rodada=10, origem='historico/validacao-legada-r10.md', texto='r10\nDADO')
     assert resposta['tarefa'] == 'Ação\n<literal>'
+    for arquivo in area_protegida.iterdir():
+        if arquivo.name.isdigit():
+            arquivo.unlink()
     (pasta / 'validacao-legada-r10.md').write_text('outro')
     consulta('--contexto-json', 'legada', False)
     (pasta / 'validacao-legada-r10.md').unlink()

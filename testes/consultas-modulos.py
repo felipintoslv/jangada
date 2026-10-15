@@ -181,13 +181,21 @@ class ConsultasModulos(unittest.TestCase):
             caminho = raiz / 'agentes/projetos/um/tarefas.sqlite'
             db = criar_banco(caminho)
             self.assertEqual(consultas.consultar_filas(raiz)['projetos'][0]['tarefas'], [])
+            db.execute('BEGIN')
             db.executemany('INSERT INTO eventos VALUES (?,?,?,?)',
                            ((n, 'x', 'observacao', '{}') for n in range(16385)))
-            self.assertTrue(consultas.consultar_filas(raiz)['erros'])
+            db.execute('COMMIT')
+            self.assertEqual(consultas.consultar_filas(raiz)['erros'], [])
             db.execute('DELETE FROM eventos')
             db.execute('INSERT INTO tarefas VALUES (?,?,?,?,?,?,?,?)',
-                       ('x', json.dumps(dict(papel='leitor', capacidade='x', texto='x' * 1048576)),
+                       ('x', json.dumps(dict(papel='leitor', capacidade='x', pedido='x' * 1048576)),
                         'QUEUED', 0, '', 1, 1, None))
+            self.assertEqual(consultas.consultar_filas(raiz)['erros'], [])
+            db.execute('DELETE FROM tarefas')
+            db.execute('BEGIN')
+            db.executemany('INSERT INTO tarefas VALUES (?,?,?,?,?,?,?,?)',
+                           ((str(n), '{}', 'QUEUED', 0, '', 1, 1, None) for n in range(16385)))
+            db.execute('COMMIT')
             self.assertTrue(consultas.consultar_filas(raiz)['erros'])
             db.close()
             with caminho.open('wb') as arquivo:
@@ -195,6 +203,59 @@ class ConsultasModulos(unittest.TestCase):
             antes = retrato(raiz)
             self.assertTrue(consultas.consultar_filas(raiz)['erros'])
             self.assertEqual(retrato(raiz), antes)
+
+    def test_pedidos_longos_nao_incham_resposta(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp)
+            projeto = raiz / 'original'
+            projeto.mkdir()
+            atalho = raiz / 'atalho'
+            atalho.symlink_to(projeto, target_is_directory=True)
+            identificador = hashlib.sha256(str(projeto).encode()).hexdigest()
+            db = criar_banco(raiz / 'agentes/projetos' / identificador / 'tarefas.sqlite')
+            spec = dict(papel='leitor', capacidade='leitura_documental', pedido='p' * 9000)
+            db.execute('BEGIN')
+            db.executemany('INSERT INTO tarefas VALUES (?,?,?,?,?,?,?,?)',
+                           ((str(n), json.dumps(spec), 'QUEUED', 0, '', 1, 1, '{"relato":"privado"}') for n in range(400)))
+            db.execute('COMMIT')
+            antes = retrato(raiz)
+            consulta = consultas.consultar_filas(raiz, [atalho])
+            self.assertEqual(consulta['erros'], [])
+            fila = consulta['projetos'][0]
+            self.assertEqual(fila['caminho'], str(atalho))
+            self.assertEqual(len(fila['tarefas']), 400)
+            self.assertLess(len(json.dumps(consulta).encode()), 1024 * 1024)
+            self.assertEqual(set(fila['tarefas'][0]), {'id', 'status', 'tentativas', 'motivo', 'atualizado', 'especificacao'})
+            self.assertEqual(fila['tarefas'][0]['especificacao'], dict(papel='leitor', capacidade='leitura_documental'))
+            with patch.object(orquestracao, 'ler_precos', return_value=None):
+                painel = orquestracao.coletar(raiz, [atalho], lambda p: Path(p).name)
+            self.assertEqual(painel['erros'], [])
+            self.assertEqual(painel['projetos'][0]['projeto'], 'atalho')
+            self.assertEqual(len(painel['tarefas']), 400)
+            self.assertEqual(retrato(raiz), antes)
+            db.close()
+
+    def test_estouro_de_projeto_preserva_provedores_e_demais_filas(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp)
+            bancos = []
+            for nome, tamanho in (('a', 600000), ('b', 600000), ('c', 1)):
+                db = criar_banco(raiz / 'agentes/projetos' / nome / 'tarefas.sqlite')
+                spec = dict(papel='leitor', capacidade='leitura_documental')
+                db.execute('INSERT INTO tarefas VALUES (?,?,?,?,?,?,?,?)',
+                           ('t', json.dumps(spec), 'QUEUED', 0, 'x' * tamanho, 1, 1, None))
+                bancos.append(db)
+            runtime = criar_banco(raiz / 'agentes/runtime/tarefas.sqlite')
+            bancos.append(runtime)
+            antes = retrato(raiz)
+            consulta = consultas.consultar_filas(raiz)
+            self.assertEqual([p['id'] for p in consulta['projetos']], ['a', 'c'])
+            self.assertEqual([e['projeto'] for e in consulta['erros']], ['b'])
+            self.assertEqual({p['id'] for p in consulta['provedores']}, {'agy', 'local'})
+            self.assertLessEqual(len(json.dumps(consulta).encode()), 1024 * 1024)
+            self.assertEqual(retrato(raiz), antes)
+            for db in bancos:
+                db.close()
 
     def test_consumidor_falhas_nao_viram_sucesso(self):
         for resposta in (dict(versao=2), dict(versao=True), {},

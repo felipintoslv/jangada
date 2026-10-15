@@ -14,6 +14,8 @@ O caminho exige forma absoluta, até 4.096 caracteres. A comparação com
 retenção. `dir` e `raiz` não participam. Assim, uma sessão `--direto` sem
 `worktree` não corresponde; uma sessão legada ou encerrada ainda corresponde.
 O nome continua vindo do arquivo, mesmo sem campo `sessao` no registro.
+Arquivos reservados a revisões, delegações e contextos de validação não são
+registros de sessão e não são abertos; diretórios `*.json` são ignorados.
 
 `JANGADA_SESSAO` mantém precedência no terminal e dispensa a consulta.
 Sem essa variável, `_jangada_sessao_atual` entrega ao Core o topo do Git.
@@ -36,7 +38,9 @@ A consulta agora recusa e informa os nomes, sem escolher arbitrariamente.
 | `parecer` | Nulo ou objeto com `rodada` inteira, `origem` relativa e `texto` |
 
 A seleção preserva a origem anterior: Markdown `validacao-SESSAO-rN.md`
-na árvore de `agentes/`, inclusive subpastas. Não consulta `revisoes/`,
+na árvore de `agentes/`, inclusive subpastas de pareceres. Não desce em
+`agentes/projetos/` ou `agentes/runtime/`, áreas operacionais protegidas.
+Não consulta `revisoes/`,
 conversas, históricos dos modelos, protocolos nem credenciais. A maior
 rodada numérica vence, portanto r10 vem depois de r2 independentemente da
 subpasta. Empate na maior rodada recusa o repasse. A ordenação anterior
@@ -58,8 +62,8 @@ A pasta final não pode ser simbólica. A raiz configurada do estado é resolvid
 antes da leitura; os componentes abaixo dela são abertos sem seguir links.
 JSON e parecer selecionado exigem arquivo regular sem ligações adicionais,
 até 1 MiB. `worktree` e `tarefa` exigem texto ou nulo, até 16.000 caracteres.
-JSON malformado ou de outro tipo recusa a consulta, inclusive se o registro
-não corresponder à árvore solicitada.
+JSON malformado ou de outro tipo em registro de sessão recusa a consulta,
+inclusive se o registro não corresponder à árvore solicitada.
 
 São aceitos até 4.096 registros na busca por árvore, 16.384 entradas de
 pasta e profundidade 32 na busca de parecer. Diretórios simbólicos não são
@@ -82,11 +86,18 @@ preços já lida pelo consumidor. A resposta tem versão inteira 1 e listas
 
 Cada projeto entrega `id` opaco, `caminho` conhecido ou nulo, `tarefas`,
 `consumos` por ID e `metricas`. O Core decide descoberta, seleção dos bancos
-e correspondência dos caminhos. O Monitor decide apenas o nome de exibição;
+e correspondência dos caminhos. A chave usa o destino resolvido, mas
+`caminho` conserva o texto recebido, inclusive aliases por links simbólicos.
+O Monitor decide apenas o nome de exibição;
 para projeto desconhecido, conserva `projeto-` seguido dos primeiros doze
 caracteres do ID. Não recebe conexão SQL nem caminho de banco.
 
-Tarefas conservam especificação e resultado decodificados. Consumo continua
+Cada tarefa entrega apenas `id`, `status`, `tentativas`, `motivo`, `atualizado`
+e a parte de `especificacao` usada na apresentação: `papel`, `capacidade`,
+`prioridade`, `dependencias`, `max_chamadas` e `tempo_total`. Campos opcionais
+ausentes continuam ausentes. Pedidos, objetivos, resultados e demais colunas
+não atravessam esse contrato. O cálculo interno conserva os dados completos.
+Consumo continua
 com `chamadas` e `segundos`. As métricas reutilizam o cálculo existente no
 Core, sobre o mesmo retrato de leitura. Preços inválidos continuam gerando
 erro; consumo ou custo desconhecido continua nulo. Provedores mantêm a
@@ -101,9 +112,13 @@ O Monitor recusa versão desconhecida e conserva o erro na saída do coletor.
 Bancos e WAL são copiados para pasta temporária privada, nunca abertos para
 escrita na origem. `query_only` e transação de leitura permanecem ativos.
 Banco, WAL e SHM simbólicos ou não regulares são recusados. Cada arquivo
-copiado admite 64 MiB; há até 4.096 projetos e 16.384 registros por tabela
-consultada. A resposta codificada admite 1 MiB. Estouro agregado lança erro,
-sem resposta parcial silenciosa. O esquema legado tem `user_version=0`;
+copiado admite 64 MiB; há até 4.096 projetos e 16.384 tarefas ou provedores
+por banco. Eventos não têm teto de contagem separado do limite dos arquivos.
+A resposta codificada admite 1 MiB. Provedores são consultados primeiro.
+Projeto cuja apresentação excede o saldo da resposta gera erro identificado,
+sem descartar provedores ou outras filas válidas. Uma reserva de 1 KiB
+permite relatar erros de limite. Se os próprios diagnósticos excederem a
+resposta, são resumidos por uma mensagem explícita com a quantidade de erros. O esquema legado tem `user_version=0`;
 outro valor é erro nesta API. Esses tetos são proteções, não prova de
 adequação a volume. Mudança concorrente durante a cópia continua exigindo
 nova tentativa limitada ou erro, conforme `banco_leitura`.
@@ -126,11 +141,10 @@ Os contratos existentes de consulta, fachada, caminhos e fronteiras continuam
 ativos. Não foram ampliados tetos ou exceções de K9. Não há alteração de TSV,
 de `--lista-json` versão 1, de links relativos ou de registros documentados.
 
-A regressão antiga `painel-orquestracao.py` depende de montar uma fixture com
-`Estado`. O marcador do isolamento aninhado impede essa preparação nesta
-sessão, inclusive após solicitação técnica de execução externa. A prova
-permanece para o coordenador em ambiente autorizado, junto da suíte integral
-e da única revisão protegida externa. Nenhum bloqueio foi convertido em
-sucesso nem se alterou a autoridade do controlador para viabilizar o teste.
-O apoio de arquitetura agy foi recebido e conferido; pedido, resultado e
-aproveitamento ficam em `.jangada/evidencias-m1-consultas`, fora do Git.
+Antes de integrar, executar `testes/painel-orquestracao.py` e a suíte integral
+em ambiente com autoridade para preparar as fontes sintéticas. As provas
+específicas incluem 400 pedidos longos sem aumentar a resposta, estouro por
+projeto com provedores preservados e aliases simbólicos no nome de exibição.
+A busca do terminal é conferida com contextos grandes, relatórios inválidos
+e mais de 16.384 artefatos protegidos, sem abrir essas fontes como sessões
+ou pareceres. Esses casos não substituem a avaliação de volume de M1.3.

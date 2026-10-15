@@ -278,12 +278,12 @@ def consultar_filas(raiz, projetos=(), precos=None):
     from metricas_projeto import calcular
 
     raiz = Path(raiz).resolve()
-    caminhos = {chave(Path(p).resolve()): str(Path(p).resolve()) for p in projetos}
+    caminhos = {chave(p): str(p) for p in projetos}
     resultado = dict(versao=1, projetos=[], provedores=[], erros=[])
     limite = 1024 * 1024
 
-    def conferir_resposta(dados):
-        if len(json.dumps(dados, ensure_ascii=False, allow_nan=False).encode('utf-8')) > limite:
+    def conferir_resposta(dados, reserva=0):
+        if len(json.dumps(dados, ensure_ascii=False, allow_nan=False).encode('utf-8')) > limite - reserva:
             raise ValueError('Resposta das filas excedeu 1 MiB.')
 
     @contextlib.contextmanager
@@ -324,6 +324,16 @@ def consultar_filas(raiz, projetos=(), precos=None):
             if agentes is None:
                 return resultado
             try:
+                with diretorio(agentes / 'runtime') as runtime:
+                    if runtime is not None and banco(runtime):
+                        with banco_leitura(runtime / 'tarefas.sqlite', limite=64 * limite) as db:
+                            conferir_db(db, ('provedores',))
+                            provedores = listar_provedores(db)
+                            conferir_resposta(dict(resultado, provedores=provedores), reserva=1024)
+                            resultado['provedores'] = provedores
+            except (OSError, ValueError, KeyError, TypeError, RecursionError, sqlite3.Error) as erro:
+                resultado['erros'].append(dict(projeto=None, caminho=None, mensagem='provedores: ' + str(erro)))
+            try:
                 with diretorio(agentes / 'projetos') as pastas:
                     nomes = sorted(pastas.iterdir()) if pastas is not None else []
                     if len(nomes) > 4096:
@@ -338,7 +348,7 @@ def consultar_filas(raiz, projetos=(), precos=None):
                                 if fixa is None or not banco(fixa):
                                     continue
                                 with banco_leitura(fixa / 'tarefas.sqlite', limite=64 * limite) as db:
-                                    conferir_db(db, ('tarefas', 'eventos'))
+                                    conferir_db(db, ('tarefas',))
                                     consulta = ConsultaFila(db, raiz / 'agentes/projetos' / identificador)
                                     tarefas = consulta.listar()
                                     for tarefa in tarefas:
@@ -358,25 +368,31 @@ def consultar_filas(raiz, projetos=(), precos=None):
                                                 or any(type(spec.get(c, padrao)) is not int or spec.get(c, padrao) < 0
                                                        for c, padrao in (('max_chamadas', 8), ('tempo_total', 600)))):
                                             raise ValueError('Campos da especificação inválidos.')
-                                    item = dict(id=identificador, caminho=caminho, tarefas=tarefas,
+                                    apresentacao = []
+                                    for t in tarefas:
+                                        item_tarefa = {c: t[c] for c in ('id', 'status', 'tentativas', 'motivo', 'atualizado')}
+                                        item_tarefa['especificacao'] = {c: t['especificacao'][c] for c in
+                                            ('papel', 'capacidade', 'prioridade', 'dependencias', 'max_chamadas', 'tempo_total')
+                                            if c in t['especificacao']}
+                                        apresentacao.append(item_tarefa)
+                                    item = dict(id=identificador, caminho=caminho, tarefas=apresentacao,
                                                 consumos={t['id']: consumo_tarefa(db, t['id']) for t in tarefas},
                                                 metricas=calcular(consulta, precos))
-                                    conferir_resposta(item)
+                                    conferir_resposta(dict(resultado, projetos=resultado['projetos'] + [item]),
+                                                       reserva=1024)
                             resultado['projetos'].append(item)
                         except (OSError, ValueError, KeyError, TypeError, AttributeError, RecursionError, sqlite3.Error) as erro:
                             resultado['erros'].append(dict(projeto=identificador, caminho=caminho,
                                                            mensagem=type(erro).__name__ + ': ' + str(erro)))
             except (OSError, ValueError) as erro:
                 resultado['erros'].append(dict(projeto=None, caminho=None, mensagem=str(erro)))
-            try:
-                with diretorio(agentes / 'runtime') as runtime:
-                    if runtime is not None and banco(runtime):
-                        with banco_leitura(runtime / 'tarefas.sqlite', limite=64 * limite) as db:
-                            conferir_db(db, ('provedores',))
-                            resultado['provedores'] = listar_provedores(db)
-            except (OSError, ValueError, KeyError, TypeError, RecursionError, sqlite3.Error) as erro:
-                resultado['erros'].append(dict(projeto=None, caminho=None, mensagem='provedores: ' + str(erro)))
     except (OSError, ValueError) as erro:
         resultado['erros'].append(dict(projeto=None, caminho=None, mensagem=str(erro)))
-    conferir_resposta(resultado)
+    try:
+        conferir_resposta(resultado)
+    except ValueError:
+        quantidade = len(resultado['erros'])
+        resultado['erros'] = [dict(projeto=None, caminho=None,
+            mensagem=f'{quantidade} erros nas filas; detalhes excederam o limite de resposta.')]
+        conferir_resposta(resultado)
     return resultado
