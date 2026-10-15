@@ -268,8 +268,13 @@ def executar(args, raiz):
         if str(raiz) not in settings.get("trustedWorkspaces", []):
             raise ValueError("pasta sem confiança existente no agy; não criar autorização")
         # Só a confiança já autorizada e as permissões existentes; sem tokens, MCP ou hooks.
+        # Sem terminal, o agy nega a escrita que não estiver liberada: libera só
+        # o caminho exato de cada permitido.
+        permissoes = dict(settings.get("permissions", {}))
+        permissoes["allow"] = list(permissoes.get("allow", [])) + [
+            "write_file(" + str(raiz / nome) + ")" for nome in permitidos]
         gravar(runtime, "settings.json", codificar({"trustedWorkspaces": [str(raiz)],
-               "permissions": settings.get("permissions", {})}), novo=True)
+               "permissions": permissoes}), novo=True)
         gravar(execucao, "contrato.json", codificar(contrato), novo=True)
         estado(execucao, atual)
         pedido = ("Atividade delimitada em cópia da base " + args.base + ". Sem Git, commit ou exclusão. "
@@ -399,8 +404,13 @@ def montagem(manifesto):
     # O CLI pode gravar logs e binários apenas em memória.
     runtime = arquivo.parent / "runtime"
     args += ["--tmpfs", str(cli),
-             "--ro-bind", str(runtime / "settings.json"), str(cli / "settings.json"),
-             "--ro-bind", str(runtime / "config"), str(cfg)]
+             "--ro-bind", str(runtime / "settings.json"), str(cli / "settings.json")]
+    # O agy cria config/projects ao abrir conversa; sem ela, sai com código 1.
+    # Só essa pasta grava, em memória; agents.json e hooks.json seguem fixos.
+    args += ["--tmpfs", str(cfg)]
+    for nome in ("agents.json", "hooks.json"):
+        args += ["--ro-bind", str(runtime / "config" / nome), str(cfg / nome)]
+    args += ["--tmpfs", str(cfg / "projects"), "--remount-ro", str(cfg)]
     if (cli / "builtin").is_dir():
         args += ["--ro-bind", str(cli / "builtin"), str(cli / "builtin")]
     args += ["--ro-bind", str(runtime / "agentes"), "/tmp/jangada-implementador-agentes"]

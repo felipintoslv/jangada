@@ -181,6 +181,32 @@ print(json.dumps({"status":"SUCCESS","response":"dados.txt:1 valor atualizado","
         self.assertEqual(args[indice-1:indice+2], ["--ro-bind", dns, dns])
         self.assertLess(args.index("/run"), indice)
 
+    def test_config_do_agy_grava_so_projects(self):
+        resultado = json.loads(self.executar().stdout)
+        with mock.patch.dict(os.environ, self.env):
+            args = modulo.montagem(str(Path(resultado["pasta"]) / "contrato.json"))
+        cfg = str(self.casa / ".gemini/config")
+        runtime = Path(resultado["pasta"]) / "runtime/config"
+        pares = [args[i:i+2] for i in range(len(args) - 1)]
+        self.assertIn(["--tmpfs", cfg], pares)
+        for nome in ("agents.json", "hooks.json"):
+            indice = args.index(cfg + "/" + nome)
+            self.assertEqual(args[indice-2:indice+1], ["--ro-bind", str(runtime / nome), cfg + "/" + nome])
+        projetos = args.index(cfg + "/projects")
+        self.assertEqual(args[projetos-1], "--tmpfs")
+        self.assertLess(args.index(cfg), projetos)
+        self.assertEqual(args[projetos+1:projetos+3], ["--remount-ro", cfg])
+        self.assertNotIn(["--ro-bind", str(runtime), cfg], pares)
+
+    def test_escrita_liberada_so_nos_permitidos(self):
+        resultado = json.loads(self.executar().stdout)
+        pasta = Path(resultado["pasta"])
+        contrato = json.loads((pasta / "contrato.json").read_text())
+        settings = json.loads((pasta / "runtime/settings.json").read_text())
+        escrita = [r for r in settings["permissions"]["allow"] if r.startswith("write_file(")]
+        self.assertEqual(escrita, ["write_file(" + str(Path(contrato["raiz"]) / nome) + ")"
+                                   for nome in contrato["permitidos"]])
+
     def test_perfil_isolamento_limita_keyring_e_limpa_ambiente(self):
         resultado = json.loads(self.executar().stdout)
         manifesto = str(Path(resultado["pasta"]) / "contrato.json")

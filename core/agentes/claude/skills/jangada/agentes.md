@@ -755,6 +755,17 @@ Prompts e protocolos são registrados antes de iniciar ou retomar a sessão.
   com edição, visível exclusivamente dentro da montagem restrita.
 - D-Bus exige item de keyring já selecionado; o modo não permite CreateItem,
   SetSecret ou Delete. Renovação de login pode falhar; não amplie acesso.
+  Sem `JANGADA_ISOLAR_KEYRING_ITEM` no `jangada.conf` o modo não abre. Grave
+  `JANGADA_ISOLAR_KEYRING_ITEM=service=gemini username=antigravity` sem
+  aspas: o arquivo é lido literalmente, e com aspas o agy espera 60 s e sai
+  com "authentication failed or timed out".
+- O agy 1.3.5 cria `~/.gemini/config/projects` ao abrir conversa; com
+  `config` inteira somente leitura ele sai com código 1. O modo monta `config`
+  em memória, devolve `agents.json` e `hooks.json` somente leitura e deixa
+  gravável só `projects`.
+- Sem terminal, o agy nega escrita que não tenha a regra
+  `write_file(<caminho absoluto>)` em `permissions.allow`. O modo gera uma
+  regra por arquivo permitido; não use curinga.
 - Inspecione fontes, contrato, arquivos e relatório; aceite com ID, base e
   hash recebido. Teste depois de aceitar. Falha parcial pede inspeção manual.
 - `aceita_pelo_autor` não significa testes passados nem revisão aprovada.
