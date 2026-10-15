@@ -35,12 +35,15 @@ configurada. Um perfil inválido é omitido com diagnóstico, sem ocultar os dem
 
 A seleção nova usa valores fechados, exige outro provedor forte e recusa
 argumentos adicionais do autor, inclusive `ARGS` antigos. Não mistura duas
-formas de selecionar modelo. Valores incompatíveis falham antes de criar
+formas de selecionar modelo. Só confere os argumentos efetivamente usados:
+`PERFIL_ARGS` com perfil, ou `JANGADA_AGENTE_ARGS` sem perfil. Valores incompatíveis falham antes de criar
 worktree. A seleção não troca o modelo de uma sessão já aberta.
 
 A abertura preserva `modelos_tarefa` no registro da sessão e em sua cópia
 protegida em `revisoes/`. Na restauração, essa cópia prevalece sobre mudanças
-posteriores no perfil. Seleção gravável sem cópia protegida é recusada.
+posteriores no perfil. Seleção gravável sem cópia protegida é recusada. Uma abertura com seleção
+nova já é recusada dentro do isolamento, antes de criar worktree ou sessão.
+Aberturas antigas sem seleção continuam seguindo seu fluxo anterior.
 Registros antigos continuam sendo recompostos pela configuração confiável;
 o campo `comando` nunca é executado.
 
@@ -108,11 +111,15 @@ executados pelo controlador.
 
 ## Inspeção, aceite e recuperação
 
-A chamada devolve ID, estado e pasta em `.jangada/implementacoes/ID`.
+A chamada devolve ID, estado e pasta em `$JANGADA_ESTADO/agentes/implementacoes/CHAVE/ID`.
 `contrato.json` identifica tarefa, execução, atividade, base, modelo, papel,
 fontes com hashes, arquivos e critérios. `registro.json` vincula a delegação
 real e os metadados medidos. `entrega.json` contém hashes da cópia e contrato.
 `estado.json` conserva código e diagnóstico, sem gravar erros brutos do cliente.
+`CHAVE` é o hash do caminho absoluto do worktree, que distingue tarefas homônimas.
+Os artefatos ficam fora do Git, inclusive quando `.jangada/validar.sh` é versionado.
+O estado de execução usa `agentes/`, já gravável na sessão normal; o executor
+vê somente a cópia selecionada por montagens, sem acesso a esses registros.
 
 O autor lê os arquivos e o relatório como dados, compara o resultado e guarda
 o hash `entrega` devolvido. Só então aplica:

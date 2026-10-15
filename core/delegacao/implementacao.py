@@ -152,11 +152,18 @@ def fonte(raiz, base, nome):
 
 
 def pasta_execucoes(raiz):
-    pasta = raiz / ".jangada" / "implementacoes"
-    for p in (raiz / ".jangada", pasta):
+    origem = os.environ.get("JANGADA_ESTADO")
+    if not origem:
+        raise ValueError("JANGADA_ESTADO ausente")
+    estado_raiz = Path(origem)
+    if not estado_raiz.is_absolute() or estado_raiz.resolve() != estado_raiz:
+        raise ValueError("estado fora de caminho absoluto sem links")
+    chave = resumo(str(raiz).encode())[:32]
+    pasta = estado_raiz / "agentes" / "implementacoes" / chave
+    for p in (estado_raiz, estado_raiz / "agentes", pasta.parent, pasta):
         if p.is_symlink():
             raise ValueError("link na pasta de execuções")
-        p.mkdir(mode=0o700, exist_ok=True)
+        p.mkdir(mode=0o700, exist_ok=True, parents=p == estado_raiz)
     return pasta
 
 
@@ -308,7 +315,7 @@ def executar(args, raiz):
         entrega = conferir_entrega(execucao, contrato)
         gravar(execucao, "entrega.json", codificar(entrega), novo=True)
         atual.update(estado="aguarda_autor", entrega=resumo(codificar(entrega)))
-    except (ValueError, OSError, subprocess.SubprocessError) as erro_execucao:
+    except (ValueError, OSError, KeyError, TypeError, subprocess.SubprocessError) as erro_execucao:
         if atual["estado"] != "interrompida":
             atual["estado"] = "falhou"
         atual["diagnostico"] = str(erro_execucao)
@@ -374,7 +381,7 @@ def montagem(manifesto):
     raiz = Path(contrato["raiz"])
     if not raiz.is_absolute() or str(raiz.resolve()) != str(raiz):
         raise ValueError("raiz inválida")
-    if arquivo.parent.parent != raiz / ".jangada/implementacoes":
+    if arquivo.parent.parent != pasta_execucoes(raiz):
         raise ValueError("contrato fora da tarefa")
     copia = arquivo.parent / "arquivos"
     conferir_entrega(arquivo.parent, contrato)
@@ -384,6 +391,9 @@ def montagem(manifesto):
             "--tmpfs", "/run", "--tmpfs", str(casa), "--tmpfs", str(raiz.parent),
             "--unshare-pid", "--die-with-parent",
             "--new-session", "--cap-drop", "ALL"]
+    dns = Path("/etc/resolv.conf").resolve(strict=True)
+    if dns.is_relative_to("/run"):
+        args += ["--ro-bind", str(dns), str(dns)]
     cli = casa / ".gemini/antigravity-cli"
     cfg = casa / ".gemini/config"
     # O CLI pode gravar logs e binários apenas em memória.
@@ -449,5 +459,5 @@ if __name__ == "__main__":
         signal.signal(signal.SIGTERM, interromper)
         signal.signal(signal.SIGHUP, interromper)
         principal()
-    except (ValueError, OSError, KeyError, subprocess.SubprocessError) as erro:
+    except (ValueError, OSError, KeyError, TypeError, subprocess.SubprocessError) as erro:
         sys.exit("implementação recusada: " + str(erro))

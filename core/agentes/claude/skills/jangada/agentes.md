@@ -761,3 +761,7 @@ Prompts e protocolos são registrados antes de iniciar ou retomar a sessão.
   Chame revisão forte com provedor explícito, sem alternativas automáticas.
 
 Contrato: [piloto](../../../../../docs/coordenacao-central/10-executor-agy.md).
+
+- Em Arch com systemd-resolved, `/etc/resolv.conf` pode apontar para `/run`.
+  Ocultar `/run` também oculta o DNS. A implementação devolve somente leitura
+  o arquivo resolvido, preservando o ocultamento dos soquetes.

@@ -11,6 +11,9 @@ falhas=0
 ok()    { printf 'ok    %s\n' "$*"; }
 falha() { printf 'FALHA %s\n' "$*"; falhas=$((falhas + 1)); }
 conferir() { local d="$1"; shift; if "$@"; then ok "$d"; else falha "$d"; fi; }
+conferir "implementação: ambiente vazio, keyring por item sem criação ou acesso irrestrito" \
+  env PYTHONDONTWRITEBYTECODE=1 python3 testes/implementacao-agy.py \
+    Implementacao.test_perfil_isolamento_limita_keyring_e_limpa_ambiente
 pular() {
   if [[ "${JANGADA_TESTES_EXIGIR_ISOLAMENTO:-}" == 1 ]]; then
     falha "$* (o isolamento real é exigido)"

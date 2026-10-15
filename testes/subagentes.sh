@@ -23,6 +23,23 @@ cabeca() { awk 'NR > 1 && /^---$/ { exit } NR > 1' "$1"; }
 corpo() { awk 'f; /^---$/ && ++n == 2 { f = 1 }' "$1"; }
 campo() { cabeca "$1" | sed -n "s/^$2: //p"; }
 
+# O catálogo instalado só lê; a escrita existe apenas no papel privado do controlador.
+impl=default/agy/agents/implementador/agent.md
+conferir "implementador global: subagente leitor Flash sem MCP" \
+  [ "$(campo "$impl" subagent),$(campo "$impl" model),$(campo "$impl" inheritMcp)" = true,flash,false ]
+conferir "implementador global: somente ferramenta de leitura" \
+  [ "$(cabeca "$impl" | sed -n 's/^  - //p' | paste -sd,)" = view_file ]
+PYTHONDONTWRITEBYTECODE=1 python3 - "$repo_jangada" >"$tmp/implementador.md" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1] + '/core/delegacao')
+from implementacao import PAPEL_PRIVADO
+print(PAPEL_PRIVADO)
+PY
+conferir "implementador privado: executor Flash sem MCP" \
+  [ "$(campo "$tmp/implementador.md" subagent),$(campo "$tmp/implementador.md" model),$(campo "$tmp/implementador.md" inheritMcp)" = false,flash,false ]
+conferir "implementador privado: somente ferramentas de arquivo, sem comandos ou subagentes" \
+  [ "$(cabeca "$tmp/implementador.md" | sed -n 's/^  - //p' | sort | paste -sd,)" = multi_replace_file_content,replace_file_content,view_file,write_to_file ]
+
 # Papéis: mesmos nomes e mesmo texto nos dois agentes; só o frontmatter muda.
 declare -A modelo_claude=([explorador]=haiku [leitor]=haiku [pesquisador]=haiku [verificador]=sonnet [auditor]=sonnet [arquiteto]=sonnet [otimizador]=sonnet [redator]=haiku [supervisor]=haiku)
 for p in "${papeis[@]}"; do

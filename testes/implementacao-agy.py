@@ -2,7 +2,10 @@
 """Percurso sintético completo, sem modelos remotos, e negativos do contrato."""
 
 import importlib.util
+import argparse
+import contextlib
 import fcntl
+import io
 import json
 import os
 from pathlib import Path
@@ -10,6 +13,7 @@ import subprocess
 import signal
 import tempfile
 import unittest
+from unittest import mock
 
 REPO = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("implementacao", REPO / "core/delegacao/implementacao.py")
@@ -45,7 +49,7 @@ class Implementacao(unittest.TestCase):
         self.env = {k: v for k, v in os.environ.items() if not k.startswith(("JANGADA_", "XDG_"))}
         self.env.pop("DBUS_SESSION_BUS_ADDRESS", None)
         self.env.update(HOME=str(self.casa), PATH=str(self.bin) + ":/usr/bin:/bin", JANGADA_PATH=str(REPO),
-                        XDG_STATE_HOME=str(self.tmp / "estado"), XDG_CONFIG_HOME=str(self.tmp / "config"),
+                        XDG_STATE_HOME=str(self.tmp / "estado"), JANGADA_ESTADO=str(self.tmp / "estado/jangada"), XDG_CONFIG_HOME=str(self.tmp / "config"),
                         XDG_CACHE_HOME=str(self.tmp / "cache"), JANGADA_SESSAO="sintetica")
         self.script("agy", '''import json,sys
 if sys.argv[1:] == ["agents"]: print("implementador"); sys.exit()
@@ -60,7 +64,7 @@ args=sys.argv[1:]
 alvos=[(Path(args[i+1]),args[i+2]) for i,x in enumerate(args) if x=="--bind"]
 assert len(alvos) in (1,2), args
 assert all("/arquivos/" in str(a) for a,b in alvos), args
-assert not any(x in str(a) for a,b in alvos for x in ("/.git/","/agentes/"))
+assert all(a.parent.name=="arquivos" and a.name in ("dados.txt","novo.txt") for a,b in alvos), args
 pasta=alvos[0][0].parent
 modo=os.environ.get("FALSO_MODO","")
 if modo=="prazo": time.sleep(4)
@@ -128,6 +132,88 @@ print(json.dumps({"status":"SUCCESS","response":"dados.txt:1 valor atualizado","
         self.chamar("--aceitar", r["id"], "--base", self.base, "--entrega", r["entrega"], sucesso=False)
         self.assertEqual((self.raiz / "dados.txt").read_text(), "valor=1\n")
 
+    def test_artefatos_fora_do_git_mesmo_com_jangada_versionada(self):
+        (self.raiz / ".jangada").mkdir()
+        (self.raiz / ".jangada/validar.sh").write_text("true\n")
+        self.git("add", ".jangada/validar.sh")
+        self.git("-c", "user.name=Teste", "-c", "user.email=t@t", "commit", "-qm", "portão")
+        self.base = self.git("rev-parse", "HEAD").strip()
+        resultado = json.loads(self.executar().stdout)
+        pasta = Path(resultado["pasta"])
+        self.assertTrue(pasta.is_relative_to(self.tmp / "estado/jangada/agentes/implementacoes"))
+        self.assertFalse(pasta.is_relative_to(self.raiz))
+        self.git("add", "-A")
+        self.assertEqual(self.git("diff", "--cached", "--name-only"), "")
+
+    def test_preparacao_invalida_preserva_falha_terminal(self):
+        args = argparse.Namespace(base=self.base, permitidos=["dados.txt"], novos=[],
+                                  arquivos=["fonte.txt"], pedido="atividade", criterio=["valor=2"], prazo=30)
+        registro = self.casa / ".gemini/config/agents.json"
+        valido = registro.read_text()
+        for falha in ("path", "JANGADA_PATH"):
+            with self.subTest(falha=falha):
+                registro.write_text('{"entries":[{}]}' if falha == "path" else valido)
+                ambiente = dict(self.env)
+                if falha == "JANGADA_PATH":
+                    ambiente.pop("JANGADA_PATH")
+                saida = io.StringIO()
+                with mock.patch.dict(os.environ, ambiente, clear=True), \
+                        mock.patch.object(Path, "home", return_value=self.casa), \
+                        contextlib.redirect_stdout(saida), self.assertRaises(KeyError):
+                    modulo.executar(args, self.raiz)
+                resultado = json.loads(saida.getvalue())
+                estado = json.loads((Path(resultado["pasta"]) / "estado.json").read_text())
+                self.assertEqual(estado["estado"], "falhou")
+                self.assertIn(falha, estado["diagnostico"])
+                self.assertNotIn("entrega", estado)
+
+    def test_dns_resolvido_em_run_volta_somente_leitura(self):
+        resultado = json.loads(self.executar().stdout)
+        resolver = Path.resolve
+        def resolvido(pasta, *args, **kwargs):
+            if str(pasta) == "/etc/resolv.conf":
+                return Path("/run/systemd/resolve/stub-resolv.conf")
+            return resolver(pasta, *args, **kwargs)
+        with mock.patch.dict(os.environ, self.env), mock.patch.object(Path, "resolve", resolvido):
+            args = modulo.montagem(str(Path(resultado["pasta"]) / "contrato.json"))
+        dns = "/run/systemd/resolve/stub-resolv.conf"
+        indice = args.index(dns)
+        self.assertEqual(args[indice-1:indice+2], ["--ro-bind", dns, dns])
+        self.assertLess(args.index("/run"), indice)
+
+    def test_perfil_isolamento_limita_keyring_e_limpa_ambiente(self):
+        resultado = json.loads(self.executar().stdout)
+        manifesto = str(Path(resultado["pasta"]) / "contrato.json")
+        ambiente = {**self.env, "JANGADA_ISOLAR_PERFIL": "implementacao",
+                    "JANGADA_IMPLEMENTACAO_MANIFESTO": manifesto}
+        comando = [str(REPO / "bin/jangada-isolar")]
+        mostrar = subprocess.run([*comando, "--mostrar", "--", "agy"], cwd=self.raiz,
+                                 env=ambiente, capture_output=True, text=True)
+        self.assertEqual(mostrar.returncode, 0, mostrar.stderr)
+        self.assertIn("--clearenv", mostrar.stdout.splitlines())
+        self.assertNotIn("--bind\n" + str(self.raiz), mostrar.stdout)
+        runtime = self.tmp / "run"
+        runtime.mkdir()
+        politica = self.tmp / "proxy.args"
+        self.script("xdg-dbus-proxy", "import sys\nfrom pathlib import Path\nPath(" +
+                    repr(str(politica)) + ").write_text('\\n'.join(sys.argv[1:]))\nprint('x')")
+        self.script("gdbus", "print(\"'/org/freedesktop/secrets/collection/cofre/7'\")")
+        ambiente.update(XDG_RUNTIME_DIR=str(runtime), DBUS_SESSION_BUS_ADDRESS="unix:path=/inexistente")
+        recusa = subprocess.run([*comando, "--", "agy"], cwd=self.raiz, env=ambiente,
+                                input="", capture_output=True, text=True)
+        self.assertNotEqual(recusa.returncode, 0)
+        self.assertIn("exige atributos de keyring", recusa.stderr)
+        self.assertFalse(politica.exists())
+        ambiente["JANGADA_ISOLAR_KEYRING_ITEM"] = "service=agy-teste"
+        processo = subprocess.run([*comando, "--", "agy"], cwd=self.raiz, env=ambiente,
+                                  input="", capture_output=True, text=True)
+        self.assertEqual(processo.returncode, 0, processo.stderr)
+        chamadas = politica.read_text()
+        self.assertIn("org.freedesktop.Secret.Item.GetSecret@/org/freedesktop/secrets/collection/cofre/7", chamadas)
+        self.assertNotIn("CreateItem", chamadas)
+        self.assertNotIn("=*@", chamadas)
+        self.assertNotIn("--talk=org.freedesktop.secrets", chamadas)
+
     def test_base_divergente_e_arquivo_do_autor_alterado(self):
         r = json.loads(self.executar().stdout)
         self.chamar("--aceitar", r["id"], "--base", "0" * 40, "--entrega", r["entrega"], sucesso=False)
@@ -162,7 +248,8 @@ print(json.dumps({"status":"SUCCESS","response":"dados.txt:1 valor atualizado","
         for nome in ("/tmp/fora", "../fora", "x/../../fora", ".git/config", "x//y"):
             self.executar("--permitidos", nome, sucesso=False)
         self.executar("--modelo", "gemini-outro", sucesso=False)
-        pasta = modulo.pasta_execucoes(self.raiz)
+        with mock.patch.dict(os.environ, self.env):
+            pasta = modulo.pasta_execucoes(self.raiz)
         fd = modulo.trava(pasta)
         try:
             self.executar(sucesso=False)
