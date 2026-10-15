@@ -203,6 +203,35 @@ jangada_perfil() {
   [[ -n "$PERFIL_COMANDO" ]] || PERFIL_COMANDO="$JANGADA_AGENTE"
 }
 
+# Os argumentos do modelo saem somente do contrato fechado do piloto.
+jangada_modelos_tarefa() {
+  local autor="$1" revisor="$2" am="${3:-${JANGADA_AUTOR_MODELO:-}}" ae="${4:-${JANGADA_AUTOR_ESFORCO:-}}"
+  local rm="${5:-${JANGADA_VALIDAR_MODELO:-}}" re="${6:-${JANGADA_VALIDAR_ESFORCO:-}}" v
+  for v in "${PERFIL_AMBIENTE[@]}"; do
+    case "$v" in
+      JANGADA_AUTOR_MODELO=*) am="${3:-${v#*=}}" ;;
+      JANGADA_AUTOR_ESFORCO=*) ae="${4:-${v#*=}}" ;;
+      JANGADA_VALIDAR_MODELO=*) rm="${5:-${v#*=}}" ;;
+      JANGADA_VALIDAR_ESFORCO=*) re="${6:-${v#*=}}" ;;
+    esac
+  done
+  python3 "$JANGADA_PATH/default/delegacao/modelos.py" "$autor" "$revisor" "$am" "$ae" "$rm" "$re"
+}
+
+jangada_modelo_argumentos() {
+  local selecao="$1" provedor="$2" modelo esforco
+  [[ "$selecao" != '{}' ]] || return 0
+  jq -e '.autor.modelo | type == "string" and length > 0' <<<"$selecao" >/dev/null || return 1
+  modelo="$(jq -r '.autor.modelo' <<<"$selecao")"
+  esforco="$(jq -r '.autor.esforco' <<<"$selecao")"
+  printf ' --model %q' "$modelo"
+  if [[ "$provedor" == codex ]]; then
+    printf ' -c %q' "model_reasoning_effort=\"$esforco\""
+  else
+    printf ' --effort %q' "$esforco"
+  fi
+}
+
 # Destino dos subagentes: agy por padrão para Claude e Codex.
 # Escolhas explícitas locais são preservadas; falta do agy não troca o destino.
 # O destino nativo só atende à restauração de sessões antigas do agy.

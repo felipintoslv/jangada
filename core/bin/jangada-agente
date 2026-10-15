@@ -13,6 +13,10 @@
 #   --perfil NOME     usa o perfil NOME (~/.config/jangada/agentes/NOME.conf ou,
 #                     sem ele, default/agentes/NOME.conf)
 #   --delegacao NOME  destino explícito da delegação (local, agy ou claude)
+#   --autor-modelo M   gpt-6-luna, gpt-6.1-sol, sonnet ou opus (por tarefa)
+#   --autor-esforco E medium no Luna; high nos demais
+#   --revisor-modelo M opus para autor Codex; gpt-6.1-sol para autor Claude
+#   --revisor-esforco E high no piloto
 #   --revisor NOME    revisor para jangada-validar (claude, agy, codex, mesmo ou oposto)
 #   --coordenador NOME  quem coordena a tarefa (padrão: JANGADA_COORDENADOR ou "dono"); só exibição
 #   --prompt TEXTO    tarefa inicial, entregue ao agente ao abrir
@@ -50,7 +54,7 @@ if ((${#principais[@]} == 0)); then
   exit 1
 fi
 perfis_json() {
-  local perfil ambiente delegacao isolado revisao
+  local perfil ambiente delegacao isolado revisao modelos
   while read -r perfil; do
     jangada_perfil "$perfil" || continue
     [[ " ${principais[*]} " == *" $(basename "${PERFIL_COMANDO%% *}") "* ]] || continue
@@ -62,13 +66,15 @@ perfis_json() {
         JANGADA_VALIDAR_REVISOR=*) revisao="${ambiente#*=}" ;;
       esac
     done
+    modelos="$(jangada_modelos_tarefa "$(basename "${PERFIL_COMANDO%% *}")" "$(jangada_revisor "$PERFIL_COMANDO" "$revisao")")" || return 1
     isolado=1 # A política P0 prevalece sobre a opção antiga do perfil.
     jq -n --arg nome "$perfil" --arg descricao "$PERFIL_DESCRICAO" \
       --arg executor "$(basename "${PERFIL_COMANDO%% *}")" \
       --arg delegacao "$(jangada_delegacao "$PERFIL_COMANDO" "$delegacao")" \
       --arg revisor "$(jangada_revisor "$PERFIL_COMANDO" "$revisao")" \
+      --argjson modelos "$modelos" \
       --argjson isolado "$([[ "$isolado" != 0 ]] && echo true || echo false)" \
-      '{nome:$nome, descricao:$descricao, executor:$executor, funcao:"principal", modelo:null,
+      '{nome:$nome, descricao:$descricao, executor:$executor, funcao:"principal", modelo:($modelos.autor.modelo // null), modelos_tarefa:$modelos,
         permissoes:{delegacao:$delegacao, isolado:$isolado, revisor:$revisor}}'
   done < <(jangada_perfis) | jq -s .
 }
@@ -90,6 +96,7 @@ revisor="${JANGADA_VALIDAR_REVISOR:-}"; revisor_dado=0
 coordenador="${JANGADA_COORDENADOR:-}"; coordenador_dado=0
 isolar="$JANGADA_AGENTE_ISOLAR"; isolar_dado=0; delegacao_dada=""; atividade=""; tarefa_id=""
 PERFIL_AMBIENTE=()
+autor_modelo=""; autor_esforco=""; revisor_modelo=""; revisor_esforco=""
 while (($#)); do
   case "$1" in
     --janela) janela=1; shift ;;
@@ -98,6 +105,10 @@ while (($#)); do
     --direto) direto=1; shift ;;
     --snapshot) snapshot=1; shift ;;
     --agente) agente="$2"; agente_dado=1; shift 2 ;;
+    --autor-modelo) autor_modelo="$2"; shift 2 ;;
+    --autor-esforco) autor_esforco="$2"; shift 2 ;;
+    --revisor-modelo) revisor_modelo="$2"; shift 2 ;;
+    --revisor-esforco) revisor_esforco="$2"; shift 2 ;;
     --perfil) perfil="$2"; shift 2 ;;
     --delegacao) delegacao_dada="$2"; shift 2 ;;
     --atividade) atividade="$2"; shift 2 ;;
@@ -116,7 +127,7 @@ while (($#)); do
 done
 
 # Com --projeto, a central abre a sessão; sem tarefa, abre o formulário.
-if ((janela)) && [[ -z "$projeto$nome$perfil$prompt$delegacao_dada" ]] && \
+if ((janela)) && [[ -z "$projeto$nome$perfil$prompt$delegacao_dada$autor_modelo$autor_esforco$revisor_modelo$revisor_esforco" ]] && \
     ((!direto && !snapshot && !agente_dado && !revisor_dado && !coordenador_dado && !isolar_dado && ${#extras[@]} == 0)); then
   jangada_abrir_central --nova
 fi
@@ -134,6 +145,10 @@ if ((janela)); then
   ((coordenador_dado)) && args+=(--coordenador "$coordenador")
   ((isolar_dado)) && args+=(--sem-isolar)
   [[ -n "$prompt" ]] && args+=(--prompt "$prompt")
+  [[ -z "$autor_modelo" ]] || args+=(--autor-modelo "$autor_modelo")
+  [[ -z "$autor_esforco" ]] || args+=(--autor-esforco "$autor_esforco")
+  [[ -z "$revisor_modelo" ]] || args+=(--revisor-modelo "$revisor_modelo")
+  [[ -z "$revisor_esforco" ]] || args+=(--revisor-esforco "$revisor_esforco")
   ((${#extras[@]})) && args+=(-- "${extras[@]}")
   jangada_abrir_terminal --exec org.jangada.agente "$0" "${args[@]}"
 fi
@@ -203,6 +218,19 @@ if [[ -n "$perfil" ]]; then
 fi
 if [[ "$(basename "${agente%% *}")" == agy ]]; then
   echo "o agy não abre sessão principal: ele atende só as delegações e a revisão; use claude ou codex" >&2
+  exit 1
+fi
+rev_modelos="$revisor"
+for v in "${PERFIL_AMBIENTE[@]}"; do
+  if ((!revisor_dado)) && [[ "$v" == JANGADA_VALIDAR_REVISOR=* ]]; then rev_modelos="${v#*=}"; fi
+done
+modelos_tarefa="$(jangada_modelos_tarefa "$(basename "${agente%% *}")" "$(jangada_revisor "$agente" "$rev_modelos")" \
+  "$autor_modelo" "$autor_esforco" "$revisor_modelo" "$revisor_esforco")" || exit 1
+if [[ "$modelos_tarefa" == '{}' && -n "$revisor_modelo$revisor_esforco" ]]; then
+  echo 'opções de modelo do revisor exigem modelo do autor por tarefa' >&2; exit 1
+fi
+if [[ "$modelos_tarefa" != '{}' && -n "${PERFIL_ARGS:-}$JANGADA_AGENTE_ARGS${extras[*]:-}" ]]; then
+  echo 'seleção por tarefa exige argumentos do autor vazios; use as opções de modelo e esforço' >&2
   exit 1
 fi
 if ! command -v "${agente%% *}" >/dev/null 2>&1; then
@@ -441,6 +469,7 @@ if ((sessao_nova)); then
   # Comando sem o prompt, guardado no estado só para consulta. O --restaurar
   # não o usa: o estado é gravável pelo agente isolado, e o jangada-agentes
   # recompõe o comando a partir de campos conferidos e da configuração.
+  cmd_agente+="$(jangada_modelo_argumentos "$modelos_tarefa" "$(basename "${agente%% *}")")"
   cmd_base="$cmd_agente"
   # O prompt vai por arquivo: digitado pelo send-keys, cada quebra de linha
   # seria um Enter e o agente receberia só a primeira linha. O shell da sessão
@@ -531,6 +560,10 @@ if ((sessao_nova)); then
   fi
   amb+=(-e "JANGADA_EXECUCAO=$execucao")
   [[ -n "$revisor_efetivo" ]] && amb+=(-e "JANGADA_VALIDAR_REVISOR=$revisor_efetivo")
+  if [[ "$modelos_tarefa" != '{}' ]]; then
+    amb+=(-e "JANGADA_VALIDAR_MODELO=$(jq -r '.revisor.modelo' <<<"$modelos_tarefa")"
+          -e "JANGADA_VALIDAR_ESFORCO=$(jq -r '.revisor.esforco' <<<"$modelos_tarefa")")
+  fi
   if ! "${JANGADA_TMUX[@]}" new-session -d -s "$sessao" -c "$dir" "${amb[@]}"; then
     "$JANGADA_PATH/bin/jangada-projeto" --projeto "$raiz" sessao-abortar "$sessao" \
       --execucao "$execucao" >/dev/null
@@ -541,6 +574,7 @@ if ((sessao_nova)); then
   rm -f "$estado_dir/$sessao.json"
   jq -n --arg sessao "$sessao" --arg dir "$dir" --arg raiz "$raiz" --arg worktree "$worktree" \
     --arg ramo "$ramo" --arg base "$base" --arg agente "$agente" \
+    --argjson modelos "$modelos_tarefa" \
     --arg agora "$(jangada_data_iso)" \
     --arg inicio "$( ((eh_git)) && git -C "$dir" rev-parse HEAD 2>/dev/null || true)" \
     --arg tarefa "$prompt" --arg perfil "$perfil" --arg comando "$cmd_base" \
@@ -553,6 +587,7 @@ if ((sessao_nova)); then
      + (if $atividade != "" then {atividade:$atividade} else {} end)
      + (if $tarefa_id != "" then {tarefa_id:$tarefa_id} else {} end)
      + {execucao:$execucao}
+     + (if $modelos != {} then {modelos_tarefa:$modelos} else {} end)
      + (if $inicio != "" then {inicio:$inicio} else {} end)
      + (if $revisor != "" then {revisor:$revisor} else {} end)
      + {delegar:$delegar, coordenador:$coordenador}' \
@@ -563,7 +598,7 @@ if ((sessao_nova)); then
   # isolamento, a cópia cairia na pasta que some no fim.
   if [[ -z "${JANGADA_ISOLADO:-}" ]]; then
     (umask 077; mkdir -p "$JANGADA_ESTADO/revisoes") \
-      && jq '{sessao, raiz, worktree, ramo, base, agente, desde, tarefa, inicio, revisor, delegar, execucao, atividade, tarefa_id}
+      && jq '{sessao, raiz, worktree, ramo, base, agente, desde, tarefa, inicio, revisor, delegar, execucao, atividade, tarefa_id, modelos_tarefa}
              | with_entries(select(.value != null))' "$estado_dir/$sessao.json" \
            >"$JANGADA_ESTADO/revisoes/$sessao.json" \
       || echo "aviso: não gravei a cópia da sessão em $JANGADA_ESTADO/revisoes" >&2

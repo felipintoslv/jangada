@@ -14,6 +14,7 @@
 #                     da sessão; sem ela, main ou master; sem eles, HEAD)
 #   --modelo MODELO   modelo do revisor (padrão: JANGADA_VALIDAR_MODELO; sem
 #                     ele, sonnet no Claude e o padrão do agy)
+#   --esforco NIVEL   esforço explícito do revisor (low, medium ou high)
 #   --resposta TEXTO  o que o agente fez com o parecer anterior (corrigido,
 #                     rejeitado e por quê); entra no pedido da rodada seguinte
 #   --forcar          passa do limite de rodadas (JANGADA_VALIDAR_RODADAS, 3)
@@ -45,13 +46,15 @@ source "$(dirname "${BASH_SOURCE[0]}")/jangada-config"
 
 base=""; modelo="${JANGADA_VALIDAR_MODELO:-}"; resposta=""; forcar=0
 revisor=""; revisor_dado=0
+esforco="${JANGADA_VALIDAR_ESFORCO:-}"; modelo_dado=0; esforco_dado=0
 pular_local="${JANGADA_VALIDAR_PULAR_LOCAL:-0}"
 reverter_se_limite=0; metricas=0
 while (($#)); do
   case "$1" in
     --revisor) revisor="$2"; revisor_dado=1; shift 2 ;;
     --base) base="$2"; shift 2 ;;
-    --modelo) modelo="$2"; shift 2 ;;
+    --modelo) modelo="$2"; modelo_dado=1; shift 2 ;;
+    --esforco) esforco="$2"; esforco_dado=1; shift 2 ;;
     --resposta) resposta="$2"; shift 2 ;;
     --forcar) forcar=1; shift ;;
     --pular-local) pular_local=1; shift ;;
@@ -265,6 +268,18 @@ fi
 if [[ -z "$revisor" ]]; then
   revisor="$(jangada_revisor "$autor")"
 fi
+if [[ -n "$arq_meta" ]] && jq -e 'has("modelos_tarefa")' "$arq_meta" >/dev/null; then
+  selecao="$(jq -c '.modelos_tarefa' "$arq_meta" | python3 "$JANGADA_PATH/default/delegacao/modelos.py" conferir "$autor" "$revisor")" || exit 1
+  if ((modelo_dado)) && [[ "$modelo" != "$(jq -r '.revisor.modelo' <<<"$selecao")" ]]; then
+    echo 'modelo diverge do revisor forte selecionado na tarefa' >&2; exit 1
+  fi
+  if ((esforco_dado)) && [[ "$esforco" != "$(jq -r '.revisor.esforco' <<<"$selecao")" ]]; then
+    echo 'esforço diverge da seleção da tarefa' >&2; exit 1
+  fi
+  ((modelo_dado)) || modelo="$(jq -r '.revisor.modelo' <<<"$selecao")"
+  ((esforco_dado)) || esforco="$(jq -r '.revisor.esforco' <<<"$selecao")"
+fi
+[[ -z "$esforco" || "$esforco" =~ ^(low|medium|high)$ ]] || { echo 'esforço de revisão inválido' >&2; exit 1; }
 nomear_revisor() {
   jangada_provedor "$revisor" && [[ " $PROVEDOR_FUNCOES " == *" revisor "* ]] || return 1
   nome_revisor="$PROVEDOR_NOME"; modelo="${modelo:-$PROVEDOR_MODELO_REVISOR}"
@@ -1030,10 +1045,12 @@ echo "jangada-validar: rodada $rodada de $rodadas_max, $nome_revisor${modelo:+ (
 # dele marcaria a sessão como concluída.
 revisar_claude() {
   local rc=0 resposta
+  local -a args_esforco=()
+  [[ -z "$esforco" ]] || args_esforco+=(--effort "$esforco")
   # A saída protegida é escrita pelo controlador, não herdada pelo revisor.
   resposta="$(cd "$dir" && env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 \
     JANGADA_ISOLAR_FOTO="$foto" "${com_prazo[@]}" "$JANGADA_PATH/bin/jangada-isolar" -- claude -p \
-    --model "$modelo" --setting-sources user \
+    --model "$modelo" "${args_esforco[@]}" --setting-sources user \
     --allowedTools "Read,Grep,Glob" \
     --disallowedTools "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch" \
     <<<"$pedido")" || rc=$?
@@ -1050,6 +1067,7 @@ revisar_codex() {
   pasta_revisor="$(mktemp -d)" || return 1
   local -a args=(--output-last-message "$pasta_revisor/resposta")
   [[ -n "$modelo" ]] && args+=(--model "$modelo")
+  [[ -z "$esforco" ]] || args+=(-c "model_reasoning_effort=\"$esforco\"")
   registro="$(cd "$pasta_revisor" && env JANGADA_SESSAO="revisao-codex-$rotulo" JANGADA_HOOK_DESLIGADO=1 \
     "${com_prazo[@]}" "$JANGADA_PATH/bin/jangada-isolar" -- "$JANGADA_PATH/bin/jangada-codex" --revisar -- \
     "$codex_cmd" "${args[@]}" <<<"$pedido" 2>&1)" || rc=$?

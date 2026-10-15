@@ -298,6 +298,17 @@ restaurar() {
     [[ "$agente" == "$JANGADA_AGENTE" ]] && exe="$JANGADA_AGENTE"
     args="$JANGADA_AGENTE_ARGS"
   fi
+  local modelos_tarefa='{}' copia="$JANGADA_ESTADO/revisoes/$s.json"
+  if [[ -f "$copia" && ! -L "$copia" ]] && jq -e 'has("modelos_tarefa")' "$copia" >/dev/null; then
+    rev="$(jq -r '.revisor' "$copia")"
+    modelos_tarefa="$(jq -c '.modelos_tarefa' "$copia" | python3 "$JANGADA_PATH/default/delegacao/modelos.py" conferir "$base" "$rev")" \
+      || { recusa "seleção protegida de modelos inválida"; return 1; }
+    if [[ -n "$args" ]]; then recusa "argumentos do perfil conflitam com seleção protegida"; return 1; fi
+    args="$(jangada_modelo_argumentos "$modelos_tarefa" "$base")"
+  elif jq -e 'has("modelos_tarefa")' "$arq" >/dev/null; then
+    recusa "seleção por tarefa sem registro protegido; não usar estado gravável"
+    return 1
+  fi
   if [[ -n "$conversa" && ! "$conversa" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
     recusa "id de conversa inválido no estado"
     return 1
@@ -379,6 +390,10 @@ restaurar() {
   done
   amb+=(-e "JANGADA_DELEGAR=$delegar")
   [[ -n "$rev" ]] && amb+=(-e "JANGADA_VALIDAR_REVISOR=$rev")
+  if [[ "$modelos_tarefa" != '{}' ]]; then
+    amb+=(-e "JANGADA_VALIDAR_MODELO=$(jq -r '.revisor.modelo' <<<"$modelos_tarefa")"
+          -e "JANGADA_VALIDAR_ESFORCO=$(jq -r '.revisor.esforco' <<<"$modelos_tarefa")")
+  fi
   "${JANGADA_TMUX[@]}" new-session -d -s "$s" -c "$dir" "${amb[@]}"
   marcar "$arq" iniciado "restaurada"
   python3 "$JANGADA_PATH/default/orquestracao/confianca.py" registrar-inicio "$JANGADA_ESTADO" "$s" \

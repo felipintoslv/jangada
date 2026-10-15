@@ -307,12 +307,16 @@ printf 'COMANDO=claude\nJANGADA_VALIDAR_REVISOR=claude\nJANGADA_DELEGAR=claude\n
   jangada_perfil claude-codex
   [[ "$PERFIL_COMANDO" == "claude" ]] || exit 1
   [[ " ${PERFIL_AMBIENTE[*]} " == *" JANGADA_VALIDAR_REVISOR=codex "* ]] || exit 1
-  [[ " ${PERFIL_AMBIENTE[*]} " != *" JANGADA_VALIDAR_MODELO="* ]] || exit 1
+  [[ " ${PERFIL_AMBIENTE[*]} " == *" JANGADA_VALIDAR_MODELO=gpt-6.1-sol "* ]] || exit 1
+  [[ " ${PERFIL_AMBIENTE[*]} " == *" JANGADA_AUTOR_MODELO=sonnet "* ]] || exit 1
+  [[ " ${PERFIL_AMBIENTE[*]} " == *" JANGADA_VALIDAR_ESFORCO=high "* ]] || exit 1
 
   jangada_perfil codex-claude
   [[ "$PERFIL_COMANDO" == "codex" ]] || exit 1
   [[ " ${PERFIL_AMBIENTE[*]} " == *" JANGADA_VALIDAR_REVISOR=claude "* ]] || exit 1
-  [[ " ${PERFIL_AMBIENTE[*]} " != *" JANGADA_VALIDAR_MODELO="* ]] || exit 1
+  [[ " ${PERFIL_AMBIENTE[*]} " == *" JANGADA_VALIDAR_MODELO=opus "* ]] || exit 1
+  [[ " ${PERFIL_AMBIENTE[*]} " == *" JANGADA_AUTOR_MODELO=gpt-6.1-sol "* ]] || exit 1
+  [[ " ${PERFIL_AMBIENTE[*]} " == *" JANGADA_AUTOR_ESFORCO=high "* ]] || exit 1
 ); rc=$?
 conferir "caso 8: perfis padrão e do usuário definem comando e revisor" [ "$rc" = 0 ]
 env -u JANGADA_DELEGAR -u JANGADA_VALIDAR_REVISOR PATH="$tmp/bin:$PATH" JANGADA_PATH="$repo_jangada" \
