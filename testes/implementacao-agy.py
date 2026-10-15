@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import signal
 import tempfile
 import unittest
 
@@ -64,6 +65,8 @@ pasta=alvos[0][0].parent
 modo=os.environ.get("FALSO_MODO","")
 if modo=="prazo": time.sleep(4)
 if modo=="falha": sys.exit(7)
+if modo=="cota":
+ sys.stderr.write("x"*1000000+"RESOURCE_EXHAUSTED"); sys.exit(7)
 alvos[0][0].write_text("valor=2\\n")
 if modo=="fora": (pasta/"indevido.txt").write_text("fora")
 if modo=="link":
@@ -111,6 +114,13 @@ print(json.dumps({"status":"SUCCESS","response":"dados.txt:1 valor atualizado","
         self.assertEqual(teste.returncode, 0)
         self.assertEqual(self.git("diff", "--name-only").strip(), "dados.txt")
         self.assertFalse((pasta / ".aprovado").exists())
+        global_md = (self.tmp / "agentes/implementador/agent.md").read_text()
+        privado_md = (pasta / "runtime/agentes/implementador/agent.md").read_text()
+        for ferramenta in ("write_to_file", "replace_file_content", "multi_replace_file_content"):
+            self.assertNotIn("  - " + ferramenta, global_md)
+            self.assertIn("  - " + ferramenta, privado_md)
+        self.assertIn("subagent: true", global_md)
+        self.assertIn("subagent: false", privado_md)
 
     def test_resultado_alterado_nao_aceito(self):
         r = json.loads(self.executar().stdout)
@@ -166,6 +176,30 @@ print(json.dumps({"status":"SUCCESS","response":"dados.txt:1 valor atualizado","
         self.assertTrue((self.raiz / "novo.txt").is_file())
         self.assertEqual(self.git("status", "--short", "dados.txt", "novo.txt").splitlines(),
                          [" M dados.txt", "?? novo.txt"])
+
+    def test_erro_do_executor_aguarda_captura_e_preserva_cota(self):
+        self.env["FALSO_MODO"] = "cota"
+        p = self.executar(sucesso=False)
+        self.assertEqual(json.loads(p.stdout)["motivo_codigo"], "cota_insuficiente")
+
+    def test_filho_do_catalogo_nao_herda_trava(self):
+        pid_arquivo = self.tmp / "filho.pid"
+        original = (self.bin / "agy").read_text().split("\n", 1)[1]
+        prefixo = ("import subprocess,sys\nfrom pathlib import Path\n"
+                   "if sys.argv[1:] == ['agents']:\n"
+                   " filho=subprocess.Popen(['sleep','5'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)\n"
+                   " Path(" + repr(str(pid_arquivo)) + ").write_text(str(filho.pid))\n")
+        self.script("agy", prefixo + original)
+        try:
+            self.executar()
+            with (self.tmp / "estado/jangada/agentes/.agy-execucao.lock").open() as arq:
+                fcntl.flock(arq, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        finally:
+            if pid_arquivo.exists():
+                try:
+                    os.kill(int(pid_arquivo.read_text()), signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
 
     def test_submodulo_e_link_na_base_recusados(self):
         self.git("update-index", "--add", "--cacheinfo", "160000," + self.base + ",modulo")

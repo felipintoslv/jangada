@@ -22,12 +22,16 @@ jangada-agente --perfil codex-claude --projeto PASTA --nome TAREFA \
   --revisor-modelo opus --revisor-esforco high --prompt-arquivo PEDIDO
 ```
 
+O piloto é explícito: `--autor-modelo` ou `JANGADA_AUTOR_MODELO` ativa o contrato.
+Os perfis padrão conservam o comportamento antigo quando não há seleção.
 Precedência: opções da abertura, campos do perfil pessoal ou padrão, campos
-da configuração global/ambiente. Perfil pessoal de mesmo nome prevalece
+da configuração global/ambiente. Quando o modelo vem de uma opção, o esforço
+ausente é deduzido desse modelo; não herda o esforço de outro modelo no perfil. Perfil pessoal de mesmo nome prevalece
 inteiramente sobre o padrão. Os campos são `JANGADA_AUTOR_MODELO`,
 `JANGADA_AUTOR_ESFORCO`, `JANGADA_VALIDAR_MODELO` e `JANGADA_VALIDAR_ESFORCO`.
 Sem modelo do autor, perfis antigos conservam seus argumentos e comportamento.
-No contrato de `--perfis --json`, `modelo` e `modelos_tarefa` mostram a seleção.
+No contrato de `--perfis --json`, `modelo` e `modelos_tarefa` mostram a seleção
+configurada. Um perfil inválido é omitido com diagnóstico, sem ocultar os demais.
 
 A seleção nova usa valores fechados, exige outro provedor forte e recusa
 argumentos adicionais do autor, inclusive `ARGS` antigos. Não mistura duas
@@ -68,8 +72,9 @@ cota, prazo e registrador são reaproveitados. Uma trava global disputa a conta
 existente entre leitura e implementação; concorrência é recusada, sem fila ou
 repetição automática. Uma segunda trava protege decisões na mesma tarefa.
 
-O papel novo tem ferramentas de leitura e edição de arquivo, sem terminal ou
-MCP. Os especialistas existentes continuam sem escrita. O agy continua
+O papel global novo é somente leitura. O controlador cria um papel privado
+com ferramentas de edição de arquivo somente no runtime isolado, sem terminal
+ou MCP. A chamada direta ao papel global não habilita escrita. Os especialistas existentes continuam sem escrita. O agy continua
 recusado como agente principal genérico.
 
 ## Fronteira de escrita
@@ -82,8 +87,8 @@ individuais. Arquivos de controle, outras tarefas e estado persistente ficam
 inacessíveis. Caminhos absolutos, travessia, links simbólicos, ligações físicas
 e submódulos são recusados na entrada e na entrega.
 
-O CLI tem estado temporário, configuração filtrada e somente o papel instalado
-copiado para esta execução. Não carrega hooks ou MCP pessoais. Descritores
+O CLI tem estado temporário, configuração filtrada e somente o papel privado
+derivado do contrato instalado para esta execução. Não carrega hooks ou MCP pessoais. Descritores
 extras são fechados; descritores padrão de arquivos regulares e soquetes são
 recusados. O ambiente é reconstruído sem credenciais exportadas.
 

@@ -748,6 +748,11 @@ Prompts e protocolos são registrados antes de iniciar ou retomar a sessão.
 - A prova de kernel mostrou que `/tmp` vazio ainda permite criar arquivos
   irmãos transitórios. O modo monta a pasta acima da tarefa vazia e somente
   leitura; um diretório temporário separado atende o CLI, sem virar entrega.
+- Em Bash, `$!` pode ficar ausente após substituição de processo num comando
+  externo. Abra o cano com `exec {fd}> >(...)`, capture o PID, feche o descritor
+  após a chamada e aguarde a captura antes de conferir o erro.
+- O papel global `implementador` só lê. O controlador deriva um papel privado
+  com edição, visível exclusivamente dentro da montagem restrita.
 - D-Bus exige item de keyring já selecionado; o modo não permite CreateItem,
   SetSecret ou Delete. Renovação de login pode falhar; não amplie acesso.
 - Inspecione fontes, contrato, arquivos e relatório; aceite com ID, base e

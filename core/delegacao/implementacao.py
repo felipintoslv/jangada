@@ -16,6 +16,19 @@ import uuid
 
 MODELO = "gemini-3.8-flash-high"
 LIMITE = 2 * 1024 * 1024
+PAPEL_PRIVADO = """---
+name: implementador
+description: Implementa arquivos exatos em cópia confinada pelo controlador.
+subagent: false
+model: flash
+tools:
+  - view_file
+  - write_to_file
+  - replace_file_content
+  - multi_replace_file_content
+inheritMcp: false
+---
+"""
 
 
 def resumo(dados):
@@ -237,7 +250,11 @@ def executar(args, raiz):
             raise ValueError("implementador exige um papel instalado e registrado sem ambiguidade")
         agentes = runtime / "agentes"
         agentes.mkdir(mode=0o700)
-        gravar(agentes, "implementador/agent.md", ler(instalados[0], "implementador/agent.md"), novo=True)
+        papel_instalado = ler(instalados[0], "implementador/agent.md").decode("utf-8")
+        partes = papel_instalado.split("---", 2)
+        if len(partes) != 3 or partes[0].strip() or "# Implementador" not in partes[2]:
+            raise ValueError("contrato do papel instalado inválido")
+        gravar(agentes, "implementador/agent.md", (PAPEL_PRIVADO + partes[2]).encode(), novo=True)
         gravar(configuracao, "agents.json", codificar({"entries": [{"path": "/tmp/jangada-implementador-agentes"}]}), novo=True)
         gravar(configuracao, "hooks.json", b"{}", novo=True)
         settings = json.loads((Path.home() / ".gemini/antigravity-cli/settings.json").read_text())
@@ -389,6 +406,8 @@ def montagem(manifesto):
              "--ro-bind", "/dev/null", "/tmp/.jangada-sem-autoridade",
              "--remount-ro", str(raiz.parent),
              "--tmpfs", "/tmp/jangada-implementacao-temporarios"]
+    if any("\n" in argumento or "\r" in argumento for argumento in args):
+        raise ValueError("quebra de linha em argumento do isolamento")
     return args
 
 

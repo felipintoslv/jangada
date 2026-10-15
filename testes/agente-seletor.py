@@ -85,10 +85,10 @@ class Seletor(unittest.TestCase):
         self.assertEqual([linha.split('\t')[0] for linha in opcoes],
                          ['padrão', 'claude-codex', 'claude-flash', 'codex-claude'])
         perfil = next(linha for linha in opcoes if linha.startswith('claude-codex\t'))
-        self.assertIn('claude implementa; codex revisa (gpt-6.1-sol);', perfil)
+        self.assertIn('claude implementa; codex revisa;', perfil)
         self.assertIn('delegação ao agy', perfil)
         perfil = next(linha for linha in opcoes if linha.startswith('codex-claude\t'))
-        self.assertIn('codex implementa; claude revisa (opus);', perfil)
+        self.assertIn('codex implementa; claude revisa;', perfil)
         self.assertIn('delegação ao agy, inclusive leitor e redator', perfil)
         self.assertNotIn('Ollama', perfil)
         self.assertNotIn('autorrevisão', '\n'.join(opcoes))

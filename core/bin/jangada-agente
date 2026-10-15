@@ -66,7 +66,10 @@ perfis_json() {
         JANGADA_VALIDAR_REVISOR=*) revisao="${ambiente#*=}" ;;
       esac
     done
-    modelos="$(jangada_modelos_tarefa "$(basename "${PERFIL_COMANDO%% *}")" "$(jangada_revisor "$PERFIL_COMANDO" "$revisao")")" || return 1
+    if ! modelos="$(jangada_modelos_tarefa "$(basename "${PERFIL_COMANDO%% *}")" "$(jangada_revisor "$PERFIL_COMANDO" "$revisao")")"; then
+      echo "perfil $perfil com seleção de modelos inválida; omitido da listagem" >&2
+      continue
+    fi
     isolado=1 # A política P0 prevalece sobre a opção antiga do perfil.
     jq -n --arg nome "$perfil" --arg descricao "$PERFIL_DESCRICAO" \
       --arg executor "$(basename "${PERFIL_COMANDO%% *}")" \

@@ -56,6 +56,45 @@ jangada_modelo_argumentos "$selecao" codex
         self.assertIn("--model gpt-6-luna", linhas[1])
         self.assertIn("model_reasoning_effort=", linhas[1])
 
+    def test_modelo_explicito_deduz_esforco_sem_herdar_outro_par(self):
+        script = '''source bin/jangada-config
+PERFIL_AMBIENTE=(JANGADA_AUTOR_MODELO=gpt-6.1-sol JANGADA_AUTOR_ESFORCO=high
+                JANGADA_VALIDAR_MODELO=opus JANGADA_VALIDAR_ESFORCO=medium)
+jangada_modelos_tarefa codex claude gpt-6-luna '' opus ''
+'''
+        p = subprocess.run(["bash", "-c", script], cwd=RAIZ, capture_output=True, text=True,
+                           env={**os.environ, "JANGADA_PATH": str(RAIZ)})
+        self.assertEqual(p.returncode, 0, p.stderr)
+        selecao = json.loads(p.stdout)
+        self.assertEqual(selecao["autor"]["esforco"], "medium")
+        self.assertEqual(selecao["revisor"]["esforco"], "high")
+
+    def test_perfis_legados_aceitam_revisor_e_argumentos_extras(self):
+        env = {k: v for k, v in os.environ.items() if not k.startswith("JANGADA_")}
+        with tempfile.TemporaryDirectory() as tmp:
+            env.update(JANGADA_PATH=str(RAIZ), XDG_CONFIG_HOME=tmp)
+            for extras in (("--revisor", "agy"), ("--revisor", "mesmo"), ("--", "--version")):
+                p = subprocess.run([str(RAIZ / "bin/jangada-agente"), "--perfil", "codex-claude",
+                                    "--projeto", str(Path(tmp) / "ausente"), *extras],
+                                   env=env, capture_output=True, text=True)
+                self.assertNotEqual(p.returncode, 0)
+                self.assertNotIn("modelos da tarefa:", p.stderr)
+                self.assertNotIn("argumentos do autor vazios", p.stderr)
+
+    def test_perfil_invalido_nao_derruba_catalogo_publico(self):
+        env = {k: v for k, v in os.environ.items() if not k.startswith("JANGADA_")}
+        with tempfile.TemporaryDirectory() as tmp:
+            pasta = Path(tmp) / "jangada/agentes"
+            pasta.mkdir(parents=True)
+            (pasta / "invalido.conf").write_text("COMANDO=codex\nJANGADA_AUTOR_MODELO=inexistente\n")
+            env.update(JANGADA_PATH=str(RAIZ), XDG_CONFIG_HOME=tmp)
+            p = subprocess.run([str(RAIZ / "bin/jangada-agente"), "--perfis", "--json"],
+                               env=env, capture_output=True, text=True)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            nomes = {perfil["nome"] for perfil in json.loads(p.stdout)}
+            self.assertEqual(nomes, {"claude-codex", "codex-claude"})
+            self.assertIn("perfil invalido", p.stderr)
+
     def test_restauracao_usa_selecao_protegida_e_ignora_comando(self):
         codigo = (RAIZ / "core/bin/jangada-agentes").read_text()
         inicio = codigo.index("restaurar() {")

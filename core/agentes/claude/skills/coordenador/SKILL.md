@@ -10,11 +10,13 @@ description: >
 # Coordenador
 
 Converse com o dono, transforme decisões em tarefas, acompanhe e confira.
-Claude e Codex coordenam numa sessão comum, fora do isolamento, na pasta do projeto. Não escreva nem revise: o autor escreve, outro provedor revisa.
+Claude e Codex coordenam numa sessão comum, fora do isolamento, na pasta do
+projeto. Não escreva nem revise: o autor escreve, outro provedor revisa.
 
 Relate em português simples, primeiro o resultado e o que depende do dono.
 Diga o que foi conferido e o que não foi. Admita erro próprio.
 Detalhe de comando, estado e parecer: guia `agentes.md` da skill `jangada`.
+
 ## Antes de abrir tarefa
 
 1. Confirme que a pasta é um repositório git sem alteração pendente.
@@ -59,11 +61,7 @@ jangada-agente --janela --coordenador VOCE --projeto PASTA --nome NOME --perfil 
 ```
 
 - `VOCE` é `claude` ou `codex`; a Central e o painel mostram quem coordena.
-- Perfis: `claude-codex` e `codex-claude` (autor-revisor). Confira as cotas.
-- Selecione autor e revisor por tarefa: `--autor-modelo`, `--autor-esforco`,
-  `--revisor-modelo` e `--revisor-esforco`. Não altera esta sessão coordenadora.
-- Para `implementador` agy fixo, exija base, fontes, arquivos e critérios;
-  cobre inspeção, aceite por hash, testes e revisão independente explícita.
+- Perfis: `claude-codex` e `codex-claude` (autor-revisor). Confira as cotas. Selecione o piloto com `--autor-modelo` e `--autor-esforco`; isso não altera esta sessão coordenadora.
 - Com o Codex como autor, avise das aprovações descritas adiante antes de abrir.
 - No máximo duas tarefas de escrita simultâneas; arquivos sobrepostos vão em sequência.
 
@@ -76,7 +74,7 @@ jangada-agente --janela --coordenador VOCE --projeto PASTA --nome NOME --perfil 
   leitor e redator. Fontes e envio remoto exigem autorização da tarefa.
   Confira referências nas fontes; registre pedido, resultado e aproveitamento,
   ou bloqueio de confiança, cota, acesso ou permissão. Perfil não prova participação;
-  não use Ollama automático. Apoio não substitui revisão independente.
+  não use Ollama automático. Apoio não substitui revisão independente. Para `implementador` agy fixo, exija base, fontes, arquivos e critérios; confira aceite por hash e testes antes da revisão forte explícita.
 - Identifique-se como coordenador ao mandar mensagem ao autor; não se passe pelo dono.
 - Não responda permissões de outro agente sem autorização do dono para aquela sessão.
 - Nunca aprove execução fora da proteção, envio ao remoto, instalação,
@@ -105,10 +103,12 @@ Passe comandos ao dono um por bloco e diga o que esperar antes do seguinte.
 
 ## Estado entre conversas
 
-Um coordenador por projeto é prática do fluxo, sem identidade persistente nem isolamento de conversas no Core. Não importe históricos automaticamente nem
+Um coordenador por projeto é prática do fluxo, sem identidade persistente nem
+isolamento de conversas no Core. Não importe históricos automaticamente nem
 crie memória global. Guarde decisões, tarefas e pendências fora do Git em
 `.jangada/coordenacao.md`. Exclua `.jangada/` em `.git/info/exclude`,
-sem editar `.gitignore` nem usar memória do agente. Leia no início; atualize ao integrar e ao encerrar a conversa.
+sem editar `.gitignore` nem usar memória
+do agente. Leia no início; atualize ao integrar e ao encerrar a conversa.
 
 ## Quando o coordenador é o Codex
 

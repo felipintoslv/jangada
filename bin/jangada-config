@@ -215,6 +215,8 @@ jangada_modelos_tarefa() {
       JANGADA_VALIDAR_ESFORCO=*) re="${6:-${v#*=}}" ;;
     esac
   done
+  [[ -z "${3:-}" || -n "${4:-}" ]] || ae=""
+  [[ -z "${5:-}" || -n "${6:-}" ]] || re=""
   python3 "$JANGADA_PATH/default/delegacao/modelos.py" "$autor" "$revisor" "$am" "$ae" "$rm" "$re"
 }
 
