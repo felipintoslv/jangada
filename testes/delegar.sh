@@ -1065,12 +1065,14 @@ conferir "citação: prefere nome curto e orienta preservar barra inicial" jqok 
     (.messages[1].content | split("Exemplos de referência deste trecho (dados):\n")[1] |
       split("\n/no_think")[0] | fromjson | map(.referencia) == ["README.md:1"])' "$ollama_reqs"
 
-jq -nc --arg ref "${fonte_citacao#/}:5" '{marcador:{valor:"reservado",referencia:$ref}}' >"$ollama_resp"
+referencia_sem_barra="${fonte_citacao#/}:5"
+jq -nc --arg ref "$referencia_sem_barra" '{marcador:{valor:"reservado",referencia:$ref}}' >"$ollama_resp"
 : >"$ollama_reqs"
 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia marcador" --destino local \
   --capacidade leitura_documental --extrair marcador:texto --json --arquivos "$fonte_citacao"
 conferir "citação: retirar barra inicial mantém código 4" [ "$(codigo)" = 4 ]
-conferir "citação: diagnóstico identifica referência malformada fora do trecho" grep -q 'referência ".*" (fora do trecho)' "$tmp/erro"
+conferir "citação: diagnóstico existente identifica o caminho recebido sem barra" \
+  grep -Fq "referência \"${referencia_sem_barra:0:12}…${referencia_sem_barra: -20}\" (fora do trecho)" "$tmp/erro"
 conferir "citação: falha não repete geração nem tenta outro destino" jqok -e \
   '(.tentativas | length) == 1 and .tentativas[0].chamadas == 1 and .tentativas[0].motivo_codigo == "saida_invalida"
     and .tentativas[0].destino == "local"' "$tmp/saida"
@@ -1099,6 +1101,30 @@ conferir "citação PDF: exemplos usam página real da fatia" exemplos_validos
 conferir "citação PDF: exemplo curto sem número interno de linha" jqok -se \
   'last | .messages[1].content | split("Exemplos de referência deste trecho (dados):\n")[1] |
     split("\n/no_think")[0] | fromjson | map(.referencia) == ["documento.pdf, p. 1"]' "$ollama_reqs"
+
+python_real="$(command -v python3)"
+cat >"$tmp/bin/python3" <<EOF
+#!/bin/sh
+if [ "\${2:-}" = exemplos ]; then
+  echo 'falha simulada na preparação dos exemplos' >&2
+  exit 1
+fi
+exec "$python_real" "\$@"
+EOF
+chmod +x "$tmp/bin/python3"
+: >"$ollama_reqs"
+OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia o destino" --destino local \
+  --capacidade leitura_documental --extrair destino:texto --json --arquivos "$tmp/projeto/doc1.txt"
+conferir "exemplos: falha de preparação recusa com código 4" [ "$(codigo)" = 4 ]
+conferir "exemplos: falha de preparação devolve tentativa estruturada sem geração" jqok -e \
+  '(.tentativas | length) == 1 and .tentativas[0].destino == "local"
+    and .tentativas[0].motivo_codigo == "saida_invalida" and .tentativas[0].chamadas == 0' "$tmp/saida"
+conferir "exemplos: recusa é registrada sem contar chamada ao Ollama" jqok -se \
+  'map(select(.destino == "local")) | last | .codigo_saida == 4 and .motivo_codigo == "saida_invalida"
+    and .chamadas_executor == 0 and (.chamadas_local | length) == 0' "$reg"
+conferir "exemplos: falha não transporta pedido ao servidor falso" test ! -s "$ollama_reqs"
+conferir "exemplos: erro explica a falha de preparação" grep -Fq 'não foi possível preparar os exemplos de referência' "$tmp/erro"
+rm "$tmp/bin/python3"
 
 printf '{"destino":{"valor":"local","referencia":"doc1.txt:99"}}\n' >"$ollama_resp"
 OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "extraia o destino" --destino local \
