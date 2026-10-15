@@ -155,8 +155,10 @@ echo "== modelo local (Ollama)"
 # e não mede qualidade. Ausência ou falha de acesso é nota, não problema: o
 # uso básico do jangada não depende do Ollama.
 _ollama_url="${JANGADA_OLLAMA_URL:-http://localhost:11434}"
-# A URL pode trazer usuário:senha; as mensagens mostram só o endereço.
-_ollama_rotulo="$(sed -E 's#^([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@]*@#\1#' <<<"$_ollama_url")"
+# A URL pode trazer segredo em usuário:senha, caminho, query ou fragmento; as
+# mensagens mostram só esquema, host e porta.
+_ollama_rotulo="$(sed -E -e 's|^([a-zA-Z][a-zA-Z0-9+.-]*://)?([^/?#]*).*|\1\2|' \
+  -e 's|^([a-zA-Z][a-zA-Z0-9+.-]*://)?.*@|\1|' <<<"$_ollama_url")"
 _ollama_modelo="${JANGADA_LOCAL_MODELO:-qwen3:4b}"
 if ! command -v curl >/dev/null 2>&1; then
   nota "curl ausente; modelo local não verificado"
