@@ -91,6 +91,8 @@ O CLI tem estado temporário, configuração filtrada e somente o papel privado
 derivado do contrato instalado para esta execução. Não carrega hooks ou MCP pessoais. Descritores
 extras são fechados; descritores padrão de arquivos regulares e soquetes são
 recusados. O ambiente é reconstruído sem credenciais exportadas.
+O catálogo privado é conferido dentro do isolamento antes da chamada ao modelo.
+Papel ausente recusa a execução, sem usar o agente padrão do agy.
 
 O D-Bus, quando disponível, exige atributos de keyring já configurados em
 `JANGADA_ISOLAR_KEYRING_ITEM`. Somente leitura dos itens selecionados volta ao

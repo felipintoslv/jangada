@@ -239,6 +239,16 @@ print(json.dumps({"status":"SUCCESS","response":"dados.txt:1; fronteiras conferi
         self.assertEqual(resultado["estado"], "aguarda_autor")
         self.assertEqual((self.raiz / "dados.txt").read_text(), "valor=1\n")
         self.assertEqual((Path(resultado["pasta"]) / "arquivos/dados.txt").read_text(), "valor=2\n")
+        self.script("agy", '''import json,os,sys
+if sys.argv[1:] == ["agents"]:
+ print("leitor" if os.environ.get("JANGADA_ISOLADO") else "implementador"); sys.exit()
+if "/usage" in sys.argv:
+ print(json.dumps({"command":{"data":{"groups":[{"buckets":[{"id":"gemini-weekly","remaining_fraction":0.9}]}]}}})); sys.exit()
+raise AssertionError("modelo chamado sem papel privado")
+''')
+        falha = json.loads(self.executar(sucesso=False).stdout)
+        self.assertEqual(falha["estado"], "falhou")
+        self.assertEqual((Path(falha["pasta"]) / "arquivos/dados.txt").read_text(), "valor=1\n")
 
 
 if __name__ == "__main__":

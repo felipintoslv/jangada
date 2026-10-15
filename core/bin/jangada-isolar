@@ -255,7 +255,12 @@ if [[ "$perfil" == implementacao ]]; then
          --setenv TMPDIR /tmp/jangada-implementacao-temporarios
          --setenv JANGADA_ISOLADO 1 --setenv JANGADA_HOOK_DESLIGADO 1 --setenv JANGADA_AGY_PAPEL implementador)
   [[ -z "$dbus_sinc" ]] || args+=(--setenv DBUS_SESSION_BUS_ADDRESS "unix:path=$XDG_RUNTIME_DIR/bus")
-  args+=(--chdir "$pasta" -- "$@")
+  args+=(--chdir "$pasta" -- python3 -c 'import os,subprocess,sys
+comando = sys.argv[1:]
+catalogo = subprocess.run([comando[0], "agents"], capture_output=True, text=True, timeout=30)
+if catalogo.returncode or "implementador" not in catalogo.stdout.splitlines():
+    sys.exit("implementador ausente do catálogo privado; não usar agente padrão")
+os.execvp(comando[0], comando)' "$@")
   if ((mostrar)); then printf '%s\n' bwrap "${args[@]}"; exit 0; fi
   exec python3 -c 'import os,stat,sys
 permitido = int(sys.argv[1]) if sys.argv[1] else -1
