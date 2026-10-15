@@ -8,6 +8,8 @@
 #   PAPEL             explorador, leitor, pesquisador, verificador,
 #                     auditor, arquiteto, otimizador, redator ou supervisor
 #                     (no destino local: apenas leitor e redator)
+#   implementador     caminho separado: base, fontes, permitidos e critérios;
+#                     consulte jangada-delegar implementador --help
 #   --destino D       local (modelo no Ollama) ou agy (JANGADA_DELEGAR_MODELOS)
 #   --arquivos ARQS   arquivos para leitura (obrigatório no destino local, que aceita ARQUIVO:INI-FIM)
 #   --arquivo SAIDA   grava o relatório completo em SAIDA
@@ -56,6 +58,12 @@ if [[ "${JANGADA_SESSAO:-}" =~ ^[A-Za-z0-9_.-]+$ && -f "$JANGADA_ESTADO/agentes/
 fi
 agente_sessao="${agente_sessao:-$JANGADA_AGENTE}"
 
+if [[ "${1:-}" == implementador || "${1:-}" == --aceitar || "${1:-}" == --devolver ]]; then
+  exec python3 "$JANGADA_PATH/default/delegacao/implementacao.py" "$@"
+fi
+executor_contrato=""
+
+
 uso() { sed -n '7,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 papel=""; pedido=""; arquivo=""; destino_opt=""
@@ -65,6 +73,7 @@ declare -a requisitos=()
 declare -a campos_extracao=()
 while (($#)); do
   case "$1" in
+    --executor-contrato) [[ $# -ge 2 ]] || uso; executor_contrato="$2"; shift 2 ;;
     --arquivo) [[ $# -ge 2 ]] || uso; arquivo="$2"; shift 2 ;;
     --destino) [[ $# -ge 2 ]] || uso; destino_opt="$2"; shift 2 ;;
     --capacidade) [[ $# -ge 2 && -n "$2" ]] || uso; capacidade="$2"; shift 2 ;;
@@ -114,10 +123,15 @@ fi
 
 case "$papel" in
   explorador|leitor|pesquisador|verificador|auditor|arquiteto|otimizador|redator|supervisor) ;;
+  implementador) [[ -n "$executor_contrato" && "$destino_opt" == agy && "$permitir_remoto" == 1 ]] || uso ;;
   *)
     echo "jangada-delegar: papel desconhecido: $papel (explorador, leitor, pesquisador, verificador, auditor, arquiteto, otimizador, redator ou supervisor)" >&2
     exit 2 ;;
 esac
+if [[ -n "$executor_contrato" ]]; then
+  [[ "$papel" == implementador && -z "$capacidade"  ]] || uso
+  JANGADA_DELEGAR_MODELOS=gemini-3.8-flash-high
+fi
 read -ra modelos_agy <<<"$JANGADA_DELEGAR_MODELOS"
 ((${#modelos_agy[@]})) || { echo "jangada-delegar: JANGADA_DELEGAR_MODELOS vazio" >&2; exit 2; }
 
@@ -808,6 +822,15 @@ fi
 # ==============================================================================
 agy_limpo() { env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 agy "$@" </dev/null; }
 command -v agy >/dev/null 2>&1 || recusar "agy não instalado" indisponivel
+# Uma conta existente; leitura e implementação disputam a mesma trava.
+mkdir -p "$JANGADA_ESTADO/agentes"
+trava_agy="$JANGADA_ESTADO/agentes/.agy-execucao.lock"
+[[ ! -L "$trava_agy" ]] || recusar "link na trava do agy" destino_proibido
+[[ -e "$trava_agy" ]] || (umask 077; set -o noclobber; : >"$trava_agy")
+exec {agy_fd}<"$trava_agy"
+[[ "$(stat -Lc %h /proc/self/fd/"$agy_fd")" == 1 ]] || recusar "ligação física na trava do agy" destino_proibido
+flock -n "$agy_fd" || recusar "execução agy já em andamento" execucao_ocupada
+
 
 # Sem terminal, o agy só roda em pasta confiável, e a confiança vale para o
 # caminho exato. O jangada-delegar não confia por conta própria: a pergunta de
@@ -836,6 +859,7 @@ codigo_catalogo=0
 catalogo="$(agy_limpo agents 2>"$erro_catalogo")" || codigo_catalogo=$?
 if ((codigo_catalogo)); then
   diagnostico_catalogo="$(tail -c 600 "$erro_catalogo")"
+  [[ "$papel" != implementador ]] || diagnostico_catalogo="diagnóstico bruto omitido na implementação"
   rm -f "$erro_catalogo"
   recusar "consulta dos papéis do agy falhou (código $codigo_catalogo): $diagnostico_catalogo" indisponivel
 fi
@@ -938,9 +962,12 @@ for modelo in "${modelos_agy[@]}"; do
   fi
   codigo=0
   contar_chamada
+  perfil_execucao=agente
+  [[ "$papel" == implementador ]] && perfil_execucao=implementacao
   resposta="$(cd "$pasta" && timeout "${limite_agy[@]}" "$((tempo + 30))" env -u JANGADA_SESSAO JANGADA_HOOK_DESLIGADO=1 JANGADA_AGY_PAPEL="$papel" \
+    JANGADA_ISOLAR_PERFIL="$perfil_execucao" JANGADA_IMPLEMENTACAO_MANIFESTO="$executor_contrato" \
     "$JANGADA_PATH/bin/jangada-isolar" -- agy -p "$pedido" --agent "$papel" --model "$modelo" --sandbox \
-    --output-format json --print-timeout "${tempo}s" </dev/null 2>"$saida")" || codigo=$?
+    --output-format json --print-timeout "${tempo}s" </dev/null 2> >(cat >"$saida"))" || codigo=$?
   if ((codigo == 124)); then recusar "tempo esgotado (${tempo}s)"; fi
   # O /usage pode dizer que há cota e o agy recusar mesmo assim: vale a recusa.
   if ((codigo)) && grep -qE 'RESOURCE_EXHAUSTED|[Qq]uota reached' "$saida"; then
@@ -949,7 +976,10 @@ for modelo in "${modelos_agy[@]}"; do
     echo "jangada-delegar: cota de $modelo esgotada no agy; tentando o próximo modelo" >&2
     continue
   fi
-  if ((codigo)); then recusar "o agy saiu com código $codigo: $(head -c 300 "$saida")"; fi
+  if ((codigo)); then
+    [[ "$papel" != implementador ]] || recusar "o agy saiu com código $codigo"
+    recusar "o agy saiu com código $codigo: $(head -c 300 "$saida")"
+  fi
   atendido=1
   break
 done
@@ -976,7 +1006,7 @@ if [[ -n "$capacidade" ]] && ! jq -e '.response | type == "string"' <<<"$respost
 fi
 texto="$(jq -r '.response // ""' <<<"$resposta")"
 negados="$(jq -r '.denied_actions // [] | map(.display_name // .action // tostring) | unique | join(", ")' <<<"$resposta" 2>/dev/null || true)"
-if [[ -n "$capacidade" && -n "$negados" ]]; then
+if [[ ( -n "$capacidade" || "$papel" == implementador ) && -n "$negados" ]]; then
   texto=""
   recusar "o agy negou ações necessárias: ${negados:0:300}" destino_proibido
 fi

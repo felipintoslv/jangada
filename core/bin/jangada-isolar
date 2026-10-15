@@ -70,7 +70,7 @@ ja_isolado() {
 
 perfil="${JANGADA_ISOLAR_PERFIL:-agente}"
 case "$perfil" in
-  agente | verificacao | verificacao-rede) ;;
+  agente | verificacao | verificacao-rede | implementacao) ;;
   *) echo "jangada-isolar: perfil desconhecido em JANGADA_ISOLAR_PERFIL: $perfil" >&2; exit 1 ;;
 esac
 
@@ -94,6 +94,10 @@ pasta="$(pwd -P)"
 args=(--ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --ro-bind /dev/null "$marca"
       --unshare-pid --die-with-parent)
 [[ "$perfil" == verificacao ]] && args+=(--unshare-net)
+if [[ "$perfil" == implementacao ]]; then
+  montagem="$(python3 "$JANGADA_PATH/default/delegacao/implementacao.py" montagem "${JANGADA_IMPLEMENTACAO_MANIFESTO:-}")" || exit 1
+  mapfile -t args <<<"$montagem"
+fi
 
 # Executáveis temporários do controlador continuam visíveis, somente leitura.
 # As proteções obrigatórias abaixo prevalecem sobre estas montagens.
@@ -109,7 +113,7 @@ somente_leitura() { [[ -e "$1" ]] && args+=(--ro-bind "$1" "$1"); return 0; }
 # volta, somente leitura, só o que os agentes e o jangada leem. As montagens
 # seguintes (graváveis, somente leitura, ocultos) valem por cima dela. Os
 # arquivos de início do shell ficam de fora: é neles que se exporta token.
-if [[ "${JANGADA_ISOLAR_CASA:-}" == minima ]]; then
+if [[ "$perfil" != implementacao && "${JANGADA_ISOLAR_CASA:-}" == minima ]]; then
   args+=(--tmpfs "$HOME")
   visiveis=("$JANGADA_PATH" "$JANGADA_CONFIG" "$JANGADA_ESTADO")
   IFS=: read -ra dirs_path <<<"$PATH"
@@ -170,7 +174,7 @@ dbus_sinc=""
 if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" ]]; then
   args+=(--perms 0700 --tmpfs "$XDG_RUNTIME_DIR")
   pasta_proxy="$XDG_RUNTIME_DIR/jangada-isolar"
-  if ((!mostrar)) && [[ "$perfil" == agente && -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]] \
+  if ((!mostrar)) && [[ ( "$perfil" == agente || "$perfil" == implementacao ) && -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]] \
      && command -v xdg-dbus-proxy >/dev/null 2>&1 \
      && { [[ -d "$pasta_proxy" ]] || mkdir -m 0700 "$pasta_proxy" 2>/dev/null; }; then
     sock="$pasta_proxy/bus-$$"
@@ -183,6 +187,10 @@ if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" ]]; then
     # aqueles atributos, achados aqui fora; item criado depois só entra na
     # próxima abertura. A busca e o CreateItem seguem liberados: o go-keyring
     # do agy procura o item pelos atributos e regrava o token por CreateItem.
+    if [[ "$perfil" == implementacao && -z "${JANGADA_ISOLAR_KEYRING_ITEM:-}" ]]; then
+      echo 'jangada-isolar: implementação exige atributos de keyring já configurados; não liberar o serviço inteiro' >&2
+      exit 1
+    fi
     falar=(--talk=org.freedesktop.Notifications)
     if command -v agy >/dev/null 2>&1; then
       if [[ -z "${JANGADA_ISOLAR_KEYRING_ITEM:-}" ]]; then
@@ -210,7 +218,13 @@ if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" ]]; then
         done
         if [[ -n "$atributos" ]]; then
           while IFS= read -r item; do
-            falar+=(--call="$segredos=*@$item")
+            if [[ "$perfil" == implementacao ]]; then
+              falar+=(--call="$segredos=org.freedesktop.Secret.Item.GetSecret@$item"
+                      --call="$segredos=org.freedesktop.DBus.Properties.Get@$item"
+                      --call="$segredos=org.freedesktop.DBus.Properties.GetAll@$item")
+            else
+              falar+=(--call="$segredos=*@$item")
+            fi
             [[ " ${colecoes[*]} " == *" ${item%/*} "* ]] || colecoes+=("${item%/*}")
           done < <(timeout 5 gdbus call --session --dest "$segredos" --object-path "$raiz" \
             --method org.freedesktop.Secret.Service.SearchItems "{$atributos}" 2>/dev/null \
@@ -218,7 +232,8 @@ if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" ]]; then
         fi
         for colecao in "${colecoes[@]}"; do
           falar+=(--call="$segredos=org.freedesktop.Secret.Collection.SearchItems@$colecao"
-                  --call="$segredos=org.freedesktop.Secret.Collection.CreateItem@$colecao")
+                  )
+          [[ "$perfil" == implementacao ]] || falar+=(--call="$segredos=org.freedesktop.Secret.Collection.CreateItem@$colecao")
         done
       fi
     fi
@@ -234,6 +249,27 @@ if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" ]]; then
   fi
 fi
 [[ -n "$dbus_sinc" ]] || args+=(--unsetenv DBUS_SESSION_BUS_ADDRESS)
+
+if [[ "$perfil" == implementacao ]]; then
+  args+=(--clearenv --setenv HOME "$HOME" --setenv PATH "$PATH" --setenv LANG "${LANG:-C.UTF-8}"
+         --setenv TMPDIR /tmp/jangada-implementacao-temporarios
+         --setenv JANGADA_ISOLADO 1 --setenv JANGADA_HOOK_DESLIGADO 1 --setenv JANGADA_AGY_PAPEL implementador)
+  [[ -z "$dbus_sinc" ]] || args+=(--setenv DBUS_SESSION_BUS_ADDRESS "unix:path=$XDG_RUNTIME_DIR/bus")
+  args+=(--chdir "$pasta" -- "$@")
+  if ((mostrar)); then printf '%s\n' bwrap "${args[@]}"; exit 0; fi
+  exec python3 -c 'import os,stat,sys
+permitido = int(sys.argv[1]) if sys.argv[1] else -1
+for fd in (0,1,2):
+    modo = os.fstat(fd).st_mode
+    if stat.S_ISREG(modo) or stat.S_ISSOCK(modo):
+        sys.exit("descritor padrão gravável ou soquete recusado")
+for nome in os.listdir("/proc/self/fd"):
+    fd = int(nome)
+    if fd > 2 and fd != permitido:
+        try: os.close(fd)
+        except OSError: pass
+os.execvp("bwrap", ["bwrap", *sys.argv[2:]])' "$dbus_sinc" "${args[@]}"
+fi
 
 gravavel "$pasta"
 # Do Claude, a pasta ~/.claude: conversas, login e sessões. O ~/.claude.json
