@@ -759,6 +759,10 @@ for papel_remoto in explorador pesquisador verificador auditor arquiteto otimiza
   conferir "perfis: $papel_remoto não vai ao destino local" \
     bash -c '[ "$1" = 4 ] && [ ! -s "$2" ] && [ ! -e "$3" ]' _ "$(codigo)" "$ollama_reqs" "$tmp/falso/agy.args"
 done
+: >"$ollama_reqs"
+DELEGAR=agy OLLAMA_URL="http://127.0.0.1:$porta_ollama" delegar leitor "pedido" --arquivos "$tmp/projeto/doc1.txt"
+conferir "perfis: sem --destino nem autorização, nem agy nem Ollama recebem a fonte" \
+  bash -c '[ "$1" = 4 ] && [ ! -s "$2" ] && [ ! -e "$3" ]' _ "$(codigo)" "$ollama_reqs" "$tmp/falso/agy.args"
 DELEGAR=agy delegar --destino agy explorador "mapeie" --arquivos "$tmp/projeto/doc1.txt"
 conferir "perfis: agy explícito sem --permitir-remoto recusa antes de enviar" \
   bash -c '[ "$1" = 4 ] && [ ! -e "$2" ]' _ "$(codigo)" "$tmp/falso/agy.args"
