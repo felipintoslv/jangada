@@ -169,7 +169,7 @@ observadas ficam em memória durante a janela. Perguntas e permissões
 continuam no terminal. Na tarefa selecionada, `Alt+I` abre a integração,
 que mantém a sessão; `Ctrl+X` abre o encerramento sem integração. Ambos usam
 `jangada-agente-fim`, preservando suas conferências e confirmações.
-Veja [instalação e reversão](../README.md#central-de-tarefas-v01).
+Veja [instalação e reversão](interface.md#central-de-tarefas-v01).
 
 Cada mudança registrada vira uma linha em `eventos-agentes.jsonl`
 ([registros](registros.md)).
@@ -376,3 +376,97 @@ O piloto permite selecionar autor e revisor por tarefa e delegar uma atividade
 com arquivos exatos ao agy. O autor inspeciona, aceita pelo hash e testa;
 o revisor independente continua obrigatório.
 Veja o [contrato do piloto](coordenacao-central/10-executor-agy.md).
+
+## Worktrees dos agentes
+
+O `jangada-agente` cria cada worktree a partir do último
+commit, então arquivos fora do git (`.Renviron`, `.env`, dados locais) ficam
+para trás. Ao criar um worktree novo, o `jangada-worktree-preparar` lê três
+arquivos opcionais na raiz do projeto:
+
+| Arquivo | Efeito |
+|---|---|
+| `.worktreeinclude` | padrões no formato do `.gitignore`; o que casar e for ignorado pelo git é copiado (mesmo formato do `--worktree` do Claude Code) |
+| `.jangada/links` | um caminho por linha; vira link simbólico para a pasta da raiz, sem cópia |
+| `.jangada/preparar.sh` | roda dentro do worktree por último, com `JANGADA_RAIZ` e `JANGADA_WORKTREE` no ambiente |
+
+A cópia usa `--reflink=auto`: em btrfs, na mesma partição, não ocupa espaço.
+Fora disso, uma cópia maior que `JANGADA_WORKTREE_COPIA_MAX` megabytes (padrão
+500) é recusada com aviso. Um link só é mantido se o git do worktree o ignorar;
+para pastas, escreva `/dados` no `.gitignore`, sem a barra final, porque o
+padrão `dados/` não cobre um link. Um worktree reaproveitado não é preparado de
+novo.
+
+## Skills do Claude Code, do agy e do Codex
+
+A etapa de agentes liga cada pasta de `default/claude/skills` em
+`~/.claude/skills/<nome>` e, se o agy estiver instalado, em
+`~/.gemini/config/skills/<nome>`. Os dois agentes carregam a skill quando a
+tarefa combina com a descrição dela, mesmo abertos em outro projeto:
+
+- `jangada`: regras do projeto e pegadinhas já resolvidas (`hyprctl dispatch`
+  só com Lua, hypridle que ignora `-c`, on-click da waybar com `setsid -f`,
+  agy sem terminal).
+- `relatorio-tecnico`: investigação, postmortem, RFC, ADR e relatório formal
+  (NBR 10719), com a estrutura de cada tipo e o checklist de entrega.
+- `relatorio-academico`: artigo, monografia e tese, com o que levantar antes
+  de redigir, `[FALTA: ...]` no lugar de dado ou citação sem origem e o
+  checklist de entrega.
+- `revisao-academica`: revisão de TCC, artigo ou dissertação como orientador,
+  com comentários curtos inseridos no PDF ou DOCX. Conduz as etapas do projeto
+  `jangada-academic-review` (revisores, critical gate, anotação e QA) e
+  mantém o estado e a rastreabilidade.
+- `graficos`: gráfico para relatório em R (ggplot2) ou Python (matplotlib),
+  com a escolha do tipo pela relação a mostrar, o tema padrão (`tema_dv.R` e
+  `tema_dv.py`, copiados para o projeto), título e fonte em comentário fora
+  da imagem e a checklist de 41 itens.
+- `coordenador`: papel da sessão que abre, acompanha e confere tarefas de
+  agentes em qualquer projeto. Não vai para o agy; é a única ligada ao Codex,
+  em `~/.codex/skills/coordenador`. Veja
+  [docs/ciclo-da-tarefa.md](ciclo-da-tarefa.md#coordenador).
+
+O agy e o Codex leem o mesmo `SKILL.md`, sem ajuste no frontmatter. Uma pasta
+ou link alheio com o mesmo nome nessas pastas fica como está, com aviso.
+
+## Perfis e protocolo no uso diário
+
+O seletor calcula as descrições a partir do executor, revisor e delegação
+efetivos. `DESCRICAO` em perfis antigos continua sendo lida, mas não
+substitui esses valores. Os perfis ficam em `~/.config/jangada/agentes/NOME.conf`;
+o modelo está em `default/agentes/exemplo.conf`. Fila e orçamento são
+configurados separadamente.
+
+O agy não abre sessão principal. `jangada-agente` recusa `--agente agy` e
+perfis com `COMANDO=agy`; sessões antigas ainda podem ser restauradas.
+Sem terminal, `jangada-agente` exige `--nome`, `--prompt` ou `--direto`.
+O seletor recusa executor ausente antes de criar sessão. Revisor ausente
+mantém protocolo e testes, mas deixa a entrega sem aprovação.
+
+`JANGADA_AGENTE_PROTOCOLO=0` desliga o protocolo. Em projetos com arquivos R
+até dois níveis abaixo da raiz, também entram as regras de
+`default/agentes/protocolo-r.md`. O Codex usa o worktree e o tmux do jangada,
+sem criar outro worktree nem conectar ao servidor compartilhado do programa.
+
+Ganchos pessoais ficam em `~/.config/jangada/ganchos/EVENTO` ou `EVENTO.d/`.
+Os eventos são `pos-update`, `pos-tema`, `pos-agente-fim` (sessão, raiz e
+indicação de integração) e `pos-validar` (sessão e estado).
+`pos-tema` pode chamar `jangada-sddm aplicar` para atualizar o tema do login.
+
+## Detalhes da conferência local e das métricas
+
+O `lintr` usa `.lintr` da base; sem configuração própria, usa
+`default/r/lintr`. Do `object_usage_linter`, só considera variável sem uso;
+o aviso de variável global em colunas do dplyr é descartado.
+Achados do padrão geram aviso; configuração própria torna o achado impeditivo.
+Ausência ou falha da ferramenta aplicável não aprova a entrega.
+
+O `gitleaks` lê `.gitleaks.toml` e `.gitleaksignore` da base.
+Um falso positivo pode receber `gitleaks:allow` num comentário da linha.
+`JANGADA_VALIDAR_SEM_GITLEAKS=1` registra a conferência ausente como
+`SKIPPED`; essa opção não produz aprovação com verificação local completa.
+
+`jangada-validar --metricas` resume rodadas, apontamentos e duração por
+projeto e revisor a partir de `validar.jsonl`. Os estados de sessão usam
+`flock` na pasta `~/.local/state/jangada/agentes`, aberta só para leitura,
+pois os hooks rodam em paralelo. Uma trava aberta para escrita poderia
+seguir um link criado pelo agente e truncar um arquivo fora do isolamento.

@@ -865,7 +865,7 @@ Envio remoto exige `--permitir-remoto`, `permitir_remoto: true` no plano e
 perfil de sessão compatível. Os perfis não ampliam as permissões da sessão.
 O destino opcional `codex-economico` exige também `--permitir-codex`,
 `permitir_codex: true` no plano e modelo econômico explicitamente configurado.
-Consulte [as restrições do executor Codex](codex.md#executor-economico).
+Consulte [as restrições do executor Codex](codex.md#executor-econômico).
 Nenhum perfil chama Claude como trabalhador externo. Os registros
 de cada tentativa ficam no resultado da tarefa e no histórico persistente.
 
@@ -1089,3 +1089,21 @@ A exceção à leitura é o papel `implementador`, exclusivo do caminho protegid
 de implementação. Ele edita uma cópia sem Git e sem terminal; os outros papéis
 continuam sem escrita. Relatório leitor nunca substitui revisão independente.
 Veja o [contrato do piloto](coordenacao-central/10-executor-agy.md).
+
+## Critérios de acompanhamento do apoio
+
+A aba Autonomia de agentes e `jangada-subagentes` mostram os indicadores
+por entrega: tokens do Claude com e sem agy, fração delegada, recusas,
+compressão, cota gasta, aprovação na primeira rodada, afirmações sem fonte,
+desvios do protocolo e árvore de subagentes. Um `*` marca grupos com menos
+de 15 entregas.
+
+- Após 30 entregas com agy, se os tokens do Claude por entrega aprovada não
+  caírem, retirar a preferência pelo agy do protocolo.
+- Se a aprovação na primeira rodada cair com delegação, rever os papéis.
+- Se o verificador não aumentar a aprovação na primeira rodada em 30
+  entregas, retirar esse papel do fluxo.
+
+Sem agy instalado, o destino padrão continua `agy` e registra bloqueio.
+Uma preferência local explícita continua válida. Apoio não aprova entrega;
+`jangada-validar` mantém a revisão independente.

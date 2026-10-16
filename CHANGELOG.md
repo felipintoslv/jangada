@@ -3,6 +3,16 @@
 Gerado das mensagens de commit por `jangada-versao --lancar`; não edite
 à mão. A versão instalada aparece em `jangada-versao`.
 
+## Planejado para v0.4.0
+
+- Remover os links de compatibilidade de `bin/` e `default/`.
+  Quem usa `bin/jangada-*` deverá chamar o comando pelo PATH instalado ou
+  pelo caminho do módulo (`core/bin/`, `shell/bin/` ou `monitor/bin/`).
+  Referências a `default/` deverão usar o arquivo em `core/`, `shell/`
+  ou `monitor/`, conforme o [mapa de caminhos](docs/modularizacao-3.0/01-inventario.md).
+  Os links permanecem nesta versão; a retirada exige adaptar a resolução
+  de `jangada-config` antes de permitir chamadas diretas aos módulos.
+
 ## 0.2.0 (2026-10-01)
 
 ### Novidades

@@ -299,3 +299,85 @@ botão direito, `--parar`. O script avisa a barra pelo sinal 9
 | `testes/barra.sh` | módulo `custom/indicadores` e a migração que o acrescenta |
 | `testes/metricas.py` | coleta incremental Codex, contexto entre coletas, respostas e cumulativos, linhas parciais, rotação, truncamento, cache inválido e preservação de uma fonte com erro |
 | `testes/painel-motores.R` | agregação diária sem inventar zero, gráficos, filtros por provedor e papel e aviso de fonte com erro |
+
+## Uso e definição dos indicadores
+
+O funcionamento de cada peça está em [docs/painel.md](painel.md).
+
+O `jangada-painel` junta os registros dos agentes num cache e abre um app
+Shiny em `127.0.0.1:8765` (`JANGADA_PAINEL_PORTA`). O app só existe enquanto
+está aberto: `jangada-painel --parar` libera a memória do R. Precisa de R com
+shiny, bslib, bsicons, plotly, visNetwork, igraph, DT, arrow, jsonlite e
+htmltools, e do `python-pyarrow`; a instalação só avisa o que falta. O app só abre sessão
+para `127.0.0.1` ou `localhost` na porta dele e com o token de
+`~/.local/state/jangada/painel-chave/token` na URL, que o `jangada-painel`
+passa ao navegador: uma página de fora, aberta no mesmo navegador, não lê os
+indicadores, e um agente no `jangada-isolar`, que não vê a pasta do token,
+também não.
+
+Cada chamada roda o coletor (`default/painel/coletor.py`). Ele lê as
+conversas do Claude Code a partir de onde parou, então só a primeira coleta
+lê os ~280 MB de `~/.claude/projects`. O cache fica em
+`~/.local/state/jangada/painel`, em Parquet, e guarda o que o Claude Code já
+apagou (ele apaga conversas com mais de 30 dias). O detalhe de respostas e
+ferramentas fica pelos últimos `JANGADA_PAINEL_RETENCAO` dias (180; 0 guarda
+tudo); dos dias mais antigos sobra o consumo somado por dia, projeto e
+modelo, que o bloco de consumo mostra, e os indicadores de ferramentas, de
+blocos de 5 horas e de tokens por entrega ficam só dentro do prazo. O mapa de cada registro,
+com campos e lacunas, está em `docs/registros.md`.
+
+Definições:
+
+- **Entrega**: as rodadas do `jangada-validar` num mesmo rótulo até um
+  APROVADO. Antes do `validar.jsonl` (26/09/2026) as rodadas vêm dos
+  pareceres guardados em `agentes/`.
+- **Aprovação na 1ª rodada**: entregas aprovadas sem nenhum REVISAR antes,
+  sobre as entregas aprovadas.
+- **No limite**: entregas que chegaram a `JANGADA_VALIDAR_RODADAS` sem
+  aprovação. Indica tarefa ambígua ou modelos em desacordo.
+- **Tokens**: resumo de Claude, Codex e Ollama por executor, origem e modelo.
+  Entrada inclui cache lido; saída e raciocínio aparecem separados e não são
+  somados. Ausência de medida permanece ausente. O histórico externo do Codex
+  fica separado das sessões Jangada. O agy não grava contagem legível.
+  Os gráficos detalhados e blocos de 5 horas continuam exclusivos do Claude.
+  Veja cobertura, filtros e durações locais em [docs/painel.md](painel.md).
+- **Bloco de 5 horas**: a regra do `jangada-consumo`. Os registros não trazem
+  o limite do plano; "perto do limite" é um bloco com 80% ou mais da saída do
+  maior bloco observado.
+- **Tokens por entrega**: as respostas da sessão da entrega entre o fim da
+  entrega anterior do mesmo rótulo (ou 24 horas antes da 1ª rodada) e a
+  aprovação.
+- **Tempo em aguardando** e **sessões simultâneas**: saem do
+  `eventos-agentes.jsonl`, que começou em 26/09/2026. O agy não tem estado
+  aguardando.
+
+- **Ciclo de retrabalho**: editar um arquivo (Edit ou Write), os testes
+  falharem e editar o mesmo arquivo de novo, na mesma conversa. Um teste que
+  passa zera a conta. Edição por comando (sed, python) não entra, porque o
+  registro não diz o arquivo.
+- **Pontos quentes**: arquivos editados em mais de uma sessão, com o número
+  de itens REVISAR que os citam. O `validar.jsonl` não guarda os arquivos da
+  entrega; eles saem dos itens dos pareceres.
+- **Espaço de ferramentas** (exploratório): como o Product Space. Um projeto
+  tem vantagem numa capacidade (ferramenta, skill, subagente, servidor MCP ou
+  tipo de comando) quando a usa mais que a média; duas capacidades são
+  próximas quando os mesmos projetos têm vantagem nas duas. O grafo mostra a
+  árvore geradora máxima e as arestas acima do limiar.
+
+As redes cobrem só o Claude Code e mostram no máximo 40 nós por padrão; o
+painel tem controles para afrouxar a poda.
+
+O painel abre em **Operacional**, na aba **Visão Geral**, com sessões aguardando, revisões pendentes de
+sessões abertas e da fila, provedores, consumo do dia e sessões sem entrega.
+A tela mostra o retrato da última coleta de todos os projetos, sem filtros.
+As seis telas analíticas ficam na página **Indicadores**, com os filtros na barra lateral. **Fila e provedores** explica a
+execução automática e suas ausências de dados, separadas das sessões da Central
+de Tarefas. Os gráficos e redes acompanham o seletor claro/escuro da interface.
+
+Cada gráfico mostra o período e o número de observações coberto, com o aviso
+"pouco dado" abaixo de 10.
+
+Na barra, o módulo `custom/indicadores` fica ao lado do de agentes. O clique
+atualiza o cache e abre o painel; o botão direito encerra o app. A dica
+mostra os indicadores do dia. O módulo só lê o cache e é avisado pelo sinal
+9 (`pkill -RTMIN+9 -x waybar`), que fica reservado a ele.

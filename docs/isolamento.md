@@ -302,3 +302,11 @@ O perfil `implementacao` sempre cria outro isolamento. Ele expõe fontes
 copiadas e arquivos exatos, sem liberar worktree, Git ou estado persistente.
 O estado do CLI é temporário e o keyring selecionado é somente leitura.
 Veja o [contrato do piloto](coordenacao-central/10-executor-agy.md).
+
+## Ajustes pessoais das montagens
+
+`JANGADA_ISOLAR_ESCRITA` acrescenta pastas graváveis separadas por `:`, como
+`~/dados:~/R`. `JANGADA_ISOLAR_OCULTAR` substitui a lista de ocultos;
+definida vazia, remove os ocultos opcionais. Para acrescentar caminhos sem
+perder a lista padrão, use `JANGADA_ISOLAR_OCULTAR_EXTRA`.
+As pastas protegidas do controlador continuam ocultas independentemente dessas opções.

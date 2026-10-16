@@ -154,3 +154,71 @@ no Codex com destino `local`, ela fica na própria sessão.
 - Antes do `jangada-validar`, o subagente `verificador` roda os testes e
   procura arquivos esquecidos fora do diff.
 - Veja o [ciclo da tarefa](ciclo-da-tarefa.md) e o [isolamento](isolamento.md).
+
+## Desenvolvimento
+
+A cópia de trabalho fica em `~/Projetos/jangada` (`JANGADA_REPO`); a cópia
+instalada só recebe avanço rápido (`--ff-only`) pelo `jangada-update`, depois
+da confirmação. O `jangada-agente-fim --integrar` integra na cópia de trabalho
+e mantém a sessão. Para testar a cópia de trabalho sem instalar, rode
+`JANGADA_PATH=$PWD bin/...`.
+
+| Teste | O que confere |
+|---|---|
+| `testes/verificar.sh` | shellcheck, sintaxe Lua, JSON e TOML, comandos citados na configuração e, em seguida, todos os testes abaixo menos o `aninhado.sh` |
+| `testes/diagnostico.sh` | diagnóstico do `jangada-verificar`: do `hyprland.log` só erros e avisos, sem caracteres de controle, marcados como dados |
+| `testes/hooks.sh` | `settings.json` do Claude e `hooks.json` do agy vazios ou inválidos: a mescla trata o vazio como `{}` e grava os hooks, e o `jangada-verificar` aponta o arquivo |
+| `testes/regra1.sh` | todo caminho de fora das pastas do jangada citado no código está nas exceções à regra 1 do `AGENTS.md` ou é só lido |
+| `testes/validar.sh` | `jangada-validar` com claude e agy falsos: veredito, rodadas, pareceres e métricas |
+| `testes/isolar.sh` | `jangada-isolar`: o que fica gravável, somente leitura e oculto, no worktree e direto no repositório |
+| `testes/restaurar.sh` | `jangada-agentes --restaurar` com tmux falso: o comando sai de campos conferidos, nunca do estado |
+| `testes/codex.sh` | lançamento do Codex, protocolo, argumentos TOML, hooks e recusas sem rede |
+| `testes/update.sh` | `jangada-update` só aplica com confirmação e, com `allowed_signers`, só commits assinados; `jangada-assinar`; a integração preserva a cópia instalada e não roda ganchos do repositório do agente |
+| `testes/eventos.sh` | histórico de estados dos agentes gravado pelos hooks e pela troca de foco |
+| `testes/barra.sh` | módulo `custom/indicadores`, barra em pé do `jangada-barra` e a migração que o acrescenta |
+| `testes/painel.sh` | coletor do painel sobre registros de exemplo e, com os pacotes R, o app no ar |
+| `testes/conversa.py` | janela de conversa local com Ollama falso: resposta progressiva, parada, raciocínio vazado, recusa, trava e proteções |
+| `testes/skills.sh` | instalação das skills num HOME temporário: Claude Code com todas, agy sem a `coordenador`, Codex só com ela, link alheio preservado e a migração sem Codex |
+| `testes/subagentes.sh`, `testes/delegar.sh` | papéis de subagente e a instalação deles; `jangada-delegar` com agy falso, cota por grupo e troca de modelo |
+| `testes/agente-seletor.py` | seletor do `jangada-agente` num terminal falso, sem executar modelos nem criar sessões |
+| `testes/interface.sh` | identificação da interface sem abrir janelas nem tocar em outras sessões |
+| `testes/tarefas.py` | central de tarefas com sessões fictícias, sem configuração ativa |
+| `testes/metricas.py`, `testes/painel-local.py`, `testes/painel-orquestracao.py`, `testes/painel-motores.R` | métricas e painel sobre fontes sintéticas: consumo, modelos locais, retratos da fila e regressões dos indicadores em R |
+| `testes/delegacao.py`, `testes/orquestracao.py`, `testes/executor.py` | seleção por capacidade, fila persistente e execução com `jangada-delegar` simulado |
+| `testes/supervisao.py`, `testes/acompanhamento.py`, `testes/deterministico.py` | supervisor de relatórios intermediários, acompanhamento da fila e conferência de JSON |
+| `testes/saude.py`, `testes/metricas-projeto.py`, `testes/cota-codex.py`, `testes/codex-economico.py` | saúde dos provedores, métricas da fila, cota e executor econômico do Codex, sem serviços externos |
+| `testes/versao.sh` | `jangada-versao` num repositório temporário: grupos e prefixos das novidades, o `CHANGELOG.md` e a tag do `--lancar` e as recusas (árvore suja, versão menor, tag existente, nada novo) |
+| `testes/importar.sh` | `jangada-importar` com um config.kdl de exemplo |
+| `testes/fim.sh` | `jangada-agente-fim` recusa estado adulterado (ramo, worktree, raiz, base) sem mexer em nada; `jangada-agentes --limpar-concluidos` só age com `s` |
+| `testes/mapear.sh` | a máscara de segredos do `jangada-mapear` apaga tokens, chaves e senhas e preserva texto comum |
+| `testes/rede.sh` | `jangada-rede` com nmcli falso: a senha do Wi-Fi nunca aparece nos argumentos |
+| `testes/bluetooth.sh` | `jangada-bluetooth` com bluetoothctl falso: parear não confia no aparelho sem a escolha no menu |
+| `testes/snapshot.sh` | `jangada-snapshot` com snapper falso: os do agente ficam fora da limpeza do snapper e só os mais recentes ficam |
+| `testes/calendario.sh` | `jangada-calendario`: JSON corrompido guardado à parte, gravação atômica e gravações simultâneas sem perda |
+| `testes/reverter.sh` | `reverter` do Jangada Core, no bash e no zsh: prévia do que se perde e ramo de cópia; cabeçalho de abertura do console |
+| `testes/aninhado.sh` | sobe um Hyprland aninhado com a configuração (`--sem-usuario` só os padrões) e confere `configerrors` e o número de atalhos |
+
+A cada push, o GitHub Actions (`.github/workflows/verificar.yml`) roda o
+`testes/verificar.sh` num contêiner Arch e simula a instalação como usuário
+sem sudo, conferindo que nada foi escrito. R e `lintr` rodam na tarefa separada
+`sandbox-e2e`, que instala `libxml2` e `pkgconf` para compilar o pacote R
+`xml2` e confere o carregamento do `lintr` antes dos testes de isolamento.
+
+A CI roda em dois ambientes: `fixo`, com a imagem do Arch por digest e os
+pacotes do Arch Linux Archive na mesma data, e `atual`, com `archlinux:latest`.
+Nos dois, `JANGADA_TESTES_EXIGIR_ISOLAMENTO=1` faz o teste reprovar, em vez de
+pular, onde o `bwrap` não cria o isolamento, onde a leitura da casa mínima não
+pode ser conferida e onde falta o que o filtro do keyring por item usa. O caso
+do D-Bus da sessão segue pulado sem sessão gráfica. Use a mesma variável antes
+de publicar uma versão.
+
+Os testes nunca tocam a configuração real: rodam com `XDG_CONFIG_HOME` e
+`XDG_STATE_HOME` temporários, e o `jangada-tema` respeita o
+`XDG_CONFIG_HOME` também nas saídas do matugen.
+
+Mudança que exige ajuste numa instalação existente ganha uma migração em
+`migrations/` (ver `migrations/README.md`). As revisões cruzadas e as
+avaliações estão indexadas em `revisao/README.md`; a última auditoria
+(`revisao/auditoria-20260927.md`) cobre o repositório inteiro, com 72
+apontamentos: os 6 críticos, todos de fuga do isolamento, e os 8 altos foram
+corrigidos, assim como os médios e os baixos.

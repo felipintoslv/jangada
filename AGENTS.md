@@ -2,7 +2,8 @@
 
 Este repositório é o **jangada**: configuração de Arch Linux com Hyprland
 (configuração em Lua, Hyprland 0.55 ou mais novo), organizada para o trabalho
-com agentes de IA. Leia o README.md antes de alterar qualquer coisa.
+com agentes de IA. Antes de alterar qualquer coisa, leia o [README.md](README.md) curto e o
+documento de `docs/` sobre o assunto da tarefa, indicado na tabela do README.
 
 ## Regras
 
