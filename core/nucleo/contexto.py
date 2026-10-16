@@ -49,35 +49,39 @@ def campo(dados, nome):
     valor = dados.get(nome)
     if valor is None:
         return ''
-    if not isinstance(valor, str) or len(valor) > TEXTO_MAX or '\x00' in valor:
+    limite = LIMITE if nome == 'tarefa' else TEXTO_MAX
+    if not isinstance(valor, str) or len(valor) > limite or '\x00' in valor:
         raise ValueError('Campo inválido: ' + nome)
     valor.encode('utf-8')
     return valor
-
-
-def entradas(fd):
-    nomes = os.listdir(fd)
-    if len(nomes) > 16384:
-        raise ValueError('Consulta excedeu 16384 entradas.')
-    return sorted(nomes)
 
 
 def sessao_worktree(raiz, worktree):
     if not Path(worktree).is_absolute() or len(worktree) > 4096:
         raise ValueError('Worktree deve ser caminho absoluto de até 4096 caracteres.')
     achadas = []
+    quantidade = 0
     with pasta_leitura(Path(raiz).resolve() / 'agentes') as fd:
         if fd is not None:
-            nomes = [n for n in entradas(fd) if eh_sessao(n)
-                     and not stat.S_ISDIR(os.stat(n, dir_fd=fd, follow_symlinks=False).st_mode)]
-            if len(nomes) > 4096:
-                raise ValueError('Consulta excedeu 4096 registros.')
-            for nome in nomes:
-                if not nome_valido(nome[:-5]):
-                    raise ValueError('Nome de sessão inválido.')
-                dados = objeto(fd, nome)
-                if campo(dados, 'worktree') == worktree:
-                    achadas.append(nome[:-5])
+            with os.scandir(fd) as entradas:
+                for entrada in entradas:
+                    nome = entrada.name
+                    if not eh_sessao(nome):
+                        continue
+                    try:
+                        info = os.stat(nome, dir_fd=fd, follow_symlinks=False)
+                        if stat.S_ISDIR(info.st_mode):
+                            continue
+                        if not nome_valido(nome[:-5]):
+                            raise ValueError('Nome de sessão inválido.')
+                        dados = objeto(fd, nome)
+                    except FileNotFoundError:
+                        continue
+                    quantidade += 1
+                    if quantidade > 4096:
+                        raise ValueError('Consulta excedeu 4096 registros.')
+                    if campo(dados, 'worktree') == worktree:
+                        achadas.append(nome[:-5])
     if len(achadas) > 1:
         raise ValueError('Worktree associado a várias sessões: ' + ', '.join(achadas))
     return {'versao': 1, 'sessao': achadas[0] if achadas else None}
@@ -95,35 +99,43 @@ def contexto_sessao(raiz, sessao):
         nonlocal parecer, quantidade, empatados
         if profundidade > 32:
             raise ValueError('Profundidade de pareceres excedida.')
-        for nome in entradas(fd):
-            if not prefixo and nome in ('projetos', 'runtime'):
-                continue
-            quantidade += 1
-            if quantidade > 16384:
-                raise ValueError('Consulta excedeu 16384 entradas.')
-            info = os.stat(nome, dir_fd=fd, follow_symlinks=False)
-            relativo = prefixo + nome
-            match = padrao.fullmatch(nome)
-            if match:
-                if len(match[1]) > 9:
-                    raise ValueError('Rodada de parecer excedeu nove dígitos.')
-                rodada = int(match[1])
-                # Links e FIFO candidatos são recusados mesmo quando antigos.
-                if not stat.S_ISREG(info.st_mode):
-                    raise ValueError('Parecer deve ser arquivo regular sem link.')
-                if parecer is None or rodada > parecer['rodada']:
-                    if any(not nome_valido(parte) for parte in relativo.split('/')) or len(relativo) > 4096:
-                        raise ValueError('Origem de parecer inválida.')
-                    parecer = dict(rodada=rodada, origem=relativo)
-                    empatados = 1
-                elif rodada == parecer['rodada']:
-                    empatados += 1
-            elif stat.S_ISDIR(info.st_mode):
-                filho = os.open(nome, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+        with os.scandir(fd) as entradas:
+            for entrada in entradas:
+                nome = entrada.name
+                if not prefixo and nome in ('projetos', 'runtime'):
+                    continue
                 try:
-                    procurar(filho, relativo + '/', profundidade + 1)
-                finally:
-                    os.close(filho)
+                    match = padrao.fullmatch(nome)
+                    diretorio = not match and entrada.is_dir(follow_symlinks=False)
+                    if not match and not diretorio:
+                        continue
+                    quantidade += 1
+                    if quantidade > 16384:
+                        raise ValueError('Consulta excedeu 16384 candidatos e pastas.')
+                    relativo = prefixo + nome
+                    if match:
+                        if len(match[1]) > 9:
+                            raise ValueError('Rodada de parecer excedeu nove dígitos.')
+                        rodada = int(match[1])
+                        info = os.stat(nome, dir_fd=fd, follow_symlinks=False)
+                        # Links e FIFO candidatos são recusados mesmo quando antigos.
+                        if not stat.S_ISREG(info.st_mode):
+                            raise ValueError('Parecer deve ser arquivo regular sem link.')
+                        if parecer is None or rodada > parecer['rodada']:
+                            if any(not nome_valido(parte) for parte in relativo.split('/')) or len(relativo) > 4096:
+                                raise ValueError('Origem de parecer inválida.')
+                            parecer = dict(rodada=rodada, origem=relativo)
+                            empatados = 1
+                        elif rodada == parecer['rodada']:
+                            empatados += 1
+                    else:
+                        filho = os.open(nome, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+                        try:
+                            procurar(filho, relativo + '/', profundidade + 1)
+                        finally:
+                            os.close(filho)
+                except FileNotFoundError:
+                    continue
 
     with pasta_leitura(Path(raiz).resolve() / 'agentes') as fd:
         if fd is not None:
@@ -144,6 +156,8 @@ def contexto_sessao(raiz, sessao):
                         os.close(atual)
                         atual = filho
                     parecer['texto'] = ler(atual, partes[-1])
+                except FileNotFoundError:
+                    parecer = None
                 finally:
                     os.close(atual)
     return {'versao': 1, 'sessao': sessao, 'tarefa': tarefa, 'parecer': parecer}

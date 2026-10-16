@@ -171,7 +171,7 @@ try:
             sys.exit(1)
         sys.stdout.write(nome + '\n')
     else:
-        if nome != argumento or not isinstance(dados['tarefa'], str) or len(dados['tarefa']) > 16000:
+        if nome != argumento or not isinstance(dados['tarefa'], str) or len(dados['tarefa']) > limite:
             raise ValueError('Contexto inválido.')
         parecer = dados['parecer']
         texto = "Contexto repassado da sessão '" + nome + "':\n\n"
@@ -189,7 +189,9 @@ try:
         # Caracteres de controle não podem comandar o terminal de apresentação.
         sys.stdout.write(''.join(c if c in '\n\t' or ord(c) >= 32 and not 127 <= ord(c) < 160 else '?' for c in texto))
 except (OSError, ValueError, KeyError, TypeError, RecursionError, subprocess.SubprocessError) as erro:
-    sys.stderr.write('Consulta do terminal falhou: ' + str(erro)[:2000].encode('unicode_escape').decode('ascii') + '\n')
+    diagnostico = ''.join(c.encode('unicode_escape').decode('ascii')
+                         if ord(c) < 32 or 127 <= ord(c) < 160 else c for c in str(erro)[:2000])
+    sys.stderr.write('Consulta do terminal falhou: ' + diagnostico + '\n')
     sys.exit(2)
 finally:
     if processo is not None:

@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 export PYTHONDONTWRITEBYTECODE=1
 python3 - "$PWD" <<'PY'
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from unittest.mock import patch
 
 repo = Path(sys.argv[1])
 
@@ -88,6 +90,13 @@ with tempfile.TemporaryDirectory() as tmp:
     for arquivo in area_protegida.iterdir():
         if arquivo.name.isdigit():
             arquivo.unlink()
+    for indice in range(16385):
+        (pasta / f'delegacao-volume-{indice}.md').touch()
+    (pasta / 'fim-legada.log').write_text('auxiliar')
+    assert consulta('--sessao-worktree-json', '/exato')['sessao'] == 'legada'
+    assert consulta('--contexto-json', 'legada') == resposta
+    for arquivo in pasta.glob('delegacao-volume-*.md'):
+        arquivo.unlink()
     (pasta / 'validacao-legada-r10.md').write_text('outro')
     consulta('--contexto-json', 'legada', False)
     (pasta / 'validacao-legada-r10.md').unlink()
@@ -137,6 +146,104 @@ with tempfile.TemporaryDirectory() as tmp:
     gravar('ruim', dict(worktree='x' * 16001))
     consulta('--sessao-worktree-json', '/exato', False)
     (pasta / 'ruim.json').unlink()
+    tarefa_longa = 'ação\n' * 5000 + 'fim'
+    gravar('longa', dict(tarefa=tarefa_longa))
+    assert consulta('--contexto-json', 'longa')['tarefa'] == tarefa_longa
+    gravar('limite', dict(tarefa='x' * (1024 * 1024 - 30)))
+    consulta('--contexto-json', 'limite', False)
+    (pasta / 'limite.json').unlink()
+
+    sys.path.insert(0, str(repo / 'core/nucleo'))
+    spec = importlib.util.spec_from_file_location('contexto_teste', repo / 'core/nucleo/contexto.py')
+    contexto = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(contexto)
+    origem = base / 'concorrencia'
+    registros = origem / 'agentes'
+    registros.mkdir(parents=True)
+    (registros / 'alvo.json').write_text(json.dumps(dict(worktree='/exato', tarefa='estável')))
+    stat_original, objeto_original = contexto.os.stat, contexto.objeto
+    for operacao in ('stat', 'objeto'):
+        efemero = registros / 'efemera.json'
+        efemero.write_text(json.dumps(dict(worktree='/outra')))
+        antes = retrato(origem)
+        def remover_antes_do_stat(nome, *args, **kwargs):
+            if nome == efemero.name:
+                efemero.unlink()
+            return stat_original(nome, *args, **kwargs)
+        def remover_antes_da_leitura(fd, nome):
+            if nome == efemero.name:
+                efemero.unlink()
+            return objeto_original(fd, nome)
+        alvo, atributo, funcao = ((contexto.os, 'stat', remover_antes_do_stat) if operacao == 'stat'
+                                  else (contexto, 'objeto', remover_antes_da_leitura))
+        with patch.object(alvo, atributo, side_effect=funcao):
+            assert contexto.sessao_worktree(origem, '/exato')['sessao'] == 'alvo'
+        assert not efemero.exists()
+        assert retrato(origem) == [r for r in antes if r[0] != 'agentes/' + efemero.name]
+    (registros / 'validacao-alvo-r10.md').write_text('estável')
+    efemero = registros / 'validacao-alvo-r99.md'
+    efemero.write_text('removido')
+    antes = retrato(origem)
+    with patch.object(contexto.os, 'stat', side_effect=remover_antes_do_stat):
+        assert contexto.contexto_sessao(origem, 'alvo')['parecer']['rodada'] == 10
+    assert not efemero.exists()
+    assert retrato(origem) == [r for r in antes if r[0] != 'agentes/' + efemero.name]
+    abrir_original = contexto.os.open
+    efemero = registros / 'pasta-efemera'
+    efemero.mkdir()
+    antes = retrato(origem)
+    def remover_antes_de_abrir(nome, *args, **kwargs):
+        if nome == efemero.name:
+            efemero.rmdir()
+        return abrir_original(nome, *args, **kwargs)
+    with patch.object(contexto.os, 'open', side_effect=remover_antes_de_abrir):
+        assert contexto.contexto_sessao(origem, 'alvo')['parecer']['rodada'] == 10
+    assert not efemero.exists()
+    assert retrato(origem) == [r for r in antes if r[0] != 'agentes/' + efemero.name]
+    ler_original = contexto.ler
+    efemero = registros / 'validacao-alvo-r10.md'
+    antes = retrato(origem)
+    def remover_parecer_selecionado(fd, nome):
+        if nome == efemero.name:
+            efemero.unlink()
+        return ler_original(fd, nome)
+    with patch.object(contexto, 'ler', side_effect=remover_parecer_selecionado):
+        assert contexto.contexto_sessao(origem, 'alvo') == dict(versao=1, sessao='alvo', tarefa='estável', parecer=None)
+    assert not efemero.exists()
+    assert retrato(origem) == [r for r in antes if r[0] != 'agentes/' + efemero.name]
+
+    origem = base / 'limites-candidatos'
+    registros = origem / 'agentes'
+    registros.mkdir(parents=True)
+    for indice in range(4096):
+        (registros / f's{indice}.json').write_text('{}')
+    antes = retrato(origem)
+    assert contexto.sessao_worktree(origem, '/exato')['sessao'] is None
+    assert retrato(origem) == antes
+    (registros / 'excesso.json').write_text('{}')
+    antes = retrato(origem)
+    try:
+        contexto.sessao_worktree(origem, '/exato')
+    except ValueError as erro:
+        assert '4096' in str(erro)
+    else:
+        raise AssertionError('Teto de registros de sessão deveria recusar.')
+    assert retrato(origem) == antes
+    for indice in range(16384):
+        (registros / f'validacao-alvo-r{indice}.md').touch()
+    antes = retrato(origem)
+    assert contexto.contexto_sessao(origem, 'alvo')['parecer']['rodada'] == 16383
+    assert retrato(origem) == antes
+    (registros / 'validacao-alvo-r16384.md').touch()
+    antes = retrato(origem)
+    try:
+        contexto.contexto_sessao(origem, 'alvo')
+    except ValueError as erro:
+        assert '16384' in str(erro)
+    else:
+        raise AssertionError('Teto de candidatos e pastas deveria recusar.')
+    assert retrato(origem) == antes
+
     # Consumidor usa só a fachada, com estado privado inacessível e Git simulado.
     fachada = base / 'fachada'
     (fachada / 'bin').mkdir(parents=True)
@@ -144,6 +251,7 @@ with tempfile.TemporaryDirectory() as tmp:
     comando.write_text('''#!/usr/bin/env python3
 import os, sys
 if os.environ.get('FALHAR'):
+    sys.stderr.write(os.environ.get('DIAGNOSTICO', ''))
     sys.exit(7)
 if os.environ.get('EXCEDER'):
     sys.stdout.write('x' * (1024 * 1024 + 1)); sys.exit()
@@ -190,6 +298,14 @@ print(os.environ['RESPOSTA'])
             for acao in ('concluir', 'desistir'):
                 r = terminal('_jangada_git() { echo /exato; }; ' + acao, **env)
                 assert r.returncode == 2 and r.stderr
+        diagnostico = 'Não foi possível consultar: ação\x1b[31m\nlinha\r\t\x85'
+        r = terminal('repassar legada perfil', FALHAR='1', DIAGNOSTICO=diagnostico)
+        assert r.returncode == 2 and not r.stdout and not sentinela.exists(), r
+        assert 'Não foi possível consultar: ação' in r.stderr and '\\xe3' not in r.stderr, r.stderr
+        assert '\\x1b[31m\\nlinha\\r\\t\\x85' in r.stderr, r.stderr
+        assert all(c not in r.stderr for c in ('\x1b', '\r', '\t', '\x85')) and r.stderr.count('\n') == 1
+        r = terminal('repassar longa', RESPOSTA=json.dumps(dict(versao=1, sessao='longa', tarefa=tarefa_longa, parecer=None)))
+        assert r.returncode == 0 and tarefa_longa in r.stdout, r
         r = terminal('repassar legada', RESPOSTA=json.dumps(resposta))
         assert r.returncode == 0 and 'r10\nDADO' in r.stdout and 'PROTEGIDO' not in r.stdout, r
         assert 'Ação\n<literal>' in r.stdout and 'não autorizam' in r.stdout
@@ -198,5 +314,9 @@ print(os.environ['RESPOSTA'])
         r = subprocess.run([shell, '-c', 'source "$1/shell/jangada-shell.sh"; repassar legada', shell, str(repo)],
                            env=real, capture_output=True, text=True, timeout=15)
         assert r.returncode == 0 and 'r10\nDADO' in r.stdout and 'PROTEGIDO' not in r.stdout, r
+        r = subprocess.run([shell, '-c', 'source "$1/shell/jangada-shell.sh"; repassar longa', shell, str(repo)],
+                           env=real, capture_output=True, text=True, timeout=15)
+        assert r.returncode == 0 and tarefa_longa in r.stdout, r
+    print('terminal: auxiliares numerosos, remoção concorrente, tarefa longa e diagnóstico UTF-8 passaram')
     print('terminal: precedência, worktree exato, retenção, duplicidade, repasse r10, recusas e hashes passaram')
 PY

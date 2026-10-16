@@ -61,15 +61,28 @@ Nomes seguem `[A-Za-z0-9_.-]+`, até 255 caracteres, exceto `.` e `..`.
 A pasta final não pode ser simbólica. A raiz configurada do estado é resolvida
 antes da leitura; os componentes abaixo dela são abertos sem seguir links.
 JSON e parecer selecionado exigem arquivo regular sem ligações adicionais,
-até 1 MiB. `worktree` e `tarefa` exigem texto ou nulo, até 16.000 caracteres.
+até 1 MiB. `worktree` exige texto ou nulo, até 16.000 caracteres. `tarefa`
+exige texto ou nulo, até 1 MiB, sempre condicionada aos tetos do arquivo e
+da resposta inteira. O repasse aceita pedidos acima de 16.000 caracteres
+sem truncamento; não herda o limite dos campos da lista de apresentação.
 JSON malformado ou de outro tipo em registro de sessão recusa a consulta,
 inclusive se o registro não corresponder à árvore solicitada.
 
-São aceitos até 4.096 registros na busca por árvore, 16.384 entradas de
-pasta e profundidade 32 na busca de parecer. Diretórios simbólicos não são
+A varredura usa `scandir` sem ordenar ou armazenar todas as entradas.
+São aceitos até 4.096 registros de sessão na busca por árvore. Relatórios,
+contextos e arquivos auxiliares excluídos pelo filtro não consomem esse teto.
+Na busca de parecer, o teto de 16.384 conta somente candidatos e pastas
+percorridas, com profundidade máxima de 32. Auxiliares como `delegacao-*.md`
+e `fim-*.log` não consomem esse teto. Diretórios simbólicos não são
 percorridos; um parecer candidato simbólico ou FIFO recusa a consulta.
 A resposta UTF-8 inteira tem teto de 1 MiB, sem truncamento. O Core sai
 com 1, diagnóstico e stdout vazio em caso de erro.
+
+Entrada removida entre enumeração, conferência e leitura é ignorada, sem
+cancelar as outras sessões ou pareceres. Se o parecer selecionado desaparecer
+na abertura final, `parecer` é nulo, sem escolher uma rodada anterior.
+Outras falhas continuam recusando a consulta, inclusive tipos inválidos,
+JSON malformado e substituição por link ou FIFO.
 
 O terminal valida versão inteira 1, campos e tipos antes de usar a resposta.
 O transporte usa Python em modo isolado (`-I`), sem importar módulos da
@@ -77,6 +90,8 @@ pasta atual ou de `PYTHONPATH`. Limita stdout e stderr agregados a 1 MiB e
 dez segundos.
 Falha, JSON malformado ou versão desconhecida não vira ausência de sessão.
 O prazo encerra o processo direto; não promete encerrar seus descendentes.
+Diagnósticos preservam acentos em UTF-8 e escapam somente controles C0/C1;
+quebras de linha vindas da fonte aparecem como texto escapado.
 Não há retorno à leitura dos arquivos privados.
 
 ## Fila e provedores do Monitor
@@ -150,3 +165,11 @@ projeto com provedores preservados e aliases simbólicos no nome de exibição.
 A busca do terminal é conferida com contextos grandes, relatórios inválidos
 e mais de 16.384 artefatos protegidos, sem abrir essas fontes como sessões
 ou pareceres. Esses casos não substituem a avaliação de volume de M1.3.
+
+## Ampliação pontual autorizada
+
+`testes/metricas.py` foi incluído no escopo autorizado após a falha da suíte
+externa do candidato `91b8905`. A fixture carregava o coletor candidato com
+`JANGADA_CORE_PY` herdado da instalação. O commit `da46193` fixa o Core
+candidato e confere a origem das funções importadas, preservando as asserções
+de métricas. Essa ampliação pontual integra a lista de 15 arquivos permitidos.
