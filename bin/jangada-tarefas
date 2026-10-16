@@ -1,1 +1,23 @@
-../shell/bin/jangada-tarefas
+#!/usr/bin/env bash
+# Abre a central de tarefas ou emite seus contadores para a Waybar.
+set -euo pipefail
+# shellcheck source=bin/jangada-shell-config
+source "$(dirname "${BASH_SOURCE[0]}")/jangada-shell-config"
+case "${1:-}" in
+  --anterior) shift ;;
+  --simular) shift; exec python3 "$JANGADA_PATH/default/tarefas/central.py" "$@" ;;
+  ""|--nova|--waybar) ;;
+  *) printf 'Uso: jangada-tarefas [--nova|--waybar|--simular]\n' >&2; exit 1 ;;
+esac
+args=(--real --jangada "$JANGADA_PATH" --estado "$JANGADA_SESSOES")
+if [[ "${1:-}" == --waybar ]]; then
+  # O jangada-agentes é do Core: sem ele, a barra segue sem limpar órfãos.
+  if command -v jangada-agentes >/dev/null 2>&1; then
+    jangada-agentes --limpar-orfaos || true
+  fi
+  args+=(--waybar)
+else
+  args+=(--mostrar)
+  [[ "${1:-}" != --nova ]] || args+=(--nova)
+fi
+exec python3 "$JANGADA_PATH/default/tarefas/central.py" "${args[@]}"

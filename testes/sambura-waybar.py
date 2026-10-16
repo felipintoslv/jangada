@@ -28,7 +28,8 @@ class Sambura(unittest.TestCase):
         self.alvo.parent.mkdir(parents=True)
         self.ambiente = dict(os.environ, XDG_CONFIG_HOME=str(self.tmp),
                              JANGADA_PATH=str(REPO), JANGADA_SIMULAR='0')
-        self.padrao = carregar((REPO / 'shell/waybar/config.jsonc').read_text())
+        waybar_cfg = REPO / 'waybar/config.jsonc' if (REPO / 'waybar/config.jsonc').exists() else REPO / 'shell/waybar/config.jsonc'
+        self.padrao = carregar(waybar_cfg.read_text())
 
     def migrar(self, simular=False):
         ambiente = dict(self.ambiente, JANGADA_SIMULAR=str(int(simular)))
@@ -102,7 +103,8 @@ class Sambura(unittest.TestCase):
         self.assertEqual(len(self.copias()), 1)
 
     def test_texto_sem_simbolo_e_legibilidade(self):
-        css = (REPO / 'shell/waybar/base.css').read_text()
+        waybar_base = REPO / 'waybar/base.css' if (REPO / 'waybar/base.css').exists() else REPO / 'shell/waybar/base.css'
+        css = waybar_base.read_text()
         menu = re.search(r'^#custom-menu \{([^}]+)\}', css, re.M)[1]
         sambura = re.search(r'^#custom-sambura \{([^}]+)\}', css, re.M)[1]
         self.assertIn('background-image: -gtk-recolor(url("../logo/jangada-symbolic.svg"));', menu)

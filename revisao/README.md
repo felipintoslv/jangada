@@ -24,7 +24,7 @@ git show arquivo/evidencias:revisao/PROMPT_AUDITORIA.md
 git show 7a9d1e5:revisao/avaliacao-gemini-20260922-integrar-pull.md
 ```
 
-Para o estado P0 e os limites P1, consulte a [estabilização](../docs/estabilizacao/README.md).
+Para o estado P0 e os limites P1, consulte a documentação de estabilização do Core.
 Revisão de uma entrega continua sendo feita por `jangada-validar`.
 
 ## Cabeçalho dos relatórios

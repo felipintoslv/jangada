@@ -212,7 +212,7 @@ class ContextoDaConfiguracao(unittest.TestCase):
             ambiente = {k: v for k, v in os.environ.items() if k not in ('JANGADA_LOCAL_CTX', 'JANGADA_CONVERSA_CTX')}
             ambiente['XDG_CONFIG_HOME'] = pasta
             return subprocess.run(
-                ['bash', '-c', 'source "$1" && echo "$JANGADA_LOCAL_CTX $JANGADA_CONVERSA_CTX"', '_', str(RAIZ/'bin/jangada-config')],
+                ['bash', '-c', 'source "$1" && echo "$JANGADA_LOCAL_CTX $JANGADA_CONVERSA_CTX"', '_', str(RAIZ/'bin/jangada-shell-config')],
                 env=ambiente, capture_output=True, text=True, check=True).stdout.strip()
 
     def test_sem_valor_proprio_segue_a_delegacao(self):

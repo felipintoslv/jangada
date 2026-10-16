@@ -1,0 +1,196 @@
+#!/usr/bin/env bash
+# Carrega as preferências do Shell do jangada. Uso em outros scripts:
+#   source "$(dirname "$0")/jangada-shell-config"
+# Executado diretamente, mostra os valores efetivos.
+# Os comandos do Core têm configuração própria (jangada-config, do Core); os
+# dois leem o mesmo arquivo do usuário, $JANGADA_CONFIG/jangada.conf.
+
+JANGADA_PATH="${JANGADA_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+JANGADA_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/jangada"
+JANGADA_ESTADO="${XDG_STATE_HOME:-$HOME/.local/state}/jangada"
+# Pasta dos arquivos de estado das sessões de agente (do Core), lida pela
+# Central de Tarefas. Sempre derivada do JANGADA_ESTADO.
+JANGADA_SESSOES="$JANGADA_ESTADO/agentes"
+
+# Valores padrão, substituídos pelo arquivo do usuário se ele existir.
+JANGADA_INTERFACE=componentes
+JANGADA_VIDRO=1
+JANGADA_VIDRO_ALPHA=0.88
+JANGADA_TERMINAL=
+JANGADA_PROJETOS="$HOME/Projetos"
+JANGADA_WORKTREES="$HOME/.local/share/jangada-worktrees"
+JANGADA_PAPEL=
+# Como o papel de parede ocupa uma tela de proporção diferente da imagem:
+# espelho (completa as laterais com o reflexo da borda), desfoque (com a
+# própria imagem ampliada e desfocada), cor (com a cor de fundo do tema) ou
+# cobrir (amplia até cobrir a tela e corta o que sobra).
+JANGADA_PAPEL_AJUSTE=espelho
+# Esquema do matugen usado pelo jangada-tema. O fidelity mantém a cor da
+# imagem; o tonal-spot, padrão do matugen, satura as cores de imagens quase
+# monocromáticas até virarem outra cor.
+JANGADA_TEMA_ESQUEMA=scheme-fidelity
+# Borda em que a barra fica: topo, base, esquerda ou direita. Gravado pelo
+# jangada-barra --posicao.
+JANGADA_BARRA_POSICAO=topo
+# Dispositivo DRM que conduz a sessão. Vazio = detectar pela saída conectada.
+JANGADA_GPU=
+# Cópia de trabalho do jangada (onde se edita e faz commit), usada pelo
+# jangada-verificar --agente. Vazio = $JANGADA_PROJETOS/jangada, se existir,
+# ou o origin da cópia instalada, se for uma pasta local.
+JANGADA_REPO=
+# Ramo que o jangada-sistema-update acompanha na cópia instalada: main (tudo o que
+# entrou) ou estavel (só o que foi marcado como testado).
+JANGADA_CANAL=main
+# Delegação local da Conversa de Pescador.
+JANGADA_LOCAL_MODELO="${JANGADA_LOCAL_MODELO:-qwen3:4b}"
+JANGADA_LOCAL_CTX="${JANGADA_LOCAL_CTX:-8192}"
+JANGADA_LOCAL_VRAM_MIN="${JANGADA_LOCAL_VRAM_MIN:-4000}"
+JANGADA_OLLAMA_URL="${JANGADA_OLLAMA_URL:-http://localhost:11434}"
+
+if [[ -f "$JANGADA_CONFIG/jangada.conf" ]]; then
+  # Lê só linhas CHAVE=valor com chaves JANGADA_*, sem executar o arquivo.
+  while IFS='=' read -r _chave _valor; do
+    [[ "$_chave" =~ ^JANGADA_[A-Z_]+$ ]] || continue
+    _valor="${_valor/#\$HOME/$HOME}"
+    _valor="${_valor/#\~/$HOME}"
+    printf -v "$_chave" '%s' "$_valor"
+  done < <(sed -e 's/^[[:space:]]*#.*//' -e 's/[[:space:]]*$//' "$JANGADA_CONFIG/jangada.conf")
+  unset _chave _valor
+fi
+# Contexto da Conversa de Pescador; sem valor próprio, segue o da delegação.
+# Fica depois do arquivo, de onde o JANGADA_LOCAL_CTX pode vir.
+JANGADA_CONVERSA_CTX="${JANGADA_CONVERSA_CTX:-$JANGADA_LOCAL_CTX}"
+if [[ -z "$JANGADA_REPO" && -d "$JANGADA_PROJETOS/jangada/.git" ]]; then
+  JANGADA_REPO="$JANGADA_PROJETOS/jangada"
+fi
+# Máquina com os projetos em outra pasta: a cópia instalada foi clonada da de
+# trabalho, então o origin dela, quando é uma pasta local, é a cópia de trabalho.
+if [[ -z "$JANGADA_REPO" && -f "$JANGADA_PATH/.git/config" ]]; then
+  _origem="$(git config -f "$JANGADA_PATH/.git/config" remote.origin.url 2>/dev/null || true)"
+  [[ "$_origem" == /* && -d "$_origem/.git" ]] && JANGADA_REPO="$_origem"
+  unset _origem
+fi
+
+export JANGADA_VIDRO JANGADA_VIDRO_ALPHA
+export JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_SESSOES JANGADA_INTERFACE JANGADA_TERMINAL \
+  JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL \
+  JANGADA_PAPEL_AJUSTE JANGADA_TEMA_ESQUEMA JANGADA_BARRA_POSICAO JANGADA_GPU \
+  JANGADA_REPO JANGADA_CANAL JANGADA_LOCAL_MODELO JANGADA_LOCAL_CTX JANGADA_LOCAL_VRAM_MIN \
+  JANGADA_OLLAMA_URL JANGADA_CONVERSA_CTX
+
+# Dispositivos DRM com saída de vídeo conectada, um por linha, em caminho
+# estável (/dev/dri/by-path, porque a numeração de /dev/dri/cardN muda entre
+# partidas). Numa máquina com duas GPUs, o aquamarine pode escolher a que não
+# tem monitor ligado; a sessão sobe sem imagem e sem terminal para consertar.
+gpu_das_saidas() {
+  local _st _card _pci _dev
+  local -a _achados=()
+  for _st in /sys/class/drm/card*-*/status; do
+    [[ -r "$_st" ]] || continue
+    [[ "$(<"$_st")" == connected ]] || continue
+    _card="${_st#/sys/class/drm/}"; _card="${_card%%-*}"
+    _pci="$(readlink -f "/sys/class/drm/$_card/device" 2>/dev/null)" || continue
+    _pci="${_pci##*/}"
+    _dev="/dev/dri/by-path/pci-$_pci-card"
+    [[ -e "$_dev" ]] || continue
+    [[ " ${_achados[*]:-} " == *" $_dev "* ]] || _achados+=("$_dev")
+  done
+  ((${#_achados[@]})) || return 1
+  printf '%s\n' "${_achados[@]}"
+}
+
+# Valor de AQ_DRM_DEVICES para os dispositivos recebidos. O aquamarine separa
+# essa lista por ":", e o nome em /dev/dri/by-path traz ":" no endereço PCI:
+# entregue como está, um caminho vira três caminhos inválidos, o aquamarine não
+# encontra GPU nenhuma e o Hyprland aborta antes de abrir a tela. Por isso cada
+# dispositivo é resolvido para o /dev/dri/cardN correspondente, que não tem ":".
+gpu_para_aquamarine() {
+  local _dev _real
+  local -a _reais=()
+  for _dev in "$@"; do
+    [[ -n "$_dev" ]] || continue
+    _real="$(readlink -f "$_dev" 2>/dev/null)" || continue
+    [[ -e "$_real" ]] || continue
+    [[ "$_real" == *:* ]] && continue
+    [[ " ${_reais[*]:-} " == *" $_real "* ]] || _reais+=("$_real")
+  done
+  ((${#_reais[@]})) || return 1
+  local IFS=:
+  printf '%s\n' "${_reais[*]}"
+}
+
+# Driver do kernel em uso por um dispositivo DRM, dado em /dev/dri/by-path ou
+# já resolvido em /dev/dri/cardN.
+driver_da_gpu() {
+  local _real _drv
+  _real="$(readlink -f "${1:-}" 2>/dev/null)" || return 1
+  [[ -e "$_real" ]] || return 1
+  _drv="$(readlink -f "/sys/class/drm/${_real##*/}/device/driver" 2>/dev/null)" || return 1
+  printf '%s\n' "${_drv##*/}"
+}
+
+# Abre o fuzzel no modo dmenu com o tema do jangada, repassando os argumentos
+# recebidos. O "--config" só entra quando o arquivo existe. Cobrir a ausência
+# dele com "fuzzel --config ... || fuzzel" reabre o menu quando o usuário
+# cancela, porque o fuzzel sai com 1 nos dois casos: erro de configuração e
+# nenhuma seleção. Quem chama continua distinguindo cancelamento pelo código
+# de saída 1.
+jangada_fuzzel() {
+  local _cfg="$JANGADA_CONFIG/fuzzel/fuzzel.ini"
+  if [[ -r "$_cfg" ]]; then
+    fuzzel --dmenu --config "$_cfg" "$@"
+  else
+    fuzzel --dmenu "$@"
+  fi
+}
+
+# git para rodar fora do isolamento sobre pastas que um agente pode gravar:
+# desliga o fsmonitor e os hooks que uma configuração plantada definiria.
+# É defesa a mais: a principal é o jangada-isolar manter somente leitura
+# o que o git lê como configuração (config, commondir, gitdir).
+_jangada_git_blindagem=(core.fsmonitor=false core.hooksPath=/dev/null core.sshCommand=ssh
+  core.pager=cat safe.bareRepository=explicit)
+jangada_git_seguro() {
+  local c args=()
+  for c in "${_jangada_git_blindagem[@]}"; do args+=(-c "$c"); done
+  git "${args[@]}" "$@"
+}
+
+# Notificação do sistema (contrato K3). Só este corpo conhece o notify-send.
+# Sem o programa ou sem serviço de notificação, não faz nada e devolve 0.
+# Com -A, espera o clique e imprime a ação escolhida.
+# Uso: jangada_notificar [-a APLICATIVO] [-u URGÊNCIA] [-A AÇÃO=RÓTULO] TÍTULO MENSAGEM
+jangada_notificar() {
+  local app=jangada opcoes=()
+  while [[ "${1:-}" == -[auA] ]]; do
+    if [[ "$1" == -a ]]; then app="$2"; else opcoes+=("$1" "$2"); fi
+    shift 2
+  done
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send -a "$app" "${opcoes[@]}" "$1" "$2" 2>/dev/null || true
+  fi
+}
+
+# Foca a primeira janela da classe CLASSE e devolve 0; devolve 1 se não houver
+# nenhuma (ou se não houver Hyprland). Serve para "abrir ou focar".
+jangada_focar_classe() {
+  local _end
+  _end="$(hyprctl clients -j 2>/dev/null \
+    | jq -r --arg c "$1" 'first(.[] | select(.class == $c) | .address) // empty' 2>/dev/null)"
+  [[ -n "$_end" ]] || return 1
+  hyprctl dispatch "hl.dsp.focus({ window = \"address:$_end\" })" >/dev/null
+}
+
+# Socket próprio do tmux para as sessões de agentes (do Core), usado só para
+# conferir se há sessões abertas antes de trocar o código instalado.
+# shellcheck disable=SC2034  # usado pelos scripts que carregam este arquivo
+JANGADA_TMUX=(tmux -L jangada)
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  for _v in JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_INTERFACE JANGADA_TERMINAL \
+    JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL \
+    JANGADA_PAPEL_AJUSTE JANGADA_TEMA_ESQUEMA JANGADA_BARRA_POSICAO JANGADA_GPU \
+    JANGADA_REPO JANGADA_CANAL; do
+    printf '%s=%s\n' "$_v" "${!_v}"
+  done
+fi

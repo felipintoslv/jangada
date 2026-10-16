@@ -49,91 +49,11 @@ rm "$alvo"
 bash "$migracao"
 [[ ! -e "$alvo" ]]
 
-printf '#!/bin/sh\nexit 1\n' >"$tmp/bin/tmux"
-chmod +x "$tmp/bin/tmux"
+mkdir -p "$tmp/bin"
 export PATH="$tmp/bin:$PATH"
-jq -n --arg dir "$tmp" --arg agora "$(date -Iseconds)" \
-  '{estado:"trabalhando", agente:"codex", dir:$dir, atualizado:$agora}' \
-  >"$XDG_STATE_HOME/jangada/agentes/interrompida.json"
-cp "$XDG_STATE_HOME/jangada/agentes/interrompida.json" "$tmp/registro"
-bin/jangada-agentes --lista >"$tmp/lista"
-grep -q $'^interrompido\tinterrompida\t' "$tmp/lista"
-cmp "$XDG_STATE_HOME/jangada/agentes/interrompida.json" "$tmp/registro"
-# Fim de turno guardado continua sendo fim de turno, mesmo sem tmux.
-jq '.estado="concluido"' "$tmp/registro" >"$XDG_STATE_HOME/jangada/agentes/turno.json"
-bin/jangada-agentes --lista >"$tmp/lista"
-grep -q $'^concluido\tturno\t' "$tmp/lista"
-
-jq -n '{estado:"concluido", atualizado:"2000-01-01T00:00:00+00:00"}' \
-  >"$XDG_STATE_HOME/jangada/agentes/orfa.json"
-bin/jangada-agentes --limpar-orfaos
-bin/jangada-agentes --lista-atualizada >"$tmp/lista"
-[[ ! -e "$XDG_STATE_HOME/jangada/agentes/orfa.json" ]]
-jq -e '.estado == "interrompido"' "$XDG_STATE_HOME/jangada/agentes/interrompida.json" >/dev/null
-grep -q $'^concluido\tturno\t' "$tmp/lista"
-
-# A barra limpa a órfã antes de consultar e preserva o contador das demais sessões.
-bin/jangada-tarefas --waybar >"$tmp/barra-sem-orfa.json"
-jq -e '.class != "erro" and (.text | startswith("Tarefas 2"))' "$tmp/barra-sem-orfa.json" >/dev/null
-jq -n '{estado:"concluido", atualizado:"2000-01-01T00:00:00+00:00"}' \
-  >"$XDG_STATE_HOME/jangada/agentes/orfa-barra.json"
-bin/jangada-tarefas --waybar >"$tmp/barra-com-orfa.json"
-cmp "$tmp/barra-sem-orfa.json" "$tmp/barra-com-orfa.json"
-[[ ! -e "$XDG_STATE_HOME/jangada/agentes/orfa-barra.json" ]]
-
-# Prévia gráfica sai dos metadados protegidos e informa os commits atuais.
-mkdir -p "$XDG_STATE_HOME/jangada/revisoes" "$tmp/projeto"
-git -C "$tmp/projeto" init -q -b main
-git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm inicio --allow-empty
-git -C "$tmp/projeto" checkout -qb agente/previa
-echo proposta >"$tmp/projeto/proposta.txt"
-git -C "$tmp/projeto" add proposta.txt
-git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm proposta
-jq -n --arg raiz "$tmp/projeto" '{raiz:$raiz, ramo:"agente/previa", base:"main"}' \
-  >"$XDG_STATE_HOME/jangada/revisoes/previa.json"
-bin/jangada-agentes --integracao-json previa >"$tmp/previa.json"
-jq -e '.candidate_sha != .base_sha and (.arquivos | contains("proposta.txt")) and .marca == {}' "$tmp/previa.json" >/dev/null
-# Caminhos longos e contagem exata por arquivo não podem desaparecer na tela.
-nome_longo="$(printf 'caminho%.0s' {1..18}).txt"
-echo linha >"$tmp/projeto/$nome_longo"
-git -C "$tmp/projeto" add "$nome_longo"
-git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm longo
-bin/jangada-agentes --integracao-json previa >"$tmp/previa.json"
-jq -e --arg nome "$nome_longo" '.arquivos | contains("+1 -0 " + $nome)' "$tmp/previa.json" >/dev/null
-b_previa="$(git -C "$tmp/projeto" rev-parse main)"
-c_previa="$(git -C "$tmp/projeto" rev-parse agente/previa)"
-jq -n --arg b "$b_previa" --arg c "$c_previa" \
-  '{base_sha:$b, candidate_sha:$c, reviewer:"codex", local_verified:true, independent:false, limpo:true}' \
-  >"$XDG_STATE_HOME/jangada/revisoes/validacao-previa.aprovado"
-bin/jangada-agentes --integracao-json previa >"$tmp/previa.json"
-jq -e '.marca_atual and (.validacao_local | contains("passou")) and .marca.independent == false and .marca.reviewer == "codex"' "$tmp/previa.json" >/dev/null
-jq '.independent = true' "$XDG_STATE_HOME/jangada/revisoes/validacao-previa.aprovado" >"$tmp/marca"
-mv "$tmp/marca" "$XDG_STATE_HOME/jangada/revisoes/validacao-previa.aprovado"
-bin/jangada-agentes --integracao-json previa >"$tmp/previa.json"
-jq -e '.marca_atual and .marca.independent' "$tmp/previa.json" >/dev/null
-# Candidato diferente mantém os metadados identificados como outra entrega.
-echo depois >>"$tmp/projeto/proposta.txt"
-git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qam depois
-bin/jangada-agentes --integracao-json previa >"$tmp/previa.json"
-jq -e '(.marca_atual | not) and (.validacao_local | contains("outra entrega"))' "$tmp/previa.json" >/dev/null
-# Base diferente também invalida a indicação da prévia.
-git -C "$tmp/projeto" checkout -q main
-echo base >"$tmp/projeto/base.txt"
-git -C "$tmp/projeto" add base.txt
-git -C "$tmp/projeto" -c user.name=t -c user.email=t@t commit -qm base
-jq --arg c "$(git -C "$tmp/projeto" rev-parse agente/previa)" '.candidate_sha = $c' \
-  "$XDG_STATE_HOME/jangada/revisoes/validacao-previa.aprovado" >"$tmp/marca"
-mv "$tmp/marca" "$XDG_STATE_HOME/jangada/revisoes/validacao-previa.aprovado"
-bin/jangada-agentes --integracao-json previa >"$tmp/previa.json"
-jq -e '(.marca_atual | not) and (.validacao_local | contains("outra entrega"))' "$tmp/previa.json" >/dev/null
-# Estado gravável não muda a origem da prévia.
-jq -n '{raiz:"/inexistente", ramo:"agente/outro"}' >"$XDG_STATE_HOME/jangada/agentes/previa.json"
-bin/jangada-agentes --integracao-json previa >"$tmp/previa2.json"
-cmp "$tmp/previa.json" "$tmp/previa2.json"
 
 mkdir -p "$tmp/jangada/bin" "$tmp/jangada/default/tarefas"
-cp bin/jangada-tarefas bin/jangada-config "$tmp/jangada/bin/"
-cp -rL default/provedores "$tmp/jangada/default/"
+cp bin/jangada-tarefas bin/jangada-shell-config "$tmp/jangada/bin/"
 cat >"$tmp/jangada/default/tarefas/central.py" <<'PYTHON'
 import os
 import sys
@@ -143,12 +63,13 @@ if '--waybar' in sys.argv:
 print('\n'.join(sys.argv[1:]))
 print('sessoes=' + os.environ['JANGADA_SESSOES'])
 PYTHON
-cat >"$tmp/jangada/bin/jangada-agentes" <<'SH'
+# O jangada-agentes é do Core: aqui entra um falso no PATH.
+cat >"$tmp/bin/jangada-agentes" <<'SH'
 #!/bin/sh
 printf '%s\n' "$*" >>"$CHAMADAS_AGENTES"
 [ "$#" -eq 1 ] && [ "$1" = --limpar-orfaos ] || exit 99
 SH
-chmod +x "$tmp/jangada/bin/jangada-agentes"
+chmod +x "$tmp/bin/jangada-agentes"
 export CHAMADAS_AGENTES="$tmp/chamadas-agentes"
 echo JANGADA_CENTRAL=agentes >"$XDG_CONFIG_HOME/jangada/jangada.conf"
 for opcao in '' --anterior --nova --waybar; do
@@ -166,35 +87,18 @@ done
 JANGADA_PATH="$tmp/jangada" bin/jangada-tarefas --simular >"$tmp/saida"
 grep -qxF "sessoes=$XDG_STATE_HOME/jangada/agentes" "$tmp/saida"
 ! grep -q -- --estado "$tmp/saida"
+# Sem o jangada-agentes no PATH (Core ausente), a barra segue sem limpar órfãos.
+mv "$tmp/bin/jangada-agentes" "$tmp/jangada-agentes.falso"
+rm -f "$CHAMADAS_AGENTES"
+printf 'import sys\nprint("\\n".join(sys.argv[1:]))\n' >"$tmp/jangada/default/tarefas/central.py"
+JANGADA_PATH="$tmp/jangada" PATH="$tmp/bin:/usr/bin:/bin" bin/jangada-tarefas --waybar >"$tmp/saida"
+grep -qx -- '--waybar' "$tmp/saida"
+[[ ! -e "$CHAMADAS_AGENTES" ]]
 cat >"$tmp/jangada/bin/jangada-tarefas" <<'SH'
 #!/bin/sh
 printf 'central\n%s\n' "$*"
 SH
 chmod +x "$tmp/jangada/bin/jangada-tarefas"
-for opcao in --janela --janela-anterior --painel --painel-anterior; do
-  JANGADA_PATH="$tmp/jangada" bin/jangada-agentes "$opcao" >"$tmp/saida"
-  grep -qx central "$tmp/saida"
-done
-JANGADA_PATH="$tmp/jangada" bin/jangada-agente --janela >"$tmp/saida"
-grep -qx central "$tmp/saida"
-grep -qx -- '--nova' "$tmp/saida"
-cat >"$tmp/jangada/bin/jangada-terminal" <<'SH'
-#!/bin/sh
-printf '%s\n' "$@"
-SH
-chmod +x "$tmp/jangada/bin/jangada-terminal"
-JANGADA_PATH="$tmp/jangada" bin/jangada-agente --janela --projeto "$tmp" >"$tmp/saida"
-grep -qx -- '--projeto' "$tmp/saida"
-! grep -qx central "$tmp/saida"
-mkdir -p "$XDG_CONFIG_HOME/jangada/agentes"
-printf 'COMANDO=codex\nDESCRICAO=Meu perfil local\nJANGADA_VALIDAR_REVISOR=agy\n' >"$XDG_CONFIG_HOME/jangada/agentes/codex-claude.conf"
-printf 'COMANDO=agy\n' >"$XDG_CONFIG_HOME/jangada/agentes/antigo.conf"
-JANGADA_PATH="$repo_jangada" bin/jangada-agente --perfis >"$tmp/perfis.json"
-jq -e '([.[].nome] == ["claude-codex", "codex-claude"]) and any(.[]; .nome == "codex-claude" and .descricao == "Meu perfil local" and .permissoes.revisor == "agy")' "$tmp/perfis.json" >/dev/null
-JANGADA_PATH="$repo_jangada" bin/jangada-agente --capacidades-json >"$tmp/capacidades.json"
-jq -e '([.principais[].nome] == ["claude", "codex"]) and all(.principais[]; .instalado | type == "boolean")
-  and ([.perfis[].nome] == ["claude-codex", "codex-claude"])
-  and all(.principais[], .perfis[]; .nome != "agy")' "$tmp/capacidades.json" >/dev/null
 cat >"$tmp/bin/fuzzel" <<'SH'
 #!/bin/sh
 cat >"$MENU_TESTE"

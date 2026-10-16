@@ -19,8 +19,8 @@ source "$JANGADA_PATH/install/lib.sh"
 # isolamento, então instalar dali faria rodar fora dele o código que o agente
 # muda. A simulação não executa nada e continua liberada, para testar a
 # instalação na cópia de trabalho.
-# shellcheck source=bin/jangada-config
-source "$JANGADA_PATH/bin/jangada-config"
+# shellcheck source=bin/jangada-shell-config
+source "$JANGADA_PATH/bin/jangada-shell-config"
 _aqui="$(cd "$JANGADA_PATH" && pwd -P)"
 _motivo=""
 if [[ -f "$JANGADA_PATH/.git" ]]; then

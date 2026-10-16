@@ -26,11 +26,11 @@ sem_comentario default/waybar/config.jsonc >"$tmp/config.json"
 conferir "caso 1: custom/indicadores logo depois do custom/agentes" \
   jq_ok '.["modules-left"] | index("custom/indicadores") == index("custom/agentes") + 1' "$tmp/config.json"
 conferir "caso 1: exec só lê o cache, JSON, sinal 9 e intervalo longo" \
-  jq_ok '.["custom/indicadores"] | .exec == "$JANGADA_PATH/bin/jangada-painel --waybar"
+  jq_ok '.["custom/indicadores"] | .exec == "jangada-painel --waybar"
     and .["return-type"] == "json" and .signal == 9 and .interval >= 300' "$tmp/config.json"
 conferir "caso 1: clique solto e botão direito encerra" \
-  jq_ok '.["custom/indicadores"] | .["on-click"] == "setsid -f $JANGADA_PATH/bin/jangada-painel"
-    and .["on-click-right"] == "$JANGADA_PATH/bin/jangada-painel --parar"' "$tmp/config.json"
+  jq_ok '.["custom/indicadores"] | .["on-click"] == "setsid -f jangada-painel"
+    and .["on-click-right"] == "jangada-painel --parar"' "$tmp/config.json"
 conferir "caso 1: o sinal 9 é só do custom/indicadores" \
   jq_ok '[to_entries[] | select(.value | objects | .signal == 9) | .key] == ["custom/indicadores"]' "$tmp/config.json"
 conferir "caso 1: nenhum outro comando manda RTMIN+9" \
@@ -205,6 +205,7 @@ for comando in checkupdates paru yay tmux; do
   chmod +x "$tmp/modulos/bin/$comando"
 done
 for modulo in tarefas painel atualizacoes; do
+  [[ -x "bin/jangada-$modulo" ]] || continue
   saida="$tmp/modulos/$modulo.json"
   if PATH="$tmp/modulos/bin:$PATH" XDG_CONFIG_HOME="$tmp/modulos/config" \
     XDG_STATE_HOME="$tmp/modulos/state" XDG_CACHE_HOME="$tmp/modulos/cache" \

@@ -6,6 +6,16 @@ Configuração de Arch Linux com Hyprland em Lua (0.55 ou mais novo),
 com área de trabalho e ferramentas para abrir, acompanhar e revisar
 sessões de agentes de IA. Usa waybar, fuzzel, mako e cores do matugen.
 
+## O que é o Shell
+
+O Shell é a camada de área de trabalho do jangada: sessão Hyprland, barra,
+temas, menus, atalhos, tema de login e a Central de Tarefas (PyQt6). O Core
+(sessões de agentes, isolamento, revisão e delegação) e o Monitor (painel e
+consumo) são repositórios à parte, **instalados separadamente**. O Shell
+chama os comandos deles só pelo nome, via `PATH`, e funciona sem eles, sem os
+dados de sessões. A raiz do Core, quando a Central precisa dela, vem de
+`JANGADA_CORE_PATH`.
+
 ## Princípios
 
 - **Isolamento:** sessão própria; configuração em `~/.config/jangada`,
@@ -14,10 +24,8 @@ sessões de agentes de IA. Usa waybar, fuzzel, mako e cores do matugen.
 - **Cópia antes de alterar:** arquivos existentes recebem cópia de segurança;
   ajustes pessoais são criados somente quando ausentes.
 - **Instalação repetível:** cada etapa pode rodar novamente e respeita a simulação.
-- **Padrões separados dos ajustes:** padrões em `core/`, `shell/` e `monitor/`;
-  preferências pessoais em `~/.config/jangada`.
-- **Revisão independente:** o agente trabalha no isolamento, testa e pede
-  revisão antes de entregar. O usuário controla integração e envio ao remoto.
+- **Padrões separados dos ajustes:** padrões no repositório; preferências
+  pessoais em `~/.config/jangada`.
 
 ## Instalação
 
@@ -44,26 +52,11 @@ use `componentes` quando essa interface antiga não estiver disponível.
 
 | Pasta | Conteúdo |
 |---|---|
-| `core/` | sessões, isolamento, revisão, delegação, fila e provedores |
-| `shell/` | Hyprland, barra, temas, menus e integração com o terminal |
-| `monitor/` | painel, consumo e diagnóstico |
+| `bin/` | comandos do Shell (`jangada-shell-config`, `jangada-sistema-update`, `jangada-shell-migrar`, barra, tema, menus) |
+| `hyprland/`, `waybar/`, `temas/`, `menus/`, `integracoes/` | configuração e interface |
 | `install/`, `config/`, `migrations/` | instalação, modelos pessoais e migrações |
-| `bin/`, `default/` | entradas compartilhadas e links de compatibilidade |
-| `docs/` | guias por assunto e sínteses históricas |
-| `testes/` | verificação estática, testes e sessão Hyprland aninhada |
-| `revisao/`, `estudos/`, `benchmarking/` | auditorias, comparações e referências |
-
-### Compatibilidade até v0.4.0
-
-Os 73 links em `bin/` e `default/` permanecem nesta versão.
-Sua remoção está prevista para **v0.4.0**, também registrada no
-[CHANGELOG](CHANGELOG.md#planejado-para-v040).
-Quem chama `bin/jangada-*` deverá usar o comando pelo PATH instalado ou
-seu caminho em `core/bin/`, `shell/bin/` ou `monitor/bin/`.
-Referências a `default/` deverão apontar ao arquivo no módulo correspondente;
-consulte o [inventário de caminhos](docs/modularizacao-3.0/01-inventario.md).
-Hoje, chamadas diretas aos módulos ainda não encontram `jangada-config`;
-a retirada depende de adaptar essa resolução. Continue usando `bin/` até lá.
+| `docs/` | guias por assunto |
+| `testes/` | verificação estática e testes (`testes/verificar.sh`) |
 
 ## Documentação
 
@@ -87,18 +80,7 @@ Antes de alterar arquivos, leia o guia do assunto da tarefa e as regras do
 | Código, testes, textos e commits | [Boas práticas](docs/boas-praticas.md) |
 | Transparência e desfoque | [Vidro fosco](docs/vidro-fosco.md) |
 | Teclado da bandeja e escalas | [Teclado na Waybar](docs/teclado-waybar.md) |
-| Estado P0, limites P1 e evidências arquivadas | [Estabilização](docs/estabilizacao/README.md) |
 | Divisão em módulos e contratos | [Modularização 3.0](docs/modularizacao-3.0/README.md) |
 | Coordenação e consultas entre módulos | [Coordenação central](docs/coordenacao-central/README.md) |
-| Evolução da interface | [Evolução 2.0](docs/evolucao-2.0/00-indice.md) |
-| Proposta de diagnóstico, ainda sem implementação | [Inspector](docs/inspector/README.md) |
 | Análise do painel em 30/09/2026 | [Análise](docs/analise-painel-20260930.md) |
 | Proposta do painel, com implementação parcial | [Proposta](docs/proposta-atualizacao-painel.md) |
-
-A correção P0 foi incorporada em `19f5569`; a validação P1 permanece
-inconclusiva. O uso diário desde 19/09/2026 não comprova o ciclo completo
-com modelos reais nem a portabilidade para uma segunda máquina.
-Relatórios de ensaios descrevem a versão e o ambiente avaliados.
-Logs, dados de validação e roteiros históricos estão no ramo
-`arquivo/evidencias`, commit `7a9d1e5`; veja os índices de
-[estabilização](docs/estabilizacao/README.md) e [revisões](revisao/README.md).

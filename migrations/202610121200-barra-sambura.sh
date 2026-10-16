@@ -7,7 +7,9 @@ alvo="$JANGADA_CONFIG/waybar/config.jsonc"
 [[ -f "$alvo" ]] || { ok "sem cópia própria da barra; nada a migrar"; exit 0; }
 novo="$(mktemp)"
 trap 'rm -f "$novo"' EXIT
-python3 - "$alvo" "$novo" "$(dirname "${BASH_SOURCE[0]}")/../shell/waybar/config.jsonc" <<'PY'
+origem="$(dirname "${BASH_SOURCE[0]}")/../waybar/config.jsonc"
+[[ -f "$origem" ]] || origem="$(dirname "${BASH_SOURCE[0]}")/../shell/waybar/config.jsonc"
+python3 - "$alvo" "$novo" "$origem" <<'PY'
 import json
 from pathlib import Path
 import re

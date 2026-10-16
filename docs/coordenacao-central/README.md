@@ -81,3 +81,5 @@ D4/D8 só habilitam expansões após avaliação e decisão separadas.
 O resultado datado da suíte está no [05](05-plano-incremental.md).
 Inspector, acessórios da Waybar, memória automaticamente compartilhada, hierarquias complexas e autonomia irrestrita continuam fora da proposta.
 A reorganização visual não cria capacidade privilegiada, e aprovação documental não autoriza implementação ou integração.
+
+A evolução do mockup da Central (conceito, v1 e v2) está em [mockup-central](mockup-central/README.md).

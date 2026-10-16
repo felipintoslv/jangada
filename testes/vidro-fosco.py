@@ -24,8 +24,9 @@ with tempfile.TemporaryDirectory() as pasta:
         p.write_text(texto)
         return p
 
-    modelos = repo / 'shell/temas/matugen/modelos'
-    estilo = (repo / 'shell/waybar/style.css.modelo').read_text().replace('@JANGADA_PATH@', str(repo))
+    modelos = repo / 'temas/matugen/modelos' if (repo / 'temas/matugen/modelos').exists() else repo / 'shell/temas/matugen/modelos'
+    pasta_waybar = repo / 'waybar' if (repo / 'waybar').exists() else repo / 'shell/waybar'
+    estilo = (pasta_waybar / 'style.css.modelo').read_text().replace('@JANGADA_PATH@', str(repo))
     barra = gravar('waybar/style.css', estilo)
     antigos = {}
     for rel, nome in [('fuzzel/fuzzel.ini', 'fuzzel.ini'), ('mako/config', 'mako')]:
@@ -111,7 +112,7 @@ else:
         tmp = Path(pasta)
         cfg = tmp / 'matugen.toml'
         cfg.write_text('[config]\nversion_check = false\n' + ''.join(
-            f'\n[templates.{nome}]\ninput_path = "{repo}/shell/temas/matugen/modelos/{modelo}"\n'
+            f'\n[templates.{nome}]\ninput_path = "{modelos}/{modelo}"\n'
             f'output_path = "{tmp}/{nome}"\n'
             for nome, modelo in [('waybar', 'waybar.css'), ('fuzzel', 'fuzzel.ini'), ('mako', 'mako')]))
         for cor in ('#4f8fba', '#fff4d5'):

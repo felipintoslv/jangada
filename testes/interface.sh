@@ -10,8 +10,8 @@ trap limpar EXIT
 mkdir -p "$tmp/bin" "$tmp/config/jangada"
 export XDG_CONFIG_HOME="$tmp/config" XDG_STATE_HOME="$tmp/state" JANGADA_PATH="$repo"
 export HYPRLAND_INSTANCE_SIGNATURE=teste-interface WAYLAND_DISPLAY=wayland-teste
-# shellcheck source=bin/jangada-config
-source bin/jangada-config
+# shellcheck source=bin/jangada-shell-config
+source bin/jangada-shell-config
 # shellcheck source=bin/jangada-interface-processos
 source bin/jangada-interface-processos
 cat >"$tmp/processo.py" <<'PY'

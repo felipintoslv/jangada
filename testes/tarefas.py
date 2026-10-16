@@ -2,7 +2,7 @@
 import os
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'default/tarefas'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'menus/tarefas'))
 os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 os.environ['JANGADA_PATH'] = str(Path(__file__).resolve().parents[1])
 try:
@@ -24,6 +24,7 @@ from PyQt6.QtNetwork import QLocalServer
 from PyQt6.QtGui import QTextDocument, QKeySequence
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QLabel, QPushButton
+import dados
 import janela
 from janela import Janela
 import central
@@ -72,7 +73,7 @@ class Interface(unittest.TestCase):
         os.environ['XDG_RUNTIME_DIR'] = str(self.raiz)
         self.estado = self.raiz / 'estado'
         self.estado.mkdir()
-        ambiente = patch.dict(os.environ, JANGADA_SESSOES=str(self.estado))
+        ambiente = patch.dict(os.environ, JANGADA_SESSOES=str(self.estado), JANGADA_CORE_PATH=str(self.raiz))
         ambiente.start()
         self.addCleanup(ambiente.stop)
         self.bin = self.raiz / 'bin'
@@ -1299,6 +1300,93 @@ class Interface(unittest.TestCase):
                 processo.wait(timeout=4)
 
 
+class RaizDoCore(unittest.TestCase):
+    """Comandos do Core: raiz do ambiente, depois a do jangada-config do Core, depois o PATH."""
+
+    def setUp(self):
+        self.pasta = tempfile.TemporaryDirectory()
+        self.addCleanup(self.pasta.cleanup)
+        self.base = Path(self.pasta.name)
+        dados._raiz_core_da_configuracao.cache_clear()
+        self.addCleanup(dados._raiz_core_da_configuracao.cache_clear)
+
+    def ambiente(self, **variaveis):
+        anterior = {k: v for k, v in os.environ.items() if k not in ('JANGADA_CORE_PATH', 'PATH')}
+        anterior.update(variaveis)
+        return patch.dict(os.environ, anterior, clear=True)
+
+    def falso_config(self, raiz):
+        pasta = self.base / 'path'
+        pasta.mkdir()
+        comando = pasta / 'jangada-config'
+        comando.write_text(f'#!/bin/sh\necho JANGADA_PATH=/x\necho JANGADA_CORE_PATH={raiz}\n')
+        comando.chmod(0o755)
+        return str(pasta)
+
+    def test_ambiente_tem_precedencia(self):
+        with self.ambiente(JANGADA_CORE_PATH=str(self.base / 'core'), PATH=self.falso_config('/outra')):
+            self.assertEqual(dados.raiz_core(), self.base / 'core')
+            programa, extra = dados.resolver_comando('jangada-agentes', self.base / 'shell')
+        self.assertEqual(programa, str(self.base / 'core/bin/jangada-agentes'))
+        self.assertEqual(extra, {'JANGADA_CORE_PATH': str(self.base / 'core')})
+
+    def test_ambiente_vazio_usa_o_jangada_config_do_core(self):
+        with self.ambiente(JANGADA_CORE_PATH='', PATH=self.falso_config('/raiz/do/core')):
+            self.assertEqual(dados.raiz_core(), Path('/raiz/do/core'))
+
+    def test_sem_raiz_vai_pelo_nome_e_sem_variavel(self):
+        with self.ambiente(PATH='/nao/existe'):
+            self.assertIsNone(dados.raiz_core())
+            self.assertEqual(dados.resolver_comando('jangada-agentes', self.base), ('jangada-agentes', {}))
+
+    def test_comando_do_shell_sai_da_raiz_do_shell(self):
+        with self.ambiente(PATH='/nao/existe'):
+            programa, extra = dados.resolver_comando('jangada-terminal', self.base / 'shell')
+        self.assertEqual(programa, str(self.base / 'shell/bin/jangada-terminal'))
+        self.assertEqual(extra, {'JANGADA_PATH': str(self.base / 'shell')})
+
+    def test_comando_de_fora_vai_pelo_nome_mesmo_com_raiz_do_core(self):
+        with self.ambiente(JANGADA_CORE_PATH=str(self.base / 'core'), PATH='/nao/existe'):
+            programa, extra = dados.resolver_comando('jangada-painel', self.base / 'shell')
+        self.assertEqual(programa, 'jangada-painel')
+        self.assertEqual(extra, {'JANGADA_CORE_PATH': str(self.base / 'core')})
+
+    def test_comando_disponivel_depende_do_path(self):
+        cache = Path.home() / '.cache'
+        cache.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=cache) as temporaria:
+            pasta = Path(temporaria)
+            with self.ambiente(PATH=str(pasta)):
+                self.assertFalse(dados.comando_disponivel('jangada-painel', self.base))
+                falso = pasta / 'jangada-painel'
+                falso.write_text('#!/bin/sh\n')
+                falso.chmod(0o755)
+                self.assertTrue(dados.comando_disponivel('jangada-painel', self.base))
+            with self.ambiente(JANGADA_CORE_PATH=str(pasta)):
+                (pasta / 'bin').mkdir()
+                self.assertFalse(dados.comando_disponivel('jangada-agentes', self.base))
+                (pasta / 'bin/jangada-agentes').write_text('#!/bin/sh\n')
+                self.assertFalse(dados.comando_disponivel('jangada-agentes', self.base))
+                (pasta / 'bin/jangada-agentes').chmod(0o755)
+                self.assertTrue(dados.comando_disponivel('jangada-agentes', self.base))
+
+    def test_botao_do_painel_some_sem_o_comando_so_em_modo_real(self):
+        estado = self.base / 'estado'
+        estado.mkdir()
+        def rotulos(real, disponivel):
+            with patch.object(janela, 'comando_disponivel', return_value=disponivel):
+                aberta = Janela(real, self.base, estado)
+            aberta.timer.stop()
+            try:
+                return {b.text() for b in aberta.findChildren(QPushButton)}
+            finally:
+                aberta.close()
+        self.assertNotIn('Painel de indicadores', rotulos(True, False))
+        self.assertIn('Conversa de Pescador', rotulos(True, False))
+        self.assertIn('Painel de indicadores', rotulos(True, True))
+        self.assertIn('Painel de indicadores', rotulos(False, False))
+
+
 class Links(unittest.TestCase):
 
     def test_visual_e_logo_com_pastas_acessadas_por_link(self):
@@ -1313,7 +1401,7 @@ from PyQt6.QtWidgets import QApplication, QLabel
 app = QApplication([])
 import janela
 import visual
-assert Path(janela.__file__).parent == raiz / 'shell/menus/tarefas', janela.__file__
+assert Path(janela.__file__).parent in (raiz / 'menus/tarefas', raiz / 'shell/menus/tarefas'), janela.__file__
 assert Path(visual.__file__).parent == raiz / 'default/visual', visual.__file__
 central = janela.Janela(False, raiz, raiz / 'estado')
 central.timer.stop()
@@ -1322,16 +1410,16 @@ assert any(rotulo.accessibleName() == 'Jangada' and not rotulo.pixmap().isNull()
 """
         with tempfile.TemporaryDirectory() as pasta:
             raiz = Path(pasta).resolve() / 'jangada'
-            shutil.copytree(repo / 'default/tarefas', raiz / 'shell/menus/tarefas',
+            pasta_tarefas = raiz / 'menus/tarefas'
+            pasta_logo = raiz / 'temas/logo'
+            shutil.copytree(repo / 'menus/tarefas', pasta_tarefas,
                             ignore=shutil.ignore_patterns('__pycache__'))
-            shutil.copytree(repo / 'default/logo', raiz / 'shell/temas/logo')
+            shutil.copytree(repo / 'default/logo', pasta_logo)
             shutil.copytree(repo / 'default/visual', raiz / 'default/visual',
                             ignore=shutil.ignore_patterns('__pycache__'))
-            shutil.copytree(repo / 'default/nucleo', raiz / 'core/nucleo',
-                            ignore=shutil.ignore_patterns('__pycache__'))
-            (raiz / 'default/nucleo').symlink_to('../core/nucleo')
-            (raiz / 'default/tarefas').symlink_to('../shell/menus/tarefas')
-            (raiz / 'default/logo').symlink_to('../shell/temas/logo')
+            (raiz / 'default').mkdir(parents=True, exist_ok=True)
+            (raiz / 'default/tarefas').symlink_to('../menus/tarefas')
+            (raiz / 'default/logo').symlink_to('../temas/logo')
             resultado = subprocess.run(
                 [sys.executable, '-c', codigo, str(raiz)], capture_output=True, text=True, timeout=30,
                 env=dict(os.environ, JANGADA_PATH=str(raiz), XDG_RUNTIME_DIR=pasta))

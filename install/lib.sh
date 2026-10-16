@@ -75,7 +75,7 @@ copia_seguranca() {
 # Troca o conteúdo de DESTINO pelo de ORIGEM com rename: uma interrupção deixa
 # o arquivo antigo inteiro, nunca truncado. Segue link simbólico e mantém as
 # permissões; sem poder renomear, regrava no lugar. Igual a
-# jangada_gravar_atomico (bin/jangada-config), que esta lib não carrega.
+# jangada_gravar_atomico, que esta lib não carrega.
 gravar_atomico() {
   local origem="$1" destino novo
   destino="$(realpath "$2" 2>/dev/null)" || destino="$2"

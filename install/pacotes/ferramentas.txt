@@ -1,4 +1,4 @@
-# Ferramentas de terminal (também aproveitadas pelos agentes).
+# Ferramentas de terminal.
 ripgrep
 fd
 bat
@@ -11,6 +11,3 @@ fastfetch
 tmux
 mise
 shellcheck
-gitleaks
-bubblewrap
-xdg-dbus-proxy

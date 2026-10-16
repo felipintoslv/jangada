@@ -53,13 +53,13 @@ awk '
     printf "%s// Painel de indicadores (jangada-painel). O exec só lê o cache; o clique\n", m
     printf "%s// roda solto (setsid -f) para não prender a barra enquanto o app R sobe.\n", m
     printf "%s\"custom/indicadores\": {\n", m
-    printf "%s  \"exec\": \"$JANGADA_PATH/bin/jangada-painel --waybar\",\n", m
+    printf "%s  \"exec\": \"jangada-painel --waybar\",\n", m
     printf "%s  \"return-type\": \"json\",\n", m
     printf "%s  \"interval\": 300,\n", m
     printf "%s  \"signal\": 9,\n", m
     printf "%s  \"format\": \"{}\",\n", m
-    printf "%s  \"on-click\": \"setsid -f $JANGADA_PATH/bin/jangada-painel\",\n", m
-    printf "%s  \"on-click-right\": \"$JANGADA_PATH/bin/jangada-painel --parar\",\n", m
+    printf "%s  \"on-click\": \"setsid -f jangada-painel\",\n", m
+    printf "%s  \"on-click-right\": \"jangada-painel --parar\",\n", m
     printf "%s  \"tooltip\": true\n", m
     printf "%s},\n\n", m
   }

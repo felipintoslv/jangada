@@ -42,7 +42,7 @@ preparar() {
 reverter_em() {
   local sh="$1" wt="$2" resposta="$3"
   (cd "$wt" && printf '%s\n' "$resposta" |
-    "$sh" -c '. "$1/shell/jangada-shell.sh"; reverter' _ "$repo_jangada" 2>&1)
+    "$sh" -c '. "$1/jangada-shell.sh"; reverter' _ "$repo_jangada" 2>&1)
 }
 
 # Abre o console no shell dado, com a cópia do jangada em $2, e pede a ajuda.
@@ -61,8 +61,8 @@ export -f cores_no_terminal
 export repo_jangada
 
 # Cópia do jangada sem o arquivo da logo.
-mkdir -p "$tmp/semlogo/shell"
-ln -s "$repo_jangada/shell/jangada-shell.sh" "$tmp/semlogo/shell/jangada-shell.sh"
+mkdir -p "$tmp/semlogo"
+ln -s "$repo_jangada/jangada-shell.sh" "$tmp/semlogo/jangada-shell.sh"
 
 for sh in bash zsh; do
   if ! command -v "$sh" >/dev/null 2>&1; then

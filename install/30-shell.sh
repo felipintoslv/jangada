@@ -8,7 +8,7 @@ _fim="# <<< jangada <<<"
 # descobri-lo antes de carregar o arquivo.
 _bloco="$_marca
 export JANGADA_PATH=\"$JANGADA_PATH\"
-[ -f \"\$JANGADA_PATH/shell/jangada.sh\" ] && . \"\$JANGADA_PATH/shell/jangada.sh\"
+[ -f \"\$JANGADA_PATH/jangada.sh\" ] && . \"\$JANGADA_PATH/jangada.sh\"
 $_fim"
 
 for _rc in "$HOME/.bashrc" "$HOME/.zshrc"; do

@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.imagem }}
-      # O bwrap precisa criar namespaces, e o Docker barra isso por padrão.
+      # O bwrap do teste de atualização precisa criar namespaces, e o Docker barra isso por padrão.
       options: --privileged
     steps:
       - name: Repositórios da data fixa
@@ -42,7 +42,7 @@ jobs:
 
       # R e lintr ficam no job sandbox-e2e: compilar o lintr leva minutos.
       - name: Dependências
-        run: pacman -Syu --noconfirm --needed git sudo shellcheck lua jq python python-pyqt6 qt6-svg qt6-declarative gitleaks bubblewrap diffutils openssh xdg-dbus-proxy dbus python-dbus python-gobject zsh poppler python-pyarrow
+        run: pacman -Syu --noconfirm --needed git sudo shellcheck lua jq python python-pyqt6 qt6-svg qt6-declarative bubblewrap diffutils openssh dbus python-dbus python-gobject zsh
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -52,7 +52,7 @@ jobs:
           useradd -m testes
           chown -R testes:testes "$GITHUB_WORKSPACE"
           runuser -u testes -- env GIT_CONFIG_GLOBAL=/tmp/jangada-ci-gitconfig JANGADA_TESTES_EXIGIR_ISOLAMENTO=1 \
-            JANGADA_TESTES_EXIGIR="bwrap sem-rede shellcheck jq gitleaks zsh pdftotext pyarrow" sh -ec '
+            JANGADA_TESTES_EXIGIR="bwrap shellcheck jq zsh" sh -ec '
             git config --global user.name ci
             git config --global user.email ci@localhost
             testes/verificar.sh
@@ -76,44 +76,3 @@ jobs:
             echo "a simulação escreveu em $sobras"
             exit 1
           fi
-
-  # O isolamento de verdade com o que o job acima deixa de fora: R e lintr.
-  # Sem eles, o .lintr malicioso e o lintr dentro do bwrap ficam sem teste.
-  sandbox-e2e:
-    runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
-      options: --privileged
-    steps:
-      # O runner Ubuntu barra pelo AppArmor o namespace de usuário sem
-      # privilégio, e o bwrap do usuário de teste precisa dele.
-      - name: Namespaces de usuário
-        run: |
-          f=/proc/sys/kernel/apparmor_restrict_unprivileged_userns
-          [ ! -e "$f" ] || echo 0 >"$f"
-
-      - name: Dependências
-        run: pacman -Syu --noconfirm --needed git sudo jq python gitleaks bubblewrap diffutils openssh xdg-dbus-proxy dbus python-dbus python-gobject zsh poppler r gcc make gcc-fortran libxml2 pkgconf
-
-      - name: lintr
-        # O xml2 precisa do pkg-config para localizar os cabeçalhos do libxml2.
-        # install.packages pode apenas avisar da falha e terminar com código 0.
-        run: |
-          pkg-config --cflags --libs libxml-2.0
-          Rscript -e 'install.packages("lintr", repos = "https://cloud.r-project.org", Ncpus = 4); library(lintr)'
-
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - name: Testes do isolamento e da validação
-        run: |
-          useradd -m testes
-          chown -R testes:testes "$GITHUB_WORKSPACE"
-          runuser -u testes -- env GIT_CONFIG_GLOBAL=/tmp/jangada-ci-gitconfig JANGADA_TESTES_EXIGIR_ISOLAMENTO=1 \
-            JANGADA_TESTES_EXIGIR="bwrap sem-rede jq gitleaks zsh R lintr" sh -ec '
-            git config --global user.name ci
-            git config --global user.email ci@localhost
-            testes/capacidades.sh
-            testes/isolar.sh
-            testes/validar.sh
-            testes/fim.sh
-          '

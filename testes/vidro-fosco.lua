@@ -24,7 +24,10 @@ local function iniciar(desligado)
     curve = function() end, animation = function() end,
   }
   package.loaded['default.hypr.vidro'] = nil
-  dofile(raiz .. '/shell/hyprland/aparencia.lua')
+  local caminho_aparencia = raiz .. '/hyprland/aparencia.lua'
+  local f = io.open(caminho_aparencia, 'r')
+  if f then f:close() else caminho_aparencia = raiz .. '/shell/hyprland/aparencia.lua' end
+  dofile(caminho_aparencia)
 end
 local function blur() return configs['decoration.blur.enabled'] end
 local function janela(endereco, classe, tela)

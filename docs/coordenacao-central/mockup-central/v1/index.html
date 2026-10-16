@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="pt-BR" data-mode="dark" data-palette="cordel">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; font-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Jangada · Central de Trabalho · Prévia</title>
+<style>
+:root{color-scheme:dark;--superficie:#141311;--superficie_elevada:#211f1d;--texto:#e6e2de;--texto_suave:#c1c7ce;--primaria:#e6d9be;--texto_primario:#37301d;--atencao:#dbd8e9;--linha:color-mix(in srgb,var(--texto) 18%,transparent)}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--superficie);color:var(--texto);font:14px/1.55 Inter,"Noto Sans",system-ui,sans-serif}
+button,input,select{font:inherit}
+button,select{cursor:pointer}
+button,a,input,select{touch-action:manipulation}
+button{border:1px solid var(--linha);border-radius:8px;background:transparent;color:var(--texto);padding:8px 12px;min-height:40px;text-align:left}
+button:hover{background:var(--superficie_elevada);border-color:var(--texto_suave)}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--primaria);outline-offset:4px}
+button.primary{background:var(--primaria);color:var(--texto_primario);border-color:var(--primaria);font-weight:600}
+button.primary:hover{opacity:.9}
+button[aria-pressed="true"]{color:var(--primaria);border-color:var(--primaria)}
+h1,h2,h3,p{margin:0}
+h1{font-size:28px;line-height:1.25;font-weight:600;letter-spacing:-.6px}
+h2{font-size:20px;line-height:1.4;font-weight:600}
+h3{font-size:16px;font-weight:600}
+.muted{color:var(--texto_suave)}
+.eyebrow{font-size:13px;letter-spacing:1px;text-transform:uppercase;font-weight:600}
+.mono,code{font:13px/1.6 "JetBrains Mono",monospace;overflow-wrap:anywhere}
+.skip{position:fixed;top:-100px;left:8px;z-index:5;padding:12px;background:var(--primaria);color:var(--texto_primario)}
+.skip:focus{top:8px}
+.app{display:grid;grid-template-columns:224px minmax(0,1fr);min-height:100vh}
+.sidebar{padding:32px 20px;border-right:1px solid var(--linha);display:flex;flex-direction:column;gap:40px}
+.brand{display:flex;align-items:center;gap:12px;font-size:24px;font-weight:600}
+.brand img,.brand svg{width:48px;height:48px;flex:none}
+.brand svg{display:none;color:var(--primaria)}
+html[data-mode="light"] .brand img{display:none}
+html[data-mode="light"] .brand svg{display:block}
+.sidebar .eyebrow{margin-bottom:12px}
+.projects{display:grid;gap:8px}
+.projects button{width:100%;border-color:transparent;padding:12px}
+.projects button[aria-pressed="true"]{background:var(--superficie_elevada);border-color:var(--linha);border-left:3px solid var(--primaria);padding-left:10px}
+.sidebar-note{margin-top:auto;font-size:13px;color:var(--texto_suave);border-top:1px solid var(--linha);padding-top:20px}
+.sidebar-note p+p{margin-top:8px}
+.main{padding:32px;max-width:1536px;width:100%;margin:auto;align-self:start;min-width:0}
+.topline{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
+.appearance{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.appearance select{max-width:180px}
+.field{display:grid;gap:4px;font-size:13px;color:var(--texto_suave)}
+select,input{background:var(--superficie);color:var(--texto);border:1px solid var(--linha);border-radius:8px;padding:8px 12px;min-height:40px;min-width:0}
+.project-heading{margin-top:28px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.project-heading h2{font-size:24px}
+.coordinator{padding-left:12px;border-left:1px solid var(--linha);color:var(--texto_suave)}
+.coordinator strong{color:var(--texto);font-weight:500}
+.context{margin-top:8px}
+.conversations{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}
+.conversations button{border-color:transparent;min-height:40px}
+.conversations button[aria-pressed="true"]{background:var(--superficie_elevada);border-color:var(--linha);box-shadow:inset 0 -2px var(--primaria)}
+.sessionline{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:16px;padding-bottom:24px;border-bottom:1px solid var(--linha)}
+.sessionline p{font-size:13px}
+.attention{display:flex;gap:20px;align-items:center;justify-content:space-between;background:var(--superficie_elevada);border-left:3px solid var(--atencao);border-radius:8px;padding:20px 24px;margin:24px 0}
+.attention .eyebrow{color:var(--atencao);margin-bottom:4px}
+.attention p{margin-top:4px;color:var(--texto_suave)}
+.attention button{flex:none}
+.workspace{display:grid;grid-template-columns:minmax(280px,.85fr) minmax(0,1.25fr);gap:28px}
+.listhead{display:flex;align-items:baseline;gap:12px;margin-bottom:16px}
+.filters{display:grid;grid-template-columns:minmax(0,1fr) 152px;gap:8px;margin-bottom:16px}
+.task-list{display:grid;gap:0;border-top:1px solid var(--linha)}
+.task{border:0;border-radius:0;border-bottom:1px solid var(--linha);padding:20px 16px;width:100%;display:block}
+.task[aria-pressed="true"]{background:var(--superficie_elevada);color:var(--texto);box-shadow:inset 3px 0 var(--primaria)}
+.task-title{display:block;font-weight:600;font-size:16px;line-height:1.4;margin-bottom:12px}
+.task-meta{display:flex;gap:8px 16px;justify-content:space-between;flex-wrap:wrap;font-size:13px}
+.task-people{display:block;color:var(--texto_suave);font-size:13px;margin-top:8px}
+.state{color:var(--state);font-size:13px;font-weight:600;white-space:nowrap}
+.list-note{font-size:13px;color:var(--texto_suave);margin-top:16px}
+.detail{border:1px solid var(--linha);border-radius:8px;min-width:0;align-self:start}
+.detail-header{padding:24px 24px 20px}
+.detail-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.detail-header h2{margin-bottom:8px}
+.detail-header .people{margin-top:16px;font-size:13px;color:var(--texto_suave)}
+.flow{border-top:1px solid var(--linha);padding:20px 24px}
+.flow h3{margin-bottom:16px}
+.steps{list-style:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px 8px;padding:0;margin:0}
+.steps li{font-size:13px;color:var(--texto_suave);border-top:2px solid var(--linha);padding-top:8px;line-height:1.4}
+.steps li.current{border-color:var(--primaria);color:var(--primaria);font-weight:600}
+.stepnumber{display:block;margin-bottom:4px}
+.next{margin-top:20px;padding:12px 16px;background:var(--superficie_elevada);border-radius:8px}
+.next .eyebrow{font-size:13px;letter-spacing:.4px;margin-bottom:4px}
+.tabs{display:flex;padding:0 16px;border-top:1px solid var(--linha);border-bottom:1px solid var(--linha);gap:0;flex-wrap:wrap}
+.tabs button{border:0;border-radius:0;padding:12px 8px;min-height:48px}
+.tabs button[aria-selected="true"]{color:var(--primaria);box-shadow:inset 0 -2px var(--primaria)}
+.tab-panel{padding:20px 24px;min-height:204px}
+.tab-panel h3{margin-bottom:8px}
+.tab-panel ul{padding-left:20px;margin:8px 0 16px}
+.tab-panel li+li{margin-top:4px}
+.tab-panel p+p{margin-top:12px}
+.tab-panel button{margin-top:16px}
+.fact{display:grid;grid-template-columns:100px minmax(0,1fr);gap:8px;margin:12px 0}
+.fact dt{color:var(--texto_suave)}
+.fact dd{margin:0;overflow-wrap:anywhere}
+.detail-bottom{padding:16px 24px;border-top:1px solid var(--linha);font-size:13px;color:var(--texto_suave)}
+footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--texto_suave);margin-top:28px;padding-top:16px;border-top:1px solid var(--linha)}
+details{font-size:13px}
+summary{cursor:pointer}
+details p{margin-top:8px;max-width:680px}
+dialog{background:var(--superficie);color:var(--texto);border:1px solid var(--texto_suave);border-radius:8px;padding:28px;width:min(560px,calc(100% - 32px));max-height:calc(100% - 48px);overflow:auto}
+dialog::backdrop{background:#0009}
+dialog h2{margin:8px 0 16px}
+dialog p+p{margin-top:12px}
+dialog button{margin-top:24px}
+dialog dl{margin:20px 0}
+dialog .eyebrow{color:var(--atencao)}
+.empty{padding:24px 0}
+.empty button{margin-top:12px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+
+@media(min-width:1500px){.main{padding:40px}
+.workspace{gap:32px}
+.task{padding:24px 20px}
+}
+
+@media(max-width:1100px){.app{grid-template-columns:192px minmax(0,1fr)}
+.main{padding:24px}
+.workspace{grid-template-columns:1fr}
+.task-list{grid-template-columns:repeat(2,minmax(0,1fr))}
+.task{border:1px solid var(--linha)}
+.attention{align-items:flex-start}
+.topline{flex-wrap:wrap}
+.sidebar{padding:24px 16px}
+}
+
+@media(max-width:640px){.app{display:block}
+.sidebar{padding:16px;border-right:0;border-bottom:1px solid var(--linha);gap:16px}
+.brand{font-size:24px}
+.sidebar .eyebrow{margin-bottom:8px}
+.projects{grid-template-columns:1fr 1fr}
+.projects button{padding:8px}
+.sidebar-note{display:none}
+.main{padding:24px 16px}
+.topline{gap:16px}
+h1{font-size:24px}
+.appearance{width:100%;justify-content:space-between}
+.project-heading{margin-top:24px;gap:8px}
+.project-heading h2{font-size:20px}
+.coordinator{padding-left:8px;font-size:13px}
+.sessionline{flex-direction:column;align-items:stretch;gap:12px}
+.attention{padding:16px;gap:16px;flex-direction:column}
+.attention button{align-self:flex-start}
+.workspace{gap:24px}
+.task-list{grid-template-columns:1fr}
+.filters{grid-template-columns:minmax(0,1fr) 136px}
+.detail-header,.flow,.tab-panel{padding:20px 16px}
+.steps{gap:16px 8px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.tabs{padding:0 8px}
+.detail-bottom{padding:16px}
+.fact{grid-template-columns:84px minmax(0,1fr)}
+}
+
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+
+</style>
+</head>
+<body>
+<a class="skip" href="#workspace">Pular para as tarefas</a>
+<div class="app">
+<aside class="sidebar" aria-label="Projetos">
+<div class="brand"><img src="data:image/png;base64,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" alt="" width="48" height="48"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <!-- O PNG da Central mantém esta geometria em 192 pixels, com preenchimento #e6d9be. -->
+  <g fill="currentColor">
+    <path d="M15 2 C8 0 2 5 2 11.5 C2 18 7 23 14 22 C8 19 6 14 6.5 9 C7 6 10 3 15 2 Z"/>
+    <rect x="12.5" y="6" width="1.5" height="11.5"/>
+    <path d="M14 6.5 C15.4 10.8 18.3 13.6 21.2 15.5 H14 Z"/>
+    <rect x="9.5" y="17.5" width="12.5" height="2" rx="0.5"/>
+  </g>
+</svg>
+<span>Jangada</span></div>
+<div><p class="eyebrow muted">Projetos</p><nav class="projects" id="projects" aria-label="Selecionar projeto"></nav></div>
+<div class="sidebar-note"><p>Um projeto.<br>Um coordenador.<br>Conversas vinculadas.</p><p>O trabalho continua nas sessões identificadas.</p></div>
+</aside>
+<main class="main">
+<header><div class="topline"><div><p class="eyebrow muted" style="margin-bottom:8px">Seu espaço de trabalho</p><h1>Central de Trabalho</h1></div><div class="appearance"><label class="field">Paleta<select id="palette"><option value="cordel">Cordel · amostra</option><option value="padrao">Reserva oficial</option></select></label><button id="mode" aria-label="Ativar modo claro">Modo claro</button></div></div>
+<div class="project-heading"><h2 id="project-name"></h2><span class="coordinator">Coordenador <strong id="coordinator"></strong></span></div>
+<p class="muted context" id="project-purpose"></p>
+<nav class="conversations" id="conversations" aria-label="Conversas do projeto"></nav>
+<div class="sessionline"><p class="muted" id="destination"></p><button id="open-session">Abrir sessão · prévia ↗</button></div>
+</header>
+<section class="attention" aria-labelledby="attention-label"><div><p class="eyebrow" id="attention-label">Precisa de você · decisão demonstrativa</p><h3 id="decision-title"></h3><p id="decision-description"></p></div><button id="see-decision">Examinar decisão →</button></section>
+<div class="workspace" id="workspace" tabindex="-1">
+<section aria-labelledby="tasks-heading"><div class="listhead"><h2 id="tasks-heading">Tarefas</h2><span class="muted" id="task-count"></span></div>
+<div class="filters"><label class="field">Buscar nesta conversa<input type="search" id="search" placeholder="Título ou identificador"></label><label class="field">Estado<select id="status"><option value="">Todos</option></select></label></div>
+<div class="task-list" id="tasks"></div><p class="list-note">Estado da tarefa e atividade da sessão são registros distintos. Turno finalizado não significa tarefa concluída.</p>
+</section>
+<section class="detail" id="detail" aria-label="Tarefa selecionada"></section>
+</div>
+<footer><span>Protótipo · dados demonstrativos</span><details><summary>Identidade e limites</summary><p id="theme-note"></p><p>Inter prevista, ausente neste ambiente. CSS: Inter, Noto Sans, system-ui; identificadores: JetBrains Mono, monospace. Fontes locais, sem downloads.</p><p>Nenhuma sessão é aberta. As prévias não concedem autorização nem executam integração, publicação, assinatura ou instalação. M3 não foi implementado.</p></details></footer>
+<p class="sr" id="announcement" role="status" aria-live="polite"></p>
+</main>
+</div>
+<dialog id="preview" aria-labelledby="modal-title"><div class="eyebrow">Simulação · nenhum comando executado</div><h2 id="modal-title"></h2><div id="modal-body"></div><button id="close-preview" class="primary" autofocus>Fechar prévia</button></dialog>
+<script>
+'use strict';
+const PADRAO={"dark": {"superficie": "#101417", "superficie_elevada": "#1c2024", "texto": "#e0e3e8", "texto_suave": "#c1c7ce", "primaria": "#95cdf7", "texto_primario": "#00344e", "atencao": "#d0bce0"}, "light": {"superficie": "#f7f9ff", "superficie_elevada": "#ebeef3", "texto": "#181c20", "texto_suave": "#42474e", "primaria": "#266489", "texto_primario": "#ffffff", "atencao": "#685477"}};
+const CORDEL={...PADRAO.dark,superficie:'#141311',superficie_elevada:'#211f1d',texto:'#e6e2de',primaria:'#e6d9be',texto_primario:'#37301d',atencao:'#dbd8e9'};
+const ESTADOS={dark:{'Executando':'#85baff','Em revisão':'#c9b6f2','Concluída':'#96d6a8','Bloqueada':'#f2c66d','Falhou':'#f09d93'},light:{'Executando':'#005a9c','Em revisão':'#65408f','Concluída':'#22633a','Bloqueada':'#715400','Falhou':'#a12d2b'}};
+const ICONES={'Planejada':'○','Pronta':'●','Executando':'↻','Em revisão':'⌕','Concluída':'✓','Bloqueada':'Ⅱ','Falhou':'×','Cancelada':'−'};
+const ETAPAS=['Explorar','Decidir / autorizar','Escopo e critérios','Autor e apoio','Revisão independente','Verificações','Integrar por gesto','Encerrar'];
+const projects=[
+{id:'jangada',name:'Jangada',coordinator:'Codex',purpose:'Acompanhar decisões, conferir entregas e continuar o trabalho.',conversations:['Planejamento','Implementação','Testes'],decision:'A busca deve incluir critérios de aceite?',description:'A proposta compara buscar só títulos com incluir critérios. Falta a decisão sobre o recorte.',decisionTask:'central-busca'},
+{id:'pesquisa',name:'Demanda de pesquisa',coordinator:'Codex · Pesquisa',purpose:'Delimitar a pergunta, organizar fontes e conferir a síntese.',conversations:['Planejamento','Implementação','Testes'],decision:'Qual período deve orientar o levantamento?',description:'Comparar o recorte de 2015 a 2025 com o de 2020 a 2025 antes de selecionar fontes.',decisionTask:'pesquisa-recorte'}
+];
+const tasks=[
+{id:'central-busca',project:'jangada',conversation:'Planejamento',title:'Definir o alcance da busca de tarefas',state:'Bloqueada',phase:1,author:'Codex',reviewer:'Claude · não iniciado',objective:'Encontrar uma tarefa pelo objetivo sem perder a referência de projeto e conversa.',next:'Comparar as alternativas com o dono na conversa Planejamento.',scope:['Propor o recorte da busca por título ou por título e critérios.','Preservar destino explícito e vínculo da tarefa.'],criteria:['Decisão de recorte referenciada no pedido.','Nenhum campo de mensagem na visão geral.'],delivery:'Duas alternativas organizadas para discussão. Execução ainda não autorizada no cenário.',evidence:'Nenhuma verificação de implementação: o recorte está em discussão.',support:'Não solicitado neste cenário.',session:'Aguardando decisão',object:'proposta-busca-v1 · fictício',files:['documento de proposta · fictício'],base:'demo-base-01',candidate:'demo-proposta-01'},
+{id:'central-fluxo',project:'jangada',conversation:'Planejamento',title:'Conferir as etapas do trabalho na Central',state:'Em revisão',phase:4,author:'Codex',reviewer:'Claude · pendente',objective:'Tornar visíveis a etapa atual e o próximo passo de cada tarefa.',next:'Aguardar revisão independente do objeto demonstrativo.',scope:['Representar oito etapas sem conceder autorização.','Separar revisão, verificações e integração.'],criteria:['Etapa atual tem rótulo textual.','Integração aparece como gesto separado.'],delivery:'Proposta de sequência com oito etapas e indicação da próxima ação.',evidence:'Conferência documental simulada. Não comprova execução de testes.',support:'agy · relatório fictício demo-apoio-01, item 2. Uso ilustrado: separação entre revisão e integração. Não houve chamada real.',session:'Turno finalizado',object:'sequencia-central-v2 · fictício',files:['proposta de sequência · fictícia'],base:'demo-base-02',candidate:'demo-entrega-02'},
+{id:'central-acesso',project:'jangada',conversation:'Planejamento',title:'Especificar acesso à sessão identificada',state:'Planejada',phase:0,author:'A definir',reviewer:'A definir',objective:'Abrir a conversa correta com projeto, coordenador e sessão explícitos.',next:'Explorar destinos e limites de retomada antes de fechar o escopo.',scope:['Mapear a identificação necessária na prévia.'],criteria:['Destino textual sem ambiguidade.'],delivery:'Sem entrega neste cenário.',evidence:'Sem verificações neste cenário.',support:'Não solicitado neste cenário.',session:'Não iniciada',object:'rascunho-acesso-v1 · fictício',files:[],base:'demo-base-03',candidate:'não existe'},
+{id:'retomada',project:'jangada',conversation:'Implementação',title:'Documentar a retomada sem reenviar mensagens',state:'Pronta',phase:6,author:'Codex',reviewer:'Claude · parecer fictício favorável',objective:'Explicar como voltar à sessão correta preservando o destino da conversa.',next:'Conferir a prévia; a integração real exigiria um gesto humano separado.',scope:['Revisar somente o guia demonstrativo de retomada.'],criteria:['Identificar projeto, conversa e sessão.','Não prometer persistência de rascunhos não verificada.'],delivery:'Guia demonstrativo com destinos e limites de retomada. A entrega não foi integrada.',evidence:'Cenário fictício: critérios conferidos no documento. Não representa testes reais do Jangada.',support:'Não executado neste cenário.',session:'Turno finalizado',object:'guia-retomada-v3 · fictício',files:['docs/exemplo/retomada.md · arquivo fictício'],base:'demo-base-04',candidate:'demo-entrega-04'},
+{id:'m1-demo',project:'jangada',conversation:'Implementação',title:'M1 · Consultas entre módulos',state:'Bloqueada',phase:3,author:'Preservado',reviewer:'Não consultado',objective:'Exibir como uma tarefa parada aparece, sem ler seus registros reais.',next:'Manter a tarefa preservada. Esta prévia não a retoma.',scope:['Representação demonstrativa, sem acesso aos arquivos do M1.'],criteria:['Não declarar M1 concluído ou instalado.'],delivery:'Nenhuma entrega do M1 foi consultada.',evidence:'Nenhum registro real foi lido.',support:'Não executado nesta prévia.',session:'Parada · demonstração',object:'m1-ilustrativo · fictício',files:[],base:'não consultada',candidate:'não consultado'},
+{id:'teclado',project:'jangada',conversation:'Testes',title:'Conferir navegação por teclado',state:'Executando',phase:5,author:'Codex',reviewer:'Claude · não iniciado',objective:'Percorrer seleção, abas e fechamento de prévias sem perder o foco.',next:'Anotar o resultado do ensaio antes de solicitar revisão.',scope:['Ensaio demonstrativo de foco e navegação.'],criteria:['Escape fecha a prévia.','Foco retorna ao botão de origem.'],delivery:'Roteiro demonstrativo em preparação.',evidence:'Resultado ainda ausente neste cenário fictício.',support:'Não executado neste cenário.',session:'Trabalhando · demonstração',object:'roteiro-teclado-v1 · fictício',files:['roteiro de ensaio · fictício'],base:'demo-base-06',candidate:'demo-roteiro-06'},
+{id:'pesquisa-recorte',project:'pesquisa',conversation:'Planejamento',title:'Delimitar o período do levantamento',state:'Bloqueada',phase:1,author:'Codex',reviewer:'A definir',objective:'Construir um recorte temporal compatível com a pergunta de pesquisa.',next:'Levar as duas alternativas à sessão Planejamento do projeto Demanda de pesquisa.',scope:['Comparar 2015 a 2025 e 2020 a 2025.'],criteria:['Recorte decidido pelo dono.','Não selecionar conteúdo científico por inferência.'],delivery:'Alternativas preparadas. Não há decisão registrada no cenário.',evidence:'Sem execução de pesquisa.',support:'Não executado neste cenário.',session:'Aguardando decisão',object:'recorte-v1 · fictício',files:[],base:'demo-pesquisa-01',candidate:'não existe'},
+{id:'pesquisa-matriz',project:'pesquisa',conversation:'Implementação',title:'Organizar a matriz de fontes',state:'Planejada',phase:2,author:'Codex',reviewer:'A definir',objective:'Relacionar pergunta, referência e limite de cada fonte selecionada.',next:'Aguardar a decisão de recorte antes de coletar fontes.',scope:['Definir colunas da matriz sem consultar fontes reais.'],criteria:['Origem e limite explícitos por referência.'],delivery:'Sem matriz preenchida.',evidence:'Não executado.',support:'Não executado neste cenário.',session:'Não iniciada',object:'matriz-v1 · fictício',files:[],base:'demo-pesquisa-02',candidate:'não existe'},
+{id:'pesquisa-rastreio',project:'pesquisa',conversation:'Testes',title:'Conferir rastreabilidade das referências',state:'Planejada',phase:0,author:'A definir',reviewer:'A definir',objective:'Vincular cada afirmação à referência e à página que a sustenta.',next:'Definir critérios de amostragem após a seleção de fontes.',scope:['Especificar conferência documental.'],criteria:['Referência e página por afirmação.'],delivery:'Nenhum relatório emitido.',evidence:'Não executado.',support:'Não executado neste cenário.',session:'Não iniciada',object:'rastreio-v1 · fictício',files:[],base:'demo-pesquisa-03',candidate:'não existe'}
+];
+const $=id=>document.getElementById(id);
+const selection={project:'jangada',conversation:'Planejamento',task:'central-busca',tab:'Pedido',mode:'dark',palette:'cordel'};
+const project=()=>projects.find(p=>p.id===selection.project);
+const task=()=>tasks.find(t=>t.id===selection.task);
+const announce=s=>{$('announcement').textContent=s;};
+function stateColor(s){return ESTADOS[selection.mode][s]||(['Planejada','Cancelada'].includes(s)?'var(--texto_suave)':'var(--texto)');}
+function badge(t){return `<span class="state" style="--state:${stateColor(t.state)}">${ICONES[t.state]} ${t.state}</span>`;}
+function applyTheme(){const palette=selection.palette==='cordel'&&selection.mode==='dark'?CORDEL:PADRAO[selection.mode];Object.entries(palette).forEach(([key,value])=>document.documentElement.style.setProperty('--'+key,value));document.documentElement.style.setProperty('--linha','color-mix(in srgb,var(--texto) 18%,transparent)');document.documentElement.dataset.mode=selection.mode;document.documentElement.dataset.palette=selection.palette;document.documentElement.style.colorScheme=selection.mode;$('mode').textContent=selection.mode==='dark'?'Modo claro':'Modo escuro';$('mode').setAttribute('aria-label',selection.mode==='dark'?'Ativar modo claro':'Ativar modo escuro');$('theme-note').textContent=selection.palette==='cordel'?(selection.mode==='dark'?'Cordel é amostra do tema documentado, não leitura da configuração atual. Superfície elevada #211f1d derivada da caixa SDDM; texto suave da reserva oficial.':'Cordel selecionado: o modo claro usa integralmente a reserva oficial, pois não há paleta clara Cordel documentada.'):'Reserva oficial de default/visual/padrao.json, sem alterações nos valores.';renderList();renderDetail();}
+function renderContext(){const p=project();$('projects').innerHTML=projects.map(x=>`<button data-project="${x.id}" aria-pressed="${x.id===p.id}">${x.name}</button>`).join('');$('project-name').textContent=p.name;$('coordinator').textContent=p.coordinator;$('project-purpose').textContent=p.purpose;$('conversations').innerHTML=p.conversations.map((c,i)=>`<button data-conversation="${c}" aria-pressed="${c===selection.conversation}"><span class="mono">0${i+1}</span> ${c}</button>`).join('');$('destination').textContent=`${p.name} / ${p.coordinator} / ${selection.conversation} · sessão demo-${p.id}-${selection.conversation.toLowerCase()}`;$('decision-title').textContent=p.decision;$('decision-description').textContent=p.description;renderList();renderDetail();}
+function visibleTasks(){const query=$('search').value.trim().toLocaleLowerCase('pt-BR');return tasks.filter(t=>t.project===selection.project&&t.conversation===selection.conversation&&(!$('status').value||t.state===$('status').value)&&(!query||`${t.title} ${t.id}`.toLocaleLowerCase('pt-BR').includes(query)));}
+function renderList(){const visible=visibleTasks();if(!visible.some(t=>t.id===selection.task))selection.task=visible[0]?.id||null;$('task-count').textContent=`${visible.length} nesta conversa`;$('tasks').innerHTML=visible.length?visible.map(t=>`<button class="task" data-task="${t.id}" aria-pressed="${selection.task===t.id}"><span class="task-title">${t.title}</span><span class="task-meta">${badge(t)}<span class="mono muted">${t.id}</span></span><span class="task-people">Autor: ${t.author} · Revisor: ${t.reviewer}</span></button>`).join(''):'<div class="empty"><h3>Nenhuma tarefa neste filtro</h3><p class="muted">Tente outro título ou estado nesta conversa.</p><button id="clear-filters">Limpar filtros</button></div>';}
+function renderDetail(){const t=task();if(!t){$('detail').innerHTML='<div class="detail-header"><h2>Nenhuma tarefa selecionada</h2><p class="muted">Ajuste os filtros para examinar uma tarefa.</p></div>';return;}$('detail').innerHTML=`<div class="detail-header"><div class="detail-heading"><span class="mono muted">${t.id} · demonstração</span>${badge(t)}</div><h2>${t.title}</h2><p class="muted">${t.objective}</p><p class="people">Autor: ${t.author}<br>Revisor independente: ${t.reviewer}</p></div><div class="flow"><h3>Etapas do trabalho</h3><ol class="steps">${ETAPAS.map((s,i)=>`<li class="${i===t.phase?'current':''}" ${i===t.phase?'aria-current="step"':''}><span class="stepnumber">${String(i+1).padStart(2,'0')} ${i===t.phase?'· atual':i<t.phase?'· anterior':''}</span>${s}</li>`).join('')}</ol><div class="next"><p class="eyebrow">Próximo passo</p><p>${t.next}</p></div></div><div class="tabs" role="tablist" aria-label="Detalhes da tarefa">${['Pedido','Entrega','Revisão','Verificações'].map((tab,i)=>`<button id="tab-${i}" role="tab" aria-controls="tab-content" aria-selected="${tab===selection.tab}" tabindex="${tab===selection.tab?0:-1}" data-tab="${tab}">${tab}</button>`).join('')}</div><div class="tab-panel" id="tab-content" role="tabpanel" tabindex="0" aria-labelledby="tab-${['Pedido','Entrega','Revisão','Verificações'].indexOf(selection.tab)}">${panel(t)}</div><div class="detail-bottom">Atividade da sessão: ${t.session}.<br>Este registro é fictício e não certifica conclusão da tarefa.</div>`;}
+function panel(t){if(selection.tab==='Pedido')return `<h3>Escopo proposto no cenário</h3><ul>${t.scope.map(s=>`<li>${s}</li>`).join('')}</ul><h3>Critérios de aceite</h3><ul>${t.criteria.map(s=>`<li>${s}</li>`).join('')}</ul><p class="muted">Apoio delegado: ${t.support}</p>`;if(selection.tab==='Entrega')return `<h3>Objeto para conferência</h3><p>${t.delivery}</p><p class="mono muted">${t.object}</p><button class="primary" data-preview="delivery">Ver prévia da entrega</button><br><button data-preview="integration">Examinar prévia de integração</button>`;if(selection.tab==='Revisão')return `<h3>Revisão independente</h3><p>${t.reviewer}.</p><p>Objeto: <span class="mono">${t.object}</span>.</p><p class="muted">Todos os pareceres desta tela são fictícios. Apoio delegado e fim de turno não substituem revisão independente.</p>`;return `<h3>Evidências e limites</h3><p>${t.evidence}</p><p class="muted">Os resultados do ensaio desta prévia estão no README. Esta aba representa dados fictícios da tarefa selecionada.</p>`;}
+function resetFilters(){$('search').value='';$('status').value='';}
+function chooseTask(id){const t=tasks.find(t=>t.id===id);selection.conversation=t.conversation;selection.task=id;selection.tab='Pedido';resetFilters();renderContext();announce(`Tarefa selecionada: ${t.title}`);}
+let origin=null;
+function openPreview(kind){origin=document.activeElement;const t=task(),p=project();let title,body;if(kind==='session'){title='Destino da conversa';body=`<p>Abriria a sessão <strong>demo-${p.id}-${selection.conversation.toLowerCase()}</strong>.</p><dl class="fact"><dt>Projeto</dt><dd>${p.name}</dd><dt>Coordenador</dt><dd>${p.coordinator}</dd><dt>Conversa</dt><dd>${selection.conversation}</dd></dl><p class="muted">A navegação não envia mensagens nem move rascunhos. A sessão é apenas demonstrativa.</p>`;}else if(kind==='delivery'){title='Prévia da entrega';body=`<p>${t.delivery}</p><dl class="fact"><dt>Tarefa</dt><dd>${t.title}</dd><dt>Autor</dt><dd>${t.author}</dd><dt>Objeto</dt><dd class="mono">${t.object}</dd><dt>Arquivos</dt><dd>${t.files.length?t.files.join('<br>'):'Nenhum arquivo de entrega.'}</dd></dl><p class="muted">${t.evidence}</p>`;}else{title='Prévia de integração';body=`<p>Resumo exato do cenário selecionado. Os identificadores abaixo são fictícios, não são hashes Git.</p><dl class="fact"><dt>Projeto</dt><dd>${p.name}</dd><dt>Tarefa</dt><dd>${t.title}</dd><dt>Objeto</dt><dd class="mono">${t.object}</dd><dt>Base</dt><dd class="mono">${t.base}</dd><dt>Candidato</dt><dd class="mono">${t.candidate}</dd><dt>Arquivos</dt><dd>${t.files.length?t.files.join('<br>'):'Nenhum arquivo de entrega.'}</dd><dt>Revisor</dt><dd>${t.reviewer}</dd></dl><p><strong>${t.phase===6?'Cenário: aguarda gesto humano separado.':'Cenário: integração indisponível nesta etapa.'}</strong></p><p class="muted">Uma integração real exigiria reconferir base, candidato, revisão e verificações. Integrar não publica, assina ou instala.</p>`;}$('modal-title').textContent=title;$('modal-body').innerHTML=body;$('preview').showModal();}
+$('projects').addEventListener('click',e=>{const b=e.target.closest('[data-project]');if(!b)return;selection.project=b.dataset.project;selection.conversation='Planejamento';selection.task=project().decisionTask;selection.tab='Pedido';resetFilters();renderContext();document.querySelector(`[data-project="${selection.project}"]`).focus();announce(`Projeto ${project().name}, coordenador ${project().coordinator}`);});
+$('conversations').addEventListener('click',e=>{const b=e.target.closest('[data-conversation]');if(!b)return;selection.conversation=b.dataset.conversation;selection.tab='Pedido';resetFilters();renderContext();document.querySelector(`[data-conversation="${selection.conversation}"]`).focus();announce($('destination').textContent);});
+$('tasks').addEventListener('click',e=>{const b=e.target.closest('[data-task]');if(b){selection.task=b.dataset.task;selection.tab='Pedido';renderList();renderDetail();document.querySelector(`[data-task="${selection.task}"]`).focus();announce(`Tarefa selecionada: ${task().title}`);}if(e.target.closest('#clear-filters')){resetFilters();renderList();renderDetail();$('search').focus();}});
+for(const id of ['search','status'])$(id).addEventListener('input',()=>{renderList();renderDetail();announce(`${visibleTasks().length} tarefas encontradas`);});
+$('detail').addEventListener('click',e=>{const tab=e.target.closest('[data-tab]');if(tab){selection.tab=tab.dataset.tab;renderDetail();document.querySelector(`[data-tab="${selection.tab}"]`).focus();}const b=e.target.closest('[data-preview]');if(b)openPreview(b.dataset.preview);});
+$('detail').addEventListener('keydown',e=>{if(!e.target.matches('[role="tab"]'))return;const tabs=['Pedido','Entrega','Revisão','Verificações'];let i=tabs.indexOf(selection.tab);if(e.key==='ArrowRight')i=(i+1)%4;else if(e.key==='ArrowLeft')i=(i+3)%4;else if(e.key==='Home')i=0;else if(e.key==='End')i=3;else return;e.preventDefault();selection.tab=tabs[i];renderDetail();document.querySelector(`[data-tab="${selection.tab}"]`).focus();});
+$('see-decision').addEventListener('click',()=>{chooseTask(project().decisionTask);document.querySelector(`[data-task="${selection.task}"]`).focus();});
+$('open-session').addEventListener('click',()=>openPreview('session'));
+$('close-preview').addEventListener('click',()=>$('preview').close());
+$('preview').addEventListener('close',()=>{if(origin?.isConnected)origin.focus();});
+$('mode').addEventListener('click',()=>{selection.mode=selection.mode==='dark'?'light':'dark';applyTheme();announce(`Modo ${selection.mode==='dark'?'escuro':'claro'}`);});
+$('palette').addEventListener('change',()=>{selection.palette=$('palette').value;applyTheme();});
+$('status').innerHTML+=Object.keys(ICONES).map(s=>`<option>${s}</option>`).join('');
+renderContext();applyTheme();
+</script>
+</body>
+</html>

@@ -77,21 +77,20 @@ rm "$tmp/copia/default/waybar/base.css"
 conferir "caminho removido é apontado como ausente" \
   grep -qxF "ausente: default/waybar/base.css" <<<"$(problemas "$tmp/copia")"
 copia
-mkdir -p "$tmp/copia/shell/integracoes"
-mv "$tmp/copia/shell/jangada.sh" "$tmp/copia/shell/integracoes/jangada.sh"
-ln -s integracoes/jangada.sh "$tmp/copia/shell/jangada.sh"
+mv "$tmp/copia/jangada.sh" "$tmp/copia/integracao.sh"
+ln -s integracao.sh "$tmp/copia/jangada.sh"
 conferir "link relativo para dentro do repositório passa" [ -z "$(problemas "$tmp/copia")" ]
-ln -sfn "$tmp/copia/shell/integracoes/jangada.sh" "$tmp/copia/shell/jangada.sh"
+ln -sfn "$tmp/copia/integracao.sh" "$tmp/copia/jangada.sh"
 conferir "link absoluto é apontado" \
-  grep -qxF "link absoluto: shell/jangada.sh" <<<"$(problemas "$tmp/copia")"
+  grep -qxF "link absoluto: jangada.sh" <<<"$(problemas "$tmp/copia")"
 copia
-mv "$tmp/copia/default/claude/agents" "$tmp/fora/agents"
-# A cópia preserva default/claude como link para core/agentes/claude; a
-# referência externa deve partir desse destino físico.
-ln -s "$(realpath --relative-to="$(realpath "$tmp/copia/default/claude")" "$tmp/fora/agents")" \
-  "$tmp/copia/default/claude/agents"
+mv "$tmp/copia/temas/logo/jangada.txt" "$tmp/fora/jangada.txt"
+# A cópia preserva default/logo como link para temas/logo; a referência
+# externa parte desse destino físico.
+ln -s "$(realpath --relative-to="$(realpath "$tmp/copia/temas/logo")" "$tmp/fora/jangada.txt")" \
+  "$tmp/copia/temas/logo/jangada.txt"
 conferir "link para fora do repositório é apontado" \
-  grep -qxF "link para fora do repositório: default/claude/agents" <<<"$(problemas "$tmp/copia")"
+  grep -qxF "link para fora do repositório: default/logo/jangada.txt" <<<"$(problemas "$tmp/copia")"
 
 ((falhas == 0)) && echo "tudo certo" || echo "$falhas falha(s)"
 exit $((falhas > 0))

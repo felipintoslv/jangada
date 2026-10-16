@@ -31,20 +31,17 @@ class Atualizacao(unittest.TestCase):
                         PATH=str(self.bin) + ':/usr/bin:/bin')
         self.origem.mkdir()
         (self.origem / 'bin').mkdir()
-        for nome in ('jangada-config', 'jangada-update', 'jangada-versao'):
+        for nome in ('jangada-shell-config', 'jangada-sistema-update'):
             shutil.copy2(REPO / 'bin' / nome, self.origem / 'bin' / nome)
-        for nome in ('jangada-migrar', 'jangada-recarregar', 'jangada-gancho'):
+        for nome in ('jangada-shell-migrar', 'jangada-recarregar'):
             self.falso(self.origem / 'bin' / nome, self.proibido())
         for nome in ('sudo', 'pacman', 'checkupdates', 'paru', 'yay'):
             self.falso(self.bin / nome, self.proibido())
         self.falso(self.bin / 'tmux', '#!/bin/sh\nprintf "%s" "${TESTE_SESSAO:-}"\n')
         self.falso(self.bin / 'ps', '#!/bin/sh\n[ -z "${TESTE_PS_REAL:-}" ] || exec /usr/bin/ps "$@"\n'
                    'printf "%s" "${TESTE_PROCESSO:-}"\n')
-        # Módulos com link relativo na fachada, como ficam depois da migração.
-        for modulo in ('core', 'shell', 'monitor'):
-            (self.origem / modulo / 'bin').mkdir(parents=True)
-            self.falso(self.origem / modulo / 'bin' / f'jangada-{modulo}', '#!/bin/sh\nsleep 30\n')
-            (self.origem / 'bin' / f'jangada-{modulo}').symlink_to(f'../{modulo}/bin/jangada-{modulo}')
+        # Um comando do Shell em execução, para a conferência de processos.
+        self.falso(self.origem / 'bin' / 'jangada-shell', '#!/bin/sh\nsleep 30\n')
         self.git(self.origem, 'init', '-q', '-b', 'main')
         self.git(self.origem, 'add', '.')
         self.git(self.origem, 'commit', '-qm', 'base')
@@ -74,12 +71,12 @@ class Atualizacao(unittest.TestCase):
                    '--bind', str(self.raiz), str(self.raiz), '--proc', '/proc', '--dev', '/dev']
         if marcador:
             comando += ['--ro-bind', '/dev/null', '/tmp/.jangada-sem-autoridade']
-        comando += ['--', *(programa or [str(REPO / 'bin/jangada-update'), '--somente-codigo'])]
+        comando += ['--', *(programa or [str(REPO / 'bin/jangada-sistema-update'), '--somente-codigo'])]
         return subprocess.run(comando, input=resposta, env=self.env,
                               capture_output=True, text=True, timeout=20)
 
     def atualizar_instalada(self, modulo=None):
-        """Roda o jangada-update da instalação falsa com o ps real do isolamento.
+        """Roda o jangada-sistema-update da instalação falsa com o ps real do isolamento.
 
         Os caminhos ficam no arquivo do lançador, não na linha de comando do
         bwrap, que também aparece no ps.
@@ -87,7 +84,7 @@ class Atualizacao(unittest.TestCase):
         self.env['TESTE_PS_REAL'] = '1'
         lancador = self.raiz / 'lancador'
         fundo = f'sh "$(realpath "{self.instalado}/bin/jangada-{modulo}")" &\n' if modulo else ''
-        lancador.write_text(f'{fundo}exec "{self.instalado}/bin/jangada-update" --somente-codigo\n')
+        lancador.write_text(f'{fundo}exec "{self.instalado}/bin/jangada-sistema-update" --somente-codigo\n')
         return self.atualizar(programa=['sh', str(lancador)])
 
     def conferir_recusa(self, resultado):
@@ -118,13 +115,10 @@ class Atualizacao(unittest.TestCase):
         self.env['TESTE_PROCESSO'] = f'99 python3 {self.instalado}/default/tarefas/central.py\n'
         self.conferir_recusa(self.atualizar())
 
-    def test_recusa_processo_dos_modulos_aberto_pelo_caminho_fisico(self):
-        for modulo in ('core', 'shell', 'monitor'):
-            with self.subTest(modulo=modulo):
-                self.assertTrue((self.instalado / 'bin' / f'jangada-{modulo}').is_symlink())
-                resultado = self.atualizar_instalada(modulo)
-                self.conferir_recusa(resultado)
-                self.assertIn('há processos usando a instalação', resultado.stderr)
+    def test_recusa_processo_de_comando_do_shell(self):
+        resultado = self.atualizar_instalada('shell')
+        self.conferir_recusa(resultado)
+        self.assertIn('há processos usando a instalação', resultado.stderr)
 
     def test_conferencia_de_processos_ignora_a_propria_atualizacao(self):
         resultado = self.atualizar_instalada()

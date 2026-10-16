@@ -16,7 +16,7 @@ tem() {
 }
 
 faltam=0
-for c in bwrap sem-rede shellcheck jq gitleaks zsh pdftotext pyarrow R lintr; do
+for c in bwrap sem-rede shellcheck jq zsh; do
   if tem "$c"; then
     printf '%-10s sim\n' "$c"
   elif [[ " ${JANGADA_TESTES_EXIGIR:-} " == *" $c "* ]]; then
