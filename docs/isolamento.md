@@ -46,6 +46,17 @@ o agente só conheça os dados do projeto:
   `JANGADA_ISOLAR_KEYRING_ITEM` restringe a leitura a um item (seção "Keyring
   por item"). Sem o agy, o serviço não é liberado.
 
+## Limites conhecidos
+
+As conversas e a memória em `~/.claude/projects` continuam graváveis pelo
+agente, assim como o `settings.json` do agy em `~/.gemini/antigravity-cli`.
+Esse arquivo guarda permissões e pastas confiáveis.
+
+Um repositório aninhado criado no worktree e registrado no índice leva
+sua própria configuração. Um `git status` executado fora do isolamento
+poderia carregá-la. Por isso os scripts do jangada usam `jangada_git_seguro`
+para consultar pastas de agentes.
+
 ## Decisão de isolar
 
 Desde a correção P0 o isolamento é obrigatório para todos os agentes:

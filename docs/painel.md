@@ -13,8 +13,8 @@ flowchart LR
     K --> W[waybar:<br>custom/indicadores]
 ```
 
-As definições de cada indicador estão no README, seção "Painel de
-indicadores", e os campos de cada registro em [registros](registros.md).
+Veja as [definições dos indicadores](#uso-e-definição-dos-indicadores)
+e os campos de cada registro em [registros](registros.md).
 
 Desde a modularização 3.0, o painel mora em `monitor/painel/`, o
 `jangada-painel` em `monitor/bin/` e a configuração da barra em

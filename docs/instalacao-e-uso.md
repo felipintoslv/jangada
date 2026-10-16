@@ -14,7 +14,6 @@ Quem vem do niri converte a configuração com `jangada-importar`, que lê `~/.c
 
 Compare com `diff -u` e copie o que quiser para os arquivos sem a extensão.
 
-
 ## Instalação
 
 ```sh
@@ -34,7 +33,6 @@ Depois, encerre a sessão atual e escolha **jangada** no gerenciador de login.
 ### Máquinas com duas GPUs
 
 O `jangada-sessao` define `AQ_DRM_DEVICES` antes de o compositor subir, escolhendo a placa que tem monitor ligado. Sem isso, o aquamarine pode pegar a outra e a sessão sobe sem imagem, sem terminal para consertar. Quando a placa escolhida é NVIDIA, a sessão também define `LIBVA_DRIVER_NAME`, `__GLX_VENDOR_LIBRARY_NAME` e `NVD_BACKEND`; `GBM_BACKEND` fica de fora de propósito, porque quebra Firefox e Electron. Para forçar outra placa, preencha `JANGADA_GPU` no `jangada.conf` com um caminho de `/dev/dri/by-path`. O caminho escolhido é sempre resolvido para o `/dev/dri/cardN` correspondente antes de virar `AQ_DRM_DEVICES`: o aquamarine separa essa lista por `:`, e o endereço PCI de `/dev/dri/by-path` também tem `:`, então o caminho cru vira três caminhos inválidos e o compositor aborta antes de abrir a tela. O `jangada-verificar` mostra qual placa foi escolhida, o valor resolvido e reclama se ela não tiver monitor ligado.
-
 
 ## Várias máquinas
 
@@ -83,16 +81,16 @@ ela tiver ficado num deles.
 
 Com `~/.config/jangada/allowed_signers`, o `jangada-update` só aplica commits
 assinados por uma chave desse arquivo. O arquivo fica fora da cópia de
-trabalho e é somente leitura para o agente isolado, que também não vê a
-chave: os commits dos agentes chegam sem assinatura, e o `jangada-assinar`
-os assina antes do push. A assinatura é feita fora do isolamento antes do envio. Para ligar,
+trabalho e é somente leitura para o agente isolado, que também não vê a chave.
+Os commits dos agentes chegam sem assinatura. Antes do envio ao remoto,
+rode `jangada-assinar` fora do isolamento. Para habilitar a conferência,
 num terminal comum:
 
 ```sh
 ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519   # se ainda não houver chave
 echo "$(git config user.email) namespaces=\"git\" $(cat ~/.ssh/id_ed25519.pub)" \
   >~/.config/jangada/allowed_signers
-jangada-assinar          # antes do push, para o que não veio de uma integração
+jangada-assinar          # antes do envio ao remoto
 ```
 
 Outra chave vai em `JANGADA_ASSINATURA_CHAVE` no `jangada.conf`. Nas outras

@@ -162,7 +162,7 @@ Os estados do ciclo são:
 | `concluido` | fim de uma resposta ou encerramento informado pelo agente |
 | `interrompido` | tmux desapareceu, mas a pasta permite restaurar a sessão |
 
-Na Central de Tarefas v0.1, `concluido` aparece como **Turno encerrado**,
+Na Central de Tarefas v0.1, `concluido` aparece como **Pronto para conferir**,
 sem afirmar que a tarefa foi concluída. Cada sessão representa uma tarefa.
 A central acompanha estados e mensagens a cada dois segundos; mudanças
 observadas ficam em memória durante a janela. Perguntas e permissões

@@ -13,7 +13,6 @@ pendente em [revisao/PENDENCIAS.md](../revisao/PENDENCIAS.md#o-que-só-pode-ser-
 Até essa adaptação, use `componentes` se a instalação não oferecer a
 interface antiga.
 
-
 ## Cores e papel de parede
 
 `jangada-tema imagem` gera com o matugen as cores de bordas de janela, barra, notificações, menu, bloqueio, terminal e tela de login. A cor-fonte é escolhida pelo `prefer` do `default/matugen/config.toml`, e o esquema vem de `JANGADA_TEMA_ESQUEMA` (padrão `scheme-fidelity`, que mantém a cor da imagem; o `scheme-tonal-spot` do matugen satura imagens quase monocromáticas até virarem outra cor).
@@ -25,7 +24,6 @@ componentes. `JANGADA_VIDRO=0` em `jangada.conf`, seguido de `jangada-vidro`,
 desliga transparência e desfoque. Jogos identificados e tela cheia suspendem
 o desfoque; vídeos embutidos numa página não são detectados automaticamente.
 
-
 ## Tela de login (SDDM)
 
 `jangada-sddm aplicar` instala o tema `jangada` em `/usr/share/sddm/themes/jangada` e faz o SDDM ler as sessões de `/usr/local/share/jangada/sessoes`, que só contém o jangada. Os arquivos de sessão dos outros pacotes (Hyprland, niri, Plasma) não são movidos nem apagados; `jangada-sddm restaurar` remove `/etc/sddm.conf.d/zz-jangada.conf` e todas voltam a aparecer. O prefixo `zz-` faz o arquivo ser lido depois do `kde_settings.conf`, que de outro modo imporia o tema escolhido no Plasma.
@@ -33,7 +31,6 @@ o desfoque; vídeos embutidos numa página não são detectados automaticamente.
 O tema imita o menu do `SUPER + Esc`: caixa centralizada com as mesmas medidas do fuzzel, linhas `usuário >` e `senha >` e a lista **Entrar**, **Suspender**, **Reiniciar** e **Desligar**. Setas escolhem a ação e Enter executa; digitar a senha volta a seleção para Entrar. As cores vêm de um modelo próprio do matugen (`default/matugen/modelos/sddm.conf`, gerado em `~/.config/jangada/sddm/theme.conf.user`), com os mesmos papéis de cor do fuzzel, e o fundo é o papel de parede atual, copiados no momento do `aplicar`. O SDDM fica numa pasta do sistema, então o `jangada-tema` não consegue atualizá-lo sozinho: quando as cores ou o papel de parede mudam, ele avisa que é preciso rodar `jangada-sddm aplicar` de novo. `jangada-sddm testar` abre o tema numa janela, sem alterar o sistema.
 
 A instalação pergunta se deve aplicar a exclusividade; a resposta padrão é não.
-
 
 ## Atalhos principais
 
@@ -55,12 +52,11 @@ e por isso inclui também os que você definiu em
 `~/.config/jangada/hypr/usuario.lua`. Os padrões estão em
 `default/hypr/atalhos.lua`.
 
-
 ## Central de tarefas v0.1
 
 `jangada-tarefas`, `SUPER + SHIFT + A` e `SUPER + CTRL + A` abrem a central.
 Cada sessão representa uma tarefa. Pendências aparecem primeiro, seguidas
-por interrupções, trabalho em andamento e turnos encerrados.
+por interrupções, trabalho em andamento e tarefas prontas para conferir.
 
 A consulta automática roda a cada dois segundos, preservando a seleção.
 Uma falha preserva os últimos dados e o histórico, com aviso de erro; as ações
@@ -71,7 +67,7 @@ e recomeça quando a execução da sessão muda. Sessões que saem da lista deix
 de ser acompanhadas. A coluna Atualização usa a data
 publicada pelo agente, sem tratar uma consulta recente como atividade recente.
 
-**Turno encerrado** corresponde ao estado `concluido` dos hooks.
+**Pronto para conferir** corresponde ao estado `concluido` dos hooks.
 Ele não confirma conclusão da tarefa nem aprovação da entrega.
 Os hooks não registram falha da tarefa nem integração. Por isso, a Central
 não deriva os estados Falhou e Integrada; encerramentos removem a sessão da lista.
@@ -109,7 +105,8 @@ Esse modo escolhe o primeiro executor instalado na ordem de
 `jangada-agente --capacidades-json`, atualmente Claude e depois Codex.
 Revisor, segurança e delegação seguem os padrões configurados do lançador.
 As opções avançadas ficam recolhidas e preservam agente e perfil; também
-permitem escolher revisor, delegação e consultar a configuração de isolamento. O isolamento é obrigatório.
+permitem escolher revisor e delegação. A opção antiga **Sem isolamento**
+continua no formulário, mas é ignorada com aviso: o agente roda isolado.
 Alterar um controle seleciona o modo Personalizado; recolher a área preserva as escolhas.
 **Nova pasta**, no formulário, cria a pasta de um projeto novo em
 `JANGADA_PROJETOS` e a deixa selecionada; a pasta nasce sem repositório Git.
