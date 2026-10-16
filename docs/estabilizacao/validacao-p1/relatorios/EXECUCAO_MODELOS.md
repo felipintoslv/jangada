@@ -1,5 +1,10 @@
 # Execução dos modelos
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](../../README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 BLOQUEADO: fluxo real, revisão por segunda família, terceira revisão adversarial, confrontação cega dos pareceres, correção e nova revisão. Nenhum modelo executor ou revisor foi chamado. Executáveis encontrados não foram tratados como prova de disponibilidade. Não foram copiadas credenciais ou sondadas APIs autenticadas. Acesso remoto não foi previamente autorizado para este ensaio e a infraestrutura local de sockets é restrita.
 
 CONFIRMADO no backend: cadastro de projeto sintético, criação de atividade com oito critérios explícitos e importação da tarefa ECON-P1. `evidencias/backend-cadastro.json` registra atividade, especificação, status QUEUED, zero tentativas, zero execuções e ausência de artefato. Não se atribuiu identidade inventada a uma execução.

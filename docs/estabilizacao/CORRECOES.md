@@ -1,5 +1,10 @@
 # Correções
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 | Correção | Evidência e teste |
 |---|---|
 | Bloqueio de `--integrar`, inclusive confirmação gráfica e `--sem-revisao`, sob trava do repositório. Nenhum merge, rollback ou limpeza é iniciado. | `testes/fim.sh`: HEAD, índice, alterações, arquivos novos, sessão e worktree preservados; chamadas simultâneas recusadas. `testes/baseline.py`: conflito e publicação manual anterior preservados. |

@@ -31,7 +31,7 @@ conferida no código.
 | `estudos/` | 1 | `auditoria-as-is-2026-10-03.md` (516 linhas) | Diagnóstico anterior, reaproveitado com conferência |
 | `benchmarking/` | 1 | Comparação de módulos de barra | Sem relação direta |
 | `.github/` | 1 | `workflows/verificar.yml` | Integração contínua |
-| raiz | 8 | `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `README.md`, `CHANGELOG.md`, `LICENSE`, `.gitignore`, `JANGADA_V2_INSTRUCOES.md` | Regras e roteiro anterior |
+| raiz | 8 | `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `README.md`, `CHANGELOG.md`, `LICENSE`, `.gitignore`, `arquivo/evidencias:JANGADA_V2_INSTRUCOES.md` (commit `7a9d1e5`) | Regras e roteiro anterior |
 
 `desac.md` não está no repositório nem no histórico do git. A única cópia
 achada está em `~/Downloads/desac.md` (38 linhas), fora do projeto. A
@@ -221,7 +221,7 @@ Proposta para discussão. Nada abaixo está implementado.
 6. **Roteamento em três modos.** Manual (o usuário escolhe), assistido (o
    sistema sugere e explica), automático supervisionado (o sistema escolhe
    dentro de limites de risco, custo e saída de dados, com registro do
-   motivo). Mantêm-se os princípios de `JANGADA_V2_INSTRUCOES.md`: cota
+   motivo). Mantêm-se os princípios de `arquivo/evidencias:JANGADA_V2_INSTRUCOES.md` (commit `7a9d1e5`): cota
    desconhecida não é cota disponível e não há subida automática para modelo
    mais caro.
 

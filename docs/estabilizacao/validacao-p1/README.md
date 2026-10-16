@@ -1,9 +1,23 @@
-# Auditoria P1 do Jangada
+# Auditoria P1 do jangada
 
-Resultados locais da avaliação do commit `17178ded546642e3246bfe3bd5c33df8da821874`.
+**P1 INCONCLUSIVA.** O ensaio avaliou o commit `17178de`.
+A correção P0 foi depois incorporada em `main`, no commit `19f5569`;
+veja a [prova e o estado atual](../README.md).
 
-Estado: **P1 INCONCLUSIVA**. Os testes de proteção P0 e de interface passaram nos ensaios registrados. O ciclo econômico completo com execução, revisão independente, aprovação protegida e reconstrução histórica ainda não foi demonstrado. As tentativas de agy no ambiente sintético falharam na autenticação; a última sonda retornou NoReply antes de OpenSession.
+Os testes de proteção P0 e de interface passaram nos ensaios registrados.
+O ciclo econômico completo com execução, revisão independente, aprovação
+protegida e reconstrução histórica não foi demonstrado.
+A autenticação do agy no ambiente sintético falhou; a última sonda retornou
+NoReply antes de OpenSession.
 
-Este repositório registra relatórios, scripts de reprodução e evidências. Não contém o HOME sintético nem credenciais. Os gabaritos privados e os dados gerados permanecem nas pastas locais ignoradas pelo Git. SHA256SUMS registra os arquivos de resultados, inclusive os que não integram este commit.
+- [Relatório final](relatorios/RELATORIO_FINAL.md).
+- [Execução de modelos](relatorios/EXECUCAO_MODELOS.md).
+- [Ambiente isolado](relatorios/AMBIENTE_ISOLADO.md).
+- [Indicadores econômicos](relatorios/RESULTADOS_ECONOMICOS.md).
+- [Rastreabilidade](relatorios/RASTREABILIDADE.md).
 
-Nenhuma mudança de produção, instalação, merge, push ou tag foi realizada. A investigação foi encerrada nesta etapa a pedido do usuário. Consultar relatorios/RELATORIO_FINAL.md e relatorios/EXECUCAO_MODELOS.md para os resultados e limitações.
+Logs, dados artificiais, scripts e `SHA256SUMS` estão no ramo
+`arquivo/evidencias`, commit `7a9d1e5`, em
+`docs/estabilizacao/validacao-p1/`. Use `git show RAMO:CAMINHO` para consultar.
+Os manifestos também citam gabaritos privados e dados externos que nunca
+foram copiados para este repositório; não incluem credenciais ou o HOME sintético.

@@ -1,5 +1,10 @@
 # Rastreabilidade
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](../../README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 PASSOU em sessão sintética: reconstrução utilizando apenas `evidencias/arquivo-sintetico.json`, sem consultar arquivos transitórios. `reconstrucao-somente-historico.json` recupera oito documentos completos, verifica base64 e SHA-256 e relaciona candidato do parecer à marca histórica. Inclui parecer integral, contexto, metadados, prompts e marca arquivada.
 
 As suítes P0 conferem reprovações, rodadas intermediárias, snapshot de prompt inicial, falhas fsync/publicação, contexto ausente, links perigosos e repetição idempotente do arquivo. Falhas de arquivamento preservaram os documentos originais nos cenários executados. Evidências protegidas resistiram à escrita no isolamento real.

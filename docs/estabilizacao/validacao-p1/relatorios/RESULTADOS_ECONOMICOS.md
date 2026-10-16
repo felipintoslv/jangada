@@ -1,5 +1,10 @@
 # Resultados econômicos
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](../../README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 CONFIRMADO: cálculo reprodutível das quatro tabelas de referência nas duas implementações e sementes. Dados públicos e entregas sintéticas preservados em `artefatos/`; referências em `privado/`. Não há análise de municípios brasileiros reais ou resultados empíricos.
 
 A mudança apenas de 2025 no setor S001 alterou 36.000 QLs históricos na solução A7 em cada rodada, enquanto o controle correto alterou zero. Evidências `metamorfismo-1.json` e `metamorfismo-2.json`. Demonstra vazamento temporal das entregas artificiais.

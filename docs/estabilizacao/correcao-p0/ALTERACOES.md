@@ -1,5 +1,10 @@
 # Alterações
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](../README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 | Componentes | Correção | Evidência |
 |---|---|---|
 | bin/jangada-isolar | Isolamento obrigatório, autoridade somente leitura, histórico oculto, recusa de aliases/canais, fechamento de descritores | Grupos A/J, Bubblewrap real |

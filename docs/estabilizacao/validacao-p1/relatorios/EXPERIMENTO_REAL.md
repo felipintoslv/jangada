@@ -1,5 +1,10 @@
 # Continuação com modelos reais autorizados
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](../../README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 O usuário autorizou Codex executor e Claude revisor, somente dados sintéticos e configurações existentes. Ainda não há resultado de execução real; scripts foram preparados, não executados nesta sessão com sockets restritos.
 
 1. No terminal compatível: `python3 scripts/preparar_modelos_reais.py --chamar-provedores`. Cria /tmp/jreal-*, código exato, aplicações copiadas, HOME e XDG próprios. Copia somente auth.json do Codex e .credentials.json do Claude, quando existentes, com permissão 0600. Históricos, extensões, instruções pessoais e configurações globais não são copiados. Credenciais continuam privadas no HOME temporário, fora de qualquer manifesto ou pacote de evidências. Não compartilhar esse HOME. Variáveis de autenticação selecionadas são usadas somente em memória. As originais não são alteradas.

@@ -192,3 +192,6 @@ para o fim porque mexem na aparência inteira da barra.
 
 Barra em Quickshell com o painel de agentes integrado, a partir das
 personalizações do Noctalia registradas pelo `jangada-mapear`.
+
+Os pareceres `gemini-*` e as avaliações `avaliacao-gemini-*` citados acima
+estão no ramo `arquivo/evidencias`, commit `7a9d1e5`, em `revisao/`.

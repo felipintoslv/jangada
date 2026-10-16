@@ -50,7 +50,7 @@ sem avaliação.
 ## O que foi feito
 
 - Leitura de `AGENTS.md`, `config/jangada.conf`, perfis em `default/agentes/`
-  e `JANGADA_V2_INSTRUCOES.md`.
+  e `arquivo/evidencias:JANGADA_V2_INSTRUCOES.md` (commit `7a9d1e5`).
 - Leitura integral de `bin/jangada-agente`, `default/orquestracao/cli.py` e
   `estado.py`; leitura dirigida de `jangada-validar`, `jangada-delegar`,
   `jangada-config`, `jangada-agentes`, `jangada-agente-fim`,

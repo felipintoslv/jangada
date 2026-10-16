@@ -1,5 +1,10 @@
 # Causas-raiz
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](../README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 Base: `1fa3d9cc16edaa9bba620b5f9cb81394dcecbb0d`, branch nova `correcao/confianca-p0-2026-10`. Principal e baseline auditada não receberam escrita ou ensaios.
 
 P0-A: `jangada-isolar` tornava agentes gravável, incluindo SQLite, políticas e objetos. O backend aceitava COMPLETED sem evidência protegida; a revisão manual por nome de provedor podia declarar independência sem executar modelo. Ocultar o token do painel não protegia o banco.

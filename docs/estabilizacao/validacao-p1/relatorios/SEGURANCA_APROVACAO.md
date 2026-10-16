@@ -1,5 +1,10 @@
 # Segurança da aprovação
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](../../README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 PASSOU: 32 cenários em `testes/confianca-p0.py`, com isolamento Bubblewrap real nos ataques de montagem. Incluem escrita SQLite, links, FD herdado, interfaces com variável removida, COMPLETED forjado, revisão JSON inventada, artefato alterado, aprovação de outra tarefa, autoria ausente e rótulo sem revisão executada. Conferem estado persistente ou decisão protegida, não somente mensagem de erro. Logs completos e `ataques-bubblewrap.jsonl` preservados.
 
 Três ensaios complementares passaram: novo commit não reutiliza aprovação anterior na prévia backend; autoria operacional adulterada não supera autoria protegida; aprovação sem parecer protegido bloqueia arquivamento e preserva originais. Provedores são simulados nesses ensaios, sem alegação de independência real de IA.

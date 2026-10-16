@@ -1,5 +1,10 @@
 # Modelo de ameaças
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](../README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 O executor é potencialmente hostil: pode alterar sua worktree, saída, JSON, metadados operacionais e variáveis, executar comandos e explorar caminho alternativoes ou descritores herdados. O controlador fora do Bubblewrap, seu código, configuração e conta do usuário são a autoridade. Não há promessa contra controle irrestrito da conta, administrador, kernel comprometido ou executável de provedor substituído pelo usuário.
 
 | Componente | Acesso e autoridade |

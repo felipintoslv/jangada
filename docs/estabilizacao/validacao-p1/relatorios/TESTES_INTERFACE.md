@@ -1,5 +1,10 @@
 # Interface e comunicação
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](../../README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 A suíte `testes/tarefas.py` executou 67 casos: 63 passaram e quatro falharam nas condições de comunicação local. Os quatro são classificados BLOQUEADO para a auditoria operacional, com resultado bruto FALHOU preservado em `interface-67.stderr.log`. AF_UNIX bind e AF_INET socket produzem EPERM nas sondagens independentes. Não se removeram proteções para contornar o ambiente.
 
 Suítes backend passaram: orquestração 30, executor 42, supervisão 26, operacional 36, determinístico 26, acompanhamento 12 e painel-orquestração três. Cadastro/atividade real no backend sintético também observado. Isso não comprova atualização completa da Central, comunicação local ou recuperação gráfica integrada.

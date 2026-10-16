@@ -1,5 +1,10 @@
 # Testes da baseline 2026-10
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 Todos os ensaios usaram repositórios, dados e provedores sintéticos. Nenhum projeto real, credencial ou instalação ativa foi usado para execução de agente ou restauração.
 
 | Verificação | Resultado confirmado |

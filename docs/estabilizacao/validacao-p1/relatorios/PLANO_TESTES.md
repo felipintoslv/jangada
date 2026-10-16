@@ -1,5 +1,10 @@
 # Plano de testes P1
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](../../README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 Versão 17178ded546642e3246bfe3bd5c33df8da821874, cópia exportada e sem mudanças de produção. Worktrees principal, baseline e P0 preservadas. Todos os artefatos em raiz sintética ou neste diretório novo.
 
 1. Guardas de caminhos e separação de estado, leitura de arquitetura e dependências. Executado na preparação.

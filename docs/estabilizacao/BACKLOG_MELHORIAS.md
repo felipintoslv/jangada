@@ -1,5 +1,10 @@
 # Melhorias e impedimentos
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 | Prioridade | Evidência | Próximo passo |
 |---|---|---|
 | P1 | Sandbox recusa namespace sem rede e comunicação por soquetes locais. Testes reais de validação R, D-Bus, Central, painel HTTP e serviços sintéticos não completam. | Rodar as suítes em máquina compatível ou no CI existente. Não alterar o host desta missão. |

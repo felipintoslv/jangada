@@ -1,5 +1,10 @@
 # Diagnóstico da baseline 2026-10
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 Inspeção em 08/10/2026. Origem: `bf7a5f1e7b11c7156d94de42c7869ed98940c20d`, ramo `main`, sem alterações locais. Havia uma worktree, a de origem. Intervenção na worktree `jangada-baseline-2026-10`, ramo `estabilizacao/baseline-2026-10`. Os arquivos da origem, o ramo `main` e a instalação ativa foram preservados. O Git comum recebeu apenas o registro da worktree, o ramo de estabilização e seus commits locais.
 
 | Prioridade | Evidência confirmada | Tratamento |

@@ -1,5 +1,10 @@
 # Ensaio nativo par-cobaia
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](../../README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 Commits observados: 218ca4e e bb3ad6b4b2bb8f3032e28efb7af5f1a5c4abb9bb. Base 0331e4a4daafc20a1b1ba5767f0e825fbf0a9b03. Worktree vinculada ao repositório original: a preparação independente pedida não foi demonstrada. Não se realizou limpeza, merge ou reversão.
 
 Execução informada: 36 testes R passaram; saída integral preservada em evidencias/par-cobaia-bb3ad6b. Quatro hashes foram conferidos contra os arquivos presentes. O validador nativo informou revisão Antigravity e APROVADO. O parecer integral contém somente STATUS: APROVADO, sem análise, apontamentos ou testes descritos. Isso não comprova auditoria metodológica independente ou aprovação autorizada do controlador. O registro aponta parecer no estado operacional da sessão, não prova de parecer protegido externo.

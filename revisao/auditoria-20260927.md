@@ -1,6 +1,6 @@
 # Auditoria do jangada, 27/09/2026
 
-Pedido: `revisao/PROMPT_AUDITORIA.md`. Base: commit 0246292 (main).
+Pedido: `arquivo/evidencias:revisao/PROMPT_AUDITORIA.md` (commit `7a9d1e5`). Base: commit 0246292 (main).
 
 Situação: todos os 72 itens apontados pela auditoria (críticos, altos, médios e
 baixos) foram devidamente corrigidos nos commits de 27/09/2026. As 14
@@ -71,7 +71,7 @@ modelo de ameaça 1 do pedido. Ver "Perguntas ao autor".
 - Arquivo e linha: bin/jangada-update:35, :38, :91, :142; bin/jangada-agente-fim:88-91; bin/jangada-isolar:86-87
 - Categoria: segurança (CWE-494, CWE-829)
 - Gravidade: crítico
-- Certeza: alta para o mecanismo (conferido: `git -C ~/.local/share/jangada remote -v` aponta para `/home/felipinto/Projetos/jangada`); o encadeamento completo não foi executado
+- Certeza: alta para o mecanismo (conferido: `git -C ~/.local/share/jangada remote -v` aponta para `$HOME/Projetos/jangada`); o encadeamento completo não foi executado
 - Cenário: um agente aberto em ~/Projetos/jangada ou num worktree dele (inclusive o que o `jangada-verificar --agente` abre com um diagnóstico) roda `git update-ref refs/heads/main <commit>`, porque `refs` e `packed-refs` do `.git` comum são graváveis. No próximo `jangada-update`, o `pull --ff-only` traz o commit, e rodam fora do bwrap o `jangada-versao` novo, as migrações novas (que usam `como_root`, com o sudo ainda autenticado pelo `pacman -Syu` da :77) e o `jangada-gancho`. O `jangada-agente-fim --integrar` faz o mesmo pull e roda o `jangada-migrar`. O mesmo acesso às refs também permite mover `main`, tags e `refs/remotes` sem passar por `--integrar` nem pelo validar, e o próximo `git push` publica.
 - Problema: nada confere o que o pull trouxe; os commits não são assinados (`git log --format=%G?` dá N).
 - Correção proposta: buscar, mostrar e confirmar antes de avançar; de preferência exigir assinatura (a chave fica em ~/.gnupg ou ~/.ssh, que o isolamento oculta):

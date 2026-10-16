@@ -1,5 +1,10 @@
 # Relatório final P1
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](../../README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 **P1 INCONCLUSIVA.** Todos os ensaios seguros deste plano executáveis no ambiente foram concluídos; a missão não demonstrou o fluxo com modelos reais nem a comunicação integrada. Não há evidência suficiente para aprovar 30 dias de utilização experimental ou congelamento.
 
 ## A. Integridade da plataforma

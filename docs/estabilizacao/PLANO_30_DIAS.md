@@ -1,5 +1,10 @@
 # Plano de 30 dias
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 O período começa somente depois de completar as verificações pendentes em ambiente compatível e aprovar o congelamento. Nenhuma tag foi criada.
 
 | Período | Operação |

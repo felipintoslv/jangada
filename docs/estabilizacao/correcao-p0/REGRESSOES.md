@@ -1,5 +1,10 @@
 # Regressões e compatibilidade
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](../README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 Suites diretas cobrem projetos/cadastro, atividades, artefatos, fila, reservas, retomada, supervisão, validação determinística, encerramento e consultas. Comandos/tempos estão em evidencias/resultados.json; saídas integrais em .log.
 
 Mudanças deliberadas: identidade igual não demonstra independência; rótulo sem execução não aprova; dependência adulterada é bloqueada antes da chamada; configuração antiga não desativa isolamento. Os casos existentes foram preservados.

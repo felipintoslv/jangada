@@ -1,5 +1,10 @@
 # Preparação da atualização local em 09/10/2026
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 **Preparada, mas bloqueada. A instalação não foi atualizada e main não foi alterada.**
 As correções foram combinadas apenas no ramo `agente/tarefa-772f05785b35`.
 A avaliação P1 continua inconclusiva.
@@ -30,7 +35,7 @@ Ela não pode substituir o controlador instalado nem modificar a pasta principal
 A única sessão identificável pelo estado visível é `jangada--tarefa-772f05785b35`, esta execução.
 Isso não certifica ausência de outras sessões no host.
 
-`jangada-update` busca `origin`, que aponta para `/home/felipinto/Projetos/jangada`.
+`jangada-update` busca `origin`, que aponta para `$HOME/Projetos/jangada`.
 Portanto, publicação remota não é necessária.
 Entretanto, o comando também executa `sudo pacman -Syu` e atualização AUR.
 A versão instalada não oferece seleção de somente código nem simulação dessas operações.

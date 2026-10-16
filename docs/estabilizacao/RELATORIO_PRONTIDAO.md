@@ -1,5 +1,10 @@
 # Relatório de prontidão
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 **APTA para congelamento da baseline de 30 dias.** Em 09/10/2026 as quatro condições estão atendidas. A tag `jangada-baseline-2026-10` é criada pelo usuário sobre a `main` assinada; a integração automática segue bloqueada durante o período. As seções a partir de "Avaliação original" descrevem o código `5816c76` e ficam como histórico.
 
 ## Situação em 09/10/2026

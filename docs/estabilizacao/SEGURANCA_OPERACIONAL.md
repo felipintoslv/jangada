@@ -1,5 +1,10 @@
 # Segurança operacional
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 `jangada-agente-fim --integrar` está bloqueado no backend. A recusa mantém sessão, ramo e worktree. Não existe variável para liberar o fluxo. Uma tentativa interrompida ou repetida não autoriza publicação. Uma integração já feita manualmente não autoriza limpeza automática por esse comando.
 
 Use worktree isolada, revisão independente fora do isolamento e testes antes de integrar. Faça cópia dos projetos e de seus arquivos ignorados antes do primeiro uso. Confirme pessoalmente os SHA da base, do candidato e da árvore registrada, a origem da marca em `revisoes/`, `local_verified=true` e `independent=true`. Se a base mudar, revise novamente. O parecer de um provedor sintético só serve para teste.

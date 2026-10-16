@@ -1,5 +1,10 @@
 # Métricas
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](../../README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 | Métrica | Resultado e escopo |
 | --- | --- |
 | Modelos reais / revisões reais | 0 / 0; fluxo BLOQUEADO |

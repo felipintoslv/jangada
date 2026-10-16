@@ -1,5 +1,10 @@
 # Revisão adversarial
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](../../README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 Foram executadas 16 entregas R deliberadamente defeituosas, oito classes em cada rodada. Autoria: auditor, sem IA. Evidência individual com valor correto, observado, consequência e correção proposta: `evidencias/defeitos-metodologicos.json`; código: `scripts/entrega_sintetica.R` e `metodologia_adversarial.py`.
 
 | Classe | Mecanismo observado |

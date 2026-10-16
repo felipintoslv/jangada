@@ -262,7 +262,7 @@ local antes de agy para leitura e resumo, agy antes de local para análise.
 - Evidência: três linhas `agy / cota_desconhecida` em `delegacoes.jsonl`, de
   03/10/2026.
 - Consequência: o comportamento coincide com a regra "cota desconhecida não
-  equivale a cota disponível" de `JANGADA_V2_INSTRUCOES.md` l.81; a
+  equivale a cota disponível" de `arquivo/evidencias:JANGADA_V2_INSTRUCOES.md` (commit `7a9d1e5`) l.81; a
   continuação ficou a cargo do protocolo (subagente do Claude).
 - Certeza: F.
 
@@ -404,7 +404,7 @@ linhas.
 | Protocolo local | `protocolo-delegar-local.md` l.5-6 lista 6 "demais papéis" | existe também supervisor | não | F |
 | Testes do isolamento | `isolamento.md` l.131-138: parágrafo sobre `inotifywait` sob o título "Testes" | o vigia existe (`jangada-isolar` l.406) | A | F (posição do texto) |
 | `mapeamento/` | README l.29 lista na árvore | fora do git (`.gitignore`) e dito no próprio README | n/a | F, sem conflito real |
-| `JANGADA_V2_INSTRUCOES.md` | "Não crie uma fila" na Fase 1 (l.171) | a fila existe | sim | F: o arquivo é um prompt histórico, não descrição |
+| `arquivo/evidencias:JANGADA_V2_INSTRUCOES.md` (commit `7a9d1e5`) | "Não crie uma fila" na Fase 1 (l.171) | a fila existe | sim | F: o arquivo é um prompt histórico, não descrição |
 | `revisao/PENDENCIAS.md` | `JANGADA_INTERFACE=noctalia` "fica sem barra e sem lançador" (l.127) | `jangada.conf` ainda oferece `noctalia` (l.4-6) | simulação Lua no modo noctalia | F para o texto; A sobre o estado atual |
 | "Próxima etapa" | PENDENCIAS l.193: barra em Quickshell | não há | n/a | F: intenção não implementada |
 

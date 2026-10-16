@@ -1,5 +1,10 @@
 # Relatório final da correção P0
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](../README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 **CORREÇÃO P0 VALIDADA**, para os dois ataques reproduzidos e a fronteira de confiança definida. Não é declaração de prontidão da baseline ou de qualidade científica das entregas.
 
 ## Resultado

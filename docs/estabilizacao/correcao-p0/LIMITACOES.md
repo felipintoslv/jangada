@@ -1,5 +1,10 @@
 # Limitações
 
+Registro histórico do ensaio; referências a `main` e à instalação retratam
+a data desse registro. Veja o [estado atual](../README.md).
+Evidências, manifestos e scripts citados estão no ramo `arquivo/evidencias`,
+commit `7a9d1e5`, nos caminhos originais.
+
 - Modelos reais: NÃO EXECUTADO. Provedores simulados, Bubblewrap/Git reais. Bloqueio de escrita não comprova verdade semântica ou disponibilidade comercial.
 - Identidades são observadas pelo controlador no protocolo/configuração; não há atestado criptográfico do fornecedor nem independência intelectual garantida.
 - Revisão independente final não pode usar o antigo comando de rótulo sem execução. Revisão Git e supervisão intermediária não são a aprovação final de tarefa. Nenhuma API nova foi criada.
