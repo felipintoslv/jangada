@@ -22,7 +22,7 @@ COLUNAS = {
     'local_vs_agy': ['Papel', 'Destino', 'Registro', 'Chamadas', 'Sucesso', 'Recusas',
                      'Tempo mediano', 'Tokens de entrada', 'Tokens de saída', 'Mudanças do local'],
 }
-TITULOS = {'tarefas': 'Custo por tarefa', 'revisores': 'Acerto dos revisores',
+TITULOS = {'tarefas': 'Custo por tarefa', 'revisores': 'Procedência dos revisores',
            'local_vs_agy': 'Local e agy'}
 
 
@@ -168,7 +168,7 @@ class Cartao(QPushButton):
             rotulo = QLabel()
             rotulo.setObjectName('cartao_' + nome)
             rotulo.setTextFormat(Qt.TextFormat.PlainText)
-            rotulo.setWordWrap(nome in ('apoio', 'rodape'))
+            rotulo.setWordWrap(nome != 'titulo')
             rotulo.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
             layout.addWidget(rotulo)
             self.rotulos[nome] = rotulo
@@ -228,10 +228,11 @@ class Indicadores(QWidget):
         self.tabela.setAllColumnsShowFocus(True)
         layout.addWidget(self.tabela, 1)
         self.vazio = QLabel()
+        self.vazio.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.vazio.setTextFormat(Qt.TextFormat.PlainText)
         self.vazio.setWordWrap(True)
         self.vazio.hide()
-        layout.addWidget(self.vazio)
+        layout.addWidget(self.vazio, 1)
         ordem = [*self.cartoes.values(), self.atualizar_botao, self.tabela]
         for antes, depois in zip(ordem, ordem[1:]):
             QWidget.setTabOrder(antes, depois)
@@ -263,6 +264,7 @@ class Indicadores(QWidget):
         self.expirou = False
         self.janela.preparar(self.consulta, ['--json'], COMANDO)
         self.avisar('Carregando os indicadores.')
+        self.atualizar_botao.setEnabled(False)
         self.consulta.start()
         self.prazo.start(self.prazo_ms)
 
@@ -278,6 +280,7 @@ class Indicadores(QWidget):
     def consulta_erro(self, erro):
         if erro == QProcess.ProcessError.FailedToStart:
             self.prazo.stop()
+            self.atualizar_botao.setEnabled(True)
             self.falhar(f'Não foi possível executar {COMANDO}.')
 
     def consulta_fim(self, codigo, tipo):
@@ -286,6 +289,7 @@ class Indicadores(QWidget):
         self.consulta.readAllStandardError()
         if self.fechando:
             return
+        self.atualizar_botao.setEnabled(True)
         if self.expirou:
             self.falhar(f'Tempo esgotado ao consultar {COMANDO}.')
             return
@@ -321,8 +325,9 @@ class Indicadores(QWidget):
         for coluna in range(self.tabela.columnCount()):
             self.tabela.resizeColumnToContents(coluna)
         vazio = self.dados is not None and not lista
-        self.vazio.setText('Ainda não há dados para esta pergunta.' if vazio else '')
+        self.vazio.setText('Ainda não há registros para este indicador.' if vazio else '')
         self.vazio.setVisible(vazio)
+        self.tabela.setVisible(not vazio)
 
     def fechar(self):
         self.fechando = True

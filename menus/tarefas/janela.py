@@ -697,14 +697,14 @@ class Janela(QMainWindow):
             QPushButton#cartao:hover {{ border: 1px solid {c['primaria']}; }}
             QPushButton#cartao:checked {{ border: 2px solid {c['primaria']}; }}
             QPushButton#cartao:focus {{ border: 2px dashed {c['primaria']}; }}
-            QPushButton#cartao:checked:focus {{ border: 3px dashed {c['primaria']}; }}
+            QPushButton#cartao:checked:focus {{ border: 2px dashed {c['primaria']}; }}
             QPushButton#cartao QLabel {{ background: transparent; border: none; padding: 0; }}
             QLabel#cartao_titulo {{ font-size: 13px; font-weight: 600; color: {c['texto_suave']}; }}
             QLabel#cartao_numero {{ font-size: 24px; font-weight: 700; }}
             QLabel#cartao_apoio {{ font-size: 13px; }}
             QLabel#cartao_rodape {{ font-size: 12px; color: {c['texto_suave']}; }}
             QLabel#indicadores_detalhe {{ font-size: 16px; font-weight: 600; }}
-            QLabel#indicadores_status[falha="true"] {{ color: {c['atencao']}; }}
+            QLabel#indicadores_status[falha="true"] {{ color: {c['atencao']}; font-weight: 600; }}
         """)
         for nome, item in self.itens.items():
             sessao = self.sessoes.get(nome)

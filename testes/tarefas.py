@@ -370,7 +370,8 @@ class Interface(unittest.TestCase):
         self.assertFalse(ind.status.property('falha'))
 
     def test_indicadores_por_teclado_a_partir_do_botao(self):
-        self.indicadores_falso(dict(versao=1, tarefas=[], revisores=[], local_vs_agy=[]))
+        self.indicadores_falso(dict(versao=1, tarefas=[], local_vs_agy=[], revisores=[
+            dict(revisor='claude', modelo='opus', origem='sessao', casos_taxa=2, taxa_procedencia=0.5)]))
         self.janela.show()
         QTest.qWaitForWindowExposed(self.janela)
         self.janela.activateWindow()
@@ -383,7 +384,7 @@ class Interface(unittest.TestCase):
         self.assertIs(APP.focusWidget(), ind.cartoes['revisores'])
         self.assertTrue(ind.cartoes['revisores'].isChecked())
         self.assertEqual(ind.tabela.headerItem().text(0), 'Revisor')
-        self.assertEqual(ind.detalhe.text(), 'Detalhe: Acerto dos revisores')
+        self.assertEqual(ind.detalhe.text(), 'Detalhe: Procedência dos revisores')
         QTest.keyClick(APP.focusWidget(), Qt.Key.Key_Tab)
         self.assertIs(APP.focusWidget(), ind.atualizar_botao)
         QTest.keyClick(APP.focusWidget(), Qt.Key.Key_Tab)
@@ -400,6 +401,8 @@ class Interface(unittest.TestCase):
         ind = self.ler_indicadores()
         self.assertIn('Ainda não há dados de indicadores', ind.status.text())
         self.assertTrue(ind.vazio.isVisibleTo(ind))
+        self.assertFalse(ind.tabela.isVisibleTo(ind))
+        self.assertTrue(ind.atualizar_botao.isEnabled())
         self.assertEqual(ind.tabela.topLevelItemCount(), 0)
         self.assertEqual(ind.cartoes['revisores'].rotulos['numero'].text(), 'sem dado')
         self.assertFalse(any('None' in t for t in self.textos_da_aba(ind)))
@@ -430,9 +433,13 @@ class Interface(unittest.TestCase):
             self.assertTrue(ind.status.property('falha'))
             self.assertEqual(ind.cartoes['revisores'].rotulos['numero'].text(), '50%')
         self.indicadores_falso(dict(versao=1, tarefas=[], revisores=[], local_vs_agy=[]), espera=5)
-        ind.prazo_ms = 100
-        self.ler_indicadores()
+        ind.prazo_ms = 300
+        ind.atualizar()
+        self.assertIn('Carregando', ind.status.text())
+        self.assertFalse(ind.atualizar_botao.isEnabled())
+        aguardar(lambda: ind.consulta.state() == QProcess.ProcessState.NotRunning)
         self.assertIn('Tempo esgotado', ind.status.text())
+        self.assertTrue(ind.atualizar_botao.isEnabled())
         self.assertEqual(ind.cartoes['revisores'].rotulos['numero'].text(), '50%')
         self.assertTrue(self.janela.nova.isEnabled())
 
