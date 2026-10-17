@@ -7,7 +7,7 @@ import statistics
 from PyQt6.QtCore import QProcess, QSize, QTimer, Qt
 from PyQt6.QtWidgets import (QButtonGroup, QHBoxLayout, QLabel, QPushButton, QTreeWidget,
                              QTreeWidgetItem, QVBoxLayout, QWidget)
-from dados import LIMITE, comando_disponivel
+from dados import LIMITE, NOME, comando_disponivel
 
 COMANDO = 'jangada-indicadores'
 SEM_DADO = 'sem dado'
@@ -241,6 +241,7 @@ class Indicadores(QWidget):
         self.tabela = QTreeWidget()
         self.tabela.setRootIsDecorated(False)
         self.tabela.setAllColumnsShowFocus(True)
+        self.tabela.itemActivated.connect(self.abrir_tarefa)
         layout.addWidget(self.tabela, 1)
         self.vazio = QLabel()
         self.vazio.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -327,7 +328,8 @@ class Indicadores(QWidget):
         for campo, cartao in self.cartoes.items():
             cartao.mostrar(*resumos[campo])
         if any(dados.values()):
-            self.avisar('Indicadores lidos de jangada-indicadores. Clique num cartão ou use as setas para trocar o detalhe.')
+            self.avisar('Indicadores lidos de jangada-indicadores. Clique num cartão ou use as setas para trocar o detalhe. '
+                        'Em Custo por tarefa, Enter ou clique duplo numa linha abre a tarefa.')
         else:
             self.avisar('Ainda não há dados de indicadores. Eles aparecem depois das primeiras tarefas registradas.')
         self.escolher(self.escolhido())
@@ -341,13 +343,29 @@ class Indicadores(QWidget):
         self.tabela.setColumnCount(len(COLUNAS[campo]))
         self.tabela.setHeaderLabels(COLUNAS[campo])
         lista = self.tabelas[campo] if self.dados else []
-        self.tabela.addTopLevelItems([QTreeWidgetItem(linha) for linha in lista])
+        itens = [QTreeWidgetItem(linha) for linha in lista]
+        if campo == 'tarefas':
+            for indice, item in enumerate(itens):
+                item.setData(0, Qt.ItemDataRole.UserRole, indice)
+                item.setToolTip(0, 'Enter ou clique duplo abre esta tarefa na aba Sessões.')
+        self.tabela.addTopLevelItems(itens)
         for coluna in range(self.tabela.columnCount()):
             self.tabela.resizeColumnToContents(coluna)
         vazio = self.dados is not None and not lista
         self.vazio.setText('Ainda não há registros para este indicador.' if vazio else '')
         self.vazio.setVisible(vazio)
         self.tabela.setVisible(not vazio)
+
+    def abrir_tarefa(self, item, _coluna=0):
+        indice = item.data(0, Qt.ItemDataRole.UserRole)
+        if self.dados is None or self.escolhido() != 'tarefas' or not isinstance(indice, int):
+            return
+        registro = self.dados['tarefas'][indice]
+        nome = registro.get('sessao')
+        if not isinstance(nome, str) or not NOME.fullmatch(nome) or nome in ('.', '..') or len(nome) > 255:
+            self.avisar('Esta linha não traz um nome de sessão válido; não há tarefa para abrir.', falha=True)
+            return
+        self.janela.abrir_da_tabela(nome, registro)
 
     def fechar(self):
         self.fechando = True

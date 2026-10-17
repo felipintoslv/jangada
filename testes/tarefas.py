@@ -82,7 +82,7 @@ class Interface(unittest.TestCase):
         self.observados = self.raiz / 'observados'
         self.observados.mkdir()
         (self.observados / 'aviso.json').write_text('{}')
-        self.comando.write_text("#!/usr/bin/env python3\nimport pathlib, sys, json\npasta = pathlib.Path(__file__).resolve().parent.parent\nif sys.argv[1] == '--observacao-json':\n    if (pasta / 'falhar_observacao').exists():\n        print('Falha de observação simulada', file=sys.stderr)\n        sys.exit(1)\n    print(json.dumps({'versao': 1, 'caminhos': [str(pasta / 'observados'), str(pasta / 'observados' / 'aviso.json')]}))\nelif sys.argv[1] in ('--lista-json',):\n    if (pasta / 'falhar').exists():\n        print('Erro de consulta simulado', file=sys.stderr)\n        sys.exit(1)\n    dados = json.loads((pasta / 'lista').read_text())\n    if (pasta / 'apresentacao.json').exists():\n        detalhe = json.loads((pasta / 'apresentacao.json').read_text())\n        for sessao in dados['sessoes']:\n            if sessao['nome'] == 'projeto--um':\n                sessao.update(detalhe)\n                sessao['projeto'] = pathlib.Path(sessao['raiz']).name\n    print(json.dumps(dados, ensure_ascii=False))\nelif sys.argv[1] == '--previa':\n    previa = pasta / ('previa-' + sys.argv[2])\n    print(previa.read_text() if previa.exists() else 'Atividade da sessão ' + sys.argv[2])\nelse:\n    (pasta / 'acao.json').write_text(json.dumps(sys.argv[1:]))\n")
+        self.comando.write_text("#!/usr/bin/env python3\nimport pathlib, sys, json\npasta = pathlib.Path(__file__).resolve().parent.parent\nif sys.argv[1] == '--observacao-json':\n    if (pasta / 'falhar_observacao').exists():\n        print('Falha de observação simulada', file=sys.stderr)\n        sys.exit(1)\n    print(json.dumps({'versao': 1, 'caminhos': [str(pasta / 'observados'), str(pasta / 'observados' / 'aviso.json')]}))\nelif sys.argv[1] in ('--lista-json',):\n    if (pasta / 'falhar').exists():\n        print('Erro de consulta simulado', file=sys.stderr)\n        sys.exit(1)\n    dados = json.loads((pasta / 'lista').read_text())\n    if (pasta / 'apresentacao.json').exists():\n        detalhe = json.loads((pasta / 'apresentacao.json').read_text())\n        for sessao in dados['sessoes']:\n            if sessao['nome'] == 'projeto--um':\n                sessao.update(detalhe)\n                sessao['projeto'] = pathlib.Path(sessao['raiz']).name\n    print(json.dumps(dados, ensure_ascii=False))\nelif sys.argv[1] == '--contexto-json':\n    contexto = pasta / ('contexto-' + sys.argv[2])\n    print(contexto.read_text() if contexto.exists() else json.dumps({'versao': 1, 'sessao': sys.argv[2], 'tarefa': '', 'parecer': None}))\nelif sys.argv[1] == '--previa':\n    previa = pasta / ('previa-' + sys.argv[2])\n    print(previa.read_text() if previa.exists() else 'Atividade da sessão ' + sys.argv[2])\nelse:\n    (pasta / 'acao.json').write_text(json.dumps(sys.argv[1:]))\n")
         self.comando.chmod(448)
         self.criar_comando = self.bin / 'jangada-agente'
         self.criar_comando.write_text(self.comando.read_text().replace(
@@ -247,7 +247,7 @@ class Interface(unittest.TestCase):
             central.show()
             APP.processEvents()
             self.assertIn('Central de tarefas', central.windowTitle())
-            self.assertEqual([central.abas.tabText(i) for i in range(central.abas.count())], ['Acompanhamento', 'Saída do agente', 'Detalhes', 'Entrega'])
+            self.assertEqual([central.abas.tabText(i) for i in range(central.abas.count())], ['Acompanhamento', 'Saída do agente', 'Detalhes', 'Rodadas', 'Entrega'])
             self.assertFalse(hasattr(central, 'resposta'))
             self.assertIn('1 precisa da sua resposta', central.cartoes.text())
             self.assertIn('<b>Texto puro</b>', central.ultima_atividade.text())
@@ -466,6 +466,197 @@ class Interface(unittest.TestCase):
             self.assertIn('Simulação', simulada.indicadores.status.text())
             self.assertEqual(simulada.indicadores.consulta.state(), QProcess.ProcessState.NotRunning)
             self.assertFalse(simulada.indicadores.atualizar_botao.isEnabled())
+        finally:
+            simulada.close()
+
+    def tarefa_indicador(self, sessao, **campos):
+        return dict(dict(sessao=sessao, autor='claude', rodadas=2, rodadas_sessao=1, ultimo_resultado='aprovado',
+                         tokens=dict(entrada=1000, saida=500, cache_lido=None, modelo='opus', motivo=None),
+                         delegacoes=[], segundos_revisao=65), **campos)
+
+    def contexto_falso(self, sessao, parecer=None, bruto=None):
+        (self.raiz / ('contexto-' + sessao)).write_text(bruto if bruto is not None else json.dumps(
+            dict(versao=1, sessao=sessao, tarefa='Tarefa', parecer=parecer)))
+
+    def linha_de_custo(self, sessao):
+        ind = self.janela.indicadores
+        self.janela.centrais.setCurrentWidget(ind)
+        aguardar(lambda: ind.dados is not None and ind.consulta.state() == QProcess.ProcessState.NotRunning)
+        linhas = [ind.tabela.topLevelItem(i) for i in range(ind.tabela.topLevelItemCount())]
+        return ind, next(item for item in linhas if item.text(0) == sessao)
+
+    def abrir_rodadas(self):
+        rod = self.janela.rodadas
+        if not self.janela.isVisible():
+            self.janela.show()
+            QTest.qWaitForWindowExposed(self.janela)
+        self.janela.activateWindow()
+        QTest.keyClick(self.janela, Qt.Key.Key_4, Qt.KeyboardModifier.AltModifier)
+        self.assertIs(self.janela.abas.currentWidget(), rod)
+        aguardar(lambda: not rod.consulta_indicadores.ocupada() and not rod.consulta_parecer.ocupada())
+        return rod
+
+    def textos_rodadas(self, rod):
+        return ([r.text() for r in rod.valores.values()]
+                + [rod.status.text(), rod.status_rodadas.text(), rod.status_parecer.text(),
+                   rod.titulo_parecer.text(), rod.parecer.toPlainText()])
+
+    def test_rodadas_do_indicador_a_sessao_existente_com_parecer(self):
+        self.indicadores_falso(dict(versao=1, tarefas=[self.tarefa_indicador('projeto--dois')],
+                                    revisores=[], local_vs_agy=[]))
+        self.contexto_falso('projeto--dois', dict(rodada=3, origem='validacao-projeto--dois-r3.md',
+                                                  texto='STATUS: APROVADO\n\x1b[31mSem apontamentos\u202e.\tfim'))
+        self.janela.show()
+        QTest.qWaitForWindowExposed(self.janela)
+        self.janela.activateWindow()
+        self.assertEqual(self.janela.selecionada(), 'projeto--um')
+        ind, item = self.linha_de_custo('projeto--dois')
+        ind.tabela.setFocus()
+        ind.tabela.setCurrentItem(item)
+        QTest.keyClick(ind.tabela, Qt.Key.Key_Return)
+        self.assertEqual(self.janela.centrais.currentIndex(), 0)
+        self.assertEqual(self.janela.selecionada(), 'projeto--dois')
+        self.assertIs(APP.focusWidget(), self.janela.lista)
+        self.assertFalse(self.janela.aviso_encerrada.isVisibleTo(self.janela))
+        self.assertTrue(self.janela.abrir.isEnabled())
+        self.janela.lista.setCurrentItem(self.janela.itens['projeto--um'])
+        ind, item = self.linha_de_custo('projeto--dois')
+        ponto = ind.tabela.visualItemRect(item).center()
+        QTest.mouseClick(ind.tabela.viewport(), Qt.MouseButton.LeftButton, pos=ponto)
+        QTest.mouseDClick(ind.tabela.viewport(), Qt.MouseButton.LeftButton, pos=ponto)
+        self.assertEqual(self.janela.centrais.currentIndex(), 0)
+        self.assertEqual(self.janela.selecionada(), 'projeto--dois')
+        rod = self.abrir_rodadas()
+        self.assertEqual(rod.valores['rodadas'].text(), '2')
+        self.assertEqual(rod.valores['rodadas_sessao'].text(), '1')
+        self.assertEqual(rod.valores['ultimo_resultado'].text(), 'aprovado')
+        self.assertEqual(rod.valores['segundos_revisao'].text(), '1 min 5 s')
+        self.assertEqual(rod.valores['tokens'].text(), '1.000 e 500')
+        self.assertEqual(rod.titulo_parecer.text(), 'Último parecer, rodada 3')
+        self.assertEqual(rod.parecer.toPlainText(), 'STATUS: APROVADO\n[31mSem apontamentos.\tfim')
+        self.assertTrue(rod.parecer.isReadOnly())
+        self.assertIn('não aprova nem executa', rod.status.text())
+        self.assertFalse(any('None' in t for t in self.textos_rodadas(rod)))
+        self.assertEqual([b.text() for b in rod.findChildren(QPushButton)], ['Atualizar rodadas'])
+        self.assertIn('QLabel#aviso_encerrada', self.janela.styleSheet())
+        self.janela.modo.setCurrentIndex(1 - self.janela.modo.currentIndex())
+        self.assertIn(self.janela.fichas['light' if self.janela.modo.currentIndex() else 'dark']['atencao'],
+                      self.janela.styleSheet())
+
+    def test_rodadas_sessao_encerrada_mostra_registro_e_aviso(self):
+        self.indicadores_falso(dict(versao=1, revisores=[], local_vs_agy=[], tarefas=[self.tarefa_indicador(
+            'projeto--velho', tokens=dict(entrada=None, saida=None, cache_lido=None, modelo=None,
+                                          motivo='consumo não registrado'), ultimo_resultado=None)]))
+        self.janela.show()
+        QTest.qWaitForWindowExposed(self.janela)
+        ind, item = self.linha_de_custo('projeto--velho')
+        ind.tabela.setCurrentItem(item)
+        QTest.keyClick(ind.tabela, Qt.Key.Key_Enter)
+        self.assertEqual(self.janela.centrais.currentIndex(), 0)
+        self.assertIsNone(self.janela.selecionada())
+        self.assertTrue(self.janela.aviso_encerrada.isVisibleTo(self.janela))
+        self.assertIn('encerrada', self.janela.status.text())
+        self.assertEqual(self.janela.nome.text(), 'projeto--velho')
+        detalhe = self.janela.detalhes.toPlainText()
+        self.assertIn('Estado: encerrada', detalhe)
+        self.assertIn('Motivo sem consumo: consumo não registrado', detalhe)
+        self.assertIn('Último resultado: sem dado', detalhe)
+        self.assertNotIn('None', detalhe)
+        for botao in (self.janela.abrir, self.janela.integrar, self.janela.integrar_terminal, self.janela.encerrar):
+            self.assertFalse(botao.isEnabled())
+        self.janela.atualizar()
+        self.esperar_consulta()
+        self.assertTrue(self.janela.aviso_encerrada.isVisibleTo(self.janela))
+        rod = self.abrir_rodadas()
+        self.assertEqual(rod.alvo, 'projeto--velho')
+        self.assertEqual(rod.valores['ultimo_resultado'].text(), 'sem dado')
+        self.assertTrue(rod.valores['ultimo_resultado'].property('semdado'))
+        self.assertEqual(rod.valores['tokens'].text(), 'sem dado')
+        self.janela.lista.setCurrentItem(self.janela.itens['projeto--um'])
+        self.assertFalse(self.janela.aviso_encerrada.isVisibleTo(self.janela))
+        self.assertIsNone(self.janela.encerrada)
+        self.assertEqual(rod.alvo, 'projeto--um')
+
+    def test_rodadas_parecer_ausente_e_sessao_sem_registro(self):
+        self.indicadores_falso(dict(versao=1, tarefas=[], revisores=[], local_vs_agy=[]))
+        rod = self.abrir_rodadas()
+        self.assertEqual(rod.alvo, 'projeto--um')
+        self.assertEqual(rod.parecer.toPlainText(), 'sem dado')
+        self.assertIn('Nenhum parecer registrado', rod.status_parecer.text())
+        self.assertIn('ainda não têm registro', rod.status_rodadas.text())
+        self.assertEqual({r.text() for r in rod.valores.values()}, {'sem dado'})
+        self.assertFalse(rod.status.property('falha'))
+        self.assertFalse(any('None' in t for t in self.textos_rodadas(rod)))
+        self.assertIn('pareceres antigos: sem dado', ' '.join(r.text() for r in rod.findChildren(QLabel)))
+
+    def test_rodadas_comando_ausente(self):
+        rod = self.abrir_rodadas()
+        self.assertIn('Comando jangada-indicadores não encontrado', rod.status_rodadas.text())
+        self.assertTrue(rod.status_rodadas.property('falha'))
+        self.assertTrue(rod.status.property('falha'))
+        self.assertEqual(rod.valores['rodadas'].text(), 'sem dado')
+        self.assertIn('Nenhum parecer registrado', rod.status_parecer.text())
+        self.comando.unlink()
+        rod.atualizar()
+        aguardar(lambda: not rod.consulta_parecer.ocupada())
+        self.assertIn('Comando jangada-agentes não encontrado', rod.status_parecer.text())
+        self.assertTrue(rod.atualizar_botao.isEnabled())
+
+    def test_rodadas_saida_invalida_e_prazo(self):
+        self.indicadores_falso('não é JSON')
+        self.contexto_falso('projeto--um', bruto=json.dumps(dict(versao=1, sessao='outra', parecer=None)))
+        rod = self.abrir_rodadas()
+        self.assertIn('não é JSON válido', rod.status_rodadas.text())
+        self.assertIn('outra sessão', rod.status_parecer.text())
+        self.assertTrue(rod.status.property('falha'))
+        for bruto, aviso in (('{', 'não é JSON válido'),
+                             (json.dumps(dict(versao=2, sessao='projeto--um')), 'Versão 2'),
+                             (json.dumps(dict(versao=1, sessao='projeto--um', parecer=dict(rodada='1', origem='a', texto='b'))),
+                              'formato inesperado'),
+                             (json.dumps(dict(versao=1, sessao='projeto--um', parecer='texto')), 'formato inesperado')):
+            self.contexto_falso('projeto--um', bruto=bruto)
+            rod.atualizar()
+            aguardar(lambda: not rod.consulta_parecer.ocupada())
+            self.assertIn(aviso, rod.status_parecer.text())
+            self.assertEqual(rod.parecer.toPlainText(), 'sem dado')
+        self.indicadores_falso(dict(versao=1, tarefas=[], revisores=[], local_vs_agy=[]), espera=5)
+        rod.consulta_indicadores.prazo_ms = 300
+        rod.atualizar()
+        self.assertIn('Carregando as rodadas', rod.status_rodadas.text())
+        self.assertFalse(rod.atualizar_botao.isEnabled())
+        aguardar(lambda: not rod.consulta_indicadores.ocupada())
+        self.assertIn('Tempo esgotado', rod.status_rodadas.text())
+        self.assertTrue(rod.atualizar_botao.isEnabled())
+
+    def test_rodadas_resultado_de_outra_sessao_e_descartado(self):
+        self.indicadores_falso(dict(versao=1, revisores=[], local_vs_agy=[],
+                                    tarefas=[self.tarefa_indicador('projeto--um', rodadas=7)]), espera=0.5)
+        self.contexto_falso('projeto--dois', dict(rodada=1, origem='a.md', texto='parecer dois'))
+        rod = self.janela.rodadas
+        self.janela.abas.setCurrentWidget(rod)
+        self.assertTrue(rod.consulta_indicadores.ocupada())
+        self.janela.lista.setCurrentItem(self.janela.itens['projeto--dois'])
+        self.assertEqual(rod.alvo, 'projeto--dois')
+        aguardar(lambda: not rod.consulta_indicadores.ocupada() and not rod.consulta_parecer.ocupada()
+                 and rod.consultado == 'projeto--dois' and 'Lido' in rod.status.text())
+        self.assertEqual(rod.valores['rodadas'].text(), 'sem dado')
+        self.assertEqual(rod.parecer.toPlainText(), 'parecer dois')
+
+    def test_rodadas_linha_sem_nome_valido_nao_navega(self):
+        self.indicadores_falso(dict(versao=1, revisores=[], local_vs_agy=[],
+                                    tarefas=[self.tarefa_indicador('../fora')]))
+        ind, item = self.linha_de_custo('../fora')
+        ind.abrir_tarefa(item)
+        self.assertIs(self.janela.centrais.currentWidget(), ind)
+        self.assertIn('nome de sessão válido', ind.status.text())
+
+    def test_rodadas_simuladas_nao_consultam(self):
+        simulada = Janela()
+        try:
+            simulada.abas.setCurrentWidget(simulada.rodadas)
+            self.assertIn('Simulação', simulada.rodadas.status.text())
+            self.assertFalse(simulada.rodadas.consulta_parecer.ocupada())
+            self.assertFalse(simulada.rodadas.atualizar_botao.isEnabled())
         finally:
             simulada.close()
 

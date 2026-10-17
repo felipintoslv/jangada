@@ -12,7 +12,7 @@ import time
 import uuid
 
 from PyQt6.QtCore import QFileSystemWatcher, QProcess, QProcessEnvironment, QTimer, Qt
-from PyQt6.QtGui import QColor, QGuiApplication, QKeySequence, QPainter, QPixmap
+from PyQt6.QtGui import QColor, QGuiApplication, QKeySequence, QPainter, QPixmap, QShortcut
 from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout,
                             QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow, QMessageBox,
@@ -29,7 +29,8 @@ RAIZ = Path(os.environ.get('JANGADA_PATH') or Path(__file__).absolute().parents[
 sys.path.insert(0, str(RAIZ / 'default'))
 from visual.fichas import carregar as carregar_fichas, ESTADOS
 from operacional import Operacional
-from indicadores import Indicadores
+from indicadores import Indicadores, SEM_DADO, inteiro, tempo, texto, tokens_da_tarefa
+from rodadas import Rodadas
 
 # Só para a janela simulada e para quando a consulta falha: o catálogo vem do
 # jangada-agente --capacidades-json, que também é quem valida a escolha.
@@ -266,6 +267,7 @@ class Janela(QMainWindow):
         self.aviso_finalizacao = None
         self.dados_validos = False
         self.criadas = {}
+        self.encerrada = None
         self.formulario = None
         self.previas = {}
         self.atividade_sessao = None
@@ -323,7 +325,7 @@ class Janela(QMainWindow):
         self.lista.setColumnWidth(0, 270)
         self.lista.setColumnWidth(1, 130)
         self.lista.setColumnWidth(2, 155)
-        self.lista.currentItemChanged.connect(self.selecionar)
+        self.lista.currentItemChanged.connect(self.escolher_na_lista)
         divisor.addWidget(self.lista)
         detalhes = QWidget()
         direito = QVBoxLayout(detalhes)
@@ -338,6 +340,13 @@ class Janela(QMainWindow):
         self.situacao.setWordWrap(True)
         self.situacao.setObjectName('situacao')
         direito.addWidget(self.situacao)
+        self.aviso_encerrada = QLabel('Sessão encerrada. Dados lidos do registro de indicadores. '
+                                      'As ações ficam desligadas.')
+        self.aviso_encerrada.setObjectName('aviso_encerrada')
+        self.aviso_encerrada.setTextFormat(Qt.TextFormat.PlainText)
+        self.aviso_encerrada.setWordWrap(True)
+        self.aviso_encerrada.hide()
+        direito.addWidget(self.aviso_encerrada)
         self.detalhes = QPlainTextEdit()
         self.detalhes.setReadOnly(True)
         self.abas = QTabWidget()
@@ -357,6 +366,9 @@ class Janela(QMainWindow):
         self.abas.addTab(acompanhamento, 'Acompanhamento')
         self.abas.addTab(self.atividade, 'Saída do agente')
         self.abas.addTab(self.detalhes, 'Detalhes')
+        self.rodadas = Rodadas(self)
+        self.abas.addTab(self.rodadas, 'Rodadas')
+        self.abas.currentChanged.connect(self.trocar_aba)
         self.entrega = QPlainTextEdit()
         self.entrega.setReadOnly(True)
         self.entrega.setPlainText('Use Conferir e integrar para consultar a entrega antes da confirmação.')
@@ -402,6 +414,9 @@ class Janela(QMainWindow):
         self.status.setTextFormat(Qt.TextFormat.PlainText)
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
+        for numero in range(1, self.abas.count() + 1):
+            atalho = QShortcut(QKeySequence(f'Alt+{numero}'), self)
+            atalho.activated.connect(lambda i=numero - 1: self.ir_para_aba(i))
         self.aplicar_tema()
         self.integracao = QProcess(self)
         self.integracao.finished.connect(self.integracao_fim)
@@ -597,6 +612,60 @@ class Janela(QMainWindow):
         if anterior and anterior not in sessoes:
             self.status.setText('A sessão selecionada saiu da lista. Selecione outra sessão.')
 
+    def escolher_na_lista(self, atual, *_):
+        if atual is not None:
+            self.encerrada = None
+        self.selecionar()
+
+    def ir_para_aba(self, indice):
+        self.centrais.setCurrentIndex(0)
+        self.abas.setCurrentIndex(indice)
+        self.abas.tabBar().setFocus()
+
+    def trocar_aba(self, _):
+        if self.abas.currentWidget() is self.rodadas:
+            self.rodadas.aberta()
+
+    def abrir_da_tabela(self, nome, registro):
+        """Do indicador à tarefa: seleciona a sessão viva ou mostra a encerrada pelo registro."""
+        self.centrais.setCurrentIndex(0)
+        item = self.itens.get(nome)
+        if nome in self.sessoes and item is not None:
+            self.encerrada = None
+            self.lista.setCurrentItem(item)
+            self.lista.scrollToItem(item)
+            self.status.setText(f'Sessão {nome} aberta a partir dos indicadores.')
+        else:
+            self.encerrada = (nome, registro)
+            self.lista.setCurrentItem(None)
+            self.lista.clearSelection()
+            self.selecionar()
+            self.status.setText(f'A sessão {nome} foi encerrada; o detalhe vem do registro de indicadores.')
+        self.lista.setFocus()
+
+    def mostrar_encerrada(self, nome, registro):
+        t, entrada, saida = tokens_da_tarefa(registro)
+        self.nome.setText(nome)
+        self.situacao.setText('Encerrada · fora da lista de sessões\nSem ação pela Central: a sessão não existe mais.')
+        self.aviso_encerrada.show()
+        self.ultima_atividade.setText('Sessão encerrada; sem acompanhamento.')
+        self.linha_tempo.clear()
+        self.exibir_atividade(SEM_DADO, nome)
+        delegacoes = registro.get('delegacoes')
+        self.detalhes.setPlainText(
+            f"Estado: encerrada\nAutor: {texto(registro.get('autor'))}\nModelo: {texto(t.get('modelo'))}\n"
+            f"Revisor: {SEM_DADO}\n\nSessão\n{nome}\n\n"
+            f"Tokens de entrada: {inteiro(entrada)}\nTokens de saída: {inteiro(saida)}\n"
+            f"Cache lido: {inteiro(t.get('cache_lido'))}\n"
+            + (f"Motivo sem consumo: {texto(t.get('motivo'))}\n" if entrada is None or saida is None else '')
+            + f"\nRodadas protegidas: {inteiro(registro.get('rodadas'))}\n"
+            f"Rodadas do agente: {inteiro(registro.get('rodadas_sessao'))}\n"
+            f"Último resultado: {texto(registro.get('ultimo_resultado'))}\n"
+            f"Tempo de revisão: {tempo(registro.get('segundos_revisao'))}\n"
+            f"Delegações: {inteiro(len(delegacoes)) if isinstance(delegacoes, list) else SEM_DADO}\n\n"
+            'Tarefa, ramo e diretório: sem dado. O registro de indicadores não traz esses campos.')
+        self.rodadas.definir(nome)
+
     def selecionar(self, *_):
         s = self.sessoes.get(self.selecionada())
         ocupada = (self.acao.state() != QProcess.ProcessState.NotRunning
@@ -604,6 +673,11 @@ class Janela(QMainWindow):
         pendente = self.finalizacao_pendente(s.nome) if self.dados_validos and s else False
         for botao in (self.abrir, self.integrar, self.integrar_terminal, self.encerrar):
             botao.setEnabled(self.dados_validos and s is not None and (not ocupada) and not pendente)
+        if not s and self.encerrada:
+            self.mostrar_encerrada(*self.encerrada)
+            return
+        self.aviso_encerrada.hide()
+        self.rodadas.definir(s.nome if s else None)
         if not s:
             self.nome.setText('Selecione uma tarefa')
             self.situacao.clear()
@@ -704,7 +778,14 @@ class Janela(QMainWindow):
             QLabel#cartao_apoio {{ font-size: 13px; }}
             QLabel#cartao_rodape {{ font-size: 12px; color: {c['texto_suave']}; }}
             QLabel#indicadores_detalhe {{ font-size: 16px; font-weight: 600; }}
-            QLabel#indicadores_status[falha="true"] {{ color: {c['atencao']}; font-weight: 600; }}
+            QLabel#indicadores_status[falha="true"], QLabel#rodadas_status[falha="true"],
+            QLabel#rodadas_aviso[falha="true"] {{ color: {c['atencao']}; font-weight: 600; }}
+            QLabel[semdado="true"] {{ color: {c['texto_suave']}; }}
+            QLabel#rodadas_titulo {{ font-size: 16px; font-weight: 600; }}
+            QLabel#rodadas_falta {{ font-size: 13px; color: {c['texto_suave']}; }}
+            QLabel#aviso_encerrada {{ background: {c['superficie_elevada']}; color: {c['texto']};
+                border: 1px solid {c['texto_suave']}; border-left: 4px solid {c['atencao']};
+                border-radius: 8px; padding: 12px; font-weight: 600; }}
         """)
         for nome, item in self.itens.items():
             sessao = self.sessoes.get(nome)
@@ -1192,6 +1273,7 @@ exit "$resultado"
         self.fechando = True
         self.operacional.fechar()
         self.indicadores.fechar()
+        self.rodadas.fechar()
         for timer in (self.timer, self.evento_estado, self.limite_evento, self.observacao_limite,
                       self.observacao_repetir, self.espera,
                       self.tempo_acao, self.tempo_previa, self.tempo_finalizacao):
