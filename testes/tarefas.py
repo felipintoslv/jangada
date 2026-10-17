@@ -82,7 +82,7 @@ class Interface(unittest.TestCase):
         self.observados = self.raiz / 'observados'
         self.observados.mkdir()
         (self.observados / 'aviso.json').write_text('{}')
-        self.comando.write_text("#!/usr/bin/env python3\nimport pathlib, sys, json\npasta = pathlib.Path(__file__).resolve().parent.parent\nif sys.argv[1] == '--observacao-json':\n    if (pasta / 'falhar_observacao').exists():\n        print('Falha de observação simulada', file=sys.stderr)\n        sys.exit(1)\n    print(json.dumps({'versao': 1, 'caminhos': [str(pasta / 'observados'), str(pasta / 'observados' / 'aviso.json')]}))\nelif sys.argv[1] in ('--lista-json',):\n    if (pasta / 'falhar').exists():\n        print('Erro de consulta simulado', file=sys.stderr)\n        sys.exit(1)\n    dados = json.loads((pasta / 'lista').read_text())\n    if (pasta / 'apresentacao.json').exists():\n        detalhe = json.loads((pasta / 'apresentacao.json').read_text())\n        for sessao in dados['sessoes']:\n            if sessao['nome'] == 'projeto--um':\n                sessao.update(detalhe)\n                sessao['projeto'] = pathlib.Path(sessao['raiz']).name\n    print(json.dumps(dados, ensure_ascii=False))\nelif sys.argv[1] == '--contexto-json':\n    contexto = pasta / ('contexto-' + sys.argv[2])\n    print(contexto.read_text() if contexto.exists() else json.dumps({'versao': 1, 'sessao': sys.argv[2], 'tarefa': '', 'parecer': None}))\nelif sys.argv[1] == '--rodadas-json':\n    rodadas = pasta / ('rodadas-' + sys.argv[2])\n    if (pasta / 'rodadas-espera').exists():\n        import time\n        time.sleep(5)\n    if (pasta / 'rodadas-uso').exists():\n        print('uso: jangada-agentes --rodadas-json SESSAO', file=sys.stderr)\n        sys.exit(2)\n    if not rodadas.exists():\n        print('opção desconhecida: --rodadas-json', file=sys.stderr)\n        sys.exit(1)\n    print(rodadas.read_text())\nelif sys.argv[1] == '--previa':\n    previa = pasta / ('previa-' + sys.argv[2])\n    print(previa.read_text() if previa.exists() else 'Atividade da sessão ' + sys.argv[2])\nelse:\n    (pasta / 'acao.json').write_text(json.dumps(sys.argv[1:]))\n")
+        self.comando.write_text("#!/usr/bin/env python3\nimport pathlib, sys, json\npasta = pathlib.Path(__file__).resolve().parent.parent\nif sys.argv[1] == '--observacao-json':\n    if (pasta / 'falhar_observacao').exists():\n        print('Falha de observação simulada', file=sys.stderr)\n        sys.exit(1)\n    print(json.dumps({'versao': 1, 'caminhos': [str(pasta / 'observados'), str(pasta / 'observados' / 'aviso.json')]}))\nelif sys.argv[1] in ('--lista-json',):\n    if (pasta / 'falhar').exists():\n        print('Erro de consulta simulado', file=sys.stderr)\n        sys.exit(1)\n    dados = json.loads((pasta / 'lista').read_text())\n    if (pasta / 'apresentacao.json').exists():\n        detalhe = json.loads((pasta / 'apresentacao.json').read_text())\n        for sessao in dados['sessoes']:\n            if sessao['nome'] == 'projeto--um':\n                sessao.update(detalhe)\n                sessao['projeto'] = pathlib.Path(sessao['raiz']).name\n    print(json.dumps(dados, ensure_ascii=False))\nelif sys.argv[1] == '--contexto-json':\n    contexto = pasta / ('contexto-' + sys.argv[2])\n    print(contexto.read_text() if contexto.exists() else json.dumps({'versao': 1, 'sessao': sys.argv[2], 'tarefa': '', 'parecer': None}))\nelif sys.argv[1] == '--rodadas-json':\n    rodadas = pasta / ('rodadas-' + sys.argv[2])\n    if (pasta / 'rodadas-espera').exists():\n        import time\n        time.sleep(5)\n    if (pasta / 'rodadas-uso').exists():\n        print('uso: jangada-agentes --rodadas-json SESSAO', file=sys.stderr)\n        sys.exit(2)\n    if not rodadas.exists():\n        print('opção desconhecida: --rodadas-json', file=sys.stderr)\n        sys.exit(1)\n    print(rodadas.read_text())\nelif sys.argv[1] == '--coordenadores-json':\n    if (pasta / 'coordenadores-espera').exists():\n        import time\n        time.sleep(5)\n    coordenadores = pasta / 'coordenadores.json'\n    if not coordenadores.exists():\n        print('opção desconhecida: --coordenadores-json', file=sys.stderr)\n        sys.exit(1)\n    print(coordenadores.read_text())\nelif sys.argv[1] == '--previa':\n    previa = pasta / ('previa-' + sys.argv[2])\n    print(previa.read_text() if previa.exists() else 'Atividade da sessão ' + sys.argv[2])\nelse:\n    (pasta / 'acao.json').write_text(json.dumps(sys.argv[1:]))\n")
         self.comando.chmod(448)
         self.criar_comando = self.bin / 'jangada-agente'
         self.criar_comando.write_text(self.comando.read_text().replace(
@@ -528,7 +528,8 @@ class Interface(unittest.TestCase):
         self.assertTrue(self.janela.abrir.isEnabled())
         self.janela.lista.setCurrentItem(self.janela.itens['projeto--um'])
         ind, item = self.linha_de_custo('projeto--dois')
-        ponto = ind.tabela.visualItemRect(item).center()
+        # A linha pode passar da largura visível; o clique vai na primeira coluna.
+        ponto = ind.tabela.visualRect(ind.tabela.indexFromItem(item, 0)).center()
         QTest.mouseClick(ind.tabela.viewport(), Qt.MouseButton.LeftButton, pos=ponto)
         QTest.mouseDClick(ind.tabela.viewport(), Qt.MouseButton.LeftButton, pos=ponto)
         self.assertEqual(self.janela.centrais.currentIndex(), 0)
@@ -748,6 +749,273 @@ class Interface(unittest.TestCase):
             self.assertIn('Simulação', simulada.rodadas.status.text())
             self.assertFalse(simulada.rodadas.consulta_parecer.ocupada())
             self.assertFalse(simulada.rodadas.atualizar_botao.isEnabled())
+        finally:
+            simulada.close()
+
+    def coordenador_falso(self):
+        comando = self.bin / 'jangada-coordenador'
+        comando.write_text("#!/usr/bin/env python3\nimport json, pathlib, sys\n"
+                           "pasta = pathlib.Path(__file__).resolve().parent.parent\n"
+                           "with open(pasta / 'coordenador.log', 'a') as log:\n"
+                           "    log.write(json.dumps(sys.argv[1:]) + '\\n')\n")
+        comando.chmod(448)
+
+    def coordenadores_falsos(self, estado_a='aguardando', **campos):
+        a = dict(sessao='horta--coordenador', projeto='/tmp/horta', provedor='claude', estado=estado_a,
+                 ultima_linha='Pedido de permissão aberto', atualizado='2026-10-17T10:00:00-03:00',
+                 viva=True, tarefas=[dict(sessao='projeto--um', viva=True)])
+        a.update(campos)
+        b = dict(sessao='caderno--coordenador', projeto='/tmp/caderno', provedor='codex', estado='trabalhando',
+                 ultima_linha='Rodando a revisão', atualizado=None, viva=True,
+                 tarefas=[dict(sessao='projeto--dois', viva=True), dict(sessao='caderno--antiga', viva=False)])
+        (self.raiz / 'coordenadores.json').write_text(json.dumps(dict(versao=1, coordenadores=[b, a])))
+
+    def carregar_coordenadores(self):
+        coluna = self.janela.coordenadores
+        self.janela.atualizar()
+        self.esperar_consulta()
+        aguardar(lambda: not coluna.consulta.ocupada())
+        return coluna
+
+    def escolher_coordenador(self, coluna, sessao):
+        coluna.arvore.setCurrentItem(coluna.itens[('coord', sessao)])
+        return coluna
+
+    def textos_coluna(self, coluna):
+        textos = [r.text() for r in coluna.findChildren(QLabel)]
+        for i in range(coluna.arvore.topLevelItemCount()):
+            item = coluna.arvore.topLevelItem(i)
+            textos += [item.text(0), item.text(1)]
+            textos += [item.child(j).text(k) for j in range(item.childCount()) for k in (0, 1)]
+        return textos
+
+    def test_coordenadores_com_tarefas_e_aviso_por_estado(self):
+        self.coordenador_falso()
+        self.coordenadores_falsos()
+        coluna = self.carregar_coordenadores()
+        self.assertEqual(coluna.arvore.topLevelItemCount(), 2)
+        horta = coluna.itens[('coord', 'horta--coordenador')]
+        caderno = coluna.itens[('coord', 'caderno--coordenador')]
+        self.assertEqual(horta.text(0), 'horta · Claude')
+        self.assertEqual(horta.text(1), 'Ⅱ esperando você')
+        self.assertEqual(caderno.text(1), '↻ trabalhando')
+        self.assertEqual([horta.child(0).text(0)], ['projeto--um'])
+        self.assertEqual([caderno.child(i).text(0) for i in range(2)], ['projeto--dois', 'caderno--antiga'])
+        self.assertEqual(horta.child(0).text(1), 'Precisa da sua resposta')
+        self.assertIn('encerrada', caderno.child(1).text(1))
+        escuro = janela.ESTADOS['light' if self.janela.modo.currentIndex() else 'dark']['Bloqueada']
+        self.assertEqual(horta.foreground(1).color().name(), escuro)
+        self.escolher_coordenador(coluna, 'horta--coordenador')
+        self.assertEqual(coluna.aviso.text(), 'O coordenador espera resposta no terminal.')
+        self.assertEqual(coluna.ultima.text(), 'Última linha: Pedido de permissão aberto')
+        self.assertIn('17/10/2026', coluna.atualizado.text())
+        self.assertTrue(coluna.caixa.isEnabled())
+        self.escolher_coordenador(coluna, 'caderno--coordenador')
+        self.assertEqual(coluna.aviso.text(), 'O coordenador está trabalhando.')
+        self.assertEqual(coluna.atualizado.text(), 'Atualizado em sem dado')
+        self.assertTrue(coluna.caixa.isEnabled())
+        self.escolher_coordenador(coluna, 'horta--coordenador')
+        self.coordenadores_falsos('concluido')
+        self.carregar_coordenadores()
+        self.assertEqual(coluna.chave(), ('coord', 'horta--coordenador'))
+        self.assertEqual(coluna.aviso.text(), 'O coordenador terminou a resposta.')
+        self.assertEqual(coluna.itens[('coord', 'horta--coordenador')].text(1), '✓ pronto')
+        self.assertTrue(coluna.caixa.isEnabled() and coluna.ir.isEnabled())
+        self.coordenadores_falsos('aguardando', viva=False)
+        self.carregar_coordenadores()
+        self.assertEqual(coluna.itens[('coord', 'horta--coordenador')].text(1), '○ parado')
+        self.assertFalse(coluna.ir.isEnabled())
+        self.assertFalse(coluna.copiar.isEnabled())
+        self.assertTrue(coluna.caixa.isEnabled())
+        self.assertFalse(any('None' in t for t in self.textos_coluna(coluna)))
+        self.janela.modo.setCurrentIndex(1 - self.janela.modo.currentIndex())
+        modo = 'light' if self.janela.modo.currentIndex() else 'dark'
+        self.assertEqual(coluna.itens[('coord', 'caderno--coordenador')].foreground(1).color().name(),
+                         janela.ESTADOS[modo]['Executando'])
+        self.assertIn('QLabel#faixa', self.janela.styleSheet())
+
+    def test_tarefa_do_coordenador_seleciona_a_sessao(self):
+        self.coordenador_falso()
+        self.coordenadores_falsos()
+        coluna = self.carregar_coordenadores()
+        self.janela.centrais.setCurrentWidget(self.janela.indicadores)
+        aguardar(lambda: not self.janela.indicadores.consulta.state() != QProcess.ProcessState.NotRunning)
+        filho = coluna.itens[('tarefa', 'projeto--dois', 'caderno--coordenador')]
+        coluna.arvore.setCurrentItem(filho)
+        self.assertEqual(coluna.aviso.text(), 'O coordenador está trabalhando.')
+        coluna.ativar(filho)
+        self.assertEqual(self.janela.centrais.currentIndex(), 0)
+        self.assertEqual(self.janela.selecionada(), 'projeto--dois')
+        coluna.ativar(coluna.itens[('tarefa', 'caderno--antiga', 'caderno--coordenador')])
+        self.assertEqual(self.janela.selecionada(), 'projeto--dois')
+        self.assertIn('caderno--antiga não está na lista', coluna.status.text())
+
+    def test_copiar_poe_texto_na_area_e_so_foca_a_janela(self):
+        self.coordenador_falso()
+        self.coordenadores_falsos()
+        self.janela.show()
+        QTest.qWaitForWindowExposed(self.janela)
+        coluna = self.escolher_coordenador(self.carregar_coordenadores(), 'horta--coordenador')
+        APP.clipboard().setText('anterior')
+        coluna.copiar.click()
+        self.assertIn('Escreva a mensagem', coluna.copia.text())
+        self.assertEqual(APP.clipboard().text(), 'anterior')
+        coluna.caixa.setPlainText('x' * (8 * 1024 + 1))
+        coluna.copiar.click()
+        self.assertIn('8 KiB', coluna.copia.text())
+        self.assertEqual(APP.clipboard().text(), 'anterior')
+        self.assertFalse((self.raiz / 'acao.json').exists())
+        texto = 'Pode seguir com a tarefa 2.\n1\n$(rm -rf ~); `id`'
+        coluna.caixa.setPlainText(texto)
+        coluna.caixa.setFocus()
+        QTest.keyClick(coluna.caixa, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier)
+        self.assertEqual(APP.clipboard().text(), texto)
+        self.assertEqual(coluna.copia.text(), 'Copiado; cole no terminal do coordenador.')
+        self.assertEqual(coluna.caixa.toPlainText(), texto)
+        aguardar(lambda: coluna.foco.state() == QProcess.ProcessState.NotRunning)
+        self.assertEqual(json.loads((self.raiz / 'acao.json').read_text()), ['--focar', 'horta--coordenador'])
+        self.assertFalse((self.raiz / 'coordenador.log').exists())
+        (self.raiz / 'acao.json').unlink()
+        coluna.ir.click()
+        aguardar(lambda: coluna.foco.state() == QProcess.ProcessState.NotRunning)
+        self.assertEqual(json.loads((self.raiz / 'acao.json').read_text()), ['--focar', 'horta--coordenador'])
+        self.escolher_coordenador(coluna, 'caderno--coordenador')
+        self.assertEqual(coluna.caixa.toPlainText(), '')
+        self.escolher_coordenador(coluna, 'horta--coordenador')
+        self.assertEqual(coluna.caixa.toPlainText(), texto)
+
+    def test_teclado_da_coluna_e_do_painel(self):
+        self.coordenador_falso()
+        self.coordenadores_falsos()
+        coluna = self.carregar_coordenadores()
+        self.janela.show()
+        QTest.qWaitForWindowExposed(self.janela)
+        self.janela.activateWindow()
+        QTest.keyClick(self.janela, Qt.Key.Key_1, Qt.KeyboardModifier.AltModifier)
+        self.assertIs(APP.focusWidget(), coluna.arvore)
+        self.assertIsNotNone(coluna.chave())
+        QTest.keyClick(self.janela, Qt.Key.Key_M, Qt.KeyboardModifier.AltModifier)
+        self.assertIs(APP.focusWidget(), coluna.caixa)
+        QTest.keyClick(coluna.caixa, Qt.Key.Key_Tab)
+        self.assertIs(APP.focusWidget(), coluna.copiar)
+        QTest.keyClick(coluna.copiar, Qt.Key.Key_Tab)
+        self.assertIs(APP.focusWidget(), coluna.ir)
+        coluna.arvore.setFocus()
+        QTest.keyClick(coluna.arvore, Qt.Key.Key_Tab)
+        self.assertIs(APP.focusWidget(), coluna.ultima)
+        QTest.keyClick(self.janela, Qt.Key.Key_J, Qt.KeyboardModifier.AltModifier)
+        aguardar(lambda: (self.raiz / 'acao.json').exists() and coluna.foco.state() == QProcess.ProcessState.NotRunning)
+        self.assertEqual(json.loads((self.raiz / 'acao.json').read_text())[0], '--focar')
+        QTest.keyClick(self.janela, Qt.Key.Key_4, Qt.KeyboardModifier.AltModifier)
+        self.assertIs(self.janela.abas.currentWidget(), self.janela.rodadas)
+        self.assertIn('QLabel#coord_linha:focus', self.janela.styleSheet())
+
+    def test_novo_coordenador_abre_ou_leva_ao_existente(self):
+        self.coordenador_falso()
+        self.coordenadores_falsos()
+        self.janela.show()
+        QTest.qWaitForWindowExposed(self.janela)
+        coluna = self.carregar_coordenadores()
+        nova = self.raiz / 'mapa'
+        nova.mkdir()
+        self.janela.operacional.dados = {'projetos': [{'id': 'h', 'nome': 'horta', 'caminho': '/tmp/horta'},
+                                                      {'id': 'm', 'nome': 'mapa', 'caminho': str(nova)},
+                                                      {'id': 'x', 'nome': 'sem caminho', 'caminho': None}]}
+        QTest.keyClick(self.janela, Qt.Key.Key_N, Qt.KeyboardModifier.ControlModifier)
+        dialogo = coluna.dialogo
+        self.assertIsNotNone(dialogo)
+        self.assertEqual(dialogo.projeto.count(), 2)
+        dialogo.projeto.setCurrentIndex(0)
+        self.assertIn('já tem coordenador', dialogo.aviso.text())
+        dialogo.abrir.click()
+        self.assertEqual(coluna.chave(), ('coord', 'horta--coordenador'))
+        aguardar(lambda: (self.raiz / 'acao.json').exists() and coluna.foco.state() == QProcess.ProcessState.NotRunning)
+        self.assertEqual(json.loads((self.raiz / 'acao.json').read_text()), ['--focar', 'horta--coordenador'])
+        self.assertFalse((self.raiz / 'coordenador.log').exists())
+        coluna.novo_coordenador()
+        dialogo.projeto.setCurrentIndex(1)
+        dialogo.provedor.setCurrentText('codex')
+        dialogo.abrir.click()
+        aguardar(lambda: (self.raiz / 'coordenador.log').exists())
+        self.assertEqual(json.loads((self.raiz / 'coordenador.log').read_text()),
+                         ['--projeto', str(nova), '--provedor', 'codex', '--janela'])
+        self.janela.operacional.dados = {}
+        coluna.novo_coordenador()
+        self.assertFalse(dialogo.abrir.isEnabled())
+        self.assertIn('Nenhum projeto cadastrado', dialogo.aviso.text())
+        dialogo.hide()
+
+    def test_coordenadores_core_sem_consulta_ou_sem_comando(self):
+        coluna = self.carregar_coordenadores()
+        self.assertEqual(coluna.status.text(), 'Coordenadores ainda não disponíveis no Core instalado.')
+        self.assertFalse(coluna.novo.isEnabled())
+        self.coordenador_falso()
+        coluna = self.carregar_coordenadores()
+        self.assertEqual(coluna.status.text(), 'Coordenadores ainda não disponíveis no Core instalado.')
+        self.assertFalse(coluna.status.property('falha'))
+        self.assertEqual(coluna.arvore.topLevelItemCount(), 0)
+        self.assertEqual(set(self.janela.sessoes), {'projeto--um', 'projeto--dois'})
+        self.assertTrue(self.janela.abrir.isEnabled())
+        self.assertFalse(any('None' in t for t in self.textos_coluna(coluna)))
+        self.assertIn('sem dado', self.janela.faixa.text())
+
+    def test_coordenadores_saida_invalida_e_tempo_esgotado(self):
+        self.coordenador_falso()
+        self.coordenadores_falsos()
+        coluna = self.carregar_coordenadores()
+        for bruto, trecho in (('não é JSON', 'não é JSON válido'),
+                              (json.dumps(dict(versao=2, coordenadores=[])), 'Versão 2'),
+                              (json.dumps(dict(versao=1, coordenadores=[dict(sessao='horta')])), 'nome de coordenador'),
+                              (json.dumps(dict(versao=1, coordenadores=[dict(
+                                  sessao='a--coordenador', projeto=None, provedor=None, estado=None,
+                                  ultima_linha=None, atualizado=None, viva='sim', tarefas=[])])), 'viva')):
+            with self.subTest(trecho=trecho):
+                (self.raiz / 'coordenadores.json').write_text(bruto)
+                self.carregar_coordenadores()
+                self.assertIn('Saída inválida', coluna.status.text())
+                self.assertIn(trecho, coluna.status.text())
+                self.assertTrue(coluna.status.property('falha'))
+                self.assertEqual(coluna.arvore.topLevelItemCount(), 2)
+        self.coordenadores_falsos()
+        (self.raiz / 'coordenadores-espera').touch()
+        coluna.consulta.prazo_ms = 200
+        self.carregar_coordenadores()
+        self.assertIn('Tempo esgotado', coluna.status.text())
+        self.assertTrue(coluna.status.property('falha'))
+        self.assertEqual(coluna.arvore.topLevelItemCount(), 2)
+
+    def test_coordenadores_nulos_e_ultima_linha_com_controle(self):
+        self.coordenador_falso()
+        self.coordenadores_falsos(ultima_linha='\x1b[31mOi\u202e\nsegunda\tlinha\x07\r', projeto=None,
+                                  provedor=None, estado=None, atualizado='ontem')
+        coluna = self.escolher_coordenador(self.carregar_coordenadores(), 'horta--coordenador')
+        self.assertEqual(coluna.ultima.text(), 'Última linha: [31mOi segunda linha')
+        self.assertEqual(coluna.ultima.textFormat(), Qt.TextFormat.PlainText)
+        self.assertEqual(coluna.itens[('coord', 'horta--coordenador')].text(0), 'horta · provedor sem dado')
+        self.assertEqual(coluna.itens[('coord', 'horta--coordenador')].text(1), '? estado sem dado')
+        self.assertIn('Projeto: sem dado', coluna.situacao.text())
+        self.assertEqual(coluna.atualizado.text(), 'Atualizado em sem dado')
+        self.assertFalse(any('None' in t for t in self.textos_coluna(coluna)))
+
+    def test_sessao_de_coordenador_fora_da_aba_sessoes(self):
+        dados_lista = json.loads(self.lista.read_text())
+        extra = dict(dados_lista['sessoes'][0], nome='horta--coordenador', estado='trabalhando')
+        dados_lista['sessoes'].append(extra)
+        self.lista.write_text(json.dumps(dados_lista))
+        self.janela.atualizar()
+        self.esperar_consulta()
+        self.assertNotIn('horta--coordenador', self.janela.sessoes)
+        self.assertNotIn('horta--coordenador', self.janela.itens)
+        self.assertEqual(set(self.janela.sessoes), {'projeto--um', 'projeto--dois'})
+        self.assertIn('2 tarefas', self.janela.resumo.text())
+
+    def test_coordenadores_simulados_nao_consultam(self):
+        simulada = Janela()
+        try:
+            coluna = simulada.coordenadores
+            self.assertIn('Simulação', coluna.status.text())
+            self.assertFalse(coluna.novo.isEnabled())
+            self.assertFalse(coluna.consulta.ocupada())
         finally:
             simulada.close()
 
