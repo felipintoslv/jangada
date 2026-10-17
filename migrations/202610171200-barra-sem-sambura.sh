@@ -103,7 +103,13 @@ def ultima_ocorrencia(texto):
     return trecho(texto, tokens, *max(ocorrencias))
 
 texto = Path(sys.argv[1]).read_text()
-if f'"{modulo}"' not in texto:
+try:
+    ler(texto)
+except ValueError:
+    # Cópia inválida que não cita o módulo não é desta migração; falhar aqui
+    # travaria as migrações seguintes.
+    if 'sambura' in texto:
+        raise
     sys.exit(0)
 # Uma ocorrência por vez: com o módulo repetido, os cortes vizinhos dividiriam
 # a mesma vírgula se fossem calculados todos sobre o texto original.

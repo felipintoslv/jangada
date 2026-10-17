@@ -100,6 +100,8 @@ class Retirada(unittest.TestCase):
             ('{"modules-left": ["a", "custom/sambura"]}', '{"modules-left": ["a"]}'),
             ('{"modules-left": ["a", /* x */ "custom/sambura"]}',
              '{"modules-left": ["a" /* x */ ]}'),
+            ('{"modules-left": ["custom\\/sambura", "a"], "custom\\u002fsambura": {"format": "S"}}',
+             '{"modules-left": ["a"]}'),
             ('{"modules-left": ["custom/sambura" /* pessoal */, "clock"]}',
              '{"modules-left": [ /* pessoal */ "clock"]}'),
             ('{"modules-left": ["a", "custom/sambura", "custom/sambura", "b"]}',
@@ -139,6 +141,7 @@ class Retirada(unittest.TestCase):
         self.assertIn('nada a migrar', resultado.stdout)
         self.assertFalse(self.alvo.exists())
         for texto, codigo in [('{"modules-left": ["clock"]} // custom/sambura', 0),
+                              ('{"modules-left": ["clock"', 0),
                               ('{"modules-left": ["custom/sambura"', 1)]:
             with self.subTest(texto=texto):
                 self.alvo.write_text(texto)
