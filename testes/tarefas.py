@@ -363,11 +363,17 @@ class Interface(unittest.TestCase):
         self.assertEqual(ind.tabela.topLevelItem(0).text(8), 'sem dado')
         self.assertEqual(ind.tabela.topLevelItem(1).text(8), '92% (13 casos)')
         self.assertEqual(ind.tabela.topLevelItem(1).text(2), 'registro protegido')
+        self.assertEqual(ind.tabela.columnCount(), 9)
         ind.cartoes['local_vs_agy'].click()
+        self.assertEqual(ind.tabela.columnCount(), 10)
+        self.assertEqual(ind.tabela.headerItem().text(9), 'Mudanças do local')
         self.assertEqual(ind.tabela.topLevelItem(0).text(6), '7,5 s')
         self.assertEqual(ind.tabela.topLevelItem(1).text(6), '1 min 2 s')
         self.assertFalse(any('None' in t for t in self.textos_da_aba(ind)))
         self.assertFalse(ind.status.property('falha'))
+        ind.cartoes['tarefas'].click()
+        self.assertEqual(ind.tabela.columnCount(), 12)
+        self.assertEqual(ind.tabela.headerItem().text(11), 'Motivo sem consumo')
 
     def test_indicadores_por_teclado_a_partir_do_botao(self):
         self.indicadores_falso(dict(versao=1, tarefas=[], local_vs_agy=[], revisores=[
@@ -425,13 +431,23 @@ class Interface(unittest.TestCase):
         self.assertEqual(ind.cartoes['revisores'].rotulos['numero'].text(), '50%')
         for saida, aviso in (('não é JSON', 'não é JSON válido'),
                              (dict(versao=2, tarefas=[], revisores=[], local_vs_agy=[]), 'Versão 2'),
-                             (dict(versao=1, tarefas={}, revisores=[], local_vs_agy=[]), 'listas esperadas')):
+                             (dict(versao=1, tarefas={}, revisores=[], local_vs_agy=[]), 'listas esperadas'),
+                             ('{"versao": 1, "tarefas": [], "local_vs_agy": [], "revisores": ['
+                              '{"casos_taxa": 1e999, "taxa_procedencia": NaN}]}', 'não é JSON válido'),
+                             (dict(versao=1, tarefas=[], revisores=[], local_vs_agy=[
+                                 dict(destino='local', chamadas=1, sucesso=10 ** 400)]), 'formato inesperado')):
             self.indicadores_falso(saida)
             self.ler_indicadores()
             self.assertIn(aviso, ind.status.text())
             self.assertIn('leitura anterior', ind.status.text())
             self.assertTrue(ind.status.property('falha'))
             self.assertEqual(ind.cartoes['revisores'].rotulos['numero'].text(), '50%')
+        self.indicadores_falso(dict(versao=1, local_vs_agy=[], tarefas=[dict(sessao=[], tokens=[], delegacoes={})],
+                                    revisores=[dict(revisor={}, origem=[], casos_taxa='2', taxa_procedencia=2)]))
+        self.ler_indicadores()
+        self.assertFalse(ind.status.property('falha'))
+        self.assertEqual(ind.cartoes['revisores'].rotulos['numero'].text(), 'sem dado')
+        self.assertEqual({ind.tabela.topLevelItem(0).text(c) for c in range(12)} - {''}, {'sem dado'})
         self.indicadores_falso(dict(versao=1, tarefas=[], revisores=[], local_vs_agy=[]), espera=5)
         ind.prazo_ms = 300
         ind.atualizar()
@@ -439,8 +455,8 @@ class Interface(unittest.TestCase):
         self.assertFalse(ind.atualizar_botao.isEnabled())
         aguardar(lambda: ind.consulta.state() == QProcess.ProcessState.NotRunning)
         self.assertIn('Tempo esgotado', ind.status.text())
+        self.assertIn('leitura anterior', ind.status.text())
         self.assertTrue(ind.atualizar_botao.isEnabled())
-        self.assertEqual(ind.cartoes['revisores'].rotulos['numero'].text(), '50%')
         self.assertTrue(self.janela.nova.isEnabled())
 
     def test_indicadores_simulados_nao_consultam(self):

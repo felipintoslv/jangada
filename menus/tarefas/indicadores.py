@@ -1,5 +1,6 @@
 """Indicadores: lê jangada-indicadores --json e mostra, sem calcular sobre os registros."""
 import json
+import math
 import re
 import statistics
 
@@ -34,7 +35,9 @@ def texto(valor, limite=200):
 
 
 def numero(valor):
-    return valor if isinstance(valor, (int, float)) and not isinstance(valor, bool) and valor >= 0 else None
+    if isinstance(valor, bool) or not isinstance(valor, (int, float)) or not math.isfinite(valor):
+        return None
+    return valor if valor >= 0 else None
 
 
 def inteiro(valor):
@@ -66,7 +69,18 @@ def tempo(segundos):
 
 
 def origem(valor):
-    return ORIGENS.get(valor, SEM_DADO)
+    return ORIGENS.get(valor, SEM_DADO) if isinstance(valor, str) else SEM_DADO
+
+
+def finito(texto):
+    valor = float(texto)
+    if not math.isfinite(valor):
+        raise ValueError('número fora do intervalo')
+    return valor
+
+
+def recusar_constante(nome):
+    raise ValueError(nome)
 
 
 def ler(bruto):
@@ -74,7 +88,7 @@ def ler(bruto):
     if len(bruto) > LIMITE:
         raise ValueError('A saída excedeu o limite de leitura.')
     try:
-        dados = json.loads(bruto)
+        dados = json.loads(bruto, parse_float=finito, parse_constant=recusar_constante)
     except (ValueError, RecursionError) as erro:
         raise ValueError('A saída não é JSON válido.') from erro
     if not isinstance(dados, dict) or type(dados.get('versao')) is not int:
@@ -195,6 +209,7 @@ class Indicadores(QWidget):
         super().__init__(janela)
         self.janela = janela
         self.dados = None
+        self.tabelas = {}
         self.fechando = False
         self.prazo_ms = 15000
         layout = QVBoxLayout(self)
@@ -298,15 +313,19 @@ class Indicadores(QWidget):
             return
         try:
             dados = ler(bruto)
+            self.mostrar(dados)
         except ValueError as erro:
             self.falhar(str(erro))
-            return
-        self.mostrar(dados)
+        except (TypeError, OverflowError):
+            self.falhar('A saída traz campos em formato inesperado.')
 
     def mostrar(self, dados):
-        self.dados = dados
+        # Monta tudo antes de trocar a tela: campo inesperado mantém a leitura anterior.
+        resumos = {campo: resumo(campo, dados[campo]) for campo in LISTAS}
+        tabelas = {campo: linhas(campo, dados[campo]) for campo in LISTAS}
+        self.dados, self.tabelas = dados, tabelas
         for campo, cartao in self.cartoes.items():
-            cartao.mostrar(*resumo(campo, dados[campo]))
+            cartao.mostrar(*resumos[campo])
         if any(dados.values()):
             self.avisar('Indicadores lidos de jangada-indicadores. Clique num cartão ou use as setas para trocar o detalhe.')
         else:
@@ -319,9 +338,10 @@ class Indicadores(QWidget):
     def escolher(self, campo):
         self.detalhe.setText('Detalhe: ' + TITULOS[campo])
         self.tabela.clear()
+        self.tabela.setColumnCount(len(COLUNAS[campo]))
         self.tabela.setHeaderLabels(COLUNAS[campo])
-        lista = self.dados[campo] if self.dados else []
-        self.tabela.addTopLevelItems([QTreeWidgetItem(linha) for linha in linhas(campo, lista)])
+        lista = self.tabelas[campo] if self.dados else []
+        self.tabela.addTopLevelItems([QTreeWidgetItem(linha) for linha in lista])
         for coluna in range(self.tabela.columnCount()):
             self.tabela.resizeColumnToContents(coluna)
         vazio = self.dados is not None and not lista
