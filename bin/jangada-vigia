@@ -3,9 +3,9 @@
 # somente leitura e sem uso de rede ou modelo de IA.
 #
 # Uso:
-#   jangada-inspector diagnostico
-#   jangada-inspector lista
-#   jangada-inspector apagar [--todos | ARQUIVO]
+#   jangada-vigia diagnostico
+#   jangada-vigia lista
+#   jangada-vigia apagar [--todos | ARQUIVO]
 set -euo pipefail
 export LC_ALL=C.UTF-8
 export SYSTEMD_PAGER=cat PAGER=cat
@@ -13,7 +13,7 @@ export SYSTEMD_PAGER=cat PAGER=cat
 # shellcheck source=bin/jangada-shell-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-shell-config"
 
-PASTA_INSPECTOR="$JANGADA_ESTADO/inspector"
+PASTA_VIGIA="$JANGADA_ESTADO/vigia"
 
 uso() {
   sed -n '2,8s/^# \{0,1\}//p' "$0"
@@ -21,12 +21,12 @@ uso() {
 
 garantir_pasta() {
   mkdir -p "$JANGADA_ESTADO"
-  if [[ -L "$PASTA_INSPECTOR" ]]; then
-    echo "erro: $PASTA_INSPECTOR não pode ser link simbólico" >&2
+  if [[ -L "$PASTA_VIGIA" ]]; then
+    echo "erro: $PASTA_VIGIA não pode ser link simbólico" >&2
     exit 1
   fi
-  mkdir -p "$PASTA_INSPECTOR"
-  chmod 0700 "$PASTA_INSPECTOR"
+  mkdir -p "$PASTA_VIGIA"
+  chmod 0700 "$PASTA_VIGIA"
 }
 
 # Higieniza e mascara a entrada padrão:
@@ -42,12 +42,12 @@ higienizar() {
   command -v uname >/dev/null 2>&1 && uname_cmd="$(uname -n 2>/dev/null || true)"
   command -v id >/dev/null 2>&1 && id_user="$(id -un 2>/dev/null || true)"
 
-  INSP_MAX_LINHAS="$max_linhas" \
-  INSP_MAX_BYTES="$max_bytes" \
-  INSP_MODO_CORTE="$modo_corte" \
-  INSP_HOST_CMD="$host_cmd" \
-  INSP_UNAME_CMD="$uname_cmd" \
-  INSP_ID_USER="$id_user" \
+  VIGIA_MAX_LINHAS="$max_linhas" \
+  VIGIA_MAX_BYTES="$max_bytes" \
+  VIGIA_MODO_CORTE="$modo_corte" \
+  VIGIA_HOST_CMD="$host_cmd" \
+  VIGIA_UNAME_CMD="$uname_cmd" \
+  VIGIA_ID_USER="$id_user" \
   python3 -c '
 import os, re, sys
 
@@ -65,8 +65,8 @@ texto = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "", texto)
 texto = texto.replace("`", "\x27")
 
 linhas = texto.splitlines()
-max_linhas = int(os.environ.get("INSP_MAX_LINHAS", "100"))
-modo_corte = os.environ.get("INSP_MODO_CORTE", "head")
+max_linhas = int(os.environ.get("VIGIA_MAX_LINHAS", "100"))
+modo_corte = os.environ.get("VIGIA_MODO_CORTE", "head")
 if max_linhas > 0 and len(linhas) > max_linhas:
     if modo_corte == "tail":
         linhas = linhas[-max_linhas:]
@@ -102,7 +102,7 @@ usuarios = set()
 for cand in (
     os.environ.get("USER", ""),
     os.environ.get("LOGNAME", ""),
-    os.environ.get("INSP_ID_USER", ""),
+    os.environ.get("VIGIA_ID_USER", ""),
     os.path.basename(home) if home else "",
 ):
     c = cand.strip()
@@ -116,8 +116,8 @@ for u in sorted(usuarios, key=len, reverse=True):
 maquinas = set()
 for cand in (
     os.environ.get("HOSTNAME", ""),
-    os.environ.get("INSP_HOST_CMD", ""),
-    os.environ.get("INSP_UNAME_CMD", ""),
+    os.environ.get("VIGIA_HOST_CMD", ""),
+    os.environ.get("VIGIA_UNAME_CMD", ""),
 ):
     c = cand.strip()
     if len(c) >= 2:
@@ -131,7 +131,7 @@ for m in sorted(maquinas, key=len, reverse=True):
         continue
     texto = re.sub(r"(?<![A-Za-z0-9])" + re.escape(m) + r"(?![A-Za-z0-9])", "<maquina>", texto, flags=re.IGNORECASE)
 
-max_bytes = int(os.environ.get("INSP_MAX_BYTES", "16384"))
+max_bytes = int(os.environ.get("VIGIA_MAX_BYTES", "16384"))
 codificado = texto.encode("utf-8")
 if max_bytes > 0 and len(codificado) > max_bytes:
     texto = codificado[:max_bytes].decode("utf-8", errors="ignore")
@@ -288,7 +288,7 @@ coletar_log_sistema() {
 limpar_antigos() {
   garantir_pasta
   local pasta_real
-  pasta_real="$(realpath -e "$PASTA_INSPECTOR")"
+  pasta_real="$(realpath -e "$PASTA_VIGIA")"
   find "$pasta_real" -maxdepth 1 -type f \( -name 'retrato-*.json' -o -name 'retrato-*.md' \) -mtime +30 -delete
 }
 
@@ -310,11 +310,11 @@ subcomando_diagnostico() {
   gerado_em="$(date -Iseconds)"
   base="retrato-$carimbo"
   # Evita colisão caso dois diagnósticos rodem no mesmo segundo
-  if [[ -e "$PASTA_INSPECTOR/$base.json" || -e "$PASTA_INSPECTOR/$base.md" ]]; then
+  if [[ -e "$PASTA_VIGIA/$base.json" || -e "$PASTA_VIGIA/$base.md" ]]; then
     base="retrato-$carimbo-$$"
   fi
-  arq_json="$PASTA_INSPECTOR/$base.json"
-  arq_md="$PASTA_INSPECTOR/$base.md"
+  arq_json="$PASTA_VIGIA/$base.json"
+  arq_md="$PASTA_VIGIA/$base.md"
   arq_json_mascarado="$(printf '%s\n' "$arq_json" | higienizar 1 512 head)"
 
   local srv_sis srv_usr rec_load rec_mem rec_disc rec_vram ses_ver ses_mon ses_wb jang_diag log_err
@@ -330,9 +330,9 @@ subcomando_diagnostico() {
   jang_diag="$(coletar_jangada_diagnostico)"
   log_err="$(coletar_log_sistema)"
 
-  tmp_json="$(mktemp "$PASTA_INSPECTOR/.retrato-json.XXXXXX")"
+  tmp_json="$(mktemp "$PASTA_VIGIA/.retrato-json.XXXXXX")"
   TMP_JSON_ATUAL="$tmp_json"
-  tmp_md="$(mktemp "$PASTA_INSPECTOR/.retrato-md.XXXXXX")"
+  tmp_md="$(mktemp "$PASTA_VIGIA/.retrato-md.XXXXXX")"
   TMP_MD_ATUAL="$tmp_md"
   chmod 0600 "$tmp_json" "$tmp_md"
 
@@ -376,7 +376,7 @@ subcomando_diagnostico() {
     }' >"$tmp_json"
 
   {
-    echo "# Relatório de diagnóstico do Jangada Inspector ($carimbo, <maquina>)"
+    echo "# Relatório de diagnóstico do Jangada Vigia ($carimbo, <maquina>)"
     echo
     echo "Gerado em: $gerado_em"
     echo "Retrato estruturado: $arq_json_mascarado"
@@ -448,10 +448,10 @@ subcomando_diagnostico() {
 }
 
 subcomando_lista() {
-  [[ -d "$PASTA_INSPECTOR" && ! -L "$PASTA_INSPECTOR" ]] || return 0
+  [[ -d "$PASTA_VIGIA" && ! -L "$PASTA_VIGIA" ]] || return 0
   local arq
   shopt -s nullglob
-  for arq in "$PASTA_INSPECTOR"/retrato-*.json; do
+  for arq in "$PASTA_VIGIA"/retrato-*.json; do
     [[ -f "$arq" && ! -L "$arq" ]] && printf '%s\n' "$arq"
   done
   shopt -u nullglob
@@ -460,12 +460,12 @@ subcomando_lista() {
 subcomando_apagar() {
   local alvo="${1:-}"
   if [[ -z "$alvo" ]]; then
-    echo "uso: jangada-inspector apagar [--todos | ARQUIVO]" >&2
+    echo "uso: jangada-vigia apagar [--todos | ARQUIVO]" >&2
     exit 1
   fi
   garantir_pasta
   local pasta_real
-  pasta_real="$(realpath -e "$PASTA_INSPECTOR")"
+  pasta_real="$(realpath -e "$PASTA_VIGIA")"
 
   if [[ "$alvo" == "--todos" ]]; then
     find "$pasta_real" -maxdepth 1 -type f \( -name 'retrato-*.json' -o -name 'retrato-*.md' \) -delete
@@ -473,7 +473,7 @@ subcomando_apagar() {
   fi
 
   if [[ "$alvo" == *".."* ]]; then
-    echo "erro: caminho recusado fora de $PASTA_INSPECTOR: $alvo" >&2
+    echo "erro: caminho recusado fora de $PASTA_VIGIA: $alvo" >&2
     exit 1
   fi
 
@@ -494,7 +494,7 @@ subcomando_apagar() {
   nome_base="$(basename "$candidato")"
 
   if [[ "$dir_real" != "$pasta_real" || ! "$nome_base" =~ ^retrato-[A-Za-z0-9_.-]+\.(json|md)$ ]]; then
-    echo "erro: caminho fora de $PASTA_INSPECTOR ou nome inválido: $alvo" >&2
+    echo "erro: caminho fora de $PASTA_VIGIA ou nome inválido: $alvo" >&2
     exit 1
   fi
 
@@ -530,7 +530,7 @@ case "${1:-}" in
     ;;
   apagar)
     shift
-    [[ $# -eq 1 ]] || { echo "uso: jangada-inspector apagar [--todos | ARQUIVO]" >&2; exit 1; }
+    [[ $# -eq 1 ]] || { echo "uso: jangada-vigia apagar [--todos | ARQUIVO]" >&2; exit 1; }
     subcomando_apagar "$1"
     ;;
   "")

@@ -1,9 +1,10 @@
-# Jangada Inspector
+# Jangada Vigia
 
-O Jangada Inspector é a ferramenta do Jangada Shell voltada a acompanhar a
+O Jangada Vigia é a ferramenta do Jangada Shell voltada a acompanhar a
 manutenção do sistema, conversar sobre o estado da máquina e do fluxo de
 trabalho e criar peças para a barra e para a sessão gráfica em linguagem
 natural, sempre sob supervisão e dentro do isolamento do jangada.
+No planejamento, o nome era Inspector.
 
 Os contratos detalhados da primeira versão estão em:
 
@@ -27,7 +28,7 @@ Os contratos detalhados da primeira versão estão em:
   dados.
 - **Fato separado de hipótese:** relatórios e comparações distinguem o que foi
   medido pelos coletores do que é hipótese ou proposta de mudança.
-- **Subordinação às políticas do Core:** o Inspector segue o isolamento e o
+- **Subordinação às políticas do Core:** o Vigia segue o isolamento e o
   ciclo de revisão existentes do jangada e não cria outro orquestrador.
 - **Permissão por peça:** peças parecidas não dividem permissão por
   conveniência. O nome ou a finalidade de uma peça não concede capacidade além
@@ -42,7 +43,7 @@ Os contratos detalhados da primeira versão estão em:
 | I3 | Foco em acompanhar a manutenção e criar aditivos para a barra e para o Jangada Shell por linguagem natural. |
 | I4 | Agente inspetor dedicado no `agy` para conversa sobre o sistema e o fluxo de trabalho, condicionado ao teste prático da fase 2b. |
 | I5 | Controle pelo celular descartado. |
-| I6 | Ordem de execução: modularização 3.0 fechada, M3-19, período de uso e só então o Inspector, começando pelo planejamento. |
+| I6 | Ordem de execução: modularização 3.0 fechada, M3-19, período de uso e só então o Vigia, começando pelo planejamento. |
 
 ### Ajustes decorrentes de I1 e I2
 
@@ -52,8 +53,8 @@ Os contratos detalhados da primeira versão estão em:
   (silenciar notificações e temporizador), sem bloquear processos.
 - **Atualização da barra:** um módulo instalado na Waybar lê contadores locais
   a cada poucos segundos pela própria natureza da barra. Isso não é coleta do
-  Inspector, e sim execução de uma peça aprovada pelo usuário com fonte e
-  intervalo declarados no contrato. O diagnóstico do Inspector continua
+  Vigia, e sim execução de uma peça aprovada pelo usuário com fonte e
+  intervalo declarados no contrato. O diagnóstico do Vigia continua
   exclusivamente sob pedido.
 
 ## Frentes de atuação
@@ -61,7 +62,7 @@ Os contratos detalhados da primeira versão estão em:
 1. **Diagnóstico e comparação:** coleta determinística sobre serviços,
    recursos, sessão gráfica, barra, instalação do jangada e erros da partida
    atual, gerando um retrato JSON e um relatório em Markdown em
-   `~/.local/state/jangada/inspector/`. Na última fase, compara dois retratos
+   `~/.local/state/jangada/vigia/`. Na última fase, compara dois retratos
    para responder por que o sistema mudou.
 2. **Conversa sobre o sistema e o fluxo de trabalho:** sessão interativa com o
    agente inspetor lendo o retrato gerado pelo diagnóstico, sem terminal livre
@@ -107,8 +108,8 @@ módulo `custom/agentes`, pela Central de Tarefas e pelo painel do Monitor.
 | Fase | Entrega | Critério de conclusão |
 |---:|---|---|
 | 0 | Base 3.0 estável, M3-19 e período de uso | Suíte passando, sem regressão conhecida |
-| 1 | Planejamento | Documentos em `docs/inspector/` aprovados pelo Felipe |
-| 2 | Diagnóstico, primeira versão | Comando `jangada-inspector` sob pedido, retrato JSON e relatório de fatos em `~/.local/state/jangada/inspector/`, nenhuma escrita fora |
+| 1 | Planejamento | Documentos em `docs/vigia/` aprovados pelo Felipe |
+| 2 | Diagnóstico, primeira versão | Comando `jangada-vigia` sob pedido, retrato JSON e relatório de fatos em `~/.local/state/jangada/vigia/`, nenhuma escrita fora |
 | 2b | Conversa sobre o sistema e o fluxo de trabalho | Skill do `agy`, abertura da conversa lendo o retrato do diagnóstico e saída em proposta escrita |
 | 3 | Contrato das peças | Manifesto de 12 campos, instalação, desinstalação e reversão testados com peça de exemplo |
 | 4 | Três peças feitas à mão (rede passiva, saúde do sistema e GPU) | Funcionam sem chamada externa e sem processos órfãos; servem de molde para a oficina |

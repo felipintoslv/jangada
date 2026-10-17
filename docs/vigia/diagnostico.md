@@ -1,22 +1,22 @@
 # Contrato do diagnóstico (versão 1)
 
 Este documento define o contrato da primeira versão do comando
-`bin/jangada-inspector`, responsável por coletar evidências locais do sistema e
+`bin/jangada-vigia`, responsável por coletar evidências locais do sistema e
 do Jangada Shell sob pedido, sem uso de rede, sem privilégios administrativos e
 sem modelo de IA.
 
 ## Interface de linha de comando
 
-- `jangada-inspector diagnostico`: executa a lista fechada de coletores, remove
+- `jangada-vigia diagnostico`: executa a lista fechada de coletores, remove
   retratos vencidos, grava o retrato JSON e o relatório em Markdown em
-  `$JANGADA_ESTADO/inspector/` e imprime no `stdout` o caminho do relatório em
+  `$JANGADA_ESTADO/vigia/` e imprime no `stdout` o caminho do relatório em
   Markdown gerado.
-- `jangada-inspector lista`: lista os retratos JSON disponíveis em
-  `$JANGADA_ESTADO/inspector/`, ordenados por nome.
-- `jangada-inspector apagar [--todos | ARQUIVO]`: apaga todos os retratos e
+- `jangada-vigia lista`: lista os retratos JSON disponíveis em
+  `$JANGADA_ESTADO/vigia/`, ordenados por nome.
+- `jangada-vigia apagar [--todos | ARQUIVO]`: apaga todos os retratos e
   relatórios da pasta (`--todos`) ou um retrato específico (junto ao relatório
   Markdown correspondente), recusando qualquer caminho que saia de
-  `$JANGADA_ESTADO/inspector/` (como `..`, links simbólicos ou caminhos fora da
+  `$JANGADA_ESTADO/vigia/` (como `..`, links simbólicos ou caminhos fora da
   pasta).
 
 ## Coletores, comandos exatos e caminhos lidos
@@ -107,17 +107,17 @@ sem crases internas.
 
 ## Onde é gravado, permissões e prazo de guarda
 
-- **Pasta:** `$JANGADA_ESTADO/inspector` (por padrão
-  `~/.local/state/jangada/inspector`), criada com permissão `0700`.
+- **Pasta:** `$JANGADA_ESTADO/vigia` (por padrão
+  `~/.local/state/jangada/vigia`), criada com permissão `0700`.
 - **Arquivos:**
   - Retrato estruturado:
-    `$JANGADA_ESTADO/inspector/retrato-AAAAMMDD-HHMMSS.json`, gravado de forma
+    `$JANGADA_ESTADO/vigia/retrato-AAAAMMDD-HHMMSS.json`, gravado de forma
     atômica com permissão `0600`.
   - Relatório de fatos:
-    `$JANGADA_ESTADO/inspector/retrato-AAAAMMDD-HHMMSS.md`, gravado de forma
+    `$JANGADA_ESTADO/vigia/retrato-AAAAMMDD-HHMMSS.md`, gravado de forma
     atômica com permissão `0600`.
 - **Prazo de guarda (retenção):** 30 dias. Sempre que um novo diagnóstico é
   gravado, os arquivos `retrato-*.json` e `retrato-*.md` com data de
-  modificação superior a 30 dias dentro de `$JANGADA_ESTADO/inspector/` são
+  modificação superior a 30 dias dentro de `$JANGADA_ESTADO/vigia/` são
   removidos automaticamente. Nenhum arquivo fora dessa pasta ou com outro
   prefixo é apagado pela limpeza de retenção.

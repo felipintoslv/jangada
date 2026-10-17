@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Testa o jangada-inspector: retrato JSON (versao 1) e relatório Markdown de
+# Testa o jangada-vigia: retrato JSON (versao 1) e relatório Markdown de
 # fatos, coletores ausentes ("sem dado"), limpeza de caracteres de controle e
 # crases, marcação como dado, mascaramento de usuário, máquina, pasta pessoal,
 # IP e MAC em todo coletor, remoção do serial de monitores, exclusão imediata
 # do arquivo intermediário do jangada-verificar --diagnostico, permissões 0700
 # e 0600, retenção de 30 dias, subcomandos lista e apagar e confinamento de
-# escrita em $JANGADA_ESTADO/inspector.
+# escrita em $JANGADA_ESTADO/vigia.
 #
-# Uso: testes/inspector.sh
+# Uso: testes/vigia.sh
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 repo="$PWD"
@@ -142,9 +142,9 @@ chmod +x "$tmp/bin-cheio/journalctl"
 antes_home="$(find "$HOME" "$XDG_CONFIG_HOME" -printf '%p %m %s\n' 2>/dev/null | sort)"
 
 # Caso 1: retrato tem versao: 1 e todos os coletores
-saida_md="$(PATH="$tmp/bin-cheio" JANGADA_PATH="$repo" "$repo/bin/jangada-inspector" diagnostico)"
+saida_md="$(PATH="$tmp/bin-cheio" JANGADA_PATH="$repo" "$repo/bin/jangada-vigia" diagnostico)"
 conferir "caso 1: diagnostico imprime caminho do relatório .md" \
-  bash -c '[[ "$1" == "$XDG_STATE_HOME"/jangada/inspector/retrato-*.md && -f "$1" ]]' _ "$saida_md"
+  bash -c '[[ "$1" == "$XDG_STATE_HOME"/jangada/vigia/retrato-*.md && -f "$1" ]]' _ "$saida_md"
 
 arq_json="${saida_md%.md}.json"
 conferir "caso 1: retrato .json existe ao lado do .md" test -f "$arq_json"
@@ -202,24 +202,24 @@ conferir "caso 4: endereços MAC mascarados como <mac>" \
   bash -c '! grep -qiE "aa:bb:cc:dd:ee:ff|11:22:33:44:55:66" "$1" "$2" && grep -q "<mac>" "$1"' _ "$arq_json" "$saida_md"
 
 # Garante que mesmo com XDG_STATE_HOME dentro de HOME (~/.local/state) o cabeçalho do Markdown mascara HOME e usuário
-md_em_home="$(XDG_STATE_HOME="$HOME/.local/state" PATH="$tmp/bin-cheio" JANGADA_PATH="$repo" "$repo/bin/jangada-inspector" diagnostico)"
+md_em_home="$(XDG_STATE_HOME="$HOME/.local/state" PATH="$tmp/bin-cheio" JANGADA_PATH="$repo" "$repo/bin/jangada-vigia" diagnostico)"
 conferir "caso 4: cabeçalho do Markdown mascara HOME mesmo com estado em ~/.local/state" \
   bash -c '! grep -qi "usuarioteste" "$1" && ! grep -qF "$HOME" "$1"' _ "$md_em_home"
 rm -rf "$HOME/.local"
 
 # Caso 5: pasta e arquivos ficam com 700 e 600
-perm_pasta="$(stat -c '%a' "$XDG_STATE_HOME/jangada/inspector")"
+perm_pasta="$(stat -c '%a' "$XDG_STATE_HOME/jangada/vigia")"
 perm_json="$(stat -c '%a' "$arq_json")"
 perm_md="$(stat -c '%a' "$saida_md")"
-conferir "caso 5: pasta inspector com permissão 700 (atual: $perm_pasta)" [ "$perm_pasta" = "700" ]
+conferir "caso 5: pasta vigia com permissão 700 (atual: $perm_pasta)" [ "$perm_pasta" = "700" ]
 conferir "caso 5: retrato .json com permissão 600 (atual: $perm_json)" [ "$perm_json" = "600" ]
 conferir "caso 5: relatório .md com permissão 600 (atual: $perm_md)" [ "$perm_md" = "600" ]
 
 # Caso 2: coletor ausente vira "sem dado", nunca "None" nem null
 rm -rf "$tmp/vazio-repo" "$tmp/proc-vazio"
 mkdir -p "$tmp/vazio-repo/bin" "$tmp/proc-vazio"
-cp "$repo/bin/jangada-shell-config" "$repo/bin/jangada-inspector" "$tmp/vazio-repo/bin/"
-saida_vazio="$(PATH="$tmp/bin-minimo" JANGADA_PATH="$tmp/vazio-repo" JANGADA_PROC_DIR="$tmp/proc-vazio" "$tmp/vazio-repo/bin/jangada-inspector" diagnostico)"
+cp "$repo/bin/jangada-shell-config" "$repo/bin/jangada-vigia" "$tmp/vazio-repo/bin/"
+saida_vazio="$(PATH="$tmp/bin-minimo" JANGADA_PATH="$tmp/vazio-repo" JANGADA_PROC_DIR="$tmp/proc-vazio" "$tmp/vazio-repo/bin/jangada-vigia" diagnostico)"
 json_vazio="${saida_vazio%.md}.json"
 for campo in \
   '.servicos_falhos.sistema' \
@@ -238,11 +238,11 @@ for campo in \
 done
 conferir "caso 2: nunca grava None" bash -c '! grep -q "None" "$1" "$2"' _ "$json_vazio" "$saida_vazio"
 
-# Caso 6: prazo de 30 dias apaga só os retratos antigos e só dentro da pasta do Inspector
-antigo_json="$XDG_STATE_HOME/jangada/inspector/retrato-20250101-000000.json"
-antigo_md="$XDG_STATE_HOME/jangada/inspector/retrato-20250101-000000.md"
-recente_json="$XDG_STATE_HOME/jangada/inspector/retrato-20261010-000000.json"
-outro_dentro="$XDG_STATE_HOME/jangada/inspector/nota.txt"
+# Caso 6: prazo de 30 dias apaga só os retratos antigos e só dentro da pasta do Vigia
+antigo_json="$XDG_STATE_HOME/jangada/vigia/retrato-20250101-000000.json"
+antigo_md="$XDG_STATE_HOME/jangada/vigia/retrato-20250101-000000.md"
+recente_json="$XDG_STATE_HOME/jangada/vigia/retrato-20261010-000000.json"
+outro_dentro="$XDG_STATE_HOME/jangada/vigia/nota.txt"
 outro_fora="$XDG_STATE_HOME/jangada/outro-antigo.json"
 printf '{}\n' >"$antigo_json"
 printf '# antigo\n' >"$antigo_md"
@@ -252,42 +252,42 @@ printf 'preservar fora\n' >"$outro_fora"
 touch -d "40 days ago" "$antigo_json" "$antigo_md" "$outro_dentro" "$outro_fora"
 touch -d "5 days ago" "$recente_json"
 
-PATH="$tmp/bin-cheio" JANGADA_PATH="$repo" "$repo/bin/jangada-inspector" diagnostico >/dev/null
+PATH="$tmp/bin-cheio" JANGADA_PATH="$repo" "$repo/bin/jangada-vigia" diagnostico >/dev/null
 conferir "caso 6: retrato antigo (>30 dias) foi apagado" test ! -e "$antigo_json" -a ! -e "$antigo_md"
 conferir "caso 6: retrato recente (<30 dias) foi mantido" test -e "$recente_json"
 conferir "caso 6: arquivo não-retrato dentro da pasta foi mantido" test -e "$outro_dentro"
-conferir "caso 6: arquivo antigo fora da pasta do Inspector foi mantido" test -e "$outro_fora"
+conferir "caso 6: arquivo antigo fora da pasta do Vigia foi mantido" test -e "$outro_fora"
 rm -f "$outro_dentro" "$outro_fora"
 
 # Subcomando lista e caso 7: apagar recusa caminho fora da pasta
-lista_out="$(PATH="$tmp/bin-cheio" JANGADA_PATH="$repo" "$repo/bin/jangada-inspector" lista)"
+lista_out="$(PATH="$tmp/bin-cheio" JANGADA_PATH="$repo" "$repo/bin/jangada-vigia" lista)"
 conferir "lista mostra retratos guardados" grep -q 'retrato-20261010-000000.json' <<<"$lista_out"
 
 alvo_fora="$tmp/nao-apagar.json"
 printf '{}\n' >"$alvo_fora"
 conferir "caso 7: apagar recusa caminho absoluto fora da pasta" \
-  bash -c '! "$1/bin/jangada-inspector" apagar "$2" 2>/dev/null && [ -f "$2" ]' _ "$repo" "$alvo_fora"
+  bash -c '! "$1/bin/jangada-vigia" apagar "$2" 2>/dev/null && [ -f "$2" ]' _ "$repo" "$alvo_fora"
 conferir "caso 7: apagar recusa caminho com .." \
-  bash -c '! "$1/bin/jangada-inspector" apagar "../retrato-20261010-000000.json" 2>/dev/null' _ "$repo"
+  bash -c '! "$1/bin/jangada-vigia" apagar "../retrato-20261010-000000.json" 2>/dev/null' _ "$repo"
 
-ln -sf "$alvo_fora" "$XDG_STATE_HOME/jangada/inspector/retrato-link.json"
+ln -sf "$alvo_fora" "$XDG_STATE_HOME/jangada/vigia/retrato-link.json"
 conferir "caso 7: apagar recusa link simbólico" \
-  bash -c '! "$1/bin/jangada-inspector" apagar "retrato-link.json" 2>/dev/null && [ -f "$2" ]' _ "$repo" "$alvo_fora"
-rm -f "$XDG_STATE_HOME/jangada/inspector/retrato-link.json"
+  bash -c '! "$1/bin/jangada-vigia" apagar "retrato-link.json" 2>/dev/null && [ -f "$2" ]' _ "$repo" "$alvo_fora"
+rm -f "$XDG_STATE_HOME/jangada/vigia/retrato-link.json"
 
 conferir "apagar remove retrato específico dentro da pasta" \
-  bash -c '"$1/bin/jangada-inspector" apagar "retrato-20261010-000000.json" && [ ! -e "$2" ]' _ "$repo" "$recente_json"
+  bash -c '"$1/bin/jangada-vigia" apagar "retrato-20261010-000000.json" && [ ! -e "$2" ]' _ "$repo" "$recente_json"
 conferir "apagar --todos remove todos os retratos da pasta" \
-  bash -c '"$1/bin/jangada-inspector" apagar --todos && [ -z "$("$1/bin/jangada-inspector" lista)" ]' _ "$repo"
+  bash -c '"$1/bin/jangada-vigia" apagar --todos && [ -z "$("$1/bin/jangada-vigia" lista)" ]' _ "$repo"
 
 # Caso 8: nenhuma escrita fora de $JANGADA_ESTADO
 depois_home="$(find "$HOME" "$XDG_CONFIG_HOME" -printf '%p %m %s\n' 2>/dev/null | sort)"
 conferir "caso 8: nenhuma escrita em HOME ou XDG_CONFIG_HOME" [ "$antes_home" = "$depois_home" ]
-extras_estado="$(find "$XDG_STATE_HOME/jangada" -mindepth 1 -maxdepth 1 ! -name inspector)"
-conferir "caso 8: nada restou em JANGADA_ESTADO fora de inspector/" [ -z "$extras_estado" ]
+extras_estado="$(find "$XDG_STATE_HOME/jangada" -mindepth 1 -maxdepth 1 ! -name vigia)"
+conferir "caso 8: nada restou em JANGADA_ESTADO fora de vigia/" [ -z "$extras_estado" ]
 
 if ((falhas)); then
-  echo "$falhas teste(s) do inspector falharam"
+  echo "$falhas teste(s) do vigia falharam"
   exit 1
 fi
-echo "todos os testes do inspector passaram"
+echo "todos os testes do vigia passaram"

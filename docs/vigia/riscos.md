@@ -1,7 +1,7 @@
-# Riscos e contenção do Jangada Inspector
+# Riscos e contenção do Jangada Vigia
 
 Este documento resume os quatro riscos principais da coleta e uso do
-diagnóstico no Jangada Inspector e como cada um é contido por construção.
+diagnóstico no Jangada Vigia e como cada um é contido por construção.
 
 ## 1. Vazamento de dado pessoal de log
 
@@ -21,13 +21,13 @@ diagnóstico no Jangada Inspector e como cada um é contido por construção.
     (saída de `hostname` e `uname -n`) vira `<maquina>`, endereços IPv4 e IPv6
     viram `<ip>` e endereços MAC viram `<mac>`.
   - Limpeza do arquivo intermediário: o arquivo `$JANGADA_ESTADO/diagnostico-*.md`
-    gravado pelo `jangada-verificar --diagnostico` é apagado pelo Inspector logo
+    gravado pelo `jangada-verificar --diagnostico` é apagado pelo Vigia logo
     depois de ser lido e mascarado, para não restar fora de
-    `$JANGADA_ESTADO/inspector/` sem mascaramento completo nem permissão `0600`.
-  - Permissões restritas: a pasta `$JANGADA_ESTADO/inspector` é criada em
+    `$JANGADA_ESTADO/vigia/` sem mascaramento completo nem permissão `0600`.
+  - Permissões restritas: a pasta `$JANGADA_ESTADO/vigia` é criada em
     `0700` e cada retrato ou relatório em `0600`.
   - Retenção limitada: retratos com mais de 30 dias são apagados ao gravar um
-    novo, e o comando `jangada-inspector apagar` permite removê-los a qualquer
+    novo, e o comando `jangada-vigia apagar` permite removê-los a qualquer
     momento.
 
 ## 2. Injeção de instrução por log ou título de janela
@@ -53,7 +53,7 @@ diagnóstico no Jangada Inspector e como cada um é contido por construção.
   (`sudo`, `pkexec`).
 - **Contenção:**
   - Os coletores executam exclusivamente uma lista fechada e fixa de comandos
-    escrita no código de `bin/jangada-inspector`, com argumentos constantes.
+    escrita no código de `bin/jangada-vigia`, com argumentos constantes.
   - Nenhum dado coletado é interpolado em comandos de shell, `eval` ou chamadas
     subsequentes.
   - Não há chamada a `sudo`, `pkexec`, gerenciadores de pacotes, alterações de
@@ -65,14 +65,14 @@ diagnóstico no Jangada Inspector e como cada um é contido por construção.
   `~/.config/hypr`), modificar a cópia instalada (`~/.local/share/jangada`) ou
   apagar arquivos fora da pasta de estado ao limpar retratos.
 - **Contenção:**
-  - Toda escrita persistente do Inspector ocorre unicamente dentro de
-    `$JANGADA_ESTADO/inspector/` (por padrão
-    `~/.local/state/jangada/inspector/`, regra 1 do `AGENTS.md`). O arquivo
+  - Toda escrita persistente do Vigia ocorre unicamente dentro de
+    `$JANGADA_ESTADO/vigia/` (por padrão
+    `~/.local/state/jangada/vigia/`, regra 1 do `AGENTS.md`). O arquivo
     `$JANGADA_ESTADO/diagnostico-*.md` gerado por
-    `jangada-verificar --diagnostico` durante a coleta é apagado pelo Inspector
+    `jangada-verificar --diagnostico` durante a coleta é apagado pelo Vigia
     imediatamente após a leitura.
   - As gravações de retrato e relatório usam arquivo temporário na própria
-    pasta `$JANGADA_ESTADO/inspector/` seguido de `mv`.
-  - A limpeza de 30 dias e o subcomando `jangada-inspector apagar` resolvem o
+    pasta `$JANGADA_ESTADO/vigia/` seguido de `mv`.
+  - A limpeza de 30 dias e o subcomando `jangada-vigia apagar` resolvem o
     caminho real da pasta e do alvo e recusam qualquer arquivo fora de
-    `$JANGADA_ESTADO/inspector/` ou com `..` e links simbólicos externos.
+    `$JANGADA_ESTADO/vigia/` ou com `..` e links simbólicos externos.
