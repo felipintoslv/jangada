@@ -30,6 +30,10 @@ texto = Path(sys.argv[1]).read_text()
 tokens, dados = ler(texto)
 _, padrao_barra = ler(Path(sys.argv[3]).read_text())
 modulo = 'custom/sambura'
+# O Samburá saiu do padrão em 17/10/2026; sem a definição, não há o que acrescentar.
+if modulo not in padrao_barra:
+    Path(sys.argv[2]).write_text(texto)
+    sys.exit(0)
 definicao = json.dumps(padrao_barra[modulo], ensure_ascii=False, indent=2)
 pilha = []
 fins = {}

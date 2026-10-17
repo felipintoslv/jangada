@@ -114,6 +114,17 @@ class Retirada(unittest.TestCase):
                 self.conferir(antes, esperado)
                 carregar(esperado)
 
+    def test_migracao_antiga_e_nova_sem_sambura(self):
+        self.alvo.write_text(self.padrao)
+        for migracao in [REPO / 'migrations/202610121200-barra-sambura.sh', MIGRACAO]:
+            with self.subTest(migracao=migracao.name):
+                resultado = subprocess.run(['bash', str(migracao)], env=self.ambiente,
+                                           capture_output=True, text=True)
+                self.assertEqual(resultado.returncode, 0, resultado.stderr)
+                self.assertIn('nada a migrar', resultado.stdout)
+                self.assertEqual(self.alvo.read_text(), self.padrao)
+                self.assertEqual(self.copias(), [])
+
     def test_sem_arquivo_sem_modulo_e_invalido(self):
         resultado = self.migrar()
         self.assertEqual(resultado.returncode, 0)
