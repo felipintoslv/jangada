@@ -1,21 +1,24 @@
 """Rodadas e último parecer de uma sessão, pelas consultas do Core, sem ler o estado direto."""
+from datetime import datetime
 import json
 import re
 
 from PyQt6.QtCore import QObject, QProcess, QTimer, Qt
 from PyQt6.QtWidgets import (QFormLayout, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton,
-                             QVBoxLayout, QWidget)
+                             QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 from dados import LIMITE, NOME, comando_disponivel
 import indicadores
-from indicadores import SEM_DADO, inteiro, tempo, texto, tokens_da_tarefa
+from indicadores import SEM_DADO, finito, inteiro, origem, tempo, texto, tokens_da_tarefa
 
 INDICADORES = 'jangada-indicadores'
 AGENTES = 'jangada-agentes'
 # Tabulação e quebra de linha ficam; o resto do controle e a troca de direção saem.
 CONTROLE = re.compile('[\x00-\x08\x0b-\x1f\x7f-\x9f‎‏‪-‮⁦-⁩]')
 PARECER_MAX = 200000
-FALTA_NO_CORE = ('Rodadas anteriores e pareceres antigos: sem dado. '
-                 'O Core informa só a contagem, o último resultado e o último parecer.')
+FALTA_NO_CORE = 'Pareceres antigos: sem dado. O Core guarda só o texto do último parecer.'
+SEM_LISTA = 'Lista de rodadas ainda não disponível no Core instalado.'
+COLUNAS = ['Rodada', 'Origem', 'Resultado', 'Revisor', 'Modelo', 'Data', 'Tempo', 'Apontamentos']
+RODADAS_MAX = 4096
 
 
 def limpar(valor):
@@ -50,6 +53,50 @@ def ler_contexto(bruto, nome):
     return parecer
 
 
+def ler_rodadas(bruto, nome):
+    """Valida jangada-agentes --rodadas-json versão 1; devolve a lista de rodadas."""
+    if len(bruto) > LIMITE:
+        raise ValueError('A saída excedeu o limite de leitura.')
+    try:
+        dados = json.loads(bruto, parse_float=finito, parse_constant=indicadores.recusar_constante)
+    except (ValueError, RecursionError) as erro:
+        raise ValueError('A saída não é JSON válido.') from erro
+    if not isinstance(dados, dict) or type(dados.get('versao')) is not int:
+        raise ValueError('A saída não traz a versão do contrato.')
+    if dados['versao'] != 1:
+        raise ValueError(f'Versão {dados["versao"]} do contrato não é lida por esta Central.')
+    if dados.get('sessao') != nome:
+        raise ValueError('A saída fala de outra sessão.')
+    lista = dados.get('rodadas')
+    if not isinstance(lista, list) or len(lista) > RODADAS_MAX or any(not isinstance(r, dict) for r in lista):
+        raise ValueError('A saída não traz a lista de rodadas.')
+    return lista
+
+
+def data(valor):
+    if not isinstance(valor, str) or len(valor) > 64:
+        return SEM_DADO
+    try:
+        quando = datetime.fromisoformat(valor)
+    except ValueError:
+        return SEM_DADO
+    if quando.tzinfo is None:
+        return SEM_DADO
+    try:
+        return quando.astimezone().strftime('%d/%m/%Y %H:%M')
+    except (OverflowError, OSError, ValueError):
+        return SEM_DADO
+
+
+def linha_rodada(r):
+    """Textos de uma rodada na ordem de COLUNAS; campo ausente ou fora do tipo vira sem dado."""
+    quando = next((r[c] for c in ('data', 'fim', 'inicio') if isinstance(r.get(c), str)), None)
+    return [inteiro(r.get('rodada')) if type(r.get('rodada')) is int else SEM_DADO,
+            origem(r.get('origem')), texto(r.get('resultado')), texto(r.get('revisor'), 128),
+            texto(r.get('modelo'), 128), data(quando), tempo(r.get('segundos')),
+            inteiro(r.get('apontamentos')) if type(r.get('apontamentos')) is int else SEM_DADO]
+
+
 class Consulta(QObject):
     """Um comando do Core por vez, com prazo; o resultado volta com o nome da sessão pedida."""
 
@@ -61,6 +108,7 @@ class Consulta(QObject):
         self.prazo_ms = prazo_ms
         self.alvo = None
         self.expirou = False
+        self.desconhecida = False
         self.processo = QProcess(self)
         self.processo.finished.connect(self.fim)
         self.processo.errorOccurred.connect(self.erro)
@@ -77,6 +125,7 @@ class Consulta(QObject):
             return f'Comando {self.comando} não encontrado. Instale ou atualize o jangada-core.'
         self.alvo = alvo
         self.expirou = False
+        self.desconhecida = False
         self.janela.preparar(self.processo, argumentos, self.comando)
         self.processo.start()
         self.prazo.start(self.prazo_ms)
@@ -94,7 +143,10 @@ class Consulta(QObject):
     def fim(self, codigo, tipo):
         self.prazo.stop()
         bruto = bytes(self.processo.readAllStandardOutput())
-        self.processo.readAllStandardError()
+        erro = bytes(self.processo.readAllStandardError())[:4096].lower()
+        # Core sem a consulta: o atual sai com 2 no uso errado, o antigo com 1 e "opção desconhecida".
+        self.desconhecida = (not self.expirou and tipo == QProcess.ExitStatus.NormalExit
+                             and (codigo == 2 or (codigo == 1 and 'opção desconhecida'.encode() in erro)))
         if self.expirou:
             self.ao_terminar(self.alvo, f'Tempo esgotado ao consultar {self.comando}.', None)
         elif codigo != 0 or tipo != QProcess.ExitStatus.NormalExit:
@@ -141,6 +193,19 @@ class Rodadas(QWidget):
         layout.addLayout(formulario)
         self.status_rodadas = self.rotulo('rodadas_aviso')
         layout.addWidget(self.status_rodadas)
+        self.titulo_lista = self.rotulo('rodadas_titulo')
+        self.titulo_lista.setText('Lista de rodadas')
+        layout.addWidget(self.titulo_lista)
+        self.status_lista = self.rotulo('rodadas_aviso')
+        layout.addWidget(self.status_lista)
+        self.tabela = QTreeWidget()
+        self.tabela.setRootIsDecorated(False)
+        self.tabela.setAllColumnsShowFocus(True)
+        self.tabela.setColumnCount(len(COLUNAS))
+        self.tabela.setHeaderLabels(COLUNAS)
+        self.tabela.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.tabela.setAccessibleName('Lista de rodadas da sessão')
+        layout.addWidget(self.tabela, 1)
         self.titulo_parecer = self.rotulo('rodadas_titulo')
         layout.addWidget(self.titulo_parecer)
         self.status_parecer = self.rotulo('rodadas_aviso')
@@ -152,9 +217,12 @@ class Rodadas(QWidget):
         falta = self.rotulo('rodadas_falta')
         falta.setText(FALTA_NO_CORE)
         layout.addWidget(falta)
-        QWidget.setTabOrder(self.atualizar_botao, self.parecer)
+        QWidget.setTabOrder(self.atualizar_botao, self.tabela)
+        QWidget.setTabOrder(self.tabela, self.parecer)
         self.consulta_indicadores = Consulta(janela, INDICADORES, self.indicadores_fim)
+        self.consulta_lista = Consulta(janela, AGENTES, self.lista_fim)
         self.consulta_parecer = Consulta(janela, AGENTES, self.parecer_fim)
+        self.consultas = (self.consulta_indicadores, self.consulta_lista, self.consulta_parecer)
         self.limpar()
 
     def rotulo(self, nome=''):
@@ -186,7 +254,9 @@ class Rodadas(QWidget):
             self.valor(rotulo, SEM_DADO)
         self.titulo_parecer.setText('Último parecer')
         self.parecer.setPlainText(SEM_DADO)
+        self.tabela.clear()
         self.avisar(self.status_rodadas, '')
+        self.avisar(self.status_lista, '')
         self.avisar(self.status_parecer, '')
         if not self.janela.real:
             self.atualizar_botao.setEnabled(False)
@@ -225,6 +295,8 @@ class Rodadas(QWidget):
         self.avisar(self.status, f'Consultando a sessão {self.alvo}.')
         for consulta, argumentos, rotulo, carregando in (
                 (self.consulta_indicadores, ['--json'], self.status_rodadas, 'Carregando as rodadas.'),
+                (self.consulta_lista, ['--rodadas-json', self.alvo], self.status_lista,
+                 'Carregando a lista de rodadas.'),
                 (self.consulta_parecer, ['--contexto-json', self.alvo], self.status_parecer,
                  'Carregando o último parecer.')):
             if consulta.ocupada():
@@ -249,13 +321,13 @@ class Rodadas(QWidget):
         return True
 
     def conferir_fim(self):
-        if self.consulta_indicadores.ocupada() or self.consulta_parecer.ocupada():
+        if any(c.ocupada() for c in self.consultas):
             self.atualizar_botao.setEnabled(False)
             return
         self.atualizar_botao.setEnabled(self.janela.real and self.alvo is not None)
         if self.consultado is None or self.consultado != self.alvo:
             return
-        falhas = [r.property('falha') for r in (self.status_rodadas, self.status_parecer)]
+        falhas = [r.property('falha') for r in (self.status_rodadas, self.status_lista, self.status_parecer)]
         if any(falhas):
             self.avisar(self.status, 'Parte da consulta falhou. Veja os avisos abaixo.', True)
         else:
@@ -295,6 +367,36 @@ class Rodadas(QWidget):
         self.avisar(self.status_rodadas, f'{len(registros)} registros desta sessão nos indicadores; '
                     'mostra o último da lista.' if len(registros) > 1 else '')
 
+    def lista_fim(self, alvo, falha, bruto):
+        if self.descartar(self.consulta_lista, alvo, lambda nome: ['--rodadas-json', nome], self.status_lista):
+            return
+        if self.consulta_lista.desconhecida:
+            self.avisar(self.status_lista, SEM_LISTA)
+        elif falha:
+            self.avisar(self.status_lista, falha, True)
+        else:
+            try:
+                self.mostrar_lista(ler_rodadas(bruto, alvo))
+            except ValueError as erro:
+                self.avisar(self.status_lista, f'Saída inválida. {erro}', True)
+            except (TypeError, OverflowError):
+                self.tabela.clear()
+                self.avisar(self.status_lista, 'Saída inválida. A saída traz campos em formato inesperado.', True)
+        self.conferir_fim()
+
+    def mostrar_lista(self, lista):
+        itens = [QTreeWidgetItem([limpar(t) for t in linha_rodada(r)]) for r in lista]
+        self.tabela.clear()
+        self.tabela.addTopLevelItems(itens)
+        for coluna in range(len(COLUNAS)):
+            self.tabela.resizeColumnToContents(coluna)
+        if itens:
+            self.tabela.setCurrentItem(itens[-1])
+            self.avisar(self.status_lista, f'{len(itens)} ' + ('rodada' if len(itens) == 1 else 'rodadas')
+                        + ' desta execução, da mais antiga à mais recente.')
+        else:
+            self.avisar(self.status_lista, 'Nenhuma rodada registrada para esta sessão.')
+
     def parecer_fim(self, alvo, falha, bruto):
         if self.descartar(self.consulta_parecer, alvo, lambda nome: ['--contexto-json', nome],
                           self.status_parecer):
@@ -325,5 +427,5 @@ class Rodadas(QWidget):
 
     def fechar(self):
         self.fechando = True
-        self.consulta_indicadores.fechar()
-        self.consulta_parecer.fechar()
+        for consulta in self.consultas:
+            consulta.fechar()

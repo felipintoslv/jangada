@@ -82,7 +82,7 @@ class Interface(unittest.TestCase):
         self.observados = self.raiz / 'observados'
         self.observados.mkdir()
         (self.observados / 'aviso.json').write_text('{}')
-        self.comando.write_text("#!/usr/bin/env python3\nimport pathlib, sys, json\npasta = pathlib.Path(__file__).resolve().parent.parent\nif sys.argv[1] == '--observacao-json':\n    if (pasta / 'falhar_observacao').exists():\n        print('Falha de observação simulada', file=sys.stderr)\n        sys.exit(1)\n    print(json.dumps({'versao': 1, 'caminhos': [str(pasta / 'observados'), str(pasta / 'observados' / 'aviso.json')]}))\nelif sys.argv[1] in ('--lista-json',):\n    if (pasta / 'falhar').exists():\n        print('Erro de consulta simulado', file=sys.stderr)\n        sys.exit(1)\n    dados = json.loads((pasta / 'lista').read_text())\n    if (pasta / 'apresentacao.json').exists():\n        detalhe = json.loads((pasta / 'apresentacao.json').read_text())\n        for sessao in dados['sessoes']:\n            if sessao['nome'] == 'projeto--um':\n                sessao.update(detalhe)\n                sessao['projeto'] = pathlib.Path(sessao['raiz']).name\n    print(json.dumps(dados, ensure_ascii=False))\nelif sys.argv[1] == '--contexto-json':\n    contexto = pasta / ('contexto-' + sys.argv[2])\n    print(contexto.read_text() if contexto.exists() else json.dumps({'versao': 1, 'sessao': sys.argv[2], 'tarefa': '', 'parecer': None}))\nelif sys.argv[1] == '--previa':\n    previa = pasta / ('previa-' + sys.argv[2])\n    print(previa.read_text() if previa.exists() else 'Atividade da sessão ' + sys.argv[2])\nelse:\n    (pasta / 'acao.json').write_text(json.dumps(sys.argv[1:]))\n")
+        self.comando.write_text("#!/usr/bin/env python3\nimport pathlib, sys, json\npasta = pathlib.Path(__file__).resolve().parent.parent\nif sys.argv[1] == '--observacao-json':\n    if (pasta / 'falhar_observacao').exists():\n        print('Falha de observação simulada', file=sys.stderr)\n        sys.exit(1)\n    print(json.dumps({'versao': 1, 'caminhos': [str(pasta / 'observados'), str(pasta / 'observados' / 'aviso.json')]}))\nelif sys.argv[1] in ('--lista-json',):\n    if (pasta / 'falhar').exists():\n        print('Erro de consulta simulado', file=sys.stderr)\n        sys.exit(1)\n    dados = json.loads((pasta / 'lista').read_text())\n    if (pasta / 'apresentacao.json').exists():\n        detalhe = json.loads((pasta / 'apresentacao.json').read_text())\n        for sessao in dados['sessoes']:\n            if sessao['nome'] == 'projeto--um':\n                sessao.update(detalhe)\n                sessao['projeto'] = pathlib.Path(sessao['raiz']).name\n    print(json.dumps(dados, ensure_ascii=False))\nelif sys.argv[1] == '--contexto-json':\n    contexto = pasta / ('contexto-' + sys.argv[2])\n    print(contexto.read_text() if contexto.exists() else json.dumps({'versao': 1, 'sessao': sys.argv[2], 'tarefa': '', 'parecer': None}))\nelif sys.argv[1] == '--rodadas-json':\n    rodadas = pasta / ('rodadas-' + sys.argv[2])\n    if (pasta / 'rodadas-espera').exists():\n        import time\n        time.sleep(5)\n    if (pasta / 'rodadas-uso').exists():\n        print('uso: jangada-agentes --rodadas-json SESSAO', file=sys.stderr)\n        sys.exit(2)\n    if not rodadas.exists():\n        print('opção desconhecida: --rodadas-json', file=sys.stderr)\n        sys.exit(1)\n    print(rodadas.read_text())\nelif sys.argv[1] == '--previa':\n    previa = pasta / ('previa-' + sys.argv[2])\n    print(previa.read_text() if previa.exists() else 'Atividade da sessão ' + sys.argv[2])\nelse:\n    (pasta / 'acao.json').write_text(json.dumps(sys.argv[1:]))\n")
         self.comando.chmod(448)
         self.criar_comando = self.bin / 'jangada-agente'
         self.criar_comando.write_text(self.comando.read_text().replace(
@@ -491,13 +491,22 @@ class Interface(unittest.TestCase):
         self.janela.activateWindow()
         QTest.keyClick(self.janela, Qt.Key.Key_4, Qt.KeyboardModifier.AltModifier)
         self.assertIs(self.janela.abas.currentWidget(), rod)
-        aguardar(lambda: not rod.consulta_indicadores.ocupada() and not rod.consulta_parecer.ocupada())
+        aguardar(lambda: not any(c.ocupada() for c in rod.consultas))
         return rod
+
+    def rodadas_falso(self, sessao, rodadas=None, bruto=None):
+        (self.raiz / ('rodadas-' + sessao)).write_text(bruto if bruto is not None else json.dumps(
+            dict(versao=1, sessao=sessao, execucao='e1', rodadas=rodadas)))
+
+    def linhas_da_lista(self, rod):
+        return [[rod.tabela.topLevelItem(i).text(c) for c in range(rod.tabela.columnCount())]
+                for i in range(rod.tabela.topLevelItemCount())]
 
     def textos_rodadas(self, rod):
         return ([r.text() for r in rod.valores.values()]
-                + [rod.status.text(), rod.status_rodadas.text(), rod.status_parecer.text(),
-                   rod.titulo_parecer.text(), rod.parecer.toPlainText()])
+                + [rod.status.text(), rod.status_rodadas.text(), rod.status_lista.text(),
+                   rod.status_parecer.text(), rod.titulo_parecer.text(), rod.parecer.toPlainText()]
+                + [t for linha in self.linhas_da_lista(rod) for t in linha])
 
     def test_rodadas_do_indicador_a_sessao_existente_com_parecer(self):
         self.indicadores_falso(dict(versao=1, tarefas=[self.tarefa_indicador('projeto--dois')],
@@ -585,7 +594,91 @@ class Interface(unittest.TestCase):
         self.assertEqual({r.text() for r in rod.valores.values()}, {'sem dado'})
         self.assertFalse(rod.status.property('falha'))
         self.assertFalse(any('None' in t for t in self.textos_rodadas(rod)))
-        self.assertIn('pareceres antigos: sem dado', ' '.join(r.text() for r in rod.findChildren(QLabel)))
+        self.assertIn('Pareceres antigos: sem dado', ' '.join(r.text() for r in rod.findChildren(QLabel)))
+
+    def test_rodadas_lista_com_duas_rodadas_e_teclado(self):
+        self.indicadores_falso(dict(versao=1, tarefas=[], revisores=[], local_vs_agy=[]))
+        self.rodadas_falso('projeto--um', [
+            dict(rodada=1, origem='sessao', resultado='revisar', etapa='revisor', revisor='codex\x1b[31m',
+                 modelo='gpt-5', data='2026-10-17T10:00:00+00:00', segundos=65, apontamentos=3,
+                 parecer_origem=None),
+            dict(rodada=None, origem='protegida', resultado='aprovado\u202e', etapa='revisor', revisor=None,
+                 modelo=None, data=None, segundos=None, apontamentos=None, parecer_origem=None)])
+        rod = self.abrir_rodadas()
+        linhas = self.linhas_da_lista(rod)
+        self.assertEqual(len(linhas), 2)
+        self.assertEqual(linhas[0][:5], ['1', 'registro do agente', 'revisar', 'codex[31m', 'gpt-5'])
+        self.assertRegex(linhas[0][5], r'^17/10/2026 \d\d:00$')
+        self.assertEqual(linhas[0][6:], ['1 min 5 s', '3'])
+        self.assertEqual(linhas[1], ['sem dado', 'registro protegido', 'aprovado'] + ['sem dado'] * 5)
+        self.assertEqual(rod.tabela.headerItem().text(0), 'Rodada')
+        self.assertIn('2 rodadas', rod.status_lista.text())
+        self.assertFalse(rod.status_lista.property('falha'))
+        self.assertFalse(rod.status.property('falha'))
+        self.assertFalse(any('None' in t for t in self.textos_rodadas(rod)))
+        rod.atualizar_botao.setFocus()
+        QTest.keyClick(rod.atualizar_botao, Qt.Key.Key_Tab)
+        self.assertIs(APP.focusWidget(), rod.tabela)
+        self.assertEqual(rod.tabela.focusPolicy(), Qt.FocusPolicy.StrongFocus)
+        for indice in (0, 1):
+            self.janela.modo.setCurrentIndex(indice)
+            ficha = self.janela.fichas['light' if indice else 'dark']
+            folha = self.janela.styleSheet()
+            self.assertIn('QTreeWidget:focus', folha)
+            self.assertIn(f"border: 2px solid {ficha['primaria']}", folha)
+        QTest.keyClick(rod.tabela, Qt.Key.Key_Tab)
+        self.assertIs(APP.focusWidget(), rod.parecer)
+
+    def test_rodadas_lista_vazia_e_core_sem_consulta(self):
+        self.indicadores_falso(dict(versao=1, tarefas=[], revisores=[], local_vs_agy=[]))
+        self.rodadas_falso('projeto--um', [])
+        rod = self.abrir_rodadas()
+        self.assertEqual(self.linhas_da_lista(rod), [])
+        self.assertIn('Nenhuma rodada registrada', rod.status_lista.text())
+        self.assertFalse(rod.status.property('falha'))
+        (self.raiz / 'rodadas-projeto--um').unlink()
+        rod.atualizar()
+        aguardar(lambda: not any(c.ocupada() for c in rod.consultas))
+        self.assertEqual(rod.status_lista.text(), 'Lista de rodadas ainda não disponível no Core instalado.')
+        self.assertFalse(rod.status_lista.property('falha'))
+        self.assertIn('Nenhum parecer registrado', rod.status_parecer.text())
+        (self.raiz / 'rodadas-uso').write_text('')
+        self.rodadas_falso('projeto--um', [dict(rodada=1)])
+        rod.atualizar()
+        aguardar(lambda: not any(c.ocupada() for c in rod.consultas))
+        self.assertEqual(rod.status_lista.text(), 'Lista de rodadas ainda não disponível no Core instalado.')
+        self.assertEqual(self.linhas_da_lista(rod), [])
+        self.assertFalse(rod.status.property('falha'))
+        self.assertFalse(any('None' in t for t in self.textos_rodadas(rod)))
+
+    def test_rodadas_lista_versao_saida_invalida_e_prazo(self):
+        self.indicadores_falso(dict(versao=1, tarefas=[], revisores=[], local_vs_agy=[]))
+        rod = self.abrir_rodadas()
+        for bruto, aviso in (('{', 'não é JSON válido'),
+                             (json.dumps(dict(versao=2, sessao='projeto--um', rodadas=[])), 'Versão 2'),
+                             (json.dumps(dict(versao='1', sessao='projeto--um', rodadas=[])), 'versão do contrato'),
+                             (json.dumps(dict(versao=1, sessao='outra', rodadas=[])), 'outra sessão'),
+                             (json.dumps(dict(versao=1, sessao='projeto--um', rodadas=['x'])), 'lista de rodadas'),
+                             ('{"versao": 1, "sessao": "projeto--um", "rodadas": [{"segundos": NaN}]}',
+                              'não é JSON válido')):
+            self.rodadas_falso('projeto--um', bruto=bruto)
+            rod.atualizar()
+            aguardar(lambda: not any(c.ocupada() for c in rod.consultas))
+            self.assertIn('Saída inválida', rod.status_lista.text())
+            self.assertIn(aviso, rod.status_lista.text())
+            self.assertTrue(rod.status_lista.property('falha'))
+            self.assertTrue(rod.status.property('falha'))
+            self.assertEqual(self.linhas_da_lista(rod), [])
+        self.rodadas_falso('projeto--um', [])
+        (self.raiz / 'rodadas-espera').write_text('')
+        rod.consulta_lista.prazo_ms = 300
+        rod.atualizar()
+        self.assertIn('Carregando a lista de rodadas', rod.status_lista.text())
+        self.assertFalse(rod.atualizar_botao.isEnabled())
+        aguardar(lambda: not rod.consulta_lista.ocupada())
+        self.assertIn('Tempo esgotado ao consultar jangada-agentes', rod.status_lista.text())
+        self.assertTrue(rod.status_lista.property('falha'))
+        self.assertTrue(rod.atualizar_botao.isEnabled())
 
     def test_rodadas_comando_ausente(self):
         rod = self.abrir_rodadas()
