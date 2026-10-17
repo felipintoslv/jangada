@@ -134,6 +134,11 @@ def comando_disponivel(nome, shell):
     return shutil.which(programa) is not None
 
 
+def sem_coordenadores(sessoes):
+    """Tira as sessões de coordenador, que aparecem na coluna própria e não como tarefa."""
+    return {nome: s for nome, s in sessoes.items() if not nome.endswith('--coordenador')}
+
+
 def pasta_sessoes(estado=None):
     """Pasta de sessões: a informada ou a que o jangada-shell-config exporta."""
     estado = estado or os.environ.get('JANGADA_SESSOES')

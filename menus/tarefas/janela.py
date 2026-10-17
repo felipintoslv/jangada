@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout,
                             QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 from dados import (LIMITE, NOME, ORDEM, ROTULOS, Sessao,
                    estado_exibido, idade, ler_lista, ler_observacao, pasta_sessoes, resolver_comando,
-                   simuladas)
+                   sem_coordenadores, simuladas)
 
 sys.dont_write_bytecode = True
 # Com default/tarefas acessada por link, __file__ aponta para a pasta física;
@@ -31,6 +31,7 @@ from visual.fichas import carregar as carregar_fichas, ESTADOS
 from operacional import Operacional
 from indicadores import Indicadores, SEM_DADO, inteiro, tempo, texto, tokens_da_tarefa
 from rodadas import Rodadas
+from coordenadores import FAIXA, Coordenadores
 
 # Só para a janela simulada e para quando a consulta falha: o catálogo vem do
 # jangada-agente --capacidades-json, que também é quem valida a escolha.
@@ -309,6 +310,11 @@ class Janela(QMainWindow):
         self.painel.clicked.connect(self.abrir_indicadores)
         topo.addWidget(self.painel)
         layout.addLayout(topo)
+        self.faixa = QLabel(FAIXA)
+        self.faixa.setObjectName('faixa')
+        self.faixa.setTextFormat(Qt.TextFormat.PlainText)
+        layout.addWidget(self.faixa)
+        self.coordenadores = Coordenadores(self)
         self.resumo = QLabel()
         self.resumo.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(self.resumo)
@@ -406,12 +412,18 @@ class Janela(QMainWindow):
         self.indicadores = Indicadores(self)
         self.centrais.addTab(self.indicadores, 'Indicadores')
         self.centrais.currentChanged.connect(self.trocar_central)
-        layout.addWidget(self.centrais, 1)
+        area = QSplitter()
+        area.addWidget(self.coordenadores)
+        area.addWidget(self.centrais)
+        area.setStretchFactor(1, 1)
+        area.setSizes([340, 860])
+        layout.addWidget(area, 1)
         self.status = QLabel()
         self.status.setTextFormat(Qt.TextFormat.PlainText)
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
-        for numero in range(1, self.abas.count() + 1):
+        # Alt+1 é da coluna de coordenadores; Alt+2 em diante, das abas de detalhe.
+        for numero in range(2, self.abas.count() + 1):
             atalho = QShortcut(QKeySequence(f'Alt+{numero}'), self)
             atalho.activated.connect(lambda i=numero - 1: self.ir_para_aba(i))
         self.aplicar_tema()
@@ -597,6 +609,7 @@ class Janela(QMainWindow):
         self.cartoes.setText(f'{esperando} {espera_rotulo}    ·    {andando} em execução    ·    {interrompidas} {rotulo}    ·    {encerrados} {turno_rotulo}')
         if anterior and anterior not in sessoes:
             self.status.setText('A sessão selecionada saiu da lista. Selecione outra sessão.')
+        self.coordenadores.estados_das_tarefas()
 
     def escolher_na_lista(self, atual, *_):
         if atual is not None:
@@ -769,6 +782,16 @@ class Janela(QMainWindow):
             QLabel[semdado="true"] {{ color: {c['texto_suave']}; }}
             QLabel#rodadas_titulo {{ font-size: 16px; font-weight: 600; }}
             QLabel#rodadas_falta {{ font-size: 13px; color: {c['texto_suave']}; }}
+            QLabel#faixa {{ background: {c['superficie_elevada']}; padding: 6px 12px;
+                border-left: 4px solid {c['texto_suave']}; border-radius: 8px; }}
+            QLabel#coord_titulo, QLabel#coord_nome {{ font-size: 16px; font-weight: 600; }}
+            QLabel#coord_hora {{ font-size: 13px; color: {c['texto_suave']}; }}
+            QLabel#coord_linha {{ font-family: 'JetBrains Mono'; background: {c['superficie_elevada']};
+                border: 1px solid {c['texto_suave']}; border-radius: 8px; padding: 8px; }}
+            QLabel#coord_linha:focus {{ border: 2px solid {c['primaria']}; }}
+            QLabel#coord_aviso {{ font-weight: 600; }}
+            QLabel#coord_status[falha="true"], QLabel#coord_copia[falha="true"] {{
+                color: {c['atencao']}; font-weight: 600; }}
             QLabel#aviso_encerrada {{ background: {c['superficie_elevada']}; color: {c['texto']};
                 border: 1px solid {c['texto_suave']}; border-left: 4px solid {c['atencao']};
                 border-radius: 8px; padding: 12px; font-weight: 600; }}
@@ -777,6 +800,7 @@ class Janela(QMainWindow):
             sessao = self.sessoes.get(nome)
             if sessao:
                 item.setForeground(2, QColor(self.cores_estado.get(estado_exibido(sessao), c['texto'])))
+        self.coordenadores.pintar()
 
         try:
             svg = (RAIZ / 'default/logo/jangada-symbolic.svg').read_bytes()
@@ -894,6 +918,7 @@ class Janela(QMainWindow):
         self.evento_estado.stop()
         self.limite_evento.stop()
         self.operacional.atualizar()
+        self.coordenadores.atualizar()
         if not self.real:
             self.status.setText(f'Simulação · cenário {self.passo % 4 + 1} de 4')
             sessoes = simuladas(self.passo) | self.criadas
@@ -942,7 +967,7 @@ class Janela(QMainWindow):
             self.falha('A listagem excedeu o limite de leitura.')
             return
         try:
-            sessoes = ler_lista(saida.decode('utf-8'))
+            sessoes = sem_coordenadores(ler_lista(saida.decode('utf-8')))
         except ValueError as exc:
             self.falha(str(exc))
             return
@@ -1260,6 +1285,7 @@ exit "$resultado"
         self.operacional.fechar()
         self.indicadores.fechar()
         self.rodadas.fechar()
+        self.coordenadores.fechar()
         for timer in (self.timer, self.evento_estado, self.limite_evento, self.observacao_limite,
                       self.observacao_repetir, self.espera,
                       self.tempo_acao, self.tempo_previa, self.tempo_finalizacao):
