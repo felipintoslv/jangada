@@ -69,6 +69,7 @@ Antes de alterar arquivos, leia o guia do assunto da tarefa e as regras do
 | Instalação, GPU, várias máquinas e assinatura | [Instalação e uso](docs/instalacao-e-uso.md) |
 | Comandos disponíveis | [Comandos](docs/comandos.md) |
 | Interface, temas, login, atalhos e Central de Tarefas | [Interface](docs/interface.md) |
+| Abas e botões da Central: real, simulado ou ausente | [O que funciona na Central](docs/central-o-que-funciona.md) |
 | Abertura, revisão, encerramento, worktrees e skills | [Ciclo da tarefa](docs/ciclo-da-tarefa.md) |
 | Permissões, credenciais e modelo de ameaça | [Isolamento](docs/isolamento.md) |
 | Papéis, Ollama, agy e fila persistente | [Subagentes e delegação](docs/subagentes-e-delegacao.md) |

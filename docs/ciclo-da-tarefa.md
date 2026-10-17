@@ -183,6 +183,21 @@ Tab entra nos cartões e as setas trocam o cartão. Valor nulo aparece como
 como registro protegido. Sem o comando, com saída inválida, versão diferente
 de 1 ou tempo esgotado, a aba mostra um aviso e mantém a leitura anterior.
 
+Em Custo por tarefa, Enter ou clique duplo numa linha leva à aba Sessões com
+a sessão selecionada e o foco na lista. Se a sessão já foi encerrada, o
+detalhe mostra o registro dos indicadores, com aviso de sessão encerrada e as
+ações desligadas.
+
+A aba **Rodadas** do detalhe mostra a contagem de rodadas, o último resultado
+e o tempo de revisão (de `jangada-indicadores --json`) e o texto do último
+parecer (de `jangada-agentes --contexto-json SESSAO`). As consultas rodam ao
+abrir a aba e no botão Atualizar rodadas, com prazo de 15 segundos. O texto
+perde os caracteres de controle e aparece como dado; a aba não aprova nem
+executa nada. Rodadas anteriores e pareceres antigos aparecem como "sem dado",
+porque o Core informa só o último. Alt+1 a Alt+5 levam às abas do detalhe.
+O que é real, simulado ou ausente na Central está em
+[O que funciona na Central](central-o-que-funciona.md).
+
 Cada mudança registrada vira uma linha em `eventos-agentes.jsonl`
 ([registros](registros.md)).
 
