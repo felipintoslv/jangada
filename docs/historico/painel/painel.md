@@ -14,7 +14,7 @@ flowchart LR
 ```
 
 Veja as [definições dos indicadores](#uso-e-definição-dos-indicadores)
-e os campos de cada registro em [registros](registros.md).
+e os campos de cada registro em [registros](../../registros.md).
 
 Desde a modularização 3.0, o painel mora em `monitor/painel/`, o
 `jangada-painel` em `monitor/bin/` e a configuração da barra em
@@ -189,7 +189,7 @@ flowchart TD
 - **Subida.** A checagem compara a página capturada numa variável. Com
   `curl | grep -q` sob `pipefail`, o `grep` saía no título, o `curl` falhava
   ao escrever o resto e a subida era dada como falha
-  ([boas práticas](boas-praticas.md)).
+  ([boas práticas](../../boas-praticas.md)).
 - **Marca de coleta.** Um `trap` em `EXIT` apaga a marca `atualizando`, para
   uma coleta interrompida não deixar a barra presa.
 

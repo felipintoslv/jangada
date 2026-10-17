@@ -277,4 +277,4 @@ Referências: [CLI](https://learn.chatgpt.com/docs/developer-commands?surface=cl
 `--autor-modelo` e `--autor-esforco` selecionam Luna medium ou Sol high.
 O revisor independente é Opus high. A restauração usa `modelos_tarefa`
 protegido, não o comando ou a seleção gravável da sessão.
-Veja o [contrato do piloto](coordenacao-central/10-executor-agy.md).
+Veja o [contrato do piloto](historico/coordenacao-central/10-executor-agy.md).

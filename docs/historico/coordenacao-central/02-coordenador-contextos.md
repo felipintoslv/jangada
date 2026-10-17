@@ -162,7 +162,7 @@ Padrões/protocolos e cobrança de apoio já estão corrigidos no repositório l
 A instalação ainda não recebeu essa atualização; a verificação operacional está no [05](05-plano-incremental.md#verificação-e-limitações).
 Escolher algo útil à tarefa, como leitura de fontes ou análise de cobertura, sem pedir nova entrega principal ou revisão final.
 Destino explícito e fontes autorizadas delimitam o envio; capacidade documental pode usar papel leitor.
-O fluxo descrito em [delegação](../subagentes-e-delegacao.md#seleção-por-capacidade) exige os parâmetros aplicáveis, perfil permitido e conferências de confiança/cota.
+O fluxo descrito em [delegação](../../subagentes-e-delegacao.md#seleção-por-capacidade) exige os parâmetros aplicáveis, perfil permitido e conferências de confiança/cota.
 Não confundir decisão do dono com capacidade técnica do adaptador.
 
 Registro mínimo: tarefa/conversa/projeto, papel, pedido, fontes, destino/modelo efetivos, autorização,
@@ -281,7 +281,7 @@ Troca de modelo exige nova verificação de destino de dados, limites e composi�
 A fronteira deve existir no armazenamento, nas consultas, na busca, nos eventos e no adaptador.
 O processo do modelo não monta os históricos alheios nem recebe credenciais que reabram esse acesso.
 Clientes CLI que recuperam memória global precisam ser examinados e delimitados antes de servir como coordenador.
-A opção `JANGADA_ISOLAR_CASA=minima` oculta partes da pasta pessoal, conforme [isolamento](../isolamento.md#casa-mínima).
+A opção `JANGADA_ISOLAR_CASA=minima` oculta partes da pasta pessoal, conforme [isolamento](../../isolamento.md#casa-mínima).
 Ela não comprova que o adaptador deixe de recuperar outras conversas ou memórias do próprio provedor.
 
 Retenção de conversa atende privacidade e retomada de diálogo.

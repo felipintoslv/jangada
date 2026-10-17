@@ -65,8 +65,8 @@ Um coordenador por projeto é a prática do fluxo, sem identidade persistente
 ou isolamento de conversas implementados no Core por essa skill.
 O estado entre conversas fica em `.jangada/coordenacao.md`, na raiz do
 projeto e fora do controle de versão; históricos não são importados automaticamente.
-Veja [exploração e exemplos](coordenacao-central/02-coordenador-contextos.md#exploração-antes-de-abrir-tarefas)
-e [M2.0](coordenacao-central/05-plano-incremental.md#fase-2-coordenador-mínimo-preservando-sessões).
+Veja [exploração e exemplos](historico/coordenacao-central/02-coordenador-contextos.md#exploração-antes-de-abrir-tarefas)
+e [M2.0](historico/coordenacao-central/05-plano-incremental.md#fase-2-coordenador-mínimo-preservando-sessões).
 
 ## Abertura da sessão
 
@@ -373,7 +373,7 @@ registro, porque fechar o tmux encerraria o próprio comando.
 As consultas `jangada-agentes --lista`, `--lista-atualizada` e `--waybar`
 só leem o estado em `~/.local/state/jangada/agentes`. A limpeza é a ação
 explícita `jangada-agentes --limpar-orfaos` (contrato K4 em
-`docs/modularizacao-3.0/03-contratos.md`). Ela remove o estado de sessão sem
+`docs/historico/modularizacao-3.0/03-contratos.md`). Ela remove o estado de sessão sem
 tmux e sem processo vivo. Ficam o `concluido` e o `aguardando` dentro de
 `JANGADA_AGENTES_GUARDAR` horas (padrão 24) e o `interrompido` dentro de 7
 dias. Sessão de agente sem processo e com a pasta no disco vira
@@ -402,7 +402,7 @@ prazo para sair.
 O piloto permite selecionar autor e revisor por tarefa e delegar uma atividade
 com arquivos exatos ao agy. O autor inspeciona, aceita pelo hash e testa;
 o revisor independente continua obrigatório.
-Veja o [contrato do piloto](coordenacao-central/10-executor-agy.md).
+Veja o [contrato do piloto](historico/coordenacao-central/10-executor-agy.md).
 
 ## Worktrees dos agentes
 

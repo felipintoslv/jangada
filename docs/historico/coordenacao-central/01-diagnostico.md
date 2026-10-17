@@ -67,7 +67,7 @@ O teste futuro de remoção deve examinar arquivos de configuração e links, al
 | A17 | Fato: integração pela Central fixa candidato antes do gesto | `shell/menus/tarefas/janela.py:849`, `:857`, `:927`; `:1057` bloqueia fechamento durante integração | Reutilizar apresentação e confirmação; corrigir rótulos que confundam integração e encerramento em trabalho futuro |
 | A18 | Fato: aviso especial de atualização não cobre pastas reais | `bin/jangada-update:99`; conferência de processos em `:31` a `:55` fica no modo `--somente-codigo` | Não generalizar essa proteção para toda atualização; versionamento de sessões ainda precisa de contrato |
 | A19 | Fato: configuração concentra partes dos módulos | `bin/jangada-config:6`, `:76`, `:675`, `:720` | Configuração é lida sem execução; funções gráficas estão na parte compartilhada. Extração seletiva pode reduzir acoplamento |
-| A20 | Limitação: isolamento atual não estabelece fronteira de leitura entre conversas | `core/bin/jangada-isolar:21`, `:112`, `:462`, `:514`, `:525`; [isolamento](../isolamento.md#modelo-de-ameaça) | Escrita controlada e registros protegidos não garantem sigilo de diálogos entre coordenadores |
+| A20 | Limitação: isolamento atual não estabelece fronteira de leitura entre conversas | `core/bin/jangada-isolar:21`, `:112`, `:462`, `:514`, `:525`; [isolamento](../../isolamento.md#modelo-de-ameaça) | Escrita controlada e registros protegidos não garantem sigilo de diálogos entre coordenadores |
 
 A16 confirma integração existente no código, apesar de textos datados que dizem “bloqueada”.
 A janela concorrente com Git externo é documentada no próprio código em `core/bin/jangada-agente-fim:386`.
@@ -120,7 +120,7 @@ A prioridade seguinte é melhorar exploração e ligações do fluxo atual antes
 | Exploração, construção de alternativas e pedido executável | A7: skill atual coordena por sessão e arquivo do projeto | Serviço permanente ou conversa embutida |
 | Um coordenador identificado por projeto | A6/A9: rótulo atual, projetos, tarefas e execuções | Coordenadores coexistentes no mesmo projeto |
 | Várias conversas do mesmo coordenador | A8/A20: limites de conversa e leitura precisam de exame | Memória global ou importação automática de histórico |
-| Apoio agy concreto | Adaptador de delegação e registros descritos em [delegação](../subagentes-e-delegacao.md#jangada-delegar) | Perfil configurado não comprova participação; revisão Claude continua separada |
+| Apoio agy concreto | Adaptador de delegação e registros descritos em [delegação](../../subagentes-e-delegacao.md#jangada-delegar) | Perfil configurado não comprova participação; revisão Claude continua separada |
 | Acompanhar e retomar tarefas atuais | A12/A13/A16/A17: reservas, sessões, revisão e integração | Transferência e arbitragem entre coordenadores no mesmo projeto |
 | Navegação e consultas por contratos | A4/A5/A14/A15: componentes Qt e consultas | Nova interface de envio ou substituição integral da Central |
 

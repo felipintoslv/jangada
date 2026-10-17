@@ -312,7 +312,7 @@ da skill em `default/claude/skills/jangada/agentes.md`.
 O perfil `implementacao` sempre cria outro isolamento. Ele expõe fontes
 copiadas e arquivos exatos, sem liberar worktree, Git ou estado persistente.
 O estado do CLI é temporário e o keyring selecionado é somente leitura.
-Veja o [contrato do piloto](coordenacao-central/10-executor-agy.md).
+Veja o [contrato do piloto](historico/coordenacao-central/10-executor-agy.md).
 
 ## Ajustes pessoais das montagens
 

@@ -11,7 +11,7 @@ Legenda:
 - **Simulado**: sem `--real`, só escreve na linha de status o que faria.
 - **Leitura**: consulta e mostra; não muda estado.
 - **Não existe**: aparece na prévia v2
-  (`docs/coordenacao-central/mockup-central/v2/README.md`), mas não na Central.
+  (`docs/historico/coordenacao-central/mockup-central/v2/README.md`), mas não na Central.
 
 ## Abas
 

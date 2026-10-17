@@ -11,7 +11,7 @@ Pareceres e avaliações do Gemini, prompts e scripts de revisão estão no ramo
 | [benchmark-agente-local.md](benchmark-agente-local.md) | comparação de usos do modelo local e verificação |
 | [benchmark-waybar-omarchy.md](benchmark-waybar-omarchy.md) | comparação entre as barras do jangada e do Omarchy |
 | [PENDENCIAS.md](PENDENCIAS.md) | testes no desktop e pendências da máquina real |
-| [RESGATE.md](RESGATE.md) | roteiro para recuperar personalizações do Noctalia |
+| [RESGATE.md](../../../revisao/RESGATE.md) | roteiro para recuperar personalizações do Noctalia |
 
 ## Consultar o arquivo histórico
 

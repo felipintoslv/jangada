@@ -9,7 +9,7 @@
 
 A escolha fica em `~/.config/jangada/jangada.conf`. A integração ainda usa
 Quickshell; a incompatibilidade registrada com o Noctalia 5.x permanece
-pendente em [revisao/PENDENCIAS.md](../revisao/PENDENCIAS.md#o-que-só-pode-ser-confirmado-no-desktop).
+pendente em [PENDENCIAS.md](historico/revisao/PENDENCIAS.md#o-que-só-pode-ser-confirmado-no-desktop).
 Até essa adaptação, use `componentes` se a instalação não oferecer a
 interface antiga.
 
