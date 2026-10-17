@@ -5,14 +5,6 @@
 set -euo pipefail
 # shellcheck source=bin/jangada-shell-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-shell-config"
-if [[ "${1:-}" == --json ]]; then
-  diagnostico="$JANGADA_PATH/default/painel/monitoramento.py"
-  if [[ ! -f "$diagnostico" ]]; then
-    echo 'jangada-monitor: diagnóstico indisponível; módulo Monitor ausente ou incompleto' >&2
-    exit 1
-  fi
-  exec python3 "$diagnostico"
-fi
 
 mon="htop"
 if command -v btop >/dev/null 2>&1; then
