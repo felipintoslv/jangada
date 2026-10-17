@@ -45,9 +45,11 @@ def trecho(texto, tokens, primeiro, ultimo):
     """Trecho do item tokens[primeiro..ultimo] com a vírgula vizinha."""
     inicio, fim = tokens[primeiro].start(), tokens[ultimo].end()
     if ultimo + 1 < len(tokens) and tokens[ultimo + 1][0] == ',':
-        fim = tokens[ultimo + 1].end()
-        inicio, fim = linha_inteira(texto, inicio, fim)
-        if fim == tokens[ultimo + 1].end():
+        virgula = tokens[ultimo + 1]
+        if texto[fim:virgula.start()].strip():
+            return [(virgula.start(), virgula.end()), linha_inteira(texto, inicio, fim)]
+        inicio, fim = linha_inteira(texto, inicio, virgula.end())
+        if fim == virgula.end():
             while fim < len(texto) and texto[fim] in ' \t':
                 fim += 1
         return [(inicio, fim)]
@@ -58,51 +60,59 @@ def trecho(texto, tokens, primeiro, ultimo):
         return [(virgula.start(), virgula.end()), linha_inteira(texto, inicio, fim)]
     return [linha_inteira(texto, inicio, fim)]
 
-texto = Path(sys.argv[1]).read_text()
-if f'"{modulo}"' not in texto:
-    sys.exit(0)
-tokens, dados = ler(texto)
-if not isinstance(dados, (dict, list)):
-    raise ValueError('configuração da barra precisa ser objeto ou lista')
-pilha = []
-fins = {}
-raizes = []
-for i, token in enumerate(tokens):
-    if token[0] in ('{', '['):
-        if token[0] == '{' and (not pilha or pilha == [0] and tokens[0][0] == '['):
-            raizes.append(i)
-        pilha.append(i)
-    elif token[0] in ('}', ']'):
-        fins[pilha.pop()] = i
-cortes = []
-for raiz in raizes:
-    i = raiz + 1
-    while i < fins[raiz]:
-        if tokens[i][0] == ',':
-            i += 1
-            continue
-        chave = json.loads(tokens[i][0])
-        inicio = i + 2
-        fim = fins.get(inicio, inicio)
-        if chave == modulo:
-            cortes += trecho(texto, tokens, i, fim)
-        elif (chave in ('modules-left', 'modules-center', 'modules-right')
-              and tokens[inicio][0] == '['):
-            for k in range(inicio + 1, fim):
-                if eh_modulo(tokens[k]):
-                    cortes += trecho(texto, tokens, k, k)
-        i = fim + 1
 def linha_em_branco_antes(texto, inicio):
     if inicio == 0 or texto[inicio - 1] != '\n':
         return False
     comeco = texto.rfind('\n', 0, inicio - 1) + 1
     return not texto[comeco:inicio - 1].strip()
 
-for inicio, fim in sorted(cortes, reverse=True):
-    # Sem o bloco, as linhas em branco de antes e de depois ficariam juntas.
-    if texto[fim - 1:fim + 1] == '\n\n' and linha_em_branco_antes(texto, inicio):
-        fim += 1
-    texto = texto[:inicio] + texto[fim:]
+def ultima_ocorrencia(texto):
+    """Cortes da última ocorrência do módulo, ou [] quando não há."""
+    tokens, dados = ler(texto)
+    if not isinstance(dados, (dict, list)):
+        raise ValueError('configuração da barra precisa ser objeto ou lista')
+    pilha = []
+    fins = {}
+    raizes = []
+    for i, token in enumerate(tokens):
+        if token[0] in ('{', '['):
+            if token[0] == '{' and (not pilha or pilha == [0] and tokens[0][0] == '['):
+                raizes.append(i)
+            pilha.append(i)
+        elif token[0] in ('}', ']'):
+            fins[pilha.pop()] = i
+    ocorrencias = []
+    for raiz in raizes:
+        i = raiz + 1
+        while i < fins[raiz]:
+            if tokens[i][0] == ',':
+                i += 1
+                continue
+            chave = json.loads(tokens[i][0])
+            inicio = i + 2
+            fim = fins.get(inicio, inicio)
+            if chave == modulo:
+                ocorrencias.append((i, fim))
+            elif (chave in ('modules-left', 'modules-center', 'modules-right')
+                  and tokens[inicio][0] == '['):
+                ocorrencias += [(k, k) for k in range(inicio + 1, fim)
+                                if eh_modulo(tokens[k])]
+            i = fim + 1
+    if not ocorrencias:
+        return []
+    return trecho(texto, tokens, *max(ocorrencias))
+
+texto = Path(sys.argv[1]).read_text()
+if f'"{modulo}"' not in texto:
+    sys.exit(0)
+# Uma ocorrência por vez: com o módulo repetido, os cortes vizinhos dividiriam
+# a mesma vírgula se fossem calculados todos sobre o texto original.
+while cortes := ultima_ocorrencia(texto):
+    for inicio, fim in sorted(cortes, reverse=True):
+        # Sem o bloco, as linhas em branco de antes e de depois ficariam juntas.
+        if texto[fim - 1:fim + 1] == '\n\n' and linha_em_branco_antes(texto, inicio):
+            fim += 1
+        texto = texto[:inicio] + texto[fim:]
 _, dados = ler(texto)
 for barra in dados if isinstance(dados, list) else [dados]:
     if isinstance(barra, dict) and modulo in barra:
