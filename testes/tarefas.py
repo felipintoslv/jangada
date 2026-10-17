@@ -834,6 +834,14 @@ class Interface(unittest.TestCase):
                          janela.ESTADOS[modo]['Executando'])
         self.assertIn('QLabel#faixa', self.janela.styleSheet())
 
+    def test_coluna_de_coordenadores_nao_recolhe(self):
+        self.janela.show()
+        QTest.qWaitForWindowExposed(self.janela)
+        self.janela.area.moveSplitter(0, 1)
+        self.assertGreater(self.janela.area.sizes()[0], 0)
+        self.assertGreater(self.janela.coordenadores.width(), 0)
+        self.assertTrue(self.janela.coordenadores.isVisible())
+
     def test_tarefa_do_coordenador_seleciona_a_sessao(self):
         self.coordenador_falso()
         self.coordenadores_falsos()
