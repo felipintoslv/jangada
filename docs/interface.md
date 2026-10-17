@@ -110,8 +110,7 @@ continua no formulário, mas é ignorada com aviso: o agente roda isolado.
 Alterar um controle seleciona o modo Personalizado; recolher a área preserva as escolhas.
 **Nova pasta**, no formulário, cria a pasta de um projeto novo em
 `JANGADA_PROJETOS` e a deixa selecionada; a pasta nasce sem repositório Git.
-**Painel de indicadores** e **Conversa de Pescador** abrem os aplicativos
-existentes.
+**Painel de indicadores** leva à aba Indicadores.
 Aprovações nativas e envio de respostas ficam fora desta versão.
 
 Na Waybar, `custom/agentes` passa a contar tarefas, andamento, pendências e

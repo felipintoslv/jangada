@@ -17,14 +17,14 @@ Legenda:
 
 | Aba | Onde | Situação | O que mostra ou faz |
 |---|---|---|---|
-| Sessões | `menus/tarefas/janela.py:406` | Real; simulado sem `--real` | Lista das sessões de `jangada-agentes --lista-json`, agrupada por estado |
-| Sessões > Acompanhamento | `menus/tarefas/janela.py:366` | Leitura | Última mensagem e mudanças vistas nesta janela |
-| Sessões > Saída do agente | `menus/tarefas/janela.py:367` | Leitura | Prévia de `jangada-agentes --previa`; na simulação, a mensagem fictícia |
-| Sessões > Detalhes | `menus/tarefas/janela.py:368` | Leitura | Estado, autor, revisor, tarefa, ramo e pasta. Sessão encerrada: dados de `jangada-indicadores --json` |
-| Sessões > Rodadas | `menus/tarefas/janela.py:370`, `menus/tarefas/rodadas.py:113` | Leitura; simulação não consulta | Contagem de rodadas, último resultado e último parecer, como dado |
-| Sessões > Entrega | `menus/tarefas/janela.py:375` | Leitura | Prévia de `--integracao-json` antes da confirmação |
-| Projetos e fila | `menus/tarefas/janela.py:408`, `menus/tarefas/operacional.py:30` | Real; simulação não consulta | Projetos, atividades e tarefas da fila persistente |
-| Indicadores | `menus/tarefas/janela.py:410`, `menus/tarefas/indicadores.py:263` | Leitura; simulação não consulta | Custo por tarefa, procedência dos revisores e local contra agy |
+| Sessões | `menus/tarefas/janela.py:403` | Real; simulado sem `--real` | Lista das sessões de `jangada-agentes --lista-json`, agrupada por estado |
+| Sessões > Acompanhamento | `menus/tarefas/janela.py:363` | Leitura | Última mensagem e mudanças vistas nesta janela |
+| Sessões > Saída do agente | `menus/tarefas/janela.py:364` | Leitura | Prévia de `jangada-agentes --previa`; na simulação, a mensagem fictícia |
+| Sessões > Detalhes | `menus/tarefas/janela.py:365` | Leitura | Estado, autor, revisor, tarefa, ramo e pasta. Sessão encerrada: dados de `jangada-indicadores --json` |
+| Sessões > Rodadas | `menus/tarefas/janela.py:367`, `menus/tarefas/rodadas.py:113` | Leitura; simulação não consulta | Contagem de rodadas, último resultado e último parecer, como dado |
+| Sessões > Entrega | `menus/tarefas/janela.py:372` | Leitura | Prévia de `--integracao-json` antes da confirmação |
+| Projetos e fila | `menus/tarefas/janela.py:405`, `menus/tarefas/operacional.py:30` | Real; simulação não consulta | Projetos, atividades e tarefas da fila persistente |
+| Indicadores | `menus/tarefas/janela.py:407`, `menus/tarefas/indicadores.py:263` | Leitura; simulação não consulta | Custo por tarefa, procedência dos revisores e local contra agy |
 | Indicadores > Custo por tarefa | `menus/tarefas/indicadores.py:359` | Leitura | Enter ou clique duplo leva à sessão na aba Sessões |
 
 ## Botões e atalhos
@@ -32,19 +32,18 @@ Legenda:
 | Botão ou atalho | Onde | Situação | Efeito |
 |---|---|---|---|
 | Atualizar | `menus/tarefas/janela.py:302` | Real | Refaz a consulta das sessões |
-| Avançar simulação | `menus/tarefas/janela.py:302`, `menus/tarefas/janela.py:903` | Simulado | Passa ao próximo dos quatro cenários fictícios |
+| Avançar simulação | `menus/tarefas/janela.py:302`, `menus/tarefas/janela.py:889` | Simulado | Passa ao próximo dos quatro cenários fictícios |
 | Nova tarefa | `menus/tarefas/janela.py:305` | Real; simulado sem `--real` (`janela.py:220`) | Abre o formulário de nova tarefa |
 | Nova tarefa > Escolher pasta | `menus/tarefas/janela.py:58` | Real | Escolhe a pasta do projeto |
 | Nova tarefa > Nova pasta | `menus/tarefas/janela.py:64` | Real; desligado na simulação | Cria a pasta de um projeto novo |
 | Nova tarefa > Opções avançadas | `menus/tarefas/janela.py:83` | Real | Mostra executor, revisor, segurança e delegação |
 | Nova tarefa > Iniciar tarefa | `menus/tarefas/janela.py:112` | Real; "Criar tarefa simulada" na simulação | Abre a sessão pelo Core |
-| Conversa de Pescador | `menus/tarefas/janela.py:308`, `menus/tarefas/janela.py:496` | Real; simulado | Abre `jangada-conversa` |
-| Painel de indicadores | `menus/tarefas/janela.py:311`, `menus/tarefas/janela.py:507` | Leitura | Vai à aba Indicadores |
-| Abrir terminal / Retomar no terminal | `menus/tarefas/janela.py:377`, `menus/tarefas/janela.py:1237` | Real; simulado | `jangada-agentes --focar` |
-| Integrar pelo terminal | `menus/tarefas/janela.py:392`, `menus/tarefas/janela.py:1156` | Real; simulado | `jangada-agente-fim --integrar` no terminal |
-| Conferir e integrar (Alt+I) | `menus/tarefas/janela.py:381`, `menus/tarefas/janela.py:1074` | Real; simulado | Mostra a entrega, pede confirmação e integra |
-| Encerrar sem integrar (Ctrl+X) | `menus/tarefas/janela.py:382`, `menus/tarefas/janela.py:1156` | Real; simulado | `jangada-agente-fim` sem integrar |
-| Alt+1 a Alt+5 | `menus/tarefas/janela.py:418` | Leitura | Vai à aba de detalhe de mesmo número, com foco na barra de abas |
+| Painel de indicadores | `menus/tarefas/janela.py:308`, `menus/tarefas/janela.py:493` | Leitura | Vai à aba Indicadores |
+| Abrir terminal / Retomar no terminal | `menus/tarefas/janela.py:374`, `menus/tarefas/janela.py:1223` | Real; simulado | `jangada-agentes --focar` |
+| Integrar pelo terminal | `menus/tarefas/janela.py:389`, `menus/tarefas/janela.py:1142` | Real; simulado | `jangada-agente-fim --integrar` no terminal |
+| Conferir e integrar (Alt+I) | `menus/tarefas/janela.py:378`, `menus/tarefas/janela.py:1060` | Real; simulado | Mostra a entrega, pede confirmação e integra |
+| Encerrar sem integrar (Ctrl+X) | `menus/tarefas/janela.py:379`, `menus/tarefas/janela.py:1142` | Real; simulado | `jangada-agente-fim` sem integrar |
+| Alt+1 a Alt+5 | `menus/tarefas/janela.py:415` | Leitura | Vai à aba de detalhe de mesmo número, com foco na barra de abas |
 | Atualizar rodadas | `menus/tarefas/rodadas.py:126` | Leitura; desligado na simulação | Refaz as duas consultas da aba Rodadas |
 | Indicadores > Atualizar | `menus/tarefas/indicadores.py:228` | Leitura | Refaz `jangada-indicadores --json` |
 | Indicadores > cartões | `menus/tarefas/indicadores.py:224` | Leitura | Troca a tabela de detalhe |

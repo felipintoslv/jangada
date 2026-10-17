@@ -286,7 +286,7 @@ class Interface(unittest.TestCase):
             central.close()
 
     def test_central_sem_conversa_e_painel_sem_aplicativo(self):
-        self.assertNotIn('Conversa de Pescador', {b.text() for b in self.janela.findChildren(QPushButton)})
+        self.assertFalse([b for b in self.janela.findChildren(QPushButton) if 'Conversa' in b.text()])
         self.assertFalse(hasattr(self.janela, 'abrir_ferramenta'))
         with patch.object(QProcess, 'startDetached', return_value=(True, 123)) as iniciar:
             self.janela.painel.click()
@@ -1741,7 +1741,7 @@ class RaizDoCore(unittest.TestCase):
                 aberta = Janela(real, self.base, estado)
                 aberta.timer.stop()
                 try:
-                    self.assertNotIn('Conversa de Pescador', {b.text() for b in aberta.findChildren(QPushButton)})
+                    self.assertFalse([b for b in aberta.findChildren(QPushButton) if 'Conversa' in b.text()])
                     self.assertEqual(aberta.centrais.tabText(2), 'Indicadores')
                     aberta.painel.click()
                     self.assertIs(aberta.centrais.currentWidget(), aberta.indicadores)
