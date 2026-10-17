@@ -12,6 +12,9 @@ Regras:
    Hyprland que foi renomeada e a versão em que isso aconteceu).
 4. Numa instalação nova, todas as migrações existentes são marcadas como
    aplicadas (etapa `install/90-migracoes.sh`), porque os padrões já estão atualizados.
+5. Migração já publicada pode ganhar uma guarda que a faça sair sem efeito
+   quando o padrão mudou, desde que não mude o efeito onde ela já rodou. Foi o
+   caso de `202610121200-barra-sambura.sh` depois que o Samburá saiu do padrão.
 
 `202610111800-vidro-fosco.sh` adapta apenas fundos dos modelos antigos
 intactos de Waybar, Fuzzel e Mako. Preserva arquivos personalizados e
