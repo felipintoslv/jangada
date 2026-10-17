@@ -45,7 +45,10 @@ if ((somente_codigo)); then
     printf '%s\n' "$sessoes" | tr -d '\000-\010\013-\037\177' >&2
     exit 1
   fi
+  # O sddm-helper e o lançador da sessão (jangada-sessao) ficam vivos a sessão
+  # inteira; o git troca o arquivo por um novo e o processo em curso não é afetado.
   processos="$(ps -eo pid=,args= | awk -v pasta="$JANGADA_PATH/" '
+    $2 ~ /\/sddm-helper$/ || $2 == pasta "bin/jangada-sessao" || $3 == pasta "bin/jangada-sessao" {next}
     index($0, pasta "default/") || index($0, pasta "menus/") ||
     (index($0, pasta "bin/jangada-") && !index($0, pasta "bin/jangada-sistema-update")) {print $1}')"
   if [[ -n "$processos" ]]; then

@@ -115,6 +115,17 @@ class Atualizacao(unittest.TestCase):
         self.env['TESTE_PROCESSO'] = f'99 python3 {self.instalado}/default/tarefas/central.py\n'
         self.conferir_recusa(self.atualizar())
 
+    def test_lancador_da_sessao_do_sddm_nao_bloqueia(self):
+        sessao = f'{self.instalado}/bin/jangada-sessao'
+        self.env['TESTE_PROCESSO'] = f'99 /usr/lib/sddm/sddm-helper --socket /tmp/sddm-auth-1 --id 1 --start {sessao} --user teste\n'
+        resultado = self.atualizar()
+        self.assertEqual(resultado.returncode, 0, resultado.stdout + resultado.stderr)
+        self.assertEqual(self.git(self.instalado, 'rev-parse', 'HEAD'), self.novo)
+
+    def test_recusa_citar_sessao_em_outro_programa(self):
+        self.env['TESTE_PROCESSO'] = f'99 /usr/bin/outro --start {self.instalado}/bin/jangada-sessao\n'
+        self.conferir_recusa(self.atualizar())
+
     def test_recusa_processo_de_comando_do_shell(self):
         resultado = self.atualizar_instalada('shell')
         self.conferir_recusa(resultado)
