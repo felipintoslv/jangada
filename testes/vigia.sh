@@ -95,8 +95,9 @@ fi
 FIM
 chmod +x "$tmp/bin-cheio/systemctl"
 
-cat >"$tmp/bin-cheio/df" <<'FIM'
+cat >"$tmp/bin-cheio/df" <<FIM
 #!/bin/sh
+printf '%s\n' "\$*" >"$tmp/df-argumentos"
 echo "Filesystem Type 1024-blocks Used Available Capacity Mounted on"
 echo "/dev/nvme0n1p2 btrfs 100000000 25000000 75000000 25% /home/usuarioteste"
 FIM
@@ -183,6 +184,10 @@ for campo in \
   conferir "caso 1: coletor $campo presente e preenchido" \
     bash -c 'val="$(jq -r "$1" "$2")" && [ -n "$val" ] && [ "$val" != "null" ] && [ "$val" != "sem dado" ] && [ "$val" != "None" ]' _ "$campo" "$arq_json"
 done
+
+# Caso 11: o df só consulta montagens locais, sem NFS ou CIFS
+conferir "caso 11: df chamado com -l" \
+  bash -c 'grep -qE "(^| )-[A-Za-z]*l" "$1"' _ "$tmp/df-argumentos"
 
 # Ajuste 2: remoção do serial de monitores
 conferir "monitores: campo serial removido do JSON" \
@@ -322,6 +327,30 @@ conferir "apagar --todos remove todos os retratos da pasta" \
 conferir "apagar --todos mantém o que não é retrato" \
   test -f "$XDG_STATE_HOME/jangada/vigia/nota.txt" -a -f "$XDG_STATE_HOME/jangada/vigia/sub/retrato-sub.json" -a -f "$fora_nome_valido"
 rm -rf "$XDG_STATE_HOME/jangada/vigia/nota.txt" "$XDG_STATE_HOME/jangada/vigia/sub"
+
+# Caso 12: duas chamadas no mesmo segundo guardam cada uma o seu par
+mkdir -p "$tmp/bin-data"
+cat >"$tmp/bin-data/date" <<FIM
+#!/bin/sh
+[ "\${1:-}" = "+%Y%m%d-%H%M%S" ] && { echo 20261017-120000; exit 0; }
+exec $(command -v date) "\$@"
+FIM
+chmod +x "$tmp/bin-data/date"
+PATH="$tmp/bin-data:$tmp/bin-cheio" JANGADA_PATH="$repo" "$repo/bin/jangada-vigia" diagnostico >"$tmp/par-1" &
+pid1=$!
+PATH="$tmp/bin-data:$tmp/bin-cheio" JANGADA_PATH="$repo" "$repo/bin/jangada-vigia" diagnostico >"$tmp/par-2" &
+pid2=$!
+wait "$pid1"; wait "$pid2"
+conferir "caso 12: as duas chamadas devolvem relatórios diferentes" \
+  bash -c '[ -s "$1" ] && [ -s "$2" ] && [ "$(cat "$1")" != "$(cat "$2")" ]' _ "$tmp/par-1" "$tmp/par-2"
+for par in "$tmp/par-1" "$tmp/par-2"; do
+  md="$(cat "$par")"
+  conferir "caso 12: par JSON e Markdown preservado: ${md##*/}" \
+    bash -c '[ -s "$1" ] && jq -e ".versao == 1" "${1%.md}.json" >/dev/null' _ "$md"
+done
+conferir "caso 12: quatro arquivos do mesmo segundo" \
+  bash -c 'shopt -s nullglob; a=("$1"/retrato-20261017-120000*); [ "${#a[@]}" -eq 4 ]' _ "$XDG_STATE_HOME/jangada/vigia"
+"$repo/bin/jangada-vigia" apagar --todos
 
 # Caso 8: nenhuma escrita fora de $JANGADA_ESTADO
 depois_home="$(find "$HOME" "$XDG_CONFIG_HOME" -printf '%p %m %s\n' 2>/dev/null | sort)"

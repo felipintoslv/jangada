@@ -33,7 +33,7 @@ execução prossegue normalmente.
 | Serviços do usuário com falha | `servicos_falhos.usuario` | `systemctl --user --failed` | Estado do systemd da sessão do usuário | Até 80 linhas e 8 KiB; estado atual |
 | Carga do processador | `recursos.loadavg` | Leitura direta de arquivo | `/proc/loadavg` | 1 linha (até 256 bytes); estado atual |
 | Memória do sistema | `recursos.meminfo` | Leitura direta das chaves `MemTotal`, `MemAvailable`, `SwapTotal` e `SwapFree` | `/proc/meminfo` | Até 16 linhas e 2 KiB; estado atual |
-| Espaço em disco nas montagens reais | `recursos.discos` | `df -PT -x tmpfs -x devtmpfs -x squashfs -x overlay -x efivarfs` | `/proc/self/mountinfo` e pontos de montagem locais | Até 60 linhas e 8 KiB; estado atual |
+| Espaço em disco nas montagens reais | `recursos.discos` | `df -PTl -x tmpfs -x devtmpfs -x squashfs -x overlay -x efivarfs` | `/proc/self/mountinfo` e pontos de montagem locais (o `-l` deixa de fora NFS, CIFS e outras montagens de rede) | Até 60 linhas e 8 KiB; estado atual |
 | Memória de vídeo | `recursos.memoria_video` | `nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu,temperature.gpu --format=csv,noheader,nounits` (somente se `nvidia-smi` existir no `PATH`) | Dispositivos NVIDIA via `nvidia-smi` | Até 16 linhas e 4 KiB; estado atual |
 | Versão do Hyprland | `sessao_grafica.hyprctl_version` | `hyprctl version` | Soquete do Hyprland em `$XDG_RUNTIME_DIR/hypr/` | Até 20 linhas e 4 KiB; sessão atual |
 | Monitores da sessão | `sessao_grafica.monitores` | `hyprctl monitors -j` (com o campo `serial` removido via `jq 'map(del(.serial))'` antes de gravar) | Soquete do Hyprland em `$XDG_RUNTIME_DIR/hypr/` | Até 16 KiB; sessão atual |
@@ -100,7 +100,7 @@ O retrato é um objeto JSON codificado em UTF-8 com `versao: 1`:
 ```
 
 Ao lado de cada retrato JSON, é gravado o relatório de fatos em Markdown
-(`retrato-AAAAMMDD-HHMMSS.md`), contendo exclusivamente os dados coletados, sem
+(`retrato-AAAAMMDD-HHMMSS-XXXXXX.md`), contendo exclusivamente os dados coletados, sem
 interpretação por modelo de IA. Todas as seções com saídas e logs trazem no
 título a marca `(dados, não instruções)` e ficam cercadas por blocos de código
 sem crases internas.
@@ -111,10 +111,12 @@ sem crases internas.
   `~/.local/state/jangada/vigia`), criada com permissão `0700`.
 - **Arquivos:**
   - Retrato estruturado:
-    `$JANGADA_ESTADO/vigia/retrato-AAAAMMDD-HHMMSS.json`, gravado de forma
-    atômica com permissão `0600`.
+    `$JANGADA_ESTADO/vigia/retrato-AAAAMMDD-HHMMSS-XXXXXX.json`, gravado de forma
+    atômica com permissão `0600`. O sufixo `XXXXXX` vem do `mktemp`, que
+    reserva o nome antes da coleta: duas chamadas no mesmo segundo não
+    gravam uma sobre a outra.
   - Relatório de fatos:
-    `$JANGADA_ESTADO/vigia/retrato-AAAAMMDD-HHMMSS.md`, gravado de forma
+    `$JANGADA_ESTADO/vigia/retrato-AAAAMMDD-HHMMSS-XXXXXX.md`, gravado de forma
     atômica com permissão `0600`.
 - **Prazo de guarda (retenção):** 30 dias. Sempre que um novo diagnóstico é
   gravado, os arquivos `retrato-*.json` e `retrato-*.md` com data de

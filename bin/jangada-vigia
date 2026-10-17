@@ -186,7 +186,7 @@ coletar_meminfo() {
 coletar_discos() {
   command -v df >/dev/null 2>&1 || { printf 'sem dado'; return 0; }
   local bruta
-  if ! bruta="$(df -PT -x tmpfs -x devtmpfs -x squashfs -x overlay -x efivarfs 2>/dev/null)"; then
+  if ! bruta="$(df -PTl -x tmpfs -x devtmpfs -x squashfs -x overlay -x efivarfs 2>/dev/null)"; then
     printf 'sem dado'
     return 0
   fi
@@ -298,10 +298,12 @@ limpar_antigos() {
 TMP_JSON_ATUAL=""
 TMP_MD_ATUAL=""
 PRIVADA_ATUAL=""
+RESERVA_ATUAL=""
 limpar_temporarios() {
   [[ -n "$TMP_JSON_ATUAL" ]] && rm -f -- "$TMP_JSON_ATUAL"
   [[ -n "$TMP_MD_ATUAL" ]] && rm -f -- "$TMP_MD_ATUAL"
   [[ -n "$PRIVADA_ATUAL" ]] && rm -rf -- "$PRIVADA_ATUAL"
+  [[ -n "$RESERVA_ATUAL" ]] && rm -f -- "$RESERVA_ATUAL"
   return 0
 }
 trap limpar_temporarios EXIT
@@ -313,12 +315,11 @@ subcomando_diagnostico() {
   local carimbo gerado_em base arq_json arq_md arq_json_mascarado tmp_json tmp_md
   carimbo="$(date +%Y%m%d-%H%M%S)"
   gerado_em="$(date -Iseconds)"
-  base="retrato-$carimbo"
-  # Evita colisão caso dois diagnósticos rodem no mesmo segundo
-  if [[ -e "$PASTA_VIGIA/$base.json" || -e "$PASTA_VIGIA/$base.md" ]]; then
-    base="retrato-$carimbo-$$"
-  fi
-  arq_json="$PASTA_VIGIA/$base.json"
+  # O mktemp reserva o nome antes da coleta: duas chamadas no mesmo segundo
+  # não podem escolher a mesma base e sobrescrever uma à outra.
+  RESERVA_ATUAL="$(mktemp --suffix=.json "$PASTA_VIGIA/retrato-$carimbo-XXXXXX")"
+  arq_json="$RESERVA_ATUAL"
+  base="$(basename "$arq_json" .json)"
   arq_md="$PASTA_VIGIA/$base.md"
   arq_json_mascarado="$(printf '%s\n' "$arq_json" | higienizar 1 512 head)"
 
@@ -449,6 +450,7 @@ subcomando_diagnostico() {
   chmod 0600 "$tmp_json" "$tmp_md"
   mv -f "$tmp_json" "$arq_json"
   TMP_JSON_ATUAL=""
+  RESERVA_ATUAL=""
   mv -f "$tmp_md" "$arq_md"
   TMP_MD_ATUAL=""
   chmod 0600 "$arq_json" "$arq_md"
@@ -460,7 +462,7 @@ subcomando_lista() {
   local arq
   shopt -s nullglob
   for arq in "$PASTA_VIGIA"/retrato-*.json; do
-    [[ -f "$arq" && ! -L "$arq" ]] && printf '%s\n' "$arq"
+    [[ -f "$arq" && -s "$arq" && ! -L "$arq" ]] && printf '%s\n' "$arq"
   done
   shopt -u nullglob
 }
