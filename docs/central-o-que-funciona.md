@@ -17,7 +17,7 @@ Legenda:
 
 | Aba | Onde | Situação | O que mostra ou faz |
 |---|---|---|---|
-| Sessões | `menus/tarefas/janela.py:409` | Real; simulado sem `--real` | Lista das sessões de `jangada-agentes --lista-json`, agrupada por estado. Sessões terminadas em `--coordenador` ficam fora (`menus/tarefas/dados.py:137`, `menus/tarefas/janela.py:970`) |
+| Sessões | `menus/tarefas/janela.py:409` | Real; simulado sem `--real` | Lista das sessões de `jangada-agentes --lista-json`, agrupada por estado. Sessões terminadas em `--coordenador` ficam fora (`menus/tarefas/dados.py:137`, `menus/tarefas/janela.py:971`) |
 | Sessões > Acompanhamento | `menus/tarefas/janela.py:369` | Leitura | Última mensagem e mudanças vistas nesta janela |
 | Sessões > Saída do agente | `menus/tarefas/janela.py:370` | Leitura | Prévia de `jangada-agentes --previa`; na simulação, a mensagem fictícia |
 | Sessões > Detalhes | `menus/tarefas/janela.py:371` | Leitura | Estado, autor, revisor, tarefa, ramo e pasta. Sessão encerrada: dados de `jangada-indicadores --json` |
@@ -35,18 +35,18 @@ Legenda:
 | Botão ou atalho | Onde | Situação | Efeito |
 |---|---|---|---|
 | Atualizar | `menus/tarefas/janela.py:303` | Real | Refaz a consulta das sessões |
-| Avançar simulação | `menus/tarefas/janela.py:303`, `menus/tarefas/janela.py:913` | Simulado | Passa ao próximo dos quatro cenários fictícios |
+| Avançar simulação | `menus/tarefas/janela.py:303`, `menus/tarefas/janela.py:914` | Simulado | Passa ao próximo dos quatro cenários fictícios |
 | Nova tarefa | `menus/tarefas/janela.py:306` | Real; simulado sem `--real` (`janela.py:221`) | Abre o formulário de nova tarefa |
 | Nova tarefa > Escolher pasta | `menus/tarefas/janela.py:59` | Real | Escolhe a pasta do projeto |
 | Nova tarefa > Nova pasta | `menus/tarefas/janela.py:65` | Real; desligado na simulação | Cria a pasta de um projeto novo |
 | Nova tarefa > Opções avançadas | `menus/tarefas/janela.py:84` | Real | Mostra executor, revisor, segurança e delegação |
 | Nova tarefa > Iniciar tarefa | `menus/tarefas/janela.py:113` | Real; "Criar tarefa simulada" na simulação | Abre a sessão pelo Core |
-| Painel de indicadores | `menus/tarefas/janela.py:309`, `menus/tarefas/janela.py:505` | Leitura | Vai à aba Indicadores |
-| Abrir terminal / Retomar no terminal | `menus/tarefas/janela.py:380`, `menus/tarefas/janela.py:1248` | Real; simulado | `jangada-agentes --focar` |
-| Integrar pelo terminal | `menus/tarefas/janela.py:395`, `menus/tarefas/janela.py:1167` | Real; simulado | `jangada-agente-fim --integrar` no terminal |
-| Conferir e integrar (Alt+I) | `menus/tarefas/janela.py:384`, `menus/tarefas/janela.py:1085` | Real; simulado | Mostra a entrega, pede confirmação e integra |
-| Encerrar sem integrar (Ctrl+X) | `menus/tarefas/janela.py:385`, `menus/tarefas/janela.py:1167` | Real; simulado | `jangada-agente-fim` sem integrar |
-| Alt+2 a Alt+5 | `menus/tarefas/janela.py:426` | Leitura | Vai à aba de detalhe de mesmo número, com foco na barra de abas. Acompanhamento ficou sem atalho: Alt+1 é da coluna de coordenadores |
+| Painel de indicadores | `menus/tarefas/janela.py:309`, `menus/tarefas/janela.py:506` | Leitura | Vai à aba Indicadores |
+| Abrir terminal / Retomar no terminal | `menus/tarefas/janela.py:380`, `menus/tarefas/janela.py:1249` | Real; simulado | `jangada-agentes --focar` |
+| Integrar pelo terminal | `menus/tarefas/janela.py:395`, `menus/tarefas/janela.py:1168` | Real; simulado | `jangada-agente-fim --integrar` no terminal |
+| Conferir e integrar (Alt+I) | `menus/tarefas/janela.py:384`, `menus/tarefas/janela.py:1086` | Real; simulado | Mostra a entrega, pede confirmação e integra |
+| Encerrar sem integrar (Ctrl+X) | `menus/tarefas/janela.py:385`, `menus/tarefas/janela.py:1168` | Real; simulado | `jangada-agente-fim` sem integrar |
+| Alt+2 a Alt+5 | `menus/tarefas/janela.py:427` | Leitura | Vai à aba de detalhe de mesmo número, com foco na barra de abas. Acompanhamento ficou sem atalho: Alt+1 é da coluna de coordenadores |
 | Alt+1 | `menus/tarefas/coordenadores.py:261`, `menus/tarefas/coordenadores.py:467` | Leitura | Foco na lista de coordenadores |
 | Alt+M | `menus/tarefas/coordenadores.py:261`, `menus/tarefas/coordenadores.py:472` | Leitura | Foco na caixa de texto do coordenador |
 | Ir para a janela (Alt+J) | `menus/tarefas/coordenadores.py:244`, `menus/tarefas/coordenadores.py:478` | Real; simulado | `jangada-agentes --focar` com a sessão do coordenador; desligado com o coordenador parado |
