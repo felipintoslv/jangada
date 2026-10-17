@@ -171,6 +171,18 @@ que mantém a sessão; `Ctrl+X` abre o encerramento sem integração. Ambos usam
 `jangada-agente-fim`, preservando suas conferências e confirmações.
 Veja [instalação e reversão](interface.md#central-de-tarefas-v01).
 
+A aba **Indicadores** da Central, aberta também pelo botão Painel de
+indicadores, roda `jangada-indicadores --json` do Core ao abrir e no botão
+Atualizar, sem temporizador, e não lê os registros direto. Três cartões
+respondem quanto custa cada tarefa (mediana de tokens de entrada e saída das
+tarefas medidas), qual revisor acerta mais (maior taxa de apontamentos
+procedentes, com os casos) e como o destino local se compara ao agy (sucesso
+por chamada e recusas). A tabela abaixo mostra o detalhe do cartão escolhido;
+Tab entra nos cartões e as setas trocam o cartão. Valor nulo aparece como
+"sem dado", e a origem `sessao` aparece como registro do agente, `protegida`
+como registro protegido. Sem o comando, com saída inválida, versão diferente
+de 1 ou tempo esgotado, a aba mostra um aviso e mantém a leitura anterior.
+
 Cada mudança registrada vira uma linha em `eventos-agentes.jsonl`
 ([registros](registros.md)).
 

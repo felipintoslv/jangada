@@ -80,7 +80,7 @@ class Sessao:
 # Comandos que moram no Shell. Os demais são do Core.
 COMANDOS_DO_SHELL = frozenset({'jangada-terminal', 'jangada-conversa'})
 # Comandos que não são do Shell nem do Core: vão pelo nome, via PATH, e podem faltar.
-COMANDOS_DE_FORA = frozenset({'jangada-painel'})
+COMANDOS_DE_FORA = frozenset()
 
 
 @lru_cache(maxsize=1)

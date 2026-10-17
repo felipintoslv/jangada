@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout,
                             QPlainTextEdit, QPushButton, QSplitter, QTabWidget,
                             QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 from dados import (LIMITE, NOME, ORDEM, ROTULOS, Sessao,
-                   comando_disponivel, estado_exibido, idade, ler_lista, ler_observacao, pasta_sessoes, resolver_comando,
+                   estado_exibido, idade, ler_lista, ler_observacao, pasta_sessoes, resolver_comando,
                    simuladas)
 
 sys.dont_write_bytecode = True
@@ -29,6 +29,7 @@ RAIZ = Path(os.environ.get('JANGADA_PATH') or Path(__file__).absolute().parents[
 sys.path.insert(0, str(RAIZ / 'default'))
 from visual.fichas import carregar as carregar_fichas, ESTADOS
 from operacional import Operacional
+from indicadores import Indicadores
 
 # Só para a janela simulada e para quando a consulta falha: o catálogo vem do
 # jangada-agente --capacidades-json, que também é quem valida a escolha.
@@ -302,12 +303,12 @@ class Janela(QMainWindow):
         self.nova = QPushButton('Nova tarefa')
         self.nova.clicked.connect(self.nova_tarefa)
         topo.addWidget(self.nova)
-        for rotulo, comando in (('Conversa de Pescador', 'jangada-conversa'), ('Painel de indicadores', 'jangada-painel')):
-            if real and comando == 'jangada-painel' and not comando_disponivel(comando, self.jangada):
-                continue
-            botao = QPushButton(rotulo)
-            botao.clicked.connect(lambda _, c=comando: self.abrir_ferramenta(c))
-            topo.addWidget(botao)
+        conversa = QPushButton('Conversa de Pescador')
+        conversa.clicked.connect(lambda: self.abrir_ferramenta('jangada-conversa'))
+        topo.addWidget(conversa)
+        self.painel = QPushButton('Painel de indicadores')
+        self.painel.clicked.connect(self.abrir_indicadores)
+        topo.addWidget(self.painel)
         layout.addLayout(topo)
         self.resumo = QLabel()
         self.resumo.setTextFormat(Qt.TextFormat.PlainText)
@@ -393,6 +394,9 @@ class Janela(QMainWindow):
         self.centrais.addTab(sessoes, 'Sessões')
         self.operacional = Operacional(self)
         self.centrais.addTab(self.operacional, 'Projetos e fila')
+        self.indicadores = Indicadores(self)
+        self.centrais.addTab(self.indicadores, 'Indicadores')
+        self.centrais.currentChanged.connect(self.trocar_central)
         layout.addWidget(self.centrais, 1)
         self.status = QLabel()
         self.status.setTextFormat(Qt.TextFormat.PlainText)
@@ -475,7 +479,7 @@ class Janela(QMainWindow):
         return item.data(0, Qt.ItemDataRole.UserRole) if item else None
 
     def abrir_ferramenta(self, comando):
-        if comando not in ('jangada-conversa', 'jangada-painel'):
+        if comando != 'jangada-conversa':
             return
         if not self.real:
             self.status.setText(f'Simulação: abriria {comando}. Nenhum comando foi executado.')
@@ -484,6 +488,17 @@ class Janela(QMainWindow):
         self.preparar(processo, [], comando)
         iniciado, _ = processo.startDetached()
         self.status.setText('Abertura solicitada.' if iniciado else f'Não foi possível abrir {comando}. Confira --jangada.')
+
+    def abrir_indicadores(self):
+        if self.centrais.currentWidget() is self.indicadores:
+            self.indicadores.atualizar()
+        else:
+            self.centrais.setCurrentWidget(self.indicadores)
+        self.indicadores.cartoes[self.indicadores.escolhido()].setFocus()
+
+    def trocar_central(self, _):
+        if self.centrais.currentWidget() is self.indicadores:
+            self.indicadores.atualizar()
 
     def acompanhar_mudancas(self, sessoes):
         for s in sessoes.values():
@@ -678,6 +693,18 @@ class Janela(QMainWindow):
             QPushButton:focus, QComboBox:focus, QLineEdit:focus, QTreeWidget:focus,
             QPlainTextEdit:focus {{ border: 2px solid {c['primaria']}; }}
             QPushButton:disabled {{ color: {c['texto_suave']}; }}
+            QPushButton#cartao {{ text-align: left; padding: 0; }}
+            QPushButton#cartao:hover {{ border: 1px solid {c['primaria']}; }}
+            QPushButton#cartao:checked {{ border: 2px solid {c['primaria']}; }}
+            QPushButton#cartao:focus {{ border: 2px dashed {c['primaria']}; }}
+            QPushButton#cartao:checked:focus {{ border: 3px dashed {c['primaria']}; }}
+            QPushButton#cartao QLabel {{ background: transparent; border: none; padding: 0; }}
+            QLabel#cartao_titulo {{ font-size: 13px; font-weight: 600; color: {c['texto_suave']}; }}
+            QLabel#cartao_numero {{ font-size: 24px; font-weight: 700; }}
+            QLabel#cartao_apoio {{ font-size: 13px; }}
+            QLabel#cartao_rodape {{ font-size: 12px; color: {c['texto_suave']}; }}
+            QLabel#indicadores_detalhe {{ font-size: 16px; font-weight: 600; }}
+            QLabel#indicadores_status[falha="true"] {{ color: {c['atencao']}; }}
         """)
         for nome, item in self.itens.items():
             sessao = self.sessoes.get(nome)
@@ -1164,6 +1191,7 @@ exit "$resultado"
             return
         self.fechando = True
         self.operacional.fechar()
+        self.indicadores.fechar()
         for timer in (self.timer, self.evento_estado, self.limite_evento, self.observacao_limite,
                       self.observacao_repetir, self.espera,
                       self.tempo_acao, self.tempo_previa, self.tempo_finalizacao):

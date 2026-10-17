@@ -287,14 +287,164 @@ class Interface(unittest.TestCase):
         finally:
             central.close()
 
-    def test_lancadores_do_painel_e_da_conversa(self):
+    def test_lancador_da_conversa_e_painel_sem_aplicativo(self):
         with patch.object(QProcess, 'startDetached', return_value=(True, 123)) as iniciar, patch.object(self.janela, 'preparar') as preparar:
             self.janela.abrir_ferramenta('jangada-conversa')
             self.assertEqual(preparar.call_args.args[1:], ([], 'jangada-conversa'))
             self.janela.abrir_ferramenta('jangada-painel')
-            self.assertEqual(preparar.call_args.args[1:], ([], 'jangada-painel'))
             self.janela.abrir_ferramenta('outro-comando')
-            self.assertEqual(iniciar.call_count, 2)
+            self.assertEqual(iniciar.call_count, 1)
+
+    def indicadores_falso(self, saida, espera=0):
+        (self.raiz / 'indicadores-saida').write_text(saida if isinstance(saida, str) else json.dumps(saida))
+        comando = self.bin / 'jangada-indicadores'
+        comando.write_text("#!/usr/bin/env python3\nimport pathlib, sys, time\n"
+                           "pasta = pathlib.Path(__file__).resolve().parent.parent\n"
+                           "assert sys.argv[1:] == ['--json']\n"
+                           f"time.sleep({espera})\n"
+                           "sys.stdout.write((pasta / 'indicadores-saida').read_text())\n")
+        comando.chmod(0o700)
+
+    def ler_indicadores(self):
+        ind = self.janela.indicadores
+        ind.atualizar()
+        aguardar(lambda: ind.consulta.state() == QProcess.ProcessState.NotRunning)
+        return ind
+
+    def textos_da_aba(self, ind):
+        textos = [r.text() for c in ind.cartoes.values() for r in c.rotulos.values()]
+        for i in range(ind.tabela.topLevelItemCount()):
+            item = ind.tabela.topLevelItem(i)
+            textos += [item.text(c) for c in range(ind.tabela.columnCount())]
+        return textos
+
+    def test_indicadores_mostra_cartoes_tabela_e_nulos(self):
+        sem_tokens = dict(entrada=None, saida=None, cache_lido=None, modelo=None, motivo='consumo não registrado')
+        self.indicadores_falso(dict(versao=1, tarefas=[
+            dict(sessao='jangada--a\x1b[31m', autor='claude', tokens=sem_tokens, rodadas=0, rodadas_sessao=2,
+                 ultimo_resultado=None, delegacoes=[], segundos_revisao=0),
+            dict(sessao='jangada--b', autor='codex', rodadas=2, rodadas_sessao=0, ultimo_resultado='aprovado',
+                 tokens=dict(entrada=1000, saida=500, cache_lido=20000, modelo='gpt', motivo=None),
+                 delegacoes=[dict(papel='leitor', destino='local')], segundos_revisao=185.4),
+            dict(sessao='jangada--c', autor='claude', rodadas=1, rodadas_sessao=1, ultimo_resultado='revisar',
+                 tokens=dict(entrada=3000, saida=1500, cache_lido=None, modelo='opus', motivo=None),
+                 delegacoes=[], segundos_revisao=None)],
+            revisores=[
+                dict(revisor='agy', modelo='?', origem='sessao', pareceres=9, apontamentos=7, procedentes=0,
+                     rejeitados=0, sem_classificacao=0, casos=0, casos_taxa=0, taxa_procedencia=None),
+                dict(revisor='claude', modelo='sonnet', origem='protegida', pareceres=17, apontamentos=40,
+                     procedentes=12, rejeitados=1, sem_classificacao=0, casos=13, casos_taxa=13,
+                     taxa_procedencia=12 / 13)],
+            local_vs_agy=[
+                dict(papel='leitor', destino='local', origem='sessao', chamadas=4, sucesso=3, recusas=0,
+                     segundos_medianos=7.5, tokens_entrada=None, tokens_saida=None, mudancas_local=1),
+                dict(papel='explorador', destino='agy', origem='sessao', chamadas=10, sucesso=5, recusas=5,
+                     segundos_medianos=62.0, tokens_entrada=None, tokens_saida=None, mudancas_local=0)]))
+        self.janela.centrais.setCurrentWidget(self.janela.indicadores)
+        ind = self.janela.indicadores
+        aguardar(lambda: ind.dados is not None)
+        custo = ind.cartoes['tarefas'].rotulos
+        self.assertEqual(custo['numero'].text(), '3.000 tokens')
+        self.assertEqual(custo['rodape'].text(), '2 de 3 tarefas com consumo medido')
+        self.assertEqual(ind.tabela.topLevelItemCount(), 3)
+        primeira = [ind.tabela.topLevelItem(0).text(c) for c in range(ind.tabela.columnCount())]
+        self.assertEqual(primeira[0], 'jangada--a[31m')
+        self.assertEqual(primeira[2:5], ['sem dado'] * 3)
+        self.assertEqual(primeira[-1], 'consumo não registrado')
+        self.assertEqual(ind.tabela.topLevelItem(1).text(9), '3 min 5 s')
+        revisores = ind.cartoes['revisores'].rotulos
+        self.assertEqual(revisores['numero'].text(), '92%')
+        self.assertIn('claude, sonnet, registro protegido, 13 casos', revisores['apoio'].text())
+        destinos = ind.cartoes['local_vs_agy'].rotulos
+        self.assertEqual(destinos['numero'].text(), 'local 75% · agy 50%')
+        self.assertIn('recusas: local 0, agy 5', destinos['apoio'].text())
+        ind.cartoes['revisores'].click()
+        self.assertEqual(ind.tabela.headerItem().text(0), 'Revisor')
+        self.assertEqual(ind.tabela.topLevelItem(0).text(8), 'sem dado')
+        self.assertEqual(ind.tabela.topLevelItem(1).text(8), '92% (13 casos)')
+        self.assertEqual(ind.tabela.topLevelItem(1).text(2), 'registro protegido')
+        ind.cartoes['local_vs_agy'].click()
+        self.assertEqual(ind.tabela.topLevelItem(0).text(6), '7,5 s')
+        self.assertEqual(ind.tabela.topLevelItem(1).text(6), '1 min 2 s')
+        self.assertFalse(any('None' in t for t in self.textos_da_aba(ind)))
+        self.assertFalse(ind.status.property('falha'))
+
+    def test_indicadores_por_teclado_a_partir_do_botao(self):
+        self.indicadores_falso(dict(versao=1, tarefas=[], revisores=[], local_vs_agy=[]))
+        self.janela.show()
+        QTest.qWaitForWindowExposed(self.janela)
+        self.janela.activateWindow()
+        self.janela.painel.click()
+        ind = self.janela.indicadores
+        self.assertIs(self.janela.centrais.currentWidget(), ind)
+        aguardar(lambda: ind.dados is not None)
+        self.assertTrue(ind.cartoes['tarefas'].hasFocus())
+        QTest.keyClick(APP.focusWidget(), Qt.Key.Key_Right)
+        self.assertIs(APP.focusWidget(), ind.cartoes['revisores'])
+        self.assertTrue(ind.cartoes['revisores'].isChecked())
+        self.assertEqual(ind.tabela.headerItem().text(0), 'Revisor')
+        self.assertEqual(ind.detalhe.text(), 'Detalhe: Acerto dos revisores')
+        QTest.keyClick(APP.focusWidget(), Qt.Key.Key_Tab)
+        self.assertIs(APP.focusWidget(), ind.atualizar_botao)
+        QTest.keyClick(APP.focusWidget(), Qt.Key.Key_Tab)
+        self.assertIs(APP.focusWidget(), ind.tabela)
+        QTest.keyClick(APP.focusWidget(), Qt.Key.Key_Backtab)
+        QTest.keyClick(APP.focusWidget(), Qt.Key.Key_Backtab)
+        self.assertIs(APP.focusWidget(), ind.cartoes['revisores'])
+        folha = self.janela.styleSheet()
+        self.assertIn('QPushButton#cartao:focus', folha)
+        self.assertIn('QPushButton#cartao:checked', folha)
+
+    def test_indicadores_lista_vazia(self):
+        self.indicadores_falso(dict(versao=1, tarefas=[], revisores=[], local_vs_agy=[]))
+        ind = self.ler_indicadores()
+        self.assertIn('Ainda não há dados de indicadores', ind.status.text())
+        self.assertTrue(ind.vazio.isVisibleTo(ind))
+        self.assertEqual(ind.tabela.topLevelItemCount(), 0)
+        self.assertEqual(ind.cartoes['revisores'].rotulos['numero'].text(), 'sem dado')
+        self.assertFalse(any('None' in t for t in self.textos_da_aba(ind)))
+
+    def test_indicadores_comando_ausente(self):
+        ind = self.ler_indicadores()
+        self.assertIn('Comando jangada-indicadores não encontrado', ind.status.text())
+        self.assertIn('jangada-core', ind.status.text())
+        self.assertTrue(ind.status.property('falha'))
+        self.assertIsNone(ind.dados)
+        self.assertEqual(ind.consulta.state(), QProcess.ProcessState.NotRunning)
+        self.janela.centrais.setCurrentIndex(0)
+        self.assertTrue(self.janela.dados_validos)
+
+    def test_indicadores_saida_invalida_versao_e_prazo_mantem_leitura(self):
+        self.indicadores_falso(dict(versao=1, tarefas=[], revisores=[
+            dict(revisor='claude', modelo='opus', origem='sessao', casos_taxa=2, taxa_procedencia=0.5)],
+            local_vs_agy=[]))
+        ind = self.ler_indicadores()
+        self.assertEqual(ind.cartoes['revisores'].rotulos['numero'].text(), '50%')
+        for saida, aviso in (('não é JSON', 'não é JSON válido'),
+                             (dict(versao=2, tarefas=[], revisores=[], local_vs_agy=[]), 'Versão 2'),
+                             (dict(versao=1, tarefas={}, revisores=[], local_vs_agy=[]), 'listas esperadas')):
+            self.indicadores_falso(saida)
+            self.ler_indicadores()
+            self.assertIn(aviso, ind.status.text())
+            self.assertIn('leitura anterior', ind.status.text())
+            self.assertTrue(ind.status.property('falha'))
+            self.assertEqual(ind.cartoes['revisores'].rotulos['numero'].text(), '50%')
+        self.indicadores_falso(dict(versao=1, tarefas=[], revisores=[], local_vs_agy=[]), espera=5)
+        ind.prazo_ms = 100
+        self.ler_indicadores()
+        self.assertIn('Tempo esgotado', ind.status.text())
+        self.assertEqual(ind.cartoes['revisores'].rotulos['numero'].text(), '50%')
+        self.assertTrue(self.janela.nova.isEnabled())
+
+    def test_indicadores_simulados_nao_consultam(self):
+        simulada = Janela()
+        try:
+            simulada.centrais.setCurrentWidget(simulada.indicadores)
+            self.assertIn('Simulação', simulada.indicadores.status.text())
+            self.assertEqual(simulada.indicadores.consulta.state(), QProcess.ProcessState.NotRunning)
+            self.assertFalse(simulada.indicadores.atualizar_botao.isEnabled())
+        finally:
+            simulada.close()
 
     def test_idade_de_atualizacao_aceita_fuso_e_rejeita_horario_invalido(self):
         from datetime import datetime
@@ -1346,9 +1496,10 @@ class RaizDoCore(unittest.TestCase):
         self.assertEqual(extra, {'JANGADA_PATH': str(self.base / 'shell')})
 
     def test_comando_de_fora_vai_pelo_nome_mesmo_com_raiz_do_core(self):
-        with self.ambiente(JANGADA_CORE_PATH=str(self.base / 'core'), PATH='/nao/existe'):
-            programa, extra = dados.resolver_comando('jangada-painel', self.base / 'shell')
-        self.assertEqual(programa, 'jangada-painel')
+        with self.ambiente(JANGADA_CORE_PATH=str(self.base / 'core'), PATH='/nao/existe'), \
+             patch.object(dados, 'COMANDOS_DE_FORA', frozenset({'jangada-exemplo'})):
+            programa, extra = dados.resolver_comando('jangada-exemplo', self.base / 'shell')
+        self.assertEqual(programa, 'jangada-exemplo')
         self.assertEqual(extra, {'JANGADA_CORE_PATH': str(self.base / 'core')})
 
     def test_comando_disponivel_depende_do_path(self):
@@ -1357,11 +1508,11 @@ class RaizDoCore(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=cache) as temporaria:
             pasta = Path(temporaria)
             with self.ambiente(PATH=str(pasta)):
-                self.assertFalse(dados.comando_disponivel('jangada-painel', self.base))
-                falso = pasta / 'jangada-painel'
+                self.assertFalse(dados.comando_disponivel('jangada-indicadores', self.base))
+                falso = pasta / 'jangada-indicadores'
                 falso.write_text('#!/bin/sh\n')
                 falso.chmod(0o755)
-                self.assertTrue(dados.comando_disponivel('jangada-painel', self.base))
+                self.assertTrue(dados.comando_disponivel('jangada-indicadores', self.base))
             with self.ambiente(JANGADA_CORE_PATH=str(pasta)):
                 (pasta / 'bin').mkdir()
                 self.assertFalse(dados.comando_disponivel('jangada-agentes', self.base))
@@ -1370,21 +1521,22 @@ class RaizDoCore(unittest.TestCase):
                 (pasta / 'bin/jangada-agentes').chmod(0o755)
                 self.assertTrue(dados.comando_disponivel('jangada-agentes', self.base))
 
-    def test_botao_do_painel_some_sem_o_comando_so_em_modo_real(self):
+    def test_botao_do_painel_abre_a_aba_mesmo_sem_o_comando(self):
         estado = self.base / 'estado'
         estado.mkdir()
-        def rotulos(real, disponivel):
-            with patch.object(janela, 'comando_disponivel', return_value=disponivel):
+        for real in (True, False):
+            with self.ambiente(PATH='/nao/existe'):
                 aberta = Janela(real, self.base, estado)
-            aberta.timer.stop()
-            try:
-                return {b.text() for b in aberta.findChildren(QPushButton)}
-            finally:
-                aberta.close()
-        self.assertNotIn('Painel de indicadores', rotulos(True, False))
-        self.assertIn('Conversa de Pescador', rotulos(True, False))
-        self.assertIn('Painel de indicadores', rotulos(True, True))
-        self.assertIn('Painel de indicadores', rotulos(False, False))
+                aberta.timer.stop()
+                try:
+                    self.assertIn('Conversa de Pescador', {b.text() for b in aberta.findChildren(QPushButton)})
+                    self.assertEqual(aberta.centrais.tabText(2), 'Indicadores')
+                    aberta.painel.click()
+                    self.assertIs(aberta.centrais.currentWidget(), aberta.indicadores)
+                    if real:
+                        self.assertIn('não encontrado', aberta.indicadores.status.text())
+                finally:
+                    aberta.close()
 
 
 class Links(unittest.TestCase):
