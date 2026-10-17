@@ -255,22 +255,25 @@ coletar_waybar() {
 coletar_jangada_diagnostico() {
   local cmd="$JANGADA_PATH/bin/jangada-verificar"
   [[ -x "$cmd" ]] || { printf 'sem dado'; return 0; }
-  local saida arq_diag="" nome_diag="" dir_diag="" estado_real="" texto=""
-  if ! saida="$("$cmd" --diagnostico 2>/dev/null)"; then
-    printf 'sem dado'
-    return 0
-  fi
-  arq_diag="$(sed -n 's/^diagnóstico gravado em //p' <<<"$saida" | head -n 1)"
-  if [[ -n "$arq_diag" && "$arq_diag" != *".."* && -f "$arq_diag" && ! -L "$arq_diag" ]]; then
-    nome_diag="$(basename "$arq_diag")"
-    dir_diag="$(realpath -e "$(dirname "$arq_diag")" 2>/dev/null || true)"
-    estado_real="$(realpath -e "$JANGADA_ESTADO" 2>/dev/null || true)"
-    if [[ -n "$dir_diag" && "$dir_diag" == "$estado_real" && "$nome_diag" =~ ^diagnostico-[0-9]{8}-[0-9]{4}\.md$ ]]; then
-      texto="$(cat "$dir_diag/$nome_diag" 2>/dev/null || true)"
-      rm -f -- "$dir_diag/$nome_diag"
+  # O jangada-verificar grava diagnostico-AAAAMMDD-HHMM.md no JANGADA_ESTADO,
+  # com resolução de minuto, e consulta o Ollama com curl. Roda com estado
+  # próprio dentro da pasta do Vigia, para não sobrescrever nem apagar o
+  # diagnóstico de outra chamada, e com um curl que recusa, para não usar rede.
+  local privada="$1" arqs texto=""
+  mkdir -p "$privada/bin" "$privada/estado"
+  printf '#!/bin/sh\nexit 7\n' >"$privada/bin/curl"
+  chmod 0700 "$privada/bin/curl"
+  if XDG_STATE_HOME="$privada/estado" PATH="$privada/bin:$PATH" \
+      "$cmd" --diagnostico >/dev/null 2>&1; then
+    shopt -s nullglob
+    arqs=("$privada"/estado/jangada/diagnostico-*.md)
+    shopt -u nullglob
+    if [[ ${#arqs[@]} -eq 1 && -f "${arqs[0]}" && ! -L "${arqs[0]}" ]]; then
+      texto="$(cat "${arqs[0]}" 2>/dev/null || true)"
     fi
   fi
   [[ -n "${texto//[[:space:]]/}" ]] || { printf 'sem dado'; return 0; }
+  texto="nota do Vigia: rodado sem rede; a linha do Ollama não reflete o estado real."$'\n'"$texto"
   printf '%s\n' "$texto" | higienizar 250 32768 head
 }
 
@@ -294,9 +297,11 @@ limpar_antigos() {
 
 TMP_JSON_ATUAL=""
 TMP_MD_ATUAL=""
+PRIVADA_ATUAL=""
 limpar_temporarios() {
   [[ -n "$TMP_JSON_ATUAL" ]] && rm -f -- "$TMP_JSON_ATUAL"
   [[ -n "$TMP_MD_ATUAL" ]] && rm -f -- "$TMP_MD_ATUAL"
+  [[ -n "$PRIVADA_ATUAL" ]] && rm -rf -- "$PRIVADA_ATUAL"
   return 0
 }
 trap limpar_temporarios EXIT
@@ -327,7 +332,10 @@ subcomando_diagnostico() {
   ses_ver="$(coletar_hyprctl_version)"
   ses_mon="$(coletar_monitores)"
   ses_wb="$(coletar_waybar)"
-  jang_diag="$(coletar_jangada_diagnostico)"
+  PRIVADA_ATUAL="$(mktemp -d "$PASTA_VIGIA/.verificar.XXXXXX")"
+  jang_diag="$(coletar_jangada_diagnostico "$PRIVADA_ATUAL")"
+  rm -rf -- "$PRIVADA_ATUAL"
+  PRIVADA_ATUAL=""
   log_err="$(coletar_log_sistema)"
 
   tmp_json="$(mktemp "$PASTA_VIGIA/.retrato-json.XXXXXX")"

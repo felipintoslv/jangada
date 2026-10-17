@@ -20,10 +20,11 @@ diagnóstico no Jangada Vigia e como cada um é contido por construção.
     pessoal viram `~`, o nome do usuário vira `<usuario>`, o nome da máquina
     (saída de `hostname` e `uname -n`) vira `<maquina>`, endereços IPv4 e IPv6
     viram `<ip>` e endereços MAC viram `<mac>`.
-  - Limpeza do arquivo intermediário: o arquivo `$JANGADA_ESTADO/diagnostico-*.md`
-    gravado pelo `jangada-verificar --diagnostico` é apagado pelo Vigia logo
-    depois de ser lido e mascarado, para não restar fora de
-    `$JANGADA_ESTADO/vigia/` sem mascaramento completo nem permissão `0600`.
+  - Arquivo intermediário: o `jangada-verificar --diagnostico` roda com
+    `XDG_STATE_HOME` numa pasta temporária dentro de `$JANGADA_ESTADO/vigia/`,
+    apagada logo depois da leitura. O `diagnostico-*.md` dele não fica sem
+    mascaramento, e o de outra chamada no mesmo minuto não é sobrescrito nem
+    apagado.
   - Permissões restritas: a pasta `$JANGADA_ESTADO/vigia` é criada em
     `0700` e cada retrato ou relatório em `0600`.
   - Retenção limitada: retratos com mais de 30 dias são apagados ao gravar um
@@ -57,7 +58,8 @@ diagnóstico no Jangada Vigia e como cada um é contido por construção.
   - Nenhum dado coletado é interpolado em comandos de shell, `eval` ou chamadas
     subsequentes.
   - Não há chamada a `sudo`, `pkexec`, gerenciadores de pacotes, alterações de
-    serviços nem requisições de rede.
+    serviços nem requisições de rede. O `jangada-verificar` consulta o Ollama
+    com `curl`; o Vigia o roda com um `curl` que recusa sem conectar.
 
 ## 4. Escrita fora de `~/.local/state/jangada`
 
@@ -67,10 +69,9 @@ diagnóstico no Jangada Vigia e como cada um é contido por construção.
 - **Contenção:**
   - Toda escrita persistente do Vigia ocorre unicamente dentro de
     `$JANGADA_ESTADO/vigia/` (por padrão
-    `~/.local/state/jangada/vigia/`, regra 1 do `AGENTS.md`). O arquivo
-    `$JANGADA_ESTADO/diagnostico-*.md` gerado por
-    `jangada-verificar --diagnostico` durante a coleta é apagado pelo Vigia
-    imediatamente após a leitura.
+    `~/.local/state/jangada/vigia/`, regra 1 do `AGENTS.md`). O
+    `jangada-verificar --diagnostico` também grava só ali, na pasta
+    temporária descrita na seção 1.
   - As gravações de retrato e relatório usam arquivo temporário na própria
     pasta `$JANGADA_ESTADO/vigia/` seguido de `mv`.
   - A limpeza de 30 dias e o subcomando `jangada-vigia apagar` resolvem o
