@@ -23,7 +23,6 @@ opcao="$(printf '%s\n' \
   "Nova tarefa" \
   "Central de tarefas" \
   "Restaurar agentes interrompidos" \
-  "Conversa de Pescador" \
   "Monitor do sistema" \
   "Energia e bateria" \
   "Dispositivos de áudio" \
@@ -56,7 +55,6 @@ case "$opcao" in
       r="jangada-agentes não encontrado: o Core não está instalado"
     fi
     notify-send -a jangada "Agentes" "$r" 2>/dev/null || true ;;
-  "Conversa de Pescador") exec "$b/jangada-conversa" ;;
   "Monitor do sistema") exec "$b/jangada-monitor" ;;
   "Energia e bateria") exec "$b/jangada-energia" ;;
   "Dispositivos de áudio") exec "$b/jangada-audio" ;;

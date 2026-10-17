@@ -41,7 +41,7 @@ JANGADA_REPO=
 # Ramo que o jangada-sistema-update acompanha na cópia instalada: main (tudo o que
 # entrou) ou estavel (só o que foi marcado como testado).
 JANGADA_CANAL=main
-# Delegação local da Conversa de Pescador.
+# Delegação local do Core (jangada-delegar --destino local).
 JANGADA_LOCAL_MODELO="${JANGADA_LOCAL_MODELO:-qwen3:4b}"
 JANGADA_LOCAL_CTX="${JANGADA_LOCAL_CTX:-8192}"
 JANGADA_LOCAL_VRAM_MIN="${JANGADA_LOCAL_VRAM_MIN:-4000}"
@@ -57,9 +57,6 @@ if [[ -f "$JANGADA_CONFIG/jangada.conf" ]]; then
   done < <(sed -e 's/^[[:space:]]*#.*//' -e 's/[[:space:]]*$//' "$JANGADA_CONFIG/jangada.conf")
   unset _chave _valor
 fi
-# Contexto da Conversa de Pescador; sem valor próprio, segue o da delegação.
-# Fica depois do arquivo, de onde o JANGADA_LOCAL_CTX pode vir.
-JANGADA_CONVERSA_CTX="${JANGADA_CONVERSA_CTX:-$JANGADA_LOCAL_CTX}"
 if [[ -z "$JANGADA_REPO" && -d "$JANGADA_PROJETOS/jangada/.git" ]]; then
   JANGADA_REPO="$JANGADA_PROJETOS/jangada"
 fi
@@ -76,7 +73,7 @@ export JANGADA_PATH JANGADA_CONFIG JANGADA_ESTADO JANGADA_SESSOES JANGADA_INTERF
   JANGADA_PROJETOS JANGADA_WORKTREES JANGADA_PAPEL \
   JANGADA_PAPEL_AJUSTE JANGADA_TEMA_ESQUEMA JANGADA_BARRA_POSICAO JANGADA_GPU \
   JANGADA_REPO JANGADA_CANAL JANGADA_LOCAL_MODELO JANGADA_LOCAL_CTX JANGADA_LOCAL_VRAM_MIN \
-  JANGADA_OLLAMA_URL JANGADA_CONVERSA_CTX
+  JANGADA_OLLAMA_URL
 
 # Dispositivos DRM com saída de vídeo conectada, um por linha, em caminho
 # estável (/dev/dri/by-path, porque a numeração de /dev/dri/cardN muda entre

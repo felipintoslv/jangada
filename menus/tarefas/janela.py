@@ -305,9 +305,6 @@ class Janela(QMainWindow):
         self.nova = QPushButton('Nova tarefa')
         self.nova.clicked.connect(self.nova_tarefa)
         topo.addWidget(self.nova)
-        conversa = QPushButton('Conversa de Pescador')
-        conversa.clicked.connect(lambda: self.abrir_ferramenta('jangada-conversa'))
-        topo.addWidget(conversa)
         self.painel = QPushButton('Painel de indicadores')
         self.painel.clicked.connect(self.abrir_indicadores)
         topo.addWidget(self.painel)
@@ -492,17 +489,6 @@ class Janela(QMainWindow):
     def selecionada(self):
         item = self.lista.currentItem()
         return item.data(0, Qt.ItemDataRole.UserRole) if item else None
-
-    def abrir_ferramenta(self, comando):
-        if comando != 'jangada-conversa':
-            return
-        if not self.real:
-            self.status.setText(f'Simulação: abriria {comando}. Nenhum comando foi executado.')
-            return
-        processo = QProcess(self)
-        self.preparar(processo, [], comando)
-        iniciado, _ = processo.startDetached()
-        self.status.setText('Abertura solicitada.' if iniciado else f'Não foi possível abrir {comando}. Confira --jangada.')
 
     def abrir_indicadores(self):
         if self.centrais.currentWidget() is self.indicadores:

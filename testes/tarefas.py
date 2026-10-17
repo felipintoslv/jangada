@@ -282,18 +282,16 @@ class Interface(unittest.TestCase):
             central.mostrar({nome: replace(s, inicio='segunda', estado='trabalhando')})
             self.assertNotIn('Interrompida', central.linha_tempo.toPlainText())
             self.assertEqual(len(central.eventos[nome]), 1)
-            central.abrir_ferramenta('jangada-conversa')
-            self.assertIn('Nenhum comando', central.status.text())
         finally:
             central.close()
 
-    def test_lancador_da_conversa_e_painel_sem_aplicativo(self):
-        with patch.object(QProcess, 'startDetached', return_value=(True, 123)) as iniciar, patch.object(self.janela, 'preparar') as preparar:
-            self.janela.abrir_ferramenta('jangada-conversa')
-            self.assertEqual(preparar.call_args.args[1:], ([], 'jangada-conversa'))
-            self.janela.abrir_ferramenta('jangada-painel')
-            self.janela.abrir_ferramenta('outro-comando')
-            self.assertEqual(iniciar.call_count, 1)
+    def test_central_sem_conversa_e_painel_sem_aplicativo(self):
+        self.assertNotIn('Conversa de Pescador', {b.text() for b in self.janela.findChildren(QPushButton)})
+        self.assertFalse(hasattr(self.janela, 'abrir_ferramenta'))
+        with patch.object(QProcess, 'startDetached', return_value=(True, 123)) as iniciar:
+            self.janela.painel.click()
+            self.assertIs(self.janela.centrais.currentWidget(), self.janela.indicadores)
+            self.assertEqual(iniciar.call_count, 0)
 
     def indicadores_falso(self, saida, espera=0):
         (self.raiz / 'indicadores-saida').write_text(saida if isinstance(saida, str) else json.dumps(saida))
@@ -1743,7 +1741,7 @@ class RaizDoCore(unittest.TestCase):
                 aberta = Janela(real, self.base, estado)
                 aberta.timer.stop()
                 try:
-                    self.assertIn('Conversa de Pescador', {b.text() for b in aberta.findChildren(QPushButton)})
+                    self.assertNotIn('Conversa de Pescador', {b.text() for b in aberta.findChildren(QPushButton)})
                     self.assertEqual(aberta.centrais.tabText(2), 'Indicadores')
                     aberta.painel.click()
                     self.assertIs(aberta.centrais.currentWidget(), aberta.indicadores)

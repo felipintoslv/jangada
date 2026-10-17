@@ -96,10 +96,9 @@ testes/barra.sh || falha "testes/barra.sh"
 testes/barra-comandos-core.sh || falha "testes/barra-comandos-core.sh"
 testes/interface.sh || falha "testes/interface.sh"
 
-passo "testes de interface: tarefas e conversa (Qt)"
+passo "testes de interface: tarefas (Qt)"
 python3 testes/tarefas.py || falha "testes/tarefas.py"
 testes/tarefas.sh || falha "testes/tarefas.sh"
-python3 testes/conversa.py || falha "testes/conversa.py"
 
 passo "testes de interface: utilitários (rede, bluetooth, snapshot, calendário, importar, mapear)"
 testes/rede.sh || falha "testes/rede.sh"
