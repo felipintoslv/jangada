@@ -4,7 +4,7 @@
   "position": "top",
   "height": 32,
   "spacing": 4,
-  "modules-left": ["custom/menu", "custom/sambura", "hyprland/workspaces", "custom/agentes", "custom/indicadores", "hyprland/window"],
+  "modules-left": ["custom/menu", "hyprland/workspaces", "custom/agentes", "custom/indicadores", "hyprland/window"],
   "modules-center": ["clock"],
   "modules-right": [
     "tray",
@@ -32,13 +32,6 @@
     "tooltip-format": "Menu Jangada (botão direito: terminal)",
     "on-click": "setsid -f $JANGADA_PATH/bin/jangada-menu",
     "on-click-right": "setsid -f $JANGADA_PATH/bin/jangada-terminal"
-  },
-
-  "custom/sambura": {
-    "format": "Samburá",
-    "tooltip": true,
-    "tooltip-format": "Abrir Samburá",
-    "on-click": "setsid -f \"${JANGADA_PROJETOS:-$HOME/Projetos}/sambura/bin/sambura\""
   },
 
   "hyprland/workspaces": {

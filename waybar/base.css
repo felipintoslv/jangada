@@ -127,19 +127,6 @@ window#waybar {
   color: @atencao;
 }
 
-#custom-sambura {
-  color: @primaria;
-  padding: 0 8px;
-}
-
-#custom-sambura:hover {
-  color: @atencao;
-}
-
-window#waybar.vertical #custom-sambura {
-  padding: 8px 0;
-}
-
 #custom-sessao {
   color: @texto_suave;
 }

@@ -57,9 +57,9 @@ if [[ -f "$gerado" ]]; then
   conferir "caso 3: borda.jsonc é JSON" jq_ok . "$tmp/borda.json"
   conferir "caso 3: barra em pé com custom/indicadores depois do custom/agentes" \
     jq_ok '.["modules-left"] | index("custom/indicadores") == index("custom/agentes") + 1' "$tmp/borda.json"
-  conferir "caso 3: Samburá junto ao menu e texto girado na barra em pé" \
-    jq_ok '.["modules-left"][:2] == ["custom/menu", "custom/sambura"]
-      and .["custom/sambura"].rotate == 90' "$tmp/borda.json"
+  conferir "caso 3: barra em pé sem o Samburá, aposentado" \
+    jq_ok '.["modules-left"][:2] == ["custom/menu", "hyprland/workspaces"]
+      and has("custom/sambura") == false' "$tmp/borda.json"
 else
   falha "caso 3: jangada-barra não gerou $gerado"
 fi
@@ -265,8 +265,8 @@ conferir "caso 12: busca exclusiva do usuário permanece exclusiva" \
   [ "$(cat "$tmp/dados")" = "$tmp/pessoal" ]
 conferir "caso 12: recurso simbólico e estados preservados" python3 testes/teclado-waybar.py
 
-conferir "caso 13: atalho Samburá e migração preservam configurações pessoais" \
-  python3 testes/sambura-waybar.py
+conferir "caso 13: barra sem o Samburá e migração preserva configurações pessoais" \
+  python3 testes/sambura-retirada.py
 
 if ((falhas)); then
   echo "$falhas teste(s) da barra falharam"
