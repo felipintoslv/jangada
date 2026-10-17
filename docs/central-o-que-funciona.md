@@ -21,7 +21,7 @@ Legenda:
 | Sessões > Acompanhamento | `menus/tarefas/janela.py:363` | Leitura | Última mensagem e mudanças vistas nesta janela |
 | Sessões > Saída do agente | `menus/tarefas/janela.py:364` | Leitura | Prévia de `jangada-agentes --previa`; na simulação, a mensagem fictícia |
 | Sessões > Detalhes | `menus/tarefas/janela.py:365` | Leitura | Estado, autor, revisor, tarefa, ramo e pasta. Sessão encerrada: dados de `jangada-indicadores --json` |
-| Sessões > Rodadas | `menus/tarefas/janela.py:367`, `menus/tarefas/rodadas.py:113` | Leitura; simulação não consulta | Contagem de rodadas, último resultado e último parecer, como dado |
+| Sessões > Rodadas | `menus/tarefas/janela.py:367`, `menus/tarefas/rodadas.py:165` | Leitura; simulação não consulta | Contagem de rodadas, último resultado, lista de rodadas de `jangada-agentes --rodadas-json` (rodada, origem, resultado, revisor, modelo, data, tempo e apontamentos) e último parecer, como dado. Com Core sem a consulta, avisa que a lista ainda não está disponível |
 | Sessões > Entrega | `menus/tarefas/janela.py:372` | Leitura | Prévia de `--integracao-json` antes da confirmação |
 | Projetos e fila | `menus/tarefas/janela.py:405`, `menus/tarefas/operacional.py:30` | Real; simulação não consulta | Projetos, atividades e tarefas da fila persistente |
 | Indicadores | `menus/tarefas/janela.py:407`, `menus/tarefas/indicadores.py:263` | Leitura; simulação não consulta | Custo por tarefa, procedência dos revisores e local contra agy |
@@ -44,7 +44,7 @@ Legenda:
 | Conferir e integrar (Alt+I) | `menus/tarefas/janela.py:378`, `menus/tarefas/janela.py:1060` | Real; simulado | Mostra a entrega, pede confirmação e integra |
 | Encerrar sem integrar (Ctrl+X) | `menus/tarefas/janela.py:379`, `menus/tarefas/janela.py:1142` | Real; simulado | `jangada-agente-fim` sem integrar |
 | Alt+1 a Alt+5 | `menus/tarefas/janela.py:415` | Leitura | Vai à aba de detalhe de mesmo número, com foco na barra de abas |
-| Atualizar rodadas | `menus/tarefas/rodadas.py:126` | Leitura; desligado na simulação | Refaz as duas consultas da aba Rodadas |
+| Atualizar rodadas | `menus/tarefas/rodadas.py:178` | Leitura; desligado na simulação | Refaz as três consultas da aba Rodadas |
 | Indicadores > Atualizar | `menus/tarefas/indicadores.py:228` | Leitura | Refaz `jangada-indicadores --json` |
 | Indicadores > cartões | `menus/tarefas/indicadores.py:224` | Leitura | Troca a tabela de detalhe |
 | Projetos e fila > Cadastrar projeto | `menus/tarefas/operacional.py:41`, `menus/tarefas/operacional.py:248` | Real; desligado na simulação | `jangada-projeto` cadastrar |
@@ -69,14 +69,7 @@ Legenda:
 
 A aba Rodadas mostra "sem dado" onde o Core não informa. Faltam:
 
-- rodadas anteriores à última, com resultado, revisor e tempo de cada uma;
 - pareceres de rodadas antigas (`jangada-agentes --contexto-json` traz só o
-  último);
+  último, e `parecer_origem` de `--rodadas-json` é sempre nulo na versão 1);
 - um campo que separe execuções de mesmo nome em `jangada-indicadores --json`.
   Com mais de um registro da sessão, a aba mostra o último da lista e avisa.
-
-Uma consulta que cobriria isso: `jangada-agentes --rodadas-json SESSAO`,
-versão 1, com `versao`, `sessao`, `execucao` e uma lista `rodadas` em que
-cada item traz `rodada`, `origem` (`sessao` ou `protegida`), `resultado`,
-`revisor`, `modelo`, `inicio`, `fim`, `segundos`, `apontamentos` e
-`parecer_origem`.
