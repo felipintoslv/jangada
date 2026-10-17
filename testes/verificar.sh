@@ -110,6 +110,7 @@ testes/mapear.sh || falha "testes/mapear.sh"
 
 passo "diagnóstico, reversão, regras e fronteira com o Core"
 testes/diagnostico.sh || falha "testes/diagnostico.sh"
+testes/inspector.sh || falha "testes/inspector.sh"
 testes/reverter.sh || falha "testes/reverter.sh"
 testes/regra1.sh || falha "testes/regra1.sh"
 testes/contratos-caminhos.sh || falha "testes/contratos-caminhos.sh"
