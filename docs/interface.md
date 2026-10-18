@@ -128,8 +128,7 @@ interrupções. O contador consulta a cada dez segundos, com atualização imedi
 pelo sinal dos hooks. Clique abre ou foca a central existente; botão direito abre
 Nova tarefa. O sinal 10 continua reservado aos estados das sessões.
 Falhas aparecem como erro, sem um zero que pareça uma consulta bem-sucedida.
-O consumo do Claude saiu da dica da barra; continua disponível no painel
-de indicadores e em `jangada-consumo --curto`.
+O consumo do Claude está disponível em `jangada-consumo --curto`.
 
 ### Instalação e atualização
 
