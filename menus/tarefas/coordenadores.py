@@ -26,6 +26,7 @@ PROVEDORES = ('claude', 'codex')
 SEM_CORE = 'Coordenadores ainda não disponíveis no Core instalado.'
 SEM_CICLO = ('O Core instalado não informa o ciclo da atuação. Retomar e Finalizar atuação '
              'exigem atualização do Core; as ações anteriores continuam disponíveis.')
+SEM_RETOMADA = 'O Core informa que a retomada está indisponível neste momento.'
 FAIXA = ('Só você faz: sem dado. O Core ainda não informa os commits locais não enviados '
          'dos projetos cadastrados.')
 # Estado mostrado: ficha de cor, glifo e texto. Cor sempre vem com texto e glifo.
@@ -98,8 +99,6 @@ def ler_coordenadores(bruto):
             raise ValueError('Campo atuacao_id do coordenador em formato inesperado.')
         if 'retomavel' in c and type(c['retomavel']) is not bool:
             raise ValueError('Campo retomavel do coordenador em formato inesperado.')
-        if tem_ciclo(c) and c['retomavel'] != (c['ciclo'] == 'aberta' and not c['viva']):
-            raise ValueError('Campo retomavel incompatível com o ciclo e a sessão runtime.')
         tarefas = c.get('tarefas')
         if not isinstance(tarefas, list) or len(tarefas) > LISTA_MAX or any(
                 not isinstance(t, dict) or not isinstance(t.get('sessao'), str)
@@ -199,6 +198,9 @@ class NovoCoordenador(QDialog):
             self.aviso.setText('Este projeto tem atuação aberta, aguardando retomada. '
                                'Retoma a mesma atuação e preserva suas tarefas. Você pode escolher '
                                'outro provedor após ter saído voluntariamente do anterior.')
+            if not existente['retomavel']:
+                self.abrir.setEnabled(False)
+                self.aviso.setText(SEM_RETOMADA)
         elif existente and not tem_ciclo(existente):
             self.aviso.setText(SEM_CICLO + ' Abrir coordenador usa a ação anterior do Core.')
         else:
@@ -529,8 +531,10 @@ class Coordenadores(QWidget):
         self.copiar.setEnabled(c['viva'] and not ocupado)
         self.ir.setEnabled(c['viva'] and not ocupado)
         aberta = tem_ciclo(c) and c['ciclo'] == 'aberta'
+        if aberta and not c['viva'] and not c['retomavel']:
+            self.avisar(self.aviso, AVISOS[chave] + ' ' + SEM_RETOMADA)
         permitido = self.janela.real and self.disponivel and not ocupado
-        self.retomar.setEnabled(permitido and aberta and c['retomavel']
+        self.retomar.setEnabled(permitido and aberta and not c['viva'] and c['retomavel']
                                 and bool(c.get('projeto')) and c.get('provedor') in PROVEDORES)
         self.finalizar.setEnabled(permitido and aberta)
 
@@ -718,16 +722,33 @@ class Coordenadores(QWidget):
             else:
                 self.ir_para_janela()
             return
-        if pedido['tipo'] == 'finalizar':
-            argumentos = ['--finalizar', c['sessao']]
-        else:
-            argumentos = ['--projeto', pedido['caminho'], '--provedor', pedido['provedor'], '--janela']
+        if pedido['tipo'] != 'finalizar':
+            if c and tem_ciclo(c) and c['ciclo'] == 'aberta' and not c['retomavel']:
+                self.terminar_acao(SEM_RETOMADA, True)
+                return
+            self.abrir_janela(pedido)
+            return
         self.expirou_acao = False
         self.saida_acao = b''
-        self.janela.preparar(self.acao, argumentos, COORDENADOR)
+        self.janela.preparar(self.acao, ['--finalizar', c['sessao']], COORDENADOR)
         self.acao.start()
         self.prazo_acao.start(self.prazo_acao_ms)
         self.avisar(self.resultado, 'Aguardando o resultado do Core.')
+
+    def abrir_janela(self, pedido):
+        # --janela pode manter o terminal em primeiro plano; seus canais não pertencem à Central.
+        processo = QProcess(self)
+        self.janela.preparar(processo, ['--projeto', pedido['caminho'], '--provedor', pedido['provedor'],
+                                      '--janela'], COORDENADOR)
+        processo.setStandardInputFile(QProcess.nullDevice())
+        processo.setStandardOutputFile(QProcess.nullDevice())
+        processo.setStandardErrorFile(QProcess.nullDevice())
+        iniciado, _pid = processo.startDetached()
+        processo.deleteLater()
+        self.terminar_acao('Abertura ou retomada solicitada. Confira o resultado na janela.' if iniciado
+                            else f'Não foi possível executar {COORDENADOR}.', not iniciado)
+        if iniciado:
+            self.atualizar()
 
     def ler_saida_acao(self):
         for canal in (self.acao.readAllStandardError, self.acao.readAllStandardOutput):
@@ -754,9 +775,7 @@ class Coordenadores(QWidget):
         elif codigo != 0 or tipo != QProcess.ExitStatus.NormalExit:
             self.terminar_acao('O Core recusou ou falhou na ação. ' + detalhe, True)
         else:
-            finalizada = self.pedido['tipo'] == 'finalizar'
-            self.terminar_acao(('Atuação finalizada pelo Core. ' if finalizada
-                                else 'Abertura ou retomada confirmada pelo Core. ') + detalhe)
+            self.terminar_acao('Atuação finalizada pelo Core. ' + detalhe)
             self.atualizar()
 
     def terminar_acao(self, mensagem, falha=False):

@@ -188,12 +188,20 @@ e arquiva o checkpoint. Com sessão viva, a Central orienta salvar e sair,
 oferecendo **Ir para a janela**. Ela não envia instruções ao cliente nem usa
 a API antiga `--fim`, que mata a sessão.
 
-As ações acompanham o comando em QProcess, com argumentos separados, prazo de
-30 segundos e bloqueio de tentativas simultâneas. Falha ou prazo esgotado aparece
-na coluna; sucesso atualiza a consulta. Seleção e rascunhos são preservados.
+As janelas são lançadas por `QProcess.startDetached`, com argumentos separados
+e canais independentes da Central, inclusive com Core anterior. A Central
+informa a solicitação e atualiza a consulta; não acompanha a duração do cliente.
+Fechar a Central, repetir uma ação ou atingir um prazo não encerra essas janelas.
+Só a operação finita `--finalizar` tem captura de saída, prazo de 30 segundos
+e encerramento do subprocesso ao vencer o prazo. Falha aparece na coluna;
+sucesso atualiza a consulta. As ações bloqueiam tentativas simultâneas durante
+a reconferência e a finalização. Seleção e rascunhos são preservados.
 **Copiar e ir para a janela** continua copiando e focando, sem colar ou enviar.
 
 A consulta `--coordenadores-json` continua na versão 1. A Central valida
-`ciclo`, `atuacao_id` e `retomavel`. Campos ausentes indicam Core anterior,
+`ciclo`, `atuacao_id` e o tipo booleano de `retomavel`. O Core informa a
+disponibilidade da retomada; `False` mantém a lista atualizada e desabilita
+Retomar, inclusive no diálogo Novo coordenador. `True` só habilita a ação
+com ciclo aberto e sessão sem processo. Campos ausentes indicam Core anterior,
 com aviso e sem as ações novas; as ações anteriores continuam disponíveis.
 A simulação não consulta esses dados nem cria, retoma ou finaliza sessões reais.

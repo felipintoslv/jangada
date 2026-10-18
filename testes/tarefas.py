@@ -13,6 +13,7 @@ except ImportError:
 import json
 import fcntl
 import shutil
+import signal
 import subprocess
 import tempfile
 import time
@@ -818,8 +819,128 @@ class Interface(unittest.TestCase):
         self.assertTrue(coluna.retomar.isEnabled())
         self.assertTrue(coluna.finalizar.isEnabled())
 
+    def test_disponibilidade_false_nao_invalida_lista_nem_amplia_retomada(self):
+        coluna = self.atuacao_aberta()
+        self.coordenadores_falsos(viva=False, ciclo='aberta', atuacao_id='opaco-1', retomavel=False)
+        self.carregar_coordenadores()
+        self.assertFalse(coluna.status.property('falha'))
+        self.assertEqual(coluna.arvore.topLevelItemCount(), 2)
+        self.assertIn('aguardando retomada', coluna.situacao.text())
+        self.assertFalse(coluna.retomar.isEnabled())
+        self.escolher_coordenador(coluna, 'caderno--coordenador')
+        self.assertTrue(coluna.ir.isEnabled())
+        coluna.ir.click()
+        aguardar(lambda: (self.raiz / 'acao.json').exists())
+        for ciclo, viva in (('encerrada', False), ('aberta', True)):
+            self.coordenadores_falsos(ciclo=ciclo, viva=viva, atuacao_id='opaco-1', retomavel=True)
+            self.escolher_coordenador(self.carregar_coordenadores(), 'horta--coordenador')
+            self.assertFalse(coluna.status.property('falha'))
+            self.assertFalse(coluna.retomar.isEnabled())
+        self.assertEqual(self.acoes_coordenador(), [])
+
+    def test_janelas_persistem_apos_prazo_repeticao_e_fechamento_da_central(self):
+        comando = self.bin / 'jangada-coordenador'
+        comando.write_text("""#!/usr/bin/env python3
+import os, pathlib, signal, time
+pasta = pathlib.Path(__file__).resolve().parent.parent
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+pid = os.getpid()
+with (pasta / 'clientes.pid').open('a') as arquivo:
+    arquivo.write(str(pid) + '\\n')
+pulso = pasta / ('cliente-' + str(pid))
+temporario = pasta / ('pulso-' + str(pid))
+n = 0
+while not (pasta / 'parar-clientes').exists():
+    os.write(1, b'atividade\\n')
+    os.write(2, b'diagnostico\\n')
+    temporario.write_text(str(n))
+    temporario.replace(pulso)
+    n += 1
+    time.sleep(0.02)
+""")
+        comando.chmod(0o700)
+        clientes = set()
+        def parar_clientes():
+            for pid in clientes:
+                try:
+                    os.kill(int(pid), signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+        self.addCleanup(parar_clientes)
+        for provedor in ('claude', 'codex'):
+            for origem in ('retomar', 'dialogo', 'nova', 'legado'):
+                with self.subTest(provedor=provedor, origem=origem):
+                    campos = {} if origem == 'legado' else dict(ciclo='aberta', atuacao_id='opaco', retomavel=True)
+                    self.coordenadores_falsos(viva=False, provedor=provedor, **campos)
+                    aberta = Janela(True, self.raiz, self.estado)
+                    aberta.timer.stop()
+                    coluna = aberta.coordenadores
+                    try:
+                        aguardar(lambda: bool(coluna.lista) and not coluna.consulta.ocupada())
+                        coluna.prazo_acao_ms = 60
+                        self.escolher_coordenador(coluna, 'horta--coordenador')
+                        def abrir():
+                            if origem == 'retomar':
+                                coluna.retomar.click()
+                            else:
+                                caminho = '/tmp/nova' if origem == 'nova' else '/tmp/horta'
+                                aberta.operacional.dados = {'projetos': [{'nome': 'projeto', 'caminho': caminho}]}
+                                coluna.novo_coordenador()
+                                coluna.dialogo.provedor.setCurrentText(provedor)
+                                coluna.dialogo.abrir.click()
+                        pulsos = []
+                        for _ in range(2):
+                            antes = set(self.raiz.glob('cliente-*'))
+                            abrir()
+                            aguardar(lambda: bool(set(self.raiz.glob('cliente-*')) - antes))
+                            self.esperar_acao_coordenador(coluna)
+                            pulsos.extend(set(self.raiz.glob('cliente-*')) - antes)
+                            QTest.qWait(100)
+                            self.assertNotIn('Tempo esgotado', coluna.resultado.text())
+                            self.assertFalse(coluna.prazo_acao.isActive())
+                            self.assertEqual(coluna.acao.state(), QProcess.ProcessState.NotRunning)
+                        aberta.close()
+                        for pulso in pulsos:
+                            anterior = int(pulso.read_text())
+                            aguardar(lambda: int(pulso.read_text() or '-1') > anterior)
+                    finally:
+                        registro = self.raiz / 'clientes.pid'
+                        if registro.exists():
+                            clientes.update(registro.read_text().splitlines())
+                        aberta.close()
+                        parar_clientes()
+                        QTest.qWait(30)
+
+    def test_retomada_reconfere_disponibilidade_do_core(self):
+        coluna = self.atuacao_aberta()
+        coluna.caixa.setPlainText('Continuar depois')
+        self.coordenadores_falsos(viva=False, ciclo='aberta', atuacao_id='opaco-1', retomavel=False)
+        coluna.retomar.click()
+        self.esperar_acao_coordenador(coluna)
+        self.assertIn('retomada está indisponível', coluna.resultado.text())
+        self.assertEqual(self.acoes_coordenador(), [])
+        self.assertFalse(coluna.retomar.isEnabled())
+        self.assertEqual(coluna.caixa.toPlainText(), 'Continuar depois')
+        self.janela.operacional.dados = {'projetos': [{'nome': 'horta', 'caminho': '/tmp/horta'}]}
+        coluna.novo_coordenador()
+        self.assertFalse(coluna.dialogo.abrir.isEnabled())
+        self.assertIn('retomada está indisponível', coluna.dialogo.aviso.text())
+        coluna.dialogo.confirmar()
+        self.esperar_acao_coordenador(coluna)
+        self.assertEqual(self.acoes_coordenador(), [])
+
     def esperar_acao_coordenador(self, coluna):
         aguardar(lambda: not coluna.ocupada() and not coluna.consulta.ocupada())
+
+    def esperar_janela_coordenador(self, coluna, sessao):
+        self.esperar_acao_coordenador(coluna)
+        def consultado():
+            c = coluna.coordenador(sessao)
+            if c and c['viva']:
+                return True
+            coluna.atualizar()
+            return False
+        aguardar(consultado)
 
     def acoes_coordenador(self):
         arquivo = self.raiz / 'coordenador.log'
@@ -855,7 +976,7 @@ class Interface(unittest.TestCase):
             coluna = self.atuacao_aberta(provedor=provedor)
             coluna.retomar.click()
             coluna.retomar_atuacao()
-            self.esperar_acao_coordenador(coluna)
+            self.esperar_janela_coordenador(coluna, 'horta--coordenador')
             self.assertEqual(self.acoes_coordenador()[-1],
                              ['--projeto', '/tmp/horta', '--provedor', provedor, '--janela'])
             self.assertEqual(coluna.coordenador('horta--coordenador')['atuacao_id'], 'opaco-1')
@@ -872,7 +993,7 @@ class Interface(unittest.TestCase):
             outro = 'codex' if provedor == 'claude' else 'claude'
             dialogo.provedor.setCurrentText(outro)
             dialogo.abrir.click()
-            self.esperar_acao_coordenador(coluna)
+            self.esperar_janela_coordenador(coluna, 'horta--coordenador')
             self.assertEqual(self.acoes_coordenador()[-1],
                              ['--projeto', '/tmp/horta', '--provedor', outro, '--janela'])
             self.assertEqual(coluna.coordenador('horta--coordenador')['atuacao_id'], 'opaco-1')
@@ -884,7 +1005,7 @@ class Interface(unittest.TestCase):
             self.assertEqual(dialogo.abrir.text(), 'Abrir coordenador')
             dialogo.provedor.setCurrentText(provedor)
             dialogo.abrir.click()
-            self.esperar_acao_coordenador(coluna)
+            self.esperar_janela_coordenador(coluna, 'horta--coordenador')
             self.assertEqual(self.acoes_coordenador()[-1],
                              ['--projeto', '/tmp/horta', '--provedor', provedor, '--janela'])
             self.assertNotEqual(coluna.coordenador('horta--coordenador')['atuacao_id'], 'fechada')
@@ -896,7 +1017,7 @@ class Interface(unittest.TestCase):
             dialogo.carregar()
             dialogo.provedor.setCurrentText(provedor)
             dialogo.abrir.click()
-            self.esperar_acao_coordenador(coluna)
+            self.esperar_janela_coordenador(coluna, nova.name + '--coordenador')
             self.assertEqual(self.acoes_coordenador()[-1],
                              ['--projeto', str(nova), '--provedor', provedor, '--janela'])
             self.assertTrue(coluna.coordenador(nova.name + '--coordenador')['viva'])
@@ -998,21 +1119,19 @@ class Interface(unittest.TestCase):
         (self.raiz / 'acao-erro').unlink()
         (self.raiz / 'acao-espera').touch()
         coluna.prazo_acao_ms = 150
-        for tipo in ('finalizar', 'retomar'):
-            with self.subTest(tipo=tipo):
-                with patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Yes):
-                    (coluna.finalizar if tipo == 'finalizar' else coluna.retomar).click()
-                aguardar(lambda: coluna.acao.state() != QProcess.ProcessState.NotRunning)
-                self.assertNotIn('finalizada', coluna.resultado.text())
-                self.assertFalse(coluna.finalizar.isEnabled() or coluna.retomar.isEnabled() or coluna.novo.isEnabled())
-                coluna.retomar_atuacao()
-                coluna.finalizar_atuacao()
-                self.assertFalse(coluna.abrir_coordenador('/tmp/horta', 'claude'))
-                self.esperar_acao_coordenador(coluna)
-                self.assertIn('Tempo esgotado', coluna.resultado.text())
-                self.assertTrue(coluna.resultado.property('falha'))
-                self.assertTrue(coluna.retomar.isEnabled())
-        self.assertEqual(len(self.acoes_coordenador()), 3)
+        with patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Yes):
+            coluna.finalizar.click()
+        aguardar(lambda: coluna.acao.state() != QProcess.ProcessState.NotRunning)
+        self.assertNotIn('finalizada', coluna.resultado.text())
+        self.assertFalse(coluna.finalizar.isEnabled() or coluna.retomar.isEnabled() or coluna.novo.isEnabled())
+        coluna.retomar_atuacao()
+        coluna.finalizar_atuacao()
+        self.assertFalse(coluna.abrir_coordenador('/tmp/horta', 'claude'))
+        self.esperar_acao_coordenador(coluna)
+        self.assertIn('Tempo esgotado', coluna.resultado.text())
+        self.assertTrue(coluna.resultado.property('falha'))
+        self.assertTrue(coluna.retomar.isEnabled())
+        self.assertEqual(len(self.acoes_coordenador()), 2)
         self.assertEqual(coluna.caixa.toPlainText(), 'Rascunho preservado')
 
     def test_reconferencia_invalida_ou_lenta_nao_executa(self):
@@ -1063,7 +1182,7 @@ class Interface(unittest.TestCase):
         coluna = self.atuacao_aberta()
         for campo, valor in (('ciclo', None), ('ciclo', 'concluido'), ('ciclo', []),
                              ('atuacao_id', 1), ('atuacao_id', []), ('atuacao_id', ''),
-                             ('retomavel', None), ('retomavel', 'sim'), ('retomavel', 1), ('retomavel', False)):
+                             ('retomavel', None), ('retomavel', 'sim'), ('retomavel', 1)):
             with self.subTest(campo=campo, valor=valor):
                 registro = dict(viva=False, ciclo='aberta', atuacao_id='opaco-1', retomavel=True)
                 registro[campo] = valor
