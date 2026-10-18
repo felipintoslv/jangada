@@ -116,6 +116,8 @@ testes/regra1.sh || falha "testes/regra1.sh"
 testes/contratos-caminhos.sh || falha "testes/contratos-caminhos.sh"
 testes/shell-core.sh || falha "testes/shell-core.sh"
 python3 testes/sambura-retirada.py || falha "testes/sambura-retirada.py"
+python3 testes/barra-catamara.py || falha "testes/barra-catamara.py"
+python3 testes/barra-catamara-migracao.py || falha "testes/barra-catamara-migracao.py"
 python3 testes/teclado-waybar.py || falha "testes/teclado-waybar.py"
 
 passo "atualização do sistema e instalação"
