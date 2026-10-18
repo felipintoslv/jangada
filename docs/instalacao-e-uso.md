@@ -3,7 +3,7 @@
 O Shell é a camada Arch + Hyprland + waybar do jangada: sessão, barra, temas,
 menus, atalhos e a Central de Tarefas. Mora em `~/.local/share/jangada`
 (`JANGADA_PATH`). Os comandos de sessões de agentes, isolamento, revisão e
-painel pertencem ao Core e ao Monitor, que são instalados à parte.
+indicadores pertencem ao Core, que é outro repositório e se instala à parte.
 
 ## Antes de instalar: mapear a máquina
 
@@ -28,11 +28,15 @@ worktree ou de `JANGADA_WORKTREES`: essas pastas são graváveis de dentro do
 isolamento. Nelas só a simulação roda. Depois, encerre a sessão atual e
 escolha **jangada** no gerenciador de login.
 
-## Relação com o Core e o Monitor
+## Relação com o Core
 
-O Shell chama os comandos do Core e do Monitor só pelo nome, via `PATH`, e
-tolera a ausência deles: sem o Core, a barra e a Central seguem de pé, sem
-dados de sessões. Para a Central de Tarefas achar o Core fora do `PATH`, a
+O jangada tem dois repositórios: o Shell (este) e o Core
+(`felipintoslv/jangada-core`). O Shell chama os comandos do Core só pelo
+nome, via `PATH`, e tolera a ausência dele: sem o Core, a barra e a Central
+seguem de pé, sem dados de sessões. Os indicadores de consumo e revisão ficam
+na aba Indicadores da Central, com dados do `jangada-indicadores` do Core. O
+`jangada-monitor` é outra coisa: abre o btop ou o htop do sistema e pertence
+ao Shell. Para a Central de Tarefas achar o Core fora do `PATH`, a
 raiz vem de `JANGADA_CORE_PATH` no ambiente ou, se ela estiver vazia, da linha
 `JANGADA_CORE_PATH=` que o `jangada-config` do Core imprime. Nenhuma pasta
 vizinha é presumida.

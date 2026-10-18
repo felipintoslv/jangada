@@ -101,7 +101,7 @@ catálogo concentra-se apenas no que falta:
 | 13 | Guarda de privacidade | Módulo `privacy` | Avaliar se resta lacuna em relação ao módulo nativo |
 
 O monitor de agentes do estudo original fica de fora por já ser coberto pelo
-módulo `custom/agentes`, pela Central de Tarefas e pelo painel do Monitor.
+módulo `custom/agentes` e pela Central de Tarefas, com a aba Indicadores.
 
 ## Fases e ordem de execução
 

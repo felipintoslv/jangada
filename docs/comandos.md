@@ -23,7 +23,6 @@
 | `jangada-task ID AÇÃO` | controla uma tarefa: `pausar`, `retomar`, `cancelar`, `repetir`, `revisar --aprovar\|--reprovar --parecer` (aceita `ID1,ID2` no mesmo parecer), e `assumir`, `entregar` e `executar-principal` para os agentes principais |
 | `jangada-router status` | estado, cota e espera dos provedores (`--atualizar`, `--atualizar-codex`) |
 | `jangada-provedor pausar\|ativar ID` | tira um provedor da execução da fila ou o devolve |
-| `jangada-subagentes` | indicadores de subagentes e delegações (`--json`), o resumo de uma entrega (`--entrega PASTA`) e os registros por subagente (`--registros`) |
 | `jangada-filtrar` | roda um comando e condensa a saída para o agente (`-m`, `-e`, `-p`); prefira `jangada-filtrar -- COMANDO` ao modo cano, que não vê o código de saída |
 | `jangada-mapa [PASTA]` | mapa compacto do repositório (arquivos e assinaturas de funções) para dar contexto a um agente |
 | `jangada-worktree-preparar` | leva para um worktree novo os arquivos ignorados que o projeto precisa (chamado pelo `jangada-agente`) |
@@ -32,7 +31,7 @@
 | `jangada-agentes` | lista as sessões de agentes, com estado, e permite abrir, integrar ou encerrar (`--proximo`, `--anterior`, `--restaurar`) |
 | `jangada-agente-fim` | encerra uma sessão e remove o worktree após conferência; `--integrar` exige aprovação independente protegida, confirmação humana e testes; mantém sessão, ramo e worktree. Veja [ciclo da tarefa](ciclo-da-tarefa.md#fim-da-sessão) |
 | `jangada-consumo` | tokens do Claude Code no bloco de 5 horas em andamento (também na dica da barra) |
-| `jangada-painel` | painel Shiny local com Operacional e Indicadores, com consulta do núcleo; `--json` imprime os do dia, `--parar` encerra o app, `--conferir` lista o que falta |
+| `jangada-indicadores` | resumo de tarefas, revisores e delegações a partir dos registros; `--json` alimenta a aba Indicadores da Central |
 | `jangada-gancho` | roda os ganchos do usuário de um evento (chamado pelos outros comandos) |
 | `jangada-importar` | converte a configuração do niri em arquivos `.importado` |
 | `jangada-atalhos` | mostra todos os atalhos ativos, lidos do próprio Hyprland (`--lista` para o terminal) |

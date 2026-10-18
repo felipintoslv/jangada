@@ -16,8 +16,8 @@ Desde a modularização 3.0, os caminhos de `default/` e `bin/` citados neste
 documento são links de compatibilidade e continuam sendo a forma de uso. Os
 arquivos moram em `core/agentes/claude/`, `core/agentes/agy/`,
 `core/agentes/perfis/` (antes `default/agentes/`), `core/delegacao/`,
-`core/nucleo/` e `core/bin/`; o `jangada-subagentes` e o
-`default/painel/subagentes.py` moram em `monitor/bin/` e `monitor/painel/`.
+`core/nucleo/` e `core/bin/`. O `jangada-subagentes` e o
+`default/painel/subagentes.py` saíram com o Monitor, que não existe mais.
 O mapa das pastas está na seção Estrutura do [README](../README.md).
 
 | Papel | Uso | Claude |
@@ -1086,7 +1086,7 @@ Os campos de cada arquivo estão em [registros](registros.md).
 A exceção à leitura é o papel `implementador`, exclusivo do caminho protegido
 de implementação. Ele edita uma cópia sem Git e sem terminal; os outros papéis
 continuam sem escrita. Relatório leitor nunca substitui revisão independente.
-Veja o [contrato do piloto](coordenacao-central/10-executor-agy.md).
+Veja o [contrato do piloto](historico/coordenacao-central/10-executor-agy.md).
 
 ## Critérios de acompanhamento do apoio
 

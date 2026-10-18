@@ -2,14 +2,14 @@
 
 Este guia reúne as regras do `AGENTS.md` e as lições que custaram
 investigação. As pegadinhas de ferramentas específicas (API do Hyprland,
-waybar, agy) ficam na skill, em `default/claude/skills/jangada/`; aqui fica o
-que vale para qualquer mudança.
+waybar, agy) ficam na skill `jangada`; aqui fica o que vale para qualquer
+mudança.
 
-Desde a modularização 3.0, cada arquivo mora em `core/`, `shell/` ou
-`monitor/`. Os caminhos de `bin/` e `default/` citados neste guia são links de
-compatibilidade e continuam valendo: a skill mora em
-`core/agentes/claude/skills/jangada/`, a configuração do Hyprland em
-`shell/hyprland/` e o `jangada-painel` em `monitor/bin/`. O mapa das pastas está na seção Estrutura do [README](../README.md).
+O jangada tem dois repositórios. Este, o Shell, guarda a configuração do
+Hyprland em `hyprland/`, a barra em `waybar/` e a Central em `menus/tarefas/`.
+O Core guarda os comandos de agentes e a skill, em
+`agentes/claude/skills/jangada/`. O mapa das pastas está na seção Estrutura do
+[README](../README.md).
 
 ## Fluxo de uma mudança
 
@@ -89,7 +89,7 @@ no Codex com destino `local`, ela fica na própria sessão.
 - Uma operação por vez sobre o mesmo recurso: `flock` na trava do recurso
   (coleta do painel, gravação do calendário) e gravação atômica, num
   temporário na mesma pasta seguido de `mv`.
-- Funções de `shell/jangada-shell.sh` rodam em bash e zsh: nada de `read -p`
+- Funções de `jangada-shell.sh` rodam em bash e zsh: nada de `read -p`
   nem `${var,,}`.
 - Falha tratada avisa com o motivo e sai com código diferente de zero;
   falha que se ignora de propósito leva `|| true` e um comentário que diga
@@ -218,7 +218,7 @@ Os testes nunca tocam a configuração real: rodam com `XDG_CONFIG_HOME` e
 
 Mudança que exige ajuste numa instalação existente ganha uma migração em
 `migrations/` (ver `migrations/README.md`). As revisões cruzadas e as
-avaliações estão indexadas em `revisao/README.md`; a última auditoria
-(`revisao/auditoria-20260927.md`) cobre o repositório inteiro, com 72
+avaliações estão indexadas em `docs/historico/revisao/README.md`; a última
+auditoria (`docs/historico/revisao/auditoria-20260927.md`) cobre o repositório inteiro, com 72
 apontamentos: os 6 críticos, todos de fuga do isolamento, e os 8 altos foram
 corrigidos, assim como os médios e os baixos.

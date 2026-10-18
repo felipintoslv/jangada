@@ -9,11 +9,13 @@ sessões de agentes de IA. Usa waybar, fuzzel, mako e cores do matugen.
 ## O que é o Shell
 
 O Shell é a camada de área de trabalho do jangada: sessão Hyprland, barra,
-temas, menus, atalhos, tema de login e a Central de Tarefas (PyQt6). O Core
-(sessões de agentes, isolamento, revisão e delegação) e o Monitor (painel e
-consumo) são repositórios à parte, **instalados separadamente**. O Shell
-chama os comandos deles só pelo nome, via `PATH`, e funciona sem eles, sem os
-dados de sessões. A raiz do Core, quando a Central precisa dela, vem de
+temas, menus, atalhos, tema de login e a Central de Tarefas (PyQt6). O
+jangada tem dois repositórios: o Shell (este) e o
+[Core](https://github.com/felipintoslv/jangada-core) (sessões de agentes,
+isolamento, revisão e delegação), **instalado separadamente**. Os indicadores
+de consumo e revisão ficam na aba Indicadores da Central. O Shell chama os
+comandos do Core só pelo nome, via `PATH`, e funciona sem ele, sem os dados de
+sessões. A raiz do Core, quando a Central precisa dela, vem de
 `JANGADA_CORE_PATH`.
 
 ## Princípios
@@ -55,7 +57,7 @@ use `componentes` quando essa interface antiga não estiver disponível.
 | `bin/` | comandos do Shell (`jangada-shell-config`, `jangada-sistema-update`, `jangada-shell-migrar`, barra, tema, menus) |
 | `hyprland/`, `waybar/`, `temas/`, `menus/`, `integracoes/` | configuração e interface |
 | `install/`, `config/`, `migrations/` | instalação, modelos pessoais e migrações |
-| `docs/` | guias por assunto |
+| `docs/` | guias por assunto; `docs/historico/` guarda estudos e planos encerrados |
 | `testes/` | verificação estática e testes (`testes/verificar.sh`) |
 
 ## Documentação
@@ -76,12 +78,9 @@ Antes de alterar arquivos, leia o guia do assunto da tarefa e as regras do
 | Codex como executor e revisor | [Codex](docs/codex.md) |
 | Registro de provedores | [Provedores](docs/provedores.md) |
 | Atualização e migrações | [Atualização e migrações](docs/atualizacao-e-migracoes.md) |
-| Painel, consumo e indicadores | [Painel](docs/painel.md) |
+| Indicadores e diagnóstico do sistema | [O que funciona na Central](docs/central-o-que-funciona.md) e [Vigia](docs/vigia/README.md) |
 | Campos e limites dos registros | [Registros](docs/registros.md) |
 | Código, testes, textos e commits | [Boas práticas](docs/boas-praticas.md) |
 | Transparência e desfoque | [Vidro fosco](docs/vidro-fosco.md) |
 | Teclado da bandeja e escalas | [Teclado na Waybar](docs/teclado-waybar.md) |
-| Divisão em módulos e contratos | [Modularização 3.0](docs/modularizacao-3.0/README.md) |
-| Coordenação e consultas entre módulos | [Coordenação central](docs/coordenacao-central/README.md) |
-| Análise do painel em 30/09/2026 | [Análise](docs/analise-painel-20260930.md) |
-| Proposta do painel, com implementação parcial | [Proposta](docs/proposta-atualizacao-painel.md) |
+| Estudos, auditorias e planos encerrados | [Histórico](docs/historico/README.md) |

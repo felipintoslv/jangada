@@ -6,11 +6,11 @@ existe, se é sobrescrito ou acumulado e quem apaga. Os números de linha são
 do repositório em 26/09/2026. Os exemplos são reais, resumidos, com textos
 trocados por `...`.
 
-Desde a modularização 3.0, os comandos citados como `bin/jangada-*` são
-links de compatibilidade: o arquivo mora em `core/bin/`, `shell/bin/` ou
-`monitor/bin/`, e `default/painel/` mora em `monitor/painel/`. Só o
-`jangada-config` e outros seis comandos compartilhados continuam em `bin/`.
-O mapa das pastas está na seção Estrutura do [README](../README.md).
+Os caminhos e números de linha são daquela data, quando o jangada era um
+repositório só. Hoje os comandos que escrevem estes registros estão no Core,
+e o `jangada-painel` e `default/painel/` foram retirados com o Monitor; os
+indicadores ficam na aba Indicadores da Central. O mapa das pastas do Shell
+está na seção Estrutura do [README](../README.md).
 
 Caminhos usados abaixo:
 
@@ -20,13 +20,14 @@ Caminhos usados abaixo:
   O nome da pasta é `jangada-worktrees`, sem barra entre as palavras.
 - `$JANGADA_PROJETOS` = `~/Projetos`.
 
-## Consultas de terminal e Monitor
+## Consultas de terminal e do Core
 
 O terminal consulta por sessão ou árvore de trabalho através de
 `jangada-agentes --contexto-json` e `--sessao-worktree-json`, ambos versão 1.
-O Monitor recebe filas, consumos, métricas e provedores por
-`nucleo.consultas.consultar_filas`, sem descobrir bancos ou receber conexões.
-O [contrato M1.2](coordenacao-central/11-consultas-modulos.md) define campos,
+Filas, consumos, métricas e provedores saem de
+`nucleo.consultas.consultar_filas`, no Core, sem descobrir bancos ou receber
+conexões. Essa consulta foi feita para o Monitor, que não existe mais.
+O [contrato M1.2](historico/coordenacao-central/11-consultas-modulos.md) define campos,
 limites, seleção e erros. Os registros abaixo permanecem inalterados.
 Texto repassado não é autorização; a consulta nunca inclui `revisoes/`.
 
@@ -746,4 +747,4 @@ bordas para conferir assinaturas não entra nessas contagens.
 com cópia protegida em `revisoes/SESSAO.json`. Artefatos da implementação
 ficam em `$JANGADA_ESTADO/agentes/implementacoes/CHAVE/ID`, sem autoridade de aprovação.
 O contrato e a entrega são vinculados por hash, tarefa e base exata.
-Veja o [contrato do piloto](coordenacao-central/10-executor-agy.md).
+Veja o [contrato do piloto](historico/coordenacao-central/10-executor-agy.md).

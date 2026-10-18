@@ -145,7 +145,7 @@ with TemporaryDirectory() as temp:
     (overlay / "devices/32").mkdir(parents=True)
     (overlay / "index.theme").symlink_to("/usr/share/icons/breeze/index.theme")
     (overlay / "devices/32/input-keyboard-symbolic.svg").symlink_to(
-        Path("shell/waybar/icones/input-keyboard-symbolic.svg").resolve())
+        Path("waybar/icones/input-keyboard-symbolic.svg").resolve())
     for corrected in (False, True):
         theme = Gtk.IconTheme.new()
         theme.set_custom_theme("breeze")
