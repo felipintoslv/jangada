@@ -1,10 +1,8 @@
 # Codex na Jangada
 
 O Codex implementa no mesmo ciclo de worktree, tmux, validação e integração
-usado pelos outros agentes. Desde a modularização 3.0, os perfis moram em
-`core/agentes/perfis/` e os comandos em `core/bin/`; os caminhos
-`default/agentes/` e `bin/jangada-*` citados aqui são links de
-compatibilidade e continuam sendo a forma de uso. Há dois perfis padrão, e
+usado pelos outros agentes. Os perfis ficam em `jangada-core`, e os comandos
+são instalados em `~/.local/bin` e chamados pelo `PATH`. Há dois perfis padrão, e
 o Codex participa dos dois:
 
 | Perfil | Implementa | Revisa | Delegação |

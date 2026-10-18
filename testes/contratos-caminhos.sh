@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Testa o contrato K2 (docs/modularizacao-3.0/03-contratos.md): cada caminho de
+# Testa o contrato K2 (docs/historico/modularizacao-3.0/03-contratos.md): cada caminho de
 # testes/contratos/caminhos.txt existe, como arquivo ou como link, e nenhum
 # link no caminho é absoluto nem leva para fora do repositório.
 #

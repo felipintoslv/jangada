@@ -80,7 +80,7 @@ no Codex com destino `local`, ela fica na própria sessão.
 - Cabeçalho `set -euo pipefail`. Com `pipefail`, `curl ... | grep -q` falha
   quando a saída passa do tamanho do cano: o `grep -q` sai no primeiro acerto
   e o `curl` falha ao escrever o resto (código 23). Capture a saída numa
-  variável e compare, como faz o `subir` de `bin/jangada-painel`.
+  variável e compare.
 - `trap` só em `EXIT`. Um trap em `INT` ou `TERM` não encerra o script: o bash
   roda o tratador e segue na linha seguinte.
 - Argumentos que vão para outro interpretador (Lua do `hyprctl dispatch`,
@@ -175,7 +175,7 @@ e mantém a sessão. Para testar a cópia de trabalho sem instalar, rode
 | `testes/codex.sh` | lançamento do Codex, protocolo, argumentos TOML, hooks e recusas sem rede |
 | `testes/update.sh` | `jangada-update` só aplica com confirmação e, com `allowed_signers`, só commits assinados; `jangada-assinar`; a integração preserva a cópia instalada e não roda ganchos do repositório do agente |
 | `testes/eventos.sh` | histórico de estados dos agentes gravado pelos hooks e pela troca de foco |
-| `testes/barra.sh` | módulo `custom/indicadores`, barra em pé do `jangada-barra` e a migração que o acrescenta |
+| `testes/barra.sh` | retirada de `custom/indicadores`, posição dos módulos Catamarã e agentes, geração da barra em pé, cliques soltos e migrações da barra |
 | `testes/painel.sh` | coletor do painel sobre registros de exemplo e, com os pacotes R, o app no ar |
 | `testes/conversa.py` | janela de conversa local com Ollama falso: resposta progressiva, parada, raciocínio vazado, recusa, trava e proteções |
 | `testes/skills.sh` | instalação das skills num HOME temporário: Claude Code com todas, agy sem a `coordenador`, Codex só com ela, link alheio preservado e a migração sem Codex |

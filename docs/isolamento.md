@@ -6,10 +6,9 @@ fica somente leitura, e os segredos ficam ocultos. O objetivo é que nada do
 que o agente fizer rode depois fora do isolamento: um hook do git, um
 `settings.json` do Claude, um clone do AUR compilado com sudo.
 
-Desde a modularização 3.0, o `jangada-isolar` e o `jangada-agentes` moram em
-`core/bin/` e a skill em `core/agentes/claude/skills/jangada/`. Os caminhos
-de `bin/` e `default/` citados aqui são links de compatibilidade e continuam
-sendo a forma de uso. O mapa das pastas está na seção Estrutura do [README](../README.md).
+O código do isolamento, dos agentes e da skill fica no repositório
+`jangada-core`; os comandos são instalados em `~/.local/bin` e chamados pelo
+`PATH`. O mapa das pastas do Shell está na seção Estrutura do [README](../README.md).
 
 No Codex, dados de execução próprios da sessão são montados sobre a pasta
 global do CLI, com configuração e login somente leitura. O servidor
@@ -122,7 +121,7 @@ ficar somente leitura dentro deles vem depois.
 | Camada temporária | `~/.cache`; do Claude, `shell-snapshots`, `session-env` e `ide`; do agy, `bin` | o agente lê o conteúdo de fora, e o que grava some no fim (sobreposição do bwrap; sem suporte, o agente recebe uma pasta vazia em memória, e o `bin` do agy, somente leitura). O agy regrava o `agentapi` antes de cada comando, e o que ele regrava dentro não roda fora |
 | Somente leitura | do Claude: `settings*.json`, `CLAUDE.md`, `commands`, `agents`, `skills`, `hooks`, `plugins`, scripts soltos; clones do AUR | tudo isso define comando ou instrução que valeria numa sessão aberta fora |
 | Git | num worktree, o `.git` comum inteiro somente leitura, liberados `objects`, o gitdir do worktree e, das refs e dos `logs`, só a pasta do ramo da sessão (`refs/heads/agente`) e a das cópias do `reverter` (`refs/heads/backup`); direto no repositório, `config`, `hooks`, `commondir`, `worktrees` e `modules` somente leitura | `core.fsmonitor`, hooks e `commondir` rodariam fora no próximo `git status` |
-| Ocultos | `.ssh`, `.gnupg`, `.password-store`, `.aws`, `.azure`, `.kube`, `.docker`, `.netrc`, `.git-credentials`, `gh`, `rclone`, `gcloud`, `op`, `sops`, Bitwarden, `.vault-token`, `.pgpass`, `.my.cnf`, `.pypirc`, perfis de navegador e do Thunderbird, keyrings, kwallet e o banco do `cliphist`; `JANGADA_ISOLAR_OCULTAR` troca a lista. A pasta `painel-chave` do estado, com o token do `jangada-painel`, a `revisoes`, com as revisões feitas fora do isolamento, e as `fotos` e `integracoes`, com as árvores da entrega que o `jangada-validar` e o `--integrar` extraem fora dele, ficam ocultas sempre; das fotos, só a escolhida em `JANGADA_ISOLAR_FOTO` volta ao revisor, somente leitura | segredos e o histórico da área de transferência; o painel responde a quem alcança a porta, e o agente isolado alcança; a aprovação que o `--integrar` aceita não pode ser escrita pelo agente revisado; as árvores da entrega trazem os links versionados dela e por isso ficam fora de `revisoes`, onde o `jangada-isolar` recusa link |
+| Ocultos | `.ssh`, `.gnupg`, `.password-store`, `.aws`, `.azure`, `.kube`, `.docker`, `.netrc`, `.git-credentials`, `gh`, `rclone`, `gcloud`, `op`, `sops`, Bitwarden, `.vault-token`, `.pgpass`, `.my.cnf`, `.pypirc`, perfis de navegador e do Thunderbird, keyrings, kwallet e o banco do `cliphist`; `JANGADA_ISOLAR_OCULTAR` troca a lista. A `revisoes`, com as revisões feitas fora do isolamento, e `fotos` e `integracoes`, com as árvores da entrega que `jangada-validar` e `--integrar` extraem fora dele, ficam ocultas sempre; das fotos, só a escolhida em `JANGADA_ISOLAR_FOTO` volta ao revisor, somente leitura | segredos e o histórico da área de transferência; a aprovação que `--integrar` aceita não pode ser escrita pelo agente revisado; as árvores da entrega trazem links versionados dela e por isso ficam fora de `revisoes`, onde o `jangada-isolar` recusa link |
 
 Para ver os argumentos sem abrir nada: `jangada-isolar --mostrar -- true`.
 

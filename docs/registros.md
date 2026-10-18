@@ -1,6 +1,6 @@
 # Mapa dos registros
 
-Levantamento feito em 26/09/2026 nesta máquina, para o `jangada-painel`.
+Levantamento feito em 26/09/2026 nesta máquina, quando o Monitor ainda existia.
 Cada seção diz onde o registro fica, quem escreve, o formato, desde quando
 existe, se é sobrescrito ou acumulado e quem apaga. Os números de linha são
 do repositório em 26/09/2026. Os exemplos são reais, resumidos, com textos

@@ -8,10 +8,9 @@ Veja segurança operacional (documentação do Core). O estado de cada sessão f
 `~/.local/state/jangada/agentes/SESSAO.json`, com o contrato descrito em
 `default/claude/skills/jangada/agentes.md`.
 
-Desde a modularização 3.0, os comandos deste ciclo moram em `core/bin/` e a
-skill em `core/agentes/claude/skills/jangada/`. Os caminhos de `bin/` e
-`default/` citados aqui são links de compatibilidade e continuam sendo a
-forma de uso. O mapa das pastas está na seção Estrutura do [README](../README.md).
+Os comandos deste ciclo são instalados em `~/.local/bin` e chamados pelo
+`PATH`; o código e a skill ficam no repositório `jangada-core`. O mapa das
+pastas do Shell está na seção Estrutura do [README](../README.md).
 
 Os perfis padrão são `claude-codex` (Claude implementa, Codex revisa) e
 `codex-claude` (Codex implementa, Claude revisa), os dois com delegação ao

@@ -12,12 +12,9 @@ um só. Paralelismo de implementação é outra sessão do jangada.
 São nove papéis, e cada um existe no Claude e no agy, com o mesmo nome: no Claude em
 `default/claude/agents/PAPEL.md`, no agy em `default/agy/agents/PAPEL/agent.md`.
 
-Desde a modularização 3.0, os caminhos de `default/` e `bin/` citados neste
-documento são links de compatibilidade e continuam sendo a forma de uso. Os
-arquivos moram em `core/agentes/claude/`, `core/agentes/agy/`,
-`core/agentes/perfis/` (antes `default/agentes/`), `core/delegacao/`,
-`core/nucleo/` e `core/bin/`. O `jangada-subagentes` e o
-`default/painel/subagentes.py` saíram com o Monitor, que não existe mais.
+O código dos agentes e da delegação fica no repositório `jangada-core`; seus
+comandos são instalados em `~/.local/bin` e chamados pelo `PATH`. O
+`jangada-subagentes` e `default/painel/subagentes.py` saíram com o Monitor.
 O mapa das pastas está na seção Estrutura do [README](../README.md).
 
 | Papel | Uso | Claude |
@@ -1063,13 +1060,9 @@ comprova independência ou qualidade real das respostas.
   (`default/claude/hooks.json`, `bin/jangada-hook-claude`) gravam
   `subagente-inicio` e `subagente-fim` em `eventos-agentes.jsonl`, com o id e
   o tipo do subagente.
-- `default/painel/subagentes.py` lê esses registros e as conversas dos
-  subagentes. O `bin/jangada-subagentes` mostra os indicadores, o resumo de
-  uma entrega (`--entrega`, que o `jangada-validar` grava no campo
-  `subagentes` do `validar.jsonl`) e os registros crus (`--registros`).
-  No painel, cada nó filho da árvore hierárquica mostra o papel e o agente,
-  separados por ` - `; nas recusas, mostra o destino tentado quando registrado.
-  O modelo permanece na dica ao passar o mouse.
+- Na versão anterior, `default/painel/subagentes.py` lia esses registros e as
+  conversas dos subagentes. O Monitor foi retirado na versão 3.0; esses
+  indicadores não são mais apresentados por esse painel.
 
 Os campos de cada arquivo estão em [registros](registros.md).
 

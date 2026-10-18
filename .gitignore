@@ -13,7 +13,7 @@ revisao/*.json
 # Clones de referência para comparações (não entram no commit).
 referencia/
 
-# Bytecode do Python (o coletor do painel roda direto do repositório).
+# Bytecode dos módulos Python do Shell.
 __pycache__/
 *.pyc
 
