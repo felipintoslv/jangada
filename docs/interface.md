@@ -19,6 +19,9 @@ entrega pendente e em destaque com o portão reprovado. Cotas, Ollama, sessões
 e entregas ficam na dica. O clique abre a Central do Catamarã no navegador, o
 botão direito no terminal e o do meio inicia uma sessão. Sem o Catamarã, o
 botão some. Os indicadores do jangada ficam na aba Indicadores da Central.
+Na cópia pessoal da barra, a atualização troca o botão de texto que o
+Catamarã punha antes pela logo e o leva para depois do menu. Uma definição
+ou um estilo do botão que não sejam os conhecidos ficam, com aviso.
 
 ## Cores e papel de parede
 
