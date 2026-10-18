@@ -184,7 +184,7 @@ def antigo(definicao):
     # Só a chamada direta, com caminho opcional; dentro de outro comando é
     # personalização e fica.
     return isinstance(exec_, str) and re.fullmatch(
-        r'\s*(?:[\w$.{}~/-]*/)?(?:cata tarefas|catamara-tarefas) --waybar\s*', exec_)
+        r'\s*(?:[\w$.{}/-]*/)?(?:cata tarefas|catamara-tarefas) --waybar\s*', exec_)
 
 def ajustar(texto, modelo, avisos):
     comentario, bloco, definicao = modelo
