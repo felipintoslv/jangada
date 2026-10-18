@@ -87,7 +87,7 @@ no Codex com destino `local`, ela fica na própria sessão.
   comando do tmux) saem de `printf %q` ou de campos conferidos, nunca de texto
   montado com dados do usuário ou do estado.
 - Uma operação por vez sobre o mesmo recurso: `flock` na trava do recurso
-  (coleta do painel, gravação do calendário) e gravação atômica, num
+  (coleta de dados, gravação do calendário) e gravação atômica, num
   temporário na mesma pasta seguido de `mv`.
 - Funções de `jangada-shell.sh` rodam em bash e zsh: nada de `read -p`
   nem `${var,,}`.
@@ -176,14 +176,12 @@ e mantém a sessão. Para testar a cópia de trabalho sem instalar, rode
 | `testes/update.sh` | `jangada-update` só aplica com confirmação e, com `allowed_signers`, só commits assinados; `jangada-assinar`; a integração preserva a cópia instalada e não roda ganchos do repositório do agente |
 | `testes/eventos.sh` | histórico de estados dos agentes gravado pelos hooks e pela troca de foco |
 | `testes/barra.sh` | retirada de `custom/indicadores`, posição dos módulos Catamarã e agentes, geração da barra em pé, cliques soltos e migrações da barra |
-| `testes/painel.sh` | coletor do painel sobre registros de exemplo e, com os pacotes R, o app no ar |
 | `testes/conversa.py` | janela de conversa local com Ollama falso: resposta progressiva, parada, raciocínio vazado, recusa, trava e proteções |
 | `testes/skills.sh` | instalação das skills num HOME temporário: Claude Code com todas, agy sem a `coordenador`, Codex só com ela, link alheio preservado e a migração sem Codex |
 | `testes/subagentes.sh`, `testes/delegar.sh` | papéis de subagente e a instalação deles; `jangada-delegar` com agy falso, cota por grupo e troca de modelo |
 | `testes/agente-seletor.py` | seletor do `jangada-agente` num terminal falso, sem executar modelos nem criar sessões |
 | `testes/interface.sh` | identificação da interface sem abrir janelas nem tocar em outras sessões |
 | `testes/tarefas.py` | central de tarefas com sessões fictícias, sem configuração ativa |
-| `testes/metricas.py`, `testes/painel-local.py`, `testes/painel-orquestracao.py`, `testes/painel-motores.R` | métricas e painel sobre fontes sintéticas: consumo, modelos locais, retratos da fila e regressões dos indicadores em R |
 | `testes/delegacao.py`, `testes/orquestracao.py`, `testes/executor.py` | seleção por capacidade, fila persistente e execução com `jangada-delegar` simulado |
 | `testes/supervisao.py`, `testes/acompanhamento.py`, `testes/deterministico.py` | supervisor de relatórios intermediários, acompanhamento da fila e conferência de JSON |
 | `testes/saude.py`, `testes/metricas-projeto.py`, `testes/cota-codex.py`, `testes/codex-economico.py` | saúde dos provedores, métricas da fila, cota e executor econômico do Codex, sem serviços externos |

@@ -100,8 +100,8 @@ catálogo concentra-se apenas no que falta:
 | 12 | Guarda da área de transferência | Não | Limpeza voluntária, sem ler, gravar nem enviar o conteúdo copiado |
 | 13 | Guarda de privacidade | Módulo `privacy` | Avaliar se resta lacuna em relação ao módulo nativo |
 
-O monitor de agentes do estudo original fica de fora por já ser coberto pelo
-módulo `custom/agentes` e pela Central de Tarefas, com a aba Indicadores.
+O acompanhamento de agentes previsto no estudo original fica de fora, pois
+a Waybar e a Central de Tarefas já mostram tarefas e indicadores.
 
 ## Fases e ordem de execução
 

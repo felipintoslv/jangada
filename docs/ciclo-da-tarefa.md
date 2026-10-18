@@ -57,8 +57,8 @@ Ao abrir uma tarefa, a skill passa `--coordenador claude` ou
 `--coordenador codex` ao `jangada-agente`, que grava o nome no campo
 `coordenador` do registro da sessão. Sem a opção, vale `JANGADA_COORDENADOR`
 e, sem ela, "dono"; registro sem o campo é lido como "dono". O nome é só o
-que foi declarado: a Central de Tarefas e o grafo do painel o mostram ao lado
-do autor e do revisor, e ele não muda nenhuma permissão.
+que foi declarado: a Central de Tarefas mostra o coordenador ao lado do autor
+e do revisor, e ele não muda nenhuma permissão.
 
 Um coordenador por projeto é a prática do fluxo, sem identidade persistente
 ou isolamento de conversas implementados no Core por essa skill.

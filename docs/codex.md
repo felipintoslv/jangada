@@ -133,9 +133,9 @@ de 30 segundos. O observador é encerrado junto com o isolamento.
 `bin/jangada-hook-codex` não decide permissões: sua saída é vazia. Ele
 atualiza apenas uma sessão existente, sob a trava comum, e grava mudanças
 em `eventos-agentes.jsonl`. Eventos identificados como de subagente não
-alteram o estado principal. A barra e o painel leem esses registros pelo
-mecanismo existente. Perguntas ao usuário fora de `PermissionRequest` ainda
-não têm estado de espera próprio.
+alteram o estado principal. A barra e a Central acompanham esses registros
+pelo mecanismo existente. Perguntas ao usuário fora de `PermissionRequest`
+ainda não têm estado de espera próprio.
 
 ## Restauração e delegação
 

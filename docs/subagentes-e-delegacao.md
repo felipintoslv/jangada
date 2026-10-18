@@ -225,10 +225,10 @@ JSON. `verificacao_escopo` identifica o relatório completo;
 O `roteamento_id` reúne os registros dos executores da mesma seleção.
 As tentativas anteriores aparecem no resultado do executor seguinte. Se o
 tempo interromper um executor, seu número de chamadas fica desconhecido.
-O painel mantém a contagem por registro: cada executor e a recusa final
-da seleção são entradas distintas. Ele não agrupa pedidos por
-`roteamento_id`. As chamadas locais são medidas individualmente, sem
-somar de novo o histórico repetido em `tentativas`.
+A contagem por registro considera cada executor e a recusa final da seleção
+como entradas distintas. Não agrupa pedidos por `roteamento_id`. As chamadas
+locais são medidas individualmente, sem somar de novo o histórico repetido em
+`tentativas`.
 
 ```mermaid
 flowchart LR
@@ -535,8 +535,8 @@ para a raiz atual em memória e reconferidas antes da execução.
 O núcleo em `default/nucleo/` consulta cópias estáveis do banco e WAL,
 sem criar arquivos na origem. Estados da 2.0 e da atividade são calculados.
 As ações chamam `bin/`; integração conserva a confirmação dos SHA e a
-revisão protegida do backend. O painel lê a coleta do núcleo em `nucleo.json`;
-a Central consulta projetos e fila diretamente, sem carregar os catálogos.
+revisão protegida do backend. A Central consulta projetos e fila diretamente,
+sem carregar os catálogos.
 
 ## Fila persistente de projetos
 
@@ -1060,9 +1060,9 @@ comprova independência ou qualidade real das respostas.
   (`default/claude/hooks.json`, `bin/jangada-hook-claude`) gravam
   `subagente-inicio` e `subagente-fim` em `eventos-agentes.jsonl`, com o id e
   o tipo do subagente.
-- Na versão anterior, `default/painel/subagentes.py` lia esses registros e as
-  conversas dos subagentes. O Monitor foi retirado na versão 3.0; esses
-  indicadores não são mais apresentados por esse painel.
+- Os registros de subagentes ficam em `eventos-agentes.jsonl` e as delegações
+  ficam em `delegacoes.jsonl`; a Central exibe estados das tarefas e a Waybar,
+  a contagem de tarefas, pendências e interrupções.
 
 Os campos de cada arquivo estão em [registros](registros.md).
 
@@ -1083,17 +1083,8 @@ Veja o [contrato do piloto](historico/coordenacao-central/10-executor-agy.md).
 
 ## Critérios de acompanhamento do apoio
 
-A aba Autonomia de agentes e `jangada-subagentes` mostram os indicadores
-por entrega: tokens do Claude com e sem agy, fração delegada, recusas,
-compressão, cota gasta, aprovação na primeira rodada, afirmações sem fonte,
-desvios do protocolo e árvore de subagentes. Um `*` marca grupos com menos
-de 15 entregas.
-
-- Após 30 entregas com agy, se os tokens do Claude por entrega aprovada não
-  caírem, retirar a preferência pelo agy do protocolo.
-- Se a aprovação na primeira rodada cair com delegação, rever os papéis.
-- Se o verificador não aumentar a aprovação na primeira rodada em 30
-  entregas, retirar esse papel do fluxo.
+O acompanhamento das tarefas e delegações é feito pelos registros da sessão
+e pelos estados exibidos na Central de Tarefas.
 
 Sem agy instalado, o destino padrão continua `agy` e registra bloqueio.
 Uma preferência local explícita continua válida. Apoio não aprova entrega;
