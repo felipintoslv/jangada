@@ -6,6 +6,10 @@
 # duas trocas na cópia pessoal da barra sem reformatar o resto: comentários,
 # espaços e módulos próprios ficam como estão. Só sai junto o comentário do
 # custom/indicadores escrito pelo padrão antigo ou pela migração que o pôs.
+# O Catamarã já punha na barra pessoal um custom/catamara próprio, de texto,
+# depois do custom/indicadores: o item vai para logo depois do custom/menu e,
+# se o exec é o antigo (cata tarefas --waybar ou catamara-tarefas --waybar), a
+# definição vira a do padrão. Outra definição pessoal fica, com aviso.
 # Roda de novo sem efeito.
 set -euo pipefail
 # shellcheck source=install/lib.sh
@@ -16,7 +20,7 @@ novo="$(mktemp)"
 trap 'rm -f "$novo"' EXIT
 origem="$(dirname "${BASH_SOURCE[0]}")/../waybar/config.jsonc"
 [[ -f "$origem" ]] || origem="$(dirname "${BASH_SOURCE[0]}")/../shell/waybar/config.jsonc"
-python3 - "$alvo" "$novo" "$origem" <<'PY'
+avisos="$(python3 - "$alvo" "$novo" "$origem" <<'PY'
 import json
 from pathlib import Path
 import re
@@ -149,48 +153,92 @@ def ultima_ocorrencia(texto):
         cortes[-1] = (com_comentario(texto, inicio), fim)
     return cortes
 
+def valor(tokens, inicio, fim):
+    """Valor JSON dos tokens[inicio..fim], sem vírgula antes de fechar."""
+    partes = tokens[inicio:fim + 1]
+    return json.loads(''.join(t[0] for k, t in enumerate(partes)
+                              if not (t[0] == ',' and k + 1 < len(partes)
+                                      and partes[k + 1][0] in ('}', ']'))))
+
 def bloco_padrao(texto):
-    """Texto do bloco do custom/catamara no padrão, com o comentário de cima."""
+    """Comentário de cima, texto e valor do bloco do custom/catamara no padrão."""
     tokens, lista = barras(texto)
     for _, _, campos in lista:
-        for chave, i, _, fim in campos:
+        for chave, i, inicio_valor, fim in campos:
             if chave != ENTRA:
                 continue
-            inicio = texto.rfind('\n', 0, tokens[i].start()) + 1
+            comeco = texto.rfind('\n', 0, tokens[i].start()) + 1
+            inicio = comeco
             while inicio:
-                comeco = texto.rfind('\n', 0, inicio - 1) + 1
-                if not texto[comeco:inicio].strip().startswith('//'):
+                anterior = texto.rfind('\n', 0, inicio - 1) + 1
+                if not texto[anterior:inicio].strip().startswith('//'):
                     break
-                inicio = comeco
-            return texto[inicio:tokens[fim].end()]
+                inicio = anterior
+            return (texto[inicio:comeco], texto[comeco:tokens[fim].end()],
+                    valor(tokens, inicio_valor, fim))
     return None
 
-def acrescentar(texto, bloco):
+def antigo(definicao):
+    """Definição que o Catamarã pôs antes do jangada-barra-catamara."""
+    exec_ = definicao.get('exec') if isinstance(definicao, dict) else None
+    return (isinstance(exec_, str) and 'jangada-barra-catamara' not in exec_
+            and re.search(r'(^|[\s/])(cata tarefas|catamara-tarefas) --waybar\b', exec_))
+
+def ajustar(texto, modelo, avisos):
+    comentario, bloco, definicao = modelo
     tokens, lista = barras(texto)
     edicoes = []
     for raiz, fim_raiz, campos in lista:
         itens = itens_das_listas(tokens, campos)
-        if not any(nome(tokens[k]) == ENTRA for k in itens):
-            menu = next((k for k in itens if nome(tokens[k]) == MENU), None)
-            if menu is None:
-                continue
-            edicoes.append((tokens[menu].end(), ', "custom/catamara"'))
-        if any(chave == ENTRA for chave, *_ in campos):
-            continue
-        definicao = next((fim for chave, _, _, fim in campos if chave == MENU), None)
-        if definicao is not None and definicao + 1 < fim_raiz:
-            depois = tokens[definicao + 1]
-            if depois[0] == ',':
-                edicoes.append((depois.end(), '\n\n' + bloco + ','))
+        menus = [k for k in itens if nome(tokens[k]) == MENU]
+        botoes = [k for k in itens if nome(tokens[k]) == ENTRA]
+        seguinte = {a: b for a, b in zip(itens, itens[1:]) if b == a + 2}
+        if menus and not any(seguinte.get(m) in botoes for m in menus):
+            menu = menus[0]
+            if botoes:
+                edicoes += [(i, f, '') for i, f in trecho(texto, tokens, botoes[0], botoes[0])]
+            virgula = tokens[menu + 1]
+            depois = texto[virgula.end():tokens[menu + 2].start()] if virgula[0] == ',' else ''
+            recuo = texto[texto.rfind('\n', 0, tokens[menu].start()) + 1:tokens[menu].start()]
+            # Lista com um item por linha ganha a linha nova no mesmo recuo.
+            if '\n' in depois and not depois.strip() and not recuo.strip():
+                edicoes.append((virgula.end(), virgula.end(), f'\n{recuo}"{ENTRA}",'))
             else:
-                edicoes.append((tokens[definicao].end(), ',\n\n' + bloco))
+                edicoes.append((tokens[menu].end(), tokens[menu].end(), f', "{ENTRA}"'))
+        proprias = [c for c in campos if c[0] == ENTRA]
+        for _, i, inicio_valor, fim in proprias:
+            atual = valor(tokens, inicio_valor, fim)
+            if atual == definicao:
+                continue
+            if not antigo(atual):
+                avisos.append(f'{ENTRA} pessoal mantido, confira se ele chama o '
+                              'jangada-barra-catamara')
+                continue
+            comeco = texto.rfind('\n', 0, tokens[i].start()) + 1
+            if texto[comeco:tokens[i].start()].strip():
+                edicoes.append((tokens[i].start(), tokens[fim].end(), bloco.lstrip()))
+            elif texto[:comeco].endswith(comentario):
+                edicoes.append((comeco, tokens[fim].end(), bloco))
+            else:
+                edicoes.append((comeco, tokens[fim].end(), comentario + bloco))
+        if proprias or not (botoes or menus):
+            continue
+        posicao = next((fim for chave, _, _, fim in campos if chave == MENU), None)
+        if posicao is not None and posicao + 1 < fim_raiz:
+            depois = tokens[posicao + 1]
+            if depois[0] == ',':
+                edicoes.append((depois.end(), depois.end(), '\n\n' + comentario + bloco + ','))
+            else:
+                fim = tokens[posicao].end()
+                edicoes.append((fim, fim, ',\n\n' + comentario + bloco))
             continue
         ultimo = tokens[fim_raiz - 1]
-        edicoes.append((tokens[fim_raiz].start(), '\n' + bloco + '\n'))
+        fim = tokens[fim_raiz].start()
+        edicoes.append((fim, fim, '\n' + comentario + bloco + '\n'))
         if ultimo[0] not in (',', '{'):
-            edicoes.append((ultimo.end(), ','))
-    for posicao, valor in sorted(edicoes, key=lambda e: e[0], reverse=True):
-        texto = texto[:posicao] + valor + texto[posicao:]
+            edicoes.append((ultimo.end(), ultimo.end(), ','))
+    for inicio, fim, valor_novo in sorted(edicoes, key=lambda e: e[0], reverse=True):
+        texto = texto[:inicio] + valor_novo + texto[fim:]
     return texto
 
 texto = Path(sys.argv[1]).read_text()
@@ -212,16 +260,20 @@ while cortes := ultima_ocorrencia(texto):
             fim += 1
         texto = texto[:inicio] + texto[fim:]
 # Sem o custom/catamara no padrão, não há o que acrescentar.
-bloco = bloco_padrao(Path(sys.argv[3]).read_text())
-if bloco is not None:
-    texto = acrescentar(texto, bloco)
+modelo = bloco_padrao(Path(sys.argv[3]).read_text())
+avisos = []
+if modelo is not None:
+    texto = ajustar(texto, modelo, avisos)
 _, dados = ler(texto)
 for barra in dados if isinstance(dados, list) else [dados]:
     if isinstance(barra, dict) and SAI in barra:
         raise ValueError('custom/indicadores continua na barra')
 Path(sys.argv[2]).write_text(texto)
+print('\n'.join(dict.fromkeys(avisos)))
 PY
+)"
+[[ -z "$avisos" ]] || while IFS= read -r linha; do aviso "$linha: $alvo"; done <<<"$avisos"
 [[ -s "$novo" && "$(<"$novo")" != "$(<"$alvo")" ]] || { ok "barra já com o Catamarã e sem os indicadores; nada a migrar"; exit 0; }
 copia_seguranca "$alvo"
 executar gravar_atomico "$novo" "$alvo"
-ok "botão do Catamarã acrescentado e indicadores retirados da barra: $alvo"
+ok "botão do Catamarã no lugar do padrão e indicadores retirados da barra: $alvo"

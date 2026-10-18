@@ -30,6 +30,19 @@ INDICADORES = '''  // Painel de indicadores do uso de IA. O exec só lê o cache
 
 '''
 
+# Definição que o próprio Catamarã punha na barra pessoal, antes do botão novo.
+CATAMARA_ANTIGO = '''  "custom/catamara": {
+    "exec": "$HOME/.local/bin/cata tarefas --waybar",
+    "return-type": "json",
+    "interval": 15,
+    "signal": 11,
+    "format": "{}",
+    "on-click": "setsid -f $HOME/.local/bin/cata tarefas --web",
+    "on-click-right": "setsid -f $JANGADA_PATH/bin/jangada-terminal --classe catamara-tarefas -e $HOME/.local/bin/cata tarefas",
+    "tooltip": true
+  },
+'''
+
 
 def carregar(texto):
     tokens = re.findall(r'//[^\n]*|/\*[\s\S]*?\*/|"(?:\\.|[^"\\])*"|[^/" ]+', texto)
@@ -157,6 +170,98 @@ class Migracao(unittest.TestCase):
               {'modules-right': ['b']}]),
             ('{"modules-left": ["clock", "custom/indicadores"], "custom/indicadores": {}}',
              {'modules-left': ['clock']}),
+        ]
+        for antes, esperado in casos:
+            with self.subTest(antes=antes):
+                self.assertEqual(self.conferir(antes), esperado)
+
+    def antigo_do_catamara(self):
+        antigo = self.padrao.replace(
+            '"custom/menu", "custom/catamara", "hyprland/workspaces", "custom/agentes",',
+            '"custom/menu", "hyprland/workspaces", "custom/agentes", "custom/indicadores", '
+            '"custom/catamara",', 1)
+        antigo = re.sub(r'  // Botão do Catamarã.*?\n  \},\n', CATAMARA_ANTIGO, antigo,
+                        count=1, flags=re.S)
+        return antigo.replace('  // Título da janela', INDICADORES + '  // Título da janela', 1)
+
+    def test_catamara_antigo_vai_para_o_lugar_novo(self):
+        antigo = self.antigo_do_catamara()
+        self.assertIn('cata tarefas --waybar', antigo)
+        self.conferir(antigo, self.padrao)
+
+    def test_catamara_antigo_em_lista_de_uma_linha_por_item(self):
+        antes = '''{
+  "modules-left": [
+    "custom/menu",
+    "hyprland/workspaces",
+    // pessoal
+    "custom/indicadores",
+    "custom/catamara"
+  ],
+  "custom/catamara": {"exec": "catamara-tarefas --waybar"}
+}'''
+        self.conferir(antes)
+        texto = self.alvo.read_text()
+        self.assertIn('[\n    "custom/menu",\n    "custom/catamara",\n    "hyprland/workspaces"\n'
+                      '    // pessoal\n  ],\n  // Botão do Catamarã', texto)
+        dados = carregar(texto)
+        self.assertEqual(dados['custom/catamara'], self.definicao)
+
+    def test_catamara_pessoal_desconhecido_fica_com_aviso(self):
+        antes = self.antigo_do_catamara().replace('cata tarefas --waybar', 'meu-catamara --waybar')
+        self.alvo.write_text(antes)
+        resultado = self.migrar()
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+        self.assertIn('custom/catamara pessoal mantido', resultado.stderr)
+        dados = carregar(self.alvo.read_text())
+        self.assertEqual(dados['modules-left'][:3],
+                         ['custom/menu', 'custom/catamara', 'hyprland/workspaces'])
+        self.assertEqual(dados['custom/catamara']['exec'], '$HOME/.local/bin/meu-catamara --waybar')
+        self.assertNotIn('custom/indicadores', dados)
+        depois = self.alvo.read_text()
+        resultado = self.migrar()
+        self.assertIn('nada a migrar', resultado.stdout)
+        self.assertEqual(self.alvo.read_text(), depois)
+
+    def test_catamara_com_exec_do_jangada_fica(self):
+        antes = '{"custom/catamara": {"exec": "jangada-barra-catamara --waybar; cata tarefas --waybar"}}'
+        self.alvo.write_text(antes)
+        resultado = self.migrar()
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+        self.assertIn('custom/catamara pessoal mantido', resultado.stderr)
+        self.assertEqual(self.alvo.read_text(), antes)
+        self.assertEqual(self.copias(), [])
+
+    def test_catamara_ja_no_lugar_sem_aviso(self):
+        self.alvo.write_text(self.padrao)
+        resultado = self.migrar()
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+        self.assertIn('nada a migrar', resultado.stdout)
+        self.assertNotIn('mantido', resultado.stderr)
+        self.assertEqual(self.alvo.read_text(), self.padrao)
+
+    def test_catamara_movido(self):
+        d = self.definicao
+        casos = [
+            ('{"modules-left": ["custom/catamara", "custom/menu"]}',
+             {'modules-left': ['custom/menu', 'custom/catamara'], 'custom/catamara': d}),
+            ('{"modules-left": ["custom/menu", "a", "custom/catamara", "b", "custom/catamara"]}',
+             {'modules-left': ['custom/menu', 'custom/catamara', 'a', 'b', 'custom/catamara'],
+              'custom/catamara': d}),
+            ('{"modules-left": ["custom/menu",], "modules-right": ["custom\\/catamara"],'
+             ' "custom\\/catamara": {"exec": "cata tarefas --waybar"}}',
+             {'modules-left': ['custom/menu', 'custom/catamara'], 'modules-right': [],
+              'custom/catamara': d}),
+            ('{"modules-left": ["custom/menu", "x"], "custom/catamara": {"exec": "cata tarefas --waybar"},'
+             ' "custom/catamara": {"exec": "catamara-tarefas --waybar"}}',
+             {'modules-left': ['custom/menu', 'custom/catamara', 'x'], 'custom/catamara': d}),
+            ('{"modules-left": ["x", "custom/catamara"], "custom/catamara": {"exec": "cata tarefas --waybar"}}',
+             {'modules-left': ['x', 'custom/catamara'], 'custom/catamara': d}),
+            ('[{"modules-left": ["custom/menu", "custom/indicadores", "custom/catamara"]},'
+             ' {"modules-left": ["custom/catamara", "custom/menu"],'
+             ' "custom/catamara": {"exec": "/x/cata tarefas --waybar"}}]',
+             [{'modules-left': ['custom/menu', 'custom/catamara'], 'custom/catamara': d},
+              {'modules-left': ['custom/menu', 'custom/catamara'], 'custom/catamara': d}]),
         ]
         for antes, esperado in casos:
             with self.subTest(antes=antes):
