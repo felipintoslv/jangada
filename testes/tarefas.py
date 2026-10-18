@@ -23,7 +23,7 @@ from PyQt6.QtCore import QProcess, QTimer, Qt
 from PyQt6.QtNetwork import QLocalServer
 from PyQt6.QtGui import QTextDocument, QKeySequence
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QLabel, QPushButton
+from PyQt6.QtWidgets import QApplication, QLabel, QMessageBox, QPushButton
 import dados
 import janela
 from janela import Janela
@@ -757,7 +757,37 @@ class Interface(unittest.TestCase):
         comando.write_text("#!/usr/bin/env python3\nimport json, pathlib, sys\n"
                            "pasta = pathlib.Path(__file__).resolve().parent.parent\n"
                            "with open(pasta / 'coordenador.log', 'a') as log:\n"
-                           "    log.write(json.dumps(sys.argv[1:]) + '\\n')\n")
+                           "    log.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+                           "if (pasta / 'acao-espera').exists():\n"
+                           "    import time\n    time.sleep(5)\n"
+                           "if (pasta / 'acao-erro').exists():\n"
+                           "    print('Sessão viva: salve o diário e saia voluntariamente.', file=sys.stderr)\n"
+                           "    sys.exit(1)\n"
+                           "if sys.argv[1] == '--finalizar':\n"
+                           "    arquivo = pasta / 'coordenadores.json'\n"
+                           "    dados = json.loads(arquivo.read_text())\n"
+                           "    for c in dados['coordenadores']:\n"
+                           "        if c['sessao'] == sys.argv[2]:\n"
+                           "            if c['viva']:\n"
+                           "                print('Sessão viva: saia voluntariamente.', file=sys.stderr)\n"
+                           "                sys.exit(1)\n"
+                           "            c.update(ciclo='encerrada', retomavel=False)\n"
+                           "    arquivo.write_text(json.dumps(dados))\n"
+                           "    print('Pendências preservadas; checkpoint arquivado.')\n"
+                           "else:\n"
+                           "    arquivo = pasta / 'coordenadores.json'\n"
+                           "    dados = json.loads(arquivo.read_text())\n"
+                           "    projeto = sys.argv[sys.argv.index('--projeto') + 1]\n"
+                           "    provedor = sys.argv[sys.argv.index('--provedor') + 1]\n"
+                           "    c = next((c for c in dados['coordenadores'] if c['projeto'] == projeto), None)\n"
+                           "    if c is None:\n"
+                           "        c = dict(sessao=pathlib.Path(projeto).name + '--coordenador', projeto=projeto, tarefas=[])\n"
+                           "        dados['coordenadores'].append(c)\n"
+                           "    if c.get('ciclo') != 'aberta':\n"
+                           "        import uuid\n"
+                           "        c['atuacao_id'] = str(uuid.uuid4())\n"
+                           "    c.update(ciclo='aberta', viva=True, retomavel=False, estado='iniciado', provedor=provedor)\n"
+                           "    arquivo.write_text(json.dumps(dados))\n")
         comando.chmod(448)
 
     def coordenadores_falsos(self, estado_a='aguardando', **campos):
@@ -776,6 +806,317 @@ class Interface(unittest.TestCase):
         self.esperar_consulta()
         aguardar(lambda: not coluna.consulta.ocupada())
         return coluna
+
+    def test_ciclo_aberto_sem_processo_preserva_tarefas(self):
+        self.coordenador_falso()
+        self.coordenadores_falsos('encerrado', viva=False, ciclo='aberta',
+                                  atuacao_id='opaco-1', retomavel=True)
+        coluna = self.escolher_coordenador(self.carregar_coordenadores(), 'horta--coordenador')
+        item = coluna.itens[('coord', 'horta--coordenador')]
+        self.assertIn('aguardando retomada', item.text(1))
+        self.assertEqual(item.childCount(), 1)
+        self.assertTrue(coluna.retomar.isEnabled())
+        self.assertTrue(coluna.finalizar.isEnabled())
+
+    def esperar_acao_coordenador(self, coluna):
+        aguardar(lambda: not coluna.ocupada() and not coluna.consulta.ocupada())
+
+    def acoes_coordenador(self):
+        arquivo = self.raiz / 'coordenador.log'
+        return [json.loads(linha) for linha in arquivo.read_text().splitlines()] if arquivo.exists() else []
+
+    def atuacao_aberta(self, **campos):
+        self.coordenador_falso()
+        self.coordenadores_falsos('encerrado', **dict(
+            dict(viva=False, ciclo='aberta', atuacao_id='opaco-1', retomavel=True), **campos))
+        return self.escolher_coordenador(self.carregar_coordenadores(), 'horta--coordenador')
+
+    def test_ciclo_independe_do_hook_e_da_tarefa_concluida(self):
+        coluna = self.atuacao_aberta()
+        self.lista.write_text('concluido\tprojeto--um\t/tmp/projeto\thoje\tagente/um\tTarefa um\n')
+        for hook in ('concluido', 'encerrado'):
+            for viva, retomavel, rotulo in ((False, True, 'aguardando retomada'),
+                                            (True, False, 'resposta pronta' if hook == 'concluido' else 'estado sem dado')):
+                with self.subTest(hook=hook, viva=viva):
+                    self.coordenadores_falsos(hook, viva=viva, ciclo='aberta', atuacao_id=None, retomavel=retomavel)
+                    self.carregar_coordenadores()
+                    item = coluna.itens[('coord', 'horta--coordenador')]
+                    self.assertIn(rotulo, item.text(1))
+                    self.assertEqual(item.childCount(), 1)
+                    self.assertIn('conferir', item.child(0).text(1))
+        self.coordenadores_falsos('concluido', viva=False, ciclo='encerrada', atuacao_id='anterior', retomavel=False)
+        self.carregar_coordenadores()
+        self.assertIn('atuação encerrada', coluna.situacao.text())
+        self.assertFalse(coluna.retomar.isEnabled() or coluna.finalizar.isEnabled())
+        self.assertEqual(self.acoes_coordenador(), [])
+
+    def test_criar_ou_retomar_pelas_duas_origens_e_provedores(self):
+        for provedor in ('claude', 'codex'):
+            coluna = self.atuacao_aberta(provedor=provedor)
+            coluna.retomar.click()
+            coluna.retomar_atuacao()
+            self.esperar_acao_coordenador(coluna)
+            self.assertEqual(self.acoes_coordenador()[-1],
+                             ['--projeto', '/tmp/horta', '--provedor', provedor, '--janela'])
+            self.assertEqual(coluna.coordenador('horta--coordenador')['atuacao_id'], 'opaco-1')
+            self.assertTrue(coluna.coordenador('horta--coordenador')['viva'])
+            self.assertFalse(coluna.retomar.isEnabled())
+            self.coordenadores_falsos(viva=False, ciclo='aberta', atuacao_id='opaco-1',
+                                      retomavel=True, provedor=provedor)
+            self.carregar_coordenadores()
+            self.janela.operacional.dados = {'projetos': [{'nome': 'horta', 'caminho': '/tmp/horta'}]}
+            coluna.novo_coordenador()
+            dialogo = coluna.dialogo
+            self.assertIn('atuação aberta', dialogo.aviso.text())
+            self.assertEqual(dialogo.provedor.currentText(), provedor)
+            outro = 'codex' if provedor == 'claude' else 'claude'
+            dialogo.provedor.setCurrentText(outro)
+            dialogo.abrir.click()
+            self.esperar_acao_coordenador(coluna)
+            self.assertEqual(self.acoes_coordenador()[-1],
+                             ['--projeto', '/tmp/horta', '--provedor', outro, '--janela'])
+            self.assertEqual(coluna.coordenador('horta--coordenador')['atuacao_id'], 'opaco-1')
+            self.assertEqual(coluna.coordenador('horta--coordenador')['provedor'], outro)
+            self.coordenadores_falsos('concluido', viva=False, ciclo='encerrada',
+                                      atuacao_id='fechada', retomavel=False)
+            self.carregar_coordenadores()
+            coluna.novo_coordenador()
+            self.assertEqual(dialogo.abrir.text(), 'Abrir coordenador')
+            dialogo.provedor.setCurrentText(provedor)
+            dialogo.abrir.click()
+            self.esperar_acao_coordenador(coluna)
+            self.assertEqual(self.acoes_coordenador()[-1],
+                             ['--projeto', '/tmp/horta', '--provedor', provedor, '--janela'])
+            self.assertNotEqual(coluna.coordenador('horta--coordenador')['atuacao_id'], 'fechada')
+            self.assertEqual(coluna.coordenador('horta--coordenador')['ciclo'], 'aberta')
+            coluna.novo_coordenador()
+            nova = self.raiz / ('nova-' + provedor)
+            nova.mkdir()
+            self.janela.operacional.dados = {'projetos': [{'nome': 'nova', 'caminho': str(nova)}]}
+            dialogo.carregar()
+            dialogo.provedor.setCurrentText(provedor)
+            dialogo.abrir.click()
+            self.esperar_acao_coordenador(coluna)
+            self.assertEqual(self.acoes_coordenador()[-1],
+                             ['--projeto', str(nova), '--provedor', provedor, '--janela'])
+            self.assertTrue(coluna.coordenador(nova.name + '--coordenador')['viva'])
+        self.assertEqual(len(self.acoes_coordenador()), 8)
+
+    def test_retomada_reconfere_sessao_viva_sem_trocar_provedor(self):
+        coluna = self.atuacao_aberta()
+        self.coordenadores_falsos(viva=True, ciclo='aberta', atuacao_id='opaco-1', retomavel=False)
+        coluna.retomar.click()
+        self.esperar_acao_coordenador(coluna)
+        aguardar(lambda: (self.raiz / 'acao.json').exists())
+        self.assertEqual(json.loads((self.raiz / 'acao.json').read_text()), ['--focar', 'horta--coordenador'])
+        self.assertEqual(self.acoes_coordenador(), [])
+        self.janela.operacional.dados = {'projetos': [{'nome': 'horta', 'caminho': '/tmp/horta'}]}
+        aguardar(lambda: coluna.foco.state() == QProcess.ProcessState.NotRunning)
+        coluna.novo_coordenador()
+        self.assertFalse(coluna.dialogo.provedor.isEnabled())
+        coluna.dialogo.provedor.setCurrentText('codex')
+        coluna.dialogo.abrir.click()
+        self.esperar_acao_coordenador(coluna)
+        self.assertEqual(self.acoes_coordenador(), [])
+
+    def test_finalizar_cancela_confirma_preserva_rascunho_e_tarefas(self):
+        coluna = self.atuacao_aberta()
+        coluna.caixa.setPlainText('Diário a copiar')
+        confirmacoes = []
+        def responder(botao):
+            modal = APP.activeModalWidget()
+            confirmacoes.append((modal.text(), modal.textFormat(), modal.defaultButton().text()))
+            modal.button(botao).click()
+        QTimer.singleShot(20, lambda: responder(QMessageBox.StandardButton.Cancel))
+        coluna.finalizar.click()
+        self.assertEqual(self.acoes_coordenador(), [])
+        self.assertFalse(coluna.ocupada())
+        QTimer.singleShot(20, lambda: responder(QMessageBox.StandardButton.Yes))
+        coluna.finalizar.click()
+        coluna.finalizar_atuacao()
+        self.esperar_acao_coordenador(coluna)
+        self.assertEqual(len(confirmacoes), 2)
+        for texto, formato, padrao in confirmacoes:
+            self.assertIn('salvou o estado e o diário', texto)
+            self.assertIn('tarefas pendentes serão preservadas', texto)
+            self.assertEqual(formato, Qt.TextFormat.PlainText)
+            self.assertEqual(padrao, 'Cancelar')
+        self.assertEqual(self.acoes_coordenador(), [['--finalizar', 'horta--coordenador']])
+        self.assertIn('Atuação finalizada', coluna.resultado.text())
+        self.assertIn('Pendências preservadas; checkpoint arquivado', coluna.resultado.text())
+        self.assertIn('atuação encerrada', coluna.situacao.text())
+        self.assertEqual(coluna.chave(), ('coord', 'horta--coordenador'))
+        self.assertEqual(coluna.caixa.toPlainText(), 'Diário a copiar')
+        self.assertEqual(coluna.itens[('coord', 'horta--coordenador')].childCount(), 1)
+
+    def test_finalizar_reconfere_apos_confirmacao_e_oferece_janela(self):
+        coluna = self.atuacao_aberta()
+        def reaparecer():
+            self.coordenadores_falsos(viva=True, ciclo='aberta', atuacao_id='opaco-1', retomavel=False)
+            return QMessageBox.StandardButton.Yes
+        with patch.object(QMessageBox, 'exec', side_effect=reaparecer):
+            coluna.finalizar.click()
+        self.esperar_acao_coordenador(coluna)
+        self.assertEqual(self.acoes_coordenador(), [])
+        self.assertIn('saia voluntariamente', coluna.resultado.text())
+        self.assertTrue(coluna.ir.isEnabled())
+        self.assertFalse((self.raiz / 'acao.json').exists())
+        with patch.object(QMessageBox, 'exec') as confirmar:
+            coluna.finalizar.click()
+        confirmar.assert_not_called()
+        coluna.ir.click()
+        aguardar(lambda: (self.raiz / 'acao.json').exists())
+        self.assertEqual(json.loads((self.raiz / 'acao.json').read_text()), ['--focar', 'horta--coordenador'])
+
+    def test_acao_recusa_atuacao_substituida_ou_provedor_alterado(self):
+        coluna = self.atuacao_aberta()
+        self.coordenadores_falsos(viva=False, ciclo='aberta', atuacao_id='outra', retomavel=True)
+        with patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Yes):
+            coluna.finalizar.click()
+        self.esperar_acao_coordenador(coluna)
+        self.assertIn('A atuação mudou', coluna.resultado.text())
+        self.assertEqual(self.acoes_coordenador(), [])
+        coluna = self.atuacao_aberta()
+        self.coordenadores_falsos(viva=False, ciclo='aberta', atuacao_id='opaco-1', retomavel=True, provedor='codex')
+        coluna.retomar.click()
+        self.esperar_acao_coordenador(coluna)
+        self.assertIn('provedor mudou', coluna.resultado.text())
+        self.assertEqual(self.acoes_coordenador(), [])
+
+    def test_erros_e_prazo_visiveis_sem_fechar_antecipadamente(self):
+        coluna = self.atuacao_aberta()
+        coluna.caixa.setPlainText('Rascunho preservado')
+        (self.raiz / 'acao-erro').touch()
+        with patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Yes):
+            coluna.finalizar.click()
+        self.esperar_acao_coordenador(coluna)
+        self.assertIn('Sessão viva: salve o diário', coluna.resultado.text())
+        self.assertTrue(coluna.resultado.property('falha'))
+        self.carregar_coordenadores()
+        self.assertIn('Sessão viva', coluna.resultado.text())
+        self.assertIn('aguardando retomada', coluna.situacao.text())
+        (self.raiz / 'acao-erro').unlink()
+        (self.raiz / 'acao-espera').touch()
+        coluna.prazo_acao_ms = 150
+        for tipo in ('finalizar', 'retomar'):
+            with self.subTest(tipo=tipo):
+                with patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Yes):
+                    (coluna.finalizar if tipo == 'finalizar' else coluna.retomar).click()
+                aguardar(lambda: coluna.acao.state() != QProcess.ProcessState.NotRunning)
+                self.assertNotIn('finalizada', coluna.resultado.text())
+                self.assertFalse(coluna.finalizar.isEnabled() or coluna.retomar.isEnabled() or coluna.novo.isEnabled())
+                coluna.retomar_atuacao()
+                coluna.finalizar_atuacao()
+                self.assertFalse(coluna.abrir_coordenador('/tmp/horta', 'claude'))
+                self.esperar_acao_coordenador(coluna)
+                self.assertIn('Tempo esgotado', coluna.resultado.text())
+                self.assertTrue(coluna.resultado.property('falha'))
+                self.assertTrue(coluna.retomar.isEnabled())
+        self.assertEqual(len(self.acoes_coordenador()), 3)
+        self.assertEqual(coluna.caixa.toPlainText(), 'Rascunho preservado')
+
+    def test_reconferencia_invalida_ou_lenta_nao_executa(self):
+        coluna = self.atuacao_aberta()
+        (self.raiz / 'coordenadores.json').write_text('{}')
+        coluna.retomar.click()
+        self.esperar_acao_coordenador(coluna)
+        self.assertIn('Não foi possível reconferir', coluna.resultado.text())
+        self.assertEqual(self.acoes_coordenador(), [])
+        (self.raiz / 'coordenadores-espera').touch()
+        coluna.reconferencia.prazo_ms = 100
+        coluna.retomar.click()
+        self.esperar_acao_coordenador(coluna)
+        self.assertIn('Tempo esgotado', coluna.resultado.text())
+        self.assertEqual(self.acoes_coordenador(), [])
+
+    def test_falha_ao_iniciar_comando_libera_controles(self):
+        coluna = self.atuacao_aberta()
+        preparar = self.janela.preparar
+        def remover_comando(processo, argumentos, comando):
+            preparar(processo, argumentos, comando)
+            if comando == 'jangada-coordenador':
+                (self.bin / comando).unlink()
+        with patch.object(self.janela, 'preparar', side_effect=remover_comando):
+            coluna.retomar.click()
+            self.esperar_acao_coordenador(coluna)
+        self.assertIn('Não foi possível executar jangada-coordenador', coluna.resultado.text())
+        self.assertTrue(coluna.resultado.property('falha'))
+        self.assertFalse(coluna.prazo_acao.isActive())
+        self.assertEqual(self.acoes_coordenador(), [])
+
+    def test_tab_e_temas_nas_acoes_de_ciclo(self):
+        coluna = self.atuacao_aberta()
+        self.janela.show()
+        QTest.qWaitForWindowExposed(self.janela)
+        self.janela.activateWindow()
+        for modo in (0, 1):
+            self.janela.modo.setCurrentIndex(modo)
+            coluna.caixa.setFocus()
+            QTest.keyClick(coluna.caixa, Qt.Key.Key_Tab)
+            self.assertIs(APP.focusWidget(), coluna.retomar)
+            QTest.keyClick(coluna.retomar, Qt.Key.Key_Tab)
+            self.assertIs(APP.focusWidget(), coluna.finalizar)
+            self.assertEqual(coluna.retomar.accessibleName(), 'Retomar atuação do coordenador')
+        self.assertEqual(self.acoes_coordenador(), [])
+
+    def test_campos_de_ciclo_invalidos_preservam_ultimos_dados(self):
+        coluna = self.atuacao_aberta()
+        for campo, valor in (('ciclo', None), ('ciclo', 'concluido'), ('ciclo', []),
+                             ('atuacao_id', 1), ('atuacao_id', []), ('atuacao_id', ''),
+                             ('retomavel', None), ('retomavel', 'sim'), ('retomavel', 1), ('retomavel', False)):
+            with self.subTest(campo=campo, valor=valor):
+                registro = dict(viva=False, ciclo='aberta', atuacao_id='opaco-1', retomavel=True)
+                registro[campo] = valor
+                self.coordenadores_falsos(**registro)
+                self.carregar_coordenadores()
+                self.assertIn('Saída inválida', coluna.status.text())
+                self.assertIn(campo, coluna.status.text())
+                self.assertIn('aguardando retomada', coluna.situacao.text())
+        self.assertEqual(self.acoes_coordenador(), [])
+
+    def test_core_anterior_ou_campos_ausentes_preserva_acoes_antigas(self):
+        for ausente in ('ciclo', 'atuacao_id', 'retomavel'):
+            with self.subTest(ausente=ausente):
+                self.coordenador_falso()
+                self.coordenadores_falsos(ciclo='aberta', atuacao_id=None, retomavel=False)
+                arquivo = self.raiz / 'coordenadores.json'
+                payload = json.loads(arquivo.read_text())
+                del payload['coordenadores'][1][ausente]
+                arquivo.write_text(json.dumps(payload))
+                coluna = self.escolher_coordenador(self.carregar_coordenadores(), 'horta--coordenador')
+                self.assertIn('não informa o ciclo', coluna.status.text())
+                self.assertFalse(coluna.retomar.isEnabled() or coluna.finalizar.isEnabled())
+                self.assertTrue(coluna.novo.isEnabled() and coluna.ir.isEnabled() and coluna.copiar.isEnabled())
+                coluna.caixa.setPlainText('Dado, não instrução')
+                coluna.copiar.click()
+                aguardar(lambda: coluna.foco.state() == QProcess.ProcessState.NotRunning)
+                self.assertEqual(APP.clipboard().text(), 'Dado, não instrução')
+        self.assertEqual(self.acoes_coordenador(), [])
+
+    def test_simulacao_de_ciclo_sem_efeitos(self):
+        self.coordenador_falso()
+        self.coordenadores_falsos(viva=False, ciclo='aberta', atuacao_id='opaco-1', retomavel=True)
+        simulada = Janela()
+        try:
+            coluna = simulada.coordenadores
+            from coordenadores import ler_coordenadores
+            coluna.mostrar_lista(ler_coordenadores((self.raiz / 'coordenadores.json').read_text()))
+            self.escolher_coordenador(coluna, 'horta--coordenador')
+            with patch.object(simulada, 'preparar') as executar, patch.object(QMessageBox, 'exec') as confirmar:
+                coluna.retomar_atuacao()
+                coluna.finalizar_atuacao()
+                coluna.abrir_coordenador('/tmp/horta', 'codex')
+                coluna.atualizar()
+                APP.processEvents()
+            executar.assert_not_called()
+            confirmar.assert_not_called()
+            self.assertEqual(self.acoes_coordenador(), [])
+            self.assertFalse(coluna.retomar.isEnabled() or coluna.finalizar.isEnabled())
+            self.assertFalse(coluna.consulta.ocupada() or coluna.reconferencia.ocupada())
+            payload = json.loads((self.raiz / 'coordenadores.json').read_text())
+            self.assertEqual(payload['coordenadores'][1]['ciclo'], 'aberta')
+        finally:
+            simulada.close()
 
     def escolher_coordenador(self, coluna, sessao):
         coluna.arvore.setCurrentItem(coluna.itens[('coord', sessao)])
@@ -819,7 +1160,7 @@ class Interface(unittest.TestCase):
         self.carregar_coordenadores()
         self.assertEqual(coluna.chave(), ('coord', 'horta--coordenador'))
         self.assertEqual(coluna.aviso.text(), 'O coordenador terminou a resposta.')
-        self.assertEqual(coluna.itens[('coord', 'horta--coordenador')].text(1), '✓ pronto')
+        self.assertEqual(coluna.itens[('coord', 'horta--coordenador')].text(1), '✓ resposta pronta')
         self.assertTrue(coluna.caixa.isEnabled() and coluna.ir.isEnabled())
         self.coordenadores_falsos('aguardando', viva=False)
         self.carregar_coordenadores()
@@ -936,15 +1277,15 @@ class Interface(unittest.TestCase):
         dialogo.projeto.setCurrentIndex(0)
         self.assertIn('já tem coordenador', dialogo.aviso.text())
         dialogo.abrir.click()
-        self.assertEqual(coluna.chave(), ('coord', 'horta--coordenador'))
         aguardar(lambda: (self.raiz / 'acao.json').exists() and coluna.foco.state() == QProcess.ProcessState.NotRunning)
+        self.assertEqual(coluna.chave(), ('coord', 'horta--coordenador'))
         self.assertEqual(json.loads((self.raiz / 'acao.json').read_text()), ['--focar', 'horta--coordenador'])
         self.assertFalse((self.raiz / 'coordenador.log').exists())
         coluna.novo_coordenador()
         dialogo.projeto.setCurrentIndex(1)
         dialogo.provedor.setCurrentText('codex')
         dialogo.abrir.click()
-        aguardar(lambda: (self.raiz / 'coordenador.log').exists())
+        aguardar(lambda: (self.raiz / 'coordenador.log').exists() and not coluna.ocupada())
         self.assertEqual(json.loads((self.raiz / 'coordenador.log').read_text()),
                          ['--projeto', str(nova), '--provedor', 'codex', '--janela'])
         self.janela.operacional.dados = {}
@@ -2084,9 +2425,7 @@ class RaizDoCore(unittest.TestCase):
         self.assertEqual(extra, {'JANGADA_CORE_PATH': str(self.base / 'core')})
 
     def test_comando_disponivel_depende_do_path(self):
-        cache = Path.home() / '.cache'
-        cache.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=cache) as temporaria:
+        with tempfile.TemporaryDirectory(dir=self.base) as temporaria:
             pasta = Path(temporaria)
             with self.ambiente(PATH=str(pasta)):
                 self.assertFalse(dados.comando_disponivel('jangada-indicadores', self.base))

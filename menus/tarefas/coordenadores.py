@@ -10,7 +10,7 @@ from pathlib import Path
 from PyQt6.QtCore import QProcess, QTimer, Qt
 from PyQt6.QtGui import QColor, QGuiApplication, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QPlainTextEdit,
-                             QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
+                             QMessageBox, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 from dados import LIMITE, NOME, ROTULOS, comando_disponivel, estado_exibido
 from indicadores import SEM_DADO
 from rodadas import CONTROLE, Consulta, data
@@ -24,19 +24,25 @@ LINHA_MAX = 200
 LISTA_MAX = 4096
 PROVEDORES = ('claude', 'codex')
 SEM_CORE = 'Coordenadores ainda não disponíveis no Core instalado.'
+SEM_CICLO = ('O Core instalado não informa o ciclo da atuação. Retomar e Finalizar atuação '
+             'exigem atualização do Core; as ações anteriores continuam disponíveis.')
 FAIXA = ('Só você faz: sem dado. O Core ainda não informa os commits locais não enviados '
          'dos projetos cadastrados.')
 # Estado mostrado: ficha de cor, glifo e texto. Cor sempre vem com texto e glifo.
 ESTADOS_COORD = {'aguardando': ('Bloqueada', ICONES['Bloqueada'], 'esperando você'),
                  'trabalhando': ('Executando', ICONES['Executando'], 'trabalhando'),
-                 'concluido': ('Concluída', ICONES['Concluída'], 'pronto'),
+                 'concluido': ('Concluída', ICONES['Concluída'], 'resposta pronta'),
+                 'retomada': (None, ICONES['Planejada'], 'aguardando retomada'),
+                 'encerrada': (None, ICONES['Cancelada'], 'atuação encerrada'),
                  'parado': (None, ICONES['Planejada'], 'parado'),
                  'sem': (None, '?', 'estado sem dado')}
 AVISOS = {'aguardando': 'O coordenador espera resposta no terminal.',
           'trabalhando': 'O coordenador está trabalhando.',
           'concluido': 'O coordenador terminou a resposta.',
+          'retomada': 'A atuação continua aberta. Retome para continuar o trabalho e as tarefas pendentes.',
+          'encerrada': 'A atuação foi encerrada explicitamente. Novo coordenador inicia outra atuação.',
           'parado': 'O coordenador está parado. Ir para a janela fica desligado; '
-                    'Novo coordenador abre outro no projeto.',
+                    'consulte Novo coordenador para abrir no projeto.',
           'sem': 'O Core não informou o estado do coordenador.'}
 
 
@@ -76,7 +82,7 @@ def ler_coordenadores(bruto):
             raise ValueError('A lista traz um nome de coordenador inválido ou repetido.')
         vistos.add(sessao)
         if c.get('projeto') is not None and not (texto_curto(c['projeto'], 4096)
-                                                 and c['projeto'].startswith('/')):
+                                                 and c['projeto'].startswith('/') and '\x00' not in c['projeto']):
             raise ValueError('Projeto do coordenador em formato inesperado.')
         if c.get('provedor') is not None and c['provedor'] not in PROVEDORES:
             raise ValueError('Provedor do coordenador em formato inesperado.')
@@ -85,6 +91,15 @@ def ler_coordenadores(bruto):
                 raise ValueError(f'Campo {campo} do coordenador em formato inesperado.')
         if type(c.get('viva')) is not bool:
             raise ValueError('Campo viva do coordenador em formato inesperado.')
+        if 'ciclo' in c and (not isinstance(c['ciclo'], str) or c['ciclo'] not in ('aberta', 'encerrada')):
+            raise ValueError('Campo ciclo do coordenador em formato inesperado.')
+        if 'atuacao_id' in c and c['atuacao_id'] is not None and not (
+                texto_curto(c['atuacao_id'], 4096) and c['atuacao_id']):
+            raise ValueError('Campo atuacao_id do coordenador em formato inesperado.')
+        if 'retomavel' in c and type(c['retomavel']) is not bool:
+            raise ValueError('Campo retomavel do coordenador em formato inesperado.')
+        if tem_ciclo(c) and c['retomavel'] != (c['ciclo'] == 'aberta' and not c['viva']):
+            raise ValueError('Campo retomavel incompatível com o ciclo e a sessão runtime.')
         tarefas = c.get('tarefas')
         if not isinstance(tarefas, list) or len(tarefas) > LISTA_MAX or any(
                 not isinstance(t, dict) or not isinstance(t.get('sessao'), str)
@@ -93,9 +108,18 @@ def ler_coordenadores(bruto):
     return lista
 
 
+def tem_ciclo(c):
+    return all(campo in c for campo in ('ciclo', 'atuacao_id', 'retomavel'))
+
+
 def estado_coordenador(c):
     """Chave de ESTADOS_COORD para um coordenador validado."""
-    if not c['viva'] or c.get('estado') == 'encerrado':
+    if tem_ciclo(c):
+        if c['ciclo'] == 'encerrada':
+            return 'encerrada'
+        if not c['viva']:
+            return 'retomada'
+    if not c['viva'] or (not tem_ciclo(c) and c.get('estado') == 'encerrado'):
         return 'parado'
     estado = c.get('estado')
     if estado in ('trabalhando', 'iniciado'):
@@ -114,7 +138,7 @@ def provedor(c):
 
 
 class NovoCoordenador(QDialog):
-    """Projeto cadastrado e provedor; projeto com coordenador vivo leva a ele."""
+    """Projeto e provedor; o Core decide entre criar e retomar a atuação."""
 
     def __init__(self, coluna):
         super().__init__(coluna)
@@ -128,6 +152,7 @@ class NovoCoordenador(QDialog):
         self.provedor = QComboBox()
         self.provedor.addItems(PROVEDORES)
         self.provedor.setAccessibleName('Provedor do coordenador')
+        self.projeto_anterior = None
         formulario.addRow('Provedor', self.provedor)
         layout.addLayout(formulario)
         self.aviso = QLabel()
@@ -158,11 +183,24 @@ class NovoCoordenador(QDialog):
             self.aviso.setText('Nenhum projeto cadastrado. Cadastre o projeto na aba Projetos e fila.')
             self.abrir.setEnabled(False)
             return
-        self.abrir.setEnabled(True)
+        self.abrir.setEnabled(not self.coluna.ocupada())
         existente = self.coluna.coordenador_do_projeto(caminho)
+        if caminho != self.projeto_anterior:
+            self.projeto_anterior = caminho
+            if existente and existente.get('provedor') in PROVEDORES:
+                self.provedor.setCurrentText(existente['provedor'])
+        self.provedor.setEnabled(not (existente and existente['viva']))
+        self.abrir.setText('Abrir coordenador')
         if existente and existente['viva']:
             self.aviso.setText(f'Este projeto já tem coordenador: {existente["sessao"]}. '
                                'Abrir coordenador leva a ele.')
+        elif existente and tem_ciclo(existente) and existente['ciclo'] == 'aberta':
+            self.abrir.setText('Retomar atuação')
+            self.aviso.setText('Este projeto tem atuação aberta, aguardando retomada. '
+                               'Retoma a mesma atuação e preserva suas tarefas. Você pode escolher '
+                               'outro provedor após ter saído voluntariamente do anterior.')
+        elif existente and not tem_ciclo(existente):
+            self.aviso.setText(SEM_CICLO + ' Abrir coordenador usa a ação anterior do Core.')
         else:
             self.aviso.setText('Abre o coordenador numa janela de terminal, na pasta do projeto, '
                                'sem isolamento.')
@@ -188,6 +226,9 @@ class Coordenadores(QWidget):
         self.pendente = False
         self.fechando = False
         self.dialogo = None
+        self.pedido = None
+        self.prazo_acao_ms = 30000
+        self.expirou_acao = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 12, 0)
         topo = QHBoxLayout()
@@ -246,14 +287,27 @@ class Coordenadores(QWidget):
         self.ir.clicked.connect(self.ir_para_janela)
         botoes.addWidget(self.ir)
         painel.addLayout(botoes)
+        ciclo = QHBoxLayout()
+        self.retomar = QPushButton('Retomar')
+        self.retomar.setAccessibleName('Retomar atuação do coordenador')
+        self.retomar.clicked.connect(self.retomar_atuacao)
+        ciclo.addWidget(self.retomar)
+        self.finalizar = QPushButton('Finalizar atuação')
+        self.finalizar.clicked.connect(self.finalizar_atuacao)
+        ciclo.addWidget(self.finalizar)
+        painel.addLayout(ciclo)
         self.copia = self.rotulo('coord_copia')
         painel.addWidget(self.copia)
+        self.resultado = self.rotulo('coord_aviso')
+        layout.addWidget(self.resultado)
         layout.addWidget(self.painel)
         QWidget.setTabOrder(self.novo, self.arvore)
         QWidget.setTabOrder(self.arvore, self.ultima)
         QWidget.setTabOrder(self.ultima, self.caixa)
         QWidget.setTabOrder(self.caixa, self.copiar)
         QWidget.setTabOrder(self.copiar, self.ir)
+        QWidget.setTabOrder(self.ir, self.retomar)
+        QWidget.setTabOrder(self.retomar, self.finalizar)
         for tecla in ('Ctrl+Return', 'Ctrl+Enter'):
             atalho = QShortcut(QKeySequence(tecla), self.caixa)
             atalho.setContext(Qt.ShortcutContext.WidgetShortcut)
@@ -262,6 +316,16 @@ class Coordenadores(QWidget):
                             ('Alt+J', self.ir_para_janela), ('Ctrl+N', self.novo_coordenador)):
             QShortcut(QKeySequence(tecla), janela).activated.connect(acao)
         self.consulta = Consulta(janela, AGENTES, self.consulta_fim, prazo_ms=10000)
+        self.reconferencia = Consulta(janela, AGENTES, self.reconferencia_fim, prazo_ms=10000)
+        self.acao = QProcess(self)
+        self.acao.finished.connect(self.acao_fim)
+        self.acao.errorOccurred.connect(self.acao_erro)
+        self.acao.readyReadStandardOutput.connect(self.ler_saida_acao)
+        self.acao.readyReadStandardError.connect(self.ler_saida_acao)
+        self.saida_acao = b''
+        self.prazo_acao = QTimer(self)
+        self.prazo_acao.setSingleShot(True)
+        self.prazo_acao.timeout.connect(self.expirar_acao)
         self.foco = QProcess(self)
         self.foco.finished.connect(self.foco_fim)
         self.foco.errorOccurred.connect(self.foco_erro)
@@ -294,7 +358,7 @@ class Coordenadores(QWidget):
             self.novo.setEnabled(False)
             return
         self.disponivel = comando_disponivel(COORDENADOR, self.janela.jangada)
-        self.novo.setEnabled(self.disponivel)
+        self.novo.setEnabled(self.disponivel and not self.ocupada())
         if not self.disponivel:
             self.sem_core()
             return
@@ -329,6 +393,8 @@ class Coordenadores(QWidget):
                 self.avisar(self.status, f'{len(lista)} ' + ('coordenador' if len(lista) == 1
                             else 'coordenadores') + '. Linhas lidas do registro, mostradas como dado.'
                             if lista else 'Nenhum coordenador aberto. Use Novo coordenador.')
+                if any(not tem_ciclo(c) for c in lista):
+                    self.avisar(self.status, self.status.text() + ' ' + SEM_CICLO)
         if self.pendente:
             self.atualizar()
 
@@ -393,14 +459,16 @@ class Coordenadores(QWidget):
             alvo = Path(caminho).resolve()
         except (OSError, ValueError):
             return None
-        return next((c for c in self.lista if c.get('projeto') and Path(c['projeto']) == alvo), None)
+        candidatos = [c for c in self.lista if c.get('projeto') and Path(c['projeto']) == alvo]
+        return next((c for c in candidatos if c['viva'] or c.get('ciclo') == 'aberta'),
+                    next(iter(candidatos), None))
 
     def projetos(self):
         """Projetos cadastrados, da consulta de Projetos e fila: nome e caminho absoluto."""
         lista = []
         for p in self.janela.operacional.dados.get('projetos', []):
             caminho = p.get('caminho') if isinstance(p, dict) else None
-            if isinstance(caminho, str) and caminho.startswith('/') and '\n' not in caminho:
+            if isinstance(caminho, str) and caminho.startswith('/') and not any(c in caminho for c in ('\n', '\x00')):
                 nome = p.get('nome') if isinstance(p.get('nome'), str) else Path(caminho).name
                 lista.append((linha_limpa(nome, 255) or Path(caminho).name, caminho))
         return lista
@@ -445,6 +513,8 @@ class Coordenadores(QWidget):
             self.caixa.setEnabled(False)
             self.copiar.setEnabled(False)
             self.ir.setEnabled(False)
+            self.retomar.setEnabled(False)
+            self.finalizar.setEnabled(False)
             return
         chave = estado_coordenador(c)
         _, glifo, rotulo = ESTADOS_COORD[chave]
@@ -455,9 +525,14 @@ class Coordenadores(QWidget):
         self.atualizado.setText('Atualizado em ' + data(c.get('atualizado')))
         self.avisar(self.aviso, AVISOS[chave])
         self.caixa.setEnabled(True)
-        ocupado = self.foco.state() != QProcess.ProcessState.NotRunning
+        ocupado = self.foco.state() != QProcess.ProcessState.NotRunning or self.ocupada()
         self.copiar.setEnabled(c['viva'] and not ocupado)
         self.ir.setEnabled(c['viva'] and not ocupado)
+        aberta = tem_ciclo(c) and c['ciclo'] == 'aberta'
+        permitido = self.janela.real and self.disponivel and not ocupado
+        self.retomar.setEnabled(permitido and aberta and c['retomavel']
+                                and bool(c.get('projeto')) and c.get('provedor') in PROVEDORES)
+        self.finalizar.setEnabled(permitido and aberta)
 
     def editar(self):
         if self.atual:
@@ -528,7 +603,7 @@ class Coordenadores(QWidget):
 
     def novo_coordenador(self):
         if not self.novo.isEnabled():
-            if self.janela.real:
+            if self.janela.real and not self.ocupada():
                 self.avisar(self.status, SEM_CORE)
             return
         if self.dialogo is None:
@@ -545,29 +620,159 @@ class Coordenadores(QWidget):
             self.arvore.setCurrentItem(item)
 
     def abrir_coordenador(self, caminho, escolhido):
-        """Leva ao coordenador do projeto ou pede um novo ao Core; devolve se o pedido saiu."""
-        if escolhido not in PROVEDORES or not isinstance(caminho, str) or not caminho.startswith('/'):
+        """Reconsulta antes de focar, criar ou retomar; não envia texto ao cliente."""
+        if (escolhido not in PROVEDORES or not isinstance(caminho, str) or not caminho.startswith('/')
+                or '\x00' in caminho):
             return False
-        existente = self.coordenador_do_projeto(caminho)
-        if existente and existente['viva']:
-            self.selecionar(existente['sessao'])
-            self.ir_para_janela()
-            self.avisar(self.status, f'O projeto já tem coordenador: {existente["sessao"]}.')
-            return True
-        if not self.janela.real or not self.disponivel:
+        return self.pedir_acao(dict(tipo='abrir', caminho=caminho, provedor=escolhido))
+
+    def ocupada(self):
+        return self.pedido is not None
+
+    def controles_acao(self):
+        self.novo.setEnabled(self.janela.real and self.disponivel and not self.ocupada())
+        self.mostrar_painel()
+        if self.dialogo is not None:
+            self.dialogo.conferir()
+
+    def pedir_acao(self, pedido):
+        if self.fechando or not self.janela.real or not self.disponivel or self.ocupada():
             return False
-        processo = QProcess(self)
-        self.janela.preparar(processo, ['--projeto', caminho, '--provedor', escolhido, '--janela'],
-                             COORDENADOR)
-        iniciado, _ = processo.startDetached()
-        processo.deleteLater()
-        self.avisar(self.status, 'Abertura do coordenador solicitada. Se falhar, o erro aparece no terminal.'
-                    if iniciado else f'Não foi possível executar {COORDENADOR}.', not iniciado)
-        return iniciado
+        self.pedido = pedido
+        self.controles_acao()
+        self.avisar(self.resultado, 'Reconferindo a atuação no Core.')
+        falha = self.reconferencia.iniciar(['--coordenadores-json'], None)
+        if falha:
+            self.terminar_acao(falha, True)
+            return False
+        return True
+
+    def retomar_atuacao(self):
+        c = self.coordenador(self.atual) if self.atual else None
+        if c is not None and self.retomar.isEnabled():
+            self.pedir_acao(dict(tipo='retomar', caminho=c['projeto'], provedor=c['provedor'],
+                                sessao=c['sessao'], atuacao_id=c['atuacao_id']))
+
+    def finalizar_atuacao(self):
+        c = self.coordenador(self.atual) if self.atual else None
+        if c is None or not self.finalizar.isEnabled():
+            return
+        if c['viva']:
+            self.orientar_saida(c)
+            return
+        pedido = dict(tipo='finalizar', sessao=c['sessao'], atuacao_id=c['atuacao_id'])
+        # O diálogo modal processa eventos; reserve a ação antes da confirmação.
+        self.pedido = pedido
+        self.controles_acao()
+        confirmacao = QMessageBox(self)
+        confirmacao.setWindowTitle('Finalizar atuação')
+        confirmacao.setTextFormat(Qt.TextFormat.PlainText)
+        confirmacao.setText(f'Finalizar a atuação de {nome_projeto(c)}?\n'
+                             'Confirme que salvou o estado e o diário e saiu voluntariamente. '
+                             'As tarefas pendentes serão preservadas e o checkpoint será arquivado pelo Core.')
+        confirmacao.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+        confirmacao.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        confirmacao.button(QMessageBox.StandardButton.Yes).setText('Finalizar atuação')
+        confirmacao.button(QMessageBox.StandardButton.Cancel).setText('Cancelar')
+        resposta = confirmacao.exec()
+        self.pedido = None
+        self.controles_acao()
+        if resposta == QMessageBox.StandardButton.Yes:
+            self.pedir_acao(pedido)
+
+    def orientar_saida(self, c):
+        self.selecionar(c['sessao'])
+        self.avisar(self.resultado, 'A sessão está viva. Salve o estado e o diário e saia voluntariamente. '
+                    'Use Ir para a janela; depois, finalize a atuação.', True)
+
+    def reconferencia_fim(self, _alvo, falha, bruto):
+        if self.fechando or self.pedido is None:
+            return
+        if falha:
+            self.terminar_acao('Não foi possível reconferir a atuação. ' + falha, True)
+            return
+        try:
+            lista = ler_coordenadores(bruto)
+        except ValueError as erro:
+            self.terminar_acao(f'Não foi possível reconferir a atuação. {erro}', True)
+            return
+        pedido = self.pedido
+        self.mostrar_lista(lista)
+        if pedido['tipo'] == 'abrir':
+            c = self.coordenador_do_projeto(pedido['caminho'])
+        else:
+            c = self.coordenador(pedido['sessao'])
+            if (c is None or not tem_ciclo(c) or c['ciclo'] != 'aberta'
+                    or c['atuacao_id'] != pedido['atuacao_id']):
+                self.terminar_acao('A atuação mudou. Confira os dados atualizados e tente novamente.', True)
+                return
+            if pedido['tipo'] == 'retomar' and (c.get('projeto') != pedido['caminho']
+                                                or c.get('provedor') != pedido['provedor']):
+                self.terminar_acao('O projeto ou provedor mudou. Confira a atuação e tente novamente.', True)
+                return
+        if c and c['viva']:
+            self.terminar_acao('A sessão já está viva.')
+            self.selecionar(c['sessao'])
+            if pedido['tipo'] == 'finalizar':
+                self.orientar_saida(c)
+            else:
+                self.ir_para_janela()
+            return
+        if pedido['tipo'] == 'finalizar':
+            argumentos = ['--finalizar', c['sessao']]
+        else:
+            argumentos = ['--projeto', pedido['caminho'], '--provedor', pedido['provedor'], '--janela']
+        self.expirou_acao = False
+        self.saida_acao = b''
+        self.janela.preparar(self.acao, argumentos, COORDENADOR)
+        self.acao.start()
+        self.prazo_acao.start(self.prazo_acao_ms)
+        self.avisar(self.resultado, 'Aguardando o resultado do Core.')
+
+    def ler_saida_acao(self):
+        for canal in (self.acao.readAllStandardError, self.acao.readAllStandardOutput):
+            trecho = bytes(canal())
+            self.saida_acao = (self.saida_acao + trecho)[-8192:]
+
+    def expirar_acao(self):
+        self.expirou_acao = True
+        self.acao.kill()
+
+    def acao_erro(self, erro):
+        if erro == QProcess.ProcessError.FailedToStart:
+            self.prazo_acao.stop()
+            self.terminar_acao(f'Não foi possível executar {COORDENADOR}.', True)
+
+    def acao_fim(self, codigo, tipo):
+        self.prazo_acao.stop()
+        self.ler_saida_acao()
+        if self.fechando or self.pedido is None:
+            return
+        detalhe = linha_limpa(self.saida_acao.decode('utf-8', 'replace'), 2000)
+        if self.expirou_acao:
+            self.terminar_acao('Tempo esgotado. Confira o estado no Core antes de tentar novamente. ' + detalhe, True)
+        elif codigo != 0 or tipo != QProcess.ExitStatus.NormalExit:
+            self.terminar_acao('O Core recusou ou falhou na ação. ' + detalhe, True)
+        else:
+            finalizada = self.pedido['tipo'] == 'finalizar'
+            self.terminar_acao(('Atuação finalizada pelo Core. ' if finalizada
+                                else 'Abertura ou retomada confirmada pelo Core. ') + detalhe)
+            self.atualizar()
+
+    def terminar_acao(self, mensagem, falha=False):
+        self.pedido = None
+        self.avisar(self.resultado, mensagem, falha)
+        self.controles_acao()
 
     def fechar(self):
         self.fechando = True
         self.consulta.fechar()
+        self.reconferencia.fechar()
+        self.prazo_acao.stop()
+        if self.acao.state() != QProcess.ProcessState.NotRunning:
+            self.acao.blockSignals(True)
+            self.acao.kill()
+            self.acao.waitForFinished(1000)
         self.prazo_foco.stop()
         if self.foco.state() != QProcess.ProcessState.NotRunning:
             self.foco.blockSignals(True)

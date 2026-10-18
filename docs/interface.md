@@ -166,3 +166,34 @@ Os comandos antigos `jangada-agentes --janela`, `--painel`,
 encaminham para a central de tarefas. `JANGADA_CENTRAL` deixou de selecionar
 outra interface. A criação de sessões pelo terminal continua disponível
 com `jangada-agente`.
+
+### Atuação dos coordenadores
+
+A coluna de coordenadores distingue o ciclo da atuação da sessão em execução.
+Com `ciclo=aberta` e sem processo, mostra **aguardando retomada** e mantém as
+tarefas. Resposta pronta (`concluido`) e hook encerrado não finalizam a atuação.
+O ciclo só termina por fechamento explícito no Core.
+
+**Retomar** usa projeto e provedor registrados. Em **Novo coordenador**, um
+projeto com atuação aberta oferece retomada, com escolha explícita do provedor.
+Ambos chamam `jangada-coordenador --projeto CAMINHO --provedor P --janela`;
+o Core decide entre criar e retomar. Uma sessão viva recebe somente foco na
+mesma janela. Trocar provedor exige saída voluntária anterior. A Central e o
+login não iniciam coordenações automaticamente.
+
+**Finalizar atuação** exige confirmação com a sessão sem processo. Antes,
+salve o estado e o diário e saia voluntariamente. A Central reconfere a atuação
+e chama `jangada-coordenador --finalizar SESSAO`. O Core preserva as pendências
+e arquiva o checkpoint. Com sessão viva, a Central orienta salvar e sair,
+oferecendo **Ir para a janela**. Ela não envia instruções ao cliente nem usa
+a API antiga `--fim`, que mata a sessão.
+
+As ações acompanham o comando em QProcess, com argumentos separados, prazo de
+30 segundos e bloqueio de tentativas simultâneas. Falha ou prazo esgotado aparece
+na coluna; sucesso atualiza a consulta. Seleção e rascunhos são preservados.
+**Copiar e ir para a janela** continua copiando e focando, sem colar ou enviar.
+
+A consulta `--coordenadores-json` continua na versão 1. A Central valida
+`ciclo`, `atuacao_id` e `retomavel`. Campos ausentes indicam Core anterior,
+com aviso e sem as ações novas; as ações anteriores continuam disponíveis.
+A simulação não consulta esses dados nem cria, retoma ou finaliza sessões reais.

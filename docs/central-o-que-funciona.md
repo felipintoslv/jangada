@@ -1,6 +1,6 @@
 # Central de Tarefas: o que funciona
 
-Inventário das abas e dos botões da Central em 17/10/2026, com o arquivo e a
+Inventário das abas e dos botões da Central em 18/10/2026, com o arquivo e a
 linha de cada item. A Central tem dois modos. Com `--real`
 (`menus/tarefas/central.py:102`) ela consulta o Core e executa as ações. Sem
 `--real` ela roda em simulação: mostra tarefas fictícias e não executa nada.
@@ -25,8 +25,8 @@ Legenda:
 | Sessões > Entrega | `menus/tarefas/janela.py:378` | Leitura | Prévia de `--integracao-json` antes da confirmação |
 | Projetos e fila | `menus/tarefas/janela.py:411`, `menus/tarefas/operacional.py:30` | Real; simulação não consulta | Projetos, atividades e tarefas da fila persistente |
 | Indicadores | `menus/tarefas/janela.py:413`, `menus/tarefas/indicadores.py:263` | Leitura; simulação não consulta | Custo por tarefa, procedência dos revisores e local contra agy |
-| Coluna de coordenadores | `menus/tarefas/janela.py:317`, `menus/tarefas/coordenadores.py:178` | Leitura; simulação não consulta | À esquerda das abas, sempre à vista. Lista de `jangada-agentes --coordenadores-json` (`menus/tarefas/coordenadores.py:292`), com projeto, provedor e estado: trabalhando, esperando você (cor de Bloqueada e glifo Ⅱ), pronto ou parado. As tarefas de cada um ficam embaixo; Enter ou clique leva à sessão na aba Sessões (`menus/tarefas/coordenadores.py:422`). Sem a consulta no Core, ou sem `jangada-coordenador`, avisa que os coordenadores ainda não estão disponíveis (`menus/tarefas/coordenadores.py:309`) |
-| Painel do coordenador | `menus/tarefas/coordenadores.py:439` | Leitura | Última linha como texto puro, sem caracteres de controle (`menus/tarefas/coordenadores.py:43`), hora da atualização e aviso pelo estado (`menus/tarefas/coordenadores.py:35`) |
+| Coluna de coordenadores | `menus/tarefas/coordenadores.py`, `ler_coordenadores`, `estado_coordenador` e `mostrar_lista` | Leitura; simulação não consulta | Consulta versão 1 de `jangada-agentes --coordenadores-json`. Distingue trabalhando, esperando você, resposta pronta, aguardando retomada e atuação encerrada. Preserva as tarefas recebidas, inclusive após interrupção ou hook concluído. Campos novos ausentes geram aviso de Core anterior; ações antigas continuam úteis |
+| Painel do coordenador | `menus/tarefas/coordenadores.py`, `mostrar_painel` | Leitura | Última linha como texto puro, sem caracteres de controle, hora da atualização e aviso pelo estado. Ciclo da atuação e sessão runtime são independentes |
 | Faixa "Só você faz" | `menus/tarefas/janela.py:313`, `menus/tarefas/coordenadores.py:27` | Leitura | Mostra "sem dado": o Core não informa os commits não enviados |
 | Indicadores > Custo por tarefa | `menus/tarefas/indicadores.py:359` | Leitura | Enter ou clique duplo leva à sessão na aba Sessões |
 
@@ -47,11 +47,13 @@ Legenda:
 | Conferir e integrar (Alt+I) | `menus/tarefas/janela.py:384`, `menus/tarefas/janela.py:1086` | Real; simulado | Mostra a entrega, pede confirmação e integra |
 | Encerrar sem integrar (Ctrl+X) | `menus/tarefas/janela.py:385`, `menus/tarefas/janela.py:1168` | Real; simulado | `jangada-agente-fim` sem integrar |
 | Alt+2 a Alt+5 | `menus/tarefas/janela.py:427` | Leitura | Vai à aba de detalhe de mesmo número, com foco na barra de abas. Acompanhamento ficou sem atalho: Alt+1 é da coluna de coordenadores |
-| Alt+1 | `menus/tarefas/coordenadores.py:261`, `menus/tarefas/coordenadores.py:467` | Leitura | Foco na lista de coordenadores |
-| Alt+M | `menus/tarefas/coordenadores.py:261`, `menus/tarefas/coordenadores.py:472` | Leitura | Foco na caixa de texto do coordenador |
-| Ir para a janela (Alt+J) | `menus/tarefas/coordenadores.py:244`, `menus/tarefas/coordenadores.py:478` | Real; simulado | `jangada-agentes --focar` com a sessão do coordenador; desligado com o coordenador parado |
-| Copiar e ir para a janela (Ctrl+Enter na caixa) | `menus/tarefas/coordenadores.py:239`, `menus/tarefas/coordenadores.py:257`, `menus/tarefas/coordenadores.py:494` | Real; simulado | Põe o texto na área de transferência e foca a janela; nada é colado nem enviado. Caixa de até 8 KiB, ligada em qualquer estado |
-| Novo coordenador (Ctrl+N) | `menus/tarefas/coordenadores.py:116`, `menus/tarefas/coordenadores.py:529`, `menus/tarefas/coordenadores.py:547` | Real; desligado na simulação | Escolhe projeto cadastrado e provedor e roda `jangada-coordenador --projeto PASTA --provedor P --janela`. Projeto com coordenador vivo leva a ele |
+| Alt+1 | `menus/tarefas/coordenadores.py`, `focar_lista` | Leitura | Foco na lista de coordenadores |
+| Alt+M | `menus/tarefas/coordenadores.py`, `focar_caixa` | Leitura | Foco na caixa de texto do coordenador |
+| Ir para a janela (Alt+J) | `menus/tarefas/coordenadores.py`, `ir_para_janela` | Real; simulado | `jangada-agentes --focar` com a sessão do coordenador; disponível com sessão viva |
+| Copiar e ir para a janela (Ctrl+Enter na caixa) | `menus/tarefas/coordenadores.py`, `copiar_e_ir` | Real; simulado | Copia e foca a janela; nada é colado nem enviado. Caixa de até 8 KiB, editável em qualquer estado; copiar exige sessão viva |
+| Novo coordenador (Ctrl+N) | `menus/tarefas/coordenadores.py`, `NovoCoordenador` e `abrir_coordenador` | Real; desligado na simulação | Escolhe projeto cadastrado e provedor. Reconfere os dados por nova consulta e roda `jangada-coordenador --projeto PASTA --provedor P --janela`. Core cria ou retoma; sessão viva recebe somente foco. Atuação aberta sem processo mostra Retomar atuação e permite escolher o provedor |
+| Retomar | `menus/tarefas/coordenadores.py`, `retomar_atuacao` | Real; desligado na simulação e em Core anterior | Retoma atuação aberta sem sessão, com projeto e provedor registrados, após reconferir identidade, ciclo e sessão |
+| Finalizar atuação | `menus/tarefas/coordenadores.py`, `finalizar_atuacao` e `reconferencia_fim` | Real; desligado na simulação e em Core anterior | Sem sessão viva, pede confirmação de estado/diário salvo e saída voluntária. Reconfere os dados e executa `jangada-coordenador --finalizar SESSAO`; preserva pendências e informa o resultado do Core. Com sessão viva, orienta salvar/sair e usar Ir para a janela |
 | Atualizar rodadas | `menus/tarefas/rodadas.py:178` | Leitura; desligado na simulação | Refaz as três consultas da aba Rodadas |
 | Indicadores > Atualizar | `menus/tarefas/indicadores.py:228` | Leitura | Refaz `jangada-indicadores --json` |
 | Indicadores > cartões | `menus/tarefas/indicadores.py:224` | Leitura | Troca a tabela de detalhe |
