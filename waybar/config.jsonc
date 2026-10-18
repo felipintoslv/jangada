@@ -4,7 +4,7 @@
   "position": "top",
   "height": 32,
   "spacing": 4,
-  "modules-left": ["custom/menu", "hyprland/workspaces", "custom/agentes", "custom/indicadores", "hyprland/window"],
+  "modules-left": ["custom/menu", "custom/catamara", "hyprland/workspaces", "custom/agentes", "hyprland/window"],
   "modules-center": ["clock"],
   "modules-right": [
     "tray",
@@ -34,6 +34,21 @@
     "on-click-right": "setsid -f $JANGADA_PATH/bin/jangada-terminal"
   },
 
+  // Botão do Catamarã, outro projeto. Mostra só a logo, que vem do base.css,
+  // para a largura não mudar; os números ficam na dica e o estado vira classe.
+  // Sem o Catamarã instalado, com erro ou demora dele, o comando não imprime
+  // nada e a waybar esconde o módulo.
+  "custom/catamara": {
+    "exec": "$JANGADA_PATH/bin/jangada-barra-catamara --waybar",
+    "return-type": "json",
+    "interval": 10,
+    "format": "{}",
+    "on-click": "setsid -f $JANGADA_PATH/bin/jangada-barra-catamara --web",
+    "on-click-right": "setsid -f $JANGADA_PATH/bin/jangada-barra-catamara --terminal",
+    "on-click-middle": "setsid -f $JANGADA_PATH/bin/jangada-barra-catamara --iniciar",
+    "tooltip": true
+  },
+
   "hyprland/workspaces": {
     "format": "{name}",
     "on-click": "activate",
@@ -49,23 +64,6 @@
     "format": "{}",
     "on-click": "setsid -f $JANGADA_PATH/bin/jangada-tarefas",
     "on-click-right": "setsid -f $JANGADA_PATH/bin/jangada-tarefas --nova",
-    "tooltip": true
-  },
-
-  // Painel de indicadores do uso de IA. O exec só lê o cache do
-  // jangada-painel, então roda barato; quem muda o estado (coleta, app que
-  // sobe ou sai, erro) avisa pelo sinal 9, e o intervalo longo é só a rede de
-  // segurança. O clique atualiza o cache e sobe o app R, o que leva segundos:
-  // roda solto (setsid -f) para não prender a barra. O botão direito encerra o
-  // app e libera a memória do R.
-  "custom/indicadores": {
-    "exec": "jangada-painel --waybar",
-    "return-type": "json",
-    "interval": 300,
-    "signal": 9,
-    "format": "{}",
-    "on-click": "setsid -f jangada-painel",
-    "on-click-right": "jangada-painel --parar",
     "tooltip": true
   },
 

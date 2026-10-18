@@ -61,13 +61,13 @@ class Retirada(unittest.TestCase):
     def test_padrao_sem_sambura(self):
         dados = carregar(self.padrao)
         self.assertNotIn(MODULO, dados)
-        self.assertEqual(dados['modules-left'][:2], ['custom/menu', 'hyprland/workspaces'])
+        self.assertNotIn(MODULO, dados['modules-left'])
+        self.assertEqual(dados['modules-left'][0], 'custom/menu')
         self.assertNotIn('sambura', (REPO / 'waybar/base.css').read_text())
         self.assertNotIn('sambura', (REPO / 'bin/jangada-barra').read_text())
 
     def test_copia_do_padrao_antigo_volta_ao_padrao(self):
-        antigo = self.padrao.replace('"custom/menu", "hyprland',
-                                     '"custom/menu", "custom/sambura", "hyprland', 1)
+        antigo = self.padrao.replace('"custom/menu", ', '"custom/menu", "custom/sambura", ', 1)
         antigo = antigo.replace('  "hyprland/workspaces": {', BLOCO + '  "hyprland/workspaces": {', 1)
         self.assertIn(MODULO, carregar(antigo))
         self.conferir(antigo, self.padrao)

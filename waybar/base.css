@@ -89,27 +89,8 @@ window#waybar {
 #clock, #pulseaudio, #network, #bluetooth, #cpu, #memory, #temperature, #battery, #tray,
 #mpris, #idle_inhibitor, #custom-atualizacoes, #window,
 #systemd-failed-units, #privacy-item, #disk, #custom-menu, #custom-sessao,
-#custom-indicadores {
+#custom-catamara {
   padding: 0 8px;
-}
-
-/* Painel de indicadores (jangada-painel). Parado fica discreto; com o app no
-   ar, na cor primária. O ícone de carregamento vem do próprio jangada-painel
-   durante a coleta, sem animação, como no resto da barra. */
-#custom-indicadores.parado {
-  color: @texto_suave;
-}
-
-#custom-indicadores.no-ar {
-  color: @primaria;
-}
-
-#custom-indicadores.atualizando {
-  color: @texto;
-}
-
-#custom-indicadores.erro {
-  color: @atencao;
 }
 
 #custom-menu {
@@ -125,6 +106,35 @@ window#waybar {
 
 #custom-menu:hover {
   color: @atencao;
+}
+
+/* Botão do Catamarã: só a logo, recolorida pela propriedade color como a do
+   menu, com a mesma medida. Em repouso fica discreto; o erro usa o destaque
+   do #custom-agentes.erro, por isso só a cor de fundo muda: o atalho
+   background apagaria a logo. */
+#custom-catamara {
+  color: @texto_suave;
+  font-size: 0;
+  min-width: 20px;
+  min-height: 20px;
+  background-image: -gtk-recolor(url("icones/catamara-symbolic.svg"));
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 20px 20px;
+  border-radius: 8px;
+}
+
+#custom-catamara.ativo {
+  color: @primaria;
+}
+
+#custom-catamara.pendente {
+  color: @atencao;
+}
+
+#custom-catamara.erro {
+  color: @texto_primario;
+  background-color: @primaria;
 }
 
 #custom-sessao {
@@ -181,7 +191,7 @@ window#waybar {
 window#waybar.vertical #workspaces button,
 window#waybar.vertical #custom-menu,
 window#waybar.vertical #custom-agentes,
-window#waybar.vertical #custom-indicadores,
+window#waybar.vertical #custom-catamara,
 window#waybar.vertical #clock,
 window#waybar.vertical #pulseaudio,
 window#waybar.vertical #network,
