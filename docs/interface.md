@@ -13,6 +13,13 @@ pendente em [PENDENCIAS.md](historico/revisao/PENDENCIAS.md#o-que-só-pode-ser-c
 Até essa adaptação, use `componentes` se a instalação não oferecer a
 interface antiga.
 
+Na barra, logo depois do menu, o botão do Catamarã mostra só a logo, na cor
+do estado: discreta em repouso, primária com sessão ativa, de atenção com
+entrega pendente e em destaque com o portão reprovado. Cotas, Ollama, sessões
+e entregas ficam na dica. O clique abre a Central do Catamarã no navegador, o
+botão direito no terminal e o do meio inicia uma sessão. Sem o Catamarã, o
+botão some. Os indicadores do jangada ficam na aba Indicadores da Central.
+
 ## Cores e papel de parede
 
 `jangada-tema imagem` gera com o matugen as cores de bordas de janela, barra, notificações, menu, bloqueio, terminal e tela de login. A cor-fonte é escolhida pelo `prefer` do `default/matugen/config.toml`, e o esquema vem de `JANGADA_TEMA_ESQUEMA` (padrão `scheme-fidelity`, que mantém a cor da imagem; o `scheme-tonal-spot` do matugen satura imagens quase monocromáticas até virarem outra cor).
