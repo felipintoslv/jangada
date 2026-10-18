@@ -12,8 +12,11 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../install/lib.sh"
 alvo="$JANGADA_CONFIG/waybar/style.css"
 [[ -f "$alvo" ]] || { ok "sem estilo próprio da barra; nada a migrar"; exit 0; }
-novo="$(mktemp)"
-trap 'rm -f "$novo"' EXIT
+# O resultado vai para um arquivo numa pasta temporária e só existe quando o
+# bloco saiu, porque o estilo sem o bloco pode ficar vazio.
+pasta="$(mktemp -d)"
+trap 'rm -rf "$pasta"' EXIT
+novo="$pasta/style.css"
 avisos="$(python3 - "$alvo" "$novo" <<'PY'
 from pathlib import Path
 import sys
@@ -62,7 +65,7 @@ Path(sys.argv[2]).write_text('\n'.join(linhas[:inicio] + linhas[fim:]))
 PY
 )"
 [[ -z "$avisos" ]] || aviso "$avisos: $alvo"
-[[ -s "$novo" && "$(<"$novo")" != "$(<"$alvo")" ]] || { ok "estilo da barra sem o bloco antigo do Catamarã; nada a migrar"; exit 0; }
+[[ -e "$novo" ]] || { ok "estilo da barra sem o bloco antigo do Catamarã; nada a migrar"; exit 0; }
 copia_seguranca "$alvo"
 executar gravar_atomico "$novo" "$alvo"
 ok "bloco antigo do Catamarã retirado do estilo da barra: $alvo"

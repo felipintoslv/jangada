@@ -99,6 +99,15 @@ class Estilo(unittest.TestCase):
         self.migrar()
         self.assertEqual(self.alvo.read_text(), ANTES.rstrip('\n') + '\n')
 
+    def test_so_o_bloco_deixa_o_arquivo_vazio(self):
+        self.alvo.write_text(BLOCO.rstrip('\n'))
+        self.migrar()
+        self.assertEqual(self.alvo.read_text(), '')
+        self.assertEqual([c.read_text() for c in self.copias()], [BLOCO.rstrip('\n')])
+        resultado = self.migrar()
+        self.assertIn('nada a migrar', resultado.stdout)
+        self.assertEqual(len(self.copias()), 1)
+
     def test_bloco_alterado_fica(self):
         alterado = BLOCO.replace('font-weight: bold;', 'font-weight: normal;', 1)
         self.mantido(ANTES + alterado + DEPOIS, aviso=True)

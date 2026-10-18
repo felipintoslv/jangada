@@ -223,14 +223,20 @@ class Migracao(unittest.TestCase):
         self.assertIn('nada a migrar', resultado.stdout)
         self.assertEqual(self.alvo.read_text(), depois)
 
-    def test_catamara_com_exec_do_jangada_fica(self):
-        antes = '{"custom/catamara": {"exec": "jangada-barra-catamara --waybar; cata tarefas --waybar"}}'
-        self.alvo.write_text(antes)
-        resultado = self.migrar()
-        self.assertEqual(resultado.returncode, 0, resultado.stderr)
-        self.assertIn('custom/catamara pessoal mantido', resultado.stderr)
-        self.assertEqual(self.alvo.read_text(), antes)
-        self.assertEqual(self.copias(), [])
+    def test_catamara_com_exec_composto_fica(self):
+        for exec_ in ('jangada-barra-catamara --waybar; cata tarefas --waybar',
+                      'echo cata tarefas --waybar',
+                      'meu-comando; cata tarefas --waybar',
+                      'cata tarefas --waybar && meu-comando',
+                      'x;/bin/cata tarefas --waybar'):
+            with self.subTest(exec_=exec_):
+                antes = json.dumps({'custom/catamara': {'exec': exec_}})
+                self.alvo.write_text(antes)
+                resultado = self.migrar()
+                self.assertEqual(resultado.returncode, 0, resultado.stderr)
+                self.assertIn('custom/catamara pessoal mantido', resultado.stderr)
+                self.assertEqual(self.alvo.read_text(), antes)
+                self.assertEqual(self.copias(), [])
 
     def test_catamara_ja_no_lugar_sem_aviso(self):
         self.alvo.write_text(self.padrao)

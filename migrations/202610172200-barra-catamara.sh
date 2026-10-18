@@ -181,8 +181,10 @@ def bloco_padrao(texto):
 def antigo(definicao):
     """Definição que o Catamarã pôs antes do jangada-barra-catamara."""
     exec_ = definicao.get('exec') if isinstance(definicao, dict) else None
-    return (isinstance(exec_, str) and 'jangada-barra-catamara' not in exec_
-            and re.search(r'(^|[\s/])(cata tarefas|catamara-tarefas) --waybar\b', exec_))
+    # Só a chamada direta, com caminho opcional; dentro de outro comando é
+    # personalização e fica.
+    return isinstance(exec_, str) and re.fullmatch(
+        r'\s*(?:[\w$.{}~/-]*/)?(?:cata tarefas|catamara-tarefas) --waybar\s*', exec_)
 
 def ajustar(texto, modelo, avisos):
     comentario, bloco, definicao = modelo
