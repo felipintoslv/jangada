@@ -238,7 +238,11 @@ coletar_monitores() {
     # união, para um não deixar resto do outro quando se sobrepõem. Valor com
     # 4 caracteres ou mais sai onde estiver; valor mais curto só como campo
     # inteiro ou token isolado, e isso pode mascarar a mais (serial "1"
-    # atinge "DP-1").
+    # atinge "DP-1"). Número ou booleano cuja representação em texto é igual
+    # a um valor de 4 caracteres ou mais vira null (a posição na lista e a
+    # chave ficam); nome de chave passa pelo mesmo corte de texto. Número
+    # coincidente com valor curto (id, x, scale) fica: apagá-lo estragaria o
+    # retrato e um serial de 1 a 3 caracteres identifica pouco.
     def padrao:
       (gsub("(?<c>[^A-Za-z0-9])"; "\\" + .c)) as $re
       | if length >= 4 then $re
@@ -252,6 +256,8 @@ coletar_monitores() {
           | $t | explode | to_entries
           | map(select($fora[.key | tostring] | not) | .value) | implode
         end;
+    def igual($ids):
+      tostring as $r | any($ids[]; length >= 4 and . == $r);
     def limpar:
       (if (.serial // "") != "" then (.serial | tostring) else "" end) as $s
       | (if (.description | type) == "string"
@@ -259,7 +265,11 @@ coletar_monitores() {
          else "" end) as $c
       | [$s, $c | select(. != "")] as $ids
       | del(.serial)
-      | walk(if type == "string" then sem($ids) else . end)
+      | walk(
+          if type == "string" then sem($ids)
+          elif type == "object" then with_entries(.key |= sem($ids))
+          elif (type == "number" or type == "boolean") and igual($ids) then null
+          else . end)
       | if (.description | type) == "string"
         then .description |= sub("\\s+$"; "")
         else . end;
