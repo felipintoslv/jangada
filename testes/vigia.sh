@@ -376,7 +376,7 @@ cat >"$tmp/bin-arch/hyprctl" <<'FIM'
 case "${1:-}" in
   version) echo "Hyprland 0.55.0" ;;
   monitors)
-    printf '[{"name":"DP-1","description":"LG Electronics LG ULTRAWIDE 0x0006A095","make":"LG Electronics","model":"LG ULTRAWIDE","serial":"0x0006A095","outro":"id-0x0006A095-fim","width":2560},{"name":"HDMI-A-1","description":"Philips Consumer Electronics Company PHL 276E8V 0x0001B316","serial":"","width":1920}]\n'
+    printf '[{"name":"DP-1","description":"LG Electronics LG ULTRAWIDE 0x0006A095","make":"LG Electronics","model":"LG ULTRAWIDE","serial":"SN12345","outro":"id-0x0006A095-fim","serie":"x-SN12345-y","width":2560},{"name":"HDMI-A-7","description":"Philips Consumer Electronics Company PHL 276E8V 0x0001B316","serial":"7","inteiro":"7","isolado":"canal 7 ok","grudado":"ab7c","width":1920},{"name":"eDP-1","serial":"","width":1280}]\n'
     ;;
 esac
 FIM
@@ -400,16 +400,16 @@ conferir "caso 13: Arch Linux, ID=arch e archlinux intactos no relatório" \
 conferir "caso 13: Arch Linux e archlinux intactos no JSON" \
   bash -c 'jq -r ".jangada.diagnostico" "$1" | grep -qx "ID=arch" && jq -r ".jangada.diagnostico" "$1" | grep -q "archlinux.org" && grep -q "Arch Linux" "$1"' _ "$json_arch"
 
-# Caso 14: o código 0x... no fim da description e o valor do serial em outro
-# campo não chegam ao retrato; fabricante e modelo ficam
-conferir "caso 14: monitores sem 0x0006A095, 0x0001B316 e serial no JSON" \
-  bash -c '! grep -qE "0x0006A095|0x0001B316|\"serial\"" "$1"' _ "$json_arch"
-conferir "caso 14: monitores sem 0x0006A095, 0x0001B316 e serial no Markdown" \
-  bash -c '! grep -qE "0x0006A095|0x0001B316|\"serial\"" "$1"' _ "$saida_arch"
+# Caso 14: o código 0x... no fim da description e o valor do serial (longo ou
+# curto) em outros campos não chegam ao retrato; fabricante e modelo ficam
+conferir "caso 14: monitores sem códigos 0x..., serial longo e serial curto no JSON" \
+  bash -c '! grep -qiE "0x0006A095|0x0001B316|SN12345|\"serial\"" "$1" && [ "$(jq -r ".sessao_grafica.monitores" "$1" | jq -r ".[1] | .inteiro + \"|\" + .isolado")" = "|canal  ok" ]' _ "$json_arch"
+conferir "caso 14: monitores sem códigos 0x..., serial longo e serial curto no Markdown" \
+  bash -c '! grep -qiE "0x0006A095|0x0001B316|SN12345|\"serial\"|\"inteiro\":\"7\"|canal 7" "$1"' _ "$saida_arch"
 conferir "caso 14: fabricante e modelo ficam no JSON e no Markdown" \
   bash -c 'for a in "$1" "$2"; do grep -q "LG Electronics LG ULTRAWIDE" "$a" && grep -q "Philips Consumer Electronics Company PHL 276E8V" "$a" || exit 1; done' _ "$json_arch" "$saida_arch"
-conferir "caso 14: demais campos do monitor ficam" \
-  bash -c '[ "$(jq -r ".sessao_grafica.monitores" "$1" | jq -r ".[0].model + \"|\" + .[0].outro + \"|\" + (.[0].width|tostring)")" = "LG ULTRAWIDE|id--fim|2560" ]' _ "$json_arch"
+conferir "caso 14: demais campos do monitor ficam, serial curto grudado em letras também" \
+  bash -c '[ "$(jq -r ".sessao_grafica.monitores" "$1" | jq -r ".[0].model + \"|\" + .[0].outro + \"|\" + (.[0].width|tostring) + \"|\" + .[1].grudado + \"|\" + .[2].name")" = "LG ULTRAWIDE|id--fim|2560|ab7c|eDP-1" ]' _ "$json_arch"
 "$repo/bin/jangada-vigia" apagar --todos
 
 if ((falhas)); then
