@@ -2,7 +2,8 @@
 # Testa o jangada-vigia: retrato JSON (versao 1) e relatório Markdown de
 # fatos, coletores ausentes ("sem dado"), limpeza de caracteres de controle e
 # crases, marcação como dado, mascaramento de usuário, máquina, pasta pessoal,
-# IP e MAC em todo coletor, remoção do serial de monitores, exclusão imediata
+# IP e MAC em todo coletor, nome de máquina que é palavra comum, remoção do
+# serial e do código 0x... da descrição de monitores, exclusão imediata
 # do arquivo intermediário do jangada-verificar --diagnostico, permissões 0700
 # e 0600, retenção de 30 dias, subcomandos lista e apagar e confinamento de
 # escrita em $JANGADA_ESTADO/vigia.
@@ -357,6 +358,59 @@ depois_home="$(find "$HOME" "$XDG_CONFIG_HOME" -printf '%p %m %s\n' 2>/dev/null 
 conferir "caso 8: nenhuma escrita em HOME ou XDG_CONFIG_HOME" [ "$antes_home" = "$depois_home" ]
 extras_estado="$(find "$XDG_STATE_HOME/jangada" -mindepth 1 -maxdepth 1 ! -name vigia)"
 conferir "caso 8: nada restou em JANGADA_ESTADO fora de vigia/" [ -z "$extras_estado" ]
+
+# Caso 13: nome da máquina que também é palavra comum (hostname "arch").
+# A grafia exata é mascarada onde nomeia a máquina; "Arch Linux", "archlinux"
+# e as linhas ID= do os-release continuam. "arch" minúsculo em outro ponto do
+# texto é mascarado a mais: privacidade vence.
+cp -a "$tmp/bin-cheio" "$tmp/bin-arch"
+for c in hostname uname; do
+  printf '#!/bin/sh\necho "arch"\n' >"$tmp/bin-arch/$c"
+done
+cat >"$tmp/bin-arch/journalctl" <<'FIM'
+#!/bin/sh
+echo "out 19 00:06:04 arch rclone[1009]: falha de rede no Arch Linux"
+FIM
+cat >"$tmp/bin-arch/hyprctl" <<'FIM'
+#!/bin/sh
+case "${1:-}" in
+  version) echo "Hyprland 0.55.0" ;;
+  monitors)
+    printf '[{"name":"DP-1","description":"LG Electronics LG ULTRAWIDE 0x0006A095","make":"LG Electronics","model":"LG ULTRAWIDE","serial":"0x0006A095","outro":"id-0x0006A095-fim","width":2560},{"name":"HDMI-A-1","description":"Philips Consumer Electronics Company PHL 276E8V 0x0001B316","serial":"","width":1920}]\n'
+    ;;
+esac
+FIM
+cat >"$HOME/.cache/hyprland/hyprlandCrashReport1.txt" <<'FIM'
+Hyprland crashed
+Node name: arch
+NAME="Arch Linux"
+PRETTY_NAME="Arch Linux"
+ID=arch
+HOME_URL="https://archlinux.org/"
+FIM
+saida_arch="$(HOSTNAME=arch PATH="$tmp/bin-arch" JANGADA_PATH="$repo" "$repo/bin/jangada-vigia" diagnostico)"
+json_arch="${saida_arch%.md}.json"
+rm -f "$HOME/.cache/hyprland/hyprlandCrashReport1.txt"
+conferir "caso 13: hostname arch mascarado na linha do journal" \
+  bash -c 'jq -r ".log_sistema.erros" "$1" | grep -qx "out 19 00:06:04 <maquina> rclone\[1009\]: falha de rede no Arch Linux" && grep -q "00:06:04 <maquina> rclone" "$2"' _ "$json_arch" "$saida_arch"
+conferir "caso 13: hostname arch mascarado em Node name do relatório de falha" \
+  bash -c 'grep -qx "Node name: <maquina>" "$1"' _ "$saida_arch"
+conferir "caso 13: Arch Linux, ID=arch e archlinux intactos no relatório" \
+  bash -c 'grep -qx "NAME=\"Arch Linux\"" "$1" && grep -qx "PRETTY_NAME=\"Arch Linux\"" "$1" && grep -qx "ID=arch" "$1" && grep -q "https://archlinux.org/" "$1"' _ "$saida_arch"
+conferir "caso 13: Arch Linux e archlinux intactos no JSON" \
+  bash -c 'jq -r ".jangada.diagnostico" "$1" | grep -qx "ID=arch" && jq -r ".jangada.diagnostico" "$1" | grep -q "archlinux.org" && grep -q "Arch Linux" "$1"' _ "$json_arch"
+
+# Caso 14: o código 0x... no fim da description e o valor do serial em outro
+# campo não chegam ao retrato; fabricante e modelo ficam
+conferir "caso 14: monitores sem 0x0006A095, 0x0001B316 e serial no JSON" \
+  bash -c '! grep -qE "0x0006A095|0x0001B316|\"serial\"" "$1"' _ "$json_arch"
+conferir "caso 14: monitores sem 0x0006A095, 0x0001B316 e serial no Markdown" \
+  bash -c '! grep -qE "0x0006A095|0x0001B316|\"serial\"" "$1"' _ "$saida_arch"
+conferir "caso 14: fabricante e modelo ficam no JSON e no Markdown" \
+  bash -c 'for a in "$1" "$2"; do grep -q "LG Electronics LG ULTRAWIDE" "$a" && grep -q "Philips Consumer Electronics Company PHL 276E8V" "$a" || exit 1; done' _ "$json_arch" "$saida_arch"
+conferir "caso 14: demais campos do monitor ficam" \
+  bash -c '[ "$(jq -r ".sessao_grafica.monitores" "$1" | jq -r ".[0].model + \"|\" + .[0].outro + \"|\" + (.[0].width|tostring)")" = "LG ULTRAWIDE|id--fim|2560" ]' _ "$json_arch"
+"$repo/bin/jangada-vigia" apagar --todos
 
 if ((falhas)); then
   echo "$falhas teste(s) do vigia falharam"
