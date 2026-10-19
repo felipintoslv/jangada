@@ -15,10 +15,13 @@ diagnóstico no Jangada Vigia e como cada um é contido por construção.
     prioridade de erro ou superior (`-b -p err -n 100`); do `hyprland.log`,
     apenas linhas de erro e aviso (via `jangada-verificar --diagnostico`).
   - Remoção de número de série: no coletor de monitores (`hyprctl monitors -j`),
-    o campo `serial` é retirado antes de gravar.
+    o campo `serial`, o valor dele em qualquer outro texto do monitor e o código
+    `0x...` no fim da `description` são retirados antes de gravar; fabricante e
+    modelo ficam.
   - Mascaramento antes de gravar (no log e em todo coletor): caminhos da pasta
     pessoal viram `~`, o nome do usuário vira `<usuario>`, o nome da máquina
-    (saída de `hostname` e `uname -n`) vira `<maquina>`, endereços IPv4 e IPv6
+    (saída de `hostname` e `uname -n`, na grafia exata, sem as linhas `ID=` e
+    `ID_LIKE=` do os-release) vira `<maquina>`, endereços IPv4 e IPv6
     viram `<ip>` e endereços MAC viram `<mac>`.
   - Arquivo intermediário: o `jangada-verificar --diagnostico` roda com
     `XDG_STATE_HOME` numa pasta temporária dentro de `$JANGADA_ESTADO/vigia/`,
