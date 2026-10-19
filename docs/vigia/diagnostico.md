@@ -58,7 +58,8 @@ retrato JSON e no relatório em Markdown:
      de todos os textos do monitor. Valor de 4 caracteres ou mais sai onde
      estiver; valor mais curto sai quando é o campo inteiro ou um token isolado
      por caracteres não alfanuméricos, o que pode mascarar a mais (o `serial`
-     `1` atinge o `DP-1`). Fabricante e modelo ficam.
+     `1` atinge o `DP-1`). Os dois valores saem na mesma passada, para um não
+     deixar resto do outro quando se sobrepõem. Fabricante e modelo ficam.
 2. **Mascaramento de dados pessoais, máquina e identificadores de rede (em todos os coletores):**
    - Caminho da pasta pessoal (`$HOME` e `/home/<usuario>`): substituído por
      `~`.
