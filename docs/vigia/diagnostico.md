@@ -59,7 +59,11 @@ retrato JSON e no relatório em Markdown:
      estiver; valor mais curto sai quando é o campo inteiro ou um token isolado
      por caracteres não alfanuméricos, o que pode mascarar a mais (o `serial`
      `1` atinge o `DP-1`). Os dois valores saem na mesma passada, para um não
-     deixar resto do outro quando se sobrepõem. Fabricante e modelo ficam.
+     deixar resto do outro quando se sobrepõem. Número ou booleano cuja
+     representação em texto é igual a um valor de 4 caracteres ou mais vira
+     `null` (em campo, lista ou objeto aninhado), e nome de chave recebe o mesmo
+     corte do texto. Número igual a um valor curto fica, para não apagar `id`,
+     `scale` e coordenadas por coincidência. Fabricante e modelo ficam.
 2. **Mascaramento de dados pessoais, máquina e identificadores de rede (em todos os coletores):**
    - Caminho da pasta pessoal (`$HOME` e `/home/<usuario>`): substituído por
      `~`.
