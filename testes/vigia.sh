@@ -376,7 +376,7 @@ cat >"$tmp/bin-arch/hyprctl" <<'FIM'
 case "${1:-}" in
   version) echo "Hyprland 0.55.0" ;;
   monitors)
-    printf '[{"name":"DP-1","description":"LG Electronics LG ULTRAWIDE 0x0006A095","make":"LG Electronics","model":"LG ULTRAWIDE","serial":"SN12345","outro":"id-0x0006A095-fim","serie":"x-SN12345-y","width":2560},{"name":"HDMI-A-7","description":"Philips Consumer Electronics Company PHL 276E8V 0x0001B316","serial":"7","inteiro":"7","isolado":"canal 7 ok","grudado":"ab7c","width":1920},{"name":"eDP-1","serial":"","width":1280}]\n'
+    printf '[{"name":"DP-1","description":"LG Electronics LG ULTRAWIDE 0x0006A095","make":"LG Electronics","model":"LG ULTRAWIDE","serial":"SN12345","outro":"id-0x0006A095-fim","serie":"x-SN12345-y","width":2560},{"name":"HDMI-A-7","description":"Philips Consumer Electronics Company PHL 276E8V 0x0001B316","serial":"7","inteiro":"7","isolado":"canal 7 ok","grudado":"ab7c","width":1920},{"name":"eDP-1","serial":"","width":1280},{"name":"DP-3","description":"Dell U2723QE 0x0006A095","serial":"0006","campo":"0006-0x0006A095","width":3840},{"name":"DP-4","description":"Acer XB 0x00ABCDEF","serial":"k0x00ABCDEFk","campo":"k0x00ABCDEFk e 0x00ABCDEF","width":1920},{"name":"DP-5","description":"Foo 0x0009A09F","serial":"A09","campo":"A09 0x0009A09F","width":1024}]\n'
     ;;
 esac
 FIM
@@ -406,6 +406,16 @@ conferir "caso 14: monitores sem códigos 0x..., serial longo e serial curto no 
   bash -c '! grep -qiE "0x0006A095|0x0001B316|SN12345|\"serial\"" "$1" && [ "$(jq -r ".sessao_grafica.monitores" "$1" | jq -r ".[1] | .inteiro + \"|\" + .isolado")" = "|canal  ok" ]' _ "$json_arch"
 conferir "caso 14: monitores sem códigos 0x..., serial longo e serial curto no Markdown" \
   bash -c '! grep -qiE "0x0006A095|0x0001B316|SN12345|\"serial\"|\"inteiro\":\"7\"|canal 7" "$1"' _ "$saida_arch"
+# Sobreposição entre serial e código: serial "0006" dentro de 0x0006A095, código
+# dentro do serial e serial curto dentro do código. A seção do Markdown é
+# isolada porque o cabeçalho traz a hora do retrato.
+sec_md="$(sed -n '/^## Monitores da sessão/,/^## [^M]/p' "$saida_arch")"
+conferir "caso 14: sem resto de código nem de serial sobreposto no JSON" \
+  bash -c 'm="$(jq -r ".sessao_grafica.monitores" "$1")"; ! grep -qiE "0x0006A095|A095|0006|ABCDEF|0x0009A09F|9A09F|A09" <<<"$m"' _ "$json_arch"
+conferir "caso 14: sem resto de código nem de serial sobreposto no Markdown" \
+  bash -c '[ -n "$1" ] && ! grep -qiE "0x0006A095|A095|0006|ABCDEF|0x0009A09F|9A09F|A09" <<<"$1"' _ "$sec_md"
+conferir "caso 14: nada de 0x0006A095 nem A095 em todo o JSON e Markdown" \
+  bash -c '! grep -qiE "0x0006A095|A095" "$1" "$2"' _ "$json_arch" "$saida_arch"
 conferir "caso 14: fabricante e modelo ficam no JSON e no Markdown" \
   bash -c 'for a in "$1" "$2"; do grep -q "LG Electronics LG ULTRAWIDE" "$a" && grep -q "Philips Consumer Electronics Company PHL 276E8V" "$a" || exit 1; done' _ "$json_arch" "$saida_arch"
 conferir "caso 14: demais campos do monitor ficam, serial curto grudado em letras também" \
