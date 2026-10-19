@@ -3,7 +3,7 @@
 # fatos, coletores ausentes ("sem dado"), limpeza de caracteres de controle e
 # crases, marcação como dado, mascaramento de usuário, máquina, pasta pessoal,
 # IP e MAC em todo coletor, nome de máquina que é palavra comum, remoção do
-# serial e do código 0x... da descrição de monitores, exclusão imediata
+# serial (também como número) e do código 0x... da descrição de monitores, exclusão imediata
 # do arquivo intermediário do jangada-verificar --diagnostico, permissões 0700
 # e 0600, retenção de 30 dias, subcomandos lista e apagar e confinamento de
 # escrita em $JANGADA_ESTADO/vigia.
@@ -420,6 +420,29 @@ conferir "caso 14: fabricante e modelo ficam no JSON e no Markdown" \
   bash -c 'for a in "$1" "$2"; do grep -q "LG Electronics LG ULTRAWIDE" "$a" && grep -q "Philips Consumer Electronics Company PHL 276E8V" "$a" || exit 1; done' _ "$json_arch" "$saida_arch"
 conferir "caso 14: demais campos do monitor ficam, serial curto grudado em letras também" \
   bash -c '[ "$(jq -r ".sessao_grafica.monitores" "$1" | jq -r ".[0].model + \"|\" + .[0].outro + \"|\" + (.[0].width|tostring) + \"|\" + .[1].grudado + \"|\" + .[2].name")" = "LG ULTRAWIDE|id--fim|2560|ab7c|eDP-1" ]' _ "$json_arch"
+# Caso 15: serial repetido como número, booleano, item de lista, valor aninhado
+# e nome de chave. Número coincidente com serial curto fica (id, scale).
+cp -a "$tmp/bin-cheio" "$tmp/bin-num"
+cat >"$tmp/bin-num/hyprctl" <<'FIM'
+#!/bin/sh
+case "${1:-}" in
+  version) echo "Hyprland 0.55.0" ;;
+  monitors)
+    printf '[{"id":0,"name":"DP-1","serial":"12345678","outro":12345678,"lista":[1,12345678,2],"aninhado":{"n":12345678,"t":[{"v":12345678}]},"12345678":5,"width":2560},{"id":7,"name":"DP-2","serial":"true","focused":true,"vrr":false,"width":1920},{"id":3,"name":"DP-3","serial":"3","scale":3,"outro":3,"width":1280}]\n'
+    ;;
+esac
+FIM
+saida_num="$(HOSTNAME=maq PATH="$tmp/bin-num" JANGADA_PATH="$repo" "$repo/bin/jangada-vigia" diagnostico)"
+json_num="${saida_num%.md}.json"
+sec_num="$(sed -n '/^## Monitores da sessão/,/^## [^M]/p' "$saida_num")"
+conferir "caso 15: serial numérico em outro campo, lista, aninhado e chave saem do JSON" \
+  bash -c 'm="$(jq -c ".sessao_grafica.monitores | fromjson? // ." "$1")"; ! grep -q "12345678" <<<"$m" && [ "$(jq -r ".sessao_grafica.monitores | fromjson | .[0] | [.outro, .lista[1], .aninhado.n, .aninhado.t[0].v, .width] | tostring" "$1")" = "[null,null,null,null,2560]" ]' _ "$json_num"
+conferir "caso 15: serial numérico em outro campo sai do Markdown" \
+  bash -c '[ -n "$1" ] && ! grep -q "12345678" <<<"$1" && grep -q "2560" <<<"$1"' _ "$sec_num"
+conferir "caso 15: booleano igual ao serial sai; os demais ficam" \
+  bash -c 'jq -r ".sessao_grafica.monitores | fromjson | .[1] | [.focused, .vrr, .width] | tostring" "$1" | grep -qx "\[null,false,1920\]"' _ "$json_num"
+conferir "caso 15: serial curto não apaga id, scale nem outro número igual" \
+  bash -c 'jq -r ".sessao_grafica.monitores | fromjson | .[2] | [.id, .scale, .outro] | tostring" "$1" | grep -qx "\[3,3,3\]"' _ "$json_num"
 "$repo/bin/jangada-vigia" apagar --todos
 
 if ((falhas)); then
