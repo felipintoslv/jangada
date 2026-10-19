@@ -126,10 +126,17 @@ for cand in (
         if len(curto) >= 2:
             maquinas.add(curto)
 
+# Só a grafia exata do nome da máquina, para não apagar a palavra comum que
+# coincide com ele (hostname "arch" e "Arch Linux"). Linhas ID= e ID_LIKE= do
+# os-release nomeiam a distribuição e ficam intactas.
 for m in sorted(maquinas, key=len, reverse=True):
     if m.lower() in ("localhost",):
         continue
-    texto = re.sub(r"(?<![A-Za-z0-9])" + re.escape(m) + r"(?![A-Za-z0-9])", "<maquina>", texto, flags=re.IGNORECASE)
+    padrao = re.compile(r"(?<![A-Za-z0-9])" + re.escape(m) + r"(?![A-Za-z0-9])")
+    texto = "\n".join(
+        l if re.match(r"(?:ID|ID_LIKE)=", l) else padrao.sub("<maquina>", l)
+        for l in texto.split("\n")
+    )
 
 max_bytes = int(os.environ.get("VIGIA_MAX_BYTES", "16384"))
 codificado = texto.encode("utf-8")
@@ -226,10 +233,17 @@ coletar_monitores() {
   fi
   [[ -n "${bruta//[[:space:]]/}" ]] || { printf 'sem dado'; return 0; }
   if ! limpa="$(jq -c '
+    def limpar:
+      (if (.serial // "") != "" then (.serial | tostring) else "" end) as $s
+      | del(.serial)
+      | walk(if type == "string" and ($s | length) >= 4 then split($s) | join("") else . end)
+      | if (.description | type) == "string"
+        then .description |= sub("\\s*0x[0-9A-Fa-f]+$"; "")
+        else . end;
     if type == "array" then
-      map(if type == "object" then del(.serial) else . end)
+      map(if type == "object" then limpar else . end)
     elif type == "object" then
-      del(.serial)
+      limpar
     else
       .
     end
