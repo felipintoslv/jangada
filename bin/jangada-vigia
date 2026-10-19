@@ -259,7 +259,7 @@ coletar_monitores() {
     def igual($ids):
       tostring as $r | any($ids[]; length >= 4 and . == $r);
     def limpar:
-      (if (.serial // "") != "" then (.serial | tostring) else "" end) as $s
+      (if has("serial") and .serial != null and .serial != "" then (.serial | tostring) else "" end) as $s
       | (if (.description | type) == "string"
          then (.description | capture("(?<c>0x[0-9A-Fa-f]+)\\s*$").c? // "")
          else "" end) as $c

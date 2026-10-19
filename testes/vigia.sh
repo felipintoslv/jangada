@@ -443,6 +443,23 @@ conferir "caso 15: booleano igual ao serial sai; os demais ficam" \
   bash -c 'jq -r ".sessao_grafica.monitores | fromjson | .[1] | [.focused, .vrr, .width] | tostring" "$1" | grep -qx "\[null,false,1920\]"' _ "$json_num"
 conferir "caso 15: serial curto não apaga id, scale nem outro número igual" \
   bash -c 'jq -r ".sessao_grafica.monitores | fromjson | .[2] | [.id, .scale, .outro] | tostring" "$1" | grep -qx "\[3,3,3\]"' _ "$json_num"
+# Serial booleano: false conta como valor, não como ausente
+cat >"$tmp/bin-num/hyprctl" <<'FIM'
+#!/bin/sh
+case "${1:-}" in
+  version) echo "Hyprland 0.55.0" ;;
+  monitors)
+    printf '[{"id":0,"name":"DP-1","serial":false,"outro":false,"lista":[false],"focused":true,"width":2560}]\n'
+    ;;
+esac
+FIM
+saida_bool="$(HOSTNAME=maq PATH="$tmp/bin-num" JANGADA_PATH="$repo" "$repo/bin/jangada-vigia" diagnostico)"
+json_bool="${saida_bool%.md}.json"
+sec_bool="$(sed -n '/^## Monitores da sessão/,/^## [^M]/p' "$saida_bool")"
+conferir "caso 15: serial false anula o false de outro campo e da lista no JSON" \
+  bash -c 'jq -r ".sessao_grafica.monitores | fromjson | .[0] | [.outro, .lista[0], .focused, .width] | tostring" "$1" | grep -qx "\[null,null,true,2560\]"' _ "$json_bool"
+conferir "caso 15: serial false anula o false de outro campo e da lista no Markdown" \
+  bash -c '[ -n "$1" ] && ! grep -q "false" <<<"$1" && grep -q "2560" <<<"$1"' _ "$sec_bool"
 "$repo/bin/jangada-vigia" apagar --todos
 
 if ((falhas)); then
