@@ -233,12 +233,26 @@ coletar_monitores() {
   fi
   [[ -n "${bruta//[[:space:]]/}" ]] || { printf 'sem dado'; return 0; }
   if ! limpa="$(jq -c '
+    # Retira o identificador de todo texto do objeto. Valor com 4 caracteres
+    # ou mais sai onde estiver; valor mais curto só como campo inteiro ou
+    # token isolado, e isso pode mascarar a mais (serial "1" atinge "DP-1").
+    def sem($v):
+      if $v == "" then .
+      else
+        ($v | gsub("(?<c>[^A-Za-z0-9])"; "\\" + .c)) as $re
+        | (if ($v | length) >= 4 then $re
+           else "(?<![A-Za-z0-9])" + $re + "(?![A-Za-z0-9])" end) as $pad
+        | gsub($pad; ""; "i")
+      end;
     def limpar:
       (if (.serial // "") != "" then (.serial | tostring) else "" end) as $s
+      | (if (.description | type) == "string"
+         then (.description | capture("(?<c>0x[0-9A-Fa-f]+)\\s*$").c? // "")
+         else "" end) as $c
       | del(.serial)
-      | walk(if type == "string" and ($s | length) >= 4 then split($s) | join("") else . end)
+      | walk(if type == "string" then sem($s) | sem($c) else . end)
       | if (.description | type) == "string"
-        then .description |= sub("\\s*0x[0-9A-Fa-f]+$"; "")
+        then .description |= sub("\\s+$"; "")
         else . end;
     if type == "array" then
       map(if type == "object" then limpar else . end)
