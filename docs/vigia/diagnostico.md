@@ -36,7 +36,7 @@ execução prossegue normalmente.
 | Espaço em disco nas montagens reais | `recursos.discos` | `df -PTl -x tmpfs -x devtmpfs -x squashfs -x overlay -x efivarfs` | `/proc/self/mountinfo` e pontos de montagem locais (o `-l` deixa de fora NFS, CIFS e outras montagens de rede) | Até 60 linhas e 8 KiB; estado atual |
 | Memória de vídeo | `recursos.memoria_video` | `nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu,temperature.gpu --format=csv,noheader,nounits` (somente se `nvidia-smi` existir no `PATH`) | Dispositivos NVIDIA via `nvidia-smi` | Até 16 linhas e 4 KiB; estado atual |
 | Versão do Hyprland | `sessao_grafica.hyprctl_version` | `hyprctl version` | Soquete do Hyprland em `$XDG_RUNTIME_DIR/hypr/` | Até 20 linhas e 4 KiB; sessão atual |
-| Monitores da sessão | `sessao_grafica.monitores` | `hyprctl monitors -j` (com `serial` e código `0x...` da descrição removidos via `jq` antes de gravar) | Soquete do Hyprland em `$XDG_RUNTIME_DIR/hypr/` | Até 16 KiB; sessão atual |
+| Monitores da sessão | `sessao_grafica.monitores` | `hyprctl monitors -j` (com `serial` e código `0x...` da descrição removidos de todos os campos via `jq` antes de gravar) | Soquete do Hyprland em `$XDG_RUNTIME_DIR/hypr/` | Até 16 KiB; sessão atual |
 | Estado da Waybar | `sessao_grafica.waybar` | `pgrep -x waybar` (convertido em `"rodando"` quando encontra processo ou `"parada"` quando retorna código 1; se `pgrep` faltar, `"sem dado"`) | `/proc` | 1 linha; estado atual |
 | Diagnóstico do próprio jangada | `jangada.diagnostico` | `"$JANGADA_PATH/bin/jangada-verificar" --diagnostico`, com `XDG_STATE_HOME` numa pasta temporária `$JANGADA_ESTADO/vigia/.verificar.*` e um `curl` que recusa no começo do `PATH` (o relatório avisa que a linha do Ollama não vale) | `diagnostico-AAAAMMDD-HHMM.md` dentro dessa pasta temporária, apagada logo depois de ler, `$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/hyprland.log` (só linhas de erro e aviso) e `$HOME/.cache/hyprland/hyprlandCrashReport*.txt` | Limites já aplicados por `jangada-verificar` (80 linhas do log do Hyprland e 60 linhas do relatório de falha); até 32 KiB no retrato |
 | Erros do log do sistema | `log_sistema.erros` | `journalctl -b -p err -n 100 --no-pager` | Diário do systemd da partida atual (`/var/log/journal` ou `/run/log/journal`) | Partida atual (`-b`), prioridade erro ou mais grave (`-p err`), últimas 100 linhas e até 16 KiB |
@@ -54,9 +54,11 @@ retrato JSON e no relatório em Markdown:
      relatório em Markdown.
    - No coletor `sessao_grafica.monitores`, o campo de número de série
      (`serial`) da saída de `hyprctl monitors -j` é removido antes de gravar.
-     O valor do `serial` (quando tem 4 caracteres ou mais) é apagado de
-     qualquer outro texto do monitor, e o código `0x...` no fim da `description`
-     também. Fabricante e modelo ficam.
+     O valor do `serial` e o código `0x...` do fim da `description` são apagados
+     de todos os textos do monitor. Valor de 4 caracteres ou mais sai onde
+     estiver; valor mais curto sai quando é o campo inteiro ou um token isolado
+     por caracteres não alfanuméricos, o que pode mascarar a mais (o `serial`
+     `1` atinge o `DP-1`). Fabricante e modelo ficam.
 2. **Mascaramento de dados pessoais, máquina e identificadores de rede (em todos os coletores):**
    - Caminho da pasta pessoal (`$HOME` e `/home/<usuario>`): substituído por
      `~`.
