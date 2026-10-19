@@ -15,9 +15,11 @@ diagnóstico no Jangada Vigia e como cada um é contido por construção.
     prioridade de erro ou superior (`-b -p err -n 100`); do `hyprland.log`,
     apenas linhas de erro e aviso (via `jangada-verificar --diagnostico`).
   - Remoção de número de série: no coletor de monitores (`hyprctl monitors -j`),
-    o campo `serial`, o valor dele em qualquer outro texto do monitor e o código
-    `0x...` no fim da `description` são retirados antes de gravar; fabricante e
-    modelo ficam.
+    o campo `serial` e o código `0x...` do fim da `description` são retirados de
+    todos os campos do monitor antes de gravar; fabricante e modelo ficam. Um
+    `serial` curto (menos de 4 caracteres) sai só como campo inteiro ou token
+    isolado, e pode mascarar a mais (o `serial` `1` atinge o `DP-1`): privacidade
+    vence.
   - Mascaramento antes de gravar (no log e em todo coletor): caminhos da pasta
     pessoal viram `~`, o nome do usuário vira `<usuario>`, o nome da máquina
     (saída de `hostname` e `uname -n`, na grafia exata, sem as linhas `ID=` e
