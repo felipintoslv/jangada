@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# Mostra todos os atalhos ativos, lidos do próprio Hyprland.
+# Mostra todos os atalhos ativos, lidos do próprio Hyprland e do ambiente jangada.
 #
 # Uso:
-#   jangada-atalhos           lista pesquisável no fuzzel (atalho SUPER+/)
-#   jangada-atalhos --lista   mesma lista em texto, para o terminal
+#   jangada-atalhos           paleta de atalhos no fuzzel (aciona a ação escolhida)
+#   jangada-atalhos --lista   lista em texto formatado para o terminal
 set -euo pipefail
 # shellcheck source=bin/jangada-shell-config
 source "$(dirname "${BASH_SOURCE[0]}")/jangada-shell-config"
 
-# O "hyprctl binds -j" devolve JSON inválido nesta versão, então lemos o texto.
-# Cada atalho vem num bloco de "chave: valor" separado por linha em branco.
-montar() {
+# Extrai os atalhos do Hyprland com dispatcher e argumento para despacho seguro.
+# Emite linhas com 4 campos separados por tabulação:
+#   teclas \t descricao \t dispatcher \t arg
+obter_hyprland() {
   hyprctl binds 2>/dev/null | awk '
     function teclas(m,   s) {
       s = ""
@@ -20,28 +21,114 @@ montar() {
       if (int(m /  1) % 2) s = s "SHIFT + "
       return s
     }
+    function traduzir(k) {
+      if (k == "RETURN") return "Enter"
+      if (k == "SPACE") return "Espaço"
+      if (k == "ESCAPE") return "Esc"
+      if (k == "SLASH") return "/"
+      if (k == "LEFT") return "Esquerda"
+      if (k == "RIGHT") return "Direita"
+      if (k == "UP") return "Cima"
+      if (k == "DOWN") return "Baixo"
+      return k
+    }
     function emitir() {
       if (key == "") return
+      key = traduzir(key)
       if (sub_ != "") key = key "  [modo " sub_ "]"
       if (desc == "") desc = "-"
-      printf "%s%s\t%s\n", teclas(mod), key, desc
-      key = ""
+      printf "%s%s\t%s\t%s\t%s\n", teclas(mod), key, desc, disp, arg
+      key = ""; disp = ""; arg = ""
     }
-    /^[a-z]+$/            { emitir(); mod = 0; key = ""; desc = ""; sub_ = ""; next }
-    /^\tmodmask:/         { mod = $2; next }
-    /^\tsubmap:/          { sub_ = substr($0, 10); next }
-    /^\tkey:/             { key = $2; next }
-    /^\tdescription:/     { desc = substr($0, 15); next }
-    /^$/ { emitir() }
-    END { emitir() }
-  ' | sort -u | awk -F'\t' '{ printf "%-28s %s\n", $1, $2 }'
+    /^[a-z]+$/        { emitir(); mod = 0; key = ""; desc = ""; sub_ = ""; disp = ""; arg = ""; next }
+    /^\tmodmask:/     { mod = $2; next }
+    /^\tsubmap:/      { sub_ = substr($0, 10); next }
+    /^\tkey:/         { key = $2; next }
+    /^\tdescription:/ { desc = substr($0, 15); next }
+    /^\tdispatcher:/  { disp = substr($0, 14); next }
+    /^\targ:/         { arg = substr($0, 7); next }
+    /^$/              { emitir() }
+    END               { emitir() }
+  '
+}
+
+# Atalhos contextuais do ambiente jangada que não passam por binds do compositor.
+# Emite os mesmos 4 campos por tabulação.
+obter_ambiente() {
+  cat <<'EOF'
+Alt + I	Conferir e integrar entrega na Central	cmd	jangada-tarefas
+Ctrl + X	Encerrar tarefa na Central	cmd	jangada-tarefas
+Ctrl + B depois C	Tmux: nova janela na sessão	info	-
+Ctrl + B depois N	Tmux: próxima janela na sessão	info	-
+Ctrl + B depois P	Tmux: janela anterior na sessão	info	-
+Ctrl + B depois D	Tmux: desanexar do terminal	info	-
+Ctrl + B depois [	Tmux: modo de rolagem e cópia	info	-
+EOF
+}
+
+coletar_todos() {
+  {
+    obter_hyprland
+    obter_ambiente
+  } | sort -u
+}
+
+montar_lista() {
+  coletar_todos | awk -F'\t' '{ printf "%-28s %s\n", $1, $2 }'
+}
+
+executar_por_indice() {
+  local -a rotulos=()
+  local -a disp_lista=()
+  local -a arg_lista=()
+
+  while IFS=$'\t' read -r tecla desc disp arg; do
+    [[ -n "$tecla" ]] || continue
+    rotulos+=("$(printf '%-28s %s' "$tecla" "$desc")")
+    disp_lista+=("$disp")
+    arg_lista+=("$arg")
+  done < <(coletar_todos)
+
+  ((${#rotulos[@]} > 0)) || exit 0
+
+  local idx
+  idx="$(printf '%s\n' "${rotulos[@]}" | jangada_fuzzel --index --prompt "atalhos > ")" || exit 0
+
+  [[ "$idx" =~ ^[0-9]+$ ]] || exit 0
+  ((idx >= 0 && idx < ${#rotulos[@]})) || exit 0
+
+  local dispatcher="${disp_lista[$idx]}"
+  local argumento="${arg_lista[$idx]}"
+
+  case "$dispatcher" in
+    cmd)
+      # Executa comandos auxiliares de ambiente
+      "$argumento" &
+      ;;
+    info|"")
+      # Apenas informativo (como atalhos de tmux ou notas sem dispatcher)
+      exit 0
+      ;;
+    mouse)
+      # Atalhos de mouse não são acionados via menu
+      exit 0
+      ;;
+    *)
+      # Repassa com segurança para o despachante do Hyprland
+      if [[ "$dispatcher" == "exec" || "$dispatcher" == "exec_cmd" ]]; then
+        hyprctl dispatch exec "$argumento" >/dev/null 2>&1 || true
+      elif [[ -n "$argumento" ]]; then
+        hyprctl dispatch "$dispatcher" "$argumento" >/dev/null 2>&1 || true
+      else
+        hyprctl dispatch "$dispatcher" >/dev/null 2>&1 || true
+      fi
+      ;;
+  esac
 }
 
 case "${1:-}" in
-  --lista) montar ;;
+  --lista) montar_lista ;;
   -h|--ajuda) sed -n '2,6s/^# \{0,1\}//p' "$0" ;;
-  "")
-    montar | jangada_fuzzel --prompt "atalhos > "
-    ;;
+  "") executar_por_indice ;;
   *) echo "argumento desconhecido: $1" >&2; exit 1 ;;
 esac

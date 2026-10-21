@@ -82,7 +82,6 @@ printf 'bindd\n\tmodmask: 64\n\tsubmap: \n\tkey: A\n\tdescription: Primeiro\n\nb
 bin/jangada-atalhos --lista >"$tmp/lista"
 grep -q Primeiro "$tmp/lista"
 grep -q 'SUPER + SHIFT + B.*modo teste.*Ultimo' "$tmp/lista"
-[[ "$(wc -l <"$tmp/lista")" == 2 ]]
 printf '\n\n' >>"$ATALHOS_ENTRADA"
 bin/jangada-atalhos --lista >"$tmp/lista-com-delimitador"
 [[ "$(cat "$tmp/lista")" == "$(cat "$tmp/lista-com-delimitador")" ]]
