@@ -35,7 +35,7 @@
 | `jangada-indicadores` | resumo de tarefas, revisores e delegações a partir dos registros; `--json` alimenta a aba Indicadores da Central |
 | `jangada-gancho` | roda os ganchos do usuário de um evento (chamado pelos outros comandos) |
 | `jangada-importar` | converte a configuração do niri em arquivos `.importado` |
-| `jangada-atalhos` | mostra todos os atalhos ativos, lidos do próprio Hyprland (`--lista` para o terminal) |
+| `jangada-atalhos` | paleta de atalhos no fuzzel que executa a ação escolhida, reunindo atalhos do Hyprland, da Central e do tmux (`--lista` imprime no terminal) |
 | `jangada-sddm aplicar` | deixa o jangada como única sessão no SDDM, com o tema de login do jangada (`restaurar`, `status`, `testar`) |
 | `jangada-barra` | sobe ou reinicia a waybar do jangada; `--posicao topo\|base\|esquerda\|direita\|ciclo` troca a borda |
 | `jangada-barra-catamara` | botão do Catamarã na barra: `--waybar` dá o estado e a dica, sem saída quando o Catamarã falta, falha ou demora; `--web`, `--terminal` e `--iniciar` atendem os três cliques |
