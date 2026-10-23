@@ -16,7 +16,7 @@ from PyQt6.QtGui import QColor, QGuiApplication, QKeySequence, QPainter, QPixmap
 from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout,
                             QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow, QMessageBox,
-                            QPlainTextEdit, QPushButton, QSplitter, QTabWidget,
+                            QPlainTextEdit, QPushButton, QScrollArea, QSplitter, QTabWidget,
                             QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 from dados import (LIMITE, NOME, ORDEM, ROTULOS, Sessao,
                    estado_exibido, idade, ler_lista, ler_observacao, pasta_sessoes, resolver_comando,
@@ -275,10 +275,11 @@ class Janela(QMainWindow):
         self.previa_alvo = None
         self.passo = 0
         self.fechando = False
+        self.confirmando_encerramento = False
         nome_central = 'Central de tarefas'
         self.setWindowTitle('Jangada · ' + nome_central + ('' if real else ' · Simulação'))
         self.resize(1200, 780)
-        self.setMinimumSize(700, 460)
+        self.setMinimumSize(940, 700)
         centro = QWidget()
         self.setCentralWidget(centro)
         layout = QVBoxLayout(centro)
@@ -291,6 +292,7 @@ class Janela(QMainWindow):
         self.marca.setFixedSize(24, 24)
         topo.addWidget(self.marca)
         titulo = QLabel(nome_central)
+        titulo.setWordWrap(True)
         titulo.setStyleSheet('font-size: 24px; font-weight: 600;')
         topo.addWidget(titulo)
         topo.addStretch()
@@ -313,26 +315,31 @@ class Janela(QMainWindow):
         self.faixa = QLabel(FAIXA)
         self.faixa.setObjectName('faixa')
         self.faixa.setTextFormat(Qt.TextFormat.PlainText)
+        self.faixa.setWordWrap(True)
         layout.addWidget(self.faixa)
         self.coordenadores = Coordenadores(self)
         self.resumo = QLabel()
         self.resumo.setTextFormat(Qt.TextFormat.PlainText)
+        self.resumo.setWordWrap(True)
         layout.addWidget(self.resumo)
         self.cartoes = QLabel()
         self.cartoes.setTextFormat(Qt.TextFormat.PlainText)
+        self.cartoes.setWordWrap(True)
         self.cartoes.setObjectName('cartoes')
         layout.addWidget(self.cartoes)
         divisor = QSplitter()
+        self.divisor_sessoes = divisor
         self.lista = QTreeWidget()
         self.lista.setHeaderLabels(['Tarefa', 'Projeto', 'Estado', 'Atualização'])
         self.lista.setColumnWidth(0, 270)
         self.lista.setColumnWidth(1, 130)
-        self.lista.setColumnWidth(2, 155)
+        self.lista.setColumnWidth(2, 230)
+        self.lista.setMinimumHeight(150)
         self.lista.currentItemChanged.connect(self.escolher_na_lista)
         divisor.addWidget(self.lista)
         detalhes = QWidget()
         direito = QVBoxLayout(detalhes)
-        direito.setContentsMargins(18, 0, 0, 0)
+        direito.setContentsMargins(0, 0, 0, 0)
         self.nome = QLabel('Selecione uma sessão')
         self.nome.setTextFormat(Qt.TextFormat.PlainText)
         self.nome.setWordWrap(True)
@@ -377,36 +384,51 @@ class Janela(QMainWindow):
         self.entrega.setPlainText('Use Conferir e integrar para consultar a entrega antes da confirmação.')
         self.abas.addTab(self.entrega, 'Entrega')
         direito.addWidget(self.abas)
+        painel_detalhes = QWidget()
+        direito = QVBoxLayout(painel_detalhes)
+        direito.setContentsMargins(18, 0, 0, 0)
+        rolagem = QScrollArea()
+        rolagem.setWidgetResizable(True)
+        rolagem.setFrameShape(QScrollArea.Shape.NoFrame)
+        rolagem.setWidget(detalhes)
+        direito.addWidget(rolagem, 1)
         self.abrir = QPushButton('Abrir sessão')
         self.abrir.setEnabled(False)
         self.abrir.clicked.connect(self.focar)
-        direito.addWidget(self.abrir)
         self.integrar = QPushButton('Conferir e integrar')
         self.encerrar = QPushButton('Encerrar sem integrar')
         self.integrar.setObjectName('integrar')
         self.encerrar.setObjectName('encerrar')
+        self.encerrar.setStyleSheet('QPushButton { border: none; text-align: left; }')
         self.integrar.setToolTip('Integra as alterações ao projeto; a sessão permanece aberta. Atalho: Alt+I.')
-        self.encerrar.setToolTip('Encerra a sessão sem integrar as alterações ao projeto. Atalho: Ctrl+X.')
         self.integrar.setShortcut(QKeySequence('Alt+I'))
-        self.encerrar.setShortcut(QKeySequence('Ctrl+X'))
+        self.encerrar.setToolTip('Pede confirmação antes de encerrar sem integrar. Atalho: Ctrl+Shift+E.')
         self.integrar.setEnabled(False)
         self.encerrar.setEnabled(False)
         self.integrar.clicked.connect(self.integrar_interface)
         self.integrar_terminal = QPushButton('Integrar pelo terminal')
         self.integrar_terminal.clicked.connect(lambda: self.finalizar(True))
-        direito.addWidget(self.integrar_terminal)
+        terminais = QHBoxLayout()
+        terminais.addWidget(self.abrir)
+        terminais.addWidget(self.integrar_terminal)
+        direito.addLayout(terminais)
         self.encerrar.clicked.connect(lambda: self.finalizar(False))
         direito.addWidget(self.integrar)
-        direito.addWidget(self.encerrar)
-        explicacao = QLabel('A integração mostra a entrega e pede confirmação. O terminal permite diagnóstico e encerramento. Pronto para conferir não confirma conclusão.')
+        explicacao = QLabel('Conferir e integrar mostra a entrega e pede confirmação. Pronto para conferir não confirma conclusão.')
         explicacao.setWordWrap(True)
         direito.addWidget(explicacao)
-        divisor.addWidget(detalhes)
+        direito.addSpacing(20)
+        direito.addWidget(self.encerrar)
+        self.abas.setMinimumHeight(250)
+        divisor.addWidget(painel_detalhes)
         divisor.setSizes([650, 400])
         self.centrais = QTabWidget()
         sessoes = QWidget()
         QVBoxLayout(sessoes).addWidget(divisor)
         self.centrais.addTab(sessoes, 'Sessões')
+        atalho_encerrar = QShortcut(QKeySequence('Ctrl+Shift+E'), sessoes)
+        atalho_encerrar.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        atalho_encerrar.activated.connect(lambda: self.finalizar(False) if self.encerrar.isEnabled() else None)
         self.operacional = Operacional(self)
         self.centrais.addTab(self.operacional, 'Projetos e fila')
         self.indicadores = Indicadores(self)
@@ -498,6 +520,29 @@ class Janela(QMainWindow):
         if real:
             self.timer.start()
         self.atualizar()
+
+    def resizeEvent(self, evento):
+        super().resizeEvent(evento)
+        if not hasattr(self, 'area'):
+            return
+        estreita = self.width() < 1200
+        indice = self.centrais.indexOf(self.coordenadores)
+        if estreita and indice < 0:
+            self.centrais.addTab(self.coordenadores, 'Coordenadores')
+            self.divisor_sessoes.setSizes([420, 480])
+        elif not estreita and indice >= 0:
+            self.centrais.removeTab(indice)
+            self.area.insertWidget(0, self.coordenadores)
+            self.coordenadores.show()
+            self.area.setSizes([380, self.width() - 430])
+            self.divisor_sessoes.setSizes([630, 450])
+        self.lista.setColumnHidden(1, estreita)
+        self.lista.setColumnHidden(3, estreita)
+        self.lista.setColumnWidth(0, 180 if estreita else 270)
+
+    def mostrar_coordenadores(self):
+        if self.centrais.indexOf(self.coordenadores) >= 0:
+            self.centrais.setCurrentWidget(self.coordenadores)
 
     def selecionada(self):
         item = self.lista.currentItem()
@@ -1165,17 +1210,40 @@ class Janela(QMainWindow):
             self.status.setText('Não foi possível iniciar a integração. Use o terminal para diagnóstico.')
             self.limpar_integracao()
 
+    def confirmar_encerramento(self, nome):
+        pergunta = QMessageBox(self)
+        pergunta.setWindowTitle('Encerrar sem integrar')
+        pergunta.setTextFormat(Qt.TextFormat.PlainText)
+        pergunta.setText(f'Encerrar a sessão {nome} sem integrar as alterações ao projeto?\n'
+                         'O terminal mantém as conferências e a confirmação de descarte do Core.')
+        pergunta.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        pergunta.setDefaultButton(QMessageBox.StandardButton.No)
+        return pergunta.exec() == QMessageBox.StandardButton.Yes.value
+
     def finalizar(self, integrar):
         nome = self.selecionada()
         if not self.dados_validos or nome not in self.sessoes or not NOME.fullmatch(nome) or nome.startswith('-'):
             return
-        if (self.acao.state() != QProcess.ProcessState.NotRunning or self.integracao_etapa is not None
+        if (self.confirmando_encerramento or self.acao.state() != QProcess.ProcessState.NotRunning
+                or self.integracao_etapa is not None
                 or self.finalizacao_pendente(nome)):
             return
         acao = 'integrar e encerrar' if integrar else 'encerrar sem integrar'
         if not self.real:
             self.status.setText(f'Simulação: solicitaria {acao} a sessão {nome}. Nenhum comando foi executado.')
             return
+        if not integrar:
+            sessao = self.sessoes[nome]
+            self.confirmando_encerramento = True
+            try:
+                confirmado = self.confirmar_encerramento(nome)
+            finally:
+                self.confirmando_encerramento = False
+            # O diálogo modal processa consultas e mudanças de seleção.
+            if (not confirmado or self.fechando or not self.dados_validos or nome != self.selecionada()
+                    or self.sessoes.get(nome) != sessao or self.integracao_etapa is not None
+                    or self.acao.state() != QProcess.ProcessState.NotRunning or self.finalizacao_pendente(nome)):
+                return
         comando = [resolver_comando('jangada-agente-fim', self.jangada)[0]]
         if integrar:
             comando.append('--integrar')

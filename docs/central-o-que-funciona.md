@@ -45,7 +45,7 @@ Legenda:
 | Abrir terminal / Retomar no terminal | `menus/tarefas/janela.py:380`, `menus/tarefas/janela.py:1249` | Real; simulado | `jangada-agentes --focar` |
 | Integrar pelo terminal | `menus/tarefas/janela.py:395`, `menus/tarefas/janela.py:1168` | Real; simulado | `jangada-agente-fim --integrar` no terminal |
 | Conferir e integrar (Alt+I) | `menus/tarefas/janela.py`, `confirmar_entrega` e `integrar_interface` | Real; simulado | Mostra a entrega, pede confirmação e integra. A sessão permanece aberta, conforme a dica e o diálogo |
-| Encerrar sem integrar (Ctrl+X) | `menus/tarefas/janela.py:385`, `menus/tarefas/janela.py:1168` | Real; simulado | `jangada-agente-fim` sem integrar |
+| Encerrar sem integrar (Ctrl+Shift+E) | `menus/tarefas/janela.py`, `confirmar_encerramento` e `finalizar` | Real; simulado | Pede confirmação com Não como padrão; chama `jangada-agente-fim` sem integrar. Na simulação, só informa a ação |
 | Alt+2 a Alt+5 | `menus/tarefas/janela.py:427` | Leitura | Vai à aba de detalhe de mesmo número, com foco na barra de abas. Acompanhamento ficou sem atalho: Alt+1 é da coluna de coordenadores |
 | Alt+1 | `menus/tarefas/coordenadores.py`, `focar_lista` | Leitura | Foco na lista de coordenadores |
 | Alt+M | `menus/tarefas/coordenadores.py`, `focar_caixa` | Leitura | Foco na caixa de texto do coordenador |
@@ -72,7 +72,7 @@ Legenda:
 | Prévia do destino da conversa em Detalhes | v2 `README.md:29` | Não existe | |
 | Etapas recolhidas na Entrega | v2 `README.md:31` | Não existe | |
 | Voltar às sessões | v2 `README.md:63` | Não existe | Só faz sentido em tela estreita |
-| Prévia do terminal e do encerramento | v2 `README.md:83` | Não existe | Os botões executam direto, depois da confirmação onde ela já existe |
+| Prévia do terminal e do encerramento | v2 `README.md:83` | Não existe | Encerrar pede confirmação; a prévia do comando não existe |
 | Rodar `jangada-validar` | | Não entra | A validação é do autor, dentro do isolamento |
 
 Na coluna de coordenadores, uma tarefa com `viva=False` aparece como
@@ -89,6 +89,24 @@ do processo, troca da atuação ou encerramento do ciclo. Falhas de consulta
 preservam a orientação. Outros resultados de ações continuam disponíveis.
 O aviso de ciclo ausente fica apenas no painel do registro sem esses campos;
 ele não pede atualização do Core para os demais registros.
+
+## Uso em janela reduzida
+
+A janela tem mínimo de 940×700, que cabe em meia tela de 1920×1080.
+Abaixo de 1200 pixels de largura, os coordenadores ficam numa aba;
+Alt+1 e Alt+M levam até ela. Projeto e atualização saem das colunas de
+Sessões e continuam no detalhe. A coluna Estado reserva espaço para o texto.
+O painel de sessão e a aba Rodadas permitem rolagem sem comprimir o conteúdo.
+Encerrar fica separado das ações de integração e Ctrl+X permanece disponível
+para recortar texto nos campos editáveis.
+
+A lista de coordenadores reserva pelo menos 190 pixels de altura.
+O painel tem rolagem e identifica a mensagem com um rótulo. Sem seleção,
+mostra apenas a orientação para escolher um coordenador, sem a caixa vazia.
+
+Em Projetos e fila, erros da consulta aparecem numa linha com a contagem.
+Detalhes dos erros abre o diálogo com o texto completo sob demanda.
+As ações continuam bloqueadas enquanto houver erros.
 
 ## O que o Core não entrega
 

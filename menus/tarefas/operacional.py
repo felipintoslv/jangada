@@ -79,6 +79,14 @@ class Operacional(QWidget):
         self.status.setTextFormat(Qt.TextFormat.PlainText)
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
+        self.ver_erros = QPushButton('Detalhes dos erros')
+        self.ver_erros.clicked.connect(self.mostrar_erros)
+        self.ver_erros.hide()
+        layout.addWidget(self.ver_erros)
+        self.dialogo_erros = QMessageBox(self)
+        self.dialogo_erros.setWindowTitle('Erros da consulta')
+        self.dialogo_erros.setTextFormat(Qt.TextFormat.PlainText)
+        self.dialogo_erros.setStandardButtons(QMessageBox.StandardButton.Ok)
         self.consulta = QProcess(self)
         self.consulta.finished.connect(self.consulta_fim)
         self.consulta.errorOccurred.connect(self.consulta_erro)
@@ -170,8 +178,21 @@ class Operacional(QWidget):
         if anterior in itens:
             self.lista.setCurrentItem(itens[anterior])
         self.lista.blockSignals(False)
-        self.status.setText(' · '.join(str(e) for e in dados['erros']) if dados['erros'] else 'Retrato atualizado do núcleo. Consumo ausente permanece desconhecido.')
+        erros = dados['erros']
+        self.ver_erros.setVisible(bool(erros))
+        self.dialogo_erros.hide()
+        self.status.setText((f'{len(erros)} ' + ('erro' if len(erros) == 1 else 'erros')
+                             + ' na consulta. Ações bloqueadas.') if erros else
+                            'Retrato atualizado do núcleo. Consumo ausente permanece desconhecido.')
         self.selecionar()
+
+    def mostrar_erros(self):
+        erros = self.dados.get('erros', [])
+        if not erros:
+            return
+        self.dialogo_erros.setText(self.status.text())
+        self.dialogo_erros.setDetailedText('\n'.join(str(e) for e in erros))
+        self.dialogo_erros.exec()
 
     def selecionar(self, *_):
         chave = self.chave()

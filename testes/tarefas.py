@@ -96,6 +96,105 @@ class Interface(unittest.TestCase):
         self.janela = Janela(True, self.raiz, self.estado)
         self.janela.timer.stop()
         self.esperar_consulta()
+        confirmacao = patch.object(self.janela, 'confirmar_encerramento', return_value=True, create=True)
+        self.confirmacao_encerrar = confirmacao
+        confirmacao.start()
+        self.addCleanup(confirmacao.stop)
+
+    def test_encerrar_confirma_com_nao_padrao_e_respeita_recusa(self):
+        self.confirmacao_encerrar.stop()
+        def recusar(dialogo):
+            self.assertEqual(dialogo.windowTitle(), 'Encerrar sem integrar')
+            self.assertIn('projeto--um', dialogo.text())
+            self.assertEqual(dialogo.defaultButton(), dialogo.button(QMessageBox.StandardButton.No))
+            self.assertEqual(dialogo.textFormat(), Qt.TextFormat.PlainText)
+            return QMessageBox.StandardButton.No.value
+        with patch.object(QMessageBox, 'exec', new=recusar), \
+             patch.object(QProcess, 'startDetached', return_value=(True, 123)) as iniciar:
+            self.janela.encerrar.click()
+            iniciar.assert_not_called()
+            self.assertFalse(self.janela.pasta_finalizacao('projeto--um').exists())
+        with patch.object(QMessageBox, 'exec', return_value=QMessageBox.StandardButton.Yes.value), \
+             patch.object(QProcess, 'startDetached', return_value=(True, 123)) as iniciar:
+            self.janela.encerrar.click()
+            iniciar.assert_called_once()
+
+    def test_encerrar_reconfere_selecao_apos_dialogo(self):
+        self.confirmacao_encerrar.stop()
+        def trocar(_):
+            self.janela.selecionar_nome('projeto--dois')
+            return QMessageBox.StandardButton.Yes.value
+        with patch.object(QMessageBox, 'exec', new=trocar), \
+             patch.object(QProcess, 'startDetached', return_value=(True, 123)) as iniciar:
+            self.janela.finalizar(False)
+            iniciar.assert_not_called()
+
+    def test_atalho_encerrar_preserva_recortar_texto(self):
+        self.janela.show()
+        self.janela.activateWindow()
+        self.janela.abas.setCurrentWidget(self.janela.detalhes)
+        campo = self.janela.detalhes
+        campo.setReadOnly(False)
+        campo.setPlainText('texto para recortar')
+        campo.setFocus()
+        campo.selectAll()
+        APP.processEvents()
+        with patch.object(self.janela, 'finalizar') as finalizar:
+            QTest.keyClick(campo, Qt.Key.Key_X, Qt.KeyboardModifier.ControlModifier)
+            self.assertEqual(campo.toPlainText(), '')
+            finalizar.assert_not_called()
+            QTest.keyClick(campo, Qt.Key.Key_E, Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
+            finalizar.assert_called_once_with(False)
+
+    def test_operacional_resumo_de_erros_e_detalhe_sob_demanda(self):
+        op = self.carregar_operacional()
+        erros = [f'sessão sem raiz válida: exemplo--{i}\n<b>dado</b>' for i in range(40)]
+        op.mostrar(dict(op.dados, erros=erros))
+        self.assertEqual(op.status.text(), '40 erros na consulta. Ações bloqueadas.')
+        self.assertFalse(op.validos)
+        self.assertTrue(op.ver_erros.isEnabled())
+        with patch('operacional.QMessageBox.exec', return_value=QMessageBox.StandardButton.Ok.value) as abrir:
+            op.ver_erros.click()
+            abrir.assert_called_once()
+        self.assertEqual(op.dialogo_erros.detailedText(), '\n'.join(erros))
+        self.assertEqual(op.dialogo_erros.textFormat(), Qt.TextFormat.PlainText)
+        op.mostrar(dict(op.dados, erros=[]))
+        self.assertTrue(op.ver_erros.isHidden())
+        self.assertFalse(op.dialogo_erros.isVisible())
+
+    def test_janela_estreita_preserva_estado_e_acesso_aos_coordenadores(self):
+        j = self.janela
+        j.resize(700, 460)
+        j.show()
+        APP.processEvents()
+        self.assertEqual((j.width(), j.height()), (940, 700))
+        self.assertGreaterEqual(j.centrais.indexOf(j.coordenadores), 0)
+        self.assertFalse(j.lista.isColumnHidden(2))
+        self.assertGreater(j.lista.columnWidth(2), j.lista.fontMetrics().horizontalAdvance('Pronto para conferir') + 20)
+        j.coordenadores.focar_lista()
+        self.assertIs(j.centrais.currentWidget(), j.coordenadores)
+        self.assertTrue(j.coordenadores.painel.isHidden())
+        j.resize(1440, 900)
+        APP.processEvents()
+        self.assertEqual(j.centrais.indexOf(j.coordenadores), -1)
+        self.assertIs(j.area.widget(0), j.coordenadores)
+        self.assertFalse(j.lista.isColumnHidden(1))
+        self.assertFalse(j.lista.isColumnHidden(3))
+
+    def test_paineis_nao_comprimem_tabelas_e_parecer(self):
+        self.coordenador_falso()
+        self.coordenadores_falsos()
+        coluna = self.carregar_coordenadores()
+        self.escolher_coordenador(coluna, 'horta--coordenador')
+        self.janela.resize(1440, 900)
+        self.janela.show()
+        self.janela.abas.setCurrentWidget(self.janela.rodadas)
+        aguardar(lambda: not any(c.ocupada() for c in self.janela.rodadas.consultas))
+        APP.processEvents()
+        self.assertGreaterEqual(coluna.arvore.height(), 190)
+        self.assertGreaterEqual(self.janela.rodadas.tabela.height(), 160)
+        self.assertGreaterEqual(self.janela.rodadas.parecer.height(), 140)
+        self.assertTrue(any(r.text() == 'Mensagem para o coordenador' for r in coluna.painel.findChildren(QLabel)))
 
     def esperar_consulta(self):
         aguardar(lambda: self.janela.consulta.state() == QProcess.ProcessState.NotRunning)
@@ -1689,7 +1788,8 @@ while not (pasta / 'parar-clientes').exists():
 
     def test_botoes_acionam_a_tarefa_selecionada(self):
         self.assertEqual(self.janela.integrar.shortcut(), QKeySequence("Alt+I"))
-        self.assertEqual(self.janela.encerrar.shortcut(), QKeySequence("Ctrl+X"))
+        self.assertTrue(any(a.key() == QKeySequence('Ctrl+Shift+E')
+                            for a in self.janela.findChildren(janela.QShortcut)))
         self.janela.selecionar_nome('projeto--dois')
         with patch.object(self.janela, 'solicitar_previa'), patch.object(QProcess, 'startDetached', return_value=(True, 123)), patch.object(self.janela, 'preparar') as preparar:
             self.janela.integrar_terminal.click()

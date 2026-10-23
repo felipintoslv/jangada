@@ -10,7 +10,7 @@ from pathlib import Path
 from PyQt6.QtCore import QProcess, QTimer, Qt
 from PyQt6.QtGui import QColor, QGuiApplication, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QPlainTextEdit,
-                             QMessageBox, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
+                             QMessageBox, QPushButton, QScrollArea, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 from dados import LIMITE, NOME, ROTULOS, comando_disponivel, estado_exibido
 from indicadores import SEM_DADO
 from rodadas import CONTROLE, Consulta, data
@@ -247,12 +247,17 @@ class Coordenadores(QWidget):
         layout.addWidget(self.status)
         self.arvore = QTreeWidget()
         self.arvore.setHeaderLabels(['Coordenador e tarefas', 'Estado'])
-        self.arvore.setColumnWidth(0, 200)
+        self.arvore.setColumnWidth(0, 260)
+        self.arvore.setColumnWidth(1, 240)
+        self.arvore.setMinimumHeight(190)
         self.arvore.setAccessibleName('Coordenadores e as tarefas de cada um')
         self.arvore.currentItemChanged.connect(self.escolher)
         self.arvore.itemActivated.connect(self.ativar)
         self.arvore.itemClicked.connect(self.ativar)
         layout.addWidget(self.arvore, 1)
+        self.escolha = self.rotulo()
+        self.escolha.setText('Escolha um coordenador na lista.')
+        layout.addWidget(self.escolha)
         self.painel = QWidget()
         painel = QVBoxLayout(self.painel)
         painel.setContentsMargins(0, 8, 0, 0)
@@ -274,12 +279,13 @@ class Coordenadores(QWidget):
         self.caixa = QPlainTextEdit()
         self.caixa.setTabChangesFocus(True)
         self.caixa.setAccessibleName('Mensagem para o coordenador')
+        painel.addWidget(QLabel('Mensagem para o coordenador'))
         self.caixa.setPlaceholderText('Escreva com calma. Ctrl+Enter copia o texto e leva à janela; '
                                       'lá você cola e aperta Enter.')
         self.caixa.setMaximumHeight(140)
         self.caixa.textChanged.connect(self.editar)
         painel.addWidget(self.caixa)
-        botoes = QHBoxLayout()
+        botoes = QVBoxLayout()
         self.copiar = QPushButton('Copiar e ir para a janela')
         self.copiar.setToolTip('Põe o texto na área de transferência e foca a janela. Nada é enviado. '
                                'Atalho: Ctrl+Enter na caixa.')
@@ -303,7 +309,12 @@ class Coordenadores(QWidget):
         painel.addWidget(self.copia)
         self.resultado = self.rotulo('coord_aviso')
         layout.addWidget(self.resultado)
-        layout.addWidget(self.painel)
+        rolagem = QScrollArea()
+        rolagem.setWidgetResizable(True)
+        rolagem.setFrameShape(QScrollArea.Shape.NoFrame)
+        rolagem.setWidget(self.painel)
+        self.rolagem_painel = rolagem
+        layout.addWidget(rolagem, 2)
         QWidget.setTabOrder(self.novo, self.arvore)
         QWidget.setTabOrder(self.arvore, self.ultima)
         QWidget.setTabOrder(self.ultima, self.caixa)
@@ -512,6 +523,9 @@ class Coordenadores(QWidget):
 
     def mostrar_painel(self):
         c = self.coordenador(self.atual) if self.atual else None
+        self.painel.setVisible(c is not None)
+        self.rolagem_painel.setVisible(c is not None)
+        self.escolha.setVisible(c is None)
         if self.aviso_saida is not None and (c is None or not c['viva'] or c.get('ciclo') != 'aberta'
                 or self.aviso_saida != (c['sessao'], c.get('atuacao_id'))):
             self.avisar(self.resultado, '')
@@ -553,11 +567,13 @@ class Coordenadores(QWidget):
         self.copia.clear()
 
     def focar_lista(self):
+        self.janela.mostrar_coordenadores()
         self.arvore.setFocus()
         if self.arvore.currentItem() is None and self.arvore.topLevelItemCount():
             self.arvore.setCurrentItem(self.arvore.topLevelItem(0))
 
     def focar_caixa(self):
+        self.janela.mostrar_coordenadores()
         if self.caixa.isEnabled():
             self.caixa.setFocus()
         else:

@@ -5,7 +5,7 @@ import re
 
 from PyQt6.QtCore import QObject, QProcess, QTimer, Qt
 from PyQt6.QtWidgets import (QFormLayout, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton,
-                             QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
+                             QScrollArea, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 from dados import LIMITE, NOME, comando_disponivel
 import indicadores
 from indicadores import SEM_DADO, finito, inteiro, origem, tempo, texto, tokens_da_tarefa
@@ -173,7 +173,15 @@ class Rodadas(QWidget):
         self.alvo = None
         self.consultado = None
         self.fechando = False
-        layout = QVBoxLayout(self)
+        externo = QVBoxLayout(self)
+        externo.setContentsMargins(0, 0, 0, 0)
+        rolagem = QScrollArea()
+        rolagem.setWidgetResizable(True)
+        rolagem.setFrameShape(QScrollArea.Shape.NoFrame)
+        conteudo = QWidget()
+        rolagem.setWidget(conteudo)
+        externo.addWidget(rolagem)
+        layout = QVBoxLayout(conteudo)
         topo = QHBoxLayout()
         self.atualizar_botao = QPushButton('Atualizar rodadas')
         self.atualizar_botao.setToolTip('Consulta de novo as rodadas e o último parecer desta sessão.')
@@ -186,6 +194,7 @@ class Rodadas(QWidget):
         titulo.setText('Rodadas')
         layout.addWidget(titulo)
         formulario = QFormLayout()
+        formulario.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         self.valores = {}
         for chave, nome in self.CAMPOS:
             self.valores[chave] = self.rotulo()
@@ -205,6 +214,7 @@ class Rodadas(QWidget):
         self.tabela.setHeaderLabels(COLUNAS)
         self.tabela.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.tabela.setAccessibleName('Lista de rodadas da sessão')
+        self.tabela.setMinimumHeight(160)
         layout.addWidget(self.tabela, 1)
         self.titulo_parecer = self.rotulo('rodadas_titulo')
         layout.addWidget(self.titulo_parecer)
@@ -213,6 +223,7 @@ class Rodadas(QWidget):
         self.parecer = QPlainTextEdit()
         self.parecer.setReadOnly(True)
         self.parecer.setAccessibleName('Texto do último parecer')
+        self.parecer.setMinimumHeight(140)
         layout.addWidget(self.parecer, 1)
         falta = self.rotulo('rodadas_falta')
         falta.setText(FALTA_NO_CORE)
