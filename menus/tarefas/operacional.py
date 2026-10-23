@@ -4,8 +4,8 @@ from pathlib import Path
 
 from PyQt6.QtCore import QProcess, QTimer, Qt
 from PyQt6.QtGui import QKeySequence, QShortcut, QTextCursor
-from PyQt6.QtWidgets import (QFileDialog, QHBoxLayout, QInputDialog, QLabel, QMessageBox,
-                            QLineEdit, QPlainTextEdit, QPushButton, QSplitter, QTreeWidget, QTreeWidgetItem,
+from PyQt6.QtWidgets import (QFileDialog, QGridLayout, QInputDialog, QLabel, QMessageBox,
+                            QLineEdit, QPlainTextEdit, QPushButton, QScrollArea, QSplitter, QTreeWidget, QTreeWidgetItem,
                             QVBoxLayout, QWidget)
 from dados import resolver_comando
 from visual.fichas import ICONES
@@ -35,18 +35,27 @@ class Operacional(QWidget):
         self.registros = {}
         self.validos = False
         self.fechando = False
-        layout = QVBoxLayout(self)
-        topo = QHBoxLayout()
+        externo = QVBoxLayout(self)
+        rolagem = QScrollArea()
+        rolagem.setWidgetResizable(True)
+        rolagem.setFrameShape(QScrollArea.Shape.NoFrame)
+        corpo = QWidget()
+        layout = QVBoxLayout(corpo)
+        rolagem.setWidget(corpo)
+        externo.addWidget(rolagem)
+        topo = QGridLayout()
         self.botoes_projeto = {}
-        for titulo, metodo in [('Cadastrar projeto', self.cadastrar), ('Nova atividade', self.atividade),
-                               ('Importar plano', self.importar), ('Atualizar', self.atualizar)]:
+        self.motivos = {}
+        for i, (titulo, metodo) in enumerate([('Cadastrar projeto', self.cadastrar), ('Nova atividade', self.atividade),
+                                             ('Importar plano', self.importar), ('Atualizar', self.atualizar)]):
             botao = QPushButton(titulo)
             botao.clicked.connect(metodo)
             self.botoes_projeto[titulo] = botao
-            topo.addWidget(botao)
+            topo.addWidget(self.com_motivo(titulo, botao), i // 2, i % 2)
         layout.addLayout(topo)
         divisor = QSplitter()
         self.lista = QTreeWidget()
+        self.lista.setMinimumHeight(150)
         self.lista.setHeaderLabels(['Projeto, atividade ou tarefa', 'Estado'])
         self.lista.currentItemChanged.connect(self.selecionar)
         divisor.addWidget(self.lista)
@@ -61,19 +70,19 @@ class Operacional(QWidget):
         atalho = QShortcut(QKeySequence('Ctrl+F'), self)
         atalho.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         atalho.activated.connect(self.busca.setFocus)
-        linha = QHBoxLayout()
+        linha = QGridLayout()
         self.botoes = {}
-        for acao in ('pausar', 'retomar', 'cancelar', 'repetir'):
+        for i, acao in enumerate(('pausar', 'retomar', 'cancelar', 'repetir')):
             botao = QPushButton(acao.capitalize())
             botao.clicked.connect(lambda _, a=acao: self.agir(a))
             self.botoes[acao] = botao
-            linha.addWidget(botao)
+            linha.addWidget(self.com_motivo(acao, botao), i // 3, i % 3)
         self.revisar = QPushButton('Instruções de revisão')
         self.revisar.clicked.connect(self.revisao)
-        linha.addWidget(self.revisar)
+        linha.addWidget(self.com_motivo('revisar', self.revisar), 1, 1)
         self.sessao = QPushButton('Acompanhar sessão')
         self.sessao.clicked.connect(self.acompanhar)
-        linha.addWidget(self.sessao)
+        linha.addWidget(self.com_motivo('sessao', self.sessao), 1, 2)
         layout.addLayout(linha)
         self.status = QLabel('Simulação: consultas e ações não são executadas.' if not janela.real else 'Consultando o núcleo.')
         self.status.setTextFormat(Qt.TextFormat.PlainText)
@@ -100,6 +109,19 @@ class Operacional(QWidget):
         self.prazo_acao.setSingleShot(True)
         self.prazo_acao.timeout.connect(self.acao.kill)
         self.selecionar()
+
+    def com_motivo(self, chave, botao):
+        celula = QWidget()
+        layout = QVBoxLayout(celula)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(botao)
+        motivo = QLabel()
+        motivo.setObjectName('motivo_acao')
+        motivo.setWordWrap(True)
+        motivo.setTextFormat(Qt.TextFormat.PlainText)
+        layout.addWidget(motivo)
+        self.motivos[chave] = motivo
+        return celula
 
     def chave(self):
         item = self.lista.currentItem()
@@ -220,6 +242,20 @@ class Operacional(QWidget):
             botao.setEnabled(bool(permitido and chave[0] == 'tarefa' and status in estados[acao]))
         self.revisar.setEnabled(bool(permitido and chave[0] == 'tarefa' and status == 'REVIEW_REQUIRED'))
         self.sessao.setEnabled(bool(permitido and chave[0] == 'sessao'))
+        comum = ('Simulação: ações não executadas.' if not self.janela.real else
+                 'Uma ação está em andamento.' if ocupado else
+                 'Atualize a consulta sem erros.' if not self.validos else
+                 'Selecione um item com projeto e pasta válidos.' if not permitido else '')
+        for nome, botao in {**self.botoes, **self.botoes_projeto,
+                            'revisar': self.revisar, 'sessao': self.sessao}.items():
+            motivo = '' if botao.isEnabled() else comum or (
+                'Selecione uma sessão vinculada.' if nome == 'sessao' else
+                'Disponível para tarefa que aguarda revisão.' if nome == 'revisar' else
+                'Selecione uma tarefa.' if not chave or chave[0] != 'tarefa' else
+                'O estado atual da tarefa não permite esta ação.')
+            self.motivos[nome].setText(motivo)
+            self.motivos[nome].setVisible(bool(motivo))
+            botao.setAccessibleDescription(motivo)
         if r:
             tipo, projeto, identificador = chave
             relacionados = {campo: [e for e in self.dados[campo] if e.get('projeto') == projeto
@@ -324,9 +360,8 @@ class Operacional(QWidget):
         nome = self.chave()[2]
         item = self.janela.itens.get(nome)
         if item:
-            self.janela.lista.setCurrentItem(item)
             self.janela.centrais.setCurrentIndex(0)
-            self.janela.selecionar()
+            self.janela.selecionar_nome(nome)
 
     def acao_fim(self, codigo, tipo):
         self.prazo_acao.stop()

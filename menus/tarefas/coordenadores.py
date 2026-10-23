@@ -515,9 +515,10 @@ class Coordenadores(QWidget):
             return
         self.janela.centrais.setCurrentIndex(0)
         self.janela.encerrada = None
-        self.janela.lista.setCurrentItem(alvo)
+        self.janela.selecionar_nome(nome)
         self.janela.lista.scrollToItem(alvo)
-        self.janela.lista.setFocus()
+        if self.janela.width() >= 940:
+            self.janela.lista.setFocus()
 
     # Painel -----------------------------------------------------------------
 

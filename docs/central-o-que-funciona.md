@@ -1,7 +1,7 @@
 # Central de Tarefas: o que funciona
 
-Inventário das abas e dos botões da Central em 18/10/2026, com o arquivo e a
-linha de cada item. A Central tem dois modos. Com `--real`
+Inventário das abas e dos botões da Central, atualizado em 23/10/2026,
+com referências aos arquivos e funções. A Central tem dois modos. Com `--real`
 (`menus/tarefas/central.py:102`) ela consulta o Core e executa as ações. Sem
 `--real` ela roda em simulação: mostra tarefas fictícias e não executa nada.
 
@@ -17,36 +17,36 @@ Legenda:
 
 | Aba | Onde | Situação | O que mostra ou faz |
 |---|---|---|---|
-| Sessões | `menus/tarefas/janela.py:409` | Real; simulado sem `--real` | Lista das sessões de `jangada-agentes --lista-json`, agrupada por estado. Sessões terminadas em `--coordenador` ficam fora (`menus/tarefas/dados.py:137`, `menus/tarefas/janela.py:971`) |
-| Sessões > Acompanhamento | `menus/tarefas/janela.py:369` | Leitura | Última mensagem e mudanças vistas nesta janela |
-| Sessões > Saída do agente | `menus/tarefas/janela.py:370` | Leitura | Prévia de `jangada-agentes --previa`; na simulação, a mensagem fictícia |
-| Sessões > Detalhes | `menus/tarefas/janela.py:371` | Leitura | Estado, autor, revisor, tarefa, ramo e pasta. Sessão encerrada: dados de `jangada-indicadores --json` |
-| Sessões > Rodadas | `menus/tarefas/janela.py:373`, `menus/tarefas/rodadas.py:165` | Leitura; simulação não consulta | Contagem de rodadas, último resultado, lista de rodadas de `jangada-agentes --rodadas-json` (rodada, origem, resultado, revisor, modelo, data, tempo e apontamentos) e último parecer, como dado. Com Core sem a consulta, avisa que a lista ainda não está disponível |
-| Sessões > Entrega | `menus/tarefas/janela.py:378` | Leitura | Prévia de `--integracao-json` antes da confirmação |
-| Projetos e fila | `menus/tarefas/janela.py:411`, `menus/tarefas/operacional.py:30` | Real; simulação não consulta | Projetos, atividades e tarefas da fila persistente |
-| Indicadores | `menus/tarefas/janela.py:413`, `menus/tarefas/indicadores.py:263` | Leitura; simulação não consulta | Custo por tarefa, procedência dos revisores e local contra agy |
+| Sessões | `menus/tarefas/janela.py, Janela.__init__` | Real; simulado sem `--real` | Lista das sessões de `jangada-agentes --lista-json`, agrupada por estado. Sessões terminadas em `--coordenador` ficam fora (`menus/tarefas/dados.py:137`, `menus/tarefas/janela.py, atualizar`) |
+| Sessões > Acompanhamento | `menus/tarefas/janela.py, Janela.__init__` | Leitura | Última mensagem e mudanças vistas nesta janela |
+| Sessões > Saída do agente | `menus/tarefas/janela.py, Janela.__init__` | Leitura | Prévia de `jangada-agentes --previa`; na simulação, a mensagem fictícia |
+| Sessões > Detalhes | `menus/tarefas/janela.py, Janela.__init__` | Leitura | Estado, autor, revisor, tarefa, ramo e pasta. Sessão encerrada: dados de `jangada-indicadores --json` |
+| Sessões > Rodadas | `menus/tarefas/janela.py, Janela.__init__`, `menus/tarefas/rodadas.py:165` | Leitura; simulação não consulta | Contagem de rodadas, último resultado, lista de rodadas de `jangada-agentes --rodadas-json` (rodada, origem, resultado, revisor, modelo, data, tempo e apontamentos) e último parecer, como dado. Com Core sem a consulta, avisa que a lista ainda não está disponível |
+| Sessões > Entrega | `menus/tarefas/janela.py, Janela.__init__` | Leitura | Prévia de `--integracao-json` antes da confirmação |
+| Projetos e fila | `menus/tarefas/janela.py, Janela.__init__`, `menus/tarefas/operacional.py, Operacional.__init__` | Real; simulação não consulta | Projetos, atividades e tarefas da fila persistente |
+| Indicadores | `menus/tarefas/janela.py, Janela.__init__`, `menus/tarefas/indicadores.py:263` | Leitura; simulação não consulta | Custo por tarefa, procedência dos revisores e local contra agy |
 | Coluna de coordenadores | `menus/tarefas/coordenadores.py`, `ler_coordenadores`, `estado_coordenador` e `mostrar_lista` | Leitura; simulação não consulta | Consulta versão 1 de `jangada-agentes --coordenadores-json`. Distingue trabalhando, esperando você, resposta pronta, aguardando retomada e atuação encerrada. Preserva as tarefas recebidas, inclusive após interrupção ou hook concluído. A ausência dos campos de ciclo é indicada só no registro afetado; ações anteriores continuam úteis |
 | Painel do coordenador | `menus/tarefas/coordenadores.py`, `mostrar_painel` | Leitura | Última linha como texto puro, sem caracteres de controle, hora da atualização e aviso pelo estado. Ciclo da atuação e sessão runtime são independentes |
-| Faixa "Só você faz" | `menus/tarefas/janela.py:313`, `menus/tarefas/coordenadores.py:27` | Leitura | Mostra "sem dado": o Core não informa os commits não enviados |
+| Faixa "Só você faz" | `menus/tarefas/janela.py, Janela.__init__`, `menus/tarefas/coordenadores.py:27` | Leitura | Mostra "sem dado": o Core não informa os commits não enviados |
 | Indicadores > Custo por tarefa | `menus/tarefas/indicadores.py:359` | Leitura | Enter ou clique duplo leva à sessão na aba Sessões |
 
 ## Botões e atalhos
 
 | Botão ou atalho | Onde | Situação | Efeito |
 |---|---|---|---|
-| Atualizar | `menus/tarefas/janela.py:303` | Real | Refaz a consulta das sessões |
-| Avançar simulação | `menus/tarefas/janela.py:303`, `menus/tarefas/janela.py:914` | Simulado | Passa ao próximo dos quatro cenários fictícios |
-| Nova tarefa | `menus/tarefas/janela.py:306` | Real; simulado sem `--real` (`janela.py:221`) | Abre o formulário de nova tarefa |
-| Nova tarefa > Escolher pasta | `menus/tarefas/janela.py:59` | Real | Escolhe a pasta do projeto |
-| Nova tarefa > Nova pasta | `menus/tarefas/janela.py:65` | Real; desligado na simulação | Cria a pasta de um projeto novo |
-| Nova tarefa > Opções avançadas | `menus/tarefas/janela.py:84` | Real | Mostra executor, revisor, segurança e delegação |
-| Nova tarefa > Iniciar tarefa | `menus/tarefas/janela.py:113` | Real; "Criar tarefa simulada" na simulação | Abre a sessão pelo Core |
-| Painel de indicadores | `menus/tarefas/janela.py:309`, `menus/tarefas/janela.py:506` | Leitura | Vai à aba Indicadores |
-| Abrir terminal / Retomar no terminal | `menus/tarefas/janela.py:380`, `menus/tarefas/janela.py:1249` | Real; simulado | `jangada-agentes --focar` |
-| Integrar pelo terminal | `menus/tarefas/janela.py:395`, `menus/tarefas/janela.py:1168` | Real; simulado | `jangada-agente-fim --integrar` no terminal |
+| Atualizar | `menus/tarefas/janela.py, Janela.__init__` | Real | Refaz a consulta das sessões |
+| Avançar simulação | `menus/tarefas/janela.py, Janela.__init__`, `menus/tarefas/janela.py, avancar` | Simulado | Passa ao próximo dos quatro cenários fictícios |
+| Nova tarefa | `menus/tarefas/janela.py, Janela.__init__` | Real; simulado sem `--real` (`janela.py, NovaTarefa.criar`) | Abre o formulário de nova tarefa |
+| Nova tarefa > Escolher pasta | `menus/tarefas/janela.py, NovaTarefa.__init__` | Real | Escolhe a pasta do projeto |
+| Nova tarefa > Nova pasta | `menus/tarefas/janela.py, NovaTarefa.__init__` | Real; desligado na simulação | Cria a pasta de um projeto novo |
+| Nova tarefa > Opções avançadas | `menus/tarefas/janela.py, NovaTarefa.__init__` | Real | Mostra executor, revisor, segurança e delegação |
+| Nova tarefa > Iniciar tarefa | `menus/tarefas/janela.py, NovaTarefa.__init__` | Real; "Criar tarefa simulada" na simulação | Abre a sessão pelo Core |
+| Painel de indicadores | `menus/tarefas/janela.py, Janela.__init__`, `menus/tarefas/janela.py, abrir_indicadores` | Leitura | Vai à aba Indicadores |
+| Abrir terminal / Retomar no terminal | `menus/tarefas/janela.py, Janela.__init__`, `menus/tarefas/janela.py, focar` | Real; simulado | `jangada-agentes --focar` |
+| Integrar pelo terminal | `menus/tarefas/janela.py, Janela.__init__`, `menus/tarefas/janela.py, finalizar` | Real; simulado | `jangada-agente-fim --integrar` no terminal |
 | Conferir e integrar (Alt+I) | `menus/tarefas/janela.py`, `confirmar_entrega` e `integrar_interface` | Real; simulado | Mostra a entrega, pede confirmação e integra. A sessão permanece aberta, conforme a dica e o diálogo |
 | Encerrar sem integrar (Ctrl+Shift+E) | `menus/tarefas/janela.py`, `confirmar_encerramento` e `finalizar` | Real; simulado | Pede confirmação com Não como padrão; chama `jangada-agente-fim` sem integrar. Na simulação, só informa a ação |
-| Alt+2 a Alt+5 | `menus/tarefas/janela.py:427` | Leitura | Vai à aba de detalhe de mesmo número, com foco na barra de abas. Acompanhamento ficou sem atalho: Alt+1 é da coluna de coordenadores |
+| Alt+2 a Alt+5 | `menus/tarefas/janela.py, Janela.__init__` | Leitura | Vai à aba de detalhe de mesmo número, com foco na barra de abas. Acompanhamento ficou sem atalho: Alt+1 é da coluna de coordenadores |
 | Alt+1 | `menus/tarefas/coordenadores.py`, `focar_lista` | Leitura | Foco na lista de coordenadores |
 | Alt+M | `menus/tarefas/coordenadores.py`, `focar_caixa` | Leitura | Foco na caixa de texto do coordenador |
 | Ir para a janela (Alt+J) | `menus/tarefas/coordenadores.py`, `ir_para_janela` | Real; simulado | `jangada-agentes --focar` com a sessão do coordenador; disponível com sessão viva |
@@ -57,21 +57,21 @@ Legenda:
 | Atualizar rodadas | `menus/tarefas/rodadas.py:178` | Leitura; desligado na simulação | Refaz as três consultas da aba Rodadas |
 | Indicadores > Atualizar | `menus/tarefas/indicadores.py:228` | Leitura | Refaz `jangada-indicadores --json` |
 | Indicadores > cartões | `menus/tarefas/indicadores.py:224` | Leitura | Troca a tabela de detalhe |
-| Projetos e fila > Cadastrar projeto | `menus/tarefas/operacional.py:41`, `menus/tarefas/operacional.py:248` | Real; desligado na simulação | `jangada-projeto` cadastrar |
-| Projetos e fila > Nova atividade | `menus/tarefas/operacional.py:41`, `menus/tarefas/operacional.py:255` | Real; desligado na simulação | Cria atividade no projeto |
-| Projetos e fila > Importar plano | `menus/tarefas/operacional.py:41`, `menus/tarefas/operacional.py:273` | Real; desligado na simulação | `jangada-fila --importar` |
-| Projetos e fila > Atualizar | `menus/tarefas/operacional.py:41` | Leitura | Refaz a consulta da fila |
-| Projetos e fila > Pausar, Retomar, Cancelar, Repetir | `menus/tarefas/operacional.py:66`, `menus/tarefas/operacional.py:232` | Real; desligado na simulação | `jangada-task` com a ação; Cancelar pede confirmação |
-| Projetos e fila > Instruções de revisão | `menus/tarefas/operacional.py:71`, `menus/tarefas/operacional.py:281` | Leitura | Mostra como revisar no terminal; não aprova |
-| Projetos e fila > Acompanhar sessão | `menus/tarefas/operacional.py:74`, `menus/tarefas/operacional.py:294` | Leitura | Seleciona a sessão ligada à tarefa |
-| Projetos e fila > Ctrl+F | `menus/tarefas/operacional.py:61` | Leitura | Busca nos detalhes |
-| Filtro por estado no resumo | v2 `README.md:20` | Não existe | |
+| Projetos e fila > Cadastrar projeto | `menus/tarefas/operacional.py, Operacional.__init__`, `menus/tarefas/operacional.py, cadastrar` | Real; desligado na simulação | `jangada-projeto` cadastrar |
+| Projetos e fila > Nova atividade | `menus/tarefas/operacional.py, Operacional.__init__`, `menus/tarefas/operacional.py, atividade` | Real; desligado na simulação | Cria atividade no projeto |
+| Projetos e fila > Importar plano | `menus/tarefas/operacional.py, Operacional.__init__`, `menus/tarefas/operacional.py, importar` | Real; desligado na simulação | `jangada-fila --importar` |
+| Projetos e fila > Atualizar | `menus/tarefas/operacional.py, Operacional.__init__` | Leitura | Refaz a consulta da fila |
+| Projetos e fila > Pausar, Retomar, Cancelar, Repetir | `menus/tarefas/operacional.py, Operacional.__init__`, `menus/tarefas/operacional.py, agir` | Real; desligado na simulação | `jangada-task` com a ação; Cancelar pede confirmação |
+| Projetos e fila > Instruções de revisão | `menus/tarefas/operacional.py, Operacional.__init__`, `menus/tarefas/operacional.py, revisao` | Leitura | Mostra como revisar no terminal; não aprova |
+| Projetos e fila > Acompanhar sessão | `menus/tarefas/operacional.py, Operacional.__init__`, `menus/tarefas/operacional.py, acompanhar` | Leitura | Seleciona a sessão ligada à tarefa |
+| Projetos e fila > Ctrl+F | `menus/tarefas/operacional.py, Operacional.__init__` | Leitura | Busca nos detalhes |
+| Filtro por estado no resumo | `menus/tarefas/janela.py`, `filtrar_estado` | Leitura | Quatro cartões com contagens globais. Clicar novamente desfaz o filtro |
 | Busca e filtro de projeto em Sessões | v2 `README.md:20` | Não existe | |
-| Limpar filtros | v2 `README.md:20` | Não existe | |
-| Bloqueio de Conferir e integrar com motivo | v2 `README.md:37` | Não existe | A Central só desliga o botão, sem dizer o motivo |
+| Limpar filtros | `menus/tarefas/janela.py`, `limpar_busca` | Leitura | Recupera todos os grupos |
+| Ação indisponível com motivo | `menus/tarefas/janela.py` e `operacional.py`, `selecionar` | Leitura | Motivo junto aos botões e na descrição acessível. As recusas permanecem as mesmas |
 | Prévia do destino da conversa em Detalhes | v2 `README.md:29` | Não existe | |
 | Etapas recolhidas na Entrega | v2 `README.md:31` | Não existe | |
-| Voltar às sessões | v2 `README.md:63` | Não existe | Só faz sentido em tela estreita |
+| Voltar às sessões | `menus/tarefas/janela.py`, `exibir_detalhe` | Leitura | Abaixo de 940 pixels, volta à lista com foco e seleção preservados |
 | Prévia do terminal e do encerramento | v2 `README.md:83` | Não existe | Encerrar pede confirmação; a prévia do comando não existe |
 | Rodar `jangada-validar` | | Não entra | A validação é do autor, dentro do isolamento |
 
@@ -92,10 +92,13 @@ ele não pede atualização do Core para os demais registros.
 
 ## Uso em janela reduzida
 
-A janela tem mínimo de 940×700, que cabe em meia tela de 1920×1080.
-Abaixo de 1200 pixels de largura, os coordenadores ficam numa aba;
+A janela tem mínimo de 700×460.
+Abaixo de 1360 pixels de largura, os coordenadores ficam numa aba;
 Alt+1 e Alt+M levam até ela. Projeto e atualização saem das colunas de
 Sessões e continuam no detalhe. A coluna Estado reserva espaço para o texto.
+Abaixo de 940 pixels, Ver acompanhamento da seleção alterna lista e detalhe.
+Voltar às sessões recupera o foco na mesma seleção. Na janela baixa, o
+detalhe inteiro permite rolagem; o foco traz a ação para a área visível.
 O painel de sessão e a aba Rodadas permitem rolagem sem comprimir o conteúdo.
 Encerrar fica separado das ações de integração e Ctrl+X permanece disponível
 para recortar texto nos campos editáveis.
@@ -107,6 +110,61 @@ mostra apenas a orientação para escolher um coordenador, sem a caixa vazia.
 Em Projetos e fila, erros da consulta aparecem numa linha com a contagem.
 Detalhes dos erros abre o diálogo com o texto completo sob demanda.
 As ações continuam bloqueadas enquanto houver erros.
+
+## Correspondência com a prévia v2
+
+A Central continua em Qt, usando as fichas pessoais validadas e a reserva
+do mesmo modo quando necessário. Nenhuma consulta ou autorização nova do
+Core foi acrescentada. As contagens vêm das sessões consultadas.
+
+| Elemento da prévia | Central após T3b | Fonte da implementação |
+|---|---|---|
+| Logo, título e comandos | Logo oficial; Nova tarefa cheia; comandos preservados, em duas linhas na janela estreita | `menus/tarefas/janela.py`, `Janela.__init__` e `resizeEvent` |
+| Quatro cartões de resumo | Contagem global por estado; clique filtra e segundo clique desfaz; foco pelo teclado | `menus/tarefas/aparencia.py`, `CartaoResumo`; `janela.py`, `filtrar_estado` |
+| Contagem por grupo | Total visível no título, sem perder o recolhimento quando o total muda | `menus/tarefas/janela.py`, `mostrar` e `filtrar_sessoes` |
+| Busca e filtro de projeto | Permanecem ausentes em Sessões; a busca dos detalhes da fila foi preservada | `menus/tarefas/operacional.py`, `buscar` |
+| Limpar filtros | Recupera a lista; vazio filtrado oferece o mesmo comando | `menus/tarefas/janela.py`, `limpar_busca` |
+| Abas principais e de detalhe | Sublinhado de 2 px na primária; Qt conserva navegação e foco. Rodadas e Indicadores continuam disponíveis | `menus/tarefas/janela.py`, `aplicar_tema` e `ir_para_aba` |
+| Lista e tabela compacta | Quatro colunas; cabeçalho elevado sem bordas; linhas com 4 px de preenchimento; rolagem de 8 px | `menus/tarefas/janela.py`, `aplicar_tema` |
+| Seleção, situação e próxima ação | Mantidas; navegação da fila, dos indicadores e do coordenador limpa o filtro que esconderia o destino | `menus/tarefas/janela.py`, `selecionar` e `selecionar_nome` |
+| Acompanhamento e linha do tempo | Última mensagem e eventos observados nesta janela, com hora e linha vertical. Até 50 eventos, sem inventar histórico anterior | `menus/tarefas/aparencia.py`, `LinhaTempo`; `janela.py`, `acompanhar_mudancas` |
+| Saída do agente | Prévia existente preservada, com seleção de texto e posição da leitura | `menus/tarefas/janela.py`, `exibir_atividade` e `previa_fim` |
+| Detalhes e destino da conversa | Atributos existentes preservados; prévia de destino e critérios adicionais do HTML permanecem ausentes | `menus/tarefas/janela.py`, `selecionar` |
+| Entrega | Prévia, revisão, verificações e SHA continuam no texto conferido antes da confirmação; etapas recolhidas permanecem ausentes | `menus/tarefas/janela.py`, `confirmar_entrega` e `integracao_fim` |
+| Ação principal cheia | Nova tarefa; Abrir/Retomar terminal ou Conferir e integrar conforme a seleção. Destaque não certifica aprovação | `menus/tarefas/janela.py`, `selecionar` e `aplicar_tema` |
+| Motivo de indisponibilidade | Texto junto a cada ação de sessão e da fila, também na descrição acessível. Reflete seleção, erro, concorrência, finalização ou estado já conferidos | `menus/tarefas/janela.py` e `operacional.py`, `selecionar` |
+| Terminal e integração | Mesmos comandos, prévia exata, confirmação separada, travas e recusas. Revisão continua conferida pelo Core na ação, sem nova consulta antecipada | `menus/tarefas/janela.py`, `focar`, `integrar_interface` e `finalizar` |
+| Encerramento separado | Tom de Falhou misturado à superfície, borda translúcida e orientação entre integração e encerramento; Ctrl+Shift+E preservado | `menus/tarefas/aparencia.py`, `cores_interacao`; `janela.py`, `confirmar_encerramento` |
+| Cartão de vazio | Logo oficial, borda tracejada, título, orientação e Nova tarefa ou Limpar filtros | `menus/tarefas/janela.py`, `Janela.__init__` e `filtrar_sessoes` |
+| Projetos e fila | Hierarquia, formulários, relações, revisão e estados permitidos preservados; comandos em grade com motivos visíveis e rolagem | `menus/tarefas/operacional.py`, `Operacional` |
+| Navegação estreita | Lista e detalhe alternados em 700×460; retorno mantém seleção e foco. Ações e conteúdo acessíveis por rolagem | `menus/tarefas/janela.py`, `exibir_detalhe`; `aparencia.py`, `InspetorRolavel` |
+| Cores, fontes e estados | Fichas por modo; misturas de interação conferidas em 4,5:1. Inter e JetBrains Mono locais, corpo de 14 px e rótulos de 13 px | `menus/tarefas/aparencia.py`, `cores_interacao`; `janela.py`, `aplicar_tema` |
+
+O pedido ao leitor local foi listar esses elementos no HTML e na Central,
+com arquivo e linha ou indicação de ausência. A chamada com as duas fontes
+inteiras foi recusada: 11 fatias para um limite de cinco. Nenhuma contribuição
+local foi recebida ou enviada a outro destino. A tabela foi conferida pelo
+autor nas fontes.
+
+O designer do agy recebeu somente o HTML aprovado e `janela.py`, em leitura.
+Seu relatório identificou o mínimo de 940×700, a contagem no texto como risco
+para grupos recolhidos e o espaço ocupado pelos coordenadores em 1200 px.
+Foram aproveitados o mínimo de 700×460, coordenadores em aba abaixo de
+1360 px, chave estável para grupos, abas roláveis e descrições acessíveis.
+Quatro cartões na mesma linha preservam a altura útil em 700×460; a disposição
+móvel de 390 px do HTML não é requisito Qt. O apoio não revisa a entrega.
+
+O verificador do agy conferiu regras e cobertura nas fontes autorizadas.
+Seu apontamento sobre os temas levou à conferência da cor renderizada nos
+seis cenários. As referências antigas dos arquivos alterados foram trocadas
+por funções. Escopo, arquivos novos e execução dos testes foram conferidos
+pelo autor; o verificador não executou comandos nem certificou a entrega.
+
+Capturas sintéticas e roteiro reproduzível ficam em `.jangada/evidencias-t3b/`,
+nos tamanhos 1440×900, 1200×780 e 700×460, claro e escuro. A suíte Qt cobre
+os seis casos, ações visíveis no desktop, foco na janela baixa, seleção após
+atualização, grupos recolhidos, motivos de recusa e contraste das interações. Nas fichas usadas nas capturas, o menor
+contraste medido foi 5,07:1, incluindo as misturas de interação.
 
 ## O que o Core não entrega
 

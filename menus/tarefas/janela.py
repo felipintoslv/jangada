@@ -14,10 +14,10 @@ import uuid
 from PyQt6.QtCore import QFileSystemWatcher, QProcess, QProcessEnvironment, QTimer, Qt
 from PyQt6.QtGui import QColor, QGuiApplication, QKeySequence, QPainter, QPixmap, QShortcut
 from PyQt6.QtSvg import QSvgRenderer
-from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout,
-                            QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMainWindow, QMessageBox,
+from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout, QGridLayout,
+                            QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow, QMessageBox,
                             QPlainTextEdit, QPushButton, QScrollArea, QSplitter, QTabWidget,
-                            QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
+                            QSizePolicy, QStackedWidget, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 from dados import (LIMITE, NOME, ORDEM, ROTULOS, Sessao,
                    estado_exibido, idade, ler_lista, ler_observacao, pasta_sessoes, resolver_comando,
                    sem_coordenadores, simuladas)
@@ -32,6 +32,7 @@ from operacional import Operacional
 from indicadores import Indicadores, SEM_DADO, inteiro, tempo, texto, tokens_da_tarefa
 from rodadas import Rodadas
 from coordenadores import FAIXA, Coordenadores
+from aparencia import CartaoResumo, InspetorRolavel, LinhaTempo, cores_interacao
 
 # Só para a janela simulada e para quando a consulta falha: o catálogo vem do
 # jangada-agente --capacidades-json, que também é quem valida a escolha.
@@ -276,15 +277,20 @@ class Janela(QMainWindow):
         self.passo = 0
         self.fechando = False
         self.confirmando_encerramento = False
+        self.filtro_estado = None
+        self.detalhe_estreito = False
         nome_central = 'Central de tarefas'
         self.setWindowTitle('Jangada · ' + nome_central + ('' if real else ' · Simulação'))
         self.resize(1200, 780)
-        self.setMinimumSize(940, 700)
+        self.setMinimumSize(700, 460)
         centro = QWidget()
         self.setCentralWidget(centro)
         layout = QVBoxLayout(centro)
-        layout.setContentsMargins(24, 22, 24, 18)
+        self.layout_principal = layout
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(8)
         topo = QHBoxLayout()
+        self.topo = topo
         topo.setSpacing(8)
         self.fichas = carregar_fichas()
         self.marca = QLabel()
@@ -304,39 +310,82 @@ class Janela(QMainWindow):
         topo.addWidget(self.modo)
         self.atualizar_botao = QPushButton('Atualizar' if real else 'Avançar simulação')
         self.atualizar_botao.clicked.connect(self.avancar)
-        topo.addWidget(self.atualizar_botao)
         self.nova = QPushButton('Nova tarefa')
+        self.nova.setProperty('principal', True)
         self.nova.clicked.connect(self.nova_tarefa)
-        topo.addWidget(self.nova)
         self.painel = QPushButton('Painel de indicadores')
         self.painel.clicked.connect(self.abrir_indicadores)
-        topo.addWidget(self.painel)
         layout.addLayout(topo)
+        self.comandos = QWidget()
+        comandos = QHBoxLayout(self.comandos)
+        comandos.setContentsMargins(0, 0, 0, 0)
+        comandos.addStretch()
+        for botao in (self.atualizar_botao, self.nova, self.painel):
+            comandos.addWidget(botao)
+        layout.addWidget(self.comandos)
         self.faixa = QLabel(FAIXA)
         self.faixa.setObjectName('faixa')
         self.faixa.setTextFormat(Qt.TextFormat.PlainText)
         self.faixa.setWordWrap(True)
-        layout.addWidget(self.faixa)
         self.coordenadores = Coordenadores(self)
-        self.resumo = QLabel()
-        self.resumo.setTextFormat(Qt.TextFormat.PlainText)
-        self.resumo.setWordWrap(True)
-        layout.addWidget(self.resumo)
-        self.cartoes = QLabel()
-        self.cartoes.setTextFormat(Qt.TextFormat.PlainText)
-        self.cartoes.setWordWrap(True)
-        self.cartoes.setObjectName('cartoes')
-        layout.addWidget(self.cartoes)
+        self.coordenadores.layout().insertWidget(0, self.faixa)
+        resumo_layout = QHBoxLayout()
+        self.cartoes = {}
+        for estado in ('aguardando', 'trabalhando', 'interrompido', 'concluido'):
+            cartao = CartaoResumo(GRUPOS[estado])
+            cartao.clicked.connect(lambda _, e=estado: self.filtrar_estado(e))
+            resumo_layout.addWidget(cartao, 1)
+            self.cartoes[estado] = cartao
+        layout.addLayout(resumo_layout)
         divisor = QSplitter()
         self.divisor_sessoes = divisor
+        self.painel_lista = QWidget()
+        lista_layout = QVBoxLayout(self.painel_lista)
+        lista_layout.setContentsMargins(0, 0, 0, 0)
+        self.limpar_filtros = QPushButton('Limpar filtros')
+        self.limpar_filtros.clicked.connect(self.limpar_busca)
+        lista_layout.addWidget(self.limpar_filtros)
+        self.conteudo_lista = QStackedWidget()
         self.lista = QTreeWidget()
         self.lista.setHeaderLabels(['Tarefa', 'Projeto', 'Estado', 'Atualização'])
         self.lista.setColumnWidth(0, 270)
         self.lista.setColumnWidth(1, 130)
         self.lista.setColumnWidth(2, 230)
-        self.lista.setMinimumHeight(150)
+        self.lista.header().setStretchLastSection(False)
+        self.lista.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        for coluna in (1, 2, 3):
+            self.lista.header().setSectionResizeMode(coluna, QHeaderView.ResizeMode.ResizeToContents)
+        self.lista.setMinimumHeight(100)
         self.lista.currentItemChanged.connect(self.escolher_na_lista)
-        divisor.addWidget(self.lista)
+        self.conteudo_lista.addWidget(self.lista)
+        self.vazio = QWidget()
+        self.vazio.setObjectName('vazio')
+        vazio_layout = QVBoxLayout(self.vazio)
+        vazio_layout.addStretch()
+        self.marca_vazio = QLabel()
+        self.marca_vazio.setAccessibleName('Jangada')
+        vazio_layout.addWidget(self.marca_vazio, alignment=Qt.AlignmentFlag.AlignHCenter)
+        self.vazio_titulo = QLabel()
+        self.vazio_titulo.setStyleSheet('font-size: 16px; font-weight: 600;')
+        self.vazio_titulo.setWordWrap(True)
+        self.vazio_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        vazio_layout.addWidget(self.vazio_titulo)
+        self.vazio_orientacao = QLabel()
+        self.vazio_orientacao.setWordWrap(True)
+        self.vazio_orientacao.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        vazio_layout.addWidget(self.vazio_orientacao)
+        self.vazio_acao = QPushButton('Nova tarefa')
+        self.vazio_acao.setProperty('principal', True)
+        self.vazio_acao.clicked.connect(lambda: self.limpar_busca() if self.sessoes else self.nova_tarefa())
+        vazio_layout.addWidget(self.vazio_acao, alignment=Qt.AlignmentFlag.AlignHCenter)
+        vazio_layout.addStretch()
+        self.conteudo_lista.addWidget(self.vazio)
+        lista_layout.addWidget(self.conteudo_lista, 1)
+        self.ver_detalhe = QPushButton('Ver acompanhamento da seleção')
+        self.ver_detalhe.clicked.connect(lambda: self.exibir_detalhe(True))
+        self.ver_detalhe.hide()
+        lista_layout.addWidget(self.ver_detalhe)
+        divisor.addWidget(self.painel_lista)
         detalhes = QWidget()
         direito = QVBoxLayout(detalhes)
         direito.setContentsMargins(0, 0, 0, 0)
@@ -360,6 +409,8 @@ class Janela(QMainWindow):
         self.detalhes = QPlainTextEdit()
         self.detalhes.setReadOnly(True)
         self.abas = QTabWidget()
+        self.abas.setUsesScrollButtons(True)
+        self.abas.setElideMode(Qt.TextElideMode.ElideNone)
         self.atividade = QPlainTextEdit()
         self.atividade.setReadOnly(True)
         acompanhamento = QWidget()
@@ -370,8 +421,7 @@ class Janela(QMainWindow):
         self.ultima_atividade.setWordWrap(True)
         acompanhamento_layout.addWidget(self.ultima_atividade)
         acompanhamento_layout.addWidget(QLabel('Mudanças acompanhadas nesta janela'))
-        self.linha_tempo = QPlainTextEdit()
-        self.linha_tempo.setReadOnly(True)
+        self.linha_tempo = LinhaTempo()
         acompanhamento_layout.addWidget(self.linha_tempo, 1)
         self.abas.addTab(acompanhamento, 'Acompanhamento')
         self.abas.addTab(self.atividade, 'Saída do agente')
@@ -386,7 +436,11 @@ class Janela(QMainWindow):
         direito.addWidget(self.abas)
         painel_detalhes = QWidget()
         direito = QVBoxLayout(painel_detalhes)
-        direito.setContentsMargins(18, 0, 0, 0)
+        direito.setContentsMargins(8, 0, 0, 0)
+        self.voltar_lista = QPushButton('Voltar às sessões')
+        self.voltar_lista.clicked.connect(lambda: self.exibir_detalhe(False))
+        self.voltar_lista.hide()
+        direito.addWidget(self.voltar_lista)
         rolagem = QScrollArea()
         rolagem.setWidgetResizable(True)
         rolagem.setFrameShape(QScrollArea.Shape.NoFrame)
@@ -407,20 +461,34 @@ class Janela(QMainWindow):
         self.integrar.clicked.connect(self.integrar_interface)
         self.integrar_terminal = QPushButton('Integrar pelo terminal')
         self.integrar_terminal.clicked.connect(lambda: self.finalizar(True))
-        terminais = QHBoxLayout()
-        terminais.addWidget(self.abrir)
-        terminais.addWidget(self.integrar_terminal)
-        direito.addLayout(terminais)
         self.encerrar.clicked.connect(lambda: self.finalizar(False))
-        direito.addWidget(self.integrar)
+        self.motivos = {}
+        acoes = QGridLayout()
+        for linha, (chave, botao) in enumerate((('abrir', self.abrir), ('integrar_terminal', self.integrar_terminal),
+                                               ('integrar', self.integrar), ('encerrar', self.encerrar))):
+            motivo = QLabel()
+            motivo.setObjectName('motivo_acao')
+            motivo.setTextFormat(Qt.TextFormat.PlainText)
+            motivo.setWordWrap(True)
+            posicao = 4 if chave == 'encerrar' else linha
+            acoes.addWidget(botao, posicao, 0)
+            acoes.addWidget(motivo, posicao, 1)
+            self.motivos[chave] = motivo
+        acoes.setColumnStretch(1, 1)
+        direito.addLayout(acoes)
         explicacao = QLabel('Conferir e integrar mostra a entrega e pede confirmação. Pronto para conferir não confirma conclusão.')
+        explicacao.setObjectName('motivo_acao')
         explicacao.setWordWrap(True)
-        direito.addWidget(explicacao)
-        direito.addSpacing(20)
-        direito.addWidget(self.encerrar)
+        acoes.addWidget(explicacao, 3, 0, 1, 2)
         self.abas.setMinimumHeight(250)
-        divisor.addWidget(painel_detalhes)
-        divisor.setSizes([650, 400])
+        self.painel_detalhes = InspetorRolavel()
+        self.painel_detalhes.setFrameShape(QScrollArea.Shape.NoFrame)
+        self.painel_detalhes.setWidget(painel_detalhes)
+        painel_detalhes.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Ignored)
+        self.painel_detalhes.setMinimumWidth(0)
+        self.painel_lista.setMinimumWidth(0)
+        divisor.addWidget(self.painel_detalhes)
+        divisor.setSizes([500, 600])
         self.centrais = QTabWidget()
         sessoes = QWidget()
         QVBoxLayout(sessoes).addWidget(divisor)
@@ -438,7 +506,7 @@ class Janela(QMainWindow):
         self.area.addWidget(self.centrais)
         self.area.setCollapsible(0, False)
         self.area.setStretchFactor(1, 1)
-        self.area.setSizes([340, 860])
+        self.area.setSizes([300, 1000])
         layout.addWidget(self.area, 1)
         self.status = QLabel()
         self.status.setTextFormat(Qt.TextFormat.PlainText)
@@ -524,7 +592,13 @@ class Janela(QMainWindow):
         super().resizeEvent(evento)
         if not hasattr(self, 'area'):
             return
-        estreita = self.width() < 1200
+        if self.width() >= 1080 and self.layout_principal.indexOf(self.comandos) >= 0:
+            self.layout_principal.removeWidget(self.comandos)
+            self.topo.insertWidget(2, self.comandos)
+        elif self.width() < 1080 and self.layout_principal.indexOf(self.comandos) < 0:
+            self.topo.removeWidget(self.comandos)
+            self.layout_principal.insertWidget(1, self.comandos)
+        estreita = self.width() < 1360
         indice = self.centrais.indexOf(self.coordenadores)
         if estreita and indice < 0:
             self.centrais.addTab(self.coordenadores, 'Coordenadores')
@@ -534,11 +608,73 @@ class Janela(QMainWindow):
             self.area.insertWidget(0, self.coordenadores)
             self.area.setCollapsible(0, False)
             self.coordenadores.show()
-            self.area.setSizes([380, self.width() - 430])
-            self.divisor_sessoes.setSizes([630, 450])
+            self.area.setSizes([300, self.width() - 350])
+            self.divisor_sessoes.setSizes([500, 600])
         self.lista.setColumnHidden(1, estreita)
         self.lista.setColumnHidden(3, estreita)
-        self.lista.setColumnWidth(0, 180 if estreita else 270)
+        self.ajustar_sessoes()
+
+    def ajustar_sessoes(self):
+        compacta = self.width() < 940
+        self.painel_lista.setVisible(not compacta or not self.detalhe_estreito)
+        self.painel_detalhes.setVisible(not compacta or self.detalhe_estreito)
+        self.ver_detalhe.setVisible(compacta)
+        self.voltar_lista.setVisible(compacta)
+        self.ver_detalhe.setEnabled(self.selecionada() is not None)
+        self.abas.setMinimumHeight(250 if self.height() >= 650 else 200)
+
+    def exibir_detalhe(self, mostrar):
+        self.detalhe_estreito = mostrar
+        self.ajustar_sessoes()
+        if self.width() < 940:
+            if mostrar:
+                self.painel_detalhes.verticalScrollBar().setValue(0)
+                self.voltar_lista.setFocus()
+            else:
+                self.lista.setFocus()
+
+    def filtrar_estado(self, estado):
+        self.filtro_estado = None if self.filtro_estado == estado else estado
+        self.centrais.setCurrentIndex(0)
+        self.filtrar_sessoes(reselecionar=True)
+
+    def limpar_busca(self):
+        self.filtro_estado = None
+        self.filtrar_sessoes(reselecionar=True)
+
+    def filtrar_sessoes(self, reselecionar=False):
+        self.lista.blockSignals(True)
+        visiveis = []
+        for nome, item in self.itens.items():
+            s = self.sessoes[nome]
+            visivel = not self.filtro_estado or estado_exibido(s) == self.filtro_estado
+            item.setHidden(not visivel)
+            if visivel:
+                visiveis.append(item)
+        for i in range(self.lista.topLevelItemCount()):
+            grupo = self.lista.topLevelItem(i)
+            total = sum(not grupo.child(j).isHidden() for j in range(grupo.childCount()))
+            grupo.setHidden(total == 0)
+            grupo.setText(0, f'{grupo.data(0, Qt.ItemDataRole.UserRole)} ({total})')
+            grupo.setFirstColumnSpanned(True)
+        atual = self.lista.currentItem()
+        if (atual is not None and atual not in visiveis) or (reselecionar and atual is None):
+            self.lista.setCurrentItem(visiveis[0] if reselecionar and visiveis else None)
+            if not visiveis:
+                self.lista.clearSelection()
+            self.encerrada = None
+        self.lista.blockSignals(False)
+        for estado, cartao in self.cartoes.items():
+            cartao.setChecked(self.filtro_estado == estado)
+        self.limpar_filtros.setVisible(bool(self.filtro_estado))
+        self.conteudo_lista.setCurrentWidget(self.lista if visiveis else self.vazio)
+        self.vazio_titulo.setText('Nenhuma sessão neste filtro' if self.sessoes else 'Nenhuma tarefa acompanhada')
+        self.vazio_orientacao.setText('Limpe os filtros para recuperar a lista.' if self.sessoes else
+                                     'Crie uma tarefa para acompanhar a atividade do agente.')
+        self.vazio_acao.setText('Limpar filtros' if self.sessoes else 'Nova tarefa')
+        self.centrais.setTabText(0, f'Sessões ({len(visiveis)})')
+        self.selecionar()
+        self.ajustar_sessoes()
 
     def mostrar_coordenadores(self):
         if self.centrais.indexOf(self.coordenadores) >= 0:
@@ -567,7 +703,8 @@ class Janela(QMainWindow):
             if anterior is None or anterior[0] != s.inicio:
                 entradas.clear()
                 self.previas.pop(s.nome, None)
-                entradas.append('Tarefa encontrada · ' + ROTULOS.get(estado_exibido(s), estado_exibido(s)))
+                entradas.append(datetime.now().strftime('%H:%M:%S') + ' · Tarefa encontrada · '
+                                + ROTULOS.get(estado_exibido(s), estado_exibido(s)))
             elif anterior != assinatura:
                 mudancas = []
                 if anterior[1] != assinatura[1]:
@@ -591,12 +728,16 @@ class Janela(QMainWindow):
         self.formulario.activateWindow()
 
     def selecionar_nome(self, nome):
+        item = self.itens.get(nome)
+        if item is not None and item.isHidden():
+            self.limpar_busca()
         for i in range(self.lista.topLevelItemCount()):
             grupo = self.lista.topLevelItem(i)
             for j in range(grupo.childCount()):
                 item = grupo.child(j)
                 if item.data(0, Qt.ItemDataRole.UserRole) == nome:
                     self.lista.setCurrentItem(item)
+                    self.exibir_detalhe(True)
                     return
 
     def mostrar(self, sessoes):
@@ -611,7 +752,7 @@ class Janela(QMainWindow):
         # A lista só é refeita quando muda de ordem ou de grupo; no resto das
         # atualizações os itens ficam e só o texto muda.
         if estrutura != self.estrutura:
-            fechados = {g.text(0) for g in map(self.lista.topLevelItem, range(self.lista.topLevelItemCount()))
+            fechados = {g.data(0, Qt.ItemDataRole.UserRole) for g in map(self.lista.topLevelItem, range(self.lista.topLevelItemCount()))
                         if not g.isExpanded()}
             self.lista.clear()
             self.itens = {}
@@ -619,6 +760,7 @@ class Janela(QMainWindow):
             for grupo, nome in estrutura:
                 if grupo not in grupos:
                     grupos[grupo] = QTreeWidgetItem(self.lista, [grupo])
+                    grupos[grupo].setData(0, Qt.ItemDataRole.UserRole, grupo)
                     grupos[grupo].setFlags(Qt.ItemFlag.ItemIsEnabled)
                     grupos[grupo].setExpanded(grupo not in fechados)
                 self.itens[nome] = QTreeWidgetItem(grupos[grupo])
@@ -643,16 +785,9 @@ class Janela(QMainWindow):
         if escolhido and escolhido is not self.lista.currentItem():
             self.lista.setCurrentItem(escolhido)
         self.lista.blockSignals(False)
-        self.selecionar()
-        esperando = sum((estado_exibido(s) == 'aguardando' for s in sessoes.values()))
-        interrompidas = sum((estado_exibido(s) == 'interrompido' for s in sessoes.values()))
-        rotulo = 'interrompida' if interrompidas == 1 else 'interrompidas'
-        self.resumo.setText((f'{len(sessoes)} tarefas acompanhadas · Atualização por eventos; reserva a cada 30 segundos' if self.real else f'{len(sessoes)} tarefas fictícias · Avance a simulação para acompanhar as mudanças') if sessoes else 'Nenhuma tarefa. Inicie pelo botão Nova tarefa.')
-        andando = sum((estado_exibido(s) == 'trabalhando' for s in sessoes.values()))
-        encerrados = sum((estado_exibido(s) == 'concluido' for s in sessoes.values()))
-        espera_rotulo = 'precisa da sua resposta' if esperando == 1 else 'precisam da sua resposta'
-        turno_rotulo = 'pronto para conferir' if encerrados == 1 else 'prontos para conferir'
-        self.cartoes.setText(f'{esperando} {espera_rotulo}    ·    {andando} em execução    ·    {interrompidas} {rotulo}    ·    {encerrados} {turno_rotulo}')
+        self.filtrar_sessoes()
+        for estado, cartao in self.cartoes.items():
+            cartao.contar(sum(estado_exibido(s) == estado for s in sessoes.values()))
         if anterior and anterior not in sessoes:
             self.status.setText('A sessão selecionada saiu da lista. Selecione outra sessão.')
         self.coordenadores.estados_das_tarefas()
@@ -664,6 +799,7 @@ class Janela(QMainWindow):
 
     def ir_para_aba(self, indice):
         self.centrais.setCurrentIndex(0)
+        self.exibir_detalhe(True)
         self.abas.setCurrentIndex(indice)
         self.abas.tabBar().setFocus()
 
@@ -677,7 +813,7 @@ class Janela(QMainWindow):
         item = self.itens.get(nome)
         if nome in self.sessoes and item is not None:
             self.encerrada = None
-            self.lista.setCurrentItem(item)
+            self.selecionar_nome(nome)
             self.lista.scrollToItem(item)
             self.status.setText(f'Sessão {nome} aberta a partir dos indicadores.')
         else:
@@ -687,6 +823,7 @@ class Janela(QMainWindow):
             self.selecionar()
             self.status.setText(f'A sessão {nome} foi encerrada; o detalhe vem do registro de indicadores.')
         self.lista.setFocus()
+        self.exibir_detalhe(True)
 
     def mostrar_encerrada(self, nome, registro):
         t, entrada, saida = tokens_da_tarefa(registro)
@@ -718,6 +855,20 @@ class Janela(QMainWindow):
         pendente = self.finalizacao_pendente(s.nome) if self.dados_validos and s else False
         for botao in (self.abrir, self.integrar, self.integrar_terminal, self.encerrar):
             botao.setEnabled(self.dados_validos and s is not None and (not ocupada) and not pendente)
+        motivo = ('Atualize a consulta para liberar as ações.' if not self.dados_validos else
+                  'Uma ação está em andamento. Aguarde o resultado.' if ocupada else
+                  'Finalização pendente. Confira o terminal.' if pendente else
+                  'Sessão encerrada; ações indisponíveis.' if not s and self.encerrada else
+                  'Selecione uma sessão.' if not s else '')
+        for chave, rotulo in self.motivos.items():
+            rotulo.setText(motivo)
+            rotulo.setVisible(bool(motivo))
+            getattr(self, chave).setAccessibleDescription(motivo)
+        self.abrir.setProperty('principal', bool(s and estado_exibido(s) != 'concluido'))
+        self.integrar.setProperty('principal', bool(s and estado_exibido(s) == 'concluido'))
+        for botao in (self.abrir, self.integrar):
+            botao.style().unpolish(botao)
+            botao.style().polish(botao)
         if not s and self.encerrada:
             self.mostrar_encerrada(*self.encerrada)
             return
@@ -736,8 +887,7 @@ class Janela(QMainWindow):
         pendencia = 'Confira o pedido no terminal.' if estado == 'aguardando' else 'A sessão pode ser retomada pelo terminal.' if estado == 'interrompido' else 'Confira o resultado na conversa; a tarefa pode continuar.' if estado == 'concluido' else 'Acompanhando a atividade do agente.'
         self.situacao.setText(f'{ROTULOS.get(estado, estado)} · {idade(s.atualizado)}\n{pendencia}')
         self.ultima_atividade.setText(s.mensagem or 'Nenhuma mensagem de atividade publicada pelo agente.')
-        self.linha_tempo.setPlainText('\n\n'.join(self.eventos.get(s.nome, [])))
-        self.linha_tempo.verticalScrollBar().setValue(self.linha_tempo.verticalScrollBar().maximum())
+        self.linha_tempo.mostrar(self.eventos.get(s.nome, []), self.fichas['light' if self.modo.currentIndex() else 'dark'])
         self.abrir.setText('Retomar no terminal' if s.estado == 'interrompido' else 'Abrir terminal')
         self.detalhes.setPlainText(f"Estado: {ROTULOS.get(estado, estado)}\nCoordenador: {s.coordenador}\nAutor: {s.agente}\nRevisor: {s.revisor}\nProjeto: {s.projeto}\n\nSessão\n{s.nome}\n\nTarefa\n{s.tarefa or 'Não informada'}\n\nRamo\n{s.ramo or 'Não informado'}\n\nDiretório\n{s.dir or 'Não informado'}\n\nÚltima atualização\n{s.atualizado or 'Não informada'}\n\nMensagem da sessão\n{s.mensagem or 'Sem mensagem'}")
         if not self.real:
@@ -792,28 +942,57 @@ class Janela(QMainWindow):
     def aplicar_tema(self):
         modo = 'light' if self.modo.currentIndex() == 1 else 'dark'
         c = self.fichas[modo]
+        interacao = cores_interacao(c, modo)
         self.cores_estado = {'aguardando': ESTADOS[modo]['Bloqueada'],
                             'trabalhando': ESTADOS[modo]['Executando'],
                             'concluido': ESTADOS[modo]['Em revisão'],
                             'interrompido': ESTADOS[modo]['Falhou']}
         self.setStyleSheet(f"""
             QWidget {{ background: {c['superficie']}; color: {c['texto']};
-                font-family: Inter; font-size: 14px; }}
-            QTreeWidget, QPlainTextEdit, QLineEdit, QComboBox {{ background: {c['superficie_elevada']};
+                font-family: Inter; font-size: 14px; selection-background-color: {c['primaria']};
+                selection-color: {c['texto_primario']}; }}
+            QTreeWidget, QPlainTextEdit, QTextBrowser, QLineEdit, QComboBox {{ background: {c['superficie_elevada']};
                 border: 1px solid {c['texto_suave']}; border-radius: 8px; padding: 8px; }}
             QPlainTextEdit {{ font-family: 'JetBrains Mono'; }}
-            QTreeWidget::item {{ padding: 8px 4px; }}
+            QTreeWidget::item {{ padding: 4px; }}
             QTreeWidget::item:selected {{ background: {c['primaria']}; color: {c['texto_primario']}; }}
-            QHeaderView::section, QLabel#cartoes, QLabel#situacao {{
-                background: {c['superficie_elevada']}; padding: 12px; }}
+            QHeaderView::section {{ background: {c['superficie_elevada']};
+                color: {c['texto_suave']}; padding: 6px 4px; border: none; }}
+            QLabel#situacao {{ background: {c['superficie_elevada']}; padding: 8px; }}
+            QTabWidget::pane {{ border: none; }}
+            QTabBar::tab {{ background: {c['superficie']}; color: {c['texto_suave']};
+                border: none; border-bottom: 2px solid transparent; padding: 8px; }}
+            QTabBar::tab:selected {{ color: {c['primaria']}; border-bottom: 2px solid {c['primaria']}; }}
+            QTabBar::tab:focus {{ border: 1px dashed {c['primaria']}; border-bottom: 2px solid {c['primaria']}; }}
+            QScrollBar:vertical {{ background: {c['superficie']}; width: 8px; margin: 0; }}
+            QScrollBar:horizontal {{ background: {c['superficie']}; height: 8px; margin: 0; }}
+            QScrollBar::handle {{ background: {c['texto_suave']}; border-radius: 4px; min-height: 24px; min-width: 24px; }}
+            QScrollBar::add-line, QScrollBar::sub-line {{ width: 0; height: 0; }}
+            QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
             QPushButton {{ background: {c['superficie_elevada']}; border: 1px solid {c['texto_suave']};
                 border-radius: 8px; padding: 8px 16px; }}
             QPushButton:hover {{ border: 2px solid {c['primaria']}; }}
             QPushButton:focus, QComboBox:focus, QLineEdit:focus, QTreeWidget:focus,
             QPlainTextEdit:focus {{ border: 2px solid {c['primaria']}; }}
             QPushButton:disabled {{ color: {c['texto_suave']}; }}
-            QPushButton#encerrar {{ border: 2px solid transparent; text-align: left; }}
-            QPushButton#encerrar:focus, QPushButton#encerrar:hover {{ border: 2px solid {c['primaria']}; }}
+            QPushButton[principal="true"]:enabled {{ background: {c['primaria']}; color: {c['texto_primario']};
+                border: 1px solid {c['primaria']}; font-weight: 600; }}
+            QPushButton[principal="true"]:enabled:hover {{ background: {interacao['hover']}; }}
+            QPushButton[principal="true"]:enabled:focus {{ border: 2px dashed {c['texto_primario']}; }}
+            QPushButton#encerrar:enabled {{ background: {interacao['destrutivo']}; color: {ESTADOS[modo]['Falhou']};
+                border: 1px solid {interacao['borda_falha']}; }}
+            QPushButton#encerrar:enabled:hover {{ background: {interacao['destrutivo_hover']}; }}
+            QPushButton#encerrar:focus {{ border: 2px solid {c['primaria']}; }}
+            QPushButton#resumo_estado {{ text-align: left; padding: 0; border: 1px solid {c['texto_suave']}; }}
+            QPushButton#resumo_estado:checked {{ border: 2px solid {c['primaria']}; }}
+            QPushButton#resumo_estado:hover {{ border: 1px solid {c['primaria']}; }}
+            QPushButton#resumo_estado:focus {{ border: 2px dashed {c['primaria']}; }}
+            QPushButton#resumo_estado QLabel {{ background: transparent; border: none; padding: 0; font-size: 13px; }}
+            QPushButton#resumo_estado QLabel#resumo_numero {{ font-size: 20px; font-weight: 600; }}
+            QWidget#vazio {{ border: 1px dashed {c['texto_suave']}; border-radius: 8px; }}
+            QWidget#vazio QLabel {{ border: none; }}
+            QLabel#motivo_acao {{ color: {c['texto_suave']}; font-size: 13px; }}
+            QTextBrowser#linha_tempo {{ font-family: Inter; border: none; }}
             QPushButton#cartao {{ text-align: left; padding: 0; }}
             QPushButton#cartao:hover {{ border: 1px solid {c['primaria']}; }}
             QPushButton#cartao:checked {{ border: 2px solid {c['primaria']}; }}
@@ -823,7 +1002,7 @@ class Janela(QMainWindow):
             QLabel#cartao_titulo {{ font-size: 13px; font-weight: 600; color: {c['texto_suave']}; }}
             QLabel#cartao_numero {{ font-size: 24px; font-weight: 700; }}
             QLabel#cartao_apoio {{ font-size: 13px; }}
-            QLabel#cartao_rodape {{ font-size: 12px; color: {c['texto_suave']}; }}
+            QLabel#cartao_rodape {{ font-size: 13px; color: {c['texto_suave']}; }}
             QLabel#indicadores_detalhe {{ font-size: 16px; font-weight: 600; }}
             QLabel#indicadores_status[falha="true"], QLabel#rodadas_status[falha="true"],
             QLabel#rodadas_aviso[falha="true"] {{ color: {c['atencao']}; font-weight: 600; }}
@@ -849,24 +1028,33 @@ class Janela(QMainWindow):
             if sessao:
                 item.setForeground(2, QColor(self.cores_estado.get(estado_exibido(sessao), c['texto'])))
         self.coordenadores.pintar()
+        for estado, cartao in self.cartoes.items():
+            cartao.numero.setStyleSheet(f'color: {self.cores_estado[estado]};')
+        if self.selecionada() in self.sessoes:
+            self.linha_tempo.mostrar(self.eventos.get(self.selecionada(), []), c)
 
         try:
             svg = (RAIZ / 'default/logo/jangada-symbolic.svg').read_bytes()
         except OSError:
-            self.marca.setAccessibleName('')
-            self.marca.hide()
+            for marca in (self.marca, self.marca_vazio):
+                marca.setAccessibleName('')
+                marca.hide()
             return
         renderer = QSvgRenderer(svg.replace(b'#000000', c['primaria'].encode()))
         imagem = QPixmap(24, 24)
         if imagem.isNull() or not renderer.isValid():
-            self.marca.setAccessibleName('')
-            self.marca.hide()
+            for marca in (self.marca, self.marca_vazio):
+                marca.setAccessibleName('')
+                marca.hide()
             return
         imagem.fill(Qt.GlobalColor.transparent)
         pincel = QPainter(imagem)
         renderer.render(pincel)
         pincel.end()
         self.marca.setPixmap(imagem)
+        self.marca_vazio.setPixmap(imagem)
+        self.marca_vazio.setAccessibleName('Jangada')
+        self.marca_vazio.show()
         self.marca.setAccessibleName('Jangada')
         self.marca.show()
 

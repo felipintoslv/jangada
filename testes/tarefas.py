@@ -231,7 +231,7 @@ class Interface(unittest.TestCase):
         j.resize(700, 460)
         j.show()
         APP.processEvents()
-        self.assertEqual((j.width(), j.height()), (940, 700))
+        self.assertEqual((j.width(), j.height()), (700, 460))
         self.assertGreaterEqual(j.centrais.indexOf(j.coordenadores), 0)
         self.assertFalse(j.lista.isColumnHidden(2))
         self.assertGreater(j.lista.columnWidth(2), j.lista.fontMetrics().horizontalAdvance('Pronto para conferir') + 20)
@@ -283,7 +283,7 @@ class Interface(unittest.TestCase):
     def test_marca_carrega_com_transparencia_e_preserva_titulo_quando_ausente(self):
         marcas = [rotulo for rotulo in self.janela.findChildren(QLabel)
                   if rotulo.accessibleName() == 'Jangada']
-        self.assertEqual(len(marcas), 1)
+        self.assertEqual(len(marcas), 2)
         imagem = marcas[0].pixmap().toImage()
         self.assertEqual((imagem.width(), imagem.height()), (24, 24))
         self.assertEqual(imagem.pixelColor(0, 0).alpha(), 0)
@@ -414,7 +414,7 @@ class Interface(unittest.TestCase):
             self.assertIn('Central de tarefas', central.windowTitle())
             self.assertEqual([central.abas.tabText(i) for i in range(central.abas.count())], ['Acompanhamento', 'Saída do agente', 'Detalhes', 'Rodadas', 'Entrega'])
             self.assertFalse(hasattr(central, 'resposta'))
-            self.assertIn('1 precisa da sua resposta', central.cartoes.text())
+            self.assertEqual(central.cartoes['aguardando'].numero.text(), '1')
             self.assertIn('<b>Texto puro</b>', central.ultima_atividade.text())
             self.assertIn('Precisa da sua resposta', central.situacao.text())
             original = central.linha_tempo.toPlainText()
@@ -449,6 +449,117 @@ class Interface(unittest.TestCase):
             self.assertEqual(len(central.eventos[nome]), 1)
         finally:
             central.close()
+
+    def test_resumo_filtra_sem_perder_alvo_ao_atualizar(self):
+        j = self.janela
+        j.cartoes['trabalhando'].click()
+        self.assertEqual(j.selecionada(), 'projeto--dois')
+        self.assertTrue(j.itens['projeto--um'].isHidden())
+        j.mostrar(j.sessoes)
+        self.assertEqual(j.selecionada(), 'projeto--dois')
+        grupo = j.itens['projeto--dois'].parent()
+        self.assertIn('(1)', grupo.text(0))
+        grupo.setExpanded(False)
+        j.cartoes['trabalhando'].click()
+        j.mostrar(j.sessoes)
+        self.assertFalse(grupo.isExpanded())
+        self.assertFalse(j.itens['projeto--um'].isHidden())
+        j.cartoes['concluido'].click()
+        self.assertIsNone(j.selecionada())
+        self.assertFalse(j.abrir.isEnabled())
+        self.assertFalse(j.vazio.isHidden())
+        j.selecionar_nome('projeto--um')
+        self.assertEqual(j.selecionada(), 'projeto--um')
+        self.assertFalse(j.itens['projeto--um'].isHidden())
+
+    def test_motivo_visivel_acompanha_recusas_existentes(self):
+        j = self.janela
+        j.falha('Erro simulado')
+        for motivo in j.motivos.values():
+            self.assertIn('Atualize', motivo.text())
+        j.mostrar(j.sessoes)
+        j.integracao_etapa = 'previa'
+        j.selecionar()
+        self.assertIn('andamento', j.motivos['integrar'].text())
+        self.assertFalse(j.integrar.isEnabled())
+        j.integracao_etapa = None
+        j.selecionar()
+        self.assertEqual(j.motivos['integrar'].text(), '')
+        self.assertTrue(j.integrar.isEnabled())
+
+    def test_linha_tempo_trata_mensagem_como_texto(self):
+        j = self.janela
+        s = j.sessoes[j.selecionada()]
+        j.mostrar(dict(j.sessoes, **{s.nome: janela.replace(s, mensagem='<img src="https://exemplo"> & texto')}))
+        self.assertIn('<img src="https://exemplo"> & texto', j.linha_tempo.toPlainText())
+        self.assertIn('Tarefa encontrada', j.linha_tempo.toPlainText())
+
+    def test_cores_derivadas_conservam_contraste(self):
+        from aparencia import cores_interacao
+        from visual.fichas import PADRAO, contraste, validar
+        pessoal = {m: dict(c, primaria=c['texto'], texto_primario=c['superficie'])
+                   for m, c in PADRAO.items()}
+        for paleta in (PADRAO, validar(pessoal)):
+            for modo, c in paleta.items():
+                cores = cores_interacao(c, modo)
+                for texto, fundo in cores['pares'].values():
+                    self.assertGreaterEqual(contraste(texto, fundo), 4.5)
+                self.assertEqual(cores['pares']['principal'], (c['texto_primario'], c['primaria']))
+
+    def test_dimensoes_temas_e_retorno_ao_foco(self):
+        j = self.janela
+        for largura, altura in ((1440, 900), (1200, 780), (700, 460)):
+            for modo in (0, 1):
+                with self.subTest(largura=largura, modo=modo):
+                    j.resize(largura, altura)
+                    j.modo.setCurrentIndex(modo)
+                    j.show()
+                    j.activateWindow()
+                    j.exibir_detalhe(False)
+                    APP.processEvents()
+                    self.assertEqual((j.width(), j.height()), (largura, altura))
+                    self.assertEqual(j.centralWidget().grab().toImage().pixelColor(0, 0).name(),
+                                     j.fichas['light' if modo else 'dark']['superficie'])
+                    for cartao in j.cartoes.values():
+                        self.assertGreaterEqual(cartao.height(), 72)
+                        self.assertTrue(cartao.rect().contains(cartao.titulo.geometry()))
+                    if largura >= 940:
+                        for botao in (j.abrir, j.integrar, j.integrar_terminal, j.encerrar):
+                            self.assertTrue(j.painel_detalhes.viewport().rect().contains(
+                                botao.mapTo(j.painel_detalhes.viewport(), botao.rect().center())))
+                    else:
+                        nome = j.selecionada()
+                        j.ver_detalhe.click()
+                        APP.processEvents()
+                        self.assertTrue(j.painel_lista.isHidden())
+                        j.encerrar.setFocus()
+                        APP.processEvents()
+                        self.assertTrue(j.painel_detalhes.viewport().rect().contains(
+                            j.encerrar.mapTo(j.painel_detalhes.viewport(), j.encerrar.rect().center())))
+                        j.voltar_lista.click()
+                        self.assertEqual(j.selecionada(), nome)
+                        self.assertIs(APP.focusWidget(), j.lista)
+
+    def test_motivos_da_fila_preservam_estados_permitidos(self):
+        op = self.carregar_operacional()
+        op.lista.setCurrentItem(None)
+        op.selecionar()
+        for acao in op.botoes:
+            self.assertFalse(op.botoes[acao].isEnabled())
+            self.assertIn('Selecione', op.motivos[acao].text())
+        op.validos = False
+        op.selecionar()
+        self.assertIn('Atualize', op.motivos['revisar'].text())
+
+    def test_contagem_nao_reabre_grupo_quando_total_muda(self):
+        j = self.janela
+        grupo = j.itens['projeto--um'].parent()
+        grupo.setExpanded(False)
+        s = j.sessoes['projeto--um']
+        j.mostrar(dict(j.sessoes, **{'projeto--tres': janela.replace(s, nome='projeto--tres')}))
+        grupo = j.itens['projeto--um'].parent()
+        self.assertIn('(2)', grupo.text(0))
+        self.assertFalse(grupo.isExpanded())
 
     def test_central_sem_conversa_e_painel_sem_aplicativo(self):
         self.assertFalse([b for b in self.janela.findChildren(QPushButton) if 'Conversa' in b.text()])
@@ -1418,6 +1529,7 @@ while not (pasta / 'parar-clientes').exists():
         self.janela.show()
         QTest.qWaitForWindowExposed(self.janela)
         self.janela.activateWindow()
+        self.janela.mostrar_coordenadores()
         for modo in (0, 1):
             self.janela.modo.setCurrentIndex(modo)
             coluna.caixa.setFocus()
@@ -1546,6 +1658,7 @@ while not (pasta / 'parar-clientes').exists():
         self.assertIn('QLabel#faixa', self.janela.styleSheet())
 
     def test_coluna_de_coordenadores_nao_recolhe(self):
+        self.janela.resize(1440, 900)
         self.janela.show()
         QTest.qWaitForWindowExposed(self.janela)
         self.janela.area.moveSplitter(0, 1)
@@ -1586,6 +1699,7 @@ while not (pasta / 'parar-clientes').exists():
         self.assertFalse((self.raiz / 'acao.json').exists())
         texto = 'Pode seguir com a tarefa 2.\n1\n$(rm -rf ~); `id`'
         coluna.caixa.setPlainText(texto)
+        self.janela.mostrar_coordenadores()
         coluna.caixa.setFocus()
         QTest.keyClick(coluna.caixa, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier)
         self.assertEqual(APP.clipboard().text(), texto)
@@ -1726,7 +1840,7 @@ while not (pasta / 'parar-clientes').exists():
         self.assertNotIn('horta--coordenador', self.janela.sessoes)
         self.assertNotIn('horta--coordenador', self.janela.itens)
         self.assertEqual(set(self.janela.sessoes), {'projeto--um', 'projeto--dois'})
-        self.assertIn('2 tarefas', self.janela.resumo.text())
+        self.assertEqual(sum(int(c.numero.text()) for c in self.janela.cartoes.values()), 2)
 
     def test_coordenadores_simulados_nao_consultam(self):
         simulada = Janela()
@@ -2355,7 +2469,7 @@ while not (pasta / 'parar-clientes').exists():
         self.lista.write_text(self.lista.read_text().replace('trabalhando', 'interrompido'))
         self.janela.atualizar()
         aguardar(lambda: self.janela.lista.topLevelItemCount() == 2
-                 and self.janela.lista.topLevelItem(1).text(0) == 'Interrompidas')
+                 and self.janela.lista.topLevelItem(1).text(0) == 'Interrompidas (1)')
         self.assertFalse(self.janela.lista.topLevelItem(0).isExpanded())
         self.assertTrue(self.janela.lista.topLevelItem(1).isExpanded())
 
@@ -2466,7 +2580,7 @@ while not (pasta / 'parar-clientes').exists():
         self.janela.atualizar()
         self.esperar_consulta()
         grupos = [self.janela.lista.topLevelItem(i) for i in range(3)]
-        self.assertEqual([g.text(0) for g in grupos], ['Precisa da sua resposta', 'Interrompidas', 'Em execução'])
+        self.assertEqual([g.text(0) for g in grupos], ['Precisa da sua resposta (1)', 'Interrompidas (1)', 'Em execução (1)'])
         self.assertEqual(grupos[0].child(0).text(0), 'Responder dúvida')
         self.assertEqual(grupos[0].child(0).text(1), 'z')
         self.janela.selecionar_nome('a--dois')
