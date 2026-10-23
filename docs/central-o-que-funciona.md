@@ -140,31 +140,10 @@ Core foi acrescentada. As contagens vêm das sessões consultadas.
 | Navegação estreita | Lista e detalhe alternados em 700×460; retorno mantém seleção e foco. Ações e conteúdo acessíveis por rolagem | `menus/tarefas/janela.py`, `exibir_detalhe`; `aparencia.py`, `InspetorRolavel` |
 | Cores, fontes e estados | Fichas por modo; misturas de interação conferidas em 4,5:1. Inter e JetBrains Mono locais, corpo de 14 px e rótulos de 13 px | `menus/tarefas/aparencia.py`, `cores_interacao`; `janela.py`, `aplicar_tema` |
 
-O pedido ao leitor local foi listar esses elementos no HTML e na Central,
-com arquivo e linha ou indicação de ausência. A chamada com as duas fontes
-inteiras foi recusada: 11 fatias para um limite de cinco. Nenhuma contribuição
-local foi recebida ou enviada a outro destino. A tabela foi conferida pelo
-autor nas fontes.
-
-O designer do agy recebeu somente o HTML aprovado e `janela.py`, em leitura.
-Seu relatório identificou o mínimo de 940×700, a contagem no texto como risco
-para grupos recolhidos e o espaço ocupado pelos coordenadores em 1200 px.
-Foram aproveitados o mínimo de 700×460, coordenadores em aba abaixo de
-1360 px, chave estável para grupos, abas roláveis e descrições acessíveis.
-Quatro cartões na mesma linha preservam a altura útil em 700×460; a disposição
-móvel de 390 px do HTML não é requisito Qt. O apoio não revisa a entrega.
-
-O verificador do agy conferiu regras e cobertura nas fontes autorizadas.
-Seu apontamento sobre os temas levou à conferência da cor renderizada nos
-seis cenários. As referências antigas dos arquivos alterados foram trocadas
-por funções. Escopo, arquivos novos e execução dos testes foram conferidos
-pelo autor; o verificador não executou comandos nem certificou a entrega.
-
-Capturas sintéticas e roteiro reproduzível ficam em `.jangada/evidencias-t3b/`,
-nos tamanhos 1440×900, 1200×780 e 700×460, claro e escuro. A suíte Qt cobre
-os seis casos, ações visíveis no desktop, foco na janela baixa, seleção após
-atualização, grupos recolhidos, motivos de recusa e contraste das interações. Nas fichas usadas nas capturas, o menor
-contraste medido foi 5,07:1, incluindo as misturas de interação.
+A suíte Qt confere 1440×900, 1200×780 e 700×460 nos dois modos de cor,
+ações visíveis no desktop, foco na janela baixa, seleção após atualização,
+grupos recolhidos e motivos de recusa. O menor contraste medido foi 5,07:1,
+incluindo as misturas de interação, acima do mínimo exigido de 4,5:1.
 
 ## O que o Core não entrega
 

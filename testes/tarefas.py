@@ -561,6 +561,46 @@ class Interface(unittest.TestCase):
         self.assertIn('(2)', grupo.text(0))
         self.assertFalse(grupo.isExpanded())
 
+    def test_selecao_por_clique_reativa_acompanhamento_estreito(self):
+        j = self.janela
+        j.resize(700, 460)
+        j.show()
+        j.exibir_detalhe(False)
+        j.lista.setCurrentItem(None)
+        j.ajustar_sessoes()
+        self.assertFalse(j.ver_detalhe.isEnabled())
+        item = j.itens['projeto--dois']
+        j.lista.scrollToItem(item)
+        APP.processEvents()
+        QTest.mouseClick(j.lista.viewport(), Qt.MouseButton.LeftButton,
+                         pos=j.lista.visualItemRect(item).center())
+        self.assertEqual(j.selecionada(), 'projeto--dois')
+        self.assertTrue(j.ver_detalhe.isEnabled())
+        j.ver_detalhe.click()
+        self.assertFalse(j.painel_detalhes.isHidden())
+
+    def test_cursor_no_grupo_sobrevive_atualizacao_sem_virar_sessao(self):
+        j = self.janela
+        grupo = j.itens['projeto--um'].parent()
+        j.lista.setCurrentItem(grupo)
+        self.assertIsNone(j.selecionada())
+        aviso = j.status.text()
+        j.mostrar(j.sessoes)
+        self.assertIs(j.lista.currentItem(), grupo)
+        self.assertEqual(j.status.text(), aviso)
+        self.assertFalse(j.ver_detalhe.isEnabled())
+
+    def test_sessao_que_sai_do_filtro_avisa_no_detalhe_estreito(self):
+        j = self.janela
+        j.resize(700, 460)
+        j.cartoes['trabalhando'].click()
+        j.exibir_detalhe(True)
+        s = j.sessoes[j.selecionada()]
+        j.mostrar(dict(j.sessoes, **{s.nome: janela.replace(s, estado='concluido')}))
+        self.assertIsNone(j.selecionada())
+        self.assertIn('saiu do filtro', j.status.text())
+        self.assertFalse(j.abrir.isEnabled())
+
     def test_central_sem_conversa_e_painel_sem_aplicativo(self):
         self.assertFalse([b for b in self.janela.findChildren(QPushButton) if 'Conversa' in b.text()])
         self.assertFalse(hasattr(self.janela, 'abrir_ferramenta'))

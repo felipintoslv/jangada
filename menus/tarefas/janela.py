@@ -40,6 +40,7 @@ AGENTES = ("claude", "codex")
 
 GRUPOS = {'aguardando': 'Precisa da sua resposta', 'interrompido': 'Interrompidas',
           'trabalhando': 'Em execução', 'concluido': 'Pronto para conferir'}
+PAPEL_GRUPO = Qt.ItemDataRole.UserRole + 1
 
 class NovaTarefa(QDialog):
 
@@ -655,10 +656,14 @@ class Janela(QMainWindow):
             grupo = self.lista.topLevelItem(i)
             total = sum(not grupo.child(j).isHidden() for j in range(grupo.childCount()))
             grupo.setHidden(total == 0)
-            grupo.setText(0, f'{grupo.data(0, Qt.ItemDataRole.UserRole)} ({total})')
+            grupo.setText(0, f'{grupo.data(0, PAPEL_GRUPO)} ({total})')
             grupo.setFirstColumnSpanned(True)
         atual = self.lista.currentItem()
-        if (atual is not None and atual not in visiveis) or (reselecionar and atual is None):
+        sessao_atual = atual is not None and atual.parent() is not None
+        if (sessao_atual and atual not in visiveis) or (reselecionar and not sessao_atual):
+            if sessao_atual and not reselecionar:
+                self.status.setText('A sessão selecionada saiu do filtro após mudar de estado. '
+                                    'Limpe os filtros ou selecione outra sessão.')
             self.lista.setCurrentItem(visiveis[0] if reselecionar and visiveis else None)
             if not visiveis:
                 self.lista.clearSelection()
@@ -682,7 +687,7 @@ class Janela(QMainWindow):
 
     def selecionada(self):
         item = self.lista.currentItem()
-        return item.data(0, Qt.ItemDataRole.UserRole) if item else None
+        return item.data(0, Qt.ItemDataRole.UserRole) if item and item.parent() is not None else None
 
     def abrir_indicadores(self):
         if self.centrais.currentWidget() is self.indicadores:
@@ -752,7 +757,7 @@ class Janela(QMainWindow):
         # A lista só é refeita quando muda de ordem ou de grupo; no resto das
         # atualizações os itens ficam e só o texto muda.
         if estrutura != self.estrutura:
-            fechados = {g.data(0, Qt.ItemDataRole.UserRole) for g in map(self.lista.topLevelItem, range(self.lista.topLevelItemCount()))
+            fechados = {g.data(0, PAPEL_GRUPO) for g in map(self.lista.topLevelItem, range(self.lista.topLevelItemCount()))
                         if not g.isExpanded()}
             self.lista.clear()
             self.itens = {}
@@ -760,7 +765,7 @@ class Janela(QMainWindow):
             for grupo, nome in estrutura:
                 if grupo not in grupos:
                     grupos[grupo] = QTreeWidgetItem(self.lista, [grupo])
-                    grupos[grupo].setData(0, Qt.ItemDataRole.UserRole, grupo)
+                    grupos[grupo].setData(0, PAPEL_GRUPO, grupo)
                     grupos[grupo].setFlags(Qt.ItemFlag.ItemIsEnabled)
                     grupos[grupo].setExpanded(grupo not in fechados)
                 self.itens[nome] = QTreeWidgetItem(grupos[grupo])
@@ -850,6 +855,7 @@ class Janela(QMainWindow):
 
     def selecionar(self, *_):
         s = self.sessoes.get(self.selecionada())
+        self.ver_detalhe.setEnabled(s is not None)
         ocupada = (self.acao.state() != QProcess.ProcessState.NotRunning
                    or self.integracao_etapa is not None)
         pendente = self.finalizacao_pendente(s.nome) if self.dados_validos and s else False
