@@ -24,8 +24,8 @@ LINHA_MAX = 200
 LISTA_MAX = 4096
 PROVEDORES = ('claude', 'codex')
 SEM_CORE = 'Coordenadores ainda não disponíveis no Core instalado.'
-SEM_CICLO = ('O Core instalado não informa o ciclo da atuação. Retomar e Finalizar atuação '
-             'exigem atualização do Core; as ações anteriores continuam disponíveis.')
+SEM_CICLO = ('Este registro não informa o ciclo da atuação. Retomar e Finalizar atuação '
+             'não estão disponíveis neste registro; as ações anteriores continuam disponíveis.')
 SEM_RETOMADA = 'O Core informa que a retomada está indisponível neste momento.'
 FAIXA = ('Só você faz: sem dado. O Core ainda não informa os commits locais não enviados '
          'dos projetos cadastrados.')
@@ -231,6 +231,7 @@ class Coordenadores(QWidget):
         self.pedido = None
         self.prazo_acao_ms = 30000
         self.expirou_acao = False
+        self.aviso_saida = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 12, 0)
         topo = QHBoxLayout()
@@ -347,6 +348,8 @@ class Coordenadores(QWidget):
         return rotulo
 
     def avisar(self, rotulo, mensagem, falha=False):
+        if rotulo is self.resultado:
+            self.aviso_saida = None
         rotulo.setText(mensagem)
         if rotulo.property('falha') != falha:
             rotulo.setProperty('falha', falha)
@@ -395,8 +398,6 @@ class Coordenadores(QWidget):
                 self.avisar(self.status, f'{len(lista)} ' + ('coordenador' if len(lista) == 1
                             else 'coordenadores') + '. Linhas lidas do registro, mostradas como dado.'
                             if lista else 'Nenhum coordenador aberto. Use Novo coordenador.')
-                if any(not tem_ciclo(c) for c in lista):
-                    self.avisar(self.status, self.status.text() + ' ' + SEM_CICLO)
         if self.pendente:
             self.atualizar()
 
@@ -427,9 +428,12 @@ class Coordenadores(QWidget):
         self.escolher()
 
     def estado_tarefa(self, t):
-        if not t['viva']:
-            return f'{ICONES["Cancelada"]} encerrada'
         s = self.janela.sessoes.get(t['sessao'])
+        if not t['viva']:
+            texto = f'{ICONES["Planejada"]} Sem sessão ativa'
+            if s:
+                texto += ' · Último estado: ' + ROTULOS.get(estado_exibido(s), estado_exibido(s))
+            return texto
         return ROTULOS.get(estado_exibido(s), estado_exibido(s)) if s else SEM_DADO
 
     def estados_das_tarefas(self):
@@ -508,6 +512,9 @@ class Coordenadores(QWidget):
 
     def mostrar_painel(self):
         c = self.coordenador(self.atual) if self.atual else None
+        if self.aviso_saida is not None and (c is None or not c['viva'] or c.get('ciclo') != 'aberta'
+                or self.aviso_saida != (c['sessao'], c.get('atuacao_id'))):
+            self.avisar(self.resultado, '')
         if c is None:
             self.nome.setText('Escolha um coordenador na lista.')
             for rotulo in (self.situacao, self.ultima, self.atualizado, self.aviso):
@@ -533,6 +540,8 @@ class Coordenadores(QWidget):
         aberta = tem_ciclo(c) and c['ciclo'] == 'aberta'
         if aberta and not c['viva'] and not c['retomavel']:
             self.avisar(self.aviso, AVISOS[chave] + ' ' + SEM_RETOMADA)
+        if not tem_ciclo(c):
+            self.avisar(self.aviso, AVISOS[chave] + ' ' + SEM_CICLO)
         permitido = self.janela.real and self.disponivel and not ocupado
         self.retomar.setEnabled(permitido and aberta and not c['viva'] and c['retomavel']
                                 and bool(c.get('projeto')) and c.get('provedor') in PROVEDORES)
@@ -688,6 +697,7 @@ class Coordenadores(QWidget):
         self.selecionar(c['sessao'])
         self.avisar(self.resultado, 'A sessão está viva. Salve o estado e o diário e saia voluntariamente. '
                     'Use Ir para a janela; depois, finalize a atuação.', True)
+        self.aviso_saida = (c['sessao'], c.get('atuacao_id'))
 
     def reconferencia_fim(self, _alvo, falha, bruto):
         if self.fechando or self.pedido is None:

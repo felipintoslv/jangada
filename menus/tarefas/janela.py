@@ -385,7 +385,7 @@ class Janela(QMainWindow):
         self.encerrar = QPushButton('Encerrar sem integrar')
         self.integrar.setObjectName('integrar')
         self.encerrar.setObjectName('encerrar')
-        self.integrar.setToolTip('Integra as alterações ao projeto e encerra a sessão. Atalho: Alt+I.')
+        self.integrar.setToolTip('Integra as alterações ao projeto; a sessão permanece aberta. Atalho: Alt+I.')
         self.encerrar.setToolTip('Encerra a sessão sem integrar as alterações ao projeto. Atalho: Ctrl+X.')
         self.integrar.setShortcut(QKeySequence('Alt+I'))
         self.encerrar.setShortcut(QKeySequence('Ctrl+X'))

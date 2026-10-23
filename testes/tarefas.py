@@ -819,6 +819,89 @@ class Interface(unittest.TestCase):
         self.assertTrue(coluna.retomar.isEnabled())
         self.assertTrue(coluna.finalizar.isEnabled())
 
+    def test_ux01_tarefa_sem_processo_preserva_vinculo_e_ultimo_estado(self):
+        coluna = self.atuacao_aberta(tarefas=[dict(sessao='projeto--um', viva=False),
+                                             dict(sessao='sem-registro', viva=False)])
+        for estado, rotulo in (('aguardando', 'Precisa da sua resposta'),
+                               ('interrompido', 'Interrompida'),
+                               ('concluido', 'Pronto para conferir')):
+            with self.subTest(estado=estado):
+                self.lista.write_text(f'{estado}\tprojeto--um\t/tmp/projeto\thoje\tagente/um\tTarefa um\n')
+                self.janela.atualizar()
+                self.esperar_consulta()
+                aguardar(lambda: not coluna.consulta.ocupada())
+                item = coluna.itens[('tarefa', 'projeto--um', 'horta--coordenador')]
+                self.assertIn('Sem sessão ativa', item.text(1))
+                self.assertIn('Último estado: ' + rotulo, item.text(1))
+                self.assertNotIn('encerrada', item.text(1))
+                self.assertEqual(item.parent(), coluna.itens[('coord', 'horta--coordenador')])
+        self.assertEqual(coluna.itens[('tarefa', 'sem-registro', 'horta--coordenador')].text(1),
+                         '○ Sem sessão ativa')
+        self.coordenadores_falsos(viva=True, ciclo='aberta', atuacao_id='opaco-1', retomavel=False)
+        self.carregar_coordenadores()
+        self.assertEqual(coluna.itens[('tarefa', 'projeto--um', 'horta--coordenador')].text(1),
+                         'Pronto para conferir')
+
+    def test_ux01_aviso_legado_so_no_registro_afetado(self):
+        coluna = self.atuacao_aberta()
+        self.assertNotIn('não informa o ciclo', coluna.status.text())
+        self.assertNotIn('não informa o ciclo', coluna.aviso.text())
+        self.escolher_coordenador(coluna, 'caderno--coordenador')
+        self.assertIn('Este registro não informa o ciclo', coluna.aviso.text())
+        self.assertNotIn('exigem atualização', coluna.aviso.text())
+        self.assertFalse(coluna.retomar.isEnabled() or coluna.finalizar.isEnabled())
+        self.assertTrue(coluna.ir.isEnabled())
+        self.escolher_coordenador(coluna, 'horta--coordenador')
+        self.assertNotIn('não informa o ciclo', coluna.aviso.text())
+        self.assertTrue(coluna.retomar.isEnabled() and coluna.finalizar.isEnabled())
+
+    def test_ux01_aviso_de_saida_expira_so_com_consulta_valida(self):
+        coluna = self.atuacao_aberta(viva=True, retomavel=False)
+        with patch.object(QMessageBox, 'exec') as confirmar:
+            coluna.finalizar.click()
+        confirmar.assert_not_called()
+        self.assertIn('saia voluntariamente', coluna.resultado.text())
+        (self.raiz / 'coordenadores.json').write_text('{}')
+        self.carregar_coordenadores()
+        self.assertIn('saia voluntariamente', coluna.resultado.text())
+        self.coordenadores_falsos(viva=True, ciclo='aberta', atuacao_id='opaco-1', retomavel=False)
+        self.carregar_coordenadores()
+        self.assertIn('saia voluntariamente', coluna.resultado.text())
+        self.coordenadores_falsos(viva=False, ciclo='aberta', atuacao_id='opaco-1', retomavel=True)
+        self.carregar_coordenadores()
+        self.assertEqual(coluna.resultado.text(), '')
+        self.assertFalse(coluna.resultado.property('falha'))
+        self.assertTrue(coluna.retomar.isEnabled() and coluna.finalizar.isEnabled())
+        coluna.terminar_acao('Resultado útil preservado', True)
+        self.carregar_coordenadores()
+        self.assertEqual(coluna.resultado.text(), 'Resultado útil preservado')
+        self.assertTrue(coluna.resultado.property('falha'))
+
+    def test_ux01_aviso_de_saida_nao_afeta_outro_registro_ou_atuacao(self):
+        coluna = self.atuacao_aberta(viva=True, retomavel=False)
+        coluna.finalizar.click()
+        self.assertIn('saia voluntariamente', coluna.resultado.text())
+        self.escolher_coordenador(coluna, 'caderno--coordenador')
+        self.assertEqual(coluna.resultado.text(), '')
+        self.escolher_coordenador(coluna, 'horta--coordenador')
+        coluna.finalizar.click()
+        self.coordenadores_falsos(viva=True, ciclo='aberta', atuacao_id='outra', retomavel=False)
+        self.carregar_coordenadores()
+        self.assertEqual(coluna.resultado.text(), '')
+
+    def test_ux01_integracao_informa_sessao_aberta_na_dica_e_no_dialogo(self):
+        self.assertIn('sessão permanece aberta', self.janela.integrar.toolTip())
+        self.assertNotIn('encerra a sessão', self.janela.integrar.toolTip())
+        dados = dict(base_sha='a' * 40, candidate_sha='b' * 40, arquivos='+1 -0 arquivo.py',
+                     marca={}, parecer='', validacao_local='')
+        def conferir_dialogo(dialogo):
+            self.assertIn('sessão fica aberta', dialogo.text())
+            self.assertEqual(dialogo.textFormat(), Qt.TextFormat.PlainText)
+            self.assertEqual(dialogo.defaultButton(), dialogo.button(QMessageBox.StandardButton.No))
+            return QMessageBox.StandardButton.No
+        with patch.object(QMessageBox, 'exec', new=conferir_dialogo):
+            self.assertFalse(self.janela.confirmar_entrega(dados))
+
     def test_disponibilidade_false_nao_invalida_lista_nem_amplia_retomada(self):
         coluna = self.atuacao_aberta()
         self.coordenadores_falsos(viva=False, ciclo='aberta', atuacao_id='opaco-1', retomavel=False)
@@ -1041,7 +1124,7 @@ while not (pasta / 'parar-clientes').exists():
         self.assertEqual(self.acoes_coordenador(), [])
 
     def test_finalizar_cancela_confirma_preserva_rascunho_e_tarefas(self):
-        coluna = self.atuacao_aberta()
+        coluna = self.atuacao_aberta(tarefas=[dict(sessao='projeto--um', viva=False)])
         coluna.caixa.setPlainText('Diário a copiar')
         confirmacoes = []
         def responder(botao):
@@ -1069,6 +1152,9 @@ while not (pasta / 'parar-clientes').exists():
         self.assertEqual(coluna.chave(), ('coord', 'horta--coordenador'))
         self.assertEqual(coluna.caixa.toPlainText(), 'Diário a copiar')
         self.assertEqual(coluna.itens[('coord', 'horta--coordenador')].childCount(), 1)
+        tarefa = coluna.itens[('tarefa', 'projeto--um', 'horta--coordenador')]
+        self.assertIn('Sem sessão ativa', tarefa.text(1))
+        self.assertIn('Último estado: Precisa da sua resposta', tarefa.text(1))
 
     def test_finalizar_reconfere_apos_confirmacao_e_oferece_janela(self):
         coluna = self.atuacao_aberta()
@@ -1203,7 +1289,8 @@ while not (pasta / 'parar-clientes').exists():
                 del payload['coordenadores'][1][ausente]
                 arquivo.write_text(json.dumps(payload))
                 coluna = self.escolher_coordenador(self.carregar_coordenadores(), 'horta--coordenador')
-                self.assertIn('não informa o ciclo', coluna.status.text())
+                self.assertNotIn('não informa o ciclo', coluna.status.text())
+                self.assertIn('Este registro não informa o ciclo', coluna.aviso.text())
                 self.assertFalse(coluna.retomar.isEnabled() or coluna.finalizar.isEnabled())
                 self.assertTrue(coluna.novo.isEnabled() and coluna.ir.isEnabled() and coluna.copiar.isEnabled())
                 coluna.caixa.setPlainText('Dado, não instrução')
@@ -1262,23 +1349,23 @@ while not (pasta / 'parar-clientes').exists():
         self.assertEqual([horta.child(0).text(0)], ['projeto--um'])
         self.assertEqual([caderno.child(i).text(0) for i in range(2)], ['projeto--dois', 'caderno--antiga'])
         self.assertEqual(horta.child(0).text(1), 'Precisa da sua resposta')
-        self.assertIn('encerrada', caderno.child(1).text(1))
+        self.assertIn('Sem sessão ativa', caderno.child(1).text(1))
         escuro = janela.ESTADOS['light' if self.janela.modo.currentIndex() else 'dark']['Bloqueada']
         self.assertEqual(horta.foreground(1).color().name(), escuro)
         self.escolher_coordenador(coluna, 'horta--coordenador')
-        self.assertEqual(coluna.aviso.text(), 'O coordenador espera resposta no terminal.')
+        self.assertIn('O coordenador espera resposta no terminal.', coluna.aviso.text())
         self.assertEqual(coluna.ultima.text(), 'Última linha: Pedido de permissão aberto')
         self.assertIn('17/10/2026', coluna.atualizado.text())
         self.assertTrue(coluna.caixa.isEnabled())
         self.escolher_coordenador(coluna, 'caderno--coordenador')
-        self.assertEqual(coluna.aviso.text(), 'O coordenador está trabalhando.')
+        self.assertIn('O coordenador está trabalhando.', coluna.aviso.text())
         self.assertEqual(coluna.atualizado.text(), 'Atualizado em sem dado')
         self.assertTrue(coluna.caixa.isEnabled())
         self.escolher_coordenador(coluna, 'horta--coordenador')
         self.coordenadores_falsos('concluido')
         self.carregar_coordenadores()
         self.assertEqual(coluna.chave(), ('coord', 'horta--coordenador'))
-        self.assertEqual(coluna.aviso.text(), 'O coordenador terminou a resposta.')
+        self.assertIn('O coordenador terminou a resposta.', coluna.aviso.text())
         self.assertEqual(coluna.itens[('coord', 'horta--coordenador')].text(1), '✓ resposta pronta')
         self.assertTrue(coluna.caixa.isEnabled() and coluna.ir.isEnabled())
         self.coordenadores_falsos('aguardando', viva=False)
@@ -1310,7 +1397,7 @@ while not (pasta / 'parar-clientes').exists():
         aguardar(lambda: not self.janela.indicadores.consulta.state() != QProcess.ProcessState.NotRunning)
         filho = coluna.itens[('tarefa', 'projeto--dois', 'caderno--coordenador')]
         coluna.arvore.setCurrentItem(filho)
-        self.assertEqual(coluna.aviso.text(), 'O coordenador está trabalhando.')
+        self.assertIn('O coordenador está trabalhando.', coluna.aviso.text())
         coluna.ativar(filho)
         self.assertEqual(self.janela.centrais.currentIndex(), 0)
         self.assertEqual(self.janela.selecionada(), 'projeto--dois')
