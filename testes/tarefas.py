@@ -128,6 +128,18 @@ class Interface(unittest.TestCase):
              patch.object(QProcess, 'startDetached', return_value=(True, 123)) as iniciar:
             self.janela.finalizar(False)
             iniciar.assert_not_called()
+            self.assertIn('durante a confirmação', self.janela.status.text())
+
+    def test_encerrar_informa_mudanca_de_atividade_durante_confirmacao(self):
+        self.confirmacao_encerrar.stop()
+        def atualizar(_):
+            self.janela.sessoes['projeto--um'] = janela.replace(self.janela.sessoes['projeto--um'], mensagem='Nova atividade')
+            return QMessageBox.StandardButton.Yes.value
+        with patch.object(QMessageBox, 'exec', new=atualizar), \
+             patch.object(QProcess, 'startDetached', return_value=(True, 123)) as iniciar:
+            self.janela.finalizar(False)
+            iniciar.assert_not_called()
+            self.assertIn('durante a confirmação', self.janela.status.text())
 
     def test_atalho_encerrar_preserva_recortar_texto(self):
         self.janela.show()
@@ -162,6 +174,58 @@ class Interface(unittest.TestCase):
         self.assertTrue(op.ver_erros.isHidden())
         self.assertFalse(op.dialogo_erros.isVisible())
 
+    def test_erros_permanecem_abertos_durante_atualizacao(self):
+        op = self.carregar_operacional()
+        erros = ['sessão sem raiz válida: exemplo--1']
+        op.mostrar(dict(op.dados, erros=erros))
+        op.dialogo_erros.setDetailedText('\n'.join(erros))
+        op.dialogo_erros.show()
+        APP.processEvents()
+        op.mostrar(dict(op.dados))
+        self.assertTrue(op.dialogo_erros.isVisible())
+        erros = erros + ['sessão sem raiz válida: exemplo--2']
+        op.mostrar(dict(op.dados, erros=erros))
+        self.assertTrue(op.dialogo_erros.isVisible())
+        self.assertEqual(op.dialogo_erros.detailedText(), '\n'.join(erros))
+        self.assertEqual(op.dialogo_erros.text(), '2 erros na consulta. Ações bloqueadas.')
+        op.mostrar(dict(op.dados, erros=[]))
+        self.assertFalse(op.dialogo_erros.isVisible())
+
+    def test_falha_nova_nao_mostra_erros_da_consulta_anterior(self):
+        op = self.carregar_operacional()
+        op.mostrar(dict(op.dados, erros=['sessão sem raiz válida: exemplo']))
+        op.dialogo_erros.show()
+        op.falhar('Consulta inválida. Dados anteriores desatualizados; ações bloqueadas.')
+        self.assertTrue(op.ver_erros.isHidden())
+        self.assertFalse(op.dialogo_erros.isVisible())
+        with patch('operacional.QMessageBox.exec') as abrir:
+            op.mostrar_erros()
+            abrir.assert_not_called()
+
+    def test_alt_m_sem_selecao_mostra_orientacao_visivel(self):
+        j = self.janela
+        j.resize(940, 700)
+        j.show()
+        j.activateWindow()
+        APP.processEvents()
+        QTest.keyClick(j, Qt.Key.Key_M, Qt.KeyboardModifier.AltModifier)
+        self.assertIs(j.centrais.currentWidget(), j.coordenadores)
+        self.assertFalse(j.coordenadores.escolha.isHidden())
+        self.assertIn('antes de escrever', j.coordenadores.escolha.text())
+
+    def test_encerrar_mostra_borda_quando_recebe_foco(self):
+        j = self.janela
+        j.show()
+        j.activateWindow()
+        j.abrir.setFocus()
+        APP.processEvents()
+        botao = j.encerrar
+        sem_foco = botao.grab().toImage().pixelColor(botao.width() // 2, 0)
+        botao.setFocus()
+        APP.processEvents()
+        com_foco = botao.grab().toImage().pixelColor(botao.width() // 2, 0)
+        self.assertNotEqual(com_foco, sem_foco)
+
     def test_janela_estreita_preserva_estado_e_acesso_aos_coordenadores(self):
         j = self.janela
         j.resize(700, 460)
@@ -178,6 +242,7 @@ class Interface(unittest.TestCase):
         APP.processEvents()
         self.assertEqual(j.centrais.indexOf(j.coordenadores), -1)
         self.assertIs(j.area.widget(0), j.coordenadores)
+        self.assertFalse(j.area.isCollapsible(0))
         self.assertFalse(j.lista.isColumnHidden(1))
         self.assertFalse(j.lista.isColumnHidden(3))
 

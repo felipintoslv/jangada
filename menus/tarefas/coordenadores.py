@@ -577,6 +577,7 @@ class Coordenadores(QWidget):
         if self.caixa.isEnabled():
             self.caixa.setFocus()
         else:
+            self.escolha.setText('Escolha um coordenador antes de escrever.')
             self.avisar(self.copia, 'Escolha um coordenador antes de escrever.')
 
     def ir_para_janela(self):

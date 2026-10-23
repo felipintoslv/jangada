@@ -119,6 +119,8 @@ class Operacional(QWidget):
 
     def falhar(self, mensagem):
         self.validos = False
+        self.ver_erros.hide()
+        self.dialogo_erros.hide()
         self.status.setText(mensagem)
         self.selecionar()
 
@@ -180,18 +182,22 @@ class Operacional(QWidget):
         self.lista.blockSignals(False)
         erros = dados['erros']
         self.ver_erros.setVisible(bool(erros))
-        self.dialogo_erros.hide()
         self.status.setText((f'{len(erros)} ' + ('erro' if len(erros) == 1 else 'erros')
                              + ' na consulta. Ações bloqueadas.') if erros else
                             'Retrato atualizado do núcleo. Consumo ausente permanece desconhecido.')
+        if erros:
+            self.dialogo_erros.setText(self.status.text())
+            detalhe = '\n'.join(str(e) for e in erros)
+            if self.dialogo_erros.detailedText() != detalhe:
+                self.dialogo_erros.setDetailedText(detalhe)
+        else:
+            self.dialogo_erros.hide()
         self.selecionar()
 
     def mostrar_erros(self):
         erros = self.dados.get('erros', [])
-        if not erros:
+        if not erros or self.ver_erros.isHidden():
             return
-        self.dialogo_erros.setText(self.status.text())
-        self.dialogo_erros.setDetailedText('\n'.join(str(e) for e in erros))
         self.dialogo_erros.exec()
 
     def selecionar(self, *_):

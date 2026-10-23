@@ -399,7 +399,6 @@ class Janela(QMainWindow):
         self.encerrar = QPushButton('Encerrar sem integrar')
         self.integrar.setObjectName('integrar')
         self.encerrar.setObjectName('encerrar')
-        self.encerrar.setStyleSheet('QPushButton { border: none; text-align: left; }')
         self.integrar.setToolTip('Integra as alterações ao projeto; a sessão permanece aberta. Atalho: Alt+I.')
         self.integrar.setShortcut(QKeySequence('Alt+I'))
         self.encerrar.setToolTip('Pede confirmação antes de encerrar sem integrar. Atalho: Ctrl+Shift+E.')
@@ -533,6 +532,7 @@ class Janela(QMainWindow):
         elif not estreita and indice >= 0:
             self.centrais.removeTab(indice)
             self.area.insertWidget(0, self.coordenadores)
+            self.area.setCollapsible(0, False)
             self.coordenadores.show()
             self.area.setSizes([380, self.width() - 430])
             self.divisor_sessoes.setSizes([630, 450])
@@ -812,6 +812,8 @@ class Janela(QMainWindow):
             QPushButton:focus, QComboBox:focus, QLineEdit:focus, QTreeWidget:focus,
             QPlainTextEdit:focus {{ border: 2px solid {c['primaria']}; }}
             QPushButton:disabled {{ color: {c['texto_suave']}; }}
+            QPushButton#encerrar {{ border: 2px solid transparent; text-align: left; }}
+            QPushButton#encerrar:focus, QPushButton#encerrar:hover {{ border: 2px solid {c['primaria']}; }}
             QPushButton#cartao {{ text-align: left; padding: 0; }}
             QPushButton#cartao:hover {{ border: 1px solid {c['primaria']}; }}
             QPushButton#cartao:checked {{ border: 2px solid {c['primaria']}; }}
@@ -1240,9 +1242,12 @@ class Janela(QMainWindow):
             finally:
                 self.confirmando_encerramento = False
             # O diálogo modal processa consultas e mudanças de seleção.
-            if (not confirmado or self.fechando or not self.dados_validos or nome != self.selecionada()
+            if not confirmado:
+                return
+            if (self.fechando or not self.dados_validos or nome != self.selecionada()
                     or self.sessoes.get(nome) != sessao or self.integracao_etapa is not None
                     or self.acao.state() != QProcess.ProcessState.NotRunning or self.finalizacao_pendente(nome)):
+                self.status.setText('A sessão mudou durante a confirmação; nada foi encerrado. Confira e tente de novo.')
                 return
         comando = [resolver_comando('jangada-agente-fim', self.jangada)[0]]
         if integrar:
