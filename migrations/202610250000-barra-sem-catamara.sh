@@ -195,14 +195,14 @@ def sem_catamara(dados, limpar):
                 barra[chave] = [m for m in barra[chave] if m != MODULO]
     return dados
 
-original = Path(sys.argv[1]).read_text()
-texto = original
+bruto = Path(sys.argv[1]).read_bytes()
 try:
+    original = texto = bruto.decode('utf-8')
     ler(texto)
 except ValueError:
-    # Cópia inválida que não cita o módulo não é desta migração; falhar aqui
-    # travaria as migrações seguintes.
-    if 'catamara' in texto:
+    # Cópia inválida (JSON ou UTF-8) que não cita o módulo não é desta
+    # migração; falhar aqui travaria as migrações seguintes.
+    if b'catamara' in bruto:
         raise
     sys.exit(0)
 avisos = []
@@ -219,7 +219,7 @@ while cortes := ultima_ocorrencia(texto, limpar):
 # diferir do original pela falta do custom/catamara das barras limpas.
 if ler(texto)[1] != sem_catamara(ler(original)[1], limpar):
     raise ValueError('a migração mexeria em mais do que o custom/catamara')
-Path(sys.argv[2]).write_text(texto)
+Path(sys.argv[2]).write_bytes(texto.encode('utf-8'))
 print('\n'.join(dict.fromkeys(avisos)))
 PY
 )"

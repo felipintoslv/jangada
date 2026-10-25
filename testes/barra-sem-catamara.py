@@ -312,6 +312,17 @@ class Migracao(unittest.TestCase):
                 self.assertEqual(self.alvo.read_text(), texto)
                 self.assertEqual(self.copias(), [])
 
+    def test_copia_com_bytes_invalidos(self):
+        for bruto, codigo in [(b'{"modules-left": ["clock"]} // \xff\xfe', 0),
+                              (b'\xff\xfe{"modules-left": ["clock"]}', 0),
+                              (b'{"modules-left": ["custom/catamara"]} // \xff', 1)]:
+            with self.subTest(bruto=bruto):
+                self.alvo.write_bytes(bruto)
+                resultado = self.migrar()
+                self.assertEqual(resultado.returncode != 0, bool(codigo), resultado.stderr)
+                self.assertEqual(self.alvo.read_bytes(), bruto)
+                self.assertEqual(self.copias(), [])
+
     def test_lista_com_valor_que_nao_e_barra(self):
         self.conferir('[1, {"modules-left": ["a", "custom/catamara"]}, "x"]',
                       '[1, {"modules-left": ["a"]}, "x"]')
