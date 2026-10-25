@@ -13,6 +13,7 @@ except ImportError:
 from datetime import datetime, timezone
 import json
 import fcntl
+import re
 import shutil
 import signal
 import subprocess
@@ -28,6 +29,7 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QLabel, QMessageBox, QPushButton
 import dados
 import janela
+from aparencia import misturar
 from janela import Janela
 import central
 from cotas import cota_argon, ler_cota_argon, ler_cotas, numero_de_fora, plano_de, variantes
@@ -2443,6 +2445,158 @@ while not (pasta / 'parar-clientes').exists():
         texto = plano_de(variantes(com_campo)[0])
         self.assertIn('agy principal: Argon 62%, Gemini sem dado (cache vencido)', texto)
         self.assertTrue(texto.endswith('jangada-router cotas --atualizar --permitir-remoto'))
+
+    def aba_cotas(self, cotas, modo='ok'):
+        """Aba Indicadores aberta no cartão Cotas, depois de uma consulta do roteador falso."""
+        self.indicadores_falso(dict(versao=1, tarefas=[], revisores=[], local_vs_agy=[]))
+        self.janela.resize(1440, 900)
+        self.janela.show()
+        self.janela.centrais.setCurrentWidget(self.janela.indicadores)
+        ind = self.ler_indicadores()
+        self.consultar_cotas(self.janela, modo, cotas)
+        ind.cartoes['cotas'].click()
+        APP.processEvents()
+        return ind
+
+    def linhas_das_barras(self, ind):
+        """(nome acessível, preenchimento, estado, texto ao lado) de cada barra, na ordem da tela."""
+        grade = ind.painel_cotas.grade
+        resultado = []
+        for barra in ind.painel_cotas.barras:
+            linha = grade.getItemPosition(grade.indexOf(barra))[0]
+            resultado.append((barra.accessibleName(), barra.value(), barra.property('estado'),
+                              grade.itemAtPosition(linha, 2).widget().text()))
+        return resultado
+
+    def test_cartao_cotas_troca_a_tabela_pelas_barras(self):
+        ind = self.aba_cotas(self.cotas_dos_provedores())
+        self.assertEqual(list(ind.cartoes), ['tarefas', 'revisores', 'local_vs_agy', 'cotas'])
+        self.assertEqual(ind.cartoes['cotas'].rotulos['titulo'].text(), 'Cotas')
+        self.assertEqual(ind.detalhe.text(), 'Detalhe: Cotas')
+        self.assertTrue(ind.painel_cotas.isVisibleTo(ind))
+        self.assertFalse(ind.tabela.isVisibleTo(ind))
+        self.assertFalse(ind.vazio.isVisibleTo(ind))
+        ind.cartoes['revisores'].click()
+        self.assertFalse(ind.painel_cotas.isVisibleTo(ind))
+        self.assertEqual(ind.tabela.headerItem().text(0), 'Revisor')
+        ind.cartoes['cotas'].click()
+        self.assertTrue(ind.painel_cotas.isVisibleTo(ind))
+        self.assertFalse(ind.tabela.isVisibleTo(ind))
+        lido = datetime.fromisoformat('2026-10-24T20:00:00+00:00').astimezone().strftime('%H:%M')
+        rotulos = ind.cartoes['cotas'].rotulos
+        self.assertEqual(rotulos['numero'].text(), '15% Ⅱ')
+        self.assertEqual(rotulos['apoio'].text(), 'menor cota: Codex, abaixo de 20%')
+        self.assertEqual(rotulos['rodape'].text(), f'3 de 4 grupos medidos; lido às {lido}')
+
+    def test_barras_mostram_cada_grupo_com_o_numero_em_texto(self):
+        ind = self.aba_cotas(self.cotas_dos_provedores())
+        renova = datetime.fromisoformat('2026-10-25T03:00:00+00:00').astimezone()
+        linhas = self.linhas_das_barras(ind)
+        self.assertEqual([(n, v, e) for n, v, e, _ in linhas], [
+            ('agy principal, Argon: 62%', 62, 'medida'),
+            ('agy principal, Gemini: 80%', 80, 'medida'),
+            ('agy reserva, Argon: sem dado (conta sem confiança)', 0, 'sem_dado'),
+            (linhas[3][0], 15, 'alerta')])
+        self.assertRegex(linhas[3][0], rf'^Codex: 15% Ⅱ abaixo de 20%, renova (\d\d/\d\d )?{renova:%H:%M}$')
+        for nome, _, _, ao_lado in linhas:
+            self.assertTrue(ao_lado and nome.endswith(ao_lado), (nome, ao_lado))
+        rotulos = [r.text() for r in ind.painel_cotas.findChildren(QLabel)]
+        self.assertIn('Claude: não medido aqui', rotulos)
+        self.assertEqual(len(ind.painel_cotas.barras), 4)
+        alerta = [r for r in ind.painel_cotas.findChildren(QLabel) if r.property('alerta')]
+        self.assertEqual([r.text() for r in alerta], [linhas[3][3]])
+        for barra in ind.painel_cotas.barras:
+            self.assertTrue(barra.accessibleName())
+
+    def test_barra_so_com_o_ultimo_valor_e_antiga_e_sem_alerta(self):
+        antigo = '2026-10-24T19:27:00+00:00'
+        quando = datetime.fromisoformat(antigo).astimezone()
+        for percentual in (95, 5):
+            with self.subTest(percentual=percentual):
+                ind = self.aba_cotas(self.cotas_com_ultimo(dict(percentual=percentual, medido_em=antigo)))
+                gemini = self.linhas_das_barras(ind)[1]
+                self.assertEqual(gemini[1:3], (percentual, 'antiga'))
+                self.assertEqual(gemini[3], f'{percentual}% ({quando:%d/%m} às {quando:%H:%M})')
+                self.assertEqual(gemini[0], f'agy principal, Gemini: {gemini[3]}')
+                self.assertNotIn('Ⅱ', gemini[3])
+                self.assertEqual([r.text() for r in ind.painel_cotas.findChildren(QLabel) if r.property('alerta')],
+                                 [self.linhas_das_barras(ind)[3][3]])
+        sem_ultimo = self.aba_cotas(self.cotas_com_ultimo(None))
+        gemini = self.linhas_das_barras(sem_ultimo)[1]
+        self.assertEqual(gemini[1:], (0, 'sem_dado', 'sem dado (cache vencido)'))
+
+    def test_barras_sem_leitura_dizem_sem_dado_como_a_faixa(self):
+        ind = self.aba_cotas(self.cotas_dos_provedores(), 'erro')
+        self.assertEqual(ind.painel_cotas.barras, [])
+        frase = [r.text() for r in ind.painel_cotas.findChildren(QLabel)]
+        self.assertEqual(len(frase), 1)
+        self.assertTrue(frase[0].startswith('Cotas: sem dado (o comando terminou com erro).'), frase)
+        self.assertEqual(frase[0], self.janela.faixa_cotas.toolTip())
+        rotulos = ind.cartoes['cotas'].rotulos
+        self.assertEqual((rotulos['numero'].text(), rotulos['apoio'].text()),
+                         ('sem dado', 'o comando terminou com erro'))
+        self.consultar_cotas(self.janela, 'ok', self.cotas_dos_provedores())
+        self.assertEqual(len(ind.painel_cotas.barras), 4)
+
+    def test_barras_seguem_a_faixa_sem_processo_nem_temporizador_novos(self):
+        ind = self.aba_cotas(self.cotas_dos_provedores())
+        processos, temporizadores = len(ind.findChildren(QProcess)), len(ind.findChildren(QTimer))
+        antes = (self.raiz / 'roteador.log').read_text().splitlines()
+        cotas = self.cotas_dos_provedores()
+        cotas['provedores'][2]['grupos'][0]['percentual'] = 55.0
+        self.consultar_cotas(self.janela, 'ok', cotas)
+        depois = (self.raiz / 'roteador.log').read_text().splitlines()
+        self.assertEqual(len(depois), len(antes) + 1)
+        self.assertEqual({json.loads(l)[0] for l in depois}, {'cotas'})
+        self.assertEqual(self.linhas_das_barras(ind)[3][1:3], (55, 'medida'))
+        self.assertIn('Codex: 55%', self.janela.faixa_cotas.toolTip())
+        self.assertEqual((len(ind.findChildren(QProcess)), len(ind.findChildren(QTimer))), (processos, temporizadores))
+        self.assertEqual(ind.painel_cotas.findChildren(QProcess) + ind.painel_cotas.findChildren(QTimer), [])
+
+    def test_barras_na_simulacao_dizem_sem_dado(self):
+        simulada = Janela()
+        try:
+            ind = simulada.indicadores
+            simulada.centrais.setCurrentWidget(ind)
+            ind.cartoes['cotas'].click()
+            self.assertEqual(ind.painel_cotas.barras, [])
+            self.assertEqual([r.text() for r in ind.painel_cotas.findChildren(QLabel)],
+                             ['Cotas: sem dado (a simulação não consulta o Core)'])
+            self.assertEqual(ind.cartoes['cotas'].rotulos['numero'].text(), 'sem dado')
+            self.assertFalse(simulada.cotas.ocupada())
+        finally:
+            simulada.close()
+
+    def test_cartao_cotas_entra_na_ordem_de_foco_e_as_barras_tem_nome(self):
+        ind = self.aba_cotas(self.cotas_dos_provedores())
+        self.janela.activateWindow()
+        ind.cartoes['local_vs_agy'].click()
+        ind.cartoes['local_vs_agy'].setFocus()
+        QTest.keyClick(APP.focusWidget(), Qt.Key.Key_Right)
+        self.assertIs(APP.focusWidget(), ind.cartoes['cotas'])
+        self.assertTrue(ind.cartoes['cotas'].isChecked())
+        self.assertTrue(ind.painel_cotas.isVisibleTo(ind))
+        self.assertEqual(ind.cartoes['cotas'].accessibleName(), 'Cotas')
+        self.assertIn('15%', ind.cartoes['cotas'].accessibleDescription())
+        QTest.keyClick(APP.focusWidget(), Qt.Key.Key_Tab)
+        self.assertIs(APP.focusWidget(), ind.atualizar_botao)
+        QTest.keyClick(APP.focusWidget(), Qt.Key.Key_Tab)
+        self.assertIs(APP.focusWidget(), ind.painel_cotas)
+        self.assertIn('QScrollArea#painel_cotas:focus', self.janela.styleSheet())
+
+    def test_cores_das_barras_vem_das_fichas_nos_dois_temas(self):
+        ind = self.aba_cotas(self.cotas_dos_provedores())
+        for indice, modo in ((0, 'dark'), (1, 'light')):
+            self.janela.modo.setCurrentIndex(indice)
+            folha = self.janela.styleSheet()
+            c = self.janela.fichas[modo]
+            for regra in (f"QProgressBar#barra_cota::chunk {{ background: {c['primaria']};",
+                          f"QProgressBar#barra_cota[estado=\"antiga\"]::chunk {{ background: {misturar(c['superficie_elevada'], c['texto_suave'], .7)};",
+                          f"QProgressBar#barra_cota[estado=\"alerta\"]::chunk {{ background: {janela.ESTADOS[modo]['Bloqueada']};"):
+                self.assertIn(regra, folha)
+        pasta = Path(__file__).resolve().parents[1] / 'menus/tarefas'
+        for nome in ('cotas.py', 'indicadores.py'):
+            self.assertIsNone(re.search(r"#[0-9a-fA-F]{6}\b|rgba?\(", (pasta / nome).read_text()), nome)
 
     def test_faixa_sem_dado_nao_derruba_a_janela(self):
         valida = self.cotas_dos_provedores()

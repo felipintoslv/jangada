@@ -5,8 +5,10 @@ import re
 import statistics
 
 from PyQt6.QtCore import QProcess, QSize, QTimer, Qt
-from PyQt6.QtWidgets import (QButtonGroup, QHBoxLayout, QLabel, QPushButton, QTreeWidget,
-                             QTreeWidgetItem, QVBoxLayout, QWidget)
+from PyQt6.QtWidgets import (QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QProgressBar,
+                             QPushButton, QScrollArea, QSizePolicy, QTreeWidget, QTreeWidgetItem,
+                             QVBoxLayout, QWidget)
+from cotas import linhas_de_barras, resumo_cotas, texto_sem_barras
 from dados import LIMITE, NOME, comando_disponivel
 
 COMANDO = 'jangada-indicadores'
@@ -23,8 +25,9 @@ COLUNAS = {
     'local_vs_agy': ['Papel', 'Destino', 'Registro', 'Chamadas', 'Sucesso', 'Recusas',
                      'Tempo mediano', 'Tokens de entrada', 'Tokens de saída', 'Mudanças do local'],
 }
+COTAS = 'cotas'
 TITULOS = {'tarefas': 'Custo por tarefa', 'revisores': 'Procedência dos revisores',
-           'local_vs_agy': 'Local e agy'}
+           'local_vs_agy': 'Local e agy', COTAS: 'Cotas'}
 
 
 def texto(valor, limite=200):
@@ -204,6 +207,79 @@ class Cartao(QPushButton):
         return QSize(160, self.layout().minimumSize().height())
 
 
+class PainelCotas(QScrollArea):
+    """Uma barra por grupo de cota; o número também vai em texto e no nome acessível da barra."""
+
+    def __init__(self):
+        super().__init__()
+        self.setObjectName('painel_cotas')
+        self.setWidgetResizable(True)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setAccessibleName('Barras de cota dos provedores')
+        corpo = QWidget()
+        self.grade = QGridLayout(corpo)
+        self.grade.setContentsMargins(8, 8, 8, 8)
+        self.grade.setHorizontalSpacing(12)
+        self.grade.setVerticalSpacing(10)
+        self.grade.setColumnStretch(1, 1)
+        self.setWidget(corpo)
+        self.barras = []
+        self.assinatura = None
+
+    def limpar(self):
+        while (item := self.grade.takeAt(0)) is not None:
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
+        for i in range(self.grade.rowCount()):
+            self.grade.setRowStretch(i, 0)
+        self.barras = []
+
+    def rotulo(self, texto, nome=None):
+        rotulo = QLabel(texto)
+        rotulo.setTextFormat(Qt.TextFormat.PlainText)
+        rotulo.setWordWrap(True)
+        if nome:
+            rotulo.setObjectName(nome)
+        return rotulo
+
+    def mostrar(self, linhas, frase=''):
+        """Refaz as barras só quando o conteúdo muda; sem linhas, mostra a frase."""
+        assinatura = (tuple(linhas), frase)
+        if assinatura == self.assinatura:
+            return
+        self.assinatura = assinatura
+        self.limpar()
+        if not linhas:
+            self.grade.addWidget(self.rotulo(frase, 'cota_frase'), 0, 0, 1, 3)
+            self.grade.setRowStretch(1, 1)
+            return
+        for i, linha in enumerate(linhas):
+            if linha.estado == 'nao_medido':
+                aviso = self.rotulo(linha.texto, 'cota_valor')
+                aviso.setProperty('semdado', True)
+                self.grade.addWidget(aviso, i, 0, 1, 3)
+                continue
+            barra = QProgressBar()
+            barra.setObjectName('barra_cota')
+            barra.setRange(0, 100)
+            barra.setValue(round(linha.preenchimento or 0))
+            barra.setTextVisible(False)
+            barra.setFixedHeight(12)
+            barra.setMinimumWidth(120)
+            barra.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            barra.setProperty('estado', 'alerta' if linha.alerta else linha.estado)
+            barra.setAccessibleName(linha.texto)
+            valor = self.rotulo(linha.valor, 'cota_valor')
+            valor.setProperty('alerta', linha.alerta)
+            self.grade.addWidget(self.rotulo(linha.rotulo, 'cota_rotulo'), i, 0)
+            self.grade.addWidget(barra, i, 1)
+            self.grade.addWidget(valor, i, 2)
+            self.barras.append(barra)
+        self.grade.setRowStretch(len(linhas), 1)
+
+
 class Indicadores(QWidget):
     def __init__(self, janela):
         super().__init__(janela)
@@ -217,7 +293,7 @@ class Indicadores(QWidget):
         self.grupo = QButtonGroup(self)
         self.grupo.setExclusive(True)
         self.cartoes = {}
-        for campo in LISTAS:
+        for campo in (*LISTAS, COTAS):
             cartao = Cartao(TITULOS[campo])
             cartao.toggled.connect(lambda marcado, c=campo: marcado and self.escolher(c))
             self.grupo.addButton(cartao)
@@ -249,7 +325,10 @@ class Indicadores(QWidget):
         self.vazio.setWordWrap(True)
         self.vazio.hide()
         layout.addWidget(self.vazio, 1)
-        ordem = [*self.cartoes.values(), self.atualizar_botao, self.tabela]
+        self.painel_cotas = PainelCotas()
+        self.painel_cotas.hide()
+        layout.addWidget(self.painel_cotas, 1)
+        ordem = [*self.cartoes.values(), self.atualizar_botao, self.tabela, self.painel_cotas]
         for antes, depois in zip(ordem, ordem[1:]):
             QWidget.setTabOrder(antes, depois)
         self.consulta = QProcess(self)
@@ -260,6 +339,8 @@ class Indicadores(QWidget):
         self.prazo.timeout.connect(self.expirar)
         self.expirou = False
         self.cartoes['tarefas'].setChecked(True)
+        janela.cotas.ouvir(self.mostrar_cotas)
+        self.mostrar_cotas()
         if not janela.real:
             self.atualizar_botao.setEnabled(False)
             self.avisar('Simulação: os indicadores não são consultados.')
@@ -325,8 +406,8 @@ class Indicadores(QWidget):
         resumos = {campo: resumo(campo, dados[campo]) for campo in LISTAS}
         tabelas = {campo: linhas(campo, dados[campo]) for campo in LISTAS}
         self.dados, self.tabelas = dados, tabelas
-        for campo, cartao in self.cartoes.items():
-            cartao.mostrar(*resumos[campo])
+        for campo in LISTAS:
+            self.cartoes[campo].mostrar(*resumos[campo])
         if any(dados.values()):
             self.avisar('Indicadores lidos de jangada-indicadores. Clique num cartão ou use as setas para trocar o detalhe. '
                         'Em Custo por tarefa, Enter ou clique duplo numa linha abre a tarefa.')
@@ -334,11 +415,25 @@ class Indicadores(QWidget):
             self.avisar('Ainda não há dados de indicadores. Eles aparecem depois das primeiras tarefas registradas.')
         self.escolher(self.escolhido())
 
+    def mostrar_cotas(self):
+        """Mesma leitura da faixa do topo: sem consulta nem temporizador próprios."""
+        if self.fechando:
+            return
+        c = self.janela.cotas
+        self.cartoes[COTAS].mostrar(*resumo_cotas(c.cotas, c.motivo, c.estado == 'consultando'))
+        linhas = linhas_de_barras(c.cotas)
+        self.painel_cotas.mostrar(linhas, '' if linhas else texto_sem_barras(c.cotas, c.motivo, c.estado == 'consultando'))
+
     def escolhido(self):
         return next(c for c, cartao in self.cartoes.items() if cartao.isChecked())
 
     def escolher(self, campo):
         self.detalhe.setText('Detalhe: ' + TITULOS[campo])
+        self.painel_cotas.setVisible(campo == COTAS)
+        if campo == COTAS:
+            self.tabela.hide()
+            self.vazio.hide()
+            return
         self.tabela.clear()
         self.tabela.setColumnCount(len(COLUNAS[campo]))
         self.tabela.setHeaderLabels(COLUNAS[campo])

@@ -33,7 +33,7 @@ from indicadores import Indicadores, SEM_DADO, inteiro, tempo, texto, tokens_da_
 from rodadas import Rodadas
 from coordenadores import FAIXA, Coordenadores
 from cotas import SIMULACAO, ConsultaCotas, FaixaCotas
-from aparencia import CartaoResumo, InspetorRolavel, LinhaTempo, cores_interacao
+from aparencia import CartaoResumo, InspetorRolavel, LinhaTempo, cores_interacao, misturar
 
 # Só para a janela simulada e para quando a consulta falha: o catálogo vem do
 # jangada-agente --capacidades-json, que também é quem valida a escolha.
@@ -960,6 +960,7 @@ class Janela(QMainWindow):
         modo = 'light' if self.modo.currentIndex() == 1 else 'dark'
         c = self.fichas[modo]
         interacao = cores_interacao(c, modo)
+        barra_antiga = misturar(c['superficie_elevada'], c['texto_suave'], .7)
         self.cores_estado = {'aguardando': ESTADOS[modo]['Bloqueada'],
                             'trabalhando': ESTADOS[modo]['Executando'],
                             'concluido': ESTADOS[modo]['Em revisão'],
@@ -1021,6 +1022,15 @@ class Janela(QMainWindow):
             QLabel#cartao_apoio {{ font-size: 13px; }}
             QLabel#cartao_rodape {{ font-size: 13px; color: {c['texto_suave']}; }}
             QLabel#indicadores_detalhe {{ font-size: 16px; font-weight: 600; }}
+            QScrollArea#painel_cotas {{ border: 2px solid transparent; border-radius: 8px; }}
+            QScrollArea#painel_cotas:focus {{ border: 2px solid {c['primaria']}; }}
+            QProgressBar#barra_cota {{ background: {c['superficie_elevada']}; border: 1px solid {c['texto_suave']};
+                border-radius: 6px; }}
+            QProgressBar#barra_cota::chunk {{ background: {c['primaria']}; border-radius: 5px; }}
+            QProgressBar#barra_cota[estado="alerta"]::chunk {{ background: {ESTADOS[modo]['Bloqueada']}; }}
+            QProgressBar#barra_cota[estado="antiga"]::chunk {{ background: {barra_antiga}; }}
+            QLabel#cota_valor[alerta="true"] {{ color: {ESTADOS[modo]['Bloqueada']}; font-weight: 600; }}
+            QLabel#cota_rotulo {{ font-weight: 600; }}
             QLabel#indicadores_status[falha="true"], QLabel#rodadas_status[falha="true"],
             QLabel#rodadas_aviso[falha="true"] {{ color: {c['atencao']}; font-weight: 600; }}
             QLabel[semdado="true"] {{ color: {c['texto_suave']}; }}

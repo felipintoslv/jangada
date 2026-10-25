@@ -211,6 +211,25 @@ sem `--atualizar` e sem `--permitir-remoto`. Durante uma nova consulta, a faixa
 mantém a última leitura. Na simulação a faixa mostra "Cotas: sem dado" e a
 Central não consulta o Core.
 
+**Barras de cota.** A aba Indicadores tem um quarto cartão, Cotas, depois de Local
+e agy. O destaque é a menor cota medida (ou "sem dado") e o apoio diz de qual conta
+e grupo; o rodapé conta os grupos medidos e traz "lido às HH:MM". Com o cartão
+escolhido, no lugar da tabela aparece uma barra horizontal por grupo de cada conta
+do agy (Gemini, 3p, Argon, conforme a conta tiver) e do Codex. Cada linha traz o
+rótulo, a barra preenchida no percentual e o número em texto ao lado, mais "renova
+HH:MM" quando o Core informa; a barra nunca é a única forma de ler o número. O
+Claude aparece como "não medido aqui", sem barra.
+
+Abaixo de 20% a barra usa a cor de alerta das fichas e o texto ganha o glifo Ⅱ e
+"abaixo de 20%". Grupo com só o último valor conhecido (`ultimo`) mostra a barra em
+tom apagado e o texto como na faixa, por exemplo `95% (às 16:27)`, sem alerta. Grupo
+sem dado mostra a barra vazia e "sem dado" com o motivo. Sem leitura nenhuma (Core
+sem o comando, erro, prazo, simulação), no lugar das barras vai a mesma frase da
+faixa. As cores vêm só das fichas dos dois temas, sem cor por provedor. As barras
+usam a consulta da faixa: mudam quando a faixa muda, sem processo nem temporizador
+próprios. Cada barra tem nome acessível com o texto inteiro da linha, e a área das
+barras entra na ordem de foco depois do botão Atualizar.
+
 Em janela pequena a faixa ocupa no máximo duas linhas. Se o texto completo não
 cabe, ela usa uma forma resumida (o menor grupo de cada provedor e, por fim, a
 menor cota com a contagem de "sem dado"). A dica de ferramenta sempre traz o texto

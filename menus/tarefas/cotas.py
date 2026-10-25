@@ -340,6 +340,98 @@ def html_de(pecas, cor):
     return ''.join(partes)
 
 
+# Barras da aba Indicadores ----------------------------------------------------
+# Lidas da mesma consulta da faixa; só o `percentual` medido conta como medida.
+
+@dataclass(frozen=True)
+class LinhaBarra:
+    rotulo: str
+    estado: str  # 'medida', 'antiga', 'sem_dado' ou 'nao_medido' (esta última sem barra)
+    preenchimento: float | int | None
+    valor: str
+    alerta: bool = False
+
+    @property
+    def texto(self):
+        return f'{self.rotulo}: {self.valor}'
+
+
+def rotulo_do_grupo(e, g):
+    nome = nome_do_provedor(e)
+    if len(e.grupos) == 1 and g.grupo == e.provedor:
+        return nome
+    return f'{nome}, {NOMES_GRUPO.get(g.grupo, g.grupo)}'
+
+
+def hora_renova(valor):
+    """'03:00' (hoje) ou '25/10 03:00' no horário local, ou None; nunca lança."""
+    quando = instante(valor)
+    if quando is None:
+        return None
+    try:
+        local = quando.astimezone()
+        hoje = datetime.now().astimezone().date()
+        return f'{"" if local.date() == hoje else local.strftime("%d/%m ")}{local:%H:%M}'
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _linha_do_grupo(e, g):
+    rotulo = rotulo_do_grupo(e, g)
+    if g.percentual is None:
+        if g.ultimo:
+            return LinhaBarra(rotulo, 'antiga', g.ultimo[0],
+                              f'{texto_percentual(g.ultimo[0])}% ({hora_antiga(g.ultimo[1])})')
+        return LinhaBarra(rotulo, 'sem_dado', None, _sem_dado(g.motivo))
+    alerta = g.percentual < COTA_MINIMA
+    valor = texto_percentual(g.percentual) + '%'
+    if alerta:
+        valor += f' {ALERTA} abaixo de {COTA_MINIMA}%'
+    renova = hora_renova(g.renova_em)
+    if renova:
+        valor += f', renova {renova}'
+    return LinhaBarra(rotulo, 'medida', g.percentual, valor, alerta)
+
+
+def linhas_de_barras(cotas):
+    """Uma linha por grupo de cada conta, na ordem do cotas.json; provedor sem grupos vira uma linha só."""
+    linhas = []
+    for e in cotas.entradas if cotas else ():
+        if e.grupos:
+            linhas += [_linha_do_grupo(e, g) for g in e.grupos]
+        elif e.motivo == NAO_MEDIDO:
+            linhas.append(LinhaBarra(nome_do_provedor(e), 'nao_medido', None, 'não medido aqui'))
+        else:
+            linhas.append(LinhaBarra(nome_do_provedor(e), 'sem_dado', None, _sem_dado(e.motivo)))
+    return linhas
+
+
+def texto_sem_barras(cotas, motivo='', consultando=False):
+    """Frase para o lugar das barras quando a consulta não trouxe provedores; igual à da faixa."""
+    return plano_de(variantes(cotas, motivo, consultando)[0])
+
+
+def resumo_cotas(cotas, motivo='', consultando=False):
+    """Destaque, apoio e rodapé do cartão Cotas: a menor cota medida e de quem é."""
+    entradas = cotas.entradas if cotas else ()
+    if not entradas:
+        if consultando and not motivo:
+            return 'sem dado', 'consultando', ''
+        return 'sem dado', motivo or 'nenhum provedor na saída', ''
+    medidos = sum(g.percentual is not None for e in entradas for g in e.grupos)
+    faltam = sum(g.percentual is None for e in entradas for g in e.grupos) \
+        + sum(not e.grupos and e.motivo != NAO_MEDIDO for e in entradas)
+    hora = hora_curta(cotas.gerado, False)
+    rodape = f'{medidos} de {medidos + faltam} grupos medidos' + (f'; lido às {hora}' if hora else '')
+    menor = _menor(entradas)
+    if menor is None:
+        return 'sem dado', 'nenhum grupo medido agora', rodape
+    g, e = menor
+    alerta = g.percentual < COTA_MINIMA
+    apoio = f'menor cota: {rotulo_do_grupo(e, g)}' + (f', abaixo de {COTA_MINIMA}%' if alerta else '')
+    return texto_percentual(g.percentual) + '%' + (f' {ALERTA}' if alerta else ''), apoio, rodape
+
+
 class FaixaCotas(QLabel):
     """Linha fixa com as cotas; escolhe o texto mais completo que cabe em duas linhas."""
 
