@@ -10,6 +10,7 @@ try:
 except ImportError:
     print('PyQt6 ausente; testes gráficos da central ignorados')
     sys.exit(1 if os.environ.get('CI') else 0)
+from datetime import datetime
 import json
 import fcntl
 import shutil
@@ -29,7 +30,7 @@ import dados
 import janela
 from janela import Janela
 import central
-from coordenadores import ler_cota_argon, numero_de_fora
+from cotas import ler_cota_argon, numero_de_fora
 from central import encaminhar, receber
 from dados import LIMITE, barra, idade, ler_lista, ler_observacao, pasta_sessoes, resumo_barra
 from argparse import Namespace
@@ -96,6 +97,7 @@ class Interface(unittest.TestCase):
         (self.raiz / 'apresentacao.json').write_text(json.dumps({'agente': 'codex', 'tarefa': "<img src='https://exemplo/imagem'>", 'raiz': '/tmp/projeto', 'mensagem': '<b>Texto puro</b>'}))
         self.janela = Janela(True, self.raiz, self.estado)
         self.janela.timer.stop()
+        self.janela.cotas.parar_repeticao()
         self.esperar_consulta()
         confirmacao = patch.object(self.janela, 'confirmar_encerramento', return_value=True, create=True)
         self.confirmacao_encerrar = confirmacao
@@ -2026,6 +2028,236 @@ while not (pasta / 'parar-clientes').exists():
         self.assertEqual(coluna.cota.estado, 'sem_dado')
         self.assertTrue(self.agy_ativo(dialogo))
         dialogo.hide()
+
+    def cotas_dos_provedores(self):
+        """Duas contas do agy, Codex com renovação e Claude sem medição, como o Core entrega."""
+        def grupo(nome, percentual, janelas=None, motivo=None):
+            return dict(grupo=nome, percentual=percentual, janelas=janelas or [], origem='agy -p /usage',
+                        medido_em='2026-10-24T20:00:00+00:00', valido_ate='2026-10-24T20:05:00+00:00', motivo=motivo)
+        janela_codex = [dict(id='codex-primary', percentual=15.0, renova_em='2026-10-25T03:00:00+00:00')]
+        return dict(versao=1, gerado='2026-10-24T20:00:00+00:00', provedores=[
+            dict(provedor='agy', conta='principal', motivo=None,
+                 grupos=[grupo('gemini-argon-wtu', 62.0), grupo('gemini', 80.0)]),
+            dict(provedor='agy', conta='reserva', motivo=None,
+                 grupos=[grupo('gemini-argon-wtu', None, motivo='conta_sem_confianca')]),
+            dict(provedor='codex', conta=None, motivo=None, grupos=[grupo('codex', 15.0, janela_codex)]),
+            dict(provedor='claude', conta=None, motivo='nao_medido_por_este_provedor', grupos=[])])
+
+    def faixa_visivel(self, central):
+        """Texto que a faixa mostra agora, lido do HTML do rótulo."""
+        documento = QTextDocument()
+        documento.setHtml(central.faixa_cotas.text())
+        return documento.toPlainText()
+
+    def consultar_cotas(self, central, modo, cotas=None, prazo=None):
+        """Instala o router falso depois de a janela abrir e roda uma consulta."""
+        self.roteador_falso(modo, cotas)
+        if prazo:
+            central.cotas.prazo_ms = prazo
+        central.cotas.consultar()
+        aguardar(lambda: not central.cotas.ocupada())
+
+    def test_faixa_mostra_cada_parte_das_cotas(self):
+        self.roteador_falso('ok', self.cotas_dos_provedores())
+        central = Janela(True, self.raiz, self.estado)
+        self.addCleanup(central.close)
+        central.timer.stop()
+        aguardar(lambda: not central.cotas.ocupada())
+        central.resize(1440, 900)
+        central.show()
+        APP.processEvents()
+        renova = datetime.fromisoformat('2026-10-25T03:00:00+00:00').astimezone().strftime('%d/%m %H:%M')
+        lido = datetime.fromisoformat('2026-10-24T20:00:00+00:00').astimezone().strftime('%H:%M')
+        texto = self.faixa_visivel(central)
+        for parte in ('agy principal: Argon 62%, Gemini 80%',
+                      'agy reserva: Argon sem dado (conta sem confiança)',
+                      'Codex: 15%', f'abaixo de 20% (renova {renova})',
+                      'Claude: não medido aqui', f'lido às {lido}',
+                      'jangada-router cotas --atualizar --permitir-remoto'):
+            self.assertIn(parte, texto)
+        self.assertEqual(texto.count('abaixo de 20%'), 1)
+        self.assertLess(texto.index('agy principal'), texto.index('agy reserva'))
+        self.assertLess(texto.index('agy reserva'), texto.index('Codex'))
+        self.assertLess(texto.index('Codex'), texto.index('Claude'))
+        self.assertEqual(central.faixa_cotas.toolTip(), texto)
+        self.assertTrue(central.faixa_cotas.isVisible())
+        self.assertLessEqual(central.faixa_cotas.geometry().bottom(), central.cartoes['aguardando'].geometry().top())
+        self.assertEqual([json.loads(l) for l in (self.raiz / 'roteador.log').read_text().splitlines()], [['cotas']])
+
+    def test_alerta_da_faixa_tem_texto_glifo_e_cor_das_fichas(self):
+        from visual.fichas import ESTADOS, ICONES, contraste
+        central = self.janela
+        central.resize(1440, 900)
+        central.show()
+        self.consultar_cotas(central, 'ok', self.cotas_dos_provedores())
+        for modo, indice in (('dark', 0), ('light', 1)):
+            with self.subTest(modo=modo):
+                central.modo.setCurrentIndex(indice)
+                cor = ESTADOS[modo]['Bloqueada']
+                html = central.faixa_cotas.text()
+                self.assertEqual(html.count(f'color:{cor}'), 1)
+                self.assertIn(f'{ICONES["Bloqueada"]} abaixo de 20%</span>', html)
+                self.assertEqual(html.count('<span'), 1)
+                for fundo in ('superficie', 'superficie_elevada'):
+                    self.assertGreaterEqual(contraste(cor, central.fichas[modo][fundo]), 4.5)
+                self.assertGreaterEqual(contraste(central.fichas[modo]['texto'],
+                                                  central.fichas[modo]['superficie_elevada']), 4.5)
+        sem_alerta = self.cotas_dos_provedores()
+        sem_alerta['provedores'][2]['grupos'][0]['percentual'] = 20.0
+        self.consultar_cotas(central, 'ok', sem_alerta)
+        self.assertNotIn('abaixo de', self.faixa_visivel(central))
+        self.assertNotIn('<span', central.faixa_cotas.text())
+
+    def test_faixa_traduz_motivos_e_ignora_motivo_desconhecido(self):
+        cotas = self.cotas_dos_provedores()
+        grupos = cotas['provedores'][1]['grupos']
+        modelo = grupos[0]
+        grupos[:] = [dict(modelo, grupo='gemini', motivo='sem_cache'),
+                     dict(modelo, grupo='3p', motivo='cache_vencido'),
+                     dict(modelo, grupo='outro-grupo', motivo='consulta_falhou'),
+                     dict(modelo, grupo='terceiro', motivo='motivo_novo_do_core'),
+                     dict(modelo, grupo='quarto', motivo=None)]
+        self.janela.resize(1440, 900)
+        self.janela.show()
+        self.consultar_cotas(self.janela, 'ok', cotas)
+        texto = self.janela.faixa_cotas.toolTip()
+        for parte in ('Gemini sem dado (sem cache)', '3p sem dado (cache vencido)',
+                      'outro-grupo sem dado (consulta falhou)', 'terceiro sem dado,', 'quarto sem dado '):
+            self.assertIn(parte, texto)
+        self.assertNotIn('motivo_novo', texto)
+
+    def test_faixa_sem_dado_nao_derruba_a_janela(self):
+        valida = self.cotas_dos_provedores()
+        enorme = json.dumps(valida).replace('"percentual": 62.0', '"percentual": 1' + '0' * 399)
+        casos = [('ausente', None, None, 'Core sem o comando jangada-router'),
+                 ('erro', 'erro', {}, 'o comando terminou com erro'),
+                 ('uso', 'uso', {}, 'o comando terminou com erro'),
+                 ('prazo', 'espera', {}, 'prazo esgotado'),
+                 ('saida grande', 'grande', {}, 'saída grande demais'),
+                 ('json invalido', 'invalido', {}, 'saída não é JSON válido'),
+                 ('versao 2', 'ok', dict(valida, versao=2), 'versão do cotas.json não lida'),
+                 ('sem provedores', 'ok', dict(valida, provedores={}), 'saída sem a lista de provedores')]
+        for nome, modo, cotas, motivo in casos:
+            with self.subTest(caso=nome):
+                (self.bin / 'jangada-router').unlink(missing_ok=True)
+                if modo:
+                    self.roteador_falso(modo, cotas)
+                self.consultar_cotas(self.janela, modo, cotas, prazo=300) if modo else self.janela.cotas.consultar()
+                texto = self.janela.faixa_cotas.toolTip()
+                self.assertTrue(texto.startswith(f'Cotas: sem dado ({motivo}).'), texto)
+                self.assertTrue(texto.endswith('jangada-router cotas --atualizar --permitir-remoto'), texto)
+                self.assertIsNone(self.janela.cotas.cotas)
+        for nome, trecho in (('numero enorme', enorme),
+                             ('booleano', json.dumps(valida).replace('"percentual": 62.0', '"percentual": true')),
+                             ('negativo', json.dumps(valida).replace('"percentual": 62.0', '"percentual": -1')),
+                             ('acima de 100', json.dumps(valida).replace('"percentual": 62.0', '"percentual": 101')),
+                             ('texto', json.dumps(valida).replace('"percentual": 62.0', '"percentual": "62"')),
+                             ('NaN', json.dumps(valida).replace('"percentual": 62.0', '"percentual": NaN')),
+                             ('Infinity', json.dumps(valida).replace('"percentual": 62.0', '"percentual": Infinity'))):
+            with self.subTest(percentual=nome):
+                self.roteador_falso('ok', {})
+                (self.raiz / 'roteador-cotas').write_text(trecho)
+                self.janela.cotas.consultar()
+                aguardar(lambda: not self.janela.cotas.ocupada())
+                texto = self.janela.faixa_cotas.toolTip()
+                self.assertIn('sem dado', texto)
+                for ruim in ('62', '-1%', '101', 'NaN', 'Infinity', '00000'):
+                    self.assertNotIn(ruim, texto)
+                if nome in ('NaN', 'Infinity'):
+                    self.assertIn('saída não é JSON válido', texto)
+                else:
+                    self.assertIn('Argon sem dado', texto)
+                    self.assertIn('Gemini 80%', texto)
+
+    def test_faixa_so_pede_cotas_sem_atualizar(self):
+        self.roteador_falso('ok', self.cotas_dos_provedores())
+        central = Janela(True, self.raiz, self.estado)
+        self.addCleanup(central.close)
+        central.timer.stop()
+        aguardar(lambda: not central.cotas.ocupada())
+        central.cotas.consultar()
+        aguardar(lambda: not central.cotas.ocupada())
+        chamadas = [json.loads(l) for l in (self.raiz / 'roteador.log').read_text().splitlines()]
+        self.assertEqual(chamadas, [['cotas'], ['cotas']])
+        self.assertEqual(central.cotas.repeticao.interval(), 60000)
+        self.assertTrue(central.cotas.repeticao.isActive())
+
+    def test_uma_consulta_em_andamento_impede_a_segunda(self):
+        self.roteador_falso('espera', {})
+        self.janela.cotas.prazo_ms = 600
+        self.janela.cotas.consultar()
+        aguardar(lambda: (self.raiz / 'roteador.log').exists())
+        self.assertTrue(self.janela.cotas.ocupada())
+        for _ in range(3):
+            self.janela.cotas.consultar()
+        coluna = self.janela.coordenadores
+        coluna.cota.consultar()
+        aguardar(lambda: not self.janela.cotas.ocupada())
+        self.assertEqual(len((self.raiz / 'roteador.log').read_text().splitlines()), 1)
+        self.assertIn('prazo esgotado', self.janela.faixa_cotas.toolTip())
+
+    def test_faixa_mostra_consultando_so_sem_leitura_anterior(self):
+        self.roteador_falso('espera', {})
+        central = Janela(True, self.raiz, self.estado)
+        self.addCleanup(central.close)
+        central.timer.stop()
+        central.cotas.parar_repeticao()
+        self.assertEqual(central.faixa_cotas.toolTip(), 'Cotas: consultando')
+        central.cotas.expirar()
+        aguardar(lambda: not central.cotas.ocupada())
+        self.assertIn('prazo esgotado', central.faixa_cotas.toolTip())
+        central.cotas.consultar()
+        self.assertIn('prazo esgotado', central.faixa_cotas.toolTip())
+        central.cotas.expirar()
+        aguardar(lambda: not central.cotas.ocupada())
+        self.consultar_cotas(central, 'ok', self.cotas_dos_provedores())
+        self.assertIn('Codex: 15%', central.faixa_cotas.toolTip())
+        self.roteador_falso('espera', {})
+        central.cotas.consultar()
+        self.assertTrue(central.cotas.ocupada())
+        self.assertIn('Codex: 15%', central.faixa_cotas.toolTip())
+        central.cotas.expirar()
+        aguardar(lambda: not central.cotas.ocupada())
+        self.assertIn('prazo esgotado', central.faixa_cotas.toolTip())
+        self.assertNotIn('Codex', central.faixa_cotas.toolTip())
+
+    def test_simulacao_nao_consulta_as_cotas(self):
+        self.roteador_falso('ok', self.cotas_dos_provedores())
+        simulada = Janela(False, self.raiz, self.estado)
+        self.addCleanup(simulada.close)
+        self.assertFalse((self.raiz / 'roteador.log').exists())
+        self.assertFalse(simulada.cotas.repeticao.isActive())
+        self.assertEqual(simulada.faixa_cotas.toolTip(), 'Cotas: sem dado (a simulação não consulta o Core)')
+
+    def test_faixa_cabe_em_duas_linhas_e_deixa_o_texto_inteiro_na_dica(self):
+        self.consultar_cotas(self.janela, 'ok', self.cotas_dos_provedores())
+        completo = self.janela.faixa_cotas.toolTip()
+        sem_dado = self.cotas_dos_provedores()
+        sem_dado['provedores'][2]['grupos'][0]['percentual'] = None
+        for largura, altura in ((1440, 900), (1200, 780), (700, 460)):
+            for modo in (0, 1):
+                for cotas in (self.cotas_dos_provedores(), sem_dado):
+                    with self.subTest(largura=largura, modo=modo, sem_dado=cotas is sem_dado):
+                        self.janela.resize(largura, altura)
+                        self.janela.modo.setCurrentIndex(modo)
+                        self.janela.show()
+                        self.consultar_cotas(self.janela, 'ok', cotas)
+                        APP.processEvents()
+                        faixa = self.janela.faixa_cotas
+                        self.assertLessEqual(faixa.height(), 2 * faixa.fontMetrics().lineSpacing() + 12)
+                        self.assertLessEqual(len(self.faixa_visivel(self.janela)), len(faixa.toolTip()))
+                        self.assertIn('Codex', self.faixa_visivel(self.janela))
+                        self.assertGreaterEqual(faixa.geometry().left(), 0)
+                        self.assertLessEqual(faixa.geometry().right(), self.janela.width())
+                        self.assertTrue(self.janela.centralWidget().rect().contains(self.janela.status.geometry()))
+                        if cotas is sem_dado:
+                            self.assertIn('sem dado', faixa.toolTip())
+                            self.assertTrue(faixa.toolTip().endswith('--atualizar --permitir-remoto'))
+        self.janela.resize(700, 460)
+        self.consultar_cotas(self.janela, 'ok', self.cotas_dos_provedores())
+        APP.processEvents()
+        self.assertNotEqual(self.faixa_visivel(self.janela), completo)
+        self.assertEqual(self.janela.faixa_cotas.toolTip(), completo)
 
     def aguardar_aviso_de_abertura(self, coluna):
         aguardar(lambda: coluna.abertura is None)

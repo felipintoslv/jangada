@@ -5,14 +5,14 @@ transferência e foca a janela, e o dono cola no terminal. Um envio pelo tmux
 podia responder uma permissão aberta no lugar dele.
 """
 import json
-import math
 import shlex
 from pathlib import Path
 
-from PyQt6.QtCore import QObject, QProcess, QTimer, Qt
+from PyQt6.QtCore import QProcess, QTimer, Qt
 from PyQt6.QtGui import QColor, QGuiApplication, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QPlainTextEdit,
                              QMessageBox, QPushButton, QScrollArea, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
+from cotas import ATUALIZAR_COTA, COTA_MINIMA, cota_argon, texto_percentual
 from dados import LIMITE, NOME, ROTULOS, comando_disponivel, estado_exibido
 from indicadores import SEM_DADO
 from rodadas import CONTROLE, Consulta, data
@@ -27,11 +27,7 @@ LISTA_MAX = 4096
 PROVEDORES = ('claude', 'codex', 'agy')
 # Texto de cada provedor no seletor; o agy abre com modelo fixo no Core.
 ROTULOS_PROVEDOR = {'claude': 'claude', 'codex': 'codex', 'agy': 'agy (Argon High)'}
-ROTEADOR = 'jangada-router'
-GRUPO_ARGON = 'gemini-argon-wtu'
-COTA_MINIMA = 20
 SEM_COTA = 'Cota do Argon sem dado: o Core confere antes de abrir.'
-ATUALIZAR_COTA = 'Para atualizar, rode no terminal: jangada-router cotas --atualizar --permitir-remoto'
 SOLICITADA = 'Abertura ou retomada solicitada. Confira o resultado na janela.'
 CAUSAS_SEM_ABERTURA = {
     'agy': 'Para agy, a causa provável é cota ou catálogo do Argon; ',
@@ -175,164 +171,66 @@ def aviso_sem_abertura(provedor, caminho, conferida=True):
                        + f'rode `{comando}` no terminal para ver o motivo.', 4400)
 
 
-def numero_de_fora(valor, minimo=0, maximo=100):
-    """Número de um JSON de fora dentro de [minimo, maximo], ou None; nunca lança.
-
-    Só int e float entram (bool não). O intervalo é conferido antes de qualquer
-    conversão: um inteiro de 400 dígitos não cabe num float.
-    """
-    try:
-        if type(valor) not in (int, float) or not minimo <= valor <= maximo:
-            return None
-        return valor if math.isfinite(valor) else None
-    except Exception:
-        return None
-
-
-def ler_cota_argon(bruto):
-    """Lê o JSON de `jangada-router cotas`; devolve (percentual, renova_em) do Argon ou (None, None).
-
-    Usa só `provedores[].grupos[]` do cotas.json versão 1. Percentual ausente, nulo
-    ou fora de 0 a 100 vale como sem dado. A conta `principal` é a do coordenador:
-    se existe, só ela vale, e sem o grupo Argon nela o resultado é sem dado. Sem
-    `principal`, vale a única conta do agy; com mais de uma, sem dado.
-    """
-    if len(bruto) > LIMITE:
-        raise ValueError('A saída excedeu o limite de leitura.')
-
-    def recusar(constante):
-        raise ValueError('Número fora do JSON.')
-    try:
-        dados = json.loads(bruto, parse_constant=recusar)
-    except (ValueError, RecursionError) as erro:
-        raise ValueError('A saída não é JSON válido.') from erro
-    if not isinstance(dados, dict) or dados.get('versao') != 1 or type(dados.get('versao')) is not int:
-        raise ValueError('Versão do cotas.json não lida por esta Central.')
-    lista = dados.get('provedores')
-    if not isinstance(lista, list):
-        raise ValueError('A saída não traz os provedores.')
-    agy = [e for e in lista if isinstance(e, dict) and e.get('provedor') == 'agy']
-    principal = [e for e in agy if e.get('conta') == 'principal']
-    if principal:
-        entrada = principal[0]
-    elif len(agy) == 1:
-        entrada = agy[0]
-    else:
-        return None, None
-    grupos = entrada.get('grupos')
-    grupo = next((g for g in grupos if isinstance(g, dict) and g.get('grupo') == GRUPO_ARGON), None) \
-        if isinstance(grupos, list) else None
-    percentual = numero_de_fora(grupo.get('percentual')) if grupo is not None else None
-    if percentual is None:
-        return None, None
-    renova = None
-    for janela in grupo.get('janelas') if isinstance(grupo.get('janelas'), list) else []:
-        if (isinstance(janela, dict) and numero_de_fora(janela.get('percentual')) == percentual
-                and isinstance(janela.get('renova_em'), str)):
-            renova = janela['renova_em']
-            break
-    return percentual, renova
-
-
-def texto_percentual(valor):
-    return f'{valor:.2f}'.rstrip('0').rstrip('.').replace('.', ',')
-
-
-class CotaArgon(QObject):
-    """Roda `jangada-router cotas` sem shell, sem rede e sem --atualizar, com prazo e limite de saída.
+class CotaArgon:
+    """Cota do Argon da consulta única de cotas.py, para o diálogo Novo coordenador.
 
     O estado é 'consultando', 'ok' (percentual de 20 ou mais), 'baixa' ou 'sem_dado'.
     Qualquer falha vira 'sem_dado': o Core confere de novo antes de abrir.
     """
 
     def __init__(self, janela, ao_mudar):
-        super().__init__(janela)
-        self.janela = janela
-        self.ao_mudar = ao_mudar
-        self.prazo_ms = 30000
-        self.estado = 'sem_dado'
-        self.percentual = None
-        self.renova_em = None
-        self.excedeu = False
-        self.expirou = False
-        self.bruto = b''
-        self.processo = QProcess(self)
-        self.processo.setStandardInputFile(QProcess.nullDevice())
-        self.processo.setStandardErrorFile(QProcess.nullDevice())
-        self.processo.readyReadStandardOutput.connect(self.ler)
-        self.processo.finished.connect(self.fim)
-        self.processo.errorOccurred.connect(self.erro)
-        self.prazo = QTimer(self)
-        self.prazo.setSingleShot(True)
-        self.prazo.timeout.connect(self.expirar)
+        self.consulta = janela.cotas
+        self.consulta.ouvir(ao_mudar)
+
+    @property
+    def prazo_ms(self):
+        return self.consulta.prazo_ms
+
+    @prazo_ms.setter
+    def prazo_ms(self, valor):
+        self.consulta.prazo_ms = valor
+
+    @property
+    def argon(self):
+        if self.consulta.estado != 'ok':
+            return None, None
+        return cota_argon(self.consulta.cotas)
+
+    @property
+    def percentual(self):
+        return self.argon[0]
+
+    @property
+    def renova_em(self):
+        return self.argon[1]
+
+    @property
+    def estado(self):
+        if self.consulta.estado == 'consultando':
+            return 'consultando'
+        if self.percentual is None:
+            return 'sem_dado'
+        return 'baixa' if self.percentual < COTA_MINIMA else 'ok'
 
     def ocupada(self):
-        return self.processo.state() != QProcess.ProcessState.NotRunning
+        return self.consulta.ocupada()
 
     def consultar(self):
-        if self.ocupada():
-            return
-        if not comando_disponivel(ROTEADOR, self.janela.jangada):
-            self.definir('sem_dado')
-            return
-        self.bruto = b''
-        self.excedeu = self.expirou = False
-        self.janela.preparar(self.processo, ['cotas'], ROTEADOR)
-        self.definir('consultando')
-        self.processo.start()
-        self.prazo.start(self.prazo_ms)
-
-    def ler(self):
-        self.bruto += bytes(self.processo.readAllStandardOutput())
-        if len(self.bruto) > LIMITE and not self.excedeu:
-            self.excedeu = True
-            self.processo.kill()
-
-    def expirar(self):
-        self.expirou = True
-        self.processo.kill()
-
-    def erro(self, erro):
-        if erro == QProcess.ProcessError.FailedToStart:
-            self.prazo.stop()
-            self.definir('sem_dado')
-
-    def fim(self, codigo, tipo):
-        self.prazo.stop()
-        self.ler()
-        if self.expirou or self.excedeu or codigo != 0 or tipo != QProcess.ExitStatus.NormalExit:
-            self.definir('sem_dado')
-            return
-        try:
-            percentual, renova = ler_cota_argon(self.bruto)
-        except Exception:
-            self.definir('sem_dado')
-            return
-        if percentual is None:
-            self.definir('sem_dado')
-        else:
-            self.definir('baixa' if percentual < COTA_MINIMA else 'ok', percentual, renova)
-
-    def definir(self, estado, percentual=None, renova_em=None):
-        self.estado, self.percentual, self.renova_em = estado, percentual, renova_em
-        self.ao_mudar()
+        self.consulta.consultar()
 
     def texto(self):
-        if self.estado == 'consultando':
+        estado = self.estado
+        if estado == 'consultando':
             return 'Conferindo a cota do Argon.'
-        if self.estado == 'ok':
+        if estado == 'ok':
             return f'Cota do Argon: {texto_percentual(self.percentual)}%.'
-        if self.estado == 'baixa':
+        if estado == 'baixa':
             renova = f' Renova em {data(self.renova_em)}.' if self.renova_em and data(self.renova_em) != SEM_DADO else ''
             return f'Cota do Argon abaixo de {COTA_MINIMA}%: {texto_percentual(self.percentual)}%.' + renova
         return SEM_COTA + ' ' + ATUALIZAR_COTA
 
     def fechar(self):
-        self.prazo.stop()
-        if self.ocupada():
-            self.processo.blockSignals(True)
-            self.processo.kill()
-            self.processo.waitForFinished(1000)
+        self.consulta.fechar()
 
 
 class NovoCoordenador(QDialog):

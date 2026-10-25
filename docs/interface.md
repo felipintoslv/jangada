@@ -190,7 +190,39 @@ Finalizar atuação ficam desligados nela, com o motivo no painel. Em Novo
 coordenador, um projeto cujo coordenador tem provedor desconhecido e atuação
 aberta não pode ser aberto por ali.
 
-**Cota do Argon.** Ao abrir Novo coordenador, a Central roda `jangada-router cotas`
+**Faixa de cotas.** Linha fixa no alto da janela, abaixo dos botões e acima dos
+cartões de contagem, visível em todas as abas. Mostra, na ordem do `cotas.json`,
+cada conta do agy (`agy principal`, `agy reserva`) com os grupos e o percentual
+(`gemini-argon-wtu` como "Argon", `gemini` como "Gemini", os demais pelo
+identificador), o Codex com o percentual do grupo `codex` e o Claude como "não
+medido aqui". O `renova_em` aparece em horário local curto junto do grupo de menor
+percentual de cada provedor, e "lido às HH:MM" vem do campo `gerado`. Só aparece
+percentual que veio no JSON e passou por `numero_de_fora`; nada é estimado.
+
+Grupo abaixo de 20% mostra o texto "abaixo de 20%", o glifo Ⅱ e a cor de alerta das
+fichas. A cor nunca vai sozinha e não há cor por provedor. Grupo com `percentual`
+nulo mostra "sem dado" e o motivo: cache ausente (`sem_cache`), cache vencido
+(`cache_vencido`), consulta falhou (`consulta_falhou`) ou conta sem confiança
+(`conta_sem_confianca`). Motivo desconhecido mostra só "sem dado".
+
+Com Core sem o comando, erro, prazo esgotado, saída grande demais ou JSON inválido,
+a faixa mostra "Cotas: sem dado" e o motivo curto, sem diálogo de erro. Sempre que
+houver "sem dado", a faixa mostra como texto o comando que o dono roda no terminal:
+`jangada-router cotas --atualizar --permitir-remoto`. A Central não roda esse comando.
+
+A consulta é `jangada-router cotas`, a mesma do diálogo Novo coordenador, uma só
+por vez. Roda ao abrir a Central e a cada 60 segundos, em segundo plano, sem shell,
+sem `--atualizar` e sem `--permitir-remoto`. Durante uma nova consulta, a faixa
+mantém a última leitura. Na simulação a faixa mostra "Cotas: sem dado" e a
+Central não consulta o Core.
+
+Em janela pequena a faixa ocupa no máximo duas linhas. Se o texto completo não
+cabe, ela usa uma forma resumida (o menor grupo de cada provedor e, por fim, a
+menor cota com a contagem de "sem dado"). A dica de ferramenta sempre traz o texto
+inteiro.
+
+**Cota do Argon.** Ao abrir Novo coordenador, a Central usa a consulta de `jangada-router cotas`
+da faixa (uma por vez; se há uma em andamento, espera por ela e não abre outra),
 em segundo plano, sem shell, sem `--atualizar` e sem `--permitir-remoto`, com prazo de
 30 segundos e limite de 1 MiB na saída. Esse comando só lê o que o Core já tem
 em disco e nunca consulta o agy. A Central usa o grupo `gemini-argon-wtu` do

@@ -32,6 +32,7 @@ from operacional import Operacional
 from indicadores import Indicadores, SEM_DADO, inteiro, tempo, texto, tokens_da_tarefa
 from rodadas import Rodadas
 from coordenadores import FAIXA, Coordenadores
+from cotas import SIMULACAO, ConsultaCotas, FaixaCotas
 from aparencia import CartaoResumo, InspetorRolavel, LinhaTempo, cores_interacao
 
 # Só para a janela simulada e para quando a consulta falha: o catálogo vem do
@@ -324,6 +325,10 @@ class Janela(QMainWindow):
         for botao in (self.atualizar_botao, self.nova, self.painel):
             comandos.addWidget(botao)
         layout.addWidget(self.comandos)
+        self.cotas = ConsultaCotas(self)
+        self.faixa_cotas = FaixaCotas()
+        self.cotas.ouvir(self.mostrar_cotas)
+        layout.addWidget(self.faixa_cotas)
         self.faixa = QLabel(FAIXA)
         self.faixa.setObjectName('faixa')
         self.faixa.setTextFormat(Qt.TextFormat.PlainText)
@@ -587,7 +592,13 @@ class Janela(QMainWindow):
         self.atualizacao_pendente = False
         if real:
             self.timer.start()
+            self.cotas.iniciar()
+        else:
+            self.cotas.definir('sem_dado', None, SIMULACAO)
         self.atualizar()
+
+    def mostrar_cotas(self):
+        self.faixa_cotas.mostrar(self.cotas.variantes())
 
     def resizeEvent(self, evento):
         super().resizeEvent(evento)
@@ -1017,6 +1028,8 @@ class Janela(QMainWindow):
             QLabel#rodadas_falta {{ font-size: 13px; color: {c['texto_suave']}; }}
             QLabel#faixa {{ background: {c['superficie_elevada']}; padding: 6px 12px;
                 border-left: 4px solid {c['texto_suave']}; border-radius: 8px; }}
+            QLabel#faixa_cotas {{ background: {c['superficie_elevada']}; padding: 4px 12px;
+                border-left: 4px solid {c['texto_suave']}; border-radius: 8px; font-size: 13px; }}
             QLabel#coord_titulo, QLabel#coord_nome {{ font-size: 16px; font-weight: 600; }}
             QLabel#coord_hora {{ font-size: 13px; color: {c['texto_suave']}; }}
             QLabel#coord_linha {{ font-family: 'JetBrains Mono'; background: {c['superficie_elevada']};
@@ -1034,6 +1047,7 @@ class Janela(QMainWindow):
             if sessao:
                 item.setForeground(2, QColor(self.cores_estado.get(estado_exibido(sessao), c['texto'])))
         self.coordenadores.pintar()
+        self.faixa_cotas.pintar(ESTADOS[modo]['Bloqueada'])
         for estado, cartao in self.cartoes.items():
             cartao.numero.setStyleSheet(f'color: {self.cores_estado[estado]};')
         if self.selecionada() in self.sessoes:
@@ -1554,6 +1568,7 @@ exit "$resultado"
         self.indicadores.fechar()
         self.rodadas.fechar()
         self.coordenadores.fechar()
+        self.cotas.fechar()
         for timer in (self.timer, self.evento_estado, self.limite_evento, self.observacao_limite,
                       self.observacao_repetir, self.espera,
                       self.tempo_acao, self.tempo_previa, self.tempo_finalizacao):
