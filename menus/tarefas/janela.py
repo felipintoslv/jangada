@@ -199,7 +199,7 @@ class NovaTarefa(QDialog):
         self.preparo.criar(nome, self.base)
 
     def preparar_pasta(self):
-        self.preparo.preparar(self.projeto.text())
+        self.preparo.preparar(self.projeto.text(), self.base)
 
     def projeto_pronto(self, caminho, situacao):
         self.projeto.setText(caminho)
@@ -804,7 +804,7 @@ class Janela(QMainWindow):
         timer.setSingleShot(True)
         timer.timeout.connect(lambda: self.abertura_vencida(nome))
         self.aberturas[nome] = {'arquivo': arquivo, 'timer': timer, 'conferida': False}
-        timer.start(self.prazo_tarefa_ms)
+        timer.start(self.espera_inicial_ms())
         return None
 
     def abertura_na_lista(self, nome):
@@ -822,6 +822,10 @@ class Janela(QMainWindow):
         for nome in [n for n in self.aberturas if self.abertura_na_lista(n)]:
             self.encerrar_abertura(nome)
 
+    def espera_inicial_ms(self):
+        """Quando reconsultar a lista: a confirmação cabe dentro do prazo total, nunca além dele."""
+        return max(0, self.prazo_tarefa_ms - max(0, self.confirmacao_tarefa_ms))
+
     def abertura_vencida(self, nome):
         abertura = self.aberturas.get(nome)
         if abertura is None or self.fechando:
@@ -832,7 +836,7 @@ class Janela(QMainWindow):
         if not abertura['conferida']:
             abertura['conferida'] = True
             self.atualizar()
-            abertura['timer'].start(self.confirmacao_tarefa_ms)
+            abertura['timer'].start(self.prazo_tarefa_ms - self.espera_inicial_ms())
             return
         linhas = ultimas_linhas(abertura['arquivo'])
         self.encerrar_abertura(nome)

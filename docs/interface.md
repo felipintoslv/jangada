@@ -116,14 +116,18 @@ Alterar um controle seleciona o modo Personalizado; recolher a área preserva as
 A barra do topo segue a ordem do trabalho: **Novo projeto**, **Novo coordenador**
 e **Nova tarefa**. **Novo projeto** pede o nome (ou uma pasta existente), cria a pasta
 em `JANGADA_PROJETOS`, inicia o Git com um commit vazio quando a pasta ainda não é
-repositório e cadastra o projeto; depois oferece abrir o coordenador nele. Pasta que
-já é repositório só é cadastrada, e nenhum arquivo é apagado ou sobrescrito.
+repositório e cadastra o projeto; depois oferece abrir o coordenador nele. O Git roda
+fora da linha da interface. Pasta que já é repositório com commit só é cadastrada;
+repositório sem commit ganha só o commit vazio. Pasta existente dentro de outro
+repositório é recusada, e `.git` ou commit só nascem dentro de `JANGADA_PROJETOS`.
+Nenhum arquivo é apagado ou sobrescrito.
 **Nova pasta**, no formulário, usa o mesmo caminho e deixa a pasta selecionada.
 Uma pasta escolhida que não é repositório Git mostra um aviso com **Preparar como
-projeto**, em vez de seguir para uma abertura que falharia.
+projeto**, em vez de seguir para uma abertura que falharia. Fora de `JANGADA_PROJETOS`
+o botão recusa com a razão.
 **Iniciar tarefa** abre o agente num terminal da Central. Se ele falhar, o terminal
 fica aberto com a mensagem, e a Central mostra as últimas linhas do erro quando a
-tarefa não entra na lista em 20 segundos.
+tarefa não entra na lista em 20 segundos: a Central reconsulta aos 15 e conclui aos 20.
 **Painel de indicadores** leva à aba Indicadores.
 Aprovações nativas e envio de respostas ficam fora desta versão.
 

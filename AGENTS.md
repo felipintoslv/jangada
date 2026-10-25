@@ -60,9 +60,9 @@ entrar aqui do mesmo jeito.
 | `~/.gemini/antigravity-cli` (`settings.json`, `bin`) | `jangada-worktree-preparar`, `jangada-agente-fim`, `jangada-isolar` | confiança do agy no worktree e pasta bin para montar isolada; o original fica em `settings.json.jangada-orig` |
 | `~/.local/share/jangada-worktrees` | `jangada-agente` | worktrees das sessões de agente |
 | Repositórios em `JANGADA_PROJETOS` | `jangada-agente`, `jangada-agente-fim` | ramos `agente/*`, registro dos worktrees e a integração que o usuário confirma |
-| `JANGADA_PROJETOS` | `menus/tarefas/janela.py` | pasta vazia de um projeto novo, quando o usuário pede pelo botão Nova pasta |
+| `JANGADA_PROJETOS` | `menus/tarefas/projeto.py`, `menus/tarefas/janela.py` | pasta vazia de um projeto novo, `git init` e primeiro commit vazio na própria pasta, quando o usuário pede por Novo projeto, Nova pasta ou Preparar como projeto |
 | Pasta atual, com `--saida` | `jangada-avaliar-ollama` | fontes sintéticas e registros da avaliação local, em uma pasta nova por execução |
-| `$XDG_RUNTIME_DIR/jangada-tarefas` | `menus/tarefas/central.py`, `menus/tarefas/janela.py` | soquete privado para reutilizar a janela e avisos privados para acompanhar ações, fora do runtime visível ao agente isolado |
+| `$XDG_RUNTIME_DIR/jangada-tarefas` | `menus/tarefas/central.py`, `menus/tarefas/janela.py`, `menus/tarefas/projeto.py` | soquete privado para reutilizar a janela, avisos privados para acompanhar ações e, na subpasta `aberturas` (0700), arquivos de erro de abertura de tarefa, fora do runtime visível ao agente isolado |
 | `~/Imagens/Capturas` ou `~/Pictures/Screenshots` | `jangada-captura` | capturas de tela |
 | `/usr/share/wayland-sessions/jangada.desktop` | `install/40-interface.sh` | sessão no gerenciador de login |
 | `/etc/snapper/configs/root`, `/.snapshots` | `install/20-snapshots.sh`, `jangada-snapshot` | configuração do snapper e snapshots |

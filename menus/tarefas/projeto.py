@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import stat
 import subprocess
+import threading
 
 from PyQt6.QtCore import QObject, QProcess, Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (QDialog, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
@@ -11,6 +12,7 @@ from PyQt6.QtWidgets import (QDialog, QFileDialog, QFormLayout, QHBoxLayout, QLa
 
 PRIMEIRO_COMMIT = 'início do projeto'
 PRAZO_GIT = 20
+PRAZO_CONSULTA = 5
 PRAZO_CADASTRO_MS = 30000
 SEM_ERRO = 'O terminal não registrou erro. Confira se ele abriu.'
 
@@ -36,6 +38,17 @@ def pasta_base():
     return Path(os.environ.get('JANGADA_PROJETOS') or Path.home() / 'Projetos').expanduser()
 
 
+def dentro_da_base(pasta, base):
+    base = Path(base).resolve()
+    return base in Path(pasta).resolve().parents
+
+
+def _exigir_base(pasta, base):
+    if not dentro_da_base(pasta, base):
+        raise ErroPreparo(f'{pasta} fica fora de {base} (JANGADA_PROJETOS); '
+                          'o Jangada só cria Git e commit em projetos dessa pasta')
+
+
 def validar_nome(nome):
     """Mensagem de erro do nome de uma pasta nova, ou None se servir."""
     if not nome or nome.startswith('.') or '/' in nome or any(ord(c) < 32 for c in nome):
@@ -54,38 +67,63 @@ def _ambiente_git():
     return ambiente
 
 
-def _git(pasta, *argumentos, ambiente=None):
+def _git(pasta, *argumentos, ambiente=None, prazo=PRAZO_GIT):
     return subprocess.run(['git', '-C', str(pasta), *argumentos], capture_output=True,
-                          encoding='utf-8', errors='replace', timeout=PRAZO_GIT,
+                          encoding='utf-8', errors='replace', timeout=prazo,
                           env=ambiente or _ambiente_git(), stdin=subprocess.DEVNULL)
 
 
 def e_git(pasta):
-    """Diz se a pasta já está num repositório Git; um .git existente nunca é refeito."""
-    if (Path(pasta) / '.git').exists():
-        return True
+    """Pasta dentro de um repositório com ao menos um commit, o que o worktree da tarefa exige."""
     try:
-        resultado = _git(pasta, 'rev-parse', '--is-inside-work-tree')
+        return _git(pasta, 'rev-parse', '--verify', '--quiet', 'HEAD', prazo=PRAZO_CONSULTA).returncode == 0
     except (OSError, subprocess.SubprocessError):
         return False
-    return resultado.returncode == 0 and resultado.stdout.strip() == 'true'
 
 
-def iniciar_repositorio(pasta):
-    """git init e um primeiro commit vazio; não toca nos arquivos da pasta."""
+def _raiz_git(pasta):
+    resultado = _git(pasta, 'rev-parse', '--show-toplevel', prazo=PRAZO_CONSULTA)
+    texto = resultado.stdout.strip()
+    return Path(texto).resolve() if resultado.returncode == 0 and texto else None
+
+
+def _commit_vazio(pasta):
+    ambiente = _ambiente_git()
+    for chave, sufixo, padrao in (('user.name', 'NAME', 'Jangada'), ('user.email', 'EMAIL', 'jangada@localhost')):
+        if not _git(pasta, 'config', chave, ambiente=ambiente).stdout.strip():
+            ambiente['GIT_AUTHOR_' + sufixo] = ambiente['GIT_COMMITTER_' + sufixo] = padrao
+    resultado = _git(pasta, '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '--no-verify',
+                     '--quiet', '-m', PRIMEIRO_COMMIT, ambiente=ambiente)
+    if resultado.returncode:
+        raise ErroPreparo('o primeiro commit falhou: ' + _resumo(resultado.stderr))
+
+
+def preparar_git(pasta, criada, base):
+    """Deixa a pasta como raiz de um repositório com commit e devolve o que fez.
+
+    Não toca nos arquivos da pasta. Repositório já pronto fica como está; um
+    sem commit (de um preparo interrompido) ganha só o commit vazio. Pasta
+    existente dentro de outro repositório é recusada; pasta recém-criada ganha
+    repositório próprio. `.git` e commit só nascem dentro de `base` (JANGADA_PROJETOS).
+    """
     try:
-        resultado = _git(pasta, 'init', '--quiet')
-        if resultado.returncode:
-            raise ErroPreparo('git init falhou: ' + _resumo(resultado.stderr))
-        ambiente = _ambiente_git()
-        for chave, sufixo, padrao in (('user.name', 'NAME', 'Jangada'), ('user.email', 'EMAIL', 'jangada@localhost')):
-            if not _git(pasta, 'config', chave, ambiente=ambiente).stdout.strip():
-                ambiente['GIT_AUTHOR_' + sufixo] = ambiente['GIT_COMMITTER_' + sufixo] = padrao
-        resultado = _git(pasta, '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '--no-verify',
-                         '--quiet', '-m', PRIMEIRO_COMMIT, ambiente=ambiente)
-        if resultado.returncode:
-            raise ErroPreparo('o repositório foi iniciado, mas o primeiro commit falhou: '
-                              + _resumo(resultado.stderr))
+        raiz = _raiz_git(pasta)
+        if raiz is not None and raiz != Path(pasta).resolve():
+            if not criada:
+                raise ErroPreparo(f'a pasta fica dentro do repositório {raiz}; escolha a raiz dele')
+            raiz = None
+        if raiz is None:
+            _exigir_base(pasta, base)
+            resultado = _git(pasta, 'init', '--quiet')
+            if resultado.returncode:
+                raise ErroPreparo('git init falhou: ' + _resumo(resultado.stderr))
+            _commit_vazio(pasta)
+            return 'Git iniciado com um primeiro commit vazio.'
+        if not e_git(pasta):
+            _exigir_base(pasta, base)
+            _commit_vazio(pasta)
+            return 'O repositório não tinha commit; criei o primeiro, vazio.'
+        return 'A pasta já era um repositório Git e não foi alterada.'
     except FileNotFoundError:
         raise ErroPreparo('o git não está instalado') from None
     except (OSError, subprocess.SubprocessError) as erro:
@@ -101,11 +139,15 @@ class Preparo(QObject):
     """
     pronto = pyqtSignal(str, str)
     falhou = pyqtSignal(str)
+    git_fim = pyqtSignal(str, str)
 
     def __init__(self, janela):
         super().__init__(janela)
         self.janela = janela
         self.processo = None
+        self.trabalhando = False
+        self.criada = False
+        self.base = None
         self.pasta = None
         self.situacao = ''
         self.expirou = False
@@ -113,10 +155,11 @@ class Preparo(QObject):
         self.prazo = QTimer(self)
         self.prazo.setSingleShot(True)
         self.prazo.timeout.connect(self.expirar)
+        self.git_fim.connect(self.git_pronto)
         janela.preparos.append(self)
 
     def ocupado(self):
-        return self.processo is not None
+        return self.trabalhando or self.processo is not None
 
     def criar(self, nome, base):
         nome = nome.strip()
@@ -139,9 +182,10 @@ class Preparo(QObject):
         except OSError as erro:
             self.falhou.emit(f'Não foi possível criar {pasta}: {erro.strerror}.')
             return
+        self.base = Path(base)
         self.seguir(pasta, True)
 
-    def preparar(self, pasta):
+    def preparar(self, pasta, base=None):
         pasta = Path(str(pasta).strip()).expanduser()
         if not pasta.is_dir():
             self.falhou.emit(f'{pasta} não é uma pasta existente.')
@@ -151,6 +195,7 @@ class Preparo(QObject):
         elif self.ocupado():
             self.falhou.emit('Outro projeto está sendo preparado.')
         else:
+            self.base = Path(base) if base else None
             self.seguir(pasta.resolve(), False)
 
     def simular(self, pasta):
@@ -158,19 +203,33 @@ class Preparo(QObject):
         self.pronto.emit(str(pasta), 'Simulação: nenhuma pasta, repositório ou cadastro foi criado.')
 
     def seguir(self, pasta, criada):
+        """O Git roda em outra linha de execução, para a Central continuar respondendo."""
+        self.pasta, self.situacao, self.criada, self.expirou = pasta, '', criada, False
+        base = self.base or pasta_base()
+        self.trabalhando = True
+        threading.Thread(target=self.rodar_git, args=(pasta, criada, base), daemon=True).start()
+
+    def rodar_git(self, pasta, criada, base):
         try:
-            if e_git(pasta):
-                situacao = 'A pasta já era um repositório Git e não foi alterada.'
-            else:
-                iniciar_repositorio(pasta)
-                situacao = 'Git iniciado com um primeiro commit vazio.'
-        except ErroPreparo as erro:
-            sobra = 'A pasta foi criada, mas ' if criada else 'Nada foi cadastrado: '
-            self.falhou.emit(f'{sobra}{erro}.')
+            erro, situacao = '', preparar_git(pasta, criada, base)
+        except ErroPreparo as falha:
+            erro, situacao = str(falha), ''
+        try:
+            self.git_fim.emit(erro, situacao)
+        except RuntimeError:
+            pass
+
+    def git_pronto(self, erro, situacao):
+        self.trabalhando = False
+        if self.fechando:
             return
-        self.pasta, self.situacao, self.expirou = pasta, situacao, False
+        if erro:
+            inicio = 'A pasta foi criada, mas ' if self.criada else 'Nada foi cadastrado: '
+            self.falhou.emit(f'{inicio}{erro}. Use Preparar como projeto para tentar de novo.')
+            return
+        self.situacao = situacao
         processo = QProcess(self)
-        self.janela.preparar(processo, ['--projeto', str(pasta), 'cadastrar'], 'jangada-projeto')
+        self.janela.preparar(processo, ['--projeto', str(self.pasta), 'cadastrar'], 'jangada-projeto')
         processo.finished.connect(self.cadastro_fim)
         processo.errorOccurred.connect(self.cadastro_erro)
         self.processo = processo
@@ -287,7 +346,7 @@ class NovoProjeto(QDialog):
         self.resultado.clear()
         self.criar.setEnabled(False)
         if texto.startswith('~') or '/' in texto:
-            self.preparo.preparar(texto)
+            self.preparo.preparar(texto, self.base)
         else:
             self.preparo.criar(texto, self.base)
 
@@ -313,17 +372,23 @@ class NovoProjeto(QDialog):
             self.janela.coordenadores.novo_coordenador_em(self.caminho)
 
 
-def pasta_de_erros():
-    """Pasta privada dos erros de abertura; recusa link, dono diferente e permissão aberta."""
-    runtime = os.environ.get('XDG_RUNTIME_DIR')
-    if not runtime or not os.path.isabs(runtime):
-        raise ValueError('XDG_RUNTIME_DIR deve indicar a pasta da sessão gráfica.')
-    pasta = Path(runtime) / 'jangada'
+def _pasta_privada(pasta):
     pasta.mkdir(mode=0o700, exist_ok=True)
     dados = pasta.lstat()
     if not stat.S_ISDIR(dados.st_mode) or dados.st_uid != os.getuid() or dados.st_mode & 0o077:
         raise ValueError('A pasta de erros deve pertencer ao usuário e ter permissão 0700.')
     return pasta
+
+
+def pasta_de_erros():
+    """`$XDG_RUNTIME_DIR/jangada-tarefas/aberturas`, fora do runtime visível ao agente isolado.
+
+    Recusa link, dono diferente e permissão aberta, na pasta e na subpasta.
+    """
+    runtime = os.environ.get('XDG_RUNTIME_DIR')
+    if not runtime or not os.path.isabs(runtime):
+        raise ValueError('XDG_RUNTIME_DIR deve indicar a pasta da sessão gráfica.')
+    return _pasta_privada(_pasta_privada(Path(runtime) / 'jangada-tarefas') / 'aberturas')
 
 
 def criar_arquivo_de_erros(nome):

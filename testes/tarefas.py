@@ -18,6 +18,7 @@ import shutil
 import signal
 import subprocess
 import tempfile
+import threading
 import time
 import unittest
 import uuid
@@ -3832,8 +3833,8 @@ while not (pasta / 'parar-clientes').exists():
         self.assertEqual(self.cadastros(), [['--projeto', str(existente.resolve()), 'cadastrar']])
 
     def test_novo_projeto_em_pasta_com_arquivos_inicia_git_sem_tocar_nos_arquivos(self):
-        existente = self.raiz / 'com-arquivos'
-        existente.mkdir()
+        existente = self.raiz / 'projetos' / 'com-arquivos'
+        existente.mkdir(parents=True)
         (existente / 'a.txt').write_text('meu texto\n')
         dialogo = self.abrir_projeto(self.raiz / 'projetos')
         dialogo.nome.setText(str(existente))
@@ -3892,11 +3893,140 @@ while not (pasta / 'parar-clientes').exists():
         finally:
             demo.close()
 
+    def pasta_do_projeto(self, nome='p'):
+        pasta = self.raiz / 'projetos' / nome
+        pasta.mkdir(parents=True)
+        return pasta
+
+    def preparar_em(self, pasta, base=None):
+        dialogo = self.abrir_projeto(base or self.raiz / 'projetos')
+        dialogo.nome.setText(str(pasta))
+        dialogo.criar.click()
+        aguardar(lambda: dialogo.caminho is not None or dialogo.criar.isEnabled())
+        return dialogo
+
+    def test_pasta_fora_de_jangada_projetos_nao_ganha_git_nem_cadastro(self):
+        fora = self.raiz / 'fora'
+        fora.mkdir()
+        (fora / 'a.txt').write_text('meu texto\n')
+        dialogo = self.preparar_em(fora)
+        self.assertIn('fora de', dialogo.resultado.text())
+        self.assertIn('JANGADA_PROJETOS', dialogo.resultado.text())
+        self.assertFalse((fora / '.git').exists())
+        self.assertEqual(self.cadastros(), [])
+        sem_commit = self.raiz / 'fora-sem-commit'
+        sem_commit.mkdir()
+        self.git(sem_commit, 'init', '--quiet')
+        dialogo = self.preparar_em(sem_commit)
+        self.assertIn('fora de', dialogo.resultado.text())
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.git(sem_commit, 'rev-parse', '--verify', 'HEAD')
+        self.assertEqual(self.cadastros(), [])
+
+    def test_git_sem_commit_na_pasta_recebe_so_o_commit_vazio(self):
+        pasta = self.pasta_do_projeto()
+        self.git(pasta, 'init', '--quiet')
+        (pasta / 'a.txt').write_text('meu texto\n')
+        dialogo = self.preparar_em(pasta)
+        self.assertEqual(self.git(pasta, 'rev-list', '--count', 'HEAD'), '1')
+        self.assertEqual(self.git(pasta, 'log', '-1', '--format=%s'), 'início do projeto')
+        self.assertEqual(self.git(pasta, 'status', '--porcelain'), '?? a.txt')
+        self.assertIn('não tinha commit', dialogo.resultado.text())
+        self.assertEqual(self.cadastros(), [['--projeto', str(pasta.resolve()), 'cadastrar']])
+
+    def test_falha_no_primeiro_commit_nao_cadastra_e_nova_tentativa_termina(self):
+        pasta = self.pasta_do_projeto()
+        original = projeto._git
+
+        def falha_no_commit(destino, *argumentos, **opcoes):
+            if 'commit' in argumentos:
+                return subprocess.CompletedProcess(argumentos, 1, '', 'sem identidade')
+            return original(destino, *argumentos, **opcoes)
+
+        with patch.object(projeto, '_git', falha_no_commit):
+            dialogo = self.preparar_em(pasta)
+        self.assertIn('primeiro commit falhou', dialogo.resultado.text())
+        self.assertEqual(self.cadastros(), [])
+        self.assertFalse(projeto.e_git(pasta))
+        dialogo = self.preparar_em(pasta)
+        self.assertEqual(dialogo.caminho, str(pasta.resolve()))
+        self.assertEqual(self.git(pasta, 'rev-list', '--count', 'HEAD'), '1')
+        self.assertEqual(self.cadastros(), [['--projeto', str(pasta.resolve()), 'cadastrar']])
+
+    def test_pasta_nova_dentro_de_outro_repositorio_ganha_repositorio_proprio(self):
+        externo = self.raiz / 'externo'
+        self.repositorio(externo)
+        base = externo / 'projetos'
+        base.mkdir()
+        dialogo = self.abrir_projeto(base)
+        dialogo.nome.setText('filho')
+        dialogo.criar.click()
+        self.esperar_projeto(dialogo)
+        filho = base / 'filho'
+        self.assertEqual(Path(self.git(filho, 'rev-parse', '--show-toplevel')), filho.resolve())
+        self.assertEqual(self.git(filho, 'rev-list', '--count', 'HEAD'), '1')
+        self.assertEqual(self.git(externo, 'rev-list', '--count', 'HEAD'), '1')
+        self.assertEqual(self.cadastros(), [['--projeto', str(filho), 'cadastrar']])
+
+    def test_pasta_existente_de_outro_repositorio_e_recusada(self):
+        externo = self.raiz / 'externo'
+        self.repositorio(externo)
+        sub = externo / 'projetos' / 'sub'
+        sub.mkdir(parents=True)
+        dialogo = self.preparar_em(sub, externo / 'projetos')
+        self.assertIn('fica dentro do repositório', dialogo.resultado.text())
+        self.assertFalse((sub / '.git').exists())
+        self.assertEqual(self.git(externo, 'rev-list', '--count', 'HEAD'), '1')
+        self.assertEqual(self.cadastros(), [])
+
+    def test_git_do_preparo_roda_fora_da_linha_da_interface(self):
+        linhas = []
+        original = projeto._git
+
+        def registra(destino, *argumentos, **opcoes):
+            linhas.append(threading.get_ident())
+            return original(destino, *argumentos, **opcoes)
+
+        with patch.object(projeto, '_git', registra):
+            dialogo = self.abrir_projeto(self.raiz / 'projetos')
+            dialogo.nome.setText('zeta')
+            dialogo.criar.click()
+            self.assertTrue(dialogo.preparo.ocupado())
+            self.esperar_projeto(dialogo)
+        self.assertTrue(linhas)
+        self.assertNotIn(threading.get_ident(), linhas)
+
+    def abertura_sem_sessao(self, consulta_presa):
+        self.janela.prazo_tarefa_ms = 600
+        self.janela.confirmacao_tarefa_ms = 250
+        self.janela.nova_tarefa()
+        form = self.janela.formulario
+        aguardar(lambda: form.perfis.state() == QProcess.ProcessState.NotRunning)
+        form.projeto.setText(str(self.raiz))
+        form.pedido.setPlainText('Fazer')
+        inicio = time.monotonic()
+        presa = patch.object(self.janela, 'atualizar', side_effect=lambda: None) if consulta_presa else patch.dict(os.environ)
+        with presa:
+            form.criar()
+            aguardar(lambda: 'A tarefa não abriu' in form.erro.text() or 'Não foi possível confirmar' in form.erro.text())
+        return time.monotonic() - inicio
+
+    def test_falha_de_abertura_aparece_dentro_do_prazo_total(self):
+        tempo = self.abertura_sem_sessao(False)
+        self.assertGreaterEqual(tempo, 0.55)
+        self.assertLess(tempo, 0.75)
+
+    def test_falha_de_abertura_com_consulta_em_andamento_respeita_o_prazo_total(self):
+        tempo = self.abertura_sem_sessao(True)
+        self.assertGreaterEqual(tempo, 0.55)
+        self.assertLess(tempo, 0.75)
+
     def test_nova_tarefa_em_pasta_sem_git_avisa_e_nao_abre_nada(self):
         self.janela.e_git = projeto.e_git
-        pasta = self.raiz / 'sem-git'
-        pasta.mkdir()
-        self.janela.nova_tarefa()
+        pasta = self.raiz / 'projetos' / 'sem-git'
+        pasta.mkdir(parents=True)
+        with patch.dict(os.environ, {'JANGADA_PROJETOS': str(self.raiz / 'projetos')}):
+            self.janela.nova_tarefa()
         form = self.janela.formulario
         aguardar(lambda: form.perfis.state() == QProcess.ProcessState.NotRunning)
         form.projeto.setText(str(pasta))
@@ -3962,7 +4092,7 @@ while not (pasta / 'parar-clientes').exists():
         form.criar()
         aguardar((self.raiz / 'acao.json').exists)
         nome = json.loads((self.raiz / 'acao.json').read_text())[3]
-        arquivo = next((self.raiz / 'jangada').glob('*.erro'))
+        arquivo = next((self.raiz / 'jangada-tarefas' / 'aberturas').glob('*.erro'))
         self.assertEqual(arquivo.stat().st_mode & 0o777, 0o600)
         self.lista.write_text(self.lista.read_text() if False else
                               'trabalhando\tprojeto--' + nome + '\t/tmp/projeto\thoje\tagente/x\tFazer\n')
