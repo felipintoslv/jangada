@@ -6,6 +6,7 @@ podia responder uma permissão aberta no lugar dele.
 """
 import json
 import shlex
+from datetime import datetime
 from pathlib import Path
 
 from PyQt6.QtCore import QProcess, QTimer, Qt
@@ -57,6 +58,10 @@ AVISOS = {'aguardando': 'O coordenador espera resposta no terminal.',
           'parado': 'O coordenador está parado. Ir para a janela fica desligado; '
                     'consulte Novo coordenador para abrir no projeto.',
           'sem': 'O Core não informou o estado do coordenador.'}
+DESATUALIZADO = ('Não foi possível confirmar a situação agora. O que está na tela é a última '
+                 'situação conhecida. Use Atualizar para consultar de novo.')
+SEM_CONSULTA = 'Nenhuma consulta válida desde que a Central abriu.'
+HORA = '%d/%m/%Y %H:%M'
 
 
 def linha_limpa(valor, maximo=LINHA_MAX):
@@ -345,6 +350,9 @@ class Coordenadores(QWidget):
         self.disponivel = False
         self.pendente = False
         self.fechando = False
+        # Horário da última consulta válida e se a última consulta falhou depois dela.
+        self.ultima_valida = None
+        self.desatualizado = False
         self.dialogo = None
         self.pedido = None
         self.prazo_acao_ms = 30000
@@ -395,8 +403,15 @@ class Coordenadores(QWidget):
         painel.addWidget(self.ultima)
         self.atualizado = self.rotulo('coord_hora')
         painel.addWidget(self.atualizado)
+        self.consultada = self.rotulo('coord_hora')
+        painel.addWidget(self.consultada)
         self.aviso = self.rotulo('coord_aviso')
         painel.addWidget(self.aviso)
+        self.atualizar_dados = QPushButton('Atualizar')
+        self.atualizar_dados.setAccessibleName('Atualizar a lista de coordenadores')
+        self.atualizar_dados.setToolTip('Consulta o Core de novo, sem perder a seleção.')
+        self.atualizar_dados.clicked.connect(self.atualizar_agora)
+        painel.addWidget(self.atualizar_dados)
         self.caixa = QPlainTextEdit()
         self.caixa.setTabChangesFocus(True)
         self.caixa.setAccessibleName('Mensagem para o coordenador')
@@ -438,7 +453,8 @@ class Coordenadores(QWidget):
         layout.addWidget(rolagem, 2)
         QWidget.setTabOrder(self.novo, self.arvore)
         QWidget.setTabOrder(self.arvore, self.ultima)
-        QWidget.setTabOrder(self.ultima, self.caixa)
+        QWidget.setTabOrder(self.ultima, self.atualizar_dados)
+        QWidget.setTabOrder(self.atualizar_dados, self.caixa)
         QWidget.setTabOrder(self.caixa, self.copiar)
         QWidget.setTabOrder(self.copiar, self.ir)
         QWidget.setTabOrder(self.ir, self.retomar)
@@ -512,9 +528,25 @@ class Coordenadores(QWidget):
         falha = self.consulta.iniciar(['--coordenadores-json'], None)
         if falha:
             self.avisar(self.status, falha, True)
+        self.botao_atualizar()
+
+    def atualizar_agora(self):
+        if not self.consulta.ocupada():
+            self.atualizar()
+
+    def botao_atualizar(self):
+        c = self.coordenador(self.atual) if self.atual else None
+        self.atualizar_dados.setVisible(self.desatualizado and c is not None)
+        self.atualizar_dados.setEnabled(self.janela.real and self.disponivel and not self.consulta.ocupada())
+
+    def registrar_consulta_valida(self):
+        self.ultima_valida = datetime.now().astimezone()
+        self.desatualizado = False
 
     def sem_core(self):
         self.disponivel = False
+        self.ultima_valida = None
+        self.desatualizado = False
         self.novo.setEnabled(False)
         self.mostrar_lista([])
         self.avisar(self.status, SEM_CORE)
@@ -526,13 +558,14 @@ class Coordenadores(QWidget):
         if self.consulta.desconhecida:
             self.sem_core()
         elif falha:
-            self.avisar(self.status, falha + ' Últimos dados preservados.', True)
+            self.consulta_sem_dado(falha)
         else:
             try:
                 lista = ler_coordenadores(bruto)
             except ValueError as erro:
-                self.avisar(self.status, f'Saída inválida. {erro} Últimos dados preservados.', True)
+                self.consulta_sem_dado(f'Saída inválida. {erro}')
             else:
+                self.registrar_consulta_valida()
                 self.mostrar_lista(lista)
                 self.avisar(self.status, f'{len(lista)} ' + ('coordenador' if len(lista) == 1
                             else 'coordenadores') + '. Linhas lidas do registro, mostradas como dado.'
@@ -541,6 +574,13 @@ class Coordenadores(QWidget):
         self.conferir_abertura(valida)
         if self.pendente:
             self.atualizar()
+
+    def consulta_sem_dado(self, motivo):
+        """Falha ou saída inválida: a lista fica, marcada como última situação conhecida."""
+        self.desatualizado = True
+        fim = ' Últimos dados preservados.' if self.ultima_valida else ' Ainda não houve consulta válida.'
+        self.avisar(self.status, motivo + fim, True)
+        self.mostrar_painel()
 
     # Lista ------------------------------------------------------------------
 
@@ -662,8 +702,9 @@ class Coordenadores(QWidget):
             self.avisar(self.resultado, '')
         if c is None:
             self.nome.setText('Escolha um coordenador na lista.')
-            for rotulo in (self.situacao, self.ultima, self.atualizado, self.aviso):
+            for rotulo in (self.situacao, self.ultima, self.atualizado, self.consultada, self.aviso):
                 rotulo.clear()
+            self.botao_atualizar()
             self.caixa.setEnabled(False)
             self.copiar.setEnabled(False)
             self.ir.setEnabled(False)
@@ -674,19 +715,24 @@ class Coordenadores(QWidget):
         _, glifo, rotulo = ESTADOS_COORD[chave]
         self.nome.setText(f'{nome_projeto(c)} · {provedor(c)}')
         projeto = linha_limpa(c.get('projeto'), 4096) or SEM_DADO
-        self.situacao.setText(f'{glifo} {rotulo} · sessão {c["sessao"]}\nProjeto: {projeto}')
+        antigo = self.desatualizado
+        self.situacao.setText(('Última situação conhecida: ' if antigo else '')
+                              + f'{glifo} {rotulo} · sessão {c["sessao"]}\nProjeto: {projeto}')
         self.ultima.setText('Última linha: ' + (linha_limpa(c.get('ultima_linha')) or SEM_DADO))
         self.atualizado.setText('Atualizado em ' + data(c.get('atualizado')))
-        self.avisar(self.aviso, AVISOS[chave])
+        self.consultada.setText('Última consulta válida: ' + self.ultima_valida.strftime(HORA)
+                                if self.ultima_valida else SEM_CONSULTA)
+        base = DESATUALIZADO if antigo else AVISOS[chave]
+        self.avisar(self.aviso, base)
         self.caixa.setEnabled(True)
         ocupado = self.foco.state() != QProcess.ProcessState.NotRunning or self.ocupada()
         self.copiar.setEnabled(c['viva'] and not ocupado)
         self.ir.setEnabled(c['viva'] and not ocupado)
         aberta = tem_ciclo(c) and c['ciclo'] == 'aberta'
-        if aberta and not c['viva'] and not c['retomavel']:
-            self.avisar(self.aviso, AVISOS[chave] + ' ' + SEM_RETOMADA)
+        if aberta and not c['viva'] and not c['retomavel'] and not antigo:
+            self.avisar(self.aviso, base + ' ' + SEM_RETOMADA)
         if not tem_ciclo(c):
-            self.avisar(self.aviso, AVISOS[chave] + ' ' + SEM_CICLO)
+            self.avisar(self.aviso, base + ' ' + SEM_CICLO)
         desconhecido = provedor_desconhecido(c)
         if desconhecido:
             self.avisar(self.aviso, self.aviso.text() + ' ' + SEM_PROVEDOR)
@@ -694,6 +740,7 @@ class Coordenadores(QWidget):
         self.retomar.setEnabled(permitido and aberta and not c['viva'] and c['retomavel']
                                 and bool(c.get('projeto')) and provedor_conhecido(c))
         self.finalizar.setEnabled(permitido and aberta and not desconhecido)
+        self.botao_atualizar()
 
     def editar(self):
         if self.atual:
@@ -867,6 +914,7 @@ class Coordenadores(QWidget):
             self.terminar_acao(f'Não foi possível reconferir a atuação. {erro}', True)
             return
         pedido = self.pedido
+        self.registrar_consulta_valida()
         self.mostrar_lista(lista)
         if pedido['tipo'] == 'abrir':
             c = self.coordenador_do_projeto(pedido['caminho'])

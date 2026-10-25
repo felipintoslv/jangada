@@ -1601,6 +1601,175 @@ while not (pasta / 'parar-clientes').exists():
                 self.assertIn('aguardando retomada', coluna.situacao.text())
         self.assertEqual(self.acoes_coordenador(), [])
 
+    def falhar_coordenadores(self, como='erro'):
+        if como == 'erro':
+            (self.raiz / 'coordenadores-erro').write_text('')
+        else:
+            (self.raiz / 'coordenadores.json').write_text('{}')
+
+    def restaurar_coordenadores(self):
+        (self.raiz / 'coordenadores-erro').unlink(missing_ok=True)
+        (self.raiz / 'coordenadores-espera').unlink(missing_ok=True)
+        self.coordenadores_falsos()
+
+    def test_ux02_primeira_consulta_com_falha_nao_inventa_dado_nem_consulta_valida(self):
+        self.coordenador_falso()
+        self.coordenadores_falsos()
+        self.falhar_coordenadores()
+        coluna = self.carregar_coordenadores()
+        self.assertTrue(coluna.status.property('falha'))
+        self.assertIn('Ainda não houve consulta válida', coluna.status.text())
+        self.assertNotIn('Últimos dados preservados', coluna.status.text())
+        self.assertIsNone(coluna.ultima_valida)
+        self.assertEqual(coluna.arvore.topLevelItemCount(), 0)
+        self.assertTrue(coluna.painel.isHidden())
+        self.assertTrue(coluna.atualizar_dados.isHidden())
+        self.restaurar_coordenadores()
+        self.carregar_coordenadores()
+        self.assertIsNotNone(coluna.ultima_valida)
+        self.assertFalse(coluna.desatualizado)
+        self.assertEqual(coluna.arvore.topLevelItemCount(), 2)
+
+    def test_ux02_detalhe_vira_ultima_situacao_conhecida_apos_falha_ou_resposta_invalida(self):
+        self.coordenador_falso()
+        self.coordenadores_falsos('aguardando', viva=True, ciclo='aberta', atuacao_id='opaco-1', retomavel=False)
+        coluna = self.escolher_coordenador(self.carregar_coordenadores(), 'horta--coordenador')
+        self.assertIn('esperando você', coluna.situacao.text())
+        self.assertNotIn('Última situação conhecida', coluna.situacao.text())
+        self.assertIn('O coordenador espera resposta no terminal.', coluna.aviso.text())
+        self.assertTrue(coluna.atualizar_dados.isHidden())
+        valida = coluna.ultima_valida
+        self.assertIsNotNone(valida)
+        self.assertEqual(coluna.consultada.text(), 'Última consulta válida: ' + valida.strftime('%d/%m/%Y %H:%M'))
+        for como in ('erro', 'invalida'):
+            with self.subTest(como=como):
+                self.restaurar_coordenadores()
+                self.coordenadores_falsos('aguardando', viva=True, ciclo='aberta', atuacao_id='opaco-1', retomavel=False)
+                self.carregar_coordenadores()
+                self.falhar_coordenadores(como)
+                self.carregar_coordenadores()
+                self.assertTrue(coluna.desatualizado)
+                self.assertTrue(coluna.situacao.text().startswith('Última situação conhecida'))
+                self.assertIn('esperando você', coluna.situacao.text())
+                self.assertIn('Não foi possível confirmar a situação agora', coluna.aviso.text())
+                self.assertNotIn('espera resposta', coluna.aviso.text())
+                self.assertTrue(coluna.consultada.text().startswith('Última consulta válida: '))
+                self.assertIn('Atualizado em 17/10/2026', coluna.atualizado.text())
+                self.assertFalse(coluna.atualizar_dados.isHidden())
+                self.assertTrue(coluna.atualizar_dados.isEnabled())
+                self.assertEqual(coluna.arvore.topLevelItemCount(), 2)
+                self.assertTrue(coluna.status.property('falha'))
+
+    def test_ux02_falhas_repetidas_nao_mudam_o_horario_da_ultima_consulta_valida(self):
+        coluna = self.atuacao_aberta()
+        valida = coluna.ultima_valida
+        texto = coluna.consultada.text()
+        for como in ('erro', 'invalida', 'erro'):
+            self.falhar_coordenadores(como)
+            self.carregar_coordenadores()
+            self.assertTrue(coluna.desatualizado)
+            self.assertEqual(coluna.ultima_valida, valida)
+            self.assertEqual(coluna.consultada.text(), texto)
+        (self.raiz / 'coordenadores-erro').unlink()
+        self.restaurar_coordenadores()
+        self.carregar_coordenadores()
+        self.assertFalse(coluna.desatualizado)
+        self.assertGreater(coluna.ultima_valida, valida)
+
+    def test_ux02_consulta_valida_depois_de_falha_tira_a_marca(self):
+        coluna = self.atuacao_aberta(viva=True, retomavel=False)
+        self.falhar_coordenadores()
+        self.carregar_coordenadores()
+        self.assertTrue(coluna.desatualizado)
+        self.restaurar_coordenadores()
+        coluna = self.escolher_coordenador(self.carregar_coordenadores(), 'horta--coordenador')
+        self.assertFalse(coluna.desatualizado)
+        self.assertNotIn('Última situação conhecida', coluna.situacao.text())
+        self.assertNotIn('Não foi possível confirmar', coluna.aviso.text())
+        self.assertTrue(coluna.atualizar_dados.isHidden())
+        self.assertFalse(coluna.status.property('falha'))
+
+    def test_ux02_trocar_a_selecao_mantem_o_aviso_certo(self):
+        coluna = self.atuacao_aberta()
+        self.falhar_coordenadores()
+        self.carregar_coordenadores()
+        for sessao in ('caderno--coordenador', 'horta--coordenador', 'caderno--coordenador'):
+            self.escolher_coordenador(coluna, sessao)
+            self.assertTrue(coluna.situacao.text().startswith('Última situação conhecida'))
+            self.assertIn('Não foi possível confirmar', coluna.aviso.text())
+            self.assertFalse(coluna.atualizar_dados.isHidden())
+        self.assertIn('Este registro não informa o ciclo', coluna.aviso.text())
+        self.restaurar_coordenadores()
+        self.carregar_coordenadores()
+        for sessao in ('horta--coordenador', 'caderno--coordenador'):
+            self.escolher_coordenador(coluna, sessao)
+            self.assertNotIn('Última situação conhecida', coluna.situacao.text())
+            self.assertTrue(coluna.atualizar_dados.isHidden())
+
+    def test_ux02_atualizar_usa_a_consulta_unica_e_preserva_a_selecao(self):
+        coluna = self.atuacao_aberta()
+        self.falhar_coordenadores()
+        self.carregar_coordenadores()
+        (self.raiz / 'coordenadores-erro').unlink()
+        (self.raiz / 'coordenadores-espera').write_text('0.4')
+        self.coordenadores_falsos()
+        coluna.atualizar_dados.click()
+        self.assertTrue(coluna.consulta.ocupada())
+        self.assertFalse(coluna.atualizar_dados.isEnabled())
+        coluna.atualizar_dados.click()
+        self.assertFalse(coluna.pendente)
+        aguardar(lambda: not coluna.consulta.ocupada())
+        self.assertFalse(coluna.desatualizado)
+        self.assertEqual(coluna.chave(), ('coord', 'horta--coordenador'))
+        self.assertTrue(coluna.atualizar_dados.isHidden())
+        self.assertFalse(coluna.pendente)
+        (self.raiz / 'coordenadores-espera').unlink()
+
+    def test_ux02_registro_selecionado_some_numa_consulta_valida(self):
+        coluna = self.atuacao_aberta()
+        self.falhar_coordenadores()
+        self.carregar_coordenadores()
+        self.assertTrue(coluna.desatualizado)
+        self.restaurar_coordenadores()
+        arquivo = self.raiz / 'coordenadores.json'
+        dados = json.loads(arquivo.read_text())
+        dados['coordenadores'] = [c for c in dados['coordenadores'] if c['sessao'] != 'horta--coordenador']
+        arquivo.write_text(json.dumps(dados))
+        self.carregar_coordenadores()
+        self.assertFalse(coluna.desatualizado)
+        self.assertIsNone(coluna.atual)
+        self.assertTrue(coluna.painel.isHidden())
+        self.assertTrue(coluna.atualizar_dados.isHidden())
+        self.assertEqual(coluna.arvore.topLevelItemCount(), 1)
+        self.assertFalse(coluna.status.property('falha'))
+
+    def test_ux02_reconferencia_valida_conta_como_consulta_valida_e_falha_nao(self):
+        coluna = self.atuacao_aberta()
+        self.falhar_coordenadores()
+        self.carregar_coordenadores()
+        valida = coluna.ultima_valida
+        coluna.pedido = dict(tipo='abrir', caminho='/tmp/horta', provedor='claude')
+        coluna.reconferencia_fim(None, 'Falha simulada.', None)
+        self.assertTrue(coluna.desatualizado)
+        self.assertEqual(coluna.ultima_valida, valida)
+        self.restaurar_coordenadores()
+        coluna.pedido = dict(tipo='abrir', caminho='/tmp/horta', provedor='claude')
+        with patch.object(coluna, 'abrir_janela'):
+            coluna.reconferencia_fim(None, None, (self.raiz / 'coordenadores.json').read_text())
+        self.assertFalse(coluna.desatualizado)
+        self.assertGreater(coluna.ultima_valida, valida)
+        coluna.terminar_acao('')
+
+    def test_ux02_core_sem_consulta_zera_o_que_a_central_sabia(self):
+        coluna = self.atuacao_aberta()
+        self.falhar_coordenadores()
+        self.carregar_coordenadores()
+        self.assertTrue(coluna.desatualizado)
+        coluna.sem_core()
+        self.assertFalse(coluna.desatualizado)
+        self.assertIsNone(coluna.ultima_valida)
+        self.assertTrue(coluna.atualizar_dados.isHidden())
+
     def test_core_anterior_ou_campos_ausentes_preserva_acoes_antigas(self):
         for ausente in ('ciclo', 'atuacao_id', 'retomavel'):
             with self.subTest(ausente=ausente):
