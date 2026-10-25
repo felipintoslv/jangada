@@ -194,7 +194,8 @@ aberta não pode ser aberto por ali.
 em segundo plano, sem shell, sem `--atualizar` e sem `--permitir-remoto`, com prazo de
 30 segundos e limite de 1 MiB na saída. Esse comando só lê o que o Core já tem
 em disco e nunca consulta o agy. A Central usa o grupo `gemini-argon-wtu` do
-agy, da conta `principal` quando houver. Com `percentual` de 20 ou mais, a opção
+agy, da conta `principal`: se ela existe, só ela vale, e sem o grupo nela o
+resultado é sem dado. Sem `principal`, vale a única conta do agy. Com `percentual` de 20 ou mais, a opção
 fica ativa e mostra o valor. Abaixo de 20, a opção fica desligada com "Cota do
 Argon abaixo de 20%" e a data de `renova_em`, quando o Core a informa. Sem o
 grupo, com `percentual` nulo, com o comando ausente (Core anterior), com erro,
@@ -209,7 +210,9 @@ vivo daquele projeto e provedor, o aviso passa a "O Core não abriu o coordenado
 com a causa provável de cada provedor e o comando
 `jangada-coordenador --projeto PASTA --provedor P` para rodar no terminal. Para o
 agy a causa provável é cota ou catálogo do Argon: o Core confere os dois antes de
-criar a sessão e, se falhar, só escreve o motivo na saída de erro. A janela
+criar a sessão e, se falhar, só escreve o motivo na saída de erro. O prazo corre pelo relógio da Central. Se a última consulta da lista falhou,
+expirou ou veio inválida, o aviso passa a "Não foi possível conferir se o Core abriu
+o coordenador", com o mesmo comando, e não afirma que o Core não abriu. A janela
 continua destacada e a Central não captura essa saída. Um aviso de outra ação,
 posto nesse intervalo, não é substituído.
 

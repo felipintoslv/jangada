@@ -29,6 +29,7 @@ import dados
 import janela
 from janela import Janela
 import central
+from coordenadores import ler_cota_argon, numero_de_fora
 from central import encaminhar, receber
 from dados import LIMITE, barra, idade, ler_lista, ler_observacao, pasta_sessoes, resumo_barra
 from argparse import Namespace
@@ -83,7 +84,7 @@ class Interface(unittest.TestCase):
         self.observados = self.raiz / 'observados'
         self.observados.mkdir()
         (self.observados / 'aviso.json').write_text('{}')
-        self.comando.write_text("#!/usr/bin/env python3\nimport pathlib, sys, json\npasta = pathlib.Path(__file__).resolve().parent.parent\nif sys.argv[1] == '--observacao-json':\n    if (pasta / 'falhar_observacao').exists():\n        print('Falha de observação simulada', file=sys.stderr)\n        sys.exit(1)\n    print(json.dumps({'versao': 1, 'caminhos': [str(pasta / 'observados'), str(pasta / 'observados' / 'aviso.json')]}))\nelif sys.argv[1] in ('--lista-json',):\n    if (pasta / 'falhar').exists():\n        print('Erro de consulta simulado', file=sys.stderr)\n        sys.exit(1)\n    dados = json.loads((pasta / 'lista').read_text())\n    if (pasta / 'apresentacao.json').exists():\n        detalhe = json.loads((pasta / 'apresentacao.json').read_text())\n        for sessao in dados['sessoes']:\n            if sessao['nome'] == 'projeto--um':\n                sessao.update(detalhe)\n                sessao['projeto'] = pathlib.Path(sessao['raiz']).name\n    print(json.dumps(dados, ensure_ascii=False))\nelif sys.argv[1] == '--contexto-json':\n    contexto = pasta / ('contexto-' + sys.argv[2])\n    print(contexto.read_text() if contexto.exists() else json.dumps({'versao': 1, 'sessao': sys.argv[2], 'tarefa': '', 'parecer': None}))\nelif sys.argv[1] == '--rodadas-json':\n    rodadas = pasta / ('rodadas-' + sys.argv[2])\n    if (pasta / 'rodadas-espera').exists():\n        import time\n        time.sleep(5)\n    if (pasta / 'rodadas-uso').exists():\n        print('uso: jangada-agentes --rodadas-json SESSAO', file=sys.stderr)\n        sys.exit(2)\n    if not rodadas.exists():\n        print('opção desconhecida: --rodadas-json', file=sys.stderr)\n        sys.exit(1)\n    print(rodadas.read_text())\nelif sys.argv[1] == '--coordenadores-json':\n    if (pasta / 'coordenadores-espera').exists():\n        import time\n        time.sleep(5)\n    coordenadores = pasta / 'coordenadores.json'\n    if not coordenadores.exists():\n        print('opção desconhecida: --coordenadores-json', file=sys.stderr)\n        sys.exit(1)\n    print(coordenadores.read_text())\nelif sys.argv[1] == '--previa':\n    previa = pasta / ('previa-' + sys.argv[2])\n    print(previa.read_text() if previa.exists() else 'Atividade da sessão ' + sys.argv[2])\nelse:\n    (pasta / 'acao.json').write_text(json.dumps(sys.argv[1:]))\n")
+        self.comando.write_text("#!/usr/bin/env python3\nimport pathlib, sys, json\npasta = pathlib.Path(__file__).resolve().parent.parent\nif sys.argv[1] == '--observacao-json':\n    if (pasta / 'falhar_observacao').exists():\n        print('Falha de observação simulada', file=sys.stderr)\n        sys.exit(1)\n    print(json.dumps({'versao': 1, 'caminhos': [str(pasta / 'observados'), str(pasta / 'observados' / 'aviso.json')]}))\nelif sys.argv[1] in ('--lista-json',):\n    if (pasta / 'falhar').exists():\n        print('Erro de consulta simulado', file=sys.stderr)\n        sys.exit(1)\n    dados = json.loads((pasta / 'lista').read_text())\n    if (pasta / 'apresentacao.json').exists():\n        detalhe = json.loads((pasta / 'apresentacao.json').read_text())\n        for sessao in dados['sessoes']:\n            if sessao['nome'] == 'projeto--um':\n                sessao.update(detalhe)\n                sessao['projeto'] = pathlib.Path(sessao['raiz']).name\n    print(json.dumps(dados, ensure_ascii=False))\nelif sys.argv[1] == '--contexto-json':\n    contexto = pasta / ('contexto-' + sys.argv[2])\n    print(contexto.read_text() if contexto.exists() else json.dumps({'versao': 1, 'sessao': sys.argv[2], 'tarefa': '', 'parecer': None}))\nelif sys.argv[1] == '--rodadas-json':\n    rodadas = pasta / ('rodadas-' + sys.argv[2])\n    if (pasta / 'rodadas-espera').exists():\n        import time\n        time.sleep(5)\n    if (pasta / 'rodadas-uso').exists():\n        print('uso: jangada-agentes --rodadas-json SESSAO', file=sys.stderr)\n        sys.exit(2)\n    if not rodadas.exists():\n        print('opção desconhecida: --rodadas-json', file=sys.stderr)\n        sys.exit(1)\n    print(rodadas.read_text())\nelif sys.argv[1] == '--coordenadores-json':\n    if (pasta / 'coordenadores-erro').exists():\n        print('Falha de consulta simulada', file=sys.stderr)\n        sys.exit(1)\n    if (pasta / 'coordenadores-espera').exists():\n        import time\n        time.sleep(5)\n    coordenadores = pasta / 'coordenadores.json'\n    if not coordenadores.exists():\n        print('opção desconhecida: --coordenadores-json', file=sys.stderr)\n        sys.exit(1)\n    print(coordenadores.read_text())\nelif sys.argv[1] == '--previa':\n    previa = pasta / ('previa-' + sys.argv[2])\n    print(previa.read_text() if previa.exists() else 'Atividade da sessão ' + sys.argv[2])\nelse:\n    (pasta / 'acao.json').write_text(json.dumps(sys.argv[1:]))\n")
         self.comando.chmod(448)
         self.criar_comando = self.bin / 'jangada-agente'
         self.criar_comando.write_text(self.comando.read_text().replace(
@@ -1976,21 +1977,58 @@ while not (pasta / 'parar-clientes').exists():
                 coluna.cota.fechar()
 
     def test_cota_da_conta_principal_vale_sobre_as_outras(self):
-        reserva = self.cotas_com_argon(50.0, conta='reserva')['provedores'][0]
-        principal = self.cotas_com_argon(10.0, conta='principal')['provedores'][0]
+        def conta(nome, percentual, grupo='gemini-argon-wtu'):
+            return self.cotas_com_argon(percentual, conta=nome, grupo=grupo)['provedores'][0]
         base = self.cotas_com_argon(50.0)
-        for contas, esperado in (([reserva, principal], 'baixa'), ([principal, reserva], 'baixa'),
-                                 ([reserva], 'ok')):
-            with self.subTest(contas=[c['conta'] for c in contas]):
+        casos = [([conta('reserva', 50.0), conta('principal', 10.0)], 'baixa'),
+                 ([conta('principal', 10.0), conta('reserva', 50.0)], 'baixa'),
+                 ([conta('principal', 50.0), conta('reserva', 10.0)], 'ok'),
+                 ([conta('reserva', 50.0)], 'ok'),
+                 ([conta('principal', None, grupo=None), conta('reserva', 10.0)], 'sem_dado'),
+                 ([conta('principal', None, grupo=None), conta('reserva', 50.0)], 'sem_dado'),
+                 ([conta('reserva', 50.0), conta('outra', 50.0)], 'sem_dado')]
+        for contas, esperado in casos:
+            with self.subTest(contas=[c['conta'] for c in contas], esperado=esperado):
                 self.roteador_falso('ok', dict(base, provedores=contas + base['provedores'][1:]))
                 self.coordenador_falso()
                 self.coordenadores_falsos()
                 coluna, dialogo = self.dialogo_com_cota('/tmp/mapa')
                 self.assertEqual(coluna.cota.estado, esperado)
+                self.assertTrue(self.agy_ativo(dialogo) or esperado == 'baixa')
                 dialogo.hide()
 
+    def test_numero_de_fora_nunca_lanca(self):
+        self.assertEqual(numero_de_fora(50), 50)
+        self.assertEqual(numero_de_fora(0.5), 0.5)
+        self.assertEqual(numero_de_fora(100), 100)
+        for ruim in (10 ** 400, -10 ** 400, 1e309, -1e309, float('nan'), -1, 101, True, False, None, '50', [50], {}):
+            with self.subTest(valor=str(ruim)[:20]):
+                self.assertIsNone(numero_de_fora(ruim))
+        for texto in ('10' + '0' * 399, '1e309', '-1', '101', 'true', 'NaN', 'Infinity', '"50"'):
+            with self.subTest(percentual=texto[:20]):
+                cota = json.dumps(self.cotas_com_argon(50.0)).replace('"percentual": 50.0, "janelas": []',
+                                                                       '"percentual": ' + texto + ', "janelas": []')
+                self.assertIn(texto, cota)
+                try:
+                    resultado = ler_cota_argon(cota)
+                except ValueError:
+                    resultado = (None, None)
+                self.assertEqual(resultado, (None, None))
+
+    def test_cota_com_numero_enorme_vira_sem_dado(self):
+        bruto = json.dumps(self.cotas_com_argon(50.0)).replace(
+            '"percentual": 50.0, "janelas": []', '"percentual": 1' + '0' * 399 + ', "janelas": []')
+        self.roteador_falso('ok', {})
+        (self.raiz / 'roteador-cotas').write_text(bruto)
+        self.coordenador_falso()
+        self.coordenadores_falsos()
+        coluna, dialogo = self.dialogo_com_cota('/tmp/mapa')
+        self.assertEqual(coluna.cota.estado, 'sem_dado')
+        self.assertTrue(self.agy_ativo(dialogo))
+        dialogo.hide()
+
     def aguardar_aviso_de_abertura(self, coluna):
-        aguardar(lambda: 'não abriu' in coluna.resultado.text() or coluna.abertura is None)
+        aguardar(lambda: coluna.abertura is None)
 
     def test_abertura_sem_sessao_troca_o_aviso_depois_do_prazo(self):
         self.coordenador_falso()
@@ -2023,6 +2061,46 @@ while not (pasta / 'parar-clientes').exists():
                 self.assertFalse(coluna.relogio_abertura.isActive())
         self.assertEqual([a[3] for a in self.acoes_coordenador()], ['agy', 'claude', 'codex'])
         dialogo.hide()
+
+    def test_abertura_vence_pelo_relogio_mesmo_com_a_lista_falhando(self):
+        def erro():
+            (self.raiz / 'coordenadores-erro').write_text('')
+
+        def espera():
+            (self.raiz / 'coordenadores-espera').write_text('')
+
+        def invalido():
+            (self.raiz / 'coordenadores.json').write_text('{}')
+
+        for nome, quebrar in (('falha', erro), ('prazo esgotado', espera), ('json inválido', invalido)):
+            with self.subTest(lista=nome):
+                for sobra in ('coordenadores-erro', 'coordenadores-espera', 'sem-sessao', 'coordenador.log'):
+                    (self.raiz / sobra).unlink(missing_ok=True)
+                self.coordenador_falso()
+                self.coordenadores_falsos()
+                (self.raiz / 'sem-sessao').write_text('')
+                nova = self.raiz / 'mapa'
+                nova.mkdir(exist_ok=True)
+                coluna, dialogo = self.dialogo_com_cota(str(nova))
+                coluna.prazo_abertura_ms = 600
+                coluna.intervalo_abertura_ms = 40
+                coluna.consulta.prazo_ms = 150
+                dialogo.provedor.setCurrentIndex(dialogo.provedor.findData('agy'))
+                dialogo.abrir.click()
+                aguardar(lambda: coluna.abertura is not None)
+                quebrar()
+                self.aguardar_aviso_de_abertura(coluna)
+                aguardar(lambda: coluna.abertura is None)
+                texto = coluna.resultado.text()
+                self.assertTrue(texto.startswith('Não foi possível conferir se o Core abriu o coordenador.'), texto)
+                self.assertNotIn('não abriu', texto)
+                self.assertIn(f'`jangada-coordenador --projeto {nova} --provedor agy`', texto)
+                self.assertTrue(coluna.resultado.property('falha'))
+                self.assertFalse(coluna.relogio_abertura.isActive())
+                aguardar(lambda: not coluna.consulta.ocupada())
+                dialogo.hide()
+                (self.raiz / 'coordenadores-erro').unlink(missing_ok=True)
+                (self.raiz / 'coordenadores-espera').unlink(missing_ok=True)
 
     def test_abertura_com_sessao_viva_mantem_o_aviso_de_solicitada(self):
         self.coordenador_falso()

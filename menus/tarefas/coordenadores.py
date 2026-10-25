@@ -166,18 +166,37 @@ def provedor(c):
     return c['provedor'].capitalize() if c.get('provedor') else 'provedor sem dado'
 
 
-def aviso_sem_abertura(provedor, caminho):
+def aviso_sem_abertura(provedor, caminho, conferida=True):
+    """Aviso do prazo vencido; sem uma lista válida ao fim, a Central não afirma que o Core não abriu."""
     comando = f'jangada-coordenador --projeto {shlex.quote(caminho)} --provedor {provedor}'
+    if not conferida:
+        return linha_limpa('Não foi possível conferir se o Core abriu o coordenador. '
+                           f'Rode `{comando}` no terminal para ver o motivo.', 4400)
     return linha_limpa('O Core não abriu o coordenador. ' + CAUSAS_SEM_ABERTURA.get(provedor, '')
                        + f'rode `{comando}` no terminal para ver o motivo.', 4400)
+
+
+def numero_de_fora(valor, minimo=0, maximo=100):
+    """Número de um JSON de fora dentro de [minimo, maximo], ou None; nunca lança.
+
+    Só int e float entram (bool não). O intervalo é conferido antes de qualquer
+    conversão: um inteiro de 400 dígitos não cabe num float.
+    """
+    try:
+        if type(valor) not in (int, float) or not minimo <= valor <= maximo:
+            return None
+        return valor if math.isfinite(valor) else None
+    except Exception:
+        return None
 
 
 def ler_cota_argon(bruto):
     """Lê o JSON de `jangada-router cotas`; devolve (percentual, renova_em) do Argon ou (None, None).
 
     Usa só `provedores[].grupos[]` do cotas.json versão 1. Percentual ausente, nulo
-    ou fora de 0 a 100 vale como sem dado. Com várias contas do agy, vale a
-    `principal`, que é a do coordenador; sem ela, a primeira que traz o grupo.
+    ou fora de 0 a 100 vale como sem dado. A conta `principal` é a do coordenador:
+    se existe, só ela vale, e sem o grupo Argon nela o resultado é sem dado. Sem
+    `principal`, vale a única conta do agy; com mais de uma, sem dado.
     """
     if len(bruto) > LIMITE:
         raise ValueError('A saída excedeu o limite de leitura.')
@@ -193,23 +212,23 @@ def ler_cota_argon(bruto):
     lista = dados.get('provedores')
     if not isinstance(lista, list):
         raise ValueError('A saída não traz os provedores.')
-    achados = []
-    for entrada in lista:
-        if not isinstance(entrada, dict) or entrada.get('provedor') != 'agy' or not isinstance(entrada.get('grupos'), list):
-            continue
-        grupo = next((g for g in entrada['grupos'] if isinstance(g, dict) and g.get('grupo') == GRUPO_ARGON), None)
-        if grupo is not None:
-            achados.append((entrada, grupo))
-    if not achados:
+    agy = [e for e in lista if isinstance(e, dict) and e.get('provedor') == 'agy']
+    principal = [e for e in agy if e.get('conta') == 'principal']
+    if principal:
+        entrada = principal[0]
+    elif len(agy) == 1:
+        entrada = agy[0]
+    else:
         return None, None
-    entrada, grupo = next((a for a in achados if a[0].get('conta') == 'principal'), achados[0])
-    percentual = grupo.get('percentual')
-    if (type(percentual) not in (int, float) or not math.isfinite(percentual)
-            or not 0 <= percentual <= 100):
+    grupos = entrada.get('grupos')
+    grupo = next((g for g in grupos if isinstance(g, dict) and g.get('grupo') == GRUPO_ARGON), None) \
+        if isinstance(grupos, list) else None
+    percentual = numero_de_fora(grupo.get('percentual')) if grupo is not None else None
+    if percentual is None:
         return None, None
     renova = None
     for janela in grupo.get('janelas') if isinstance(grupo.get('janelas'), list) else []:
-        if (isinstance(janela, dict) and janela.get('percentual') == percentual
+        if (isinstance(janela, dict) and numero_de_fora(janela.get('percentual')) == percentual
                 and isinstance(janela.get('renova_em'), str)):
             renova = janela['renova_em']
             break
@@ -287,7 +306,7 @@ class CotaArgon(QObject):
             return
         try:
             percentual, renova = ler_cota_argon(self.bruto)
-        except ValueError:
+        except Exception:
             self.definir('sem_dado')
             return
         if percentual is None:
@@ -546,7 +565,7 @@ class Coordenadores(QWidget):
         self.prazo_acao.setSingleShot(True)
         self.prazo_acao.timeout.connect(self.expirar_acao)
         self.relogio_abertura = QTimer(self)
-        self.relogio_abertura.timeout.connect(self.atualizar)
+        self.relogio_abertura.timeout.connect(self.tique_abertura)
         self.intervalo_abertura_ms = 1000
         self.foco = QProcess(self)
         self.foco.finished.connect(self.foco_fim)
@@ -603,6 +622,7 @@ class Coordenadores(QWidget):
     def consulta_fim(self, _alvo, falha, bruto):
         if self.fechando:
             return
+        valida = False
         if self.consulta.desconhecida:
             self.sem_core()
         elif falha:
@@ -617,7 +637,8 @@ class Coordenadores(QWidget):
                 self.avisar(self.status, f'{len(lista)} ' + ('coordenador' if len(lista) == 1
                             else 'coordenadores') + '. Linhas lidas do registro, mostradas como dado.'
                             if lista else 'Nenhum coordenador aberto. Use Novo coordenador.')
-                self.conferir_abertura()
+                valida = True
+        self.conferir_abertura(valida)
         if self.pendente:
             self.atualizar()
 
@@ -998,26 +1019,44 @@ class Coordenadores(QWidget):
             self.relogio_abertura.start(self.intervalo_abertura_ms)
             self.atualizar()
 
-    def conferir_abertura(self):
-        """Troca o aviso de solicitada se o Core não criou a sessão no prazo; o terminal fica com o motivo."""
+    def tique_abertura(self):
+        """O prazo corre pelo relógio: a lista pode falhar, expirar ou vir inválida."""
+        if self.abertura is None:
+            self.relogio_abertura.stop()
+        elif not self.conferir_abertura():
+            self.atualizar()
+
+    def conferir_abertura(self, lista_valida=None):
+        """Acompanha a sessão pedida; devolve True quando encerrou o acompanhamento.
+
+        `lista_valida` diz como terminou a última consulta: True com lista lida,
+        False com falha ou lista inválida, None quando a chamada não vem de uma consulta.
+        """
         pedido = self.abertura
         if pedido is None:
-            return
+            return True
+        if lista_valida is not None:
+            pedido['valida'] = lista_valida
         try:
             alvo = Path(pedido['caminho']).resolve()
         except (OSError, ValueError):
             alvo = None
-        if any(c['viva'] and c.get('provedor') == pedido['provedor'] and c.get('projeto')
-               and Path(c['projeto']) == alvo for c in self.lista):
-            self.abertura = None
-            self.relogio_abertura.stop()
-            return
-        if (time.monotonic() - pedido['inicio']) * 1000 < self.prazo_abertura_ms:
-            return
+        if pedido.get('valida') and any(c['viva'] and c.get('provedor') == pedido['provedor']
+                                        and c.get('projeto') and Path(c['projeto']) == alvo
+                                        for c in self.lista):
+            self.encerrar_abertura()
+            return True
+        if (time.monotonic() - pedido['inicio']) * 1000 < self.prazo_abertura_ms or self.consulta.ocupada():
+            return False
+        self.encerrar_abertura()
+        if self.resultado.text() == SOLICITADA:
+            self.avisar(self.resultado, aviso_sem_abertura(pedido['provedor'], pedido['caminho'],
+                                                           bool(pedido.get('valida'))), True)
+        return True
+
+    def encerrar_abertura(self):
         self.abertura = None
         self.relogio_abertura.stop()
-        if self.resultado.text() == SOLICITADA:
-            self.avisar(self.resultado, aviso_sem_abertura(pedido['provedor'], pedido['caminho']), True)
 
     def ler_saida_acao(self):
         for canal in (self.acao.readAllStandardError, self.acao.readAllStandardOutput):
