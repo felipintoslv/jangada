@@ -51,7 +51,9 @@ Legenda:
 | Alt+M | `menus/tarefas/coordenadores.py`, `focar_caixa` | Leitura | Foco na caixa de texto do coordenador |
 | Ir para a janela (Alt+J) | `menus/tarefas/coordenadores.py`, `ir_para_janela` | Real; simulado | `jangada-agentes --focar` com a sessão do coordenador; disponível com sessão viva |
 | Copiar e ir para a janela (Ctrl+Enter na caixa) | `menus/tarefas/coordenadores.py`, `copiar_e_ir` | Real; simulado | Copia e foca a janela; nada é colado nem enviado. Caixa de até 8 KiB, editável em qualquer estado; copiar exige sessão viva |
-| Novo coordenador (Ctrl+N) | `menus/tarefas/coordenadores.py`, `NovoCoordenador` e `abrir_coordenador` | Real; desligado na simulação | Escolhe projeto cadastrado e provedor. Reconfere os dados por nova consulta e roda `jangada-coordenador --projeto PASTA --provedor P --janela`. Lança a janela por `startDetached`, com canais independentes; Core cria ou retoma. Sessão viva recebe somente foco. Atuação aberta sem processo mostra Retomar atuação e permite escolher o provedor |
+| Novo coordenador (Ctrl+N) | `menus/tarefas/coordenadores.py`, `NovoCoordenador` e `abrir_coordenador` | Real; desligado na simulação | Escolhe projeto cadastrado e provedor: claude, codex ou agy (Argon High). Reconfere os dados por nova consulta e roda `jangada-coordenador --projeto PASTA --provedor P --janela`. Lança a janela por `startDetached`, com canais independentes; Core cria ou retoma. Sessão viva recebe somente foco. Atuação aberta sem processo mostra Retomar atuação e permite escolher o provedor |
+| Novo coordenador > cota do Argon | `menus/tarefas/coordenadores.py`, `CotaArgon` e `ler_cota_argon` | Real; leitura | Ao abrir o diálogo, roda `jangada-router cotas` (sem `--atualizar`, sem `--permitir-remoto`, prazo de 30 segundos, saída de até 1 MiB) e lê o grupo `gemini-argon-wtu`. De 20% em diante, a opção agy mostra o percentual. Abaixo de 20%, fica desligada com "Cota do Argon abaixo de 20%" e `renova_em`. Sem dado (grupo ausente, `percentual` nulo, comando ausente, erro, prazo ou JSON inválido), a opção continua disponível com "Cota do Argon sem dado: o Core confere antes de abrir" e o comando de atualização como texto para o terminal |
+| Novo coordenador > abertura sem sessão | `menus/tarefas/coordenadores.py`, `abrir_janela` e `conferir_abertura` | Real | Depois de "Abertura ou retomada solicitada", reconsulta a lista a cada segundo. Sem coordenador vivo do projeto e provedor em 20 segundos, troca o aviso por "O Core não abriu o coordenador", com a causa provável do provedor e o comando para rodar no terminal. Não captura a saída da janela |
 | Retomar | `menus/tarefas/coordenadores.py`, `retomar_atuacao` | Real; desligado na simulação e no registro sem campos de ciclo | Exige atuação aberta, sem sessão e com disponibilidade `retomavel=True`. Reconfere identidade, ciclo, disponibilidade e sessão; lança a janela separada da Central, com projeto e provedor registrados |
 | Finalizar atuação | `menus/tarefas/coordenadores.py`, `finalizar_atuacao` e `reconferencia_fim` | Real; desligado na simulação e no registro sem campos de ciclo | Sem sessão viva, pede confirmação de estado/diário salvo e saída voluntária. Reconfere os dados e executa `jangada-coordenador --finalizar SESSAO`; acompanha o resultado em QProcess, com prazo de 30 segundos. Preserva pendências e informa o resultado do Core. Com sessão viva, orienta salvar/sair e usar Ir para a janela |
 | Atualizar rodadas | `menus/tarefas/rodadas.py:178` | Leitura; desligado na simulação | Refaz as três consultas da aba Rodadas |
@@ -74,6 +76,12 @@ Legenda:
 | Voltar às sessões | `menus/tarefas/janela.py`, `exibir_detalhe` | Leitura | Abaixo de 940 pixels, volta à lista com foco e seleção preservados |
 | Prévia do terminal e do encerramento | v2 `README.md:83` | Não existe | Encerrar pede confirmação; a prévia do comando não existe |
 | Rodar `jangada-validar` | | Não entra | A validação é do autor, dentro do isolamento |
+
+Na coluna de coordenadores, o provedor `agy` aparece como "agy (Argon High)".
+Um provedor que a Central não conhece aparece como "provedor não reconhecido
+por esta Central" e desliga Retomar e Finalizar atuação, com o motivo no painel
+(`menus/tarefas/coordenadores.py`, `provedor_desconhecido` e `mostrar_painel`).
+A Central não mostra o modelo registrado, que o Core não exporta.
 
 Na coluna de coordenadores, uma tarefa com `viva=False` aparece como
 **Sem sessão ativa** (`menus/tarefas/coordenadores.py`, `estado_tarefa`).

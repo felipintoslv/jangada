@@ -5,9 +5,12 @@ transferência e foca a janela, e o dono cola no terminal. Um envio pelo tmux
 podia responder uma permissão aberta no lugar dele.
 """
 import json
+import math
+import shlex
+import time
 from pathlib import Path
 
-from PyQt6.QtCore import QProcess, QTimer, Qt
+from PyQt6.QtCore import QObject, QProcess, QTimer, Qt
 from PyQt6.QtGui import QColor, QGuiApplication, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QPlainTextEdit,
                              QMessageBox, QPushButton, QScrollArea, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
@@ -22,7 +25,21 @@ SUFIXO = '--coordenador'
 MENSAGEM_MAX = 8 * 1024
 LINHA_MAX = 200
 LISTA_MAX = 4096
-PROVEDORES = ('claude', 'codex')
+PROVEDORES = ('claude', 'codex', 'agy')
+# Texto de cada provedor no seletor; o agy abre com modelo fixo no Core.
+ROTULOS_PROVEDOR = {'claude': 'claude', 'codex': 'codex', 'agy': 'agy (Argon High)'}
+ROTEADOR = 'jangada-router'
+GRUPO_ARGON = 'gemini-argon-wtu'
+COTA_MINIMA = 20
+SEM_COTA = 'Cota do Argon sem dado: o Core confere antes de abrir.'
+ATUALIZAR_COTA = 'Para atualizar, rode no terminal: jangada-router cotas --atualizar --permitir-remoto'
+SOLICITADA = 'Abertura ou retomada solicitada. Confira o resultado na janela.'
+CAUSAS_SEM_ABERTURA = {
+    'agy': 'Para agy, a causa provável é cota ou catálogo do Argon; ',
+    'claude': 'Para claude, confira se o cliente está instalado e com login; ',
+    'codex': 'Para codex, confira se o cliente está instalado e com login; '}
+SEM_PROVEDOR = ('Provedor não reconhecido por esta Central. Retomar e Finalizar atuação ficam '
+                'desligados neste registro; as demais informações continuam visíveis.')
 SEM_CORE = 'Coordenadores ainda não disponíveis no Core instalado.'
 SEM_CICLO = ('Este registro não informa o ciclo da atuação. Retomar e Finalizar atuação '
              'não estão disponíveis neste registro; as ações anteriores continuam disponíveis.')
@@ -85,7 +102,7 @@ def ler_coordenadores(bruto):
         if c.get('projeto') is not None and not (texto_curto(c['projeto'], 4096)
                                                  and c['projeto'].startswith('/') and '\x00' not in c['projeto']):
             raise ValueError('Projeto do coordenador em formato inesperado.')
-        if c.get('provedor') is not None and c['provedor'] not in PROVEDORES:
+        if c.get('provedor') is not None and not texto_curto(c['provedor'], 64):
             raise ValueError('Provedor do coordenador em formato inesperado.')
         for campo, maximo in (('estado', 64), ('ultima_linha', 16000), ('atualizado', 64)):
             if c.get(campo) is not None and not texto_curto(c[campo], maximo):
@@ -132,8 +149,172 @@ def nome_projeto(c):
     return c['sessao'][:-len(SUFIXO)]
 
 
+def provedor_conhecido(c):
+    return c.get('provedor') in PROVEDORES
+
+
+def provedor_desconhecido(c):
+    """Um Core mais novo pode trazer provedor que esta Central não conhece."""
+    return bool(c.get('provedor')) and not provedor_conhecido(c)
+
+
 def provedor(c):
+    if provedor_desconhecido(c):
+        return 'provedor não reconhecido por esta Central'
+    if c.get('provedor') == 'agy':
+        return ROTULOS_PROVEDOR['agy']
     return c['provedor'].capitalize() if c.get('provedor') else 'provedor sem dado'
+
+
+def aviso_sem_abertura(provedor, caminho):
+    comando = f'jangada-coordenador --projeto {shlex.quote(caminho)} --provedor {provedor}'
+    return linha_limpa('O Core não abriu o coordenador. ' + CAUSAS_SEM_ABERTURA.get(provedor, '')
+                       + f'rode `{comando}` no terminal para ver o motivo.', 4400)
+
+
+def ler_cota_argon(bruto):
+    """Lê o JSON de `jangada-router cotas`; devolve (percentual, renova_em) do Argon ou (None, None).
+
+    Usa só `provedores[].grupos[]` do cotas.json versão 1. Percentual ausente, nulo
+    ou fora de 0 a 100 vale como sem dado. Com várias contas do agy, vale a
+    `principal`, que é a do coordenador; sem ela, a primeira que traz o grupo.
+    """
+    if len(bruto) > LIMITE:
+        raise ValueError('A saída excedeu o limite de leitura.')
+
+    def recusar(constante):
+        raise ValueError('Número fora do JSON.')
+    try:
+        dados = json.loads(bruto, parse_constant=recusar)
+    except (ValueError, RecursionError) as erro:
+        raise ValueError('A saída não é JSON válido.') from erro
+    if not isinstance(dados, dict) or dados.get('versao') != 1 or type(dados.get('versao')) is not int:
+        raise ValueError('Versão do cotas.json não lida por esta Central.')
+    lista = dados.get('provedores')
+    if not isinstance(lista, list):
+        raise ValueError('A saída não traz os provedores.')
+    achados = []
+    for entrada in lista:
+        if not isinstance(entrada, dict) or entrada.get('provedor') != 'agy' or not isinstance(entrada.get('grupos'), list):
+            continue
+        grupo = next((g for g in entrada['grupos'] if isinstance(g, dict) and g.get('grupo') == GRUPO_ARGON), None)
+        if grupo is not None:
+            achados.append((entrada, grupo))
+    if not achados:
+        return None, None
+    entrada, grupo = next((a for a in achados if a[0].get('conta') == 'principal'), achados[0])
+    percentual = grupo.get('percentual')
+    if (type(percentual) not in (int, float) or not math.isfinite(percentual)
+            or not 0 <= percentual <= 100):
+        return None, None
+    renova = None
+    for janela in grupo.get('janelas') if isinstance(grupo.get('janelas'), list) else []:
+        if (isinstance(janela, dict) and janela.get('percentual') == percentual
+                and isinstance(janela.get('renova_em'), str)):
+            renova = janela['renova_em']
+            break
+    return percentual, renova
+
+
+def texto_percentual(valor):
+    return f'{valor:.2f}'.rstrip('0').rstrip('.').replace('.', ',')
+
+
+class CotaArgon(QObject):
+    """Roda `jangada-router cotas` sem shell, sem rede e sem --atualizar, com prazo e limite de saída.
+
+    O estado é 'consultando', 'ok' (percentual de 20 ou mais), 'baixa' ou 'sem_dado'.
+    Qualquer falha vira 'sem_dado': o Core confere de novo antes de abrir.
+    """
+
+    def __init__(self, janela, ao_mudar):
+        super().__init__(janela)
+        self.janela = janela
+        self.ao_mudar = ao_mudar
+        self.prazo_ms = 30000
+        self.estado = 'sem_dado'
+        self.percentual = None
+        self.renova_em = None
+        self.excedeu = False
+        self.expirou = False
+        self.bruto = b''
+        self.processo = QProcess(self)
+        self.processo.setStandardInputFile(QProcess.nullDevice())
+        self.processo.setStandardErrorFile(QProcess.nullDevice())
+        self.processo.readyReadStandardOutput.connect(self.ler)
+        self.processo.finished.connect(self.fim)
+        self.processo.errorOccurred.connect(self.erro)
+        self.prazo = QTimer(self)
+        self.prazo.setSingleShot(True)
+        self.prazo.timeout.connect(self.expirar)
+
+    def ocupada(self):
+        return self.processo.state() != QProcess.ProcessState.NotRunning
+
+    def consultar(self):
+        if self.ocupada():
+            return
+        if not comando_disponivel(ROTEADOR, self.janela.jangada):
+            self.definir('sem_dado')
+            return
+        self.bruto = b''
+        self.excedeu = self.expirou = False
+        self.janela.preparar(self.processo, ['cotas'], ROTEADOR)
+        self.definir('consultando')
+        self.processo.start()
+        self.prazo.start(self.prazo_ms)
+
+    def ler(self):
+        self.bruto += bytes(self.processo.readAllStandardOutput())
+        if len(self.bruto) > LIMITE and not self.excedeu:
+            self.excedeu = True
+            self.processo.kill()
+
+    def expirar(self):
+        self.expirou = True
+        self.processo.kill()
+
+    def erro(self, erro):
+        if erro == QProcess.ProcessError.FailedToStart:
+            self.prazo.stop()
+            self.definir('sem_dado')
+
+    def fim(self, codigo, tipo):
+        self.prazo.stop()
+        self.ler()
+        if self.expirou or self.excedeu or codigo != 0 or tipo != QProcess.ExitStatus.NormalExit:
+            self.definir('sem_dado')
+            return
+        try:
+            percentual, renova = ler_cota_argon(self.bruto)
+        except ValueError:
+            self.definir('sem_dado')
+            return
+        if percentual is None:
+            self.definir('sem_dado')
+        else:
+            self.definir('baixa' if percentual < COTA_MINIMA else 'ok', percentual, renova)
+
+    def definir(self, estado, percentual=None, renova_em=None):
+        self.estado, self.percentual, self.renova_em = estado, percentual, renova_em
+        self.ao_mudar()
+
+    def texto(self):
+        if self.estado == 'consultando':
+            return 'Conferindo a cota do Argon.'
+        if self.estado == 'ok':
+            return f'Cota do Argon: {texto_percentual(self.percentual)}%.'
+        if self.estado == 'baixa':
+            renova = f' Renova em {data(self.renova_em)}.' if self.renova_em and data(self.renova_em) != SEM_DADO else ''
+            return f'Cota do Argon abaixo de {COTA_MINIMA}%: {texto_percentual(self.percentual)}%.' + renova
+        return SEM_COTA + ' ' + ATUALIZAR_COTA
+
+    def fechar(self):
+        self.prazo.stop()
+        if self.ocupada():
+            self.processo.blockSignals(True)
+            self.processo.kill()
+            self.processo.waitForFinished(1000)
 
 
 class NovoCoordenador(QDialog):
@@ -149,11 +330,17 @@ class NovoCoordenador(QDialog):
         self.projeto.setAccessibleName('Projeto do coordenador')
         formulario.addRow('Projeto', self.projeto)
         self.provedor = QComboBox()
-        self.provedor.addItems(PROVEDORES)
+        for escolha in PROVEDORES:
+            self.provedor.addItem(ROTULOS_PROVEDOR[escolha], escolha)
         self.provedor.setAccessibleName('Provedor do coordenador')
         self.projeto_anterior = None
         formulario.addRow('Provedor', self.provedor)
         layout.addLayout(formulario)
+        self.cota = QLabel()
+        self.cota.setTextFormat(Qt.TextFormat.PlainText)
+        self.cota.setWordWrap(True)
+        self.cota.setAccessibleName('Cota do Argon')
+        layout.addWidget(self.cota)
         self.aviso = QLabel()
         self.aviso.setTextFormat(Qt.TextFormat.PlainText)
         self.aviso.setWordWrap(True)
@@ -168,6 +355,7 @@ class NovoCoordenador(QDialog):
         botoes.addWidget(self.abrir)
         layout.addLayout(botoes)
         self.projeto.currentIndexChanged.connect(self.conferir)
+        self.provedor.currentIndexChanged.connect(self.conferir)
         self.carregar()
 
     def carregar(self):
@@ -177,6 +365,11 @@ class NovoCoordenador(QDialog):
         self.conferir()
 
     def conferir(self, *_):
+        cota = self.coluna.cota
+        indice = self.provedor.findData('agy')
+        self.cota.setText(cota.texto())
+        self.provedor.model().item(indice).setEnabled(cota.estado != 'baixa')
+        self.provedor.setItemData(indice, cota.texto(), Qt.ItemDataRole.ToolTipRole)
         caminho = self.projeto.currentData()
         if caminho is None:
             self.aviso.setText('Nenhum projeto cadastrado. Cadastre o projeto na aba Projetos e fila.')
@@ -186,13 +379,19 @@ class NovoCoordenador(QDialog):
         existente = self.coluna.coordenador_do_projeto(caminho)
         if caminho != self.projeto_anterior:
             self.projeto_anterior = caminho
-            if existente and existente.get('provedor') in PROVEDORES:
-                self.provedor.setCurrentText(existente['provedor'])
+            if existente and provedor_conhecido(existente):
+                self.provedor.setCurrentIndex(self.provedor.findData(existente['provedor']))
         self.provedor.setEnabled(not (existente and existente['viva']))
         self.abrir.setText('Abrir coordenador')
-        if existente and existente['viva']:
+        viva = bool(existente and existente['viva'])
+        if viva:
             self.aviso.setText(f'Este projeto já tem coordenador: {existente["sessao"]}. '
                                'Abrir coordenador leva a ele.')
+        elif existente and provedor_desconhecido(existente) and (
+                not tem_ciclo(existente) or existente['ciclo'] == 'aberta'):
+            self.abrir.setEnabled(False)
+            self.aviso.setText('O coordenador deste projeto tem ' + provedor(existente) + '. '
+                               'Abrir e retomar ficam desligados aqui; consulte o registro na coluna.')
         elif existente and tem_ciclo(existente) and existente['ciclo'] == 'aberta':
             self.abrir.setText('Retomar atuação')
             self.aviso.setText('Este projeto tem atuação aberta, aguardando retomada. '
@@ -206,12 +405,15 @@ class NovoCoordenador(QDialog):
         else:
             self.aviso.setText('Abre o coordenador numa janela de terminal, na pasta do projeto, '
                                'sem isolamento.')
+        if not viva and self.provedor.currentData() == 'agy' and cota.estado == 'baixa':
+            self.abrir.setEnabled(False)
+            self.aviso.setText('Abrir fica desligado com agy. ' + cota.texto())
 
     def confirmar(self):
         caminho = self.projeto.currentData()
         if caminho is None:
             return
-        if self.coluna.abrir_coordenador(caminho, self.provedor.currentText()):
+        if self.coluna.abrir_coordenador(caminho, self.provedor.currentData()):
             self.hide()
 
 
@@ -232,6 +434,9 @@ class Coordenadores(QWidget):
         self.prazo_acao_ms = 30000
         self.expirou_acao = False
         self.aviso_saida = None
+        self.abertura = None
+        self.prazo_abertura_ms = 20000
+        self.cota = CotaArgon(janela, self.cota_mudou)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 12, 0)
         topo = QHBoxLayout()
@@ -340,6 +545,9 @@ class Coordenadores(QWidget):
         self.prazo_acao = QTimer(self)
         self.prazo_acao.setSingleShot(True)
         self.prazo_acao.timeout.connect(self.expirar_acao)
+        self.relogio_abertura = QTimer(self)
+        self.relogio_abertura.timeout.connect(self.atualizar)
+        self.intervalo_abertura_ms = 1000
         self.foco = QProcess(self)
         self.foco.finished.connect(self.foco_fim)
         self.foco.errorOccurred.connect(self.foco_erro)
@@ -409,6 +617,7 @@ class Coordenadores(QWidget):
                 self.avisar(self.status, f'{len(lista)} ' + ('coordenador' if len(lista) == 1
                             else 'coordenadores') + '. Linhas lidas do registro, mostradas como dado.'
                             if lista else 'Nenhum coordenador aberto. Use Novo coordenador.')
+                self.conferir_abertura()
         if self.pendente:
             self.atualizar()
 
@@ -557,10 +766,13 @@ class Coordenadores(QWidget):
             self.avisar(self.aviso, AVISOS[chave] + ' ' + SEM_RETOMADA)
         if not tem_ciclo(c):
             self.avisar(self.aviso, AVISOS[chave] + ' ' + SEM_CICLO)
+        desconhecido = provedor_desconhecido(c)
+        if desconhecido:
+            self.avisar(self.aviso, self.aviso.text() + ' ' + SEM_PROVEDOR)
         permitido = self.janela.real and self.disponivel and not ocupado
         self.retomar.setEnabled(permitido and aberta and not c['viva'] and c['retomavel']
-                                and bool(c.get('projeto')) and c.get('provedor') in PROVEDORES)
-        self.finalizar.setEnabled(permitido and aberta)
+                                and bool(c.get('projeto')) and provedor_conhecido(c))
+        self.finalizar.setEnabled(permitido and aberta and not desconhecido)
 
     def editar(self):
         if self.atual:
@@ -637,6 +849,7 @@ class Coordenadores(QWidget):
             if self.janela.real and not self.ocupada():
                 self.avisar(self.status, SEM_CORE)
             return
+        self.cota.consultar()
         if self.dialogo is None:
             self.dialogo = NovoCoordenador(self)
         else:
@@ -644,6 +857,10 @@ class Coordenadores(QWidget):
         self.dialogo.show()
         self.dialogo.raise_()
         self.dialogo.activateWindow()
+
+    def cota_mudou(self):
+        if self.dialogo is not None:
+            self.dialogo.conferir()
 
     def selecionar(self, sessao):
         item = self.itens.get(('coord', sessao))
@@ -773,10 +990,34 @@ class Coordenadores(QWidget):
         processo.setStandardErrorFile(QProcess.nullDevice())
         iniciado, _pid = processo.startDetached()
         processo.deleteLater()
-        self.terminar_acao('Abertura ou retomada solicitada. Confira o resultado na janela.' if iniciado
-                            else f'Não foi possível executar {COORDENADOR}.', not iniciado)
+        self.terminar_acao(SOLICITADA if iniciado else f'Não foi possível executar {COORDENADOR}.',
+                           not iniciado)
         if iniciado:
+            self.abertura = dict(caminho=pedido['caminho'], provedor=pedido['provedor'],
+                                 inicio=time.monotonic())
+            self.relogio_abertura.start(self.intervalo_abertura_ms)
             self.atualizar()
+
+    def conferir_abertura(self):
+        """Troca o aviso de solicitada se o Core não criou a sessão no prazo; o terminal fica com o motivo."""
+        pedido = self.abertura
+        if pedido is None:
+            return
+        try:
+            alvo = Path(pedido['caminho']).resolve()
+        except (OSError, ValueError):
+            alvo = None
+        if any(c['viva'] and c.get('provedor') == pedido['provedor'] and c.get('projeto')
+               and Path(c['projeto']) == alvo for c in self.lista):
+            self.abertura = None
+            self.relogio_abertura.stop()
+            return
+        if (time.monotonic() - pedido['inicio']) * 1000 < self.prazo_abertura_ms:
+            return
+        self.abertura = None
+        self.relogio_abertura.stop()
+        if self.resultado.text() == SOLICITADA:
+            self.avisar(self.resultado, aviso_sem_abertura(pedido['provedor'], pedido['caminho']), True)
 
     def ler_saida_acao(self):
         for canal in (self.acao.readAllStandardError, self.acao.readAllStandardOutput):
@@ -813,6 +1054,8 @@ class Coordenadores(QWidget):
 
     def fechar(self):
         self.fechando = True
+        self.relogio_abertura.stop()
+        self.cota.fechar()
         self.consulta.fechar()
         self.reconferencia.fechar()
         self.prazo_acao.stop()

@@ -181,6 +181,38 @@ o Core decide entre criar e retomar. Uma sessão viva recebe somente foco na
 mesma janela. Trocar provedor exige saída voluntária anterior. A Central e o
 login não iniciam coordenações automaticamente.
 
+**Provedores.** O seletor de **Novo coordenador** oferece `claude`, `codex` e
+`agy (Argon High)`. O Core abre o agy com modelo fixo e grava `provedor: "agy"`
+no registro; a Central mostra esse nome na lista e no painel. Um provedor que
+esta Central não conhece, trazido por um Core mais novo, não derruba a lista:
+a linha aparece com "provedor não reconhecido por esta Central", e Retomar e
+Finalizar atuação ficam desligados nela, com o motivo no painel. Em Novo
+coordenador, um projeto cujo coordenador tem provedor desconhecido e atuação
+aberta não pode ser aberto por ali.
+
+**Cota do Argon.** Ao abrir Novo coordenador, a Central roda `jangada-router cotas`
+em segundo plano, sem shell, sem `--atualizar` e sem `--permitir-remoto`, com prazo de
+30 segundos e limite de 1 MiB na saída. Esse comando só lê o que o Core já tem
+em disco e nunca consulta o agy. A Central usa o grupo `gemini-argon-wtu` do
+agy, da conta `principal` quando houver. Com `percentual` de 20 ou mais, a opção
+fica ativa e mostra o valor. Abaixo de 20, a opção fica desligada com "Cota do
+Argon abaixo de 20%" e a data de `renova_em`, quando o Core a informa. Sem o
+grupo, com `percentual` nulo, com o comando ausente (Core anterior), com erro,
+prazo esgotado ou JSON inválido, a opção continua disponível e o diálogo avisa
+"Cota do Argon sem dado: o Core confere antes de abrir", seguido do comando que
+o dono roda no terminal para atualizar:
+`jangada-router cotas --atualizar --permitir-remoto`. A Central não roda esse comando.
+
+**Abertura sem sessão.** Depois de "Abertura ou retomada solicitada", a Central
+reconsulta a lista a cada segundo. Se em 20 segundos não aparecer coordenador
+vivo daquele projeto e provedor, o aviso passa a "O Core não abriu o coordenador",
+com a causa provável de cada provedor e o comando
+`jangada-coordenador --projeto PASTA --provedor P` para rodar no terminal. Para o
+agy a causa provável é cota ou catálogo do Argon: o Core confere os dois antes de
+criar a sessão e, se falhar, só escreve o motivo na saída de erro. A janela
+continua destacada e a Central não captura essa saída. Um aviso de outra ação,
+posto nesse intervalo, não é substituído.
+
 **Finalizar atuação** exige confirmação com a sessão sem processo. Antes,
 salve o estado e o diário e saia voluntariamente. A Central reconfere a atuação
 e chama `jangada-coordenador --finalizar SESSAO`. O Core preserva as pendências

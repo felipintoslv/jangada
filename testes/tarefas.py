@@ -1074,6 +1074,9 @@ class Interface(unittest.TestCase):
                            "pasta = pathlib.Path(__file__).resolve().parent.parent\n"
                            "with open(pasta / 'coordenador.log', 'a') as log:\n"
                            "    log.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+                           "if (pasta / 'sem-sessao').exists():\n"
+                           "    print('cota do Argon abaixo de 20%', file=sys.stderr)\n"
+                           "    sys.exit(1)\n"
                            "if (pasta / 'acao-espera').exists():\n"
                            "    import time\n    time.sleep(5)\n"
                            "if (pasta / 'acao-erro').exists():\n"
@@ -1817,6 +1820,241 @@ while not (pasta / 'parar-clientes').exists():
         self.assertFalse(dialogo.abrir.isEnabled())
         self.assertIn('Nenhum projeto cadastrado', dialogo.aviso.text())
         dialogo.hide()
+
+    def roteador_falso(self, modo, cotas=None):
+        """jangada-router falso: registra os argumentos e responde conforme o modo."""
+        (self.raiz / 'roteador-modo').write_text(modo)
+        if cotas is not None:
+            (self.raiz / 'roteador-cotas').write_text(json.dumps(cotas))
+        comando = self.bin / 'jangada-router'
+        comando.write_text("#!/usr/bin/env python3\nimport json, pathlib, sys, time\n"
+                           "pasta = pathlib.Path(__file__).resolve().parent.parent\n"
+                           "with open(pasta / 'roteador.log', 'a') as log:\n"
+                           "    log.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+                           "modo = (pasta / 'roteador-modo').read_text()\n"
+                           "if modo == 'erro':\n    print('falhou', file=sys.stderr)\n    sys.exit(1)\n"
+                           "if modo == 'uso':\n    print('uso: jangada-router', file=sys.stderr)\n    sys.exit(2)\n"
+                           "if modo == 'espera':\n    time.sleep(5)\n"
+                           "if modo == 'invalido':\n    print('{nao e json')\n    sys.exit(0)\n"
+                           "if modo == 'grande':\n    print('x' * (1024 * 1024 + 10))\n    sys.exit(0)\n"
+                           "print((pasta / 'roteador-cotas').read_text())\n")
+        comando.chmod(448)
+
+    def cotas_com_argon(self, percentual, janelas=None, conta='principal', grupo='gemini-argon-wtu'):
+        grupos = [dict(grupo='gemini', percentual=90.0, janelas=[], origem='agy -p /usage',
+                       medido_em='2026-10-24T20:00:00+00:00', valido_ate='2026-10-24T20:05:00+00:00', motivo=None)]
+        if grupo:
+            grupos.append(dict(grupo=grupo, percentual=percentual, janelas=janelas or [],
+                               origem='agy -p /usage', medido_em='2026-10-24T20:00:00+00:00',
+                               valido_ate='2026-10-24T20:05:00+00:00',
+                               motivo=None if percentual is not None else 'sem_cache'))
+        return dict(versao=1, gerado='2026-10-24T20:00:00+00:00', provedores=[
+            dict(provedor='agy', conta=conta, motivo=None, grupos=grupos),
+            dict(provedor='codex', conta=None, motivo=None, grupos=[]),
+            dict(provedor='claude', conta=None, motivo='nao_medido_por_este_provedor', grupos=[])])
+
+    def dialogo_com_cota(self, projeto='/tmp/horta'):
+        coluna = self.carregar_coordenadores()
+        self.janela.operacional.dados = {'projetos': [{'nome': 'projeto', 'caminho': projeto}]}
+        coluna.cota.prazo_ms = 300
+        coluna.novo_coordenador()
+        aguardar(lambda: not coluna.cota.ocupada())
+        return coluna, coluna.dialogo
+
+    def agy_ativo(self, dialogo):
+        return dialogo.provedor.model().item(dialogo.provedor.findData('agy')).isEnabled()
+
+    def test_lista_aceita_agy_e_provedor_desconhecido_sem_derrubar(self):
+        self.coordenador_falso()
+        novo = dict(sessao='mapa--coordenador', projeto='/tmp/mapa', provedor='agy', estado='trabalhando',
+                    ultima_linha='Rodando', atualizado=None, viva=False, ciclo='aberta', atuacao_id='opaco-2',
+                    retomavel=True, tarefas=[])
+        futuro = dict(novo, sessao='rio--coordenador', projeto='/tmp/rio', provedor='fable', atuacao_id='opaco-3')
+        horta = dict(sessao='horta--coordenador', projeto='/tmp/horta', provedor='claude', estado='aguardando',
+                     ultima_linha='x', atualizado=None, viva=False, ciclo='aberta', atuacao_id='opaco-1',
+                     retomavel=True, tarefas=[])
+        (self.raiz / 'coordenadores.json').write_text(json.dumps(
+            dict(versao=1, coordenadores=[horta, novo, futuro])))
+        coluna = self.carregar_coordenadores()
+        self.assertNotIn('Saída inválida', coluna.status.text())
+        self.assertEqual(coluna.arvore.topLevelItemCount(), 3)
+        self.assertEqual(coluna.itens[('coord', 'mapa--coordenador')].text(0), 'mapa · agy (Argon High)')
+        self.assertEqual(coluna.itens[('coord', 'rio--coordenador')].text(0),
+                         'rio · provedor não reconhecido por esta Central')
+        self.escolher_coordenador(coluna, 'mapa--coordenador')
+        self.assertTrue(coluna.retomar.isEnabled() and coluna.finalizar.isEnabled())
+        self.assertNotIn('não reconhecido', coluna.aviso.text())
+        self.escolher_coordenador(coluna, 'rio--coordenador')
+        self.assertFalse(coluna.retomar.isEnabled() or coluna.finalizar.isEnabled())
+        self.assertIn('Provedor não reconhecido por esta Central', coluna.aviso.text())
+        self.assertIn('Retomar e Finalizar atuação ficam desligados', coluna.aviso.text())
+        self.escolher_coordenador(coluna, 'horta--coordenador')
+        self.assertTrue(coluna.retomar.isEnabled() and coluna.finalizar.isEnabled())
+        for invalido in (7, ['agy'], 'x' * 65):
+            with self.subTest(provedor=invalido):
+                (self.raiz / 'coordenadores.json').write_text(json.dumps(
+                    dict(versao=1, coordenadores=[dict(novo, provedor=invalido)])))
+                self.carregar_coordenadores()
+                self.assertIn('Saída inválida', coluna.status.text())
+
+    def test_dialogo_desliga_abrir_em_projeto_de_provedor_desconhecido(self):
+        self.coordenador_falso()
+        futuro = dict(sessao='rio--coordenador', projeto='/tmp/rio', provedor='fable', estado='trabalhando',
+                      ultima_linha='x', atualizado=None, viva=False, ciclo='aberta', atuacao_id='opaco-3',
+                      retomavel=True, tarefas=[])
+        (self.raiz / 'coordenadores.json').write_text(json.dumps(dict(versao=1, coordenadores=[futuro])))
+        coluna, dialogo = self.dialogo_com_cota('/tmp/rio')
+        self.assertFalse(dialogo.abrir.isEnabled())
+        self.assertIn('provedor não reconhecido por esta Central', dialogo.aviso.text())
+        dialogo.hide()
+
+    def test_seletor_oferece_agy_e_abre_com_os_argumentos_esperados(self):
+        self.coordenador_falso()
+        self.coordenadores_falsos()
+        self.roteador_falso('ok', self.cotas_com_argon(50.0))
+        nova = self.raiz / 'mapa'
+        nova.mkdir()
+        coluna, dialogo = self.dialogo_com_cota(str(nova))
+        self.assertEqual([dialogo.provedor.itemText(i) for i in range(dialogo.provedor.count())],
+                         ['claude', 'codex', 'agy (Argon High)'])
+        dialogo.provedor.setCurrentIndex(dialogo.provedor.findData('agy'))
+        self.assertTrue(dialogo.abrir.isEnabled())
+        dialogo.abrir.click()
+        aguardar(lambda: (self.raiz / 'coordenador.log').exists() and not coluna.ocupada())
+        self.assertEqual(self.acoes_coordenador(), [['--projeto', str(nova), '--provedor', 'agy', '--janela']])
+        self.assertEqual([json.loads(l) for l in (self.raiz / 'roteador.log').read_text().splitlines()],
+                         [['cotas']])
+        coluna.relogio_abertura.stop()
+
+    def test_cota_do_argon_decide_a_opcao_agy(self):
+        casos = [
+            ('ok', self.cotas_com_argon(50.0), True, 'Cota do Argon: 50%.', 'ok'),
+            ('ok', self.cotas_com_argon(20.0), True, 'Cota do Argon: 20%.', 'ok'),
+            ('ok', self.cotas_com_argon(12.5, [dict(id='gemini-5h', percentual=12.5,
+                                                    renova_em='2026-10-25T03:00:00+00:00')]),
+             False, 'Cota do Argon abaixo de 20%: 12,5%. Renova em ', 'baixa'),
+            ('ok', self.cotas_com_argon(10.0), False, 'Cota do Argon abaixo de 20%: 10%.', 'baixa'),
+            ('ok', self.cotas_com_argon(None, grupo=None), True, 'Cota do Argon sem dado', 'sem_dado'),
+            ('ok', self.cotas_com_argon(None), True, 'Cota do Argon sem dado', 'sem_dado'),
+            ('ok', self.cotas_com_argon(150.0), True, 'Cota do Argon sem dado', 'sem_dado'),
+            ('ok', self.cotas_com_argon(True), True, 'Cota do Argon sem dado', 'sem_dado'),
+            ('ok', dict(self.cotas_com_argon(50.0), versao=2), True, 'Cota do Argon sem dado', 'sem_dado'),
+            ('erro', {}, True, 'Cota do Argon sem dado', 'sem_dado'),
+            ('uso', {}, True, 'Cota do Argon sem dado', 'sem_dado'),
+            ('espera', {}, True, 'Cota do Argon sem dado', 'sem_dado'),
+            ('invalido', {}, True, 'Cota do Argon sem dado', 'sem_dado'),
+            ('grande', {}, True, 'Cota do Argon sem dado', 'sem_dado'),
+            (None, None, True, 'Cota do Argon sem dado', 'sem_dado')]
+        for modo, cotas, ativo, texto, estado in casos:
+            with self.subTest(modo=modo, texto=texto, estado=estado, cotas=str(cotas)[:80]):
+                self.coordenador_falso()
+                self.coordenadores_falsos()
+                (self.raiz / 'roteador.log').unlink(missing_ok=True)
+                if modo is None:
+                    (self.bin / 'jangada-router').unlink(missing_ok=True)
+                else:
+                    self.roteador_falso(modo, cotas)
+                coluna, dialogo = self.dialogo_com_cota('/tmp/mapa')
+                self.assertEqual(coluna.cota.estado, estado)
+                self.assertEqual(self.agy_ativo(dialogo), ativo)
+                self.assertTrue(dialogo.cota.text().startswith(texto), dialogo.cota.text())
+                dialogo.provedor.setCurrentIndex(dialogo.provedor.findData('agy'))
+                self.assertEqual(dialogo.abrir.isEnabled(), ativo)
+                if estado == 'sem_dado':
+                    self.assertIn('o Core confere antes de abrir', dialogo.cota.text())
+                    self.assertTrue(dialogo.cota.text().endswith(
+                        'jangada-router cotas --atualizar --permitir-remoto'))
+                if estado == 'baixa':
+                    self.assertIn('abaixo de 20%', dialogo.aviso.text())
+                    self.assertEqual(dialogo.provedor.itemData(2, Qt.ItemDataRole.ToolTipRole), dialogo.cota.text())
+                    dialogo.provedor.setCurrentIndex(0)
+                    self.assertTrue(dialogo.abrir.isEnabled())
+                if modo is not None:
+                    chamadas = [json.loads(l) for l in (self.raiz / 'roteador.log').read_text().splitlines()]
+                    self.assertEqual(chamadas, [['cotas']])
+                dialogo.hide()
+                coluna.cota.fechar()
+
+    def test_cota_da_conta_principal_vale_sobre_as_outras(self):
+        reserva = self.cotas_com_argon(50.0, conta='reserva')['provedores'][0]
+        principal = self.cotas_com_argon(10.0, conta='principal')['provedores'][0]
+        base = self.cotas_com_argon(50.0)
+        for contas, esperado in (([reserva, principal], 'baixa'), ([principal, reserva], 'baixa'),
+                                 ([reserva], 'ok')):
+            with self.subTest(contas=[c['conta'] for c in contas]):
+                self.roteador_falso('ok', dict(base, provedores=contas + base['provedores'][1:]))
+                self.coordenador_falso()
+                self.coordenadores_falsos()
+                coluna, dialogo = self.dialogo_com_cota('/tmp/mapa')
+                self.assertEqual(coluna.cota.estado, esperado)
+                dialogo.hide()
+
+    def aguardar_aviso_de_abertura(self, coluna):
+        aguardar(lambda: 'não abriu' in coluna.resultado.text() or coluna.abertura is None)
+
+    def test_abertura_sem_sessao_troca_o_aviso_depois_do_prazo(self):
+        self.coordenador_falso()
+        self.coordenadores_falsos()
+        (self.raiz / 'sem-sessao').write_text('')
+        self.roteador_falso('ok', self.cotas_com_argon(50.0))
+        nova = self.raiz / 'mapa'
+        nova.mkdir()
+        coluna, dialogo = self.dialogo_com_cota(str(nova))
+        coluna.prazo_abertura_ms = 400
+        coluna.intervalo_abertura_ms = 40
+        for escolha, causa in (('agy', 'a causa provável é cota ou catálogo do Argon'),
+                               ('claude', 'confira se o cliente está instalado e com login'),
+                               ('codex', 'confira se o cliente está instalado e com login')):
+            with self.subTest(provedor=escolha):
+                coluna.novo_coordenador()
+                aguardar(lambda: not coluna.cota.ocupada())
+                dialogo.provedor.setCurrentIndex(dialogo.provedor.findData(escolha))
+                dialogo.abrir.click()
+                aguardar(lambda: not coluna.ocupada())
+                self.assertEqual(coluna.resultado.text(), 'Abertura ou retomada solicitada. Confira o resultado na janela.')
+                self.assertFalse(coluna.resultado.property('falha'))
+                self.aguardar_aviso_de_abertura(coluna)
+                texto = coluna.resultado.text()
+                self.assertTrue(texto.startswith('O Core não abriu o coordenador. Para ' + escolha), texto)
+                self.assertIn(causa, texto)
+                self.assertIn(f'`jangada-coordenador --projeto {nova} --provedor {escolha}`', texto)
+                self.assertTrue(coluna.resultado.property('falha'))
+                self.assertIsNone(coluna.abertura)
+                self.assertFalse(coluna.relogio_abertura.isActive())
+        self.assertEqual([a[3] for a in self.acoes_coordenador()], ['agy', 'claude', 'codex'])
+        dialogo.hide()
+
+    def test_abertura_com_sessao_viva_mantem_o_aviso_de_solicitada(self):
+        self.coordenador_falso()
+        self.coordenadores_falsos()
+        nova = self.raiz / 'mapa'
+        nova.mkdir()
+        coluna, dialogo = self.dialogo_com_cota(str(nova))
+        coluna.prazo_abertura_ms = 300
+        coluna.intervalo_abertura_ms = 40
+        dialogo.provedor.setCurrentIndex(dialogo.provedor.findData('agy'))
+        dialogo.abrir.click()
+        aguardar(lambda: coluna.abertura is None and bool(self.acoes_coordenador()))
+        self.assertEqual(coluna.resultado.text(), 'Abertura ou retomada solicitada. Confira o resultado na janela.')
+        QTest.qWait(500)
+        self.assertEqual(coluna.resultado.text(), 'Abertura ou retomada solicitada. Confira o resultado na janela.')
+        self.assertFalse(coluna.resultado.property('falha'))
+        self.assertFalse(coluna.relogio_abertura.isActive())
+
+    def test_abertura_sem_sessao_nao_apaga_outro_aviso(self):
+        self.coordenador_falso()
+        self.coordenadores_falsos()
+        (self.raiz / 'sem-sessao').write_text('')
+        nova = self.raiz / 'mapa'
+        nova.mkdir()
+        coluna, dialogo = self.dialogo_com_cota(str(nova))
+        coluna.prazo_abertura_ms = 300
+        coluna.intervalo_abertura_ms = 40
+        dialogo.abrir.click()
+        aguardar(lambda: coluna.abertura is not None)
+        coluna.avisar(coluna.resultado, 'Outro resultado útil', True)
+        aguardar(lambda: coluna.abertura is None)
+        self.assertEqual(coluna.resultado.text(), 'Outro resultado útil')
 
     def test_coordenadores_core_sem_consulta_ou_sem_comando(self):
         coluna = self.carregar_coordenadores()
