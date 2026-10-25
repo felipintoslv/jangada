@@ -293,7 +293,7 @@ class NovoCoordenador(QDialog):
         self.provedor.setItemData(indice, cota.texto(), Qt.ItemDataRole.ToolTipRole)
         caminho = self.projeto.currentData()
         if caminho is None:
-            self.aviso.setText('Nenhum projeto cadastrado. Cadastre o projeto na aba Projetos e fila.')
+            self.aviso.setText('Nenhum projeto cadastrado. Crie um com Novo projeto.')
             self.abrir.setEnabled(False)
             return
         self.abrir.setEnabled(not self.coluna.ocupada())
@@ -370,7 +370,6 @@ class Coordenadores(QWidget):
         self.novo = QPushButton('Novo coordenador')
         self.novo.setToolTip('Escolhe projeto e provedor e abre o coordenador. Atalho: Ctrl+N.')
         self.novo.clicked.connect(self.novo_coordenador)
-        topo.addWidget(self.novo)
         layout.addLayout(topo)
         self.status = self.rotulo('coord_status')
         layout.addWidget(self.status)
@@ -661,7 +660,19 @@ class Coordenadores(QWidget):
             if isinstance(caminho, str) and caminho.startswith('/') and not any(c in caminho for c in ('\n', '\x00')):
                 nome = p.get('nome') if isinstance(p.get('nome'), str) else Path(caminho).name
                 lista.append((linha_limpa(nome, 255) or Path(caminho).name, caminho))
+        # Projeto recém-criado vale antes de a consulta de Projetos e fila voltar.
+        conhecidos = {self.resolvido(caminho) for _, caminho in lista}
+        for caminho, nome in self.janela.projetos_novos.items():
+            if self.resolvido(caminho) not in conhecidos:
+                lista.append((linha_limpa(nome, 255) or Path(caminho).name, caminho))
         return lista
+
+    @staticmethod
+    def resolvido(caminho):
+        try:
+            return Path(caminho).resolve()
+        except (OSError, RuntimeError):
+            return Path(caminho)
 
     def escolher(self, *_):
         chave = self.chave()
@@ -828,6 +839,14 @@ class Coordenadores(QWidget):
         self.dialogo.show()
         self.dialogo.raise_()
         self.dialogo.activateWindow()
+
+    def novo_coordenador_em(self, caminho):
+        """Abre o diálogo de Novo coordenador já no projeto indicado."""
+        self.novo_coordenador()
+        if self.dialogo is not None:
+            indice = self.dialogo.projeto.findData(caminho)
+            if indice >= 0:
+                self.dialogo.projeto.setCurrentIndex(indice)
 
     def cota_mudou(self):
         if self.dialogo is not None:

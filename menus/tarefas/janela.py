@@ -19,8 +19,8 @@ from PyQt6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout, QGrid
                             QPlainTextEdit, QPushButton, QScrollArea, QSplitter, QTabWidget,
                             QSizePolicy, QStackedWidget, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 from dados import (LIMITE, NOME, ORDEM, ROTULOS, Sessao,
-                   estado_exibido, idade, ler_lista, ler_observacao, pasta_sessoes, resolver_comando,
-                   sem_coordenadores, simuladas)
+                   comando_disponivel, estado_exibido, idade, ler_lista, ler_observacao, pasta_sessoes,
+                   resolver_comando, sem_coordenadores, simuladas)
 
 sys.dont_write_bytecode = True
 # Com default/tarefas acessada por link, __file__ aponta para a pasta física;
@@ -34,6 +34,8 @@ from rodadas import Rodadas
 from coordenadores import FAIXA, Coordenadores
 from cotas import SIMULACAO, ConsultaCotas, FaixaCotas
 from aparencia import CartaoResumo, InspetorRolavel, LinhaTempo, cores_interacao, misturar
+from projeto import (ROTEIRO, SEM_ERRO, NovoProjeto, Preparo, criar_arquivo_de_erros, e_git,
+                     pasta_base, ultimas_linhas)
 
 # Só para a janela simulada e para quando a consulta falha: o catálogo vem do
 # jangada-agente --capacidades-json, que também é quem valida a escolha.
@@ -64,7 +66,8 @@ class NovaTarefa(QDialog):
         linha = QHBoxLayout()
         linha.addWidget(self.projeto)
         linha.addWidget(escolher)
-        self.base = Path(os.environ.get('JANGADA_PROJETOS') or Path.home() / 'Projetos').expanduser()
+        self.base = pasta_base()
+        self.abertura = None
         nova = QPushButton('Nova pasta')
         nova.setToolTip(f'Cria a pasta de um projeto novo em {self.base}' if janela.real else 'Simulação: nenhuma pasta é criada.')
         nova.setEnabled(janela.real)
@@ -110,6 +113,14 @@ class NovaTarefa(QDialog):
         self.erro.setTextFormat(Qt.TextFormat.PlainText)
         self.erro.setWordWrap(True)
         layout.addWidget(self.erro)
+        self.preparar_projeto = QPushButton('Preparar como projeto')
+        self.preparar_projeto.setToolTip('Inicia o Git na pasta, se faltar, e cadastra o projeto. Nenhum arquivo é alterado.')
+        self.preparar_projeto.clicked.connect(self.preparar_pasta)
+        self.preparar_projeto.hide()
+        layout.addWidget(self.preparar_projeto, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.preparo = Preparo(janela)
+        self.preparo.pronto.connect(self.projeto_pronto)
+        self.preparo.falhou.connect(self.erro.setText)
         botoes = QHBoxLayout()
         fechar = QPushButton('Fechar')
         fechar.clicked.connect(self.hide)
@@ -185,20 +196,16 @@ class NovaTarefa(QDialog):
             self.criar_pasta(nome)
 
     def criar_pasta(self, nome):
-        nome = nome.strip()
-        if not nome or nome.startswith('.') or '/' in nome or '\0' in nome:
-            self.erro.setText('O nome da pasta não pode ser vazio, começar com ponto, ter barra nem caractere nulo.')
-            return
-        pasta = self.base / nome
-        try:
-            pasta.mkdir(parents=True)
-        except FileExistsError:
-            self.erro.setText(f'{pasta} já existe. Use Escolher pasta para abrir esse projeto.')
-            return
-        except OSError as erro:
-            self.erro.setText(f'Não foi possível criar {pasta}: {erro.strerror}.')
-            return
-        self.projeto.setText(str(pasta))
+        self.preparo.criar(nome, self.base)
+
+    def preparar_pasta(self):
+        self.preparo.preparar(self.projeto.text())
+
+    def projeto_pronto(self, caminho, situacao):
+        self.projeto.setText(caminho)
+        self.preparar_projeto.hide()
+        self.enviar.setEnabled(True)
+        self.erro.setText(f'Projeto pronto em {caminho}. {situacao}')
 
     def criar(self):
         pedido = self.pedido.toPlainText().strip()
@@ -213,6 +220,11 @@ class NovaTarefa(QDialog):
             self.erro.setText('O pedido pode ter até 16.000 caracteres.')
             return
         projeto = Path(pasta).expanduser().resolve()
+        if self.janela.real and not self.janela.e_git(projeto):
+            self.erro.setText(f'{projeto} ainda não é um projeto Git, e a tarefa precisa de um worktree próprio. '
+                              'Use Preparar como projeto para iniciar o Git e cadastrar a pasta; nenhum arquivo seu é alterado.')
+            self.preparar_projeto.show()
+            return
         agente = self.agente.currentText()
         perfil = self.agente.currentData()
         if self.modo.currentText() == 'Recomendado':
@@ -228,8 +240,7 @@ class NovaTarefa(QDialog):
             self.janela.selecionar_nome(nome)
             self.erro.setText('Tarefa simulada criada. Você pode acompanhar na lista.')
         else:
-            processo = QProcess(self)
-            argumentos = ['--janela', '--projeto', str(projeto), '--nome', nome,
+            argumentos = ['--projeto', str(projeto), '--nome', nome,
                           '--perfil' if perfil else '--agente', perfil or agente, '--prompt', pedido]
             personalizado = self.modo.currentText() == 'Personalizado'
             if personalizado and self.revisor.currentIndex():
@@ -238,12 +249,13 @@ class NovaTarefa(QDialog):
                 argumentos += ['--sem-isolar']
             if personalizado and self.delegacao.currentIndex():
                 argumentos += ['--delegacao', self.delegacao.currentText()]
-            self.janela.preparar(processo, argumentos, 'jangada-agente')
-            iniciado, _ = processo.startDetached()
-            if not iniciado:
-                self.erro.setText('Não foi possível iniciar jangada-agente. Confira --jangada.')
+            falha = self.janela.abrir_tarefa(nome, argumentos)
+            if falha:
+                self.erro.setText(falha)
                 return
-            self.erro.setText('Abertura solicitada. Se o agente falhar ao iniciar, o erro aparece no terminal. Confira se a tarefa entrou na lista. Seu pedido foi preservado.')
+            self.abertura = nome
+            self.erro.setText(f'Abertura solicitada. Se a tarefa não aparecer na lista em '
+                              f'{self.janela.prazo_tarefa_ms // 1000} segundos, o motivo aparece aqui. Seu pedido foi preservado.')
         self.enviar.setEnabled(False)
 
     def personalizar(self, *_):
@@ -253,6 +265,15 @@ class NovaTarefa(QDialog):
     def reeditar(self, *_):
         self.enviar.setEnabled(True)
         self.erro.clear()
+        self.preparar_projeto.hide()
+
+    def mostrar_falha(self, nome, texto):
+        if nome != self.abertura:
+            return
+        self.enviar.setEnabled(True)
+        self.erro.setText(texto)
+        self.show()
+        self.raise_()
 
 
 class Janela(QMainWindow):
@@ -273,6 +294,13 @@ class Janela(QMainWindow):
         self.criadas = {}
         self.encerrada = None
         self.formulario = None
+        self.dialogo_projeto = None
+        self.projetos_novos = {}
+        self.preparos = []
+        self.aberturas = {}
+        self.prazo_tarefa_ms = 20000
+        self.confirmacao_tarefa_ms = 5000
+        self.e_git = e_git
         self.previas = {}
         self.atividade_sessao = None
         self.previa_alvo = None
@@ -312,6 +340,9 @@ class Janela(QMainWindow):
         topo.addWidget(self.modo)
         self.atualizar_botao = QPushButton('Atualizar' if real else 'Avançar simulação')
         self.atualizar_botao.clicked.connect(self.avancar)
+        self.novo_projeto = QPushButton('Novo projeto')
+        self.novo_projeto.setToolTip('Cria a pasta, inicia o Git e cadastra o projeto. Depois vêm o coordenador e a tarefa.')
+        self.novo_projeto.clicked.connect(self.abrir_novo_projeto)
         self.nova = QPushButton('Nova tarefa')
         self.nova.setProperty('principal', True)
         self.nova.clicked.connect(self.nova_tarefa)
@@ -319,10 +350,12 @@ class Janela(QMainWindow):
         self.painel.clicked.connect(self.abrir_indicadores)
         layout.addLayout(topo)
         self.comandos = QWidget()
+        self.comandos.setObjectName('comandos')
         comandos = QHBoxLayout(self.comandos)
         comandos.setContentsMargins(0, 0, 0, 0)
+        comandos.setSpacing(4)
         comandos.addStretch()
-        for botao in (self.atualizar_botao, self.nova, self.painel):
+        for botao in (self.atualizar_botao, self.novo_projeto, self.nova, self.painel):
             comandos.addWidget(botao)
         layout.addWidget(self.comandos)
         self.cotas = ConsultaCotas(self)
@@ -334,6 +367,7 @@ class Janela(QMainWindow):
         self.faixa.setTextFormat(Qt.TextFormat.PlainText)
         self.faixa.setWordWrap(True)
         self.coordenadores = Coordenadores(self)
+        comandos.insertWidget(comandos.indexOf(self.nova), self.coordenadores.novo)
         self.coordenadores.layout().insertWidget(0, self.faixa)
         resumo_layout = QHBoxLayout()
         self.cartoes = {}
@@ -736,6 +770,79 @@ class Janela(QMainWindow):
             self.eventos.pop(nome, None)
             self.previas.pop(nome, None)
 
+    def abrir_novo_projeto(self):
+        if self.dialogo_projeto is None:
+            self.dialogo_projeto = NovoProjeto(self)
+        self.dialogo_projeto.show()
+        self.dialogo_projeto.raise_()
+        self.dialogo_projeto.activateWindow()
+
+    def abrir_tarefa(self, nome, argumentos):
+        """Abre o agente num terminal da Central; devolve o erro, ou None se o terminal saiu.
+
+        O terminal fica aberto quando o agente falha, e a saída de erro vai também
+        para um arquivo que a Central mostra se a tarefa não entrar na lista.
+        """
+        for comando in ('jangada-agente', 'jangada-terminal'):
+            if not comando_disponivel(comando, self.jangada):
+                return f'Não foi possível iniciar {comando}. Confira --jangada.'
+        try:
+            arquivo = criar_arquivo_de_erros(nome)
+        except (OSError, ValueError) as erro:
+            return f'Não foi possível preparar o registro de erros da abertura: {erro}'
+        agente = resolver_comando('jangada-agente', self.jangada)[0]
+        vetor = ['--classe', 'org.jangada.agente', '--titulo', 'Nova tarefa', '-e', 'bash', '-c', ROTEIRO,
+                 'jangada-tarefa', str(arquivo), agente, *argumentos]
+        processo = QProcess(self)
+        self.preparar(processo, vetor, 'jangada-terminal')
+        iniciado, _ = processo.startDetached()
+        processo.deleteLater()
+        if not iniciado:
+            arquivo.unlink(missing_ok=True)
+            return 'Não foi possível iniciar jangada-terminal. Confira --jangada.'
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.timeout.connect(lambda: self.abertura_vencida(nome))
+        self.aberturas[nome] = {'arquivo': arquivo, 'timer': timer, 'conferida': False}
+        timer.start(self.prazo_tarefa_ms)
+        return None
+
+    def abertura_na_lista(self, nome):
+        return any(s.endswith('--' + nome) for s in self.sessoes)
+
+    def encerrar_abertura(self, nome):
+        abertura = self.aberturas.pop(nome, None)
+        if abertura is not None:
+            abertura['timer'].stop()
+            abertura['timer'].deleteLater()
+            abertura['arquivo'].unlink(missing_ok=True)
+        return abertura
+
+    def conferir_aberturas(self):
+        for nome in [n for n in self.aberturas if self.abertura_na_lista(n)]:
+            self.encerrar_abertura(nome)
+
+    def abertura_vencida(self, nome):
+        abertura = self.aberturas.get(nome)
+        if abertura is None or self.fechando:
+            return
+        if self.abertura_na_lista(nome):
+            self.encerrar_abertura(nome)
+            return
+        if not abertura['conferida']:
+            abertura['conferida'] = True
+            self.atualizar()
+            abertura['timer'].start(self.confirmacao_tarefa_ms)
+            return
+        linhas = ultimas_linhas(abertura['arquivo'])
+        self.encerrar_abertura(nome)
+        inicio = ('A tarefa não abriu.' if self.dados_validos else
+                  'Não foi possível confirmar que a tarefa abriu: a lista de tarefas não pôde ser consultada.')
+        texto = inicio + '\n' + (linhas or SEM_ERRO)
+        self.status.setText(texto)
+        if self.formulario is not None:
+            self.formulario.mostrar_falha(nome, texto)
+
     def nova_tarefa(self):
         if self.formulario is None:
             self.formulario = NovaTarefa(self)
@@ -807,6 +914,7 @@ class Janela(QMainWindow):
         if anterior and anterior not in sessoes:
             self.status.setText('A sessão selecionada saiu da lista. Selecione outra sessão.')
         self.coordenadores.estados_das_tarefas()
+        self.conferir_aberturas()
 
     def escolher_na_lista(self, atual, *_):
         if atual is not None:
@@ -989,6 +1097,7 @@ class Janela(QMainWindow):
             QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
             QPushButton {{ background: {c['superficie_elevada']}; border: 1px solid {c['texto_suave']};
                 border-radius: 8px; padding: 8px 16px; }}
+            QWidget#comandos QPushButton {{ padding: 8px 8px; }}
             QPushButton:hover {{ border: 2px solid {c['primaria']}; }}
             QPushButton:focus, QComboBox:focus, QLineEdit:focus, QTreeWidget:focus,
             QPlainTextEdit:focus {{ border: 2px solid {c['primaria']}; }}
@@ -1579,6 +1688,10 @@ exit "$resultado"
         self.rodadas.fechar()
         self.coordenadores.fechar()
         self.cotas.fechar()
+        for preparo in self.preparos:
+            preparo.fechar()
+        for nome in list(self.aberturas):
+            self.encerrar_abertura(nome)
         for timer in (self.timer, self.evento_estado, self.limite_evento, self.observacao_limite,
                       self.observacao_repetir, self.espera,
                       self.tempo_acao, self.tempo_previa, self.tempo_finalizacao):

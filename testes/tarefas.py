@@ -29,6 +29,7 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QLabel, QMessageBox, QPushButton
 import dados
 import janela
+import projeto
 from aparencia import misturar
 from janela import Janela
 import central
@@ -94,10 +95,26 @@ class Interface(unittest.TestCase):
             "if sys.argv[1] in ('--lista-json',):",
             "if sys.argv[1] == '--capacidades-json':\n    perfis = (pasta / 'perfis.json').read_text() if (pasta / 'perfis.json').exists() else '[]'\n    principais = (pasta / 'principais.json').read_text() if (pasta / 'principais.json').exists() else '[{\"nome\": \"claude\", \"instalado\": true}, {\"nome\": \"codex\", \"instalado\": true}]'\n    print('{\"principais\": ' + principais + ', \"perfis\": ' + perfis + '}')\nelif sys.argv[1] in ('--lista-json',):"))
         self.criar_comando.chmod(448)
+        self.terminal = self.bin / 'jangada-terminal'
+        self.terminal.write_text(
+            "#!/usr/bin/env python3\nimport json, pathlib, subprocess, sys\n"
+            "pasta = pathlib.Path(__file__).resolve().parent.parent\nargs = sys.argv[1:]\n"
+            "(pasta / 'terminal.json').write_text(json.dumps(args))\n"
+            "r = subprocess.run(args[args.index('-e') + 1:], stdin=subprocess.DEVNULL, capture_output=True, text=True)\n"
+            "(pasta / 'terminal-saida.json').write_text(json.dumps([r.returncode, r.stdout, r.stderr]))\n")
+        self.terminal.chmod(448)
+        self.projeto_comando = self.bin / 'jangada-projeto'
+        self.projeto_comando.write_text(
+            "#!/usr/bin/env python3\nimport json, pathlib, sys\n"
+            "pasta = pathlib.Path(__file__).resolve().parent.parent\n"
+            "with (pasta / 'projeto.log').open('a') as f:\n    f.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+            "if (pasta / 'projeto-recusa').exists():\n    print('cadastro recusado', file=sys.stderr)\n    sys.exit(2)\n")
+        self.projeto_comando.chmod(448)
         self.lista = Lista(self.raiz / 'lista')
         self.lista.write_text('aguardando\tprojeto--um\t/tmp/projeto\thoje\tagente/um\tTarefa um\ntrabalhando\tprojeto--dois\t/tmp/projeto\thoje\tagente/dois\tTarefa dois\n')
         (self.raiz / 'apresentacao.json').write_text(json.dumps({'agente': 'codex', 'tarefa': "<img src='https://exemplo/imagem'>", 'raiz': '/tmp/projeto', 'mensagem': '<b>Texto puro</b>'}))
         self.janela = Janela(True, self.raiz, self.estado)
+        self.janela.e_git = lambda _: True
         self.janela.timer.stop()
         self.janela.cotas.parar_repeticao()
         self.esperar_consulta()
@@ -265,6 +282,29 @@ class Interface(unittest.TestCase):
         self.assertGreaterEqual(self.janela.rodadas.tabela.height(), 160)
         self.assertGreaterEqual(self.janela.rodadas.parecer.height(), 140)
         self.assertTrue(any(r.text() == 'Mensagem para o coordenador' for r in coluna.painel.findChildren(QLabel)))
+
+    def git(self, pasta, *argumentos):
+        return subprocess.run(['git', '-C', str(pasta), *argumentos], capture_output=True, text=True, check=True).stdout.strip()
+
+    def repositorio(self, pasta):
+        pasta.mkdir()
+        self.git(pasta, 'init', '--quiet')
+        (pasta / 'a.txt').write_text('conteúdo seu\n')
+        self.git(pasta, 'add', 'a.txt')
+        self.git(pasta, '-c', 'user.name=T', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'seu commit')
+
+    def cadastros(self):
+        log = self.raiz / 'projeto.log'
+        linhas = [json.loads(l) for l in log.read_text().splitlines()] if log.exists() else []
+        return [l for l in linhas if l[-1:] == ['cadastrar']]
+
+    def abrir_projeto(self, base):
+        with patch.dict(os.environ, {'JANGADA_PROJETOS': str(base)}):
+            self.janela.novo_projeto.click()
+        return self.janela.dialogo_projeto
+
+    def esperar_projeto(self, dialogo):
+        aguardar(lambda: dialogo.caminho is not None or dialogo.criar.isEnabled())
 
     def esperar_consulta(self):
         aguardar(lambda: self.janela.consulta.state() == QProcess.ProcessState.NotRunning)
@@ -3728,8 +3768,10 @@ while not (pasta / 'parar-clientes').exists():
             self.janela.nova_tarefa()
         form = self.janela.formulario
         form.criar_pasta(' novo ')
+        aguardar(lambda: form.projeto.text() == str(base / 'novo'))
         self.assertTrue((base / 'novo').is_dir())
-        self.assertEqual(form.projeto.text(), str(base / 'novo'))
+        self.assertIn('Projeto pronto', form.erro.text())
+        self.assertEqual(self.git(base / 'novo', 'rev-list', '--count', 'HEAD'), '1')
         form.projeto.clear()
         form.criar_pasta('novo')
         self.assertIn('já existe', form.erro.text())
@@ -3739,6 +3781,214 @@ while not (pasta / 'parar-clientes').exists():
             self.assertIn('não pode', form.erro.text())
         self.assertEqual([p.name for p in base.iterdir()], ['novo'])
         self.assertFalse((self.raiz / 'fora').exists())
+
+    def test_botoes_do_topo_na_ordem_projeto_coordenador_tarefa(self):
+        layout = self.janela.comandos.layout()
+        textos = [layout.itemAt(i).widget().text() for i in range(layout.count()) if layout.itemAt(i).widget()]
+        self.assertEqual(textos, ['Atualizar', 'Novo projeto', 'Novo coordenador', 'Nova tarefa', 'Painel de indicadores'])
+
+    def test_novo_projeto_cria_pasta_git_cadastra_e_alimenta_o_coordenador(self):
+        self.coordenador_falso()
+        self.coordenadores_falsos()
+        coluna = self.carregar_coordenadores()
+        base = self.raiz / 'projetos'
+        dialogo = self.abrir_projeto(base)
+        dialogo.nome.setText(' alfa ')
+        dialogo.criar.click()
+        self.esperar_projeto(dialogo)
+        pasta = base / 'alfa'
+        self.assertEqual(dialogo.caminho, str(pasta))
+        self.assertEqual(self.git(pasta, 'rev-list', '--count', 'HEAD'), '1')
+        self.assertEqual(self.git(pasta, 'log', '-1', '--format=%s'), 'início do projeto')
+        self.assertEqual(self.git(pasta, 'status', '--porcelain'), '')
+        self.assertEqual(self.cadastros(), [['--projeto', str(pasta), 'cadastrar']])
+        self.assertFalse(dialogo.coordenador.isHidden())
+        self.assertFalse(dialogo.criar.isEnabled())
+        dialogo.coordenador.click()
+        self.assertEqual(coluna.dialogo.projeto.currentData(), str(pasta))
+        self.assertIn('alfa', coluna.dialogo.projeto.currentText())
+
+    def test_nova_tarefa_lista_o_projeto_novo_sem_passar_pela_aba_projetos(self):
+        self.janela.nova_tarefa()
+        base = self.raiz / 'projetos'
+        dialogo = self.abrir_projeto(base)
+        dialogo.nome.setText('beta')
+        dialogo.criar.click()
+        self.esperar_projeto(dialogo)
+        self.assertEqual([c for _, c in self.janela.coordenadores.projetos()], [str(base / 'beta')])
+
+    def test_novo_projeto_em_pasta_que_ja_e_git_nao_ganha_commit(self):
+        existente = self.raiz / 'existente'
+        self.repositorio(existente)
+        antes = self.git(existente, 'rev-parse', 'HEAD')
+        dialogo = self.abrir_projeto(self.raiz / 'projetos')
+        dialogo.nome.setText(str(existente))
+        dialogo.criar.click()
+        self.esperar_projeto(dialogo)
+        self.assertEqual(dialogo.caminho, str(existente.resolve()))
+        self.assertEqual(self.git(existente, 'rev-parse', 'HEAD'), antes)
+        self.assertEqual(self.git(existente, 'rev-list', '--count', 'HEAD'), '1')
+        self.assertIn('já era um repositório', dialogo.resultado.text())
+        self.assertEqual(self.cadastros(), [['--projeto', str(existente.resolve()), 'cadastrar']])
+
+    def test_novo_projeto_em_pasta_com_arquivos_inicia_git_sem_tocar_nos_arquivos(self):
+        existente = self.raiz / 'com-arquivos'
+        existente.mkdir()
+        (existente / 'a.txt').write_text('meu texto\n')
+        dialogo = self.abrir_projeto(self.raiz / 'projetos')
+        dialogo.nome.setText(str(existente))
+        dialogo.criar.click()
+        self.esperar_projeto(dialogo)
+        self.assertEqual((existente / 'a.txt').read_text(), 'meu texto\n')
+        self.assertEqual(self.git(existente, 'rev-list', '--count', 'HEAD'), '1')
+        self.assertEqual(self.git(existente, 'status', '--porcelain'), '?? a.txt')
+
+    def test_novo_projeto_com_nome_de_pasta_existente_nao_sobrescreve(self):
+        base = self.raiz / 'projetos'
+        (base / 'gama').mkdir(parents=True)
+        (base / 'gama' / 'a.txt').write_text('meu texto\n')
+        dialogo = self.abrir_projeto(base)
+        dialogo.nome.setText('gama')
+        dialogo.criar.click()
+        self.assertIn('já existe', dialogo.resultado.text())
+        self.assertTrue(dialogo.criar.isEnabled())
+        self.assertEqual(sorted(p.name for p in (base / 'gama').iterdir()), ['a.txt'])
+        self.assertEqual(self.cadastros(), [])
+        for invalido in ('.oculta', 'a\0b'):
+            dialogo.nome.setText(invalido)
+            dialogo.criar.click()
+            self.assertIn('não pode', dialogo.resultado.text())
+
+    def test_novo_projeto_mostra_a_recusa_do_cadastro(self):
+        (self.raiz / 'projeto-recusa').touch()
+        base = self.raiz / 'projetos'
+        dialogo = self.abrir_projeto(base)
+        dialogo.nome.setText('delta')
+        dialogo.criar.click()
+        aguardar(lambda: dialogo.criar.isEnabled())
+        self.assertIn('recusou o cadastro', dialogo.resultado.text())
+        self.assertIn('cadastro recusado', dialogo.resultado.text())
+        self.assertTrue(dialogo.coordenador.isHidden())
+        self.assertEqual(self.janela.projetos_novos, {})
+
+    def test_novo_projeto_simulado_nao_cria_pasta_git_nem_processo(self):
+        demo = Janela(False, self.raiz, self.estado)
+        base = self.raiz / 'simulado'
+        try:
+            with patch.dict(os.environ, {'JANGADA_PROJETOS': str(base)}):
+                demo.novo_projeto.click()
+            dialogo = demo.dialogo_projeto
+            dialogo.nome.setText('eps')
+            with patch('subprocess.run') as git, patch.object(QProcess, 'start') as iniciar, \
+                 patch.object(QProcess, 'startDetached') as destacado:
+                dialogo.criar.click()
+                git.assert_not_called()
+                iniciar.assert_not_called()
+                destacado.assert_not_called()
+            self.assertEqual(dialogo.caminho, str(base / 'eps'))
+            self.assertIn('Simulação', dialogo.resultado.text())
+            self.assertFalse(base.exists())
+            self.assertEqual(self.cadastros(), [])
+        finally:
+            demo.close()
+
+    def test_nova_tarefa_em_pasta_sem_git_avisa_e_nao_abre_nada(self):
+        self.janela.e_git = projeto.e_git
+        pasta = self.raiz / 'sem-git'
+        pasta.mkdir()
+        self.janela.nova_tarefa()
+        form = self.janela.formulario
+        aguardar(lambda: form.perfis.state() == QProcess.ProcessState.NotRunning)
+        form.projeto.setText(str(pasta))
+        form.pedido.setPlainText('Fazer algo')
+        form.criar()
+        self.assertIn('ainda não é um projeto Git', form.erro.text())
+        self.assertFalse(form.preparar_projeto.isHidden())
+        self.assertFalse((self.raiz / 'terminal.json').exists())
+        self.assertEqual(self.janela.aberturas, {})
+        form.preparar_projeto.click()
+        aguardar(lambda: form.projeto.text() == str(pasta.resolve()) and 'Projeto pronto' in form.erro.text())
+        self.assertTrue(form.preparar_projeto.isHidden())
+        self.assertEqual(self.git(pasta, 'rev-list', '--count', 'HEAD'), '1')
+        form.criar()
+        aguardar((self.raiz / 'terminal.json').exists)
+        self.assertIn('Abertura solicitada', form.erro.text())
+
+    def test_abertura_usa_terminal_proprio_e_nao_o_modo_janela(self):
+        self.janela.nova_tarefa()
+        form = self.janela.formulario
+        aguardar(lambda: form.perfis.state() == QProcess.ProcessState.NotRunning)
+        form.projeto.setText(str(self.raiz))
+        form.pedido.setPlainText('Fazer')
+        form.criar()
+        aguardar((self.raiz / 'terminal-saida.json').exists)
+        vetor = json.loads((self.raiz / 'terminal.json').read_text())
+        self.assertEqual(vetor[:2], ['--classe', 'org.jangada.agente'])
+        self.assertIn('-e', vetor)
+        self.assertNotIn('--janela', vetor)
+        self.assertEqual(json.loads((self.raiz / 'terminal-saida.json').read_text())[0], 0)
+        self.assertEqual(len(self.janela.aberturas), 1)
+
+    def test_abertura_que_falha_deixa_o_motivo_visivel_na_central(self):
+        self.criar_comando.write_text(
+            "#!/usr/bin/env python3\nimport sys\n"
+            "if sys.argv[1] == '--capacidades-json':\n    print('{\"principais\": [{\"nome\": \"claude\", \"instalado\": true}], \"perfis\": []}')\n"
+            "else:\n    print('\\x1b[31mSem acesso ao Git\\x1b[0m: falha de teste', file=sys.stderr)\n    sys.exit(3)\n")
+        self.janela.prazo_tarefa_ms = 50
+        self.janela.confirmacao_tarefa_ms = 50
+        self.janela.nova_tarefa()
+        form = self.janela.formulario
+        aguardar(lambda: form.perfis.state() == QProcess.ProcessState.NotRunning)
+        form.projeto.setText(str(self.raiz))
+        form.pedido.setPlainText('Fazer')
+        form.criar()
+        self.assertFalse(form.enviar.isEnabled())
+        aguardar(lambda: 'A tarefa não abriu' in form.erro.text())
+        self.assertIn('Sem acesso ao Git: falha de teste', form.erro.text())
+        self.assertNotIn('\x1b', form.erro.text())
+        self.assertIn('Sem acesso ao Git', self.janela.status.text())
+        self.assertTrue(form.enviar.isEnabled())
+        self.assertEqual(self.janela.aberturas, {})
+        codigo, _, erro = json.loads((self.raiz / 'terminal-saida.json').read_text())
+        self.assertEqual(codigo, 3)
+        self.assertIn('A tarefa não abriu. Enter fecha.', erro)
+
+    def test_abertura_que_aparece_na_lista_nao_acusa_falha(self):
+        self.janela.nova_tarefa()
+        form = self.janela.formulario
+        aguardar(lambda: form.perfis.state() == QProcess.ProcessState.NotRunning)
+        form.projeto.setText(str(self.raiz))
+        form.pedido.setPlainText('Fazer')
+        form.criar()
+        aguardar((self.raiz / 'acao.json').exists)
+        nome = json.loads((self.raiz / 'acao.json').read_text())[3]
+        arquivo = next((self.raiz / 'jangada').glob('*.erro'))
+        self.assertEqual(arquivo.stat().st_mode & 0o777, 0o600)
+        self.lista.write_text(self.lista.read_text() if False else
+                              'trabalhando\tprojeto--' + nome + '\t/tmp/projeto\thoje\tagente/x\tFazer\n')
+        self.janela.atualizar()
+        self.esperar_consulta()
+        self.assertEqual(self.janela.aberturas, {})
+        self.assertFalse(arquivo.exists())
+        self.assertNotIn('não abriu', form.erro.text())
+
+    def test_arquivo_de_erros_recusa_link_e_limpa_o_texto(self):
+        pasta = projeto.pasta_de_erros()
+        self.assertEqual(pasta.stat().st_mode & 0o777, 0o700)
+        with self.assertRaises(ValueError):
+            projeto.criar_arquivo_de_erros('../fora')
+        alvo = self.raiz / 'alvo'
+        alvo.write_text('segredo')
+        (pasta / 'ligado.erro').symlink_to(alvo)
+        with self.assertRaises(OSError):
+            projeto.criar_arquivo_de_erros('ligado')
+        self.assertEqual(alvo.read_text(), 'segredo')
+        self.assertEqual(projeto.ultimas_linhas(pasta / 'ligado.erro'), '')
+        arquivo = projeto.criar_arquivo_de_erros('limpo')
+        arquivo.write_text('\n'.join(f'linha {i}' for i in range(20)) + '\n\x1b[1mfim\x1b[0m\x07\n')
+        linhas = projeto.ultimas_linhas(arquivo).splitlines()
+        self.assertEqual(len(linhas), 8)
+        self.assertEqual(linhas[-1], 'fim')
 
     def test_nova_pasta_desligada_na_simulacao(self):
         demo = Janela(False, self.raiz, self.estado)
@@ -3782,10 +4032,10 @@ while not (pasta / 'parar-clientes').exists():
         arquivo = self.raiz / 'acao.json'
         aguardar(arquivo.exists)
         argumentos = json.loads(arquivo.read_text())
-        self.assertEqual(argumentos[:3], ['--janela', '--projeto', str(self.raiz)])
-        self.assertEqual(argumentos[3], '--nome')
-        self.assertRegex(argumentos[4], '^tarefa-[a-f0-9]{12}$')
-        self.assertEqual(argumentos[5:], ['--agente', 'codex', '--prompt', pedido])
+        self.assertEqual(argumentos[:2], ['--projeto', str(self.raiz)])
+        self.assertEqual(argumentos[2], '--nome')
+        self.assertRegex(argumentos[3], '^tarefa-[a-f0-9]{12}$')
+        self.assertEqual(argumentos[4:], ['--agente', 'codex', '--prompt', pedido])
         self.assertEqual(form.pedido.toPlainText(), pedido)
         self.assertIn('Abertura solicitada', form.erro.text())
         self.assertFalse(form.enviar.isEnabled())
@@ -3805,8 +4055,8 @@ while not (pasta / 'parar-clientes').exists():
         arquivo = self.raiz / 'acao.json'
         aguardar(arquivo.exists)
         argumentos = json.loads(arquivo.read_text())
-        self.assertEqual(argumentos[:3], ['--janela', '--projeto', str(self.raiz)])
-        self.assertEqual(argumentos[5:7], ['--perfil', 'codex-claude'])
+        self.assertEqual(argumentos[:2], ['--projeto', str(self.raiz)])
+        self.assertEqual(argumentos[4:6], ['--perfil', 'codex-claude'])
 
     def test_catalogo_de_agentes_vem_do_jangada_agente(self):
         (self.raiz / 'principais.json').write_text(json.dumps([

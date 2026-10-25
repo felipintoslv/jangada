@@ -113,8 +113,17 @@ As opções avançadas ficam recolhidas e preservam agente e perfil; também
 permitem escolher revisor e delegação. A opção antiga **Sem isolamento**
 continua no formulário, mas é ignorada com aviso: o agente roda isolado.
 Alterar um controle seleciona o modo Personalizado; recolher a área preserva as escolhas.
-**Nova pasta**, no formulário, cria a pasta de um projeto novo em
-`JANGADA_PROJETOS` e a deixa selecionada; a pasta nasce sem repositório Git.
+A barra do topo segue a ordem do trabalho: **Novo projeto**, **Novo coordenador**
+e **Nova tarefa**. **Novo projeto** pede o nome (ou uma pasta existente), cria a pasta
+em `JANGADA_PROJETOS`, inicia o Git com um commit vazio quando a pasta ainda não é
+repositório e cadastra o projeto; depois oferece abrir o coordenador nele. Pasta que
+já é repositório só é cadastrada, e nenhum arquivo é apagado ou sobrescrito.
+**Nova pasta**, no formulário, usa o mesmo caminho e deixa a pasta selecionada.
+Uma pasta escolhida que não é repositório Git mostra um aviso com **Preparar como
+projeto**, em vez de seguir para uma abertura que falharia.
+**Iniciar tarefa** abre o agente num terminal da Central. Se ele falhar, o terminal
+fica aberto com a mensagem, e a Central mostra as últimas linhas do erro quando a
+tarefa não entra na lista em 20 segundos.
 **Painel de indicadores** leva à aba Indicadores.
 Aprovações nativas e envio de respostas ficam fora desta versão.
 
