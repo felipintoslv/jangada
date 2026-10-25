@@ -84,7 +84,7 @@ class Interface(unittest.TestCase):
         self.observados = self.raiz / 'observados'
         self.observados.mkdir()
         (self.observados / 'aviso.json').write_text('{}')
-        self.comando.write_text("#!/usr/bin/env python3\nimport pathlib, sys, json\npasta = pathlib.Path(__file__).resolve().parent.parent\nif sys.argv[1] == '--observacao-json':\n    if (pasta / 'falhar_observacao').exists():\n        print('Falha de observação simulada', file=sys.stderr)\n        sys.exit(1)\n    print(json.dumps({'versao': 1, 'caminhos': [str(pasta / 'observados'), str(pasta / 'observados' / 'aviso.json')]}))\nelif sys.argv[1] in ('--lista-json',):\n    if (pasta / 'falhar').exists():\n        print('Erro de consulta simulado', file=sys.stderr)\n        sys.exit(1)\n    dados = json.loads((pasta / 'lista').read_text())\n    if (pasta / 'apresentacao.json').exists():\n        detalhe = json.loads((pasta / 'apresentacao.json').read_text())\n        for sessao in dados['sessoes']:\n            if sessao['nome'] == 'projeto--um':\n                sessao.update(detalhe)\n                sessao['projeto'] = pathlib.Path(sessao['raiz']).name\n    print(json.dumps(dados, ensure_ascii=False))\nelif sys.argv[1] == '--contexto-json':\n    contexto = pasta / ('contexto-' + sys.argv[2])\n    print(contexto.read_text() if contexto.exists() else json.dumps({'versao': 1, 'sessao': sys.argv[2], 'tarefa': '', 'parecer': None}))\nelif sys.argv[1] == '--rodadas-json':\n    rodadas = pasta / ('rodadas-' + sys.argv[2])\n    if (pasta / 'rodadas-espera').exists():\n        import time\n        time.sleep(5)\n    if (pasta / 'rodadas-uso').exists():\n        print('uso: jangada-agentes --rodadas-json SESSAO', file=sys.stderr)\n        sys.exit(2)\n    if not rodadas.exists():\n        print('opção desconhecida: --rodadas-json', file=sys.stderr)\n        sys.exit(1)\n    print(rodadas.read_text())\nelif sys.argv[1] == '--coordenadores-json':\n    if (pasta / 'coordenadores-erro').exists():\n        print('Falha de consulta simulada', file=sys.stderr)\n        sys.exit(1)\n    if (pasta / 'coordenadores-espera').exists():\n        import time\n        time.sleep(5)\n    coordenadores = pasta / 'coordenadores.json'\n    if not coordenadores.exists():\n        print('opção desconhecida: --coordenadores-json', file=sys.stderr)\n        sys.exit(1)\n    print(coordenadores.read_text())\nelif sys.argv[1] == '--previa':\n    previa = pasta / ('previa-' + sys.argv[2])\n    print(previa.read_text() if previa.exists() else 'Atividade da sessão ' + sys.argv[2])\nelse:\n    (pasta / 'acao.json').write_text(json.dumps(sys.argv[1:]))\n")
+        self.comando.write_text("#!/usr/bin/env python3\nimport pathlib, sys, json\npasta = pathlib.Path(__file__).resolve().parent.parent\nif sys.argv[1] == '--observacao-json':\n    if (pasta / 'falhar_observacao').exists():\n        print('Falha de observação simulada', file=sys.stderr)\n        sys.exit(1)\n    print(json.dumps({'versao': 1, 'caminhos': [str(pasta / 'observados'), str(pasta / 'observados' / 'aviso.json')]}))\nelif sys.argv[1] in ('--lista-json',):\n    if (pasta / 'falhar').exists():\n        print('Erro de consulta simulado', file=sys.stderr)\n        sys.exit(1)\n    dados = json.loads((pasta / 'lista').read_text())\n    if (pasta / 'apresentacao.json').exists():\n        detalhe = json.loads((pasta / 'apresentacao.json').read_text())\n        for sessao in dados['sessoes']:\n            if sessao['nome'] == 'projeto--um':\n                sessao.update(detalhe)\n                sessao['projeto'] = pathlib.Path(sessao['raiz']).name\n    print(json.dumps(dados, ensure_ascii=False))\nelif sys.argv[1] == '--contexto-json':\n    contexto = pasta / ('contexto-' + sys.argv[2])\n    print(contexto.read_text() if contexto.exists() else json.dumps({'versao': 1, 'sessao': sys.argv[2], 'tarefa': '', 'parecer': None}))\nelif sys.argv[1] == '--rodadas-json':\n    rodadas = pasta / ('rodadas-' + sys.argv[2])\n    if (pasta / 'rodadas-espera').exists():\n        import time\n        time.sleep(5)\n    if (pasta / 'rodadas-uso').exists():\n        print('uso: jangada-agentes --rodadas-json SESSAO', file=sys.stderr)\n        sys.exit(2)\n    if not rodadas.exists():\n        print('opção desconhecida: --rodadas-json', file=sys.stderr)\n        sys.exit(1)\n    print(rodadas.read_text())\nelif sys.argv[1] == '--coordenadores-json':\n    if (pasta / 'coordenadores-erro').exists():\n        print('Falha de consulta simulada', file=sys.stderr)\n        sys.exit(1)\n    if (pasta / 'coordenadores-espera').exists():\n        import time\n        time.sleep(float((pasta / 'coordenadores-espera').read_text() or 5))\n    coordenadores = pasta / 'coordenadores.json'\n    if not coordenadores.exists():\n        print('opção desconhecida: --coordenadores-json', file=sys.stderr)\n        sys.exit(1)\n    print(coordenadores.read_text())\nelif sys.argv[1] == '--previa':\n    previa = pasta / ('previa-' + sys.argv[2])\n    print(previa.read_text() if previa.exists() else 'Atividade da sessão ' + sys.argv[2])\nelse:\n    (pasta / 'acao.json').write_text(json.dumps(sys.argv[1:]))\n")
         self.comando.chmod(448)
         self.criar_comando = self.bin / 'jangada-agente'
         self.criar_comando.write_text(self.comando.read_text().replace(
@@ -2101,6 +2101,55 @@ while not (pasta / 'parar-clientes').exists():
                 dialogo.hide()
                 (self.raiz / 'coordenadores-erro').unlink(missing_ok=True)
                 (self.raiz / 'coordenadores-espera').unlink(missing_ok=True)
+
+    def abertura_com_consulta_lenta(self, espera):
+        self.coordenador_falso()
+        self.coordenadores_falsos()
+        (self.raiz / 'sem-sessao').write_text('')
+        nova = self.raiz / 'mapa'
+        nova.mkdir()
+        coluna, dialogo = self.dialogo_com_cota(str(nova))
+        coluna.prazo_abertura_ms = 500
+        coluna.intervalo_abertura_ms = 40
+        coluna.consulta.prazo_ms = 3000
+        dialogo.provedor.setCurrentIndex(dialogo.provedor.findData('agy'))
+        dialogo.abrir.click()
+        aguardar(lambda: coluna.abertura is not None)
+        viva = dict(sessao='mapa--coordenador', projeto=str(nova), provedor='agy', estado='trabalhando',
+                    ultima_linha='', atualizado=None, viva=True, tarefas=[])
+        (self.raiz / 'coordenadores.json').write_text(json.dumps(dict(versao=1, coordenadores=[viva])))
+        (self.raiz / 'coordenadores-espera').write_text(espera)
+        return coluna, dialogo
+
+    def test_abertura_vence_no_prazo_com_a_consulta_ainda_em_curso(self):
+        coluna, dialogo = self.abertura_com_consulta_lenta('5')
+        aguardar(lambda: coluna.consulta.ocupada())
+        aguardar(lambda: coluna.abertura is None)
+        self.assertTrue(coluna.consulta.ocupada())
+        texto = coluna.resultado.text()
+        self.assertTrue(texto.startswith('Não foi possível conferir se o Core abriu'), texto)
+        self.assertFalse(coluna.relogio_abertura.isActive())
+        self.assertFalse(coluna.vencimento_abertura.isActive())
+        (self.raiz / 'coordenadores-espera').unlink()
+        dialogo.hide()
+
+    def test_consulta_que_termina_depois_do_vencimento_nao_muda_o_aviso(self):
+        coluna, dialogo = self.abertura_com_consulta_lenta('1.2')
+        aguardar(lambda: coluna.consulta.ocupada())
+        aguardar(lambda: coluna.abertura is None)
+        aviso = coluna.resultado.text()
+        self.assertTrue(aviso.startswith('Não foi possível conferir se o Core abriu'), aviso)
+        self.assertTrue(coluna.consulta.ocupada())
+        aguardar(lambda: not coluna.consulta.ocupada())
+        (self.raiz / 'coordenadores-espera').unlink()
+        QTest.qWait(200)
+        self.assertTrue(any(c['sessao'] == 'mapa--coordenador' for c in coluna.lista))
+        self.assertEqual(coluna.resultado.text(), aviso)
+        self.assertTrue(coluna.resultado.property('falha'))
+        self.assertIsNone(coluna.abertura)
+        self.assertFalse(coluna.relogio_abertura.isActive())
+        self.assertFalse(coluna.vencimento_abertura.isActive())
+        dialogo.hide()
 
     def test_abertura_com_sessao_viva_mantem_o_aviso_de_solicitada(self):
         self.coordenador_falso()

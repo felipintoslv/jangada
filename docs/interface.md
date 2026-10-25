@@ -210,11 +210,14 @@ vivo daquele projeto e provedor, o aviso passa a "O Core não abriu o coordenado
 com a causa provável de cada provedor e o comando
 `jangada-coordenador --projeto PASTA --provedor P` para rodar no terminal. Para o
 agy a causa provável é cota ou catálogo do Argon: o Core confere os dois antes de
-criar a sessão e, se falhar, só escreve o motivo na saída de erro. O prazo corre pelo relógio da Central. Se a última consulta da lista falhou,
-expirou ou veio inválida, o aviso passa a "Não foi possível conferir se o Core abriu
-o coordenador", com o mesmo comando, e não afirma que o Core não abriu. A janela
-continua destacada e a Central não captura essa saída. Um aviso de outra ação,
-posto nesse intervalo, não é substituído.
+criar a sessão e, se falhar, só escreve o motivo na saída de erro. O prazo é só do relógio da Central e vence aos 20 segundos mesmo com uma
+consulta da lista em curso. Se nenhuma lista válida, lida depois do pedido, chegou
+antes do vencimento (consulta falhou, expirou ou veio inválida), o aviso passa a
+"Não foi possível conferir se o Core abriu o coordenador", com o mesmo comando, e
+não afirma que o Core não abriu. Uma consulta que termina depois do vencimento não
+reabre o acompanhamento nem muda o aviso. A janela continua destacada e a Central
+não captura essa saída. Um aviso de outra ação, posto nesse intervalo, não é
+substituído.
 
 **Finalizar atuação** exige confirmação com a sessão sem processo. Antes,
 salve o estado e o diário e saia voluntariamente. A Central reconfere a atuação

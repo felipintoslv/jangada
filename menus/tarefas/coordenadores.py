@@ -7,7 +7,6 @@ podia responder uma permissão aberta no lugar dele.
 import json
 import math
 import shlex
-import time
 from pathlib import Path
 
 from PyQt6.QtCore import QObject, QProcess, QTimer, Qt
@@ -566,6 +565,9 @@ class Coordenadores(QWidget):
         self.prazo_acao.timeout.connect(self.expirar_acao)
         self.relogio_abertura = QTimer(self)
         self.relogio_abertura.timeout.connect(self.tique_abertura)
+        self.vencimento_abertura = QTimer(self)
+        self.vencimento_abertura.setSingleShot(True)
+        self.vencimento_abertura.timeout.connect(self.vencer_abertura)
         self.intervalo_abertura_ms = 1000
         self.foco = QProcess(self)
         self.foco.finished.connect(self.foco_fim)
@@ -1014,49 +1016,51 @@ class Coordenadores(QWidget):
         self.terminar_acao(SOLICITADA if iniciado else f'Não foi possível executar {COORDENADOR}.',
                            not iniciado)
         if iniciado:
-            self.abertura = dict(caminho=pedido['caminho'], provedor=pedido['provedor'],
-                                 inicio=time.monotonic())
+            self.abertura = dict(caminho=pedido['caminho'], provedor=pedido['provedor'], visto=False,
+                                 anterior=self.consulta.ocupada())
             self.relogio_abertura.start(self.intervalo_abertura_ms)
+            self.vencimento_abertura.start(self.prazo_abertura_ms)
             self.atualizar()
 
     def tique_abertura(self):
-        """O prazo corre pelo relógio: a lista pode falhar, expirar ou vir inválida."""
         if self.abertura is None:
             self.relogio_abertura.stop()
-        elif not self.conferir_abertura():
+        else:
             self.atualizar()
 
-    def conferir_abertura(self, lista_valida=None):
-        """Acompanha a sessão pedida; devolve True quando encerrou o acompanhamento.
-
-        `lista_valida` diz como terminou a última consulta: True com lista lida,
-        False com falha ou lista inválida, None quando a chamada não vem de uma consulta.
-        """
+    def conferir_abertura(self, lista_valida):
+        """Uma lista válida lida depois do pedido com a sessão viva encerra o acompanhamento."""
         pedido = self.abertura
         if pedido is None:
-            return True
-        if lista_valida is not None:
-            pedido['valida'] = lista_valida
+            return
+        if pedido['anterior']:
+            pedido['anterior'] = False
+            return
+        if not lista_valida:
+            return
+        pedido['visto'] = True
         try:
             alvo = Path(pedido['caminho']).resolve()
         except (OSError, ValueError):
             alvo = None
-        if pedido.get('valida') and any(c['viva'] and c.get('provedor') == pedido['provedor']
-                                        and c.get('projeto') and Path(c['projeto']) == alvo
-                                        for c in self.lista):
+        if any(c['viva'] and c.get('provedor') == pedido['provedor'] and c.get('projeto')
+               and Path(c['projeto']) == alvo for c in self.lista):
             self.encerrar_abertura()
-            return True
-        if (time.monotonic() - pedido['inicio']) * 1000 < self.prazo_abertura_ms or self.consulta.ocupada():
-            return False
+
+    def vencer_abertura(self):
+        """O prazo é só deste relógio: uma consulta em curso ou tardia não o adia nem muda o aviso."""
+        pedido = self.abertura
+        if pedido is None:
+            return
         self.encerrar_abertura()
         if self.resultado.text() == SOLICITADA:
             self.avisar(self.resultado, aviso_sem_abertura(pedido['provedor'], pedido['caminho'],
-                                                           bool(pedido.get('valida'))), True)
-        return True
+                                                           pedido['visto']), True)
 
     def encerrar_abertura(self):
         self.abertura = None
         self.relogio_abertura.stop()
+        self.vencimento_abertura.stop()
 
     def ler_saida_acao(self):
         for canal in (self.acao.readAllStandardError, self.acao.readAllStandardOutput):
@@ -1094,6 +1098,7 @@ class Coordenadores(QWidget):
     def fechar(self):
         self.fechando = True
         self.relogio_abertura.stop()
+        self.vencimento_abertura.stop()
         self.cota.fechar()
         self.consulta.fechar()
         self.reconferencia.fechar()
