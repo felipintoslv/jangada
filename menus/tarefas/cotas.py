@@ -24,9 +24,8 @@ PRAZO_MS = 30000
 INTERVALO_MS = 60000
 SIMULACAO = 'a simulação não consulta o Core'
 IDENTIFICADOR = re.compile(r'[a-z0-9_-]{1,64}')
-# Cada provedor mostra no máximo estes grupos; o excedente fica de fora da faixa.
+# Acima deste número de provedores, a faixa pula as formas resumidas por provedor.
 PROVEDORES_EXIBIDOS = 12
-GRUPOS_EXIBIDOS = 8
 NOMES_GRUPO = {GRUPO_ARGON: 'Argon', 'gemini': 'Gemini'}
 MOTIVOS = {'sem_cache': 'sem cache', 'cache_vencido': 'cache vencido',
            'consulta_falhou': 'consulta falhou', 'conta_sem_confianca': 'conta sem confiança'}
@@ -222,7 +221,7 @@ def _entrada_pecas(e, resumo):
         return [(f'{nome}: {texto}', False)]
     medidos = [g for g in e.grupos if g.percentual is not None]
     menor = min(medidos, key=lambda g: g.percentual) if medidos else None
-    escolhidos = ([menor] if menor else list(e.grupos[:1])) if resumo else list(e.grupos[:GRUPOS_EXIBIDOS])
+    escolhidos = ([menor] if menor else list(e.grupos[:1])) if resumo else list(e.grupos)
     unico = len(e.grupos) == 1 and e.grupos[0].grupo == e.provedor
     grupos = [_grupo_pecas(g, '' if unico else NOMES_GRUPO.get(g.grupo, g.grupo),
                            hora_curta(g.renova_em) if g is menor else None) for g in escolhidos]
@@ -254,7 +253,7 @@ def _sem_cotas(motivo, vazia):
 
 def variantes(cotas, motivo='', consultando=False):
     """Textos da faixa, do mais completo ao mais curto; o primeiro vai inteiro na dica."""
-    entradas = cotas.entradas[:PROVEDORES_EXIBIDOS] if cotas else ()
+    entradas = cotas.entradas if cotas else ()
     if not entradas:
         if consultando and not motivo:
             return [[('Cotas: consultando', False)]]
@@ -265,7 +264,7 @@ def variantes(cotas, motivo='', consultando=False):
     comando = [[(ATUALIZAR_COTA, False)]] if sem_dado else []
     ponteiro = [[('atualizar: veja a dica', False)]] if sem_dado else []
     completa = [_entrada_pecas(e, False) for e in entradas]
-    resumo = [_entrada_pecas(e, True) for e in entradas]
+    resumo = [_entrada_pecas(e, True) for e in entradas] if len(entradas) <= PROVEDORES_EXIBIDOS else None
     menor = _menor(entradas)
     if menor:
         g, e = menor
@@ -278,9 +277,11 @@ def variantes(cotas, motivo='', consultando=False):
         + sum(not e.grupos and e.motivo != NAO_MEDIDO for e in entradas)
     breve = [minimo] + ([[(f'{faltam} sem dado', False)]] if faltam else []) + lido + [[('detalhes na dica', False)]]
     inicio = [('Cotas: ', False)]
-    candidatas = [inicio + _juntar(partes, ' · ')
-                  for partes in (completa + lido + comando, resumo + lido + comando,
-                                 resumo + lido + ponteiro, breve)]
+    formas = [completa + lido + comando]
+    if resumo is not None:
+        formas += [resumo + lido + comando, resumo + lido + ponteiro]
+    formas.append(breve)
+    candidatas = [inicio + _juntar(partes, ' · ') for partes in formas]
     vistas, resultado = set(), []
     for pecas in candidatas:
         plano = plano_de(pecas)

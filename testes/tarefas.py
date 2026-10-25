@@ -2057,6 +2057,34 @@ while not (pasta / 'parar-clientes').exists():
         central.cotas.consultar()
         aguardar(lambda: not central.cotas.ocupada())
 
+    def test_dica_guarda_todos_os_provedores_e_grupos(self):
+        def grupo(nome, percentual):
+            return dict(grupo=nome, percentual=percentual, janelas=[], motivo=None if percentual is not None else 'sem_cache')
+        provedores = [dict(provedor='agy', conta=f'c{i}', motivo=None, grupos=[grupo('gemini', 90.0)])
+                      for i in range(14)]
+        provedores[0]['grupos'] = [grupo(f'g{n}', 70.0) for n in range(10)] + [grupo('g10', 5.0), grupo('g11', None)]
+        provedores.append(dict(provedor='codex', conta=None, motivo=None, grupos=[grupo('codex', 3.0)]))
+        provedores.append(dict(provedor='outro', conta=None, motivo='sem_cache', grupos=[]))
+        bruto = dict(versao=1, gerado='2026-10-24T20:00:00+00:00', provedores=provedores)
+        self.roteador_falso('ok', bruto)
+        central = Janela(True, self.raiz, self.estado)
+        self.addCleanup(central.close)
+        central.timer.stop()
+        central.cotas.parar_repeticao()
+        aguardar(lambda: not central.cotas.ocupada())
+        dica = central.faixa_cotas.toolTip()
+        for parte in ('agy c13: Gemini 90%', 'g10 5% ', 'abaixo de 20%', 'g11 sem dado (sem cache)',
+                      'Codex: 3% ', 'Outro: sem dado (sem cache)', 'jangada-router cotas --atualizar --permitir-remoto'):
+            self.assertIn(parte, dica)
+        self.assertEqual(dica.count('abaixo de 20%'), 2)
+        central.resize(700, 460)
+        central.show()
+        APP.processEvents()
+        visivel = self.faixa_visivel(central)
+        self.assertIn('menor 3% (Codex)', visivel)
+        self.assertIn('2 sem dado', visivel)
+        self.assertIn('abaixo de 20%', visivel)
+
     def test_faixa_mostra_cada_parte_das_cotas(self):
         self.roteador_falso('ok', self.cotas_dos_provedores())
         central = Janela(True, self.raiz, self.estado)
