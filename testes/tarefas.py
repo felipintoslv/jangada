@@ -10,7 +10,7 @@ try:
 except ImportError:
     print('PyQt6 ausente; testes gráficos da central ignorados')
     sys.exit(1 if os.environ.get('CI') else 0)
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import fcntl
 import shutil
@@ -30,7 +30,7 @@ import dados
 import janela
 from janela import Janela
 import central
-from cotas import ler_cota_argon, numero_de_fora
+from cotas import cota_argon, ler_cota_argon, ler_cotas, numero_de_fora, plano_de, variantes
 from central import encaminhar, receber
 from dados import LIMITE, barra, idade, ler_lista, ler_observacao, pasta_sessoes, resumo_barra
 from argparse import Namespace
@@ -2351,6 +2351,98 @@ while not (pasta / 'parar-clientes').exists():
                       'outro-grupo sem dado (consulta falhou)', 'terceiro sem dado,', 'quarto sem dado '):
             self.assertIn(parte, texto)
         self.assertNotIn('motivo_novo', texto)
+
+    def cotas_com_ultimo(self, ultimo, percentual=None):
+        """Conta principal com o grupo gemini vencido (ou medido, com `percentual`) e o campo `ultimo`."""
+        cotas = self.cotas_dos_provedores()
+        gemini = cotas['provedores'][0]['grupos'][1]
+        gemini.update(percentual=percentual, motivo=None if percentual is not None else 'cache_vencido')
+        if ultimo is not None:
+            gemini['ultimo'] = ultimo
+        return cotas
+
+    def test_faixa_mostra_o_ultimo_valor_como_antigo(self):
+        agora = datetime.now(timezone.utc)
+        antigo = '2026-10-24T19:27:00+00:00'
+        hora_hoje = agora.astimezone().strftime('%H:%M')
+        hora_antiga = datetime.fromisoformat(antigo).astimezone()
+        casos = [('hoje', agora.isoformat(), f'Gemini 95% (às {hora_hoje})'),
+                 ('outro dia', antigo, f'Gemini 95% ({hora_antiga:%d/%m} às {hora_antiga:%H:%M})')]
+        self.janela.resize(1440, 900)
+        self.janela.show()
+        for nome, medido, esperado in casos:
+            with self.subTest(caso=nome):
+                self.consultar_cotas(self.janela, 'ok',
+                                     self.cotas_com_ultimo(dict(percentual=95, medido_em=medido)))
+                dica = self.janela.faixa_cotas.toolTip()
+                self.assertIn(esperado, dica)
+                self.assertNotIn('Gemini sem dado', dica)
+                self.assertIn('Argon 62%', dica)
+        baixo = self.cotas_com_ultimo(dict(percentual=5, medido_em=antigo))
+        self.consultar_cotas(self.janela, 'ok', baixo)
+        self.assertIn('Gemini 5% (', self.janela.faixa_cotas.toolTip())
+        self.assertEqual(self.janela.faixa_cotas.toolTip().count('abaixo de 20%'), 1)
+        self.assertEqual(self.janela.faixa_cotas.text().count('<span'), 1)
+
+    def test_formas_curtas_mostram_o_ultimo_valor_quando_nada_foi_medido(self):
+        cotas = dict(versao=1, gerado='2026-10-24T20:00:00+00:00', provedores=[
+            dict(provedor='agy', conta='principal', motivo=None, grupos=[
+                dict(grupo='gemini', percentual=None, motivo='cache_vencido',
+                     ultimo=dict(percentual=95, medido_em='2026-10-24T19:27:00+00:00')),
+                dict(grupo='gemini-argon-wtu', percentual=None, motivo='cache_vencido',
+                     ultimo=dict(percentual=40, medido_em='2026-10-24T19:27:00+00:00'))])])
+        formas = [plano_de(f) for f in variantes(ler_cotas(json.dumps(cotas)))]
+        self.assertIn('Gemini 95% (', formas[0])
+        self.assertIn('Argon 40% (', formas[0])
+        self.assertTrue(any('agy principal: Argon 40% (' in f and 'Gemini' not in f for f in formas), formas)
+        self.assertIn('Cotas: último menor 40% (Argon, ', formas[-1])
+        self.assertNotIn('Cotas: sem dado', ''.join(formas))
+
+    def test_ultimo_invalido_ou_de_grupo_medido_e_ignorado(self):
+        valido = '2026-10-24T19:27:00+00:00'
+        casos = [('numero acima de 100', dict(percentual=101, medido_em=valido)),
+                 ('numero negativo', dict(percentual=-1, medido_em=valido)),
+                 ('booleano', dict(percentual=True, medido_em=valido)),
+                 ('texto', dict(percentual='95', medido_em=valido)),
+                 ('sem percentual', dict(medido_em=valido)),
+                 ('data invalida', dict(percentual=95, medido_em='ontem')),
+                 ('data sem fuso', dict(percentual=95, medido_em='2026-10-24T19:27:00')),
+                 ('data de outro tipo', dict(percentual=95, medido_em=1761334020)),
+                 ('sem data', dict(percentual=95)),
+                 ('lista', [95, valido]),
+                 ('texto solto', '95%'),
+                 ('numero solto', 95),
+                 ('nulo', None)]
+        for nome, ultimo in casos:
+            with self.subTest(ultimo=nome):
+                cotas = ler_cotas(json.dumps(self.cotas_com_ultimo(ultimo)))
+                gemini = cotas.entradas[0].grupos[1]
+                self.assertIsNone(gemini.percentual)
+                self.assertIsNone(gemini.ultimo)
+                texto = plano_de(variantes(cotas)[0])
+                self.assertIn('Gemini sem dado (cache vencido)', texto)
+                self.assertNotIn('95%', texto)
+        medido = ler_cotas(json.dumps(self.cotas_com_ultimo(dict(percentual=95, medido_em=valido), percentual=70.0)))
+        self.assertEqual(medido.entradas[0].grupos[1].percentual, 70.0)
+        self.assertIsNone(medido.entradas[0].grupos[1].ultimo)
+        texto = plano_de(variantes(medido)[0])
+        self.assertIn('Gemini 70%', texto)
+        self.assertNotIn('95%', texto)
+
+    def test_cota_argon_ignora_o_ultimo_valor(self):
+        cotas = self.cotas_com_argon(None)
+        cotas['provedores'][0]['grupos'][1]['ultimo'] = dict(percentual=95, medido_em='2026-10-24T19:27:00+00:00')
+        lida = ler_cotas(json.dumps(cotas))
+        self.assertEqual(lida.entradas[0].grupos[1].ultimo[0], 95)
+        self.assertEqual(cota_argon(lida), (None, None))
+        self.assertEqual(ler_cota_argon(json.dumps(cotas)), (None, None))
+
+    def test_sem_o_campo_ultimo_a_faixa_e_a_de_hoje(self):
+        com_campo = ler_cotas(json.dumps(self.cotas_com_ultimo(None)))
+        self.assertIsNone(com_campo.entradas[0].grupos[1].ultimo)
+        texto = plano_de(variantes(com_campo)[0])
+        self.assertIn('agy principal: Argon 62%, Gemini sem dado (cache vencido)', texto)
+        self.assertTrue(texto.endswith('jangada-router cotas --atualizar --permitir-remoto'))
 
     def test_faixa_sem_dado_nao_derruba_a_janela(self):
         valida = self.cotas_dos_provedores()

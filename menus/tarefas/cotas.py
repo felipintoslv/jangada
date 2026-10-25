@@ -39,6 +39,7 @@ class Grupo:
     percentual: float | int | None
     renova_em: str | None = None
     motivo: str | None = None
+    ultimo: tuple | None = None  # (percentual, medido_em) da última medida, já vencida; só informa
 
 
 @dataclass(frozen=True)
@@ -98,6 +99,30 @@ def hora_curta(valor, com_data=True):
         return None
 
 
+def hora_antiga(valor):
+    """'às 16:27' (hoje) ou '24/10 às 16:27' no horário local, ou None; nunca lança."""
+    quando = instante(valor)
+    if quando is None:
+        return None
+    try:
+        local = quando.astimezone()
+        hoje = datetime.now().astimezone().date()
+        return f'{"" if local.date() == hoje else local.strftime("%d/%m ")}às {local:%H:%M}'
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _ultimo(valor):
+    """(percentual, medido_em) do campo `ultimo` do Core, ou None se faltar algo ou não for válido."""
+    if not isinstance(valor, dict):
+        return None
+    percentual = numero_de_fora(valor.get('percentual'))
+    medido = valor.get('medido_em')
+    if percentual is None or hora_antiga(medido) is None:
+        return None
+    return percentual, medido
+
+
 def _identificador(valor):
     return valor if isinstance(valor, str) and IDENTIFICADOR.fullmatch(valor) else None
 
@@ -117,7 +142,8 @@ def _grupo(g):
                     and instante(janela.get('renova_em')) is not None):
                 renova = janela['renova_em']
                 break
-    return Grupo(nome, percentual, renova, _identificador(g.get('motivo')))
+    ultimo = _ultimo(g.get('ultimo')) if percentual is None else None
+    return Grupo(nome, percentual, renova, _identificador(g.get('motivo')), ultimo)
 
 
 def _entrada(e):
@@ -196,6 +222,8 @@ def _sem_dado(motivo):
 def _grupo_pecas(g, rotulo, renova):
     nome = f'{rotulo} ' if rotulo else ''
     if g.percentual is None:
+        if g.ultimo:
+            return [(f'{nome}{texto_percentual(g.ultimo[0])}% ({hora_antiga(g.ultimo[1])})', False)]
         return [(nome + _sem_dado(g.motivo), False)]
     pecas = [(f'{nome}{texto_percentual(g.percentual)}%', False)]
     if g.percentual < COTA_MINIMA:
@@ -221,7 +249,9 @@ def _entrada_pecas(e, resumo):
         return [(f'{nome}: {texto}', False)]
     medidos = [g for g in e.grupos if g.percentual is not None]
     menor = min(medidos, key=lambda g: g.percentual) if medidos else None
-    escolhidos = ([menor] if menor else list(e.grupos[:1])) if resumo else list(e.grupos)
+    antigos = [g for g in e.grupos if g.ultimo]
+    base = min(antigos, key=lambda g: g.ultimo[0]) if antigos else e.grupos[0]
+    escolhidos = [menor or base] if resumo else list(e.grupos)
     unico = len(e.grupos) == 1 and e.grupos[0].grupo == e.provedor
     grupos = [_grupo_pecas(g, '' if unico else NOMES_GRUPO.get(g.grupo, g.grupo),
                            hora_curta(g.renova_em) if g is menor else None) for g in escolhidos]
@@ -272,7 +302,13 @@ def variantes(cotas, motivo='', consultando=False):
         if g.percentual < COTA_MINIMA:
             minimo += _alerta()
     else:
-        minimo = [('sem dado', False)]
+        antigos = [(g, e) for e in entradas for g in e.grupos if g.ultimo]
+        if antigos:
+            g, e = min(antigos, key=lambda par: par[0].ultimo[0])
+            minimo = [(f'último menor {texto_percentual(g.ultimo[0])}% '
+                       f'({NOMES_GRUPO.get(g.grupo, nome_do_provedor(e))}, {hora_antiga(g.ultimo[1])})', False)]
+        else:
+            minimo = [('sem dado', False)]
     faltam = sum(g.percentual is None for e in entradas for g in e.grupos) \
         + sum(not e.grupos and e.motivo != NAO_MEDIDO for e in entradas)
     breve = [minimo] + ([[(f'{faltam} sem dado', False)]] if faltam else []) + lido + [[('detalhes na dica', False)]]
