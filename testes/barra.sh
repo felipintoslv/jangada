@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Testa a configuração da barra: o botão do Catamarã depois do menu e a
-# retirada do custom/indicadores, no config.jsonc e na barra em pé gerada pelo
-# jangada-barra; os cliques que abrem janela com setsid -f e a migração que os
-# solta.
+# Testa a configuração da barra: a ordem dos módulos e a retirada do
+# custom/indicadores e do custom/catamara, no config.jsonc e na barra em pé
+# gerada pelo jangada-barra; os cliques que abrem janela com setsid -f e a
+# migração que os solta.
 #
 # Uso: testes/barra.sh
 set -uo pipefail
@@ -22,20 +22,22 @@ jq_ok() { jq -e "$@" >/dev/null 2>&1; }
 iguais() { [[ "$(<"$1")" == "$(<"$2")" ]]; }
 sem_comentario default/waybar/config.jsonc >"$tmp/config.json"
 
-# Caso 1: Catamarã logo depois do menu e nada do custom/indicadores, cujo
-# comando saiu com o Monitor.
-conferir "caso 1: custom/catamara entre o menu e as áreas de trabalho" \
-  jq_ok '.["modules-left"][:3] == ["custom/menu", "custom/catamara", "hyprland/workspaces"]' "$tmp/config.json"
-conferir "caso 1: custom/catamara pelo comando do Shell, com os três cliques soltos" \
-  jq_ok '.["custom/catamara"] | .exec == "$JANGADA_PATH/bin/jangada-barra-catamara --waybar"
-    and .["return-type"] == "json"
-    and .["on-click"] == "setsid -f $JANGADA_PATH/bin/jangada-barra-catamara --web"
-    and .["on-click-right"] == "setsid -f $JANGADA_PATH/bin/jangada-barra-catamara --terminal"
-    and .["on-click-middle"] == "setsid -f $JANGADA_PATH/bin/jangada-barra-catamara --iniciar"' "$tmp/config.json"
+# Caso 1: ordem dos módulos da barra deitada, sem o custom/catamara nem o
+# custom/indicadores, cujos comandos saíram do padrão.
+conferir "caso 1: módulos da esquerda na ordem, com as áreas de trabalho logo depois do menu" \
+  jq_ok '.["modules-left"] == ["custom/menu", "hyprland/workspaces", "custom/agentes", "hyprland/window"]' "$tmp/config.json"
+conferir "caso 1: módulos do centro e da direita na ordem" \
+  jq_ok '.["modules-center"] == ["clock"] and .["modules-right"] == ["tray", "custom/atualizacoes",
+    "systemd-failed-units", "privacy", "idle_inhibitor", "cpu", "memory", "temperature", "disk",
+    "network", "bluetooth", "pulseaudio", "pulseaudio#microfone", "battery", "custom/sessao"]' "$tmp/config.json"
+conferir "caso 1: sem custom/catamara na barra deitada" \
+  jq_ok '(has("custom/catamara") | not) and ([.[] | arrays | index("custom/catamara")] | all(. == null))' "$tmp/config.json"
 conferir "caso 1: sem custom/indicadores na barra deitada" \
   jq_ok '(has("custom/indicadores") | not) and ([.[] | arrays | index("custom/indicadores")] | all(. == null))' "$tmp/config.json"
 conferir "caso 1: sem custom/indicadores no base.css e no jangada-barra" \
   bash -c '! grep -q indicadores default/waybar/base.css bin/jangada-barra'
+conferir "caso 1: sem Catamarã no padrão da barra nem no jangada-barra" \
+  bash -c '! grep -qi catamar default/waybar/config.jsonc default/waybar/base.css bin/jangada-barra'
 
 # Caso 3: barra em pé gerada pelo jangada-barra, com waybar e pkill falsos.
 mkdir -p "$tmp/bin" "$tmp/config/jangada"
@@ -49,9 +51,9 @@ gerado="$tmp/state/jangada/waybar/borda.jsonc"
 if [[ -f "$gerado" ]]; then
   sem_comentario "$gerado" >"$tmp/borda.json"
   conferir "caso 3: borda.jsonc é JSON" jq_ok . "$tmp/borda.json"
-  conferir "caso 3: barra em pé com o Catamarã depois do menu e sem custom/indicadores" \
-    jq_ok '.["modules-left"] == ["custom/menu", "custom/catamara", "hyprland/workspaces", "custom/agentes"]
-      and has("custom/indicadores") == false' "$tmp/borda.json"
+  conferir "caso 3: barra em pé com os mesmos módulos da deitada, sem custom/catamara nem custom/indicadores" \
+    jq_ok '.["modules-left"] == ["custom/menu", "hyprland/workspaces", "custom/agentes"]
+      and has("custom/indicadores") == false and has("custom/catamara") == false' "$tmp/borda.json"
   conferir "caso 3: barra em pé sem o Samburá, aposentado" \
     jq_ok '.["modules-left"] | index("custom/sambura") == null' "$tmp/borda.json"
 else

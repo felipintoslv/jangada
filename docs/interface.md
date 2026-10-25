@@ -13,15 +13,10 @@ pendente em [PENDENCIAS.md](historico/revisao/PENDENCIAS.md#o-que-só-pode-ser-c
 Até essa adaptação, use `componentes` se a instalação não oferecer a
 interface antiga.
 
-Na barra, logo depois do menu, o botão do Catamarã mostra só a logo, na cor
-do estado: discreta em repouso, primária com sessão ativa, de atenção com
-entrega pendente e em destaque com o portão reprovado. Cotas, Ollama, sessões
-e entregas ficam na dica. O clique abre a Central do Catamarã no navegador, o
-botão direito no terminal e o do meio inicia uma sessão. Sem o Catamarã, o
-botão some. Os indicadores do jangada ficam na aba Indicadores da Central.
-Na cópia pessoal da barra, a atualização troca o botão de texto que o
-Catamarã punha antes pela logo e o leva para depois do menu. Uma definição
-ou um estilo do botão que não sejam os conhecidos ficam, com aviso.
+O botão do Catamarã não faz parte da barra do jangada. Na cópia pessoal da
+barra, a atualização tira o botão quando a definição é a que o jangada ou
+o próprio Catamarã punham; uma definição pessoal diferente fica, com aviso. Os indicadores do jangada ficam na aba
+Indicadores da Central.
 
 ## Cores e papel de parede
 

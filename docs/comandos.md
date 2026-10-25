@@ -38,7 +38,6 @@
 | `jangada-atalhos` | paleta de atalhos no fuzzel que executa a ação escolhida, reunindo atalhos do Hyprland, da Central e do tmux (`--lista` imprime no terminal) |
 | `jangada-sddm aplicar` | deixa o jangada como única sessão no SDDM, com o tema de login do jangada (`restaurar`, `status`, `testar`) |
 | `jangada-barra` | sobe ou reinicia a waybar do jangada; `--posicao topo\|base\|esquerda\|direita\|ciclo` troca a borda |
-| `jangada-barra-catamara` | botão do Catamarã na barra: `--waybar` dá o estado e a dica, sem saída quando o Catamarã falta, falha ou demora; `--web`, `--terminal` e `--iniciar` atendem os três cliques |
 | `jangada-recarregar` | recarrega o Hyprland e mostra os erros de configuração |
 | `jangada-rede`, `jangada-bluetooth`, `jangada-audio`, `jangada-energia` | menus no fuzzel para Wi-Fi e cabo, dispositivos Bluetooth, saída e entrada de áudio, e perfil de energia e bateria (abertos pela barra) |
 | `jangada-calendario`, `jangada-captura`, `jangada-monitor`, `jangada-atualizacoes` | calendário com eventos, captura de tela (`regiao\|tela`), monitor do sistema e atualizações pendentes (abertos pela barra e pelos atalhos) |

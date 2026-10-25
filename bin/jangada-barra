@@ -91,7 +91,7 @@ CABECALHO
   "name": "vertical",
   "width": 32,
   "height": 0,
-  "modules-left": ["custom/menu", "custom/catamara", "hyprland/workspaces", "custom/agentes"],
+  "modules-left": ["custom/menu", "hyprland/workspaces", "custom/agentes"],
   "clock": { "format": "{:%H\n%M}" },
   "systemd-failed-units": { "hide-on-ok": true, "format": "✗" },
   "cpu": { "format": "" },
@@ -107,7 +107,6 @@ CABECALHO
   // O texto do módulo de agentes vem do jangada-agentes, não do formato, e
   // não cabe em 32px: fica deitado, lido de baixo para cima.
   "custom/agentes": { "rotate": 90 },
-  // O custom/catamara mostra só a logo e cabe como está.
   "tray": { "spacing": 4 },
 EM_PE
     fi

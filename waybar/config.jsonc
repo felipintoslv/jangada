@@ -4,7 +4,7 @@
   "position": "top",
   "height": 32,
   "spacing": 4,
-  "modules-left": ["custom/menu", "custom/catamara", "hyprland/workspaces", "custom/agentes", "hyprland/window"],
+  "modules-left": ["custom/menu", "hyprland/workspaces", "custom/agentes", "hyprland/window"],
   "modules-center": ["clock"],
   "modules-right": [
     "tray",
@@ -32,21 +32,6 @@
     "tooltip-format": "Menu Jangada (botão direito: terminal)",
     "on-click": "setsid -f $JANGADA_PATH/bin/jangada-menu",
     "on-click-right": "setsid -f $JANGADA_PATH/bin/jangada-terminal"
-  },
-
-  // Botão do Catamarã, outro projeto. Mostra só a logo, que vem do base.css,
-  // para a largura não mudar; os números ficam na dica e o estado vira classe.
-  // Sem o Catamarã instalado, com erro ou demora dele, o comando não imprime
-  // nada e a waybar esconde o módulo.
-  "custom/catamara": {
-    "exec": "$JANGADA_PATH/bin/jangada-barra-catamara --waybar",
-    "return-type": "json",
-    "interval": 10,
-    "format": "{}",
-    "on-click": "setsid -f $JANGADA_PATH/bin/jangada-barra-catamara --web",
-    "on-click-right": "setsid -f $JANGADA_PATH/bin/jangada-barra-catamara --terminal",
-    "on-click-middle": "setsid -f $JANGADA_PATH/bin/jangada-barra-catamara --iniciar",
-    "tooltip": true
   },
 
   "hyprland/workspaces": {

@@ -4,13 +4,32 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
 
 REPO = Path(__file__).resolve().parents[1]
-MIGRACAO = REPO / 'migrations/202610172200-barra-catamara.sh'
-ANTIGA = REPO / 'migrations/202609271000-barra-indicadores.sh'
+NOME = '202610172200-barra-catamara.sh'
+NOME_ANTIGA = '202609271000-barra-indicadores.sh'
+# A migração lê o padrão ao lado dela. O padrão atual já não tem o botão, então
+# o teste monta uma árvore temporária com o padrão de 17/10/2026, que tinha.
+BLOCO_PADRAO = '''  // Botão do Catamarã, outro projeto. Mostra só a logo, que vem do base.css,
+  // para a largura não mudar; os números ficam na dica e o estado vira classe.
+  // Sem o Catamarã instalado, com erro ou demora dele, o comando não imprime
+  // nada e a waybar esconde o módulo.
+  "custom/catamara": {
+    "exec": "$JANGADA_PATH/bin/jangada-barra-catamara --waybar",
+    "return-type": "json",
+    "interval": 10,
+    "format": "{}",
+    "on-click": "setsid -f $JANGADA_PATH/bin/jangada-barra-catamara --web",
+    "on-click-right": "setsid -f $JANGADA_PATH/bin/jangada-barra-catamara --terminal",
+    "on-click-middle": "setsid -f $JANGADA_PATH/bin/jangada-barra-catamara --iniciar",
+    "tooltip": true
+  },
+
+'''
 INDICADORES = '''  // Painel de indicadores do uso de IA. O exec só lê o cache do
   // jangada-painel, então roda barato; quem muda o estado (coleta, app que
   // sobe ou sai, erro) avisa pelo sinal 9, e o intervalo longo é só a rede de
@@ -59,12 +78,24 @@ class Migracao(unittest.TestCase):
         self.alvo.parent.mkdir(parents=True)
         self.ambiente = dict(os.environ, XDG_CONFIG_HOME=str(self.tmp),
                              JANGADA_PATH=str(REPO), JANGADA_SIMULAR='0')
-        self.padrao = (REPO / 'waybar/config.jsonc').read_text()
+        self.raiz = self.tmp / 'repo'
+        (self.raiz / 'migrations').mkdir(parents=True)
+        (self.raiz / 'install').mkdir()
+        (self.raiz / 'waybar').mkdir()
+        shutil.copy(REPO / 'install/lib.sh', self.raiz / 'install/lib.sh')
+        for nome in (NOME, NOME_ANTIGA):
+            shutil.copy(REPO / 'migrations' / nome, self.raiz / 'migrations' / nome)
+        atual = (REPO / 'waybar/config.jsonc').read_text()
+        self.padrao = atual.replace('"custom/menu", "hyprland/workspaces"',
+                                    '"custom/menu", "custom/catamara", "hyprland/workspaces"', 1)
+        self.padrao = self.padrao.replace('  "hyprland/workspaces": {',
+                                          BLOCO_PADRAO + '  "hyprland/workspaces": {', 1)
+        (self.raiz / 'waybar/config.jsonc').write_text(self.padrao)
         self.definicao = carregar(self.padrao)['custom/catamara']
 
-    def migrar(self, simular=False, migracao=MIGRACAO):
+    def migrar(self, simular=False, migracao=NOME):
         ambiente = dict(self.ambiente, JANGADA_SIMULAR=str(int(simular)))
-        return subprocess.run(['bash', str(migracao)], env=ambiente,
+        return subprocess.run(['bash', str(self.raiz / 'migrations' / migracao)], env=ambiente,
                               capture_output=True, text=True)
 
     def copias(self):
@@ -87,6 +118,18 @@ class Migracao(unittest.TestCase):
         self.assertEqual(len(self.copias()), 1)
         return carregar(depois)
 
+    def test_padrao_atual_nao_traz_o_botao_de_volta(self):
+        # Com o padrão de hoje, sem o botão, a migração só tira os indicadores.
+        shutil.copy(REPO / 'waybar/config.jsonc', self.raiz / 'waybar/config.jsonc')
+        antes = self.padrao.replace('"custom/menu", "custom/catamara", "hyprland/workspaces", "custom/agentes",',
+                                    '"custom/menu", "hyprland/workspaces", "custom/agentes", "custom/indicadores",', 1)
+        antes = re.sub(r'  // Botão do Catamarã.*?\n  \},\n\n', '', antes, count=1, flags=re.S)
+        antes = antes.replace('  // Título da janela', INDICADORES + '  // Título da janela', 1)
+        self.assertIn('custom/indicadores', carregar(antes))
+        self.alvo.write_text(antes)
+        self.assertEqual(self.migrar().returncode, 0)
+        self.assertEqual(self.alvo.read_text(), (REPO / 'waybar/config.jsonc').read_text())
+
     def test_padrao_novo(self):
         dados = carregar(self.padrao)
         self.assertNotIn('custom/indicadores', dados)
@@ -106,7 +149,7 @@ class Migracao(unittest.TestCase):
         # A de 27/09 ainda põe o módulo onde ele falta; esta tira, e a ordem
         # dos nomes faz esta rodar depois.
         self.alvo.write_text(self.padrao)
-        resultado = self.migrar(migracao=ANTIGA)
+        resultado = self.migrar(migracao=NOME_ANTIGA)
         self.assertEqual(resultado.returncode, 0, resultado.stderr)
         self.assertIn('custom/indicadores', carregar(self.alvo.read_text()))
         for copia in self.copias():

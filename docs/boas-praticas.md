@@ -175,7 +175,7 @@ e mantém a sessão. Para testar a cópia de trabalho sem instalar, rode
 | `testes/codex.sh` | lançamento do Codex, protocolo, argumentos TOML, hooks e recusas sem rede |
 | `testes/update.sh` | `jangada-update` só aplica com confirmação e, com `allowed_signers`, só commits assinados; `jangada-assinar`; a integração preserva a cópia instalada e não roda ganchos do repositório do agente |
 | `testes/eventos.sh` | histórico de estados dos agentes gravado pelos hooks e pela troca de foco |
-| `testes/barra.sh` | retirada de `custom/indicadores`, posição dos módulos Catamarã e agentes, geração da barra em pé, cliques soltos e migrações da barra |
+| `testes/barra.sh` | retirada de `custom/indicadores`, ordem dos módulos, geração da barra em pé, cliques soltos e migrações da barra |
 | `testes/conversa.py` | janela de conversa local com Ollama falso: resposta progressiva, parada, raciocínio vazado, recusa, trava e proteções |
 | `testes/skills.sh` | instalação das skills num HOME temporário: Claude Code com todas, agy sem a `coordenador`, Codex só com ela, link alheio preservado e a migração sem Codex |
 | `testes/subagentes.sh`, `testes/delegar.sh` | papéis de subagente e a instalação deles; `jangada-delegar` com agy falso, cota por grupo e troca de modelo |

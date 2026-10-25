@@ -28,11 +28,11 @@ if [[ -f "$real" ]] && grep -qxF "$antiga" "$real"; then
 else
   cat >"$entrada" <<AMOSTRA
 {
-  "modules-left": ["custom/menu", "custom/indicadores", "custom/catamara"],
+  "modules-left": ["custom/menu", "custom/indicadores", "custom/proprio"],
   // módulo próprio do usuário
-  "custom/catamara": {
-    "exec": "$HOME/bin/catamara",
-    "on-click": "$HOME/bin/catamara --abrir"
+  "custom/proprio": {
+    "exec": "$HOME/bin/proprio",
+    "on-click": "$HOME/bin/proprio --abrir"
   },
   "custom/indicadores": {
     "exec": "\$JANGADA_PATH/bin/jangada-painel --waybar",
@@ -73,8 +73,8 @@ conferir "caso 3: diff só tem as $esperadas linhas trocadas (achou $trocadas)" 
 printf '      linhas trocadas na cópia testada: %s\n' "$trocadas"
 conferir "caso 3: comando do Shell (jangada-menu) intacto" \
   bash -c 'a=$(grep -cF "\$JANGADA_PATH/bin/jangada-menu" "$1"); b=$(grep -cF "\$JANGADA_PATH/bin/jangada-menu" "$2"); [[ $a == $b ]]' _ "$entrada" "$tmp/resultado.jsonc"
-conferir "caso 3: módulo próprio (catamara) intacto" \
-  bash -c '[[ "$(grep -F catamara "$1")" == "$(grep -F catamara "$2")" ]]' _ "$entrada" "$tmp/resultado.jsonc"
+conferir "caso 3: módulo próprio (proprio) intacto" \
+  bash -c '[[ "$(grep -F proprio "$1")" == "$(grep -F proprio "$2")" ]]' _ "$entrada" "$tmp/resultado.jsonc"
 conferir "caso 3: cópia de segurança criada" bash -c 'ls "$1"/*.bak >/dev/null 2>&1' _ "$tmp/cfg/jangada/waybar"
 
 # Caso 4: segunda execução não muda nada.
