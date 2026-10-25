@@ -527,7 +527,7 @@ class Coordenadores(QWidget):
         self.pendente = False
         falha = self.consulta.iniciar(['--coordenadores-json'], None)
         if falha:
-            self.avisar(self.status, falha, True)
+            self.consulta_sem_dado(falha)
         self.botao_atualizar()
 
     def atualizar_agora(self):
@@ -577,9 +577,12 @@ class Coordenadores(QWidget):
 
     def consulta_sem_dado(self, motivo):
         """Falha ou saída inválida: a lista fica, marcada como última situação conhecida."""
-        self.desatualizado = True
         fim = ' Últimos dados preservados.' if self.ultima_valida else ' Ainda não houve consulta válida.'
         self.avisar(self.status, motivo + fim, True)
+        self.marcar_desatualizado()
+
+    def marcar_desatualizado(self):
+        self.desatualizado = True
         self.mostrar_painel()
 
     # Lista ------------------------------------------------------------------
@@ -906,11 +909,13 @@ class Coordenadores(QWidget):
         if self.fechando or self.pedido is None:
             return
         if falha:
+            self.desatualizado = True
             self.terminar_acao('Não foi possível reconferir a atuação. ' + falha, True)
             return
         try:
             lista = ler_coordenadores(bruto)
         except ValueError as erro:
+            self.desatualizado = True
             self.terminar_acao(f'Não foi possível reconferir a atuação. {erro}', True)
             return
         pedido = self.pedido

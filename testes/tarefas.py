@@ -1760,6 +1760,35 @@ while not (pasta / 'parar-clientes').exists():
         self.assertGreater(coluna.ultima_valida, valida)
         coluna.terminar_acao('')
 
+    def test_ux02_falha_ao_iniciar_a_consulta_marca_o_detalhe(self):
+        coluna = self.atuacao_aberta()
+        self.assertFalse(coluna.desatualizado)
+        valida = coluna.ultima_valida
+        with patch.object(coluna.consulta, 'iniciar', return_value='Comando jangada-agentes não encontrado.'):
+            coluna.atualizar()
+        self.assertTrue(coluna.desatualizado)
+        self.assertIn('Comando jangada-agentes não encontrado.', coluna.status.text())
+        self.assertTrue(coluna.situacao.text().startswith('Última situação conhecida'))
+        self.assertFalse(coluna.atualizar_dados.isHidden())
+        self.assertEqual(coluna.ultima_valida, valida)
+
+    def test_ux02_reconferencia_que_falha_marca_dado_atual_como_antigo(self):
+        for nome, falha, bruto in (('falha', 'Tempo esgotado.', None), ('invalida', None, '{}')):
+            with self.subTest(reconferencia=nome):
+                self.restaurar_coordenadores()
+                coluna = self.atuacao_aberta()
+                self.assertFalse(coluna.desatualizado)
+                valida = coluna.ultima_valida
+                coluna.pedido = dict(tipo='abrir', caminho='/tmp/horta', provedor='claude')
+                with patch.object(coluna, 'abrir_janela') as abrir:
+                    coluna.reconferencia_fim(None, falha, bruto)
+                abrir.assert_not_called()
+                self.assertTrue(coluna.desatualizado)
+                self.assertEqual(coluna.ultima_valida, valida)
+                self.assertIn('Não foi possível reconferir', coluna.resultado.text())
+                self.assertTrue(coluna.situacao.text().startswith('Última situação conhecida'))
+                self.assertFalse(coluna.atualizar_dados.isHidden())
+
     def test_ux02_core_sem_consulta_zera_o_que_a_central_sabia(self):
         coluna = self.atuacao_aberta()
         self.falhar_coordenadores()
