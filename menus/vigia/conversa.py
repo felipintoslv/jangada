@@ -38,6 +38,7 @@ EXT_DOCUMENTO = re.compile(
     r"|parquet|feather|dta|sav|rds|rdata|tex|bib)(?![A-Za-z0-9_])", re.I)
 INICIO_DE_NOME = PARADA | set(":=([{,;")
 PALAVRA_DE_PASTA = re.compile(r"[A-Z0-9À-Ý][\w.-]*")
+ASPAS = re.compile(r"([\"'])([^\n]*?)\1")
 # Pedaço de texto que pode ser caminho; <usuario> e <ip> do Vigia ficam dentro.
 TOKEN = re.compile(r"(?:<[a-z-]+>|[^\s\"'`|<>])+")
 ESQUEMA = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://")
@@ -129,24 +130,38 @@ def _mascara(caminho):
     return MASCARA + (f".{ext.group(1)}" if ext else "")
 
 
-def _palavras_de_pasta(texto, inicio, limite):
-    """Junta até duas palavras de pasta antes do caminho ("Demanda CEBRAP/x")."""
-    for _ in range(2):
-        if inicio - 1 < limite or texto[inicio - 1] != " ":
-            break
-        ant = inicio - 1
-        while ant > limite and not texto[ant - 1].isspace() and texto[ant - 1] not in INICIO_DE_NOME:
-            ant -= 1
-        if not PALAVRA_DE_PASTA.fullmatch(texto[ant:inicio - 1]):
-            break
-        inicio = ant
-    return inicio
+def _comeco_relativo(texto, inicio, limite):
+    """Começo de um caminho relativo: volta até ": ", "(", "[", "=" ou o início
+    da linha, sem contar palavras ("Cliente Projeto Sigiloso/x")."""
+    j = inicio
+    while (j > limite and texto[j - 1] not in "\n([="
+           and not (j >= 2 and texto[j - 2:j] == ": ")):
+        j -= 1
+    while j < inicio and texto[j] in " \t":
+        j += 1
+    return j
 
 
 def _visivel(caminho):
     if caminho.startswith("/"):
         return not caminho.strip("/") or caminho.split("/", 2)[1] in SISTEMA
     return not caminho.startswith("~") and bool(SEM_CAMINHO.fullmatch(caminho))
+
+
+def _mascarar_aspas(texto):
+    # Trecho entre aspas com barra ou com documento some inteiro, antes de
+    # separar as palavras: o nome pode ter espaço antes e depois da barra. Fica
+    # só o caminho de sistema sem espaço; de URL fica o esquema.
+    def trocar(m):
+        dentro = m.group(2)
+        if "/" not in dentro:
+            if not EXT_DOCUMENTO.search(dentro):
+                return m.group()
+        elif not re.search(r"\s", dentro) and _visivel(dentro):
+            return m.group()
+        esquema = ESQUEMA.match(dentro)
+        return m.group(1) + (esquema.group() if esquema else "") + _mascara(dentro) + m.group(1)
+    return ASPAS.sub(trocar, texto)
 
 
 def _mascarar_rclone(texto):
@@ -172,8 +187,8 @@ def _mascarar_caminhos(texto):
             continue
         fim = _fim_do_caminho(texto, m.start(), inicio)
         caminho = texto[inicio:fim]
-        if corte == 0 and caminho[0] not in "/~":
-            inicio = _palavras_de_pasta(texto, inicio, pos)
+        if not esquema and caminho[0] not in "/~":
+            inicio = _comeco_relativo(texto, inicio, pos)
         partes += [texto[pos:inicio], _mascara(caminho)]
         pos = fim
     partes.append(texto[pos:])
@@ -222,12 +237,12 @@ def _mascarar_documentos(texto):
 def mascarar_projetos(texto, ambiente=None):
     """Troca caminhos de arquivos de projeto por <arquivo-de-projeto>[.ext].
 
-    Bloqueio por padrão: o objeto das linhas do rclone, os caminhos sob as
-    pastas de projeto, todo caminho relativo com barra, todo absoluto fora de
-    SISTEMA e, por fim, qualquer documento ou dado (EXT_DOCUMENTO), mesmo
-    solto. Fica visível só caminho de sistema sem essas extensões.
+    Bloqueio por padrão: o objeto das linhas do rclone, o trecho entre aspas
+    com barra ou documento, os caminhos sob as pastas de projeto, todo caminho
+    relativo com barra, todo absoluto fora de SISTEMA e, por fim, qualquer
+    documento ou dado (EXT_DOCUMENTO), mesmo solto. Fica visível só caminho de sistema sem essas extensões.
     """
-    texto = _mascarar_rclone(texto)
+    texto = _mascarar_aspas(_mascarar_rclone(texto))
     formas = _pastas_projeto(os.environ if ambiente is None else ambiente)
     partes, pos = [], 0
     if formas:

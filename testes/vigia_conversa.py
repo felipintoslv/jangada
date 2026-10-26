@@ -152,8 +152,8 @@ with tempfile.TemporaryDirectory() as pasta:
              saida == 'abriu <arquivo-de-projeto>.ODS, <arquivo-de-projeto>.RData e '
                       '<arquivo-de-projeto>.tex; leu /etc/x.conf e /usr/lib/y.so')
     saida = motor.mascarar_projetos('falhou em Tese final/cap 1.docx e x.document ao salvar', env)
-    conferir('documento com espaço na pasta e no nome mascarado até o fim da linha',
-             saida == 'falhou em <arquivo-de-projeto>')
+    conferir('documento com espaço na pasta e no nome mascarado do início ao fim da linha',
+             saida == '<arquivo-de-projeto>')
     # Nome com espaço: entre aspas até a aspa; sem aspas, para no espaço só
     # quando o pedaço termina em extensão, e senão vai até ": " ou o fim da linha
     for caminho, ext in (('~/Documentos/Cliente Projeto Sigiloso.txt', 'txt'),
@@ -169,6 +169,36 @@ with tempfile.TemporaryDirectory() as pasta:
         saida = motor.mascarar_projetos(f'{aspa}~/Documentos/Relatório confidencial{aspa} falhou', env)
         conferir(f'caminho entre aspas {aspa} vai até a aspa e preserva o resto',
                  saida == f'{aspa}<arquivo-de-projeto>{aspa} falhou')
+    # Começo do caminho: entre aspas some o trecho inteiro; relativo sem aspas
+    # volta até ": ", "(", "[", "=" ou o início da linha
+    nomes = ('Cliente', 'Projeto', 'Muito', 'Sigiloso', 'Final', 'Revisado')
+    for aspa in '"\'':
+        for texto in ('Cliente Projeto Muito Sigiloso/dados.xlsx',
+                      'Cliente Projeto Muito Sigiloso Final Revisado/sub pasta/dados.xlsx'):
+            saida = motor.mascarar_projetos(f'erro ao abrir {aspa}{texto}{aspa} agora', env)
+            conferir(f'relativo entre aspas {aspa} com {len(texto.split())} palavras mascarado inteiro',
+                     saida == f'erro ao abrir {aspa}<arquivo-de-projeto>.xlsx{aspa} agora'
+                     and not any(n in saida for n in nomes))
+    saida = motor.mascarar_projetos('leu "Cliente ~/Documentos/x" e "a b/c d" e "/srv/Cliente X/y.txt"', env)
+    conferir('aspas com caminho em ~, nome com espaço e absoluto fora do sistema somem inteiras',
+             saida == 'leu "<arquivo-de-projeto>" e "<arquivo-de-projeto>" e "<arquivo-de-projeto>.txt"')
+    saida = motor.mascarar_projetos('erro "Cliente Sigiloso.xlsx" e \'Cliente Final.pdf\' agora', env)
+    conferir('documento entre aspas sem barra mascarado inteiro',
+             saida == 'erro "<arquivo-de-projeto>.xlsx" e \'<arquivo-de-projeto>.pdf\' agora')
+    saida = motor.mascarar_projetos('leu "/etc/x.conf" e \'/usr/lib/y.so\'; "sem barra" fica', env)
+    conferir('caminho de sistema entre aspas continua visível',
+             saida == 'leu "/etc/x.conf" e \'/usr/lib/y.so\'; "sem barra" fica')
+    saida = motor.mascarar_projetos('proc[12]: falhou Cliente Projeto Muito Sigiloso/dados.xlsx agora', env)
+    conferir('relativo sem aspas volta até ": " e preserva "proc[12]:"',
+             saida == 'proc[12]: <arquivo-de-projeto>.xlsx agora' and not any(n in saida for n in nomes))
+    for antes, depois in (('Cliente Projeto Sigiloso/x.txt ok', '<arquivo-de-projeto>.txt ok'),
+                          ('  Cliente Sigiloso/x.txt ok', '  <arquivo-de-projeto>.txt ok'),
+                          ('abriu (Cliente Sigiloso/x.txt) ok', 'abriu (<arquivo-de-projeto>.txt) ok'),
+                          ('lista [a Cliente/x.txt] ok', 'lista [<arquivo-de-projeto>.txt] ok'),
+                          ('ARQ=Cliente Sigiloso/x.txt ok', 'ARQ=<arquivo-de-projeto>.txt ok'),
+                          ('a\nminha pasta/dados.xlsx b', 'a\n<arquivo-de-projeto>.xlsx b')):
+        saida = motor.mascarar_projetos(antes, env)
+        conferir(f'relativo sem aspas: começo em {antes!r}', saida == depois)
     saida = motor.mascarar_projetos('HOME_URL="https://exemplo.org/" e BUG="https://x.org/a b" ok', env)
     conferir('URL entre aspas vai até a aspa',
              saida == 'HOME_URL="https://<arquivo-de-projeto>.org" e BUG="https://<arquivo-de-projeto>" ok')
@@ -207,7 +237,7 @@ with tempfile.TemporaryDirectory() as pasta:
         'Mounted on / em /dev/nvme0n1p2 0.31 1/612 2026/10/26 I/O error 3MB/s', env)
     conferir('caminho de sistema visível, relativo e outro absoluto mascarados',
              saida == 'leu /usr/lib/x.so e /etc/y.conf; ok\n'
-                      'Failed to open <arquivo-de-projeto>\n'
+                      '<arquivo-de-projeto>\n'
                       '<arquivo-de-projeto>.txt <arquivo-de-projeto>.conf <arquivo-de-projeto>.img '
                       'file://<arquivo-de-projeto>.html http://<arquivo-de-projeto>.json\n'
                       'url http://<arquivo-de-projeto>\n'

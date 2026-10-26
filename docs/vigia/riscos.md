@@ -111,7 +111,8 @@ construção.
     próximo `: ` ou o fim da linha, com ou sem extensão e com espaços. O
     rclone escreve o caminho a partir do remoto, e o retrato pode cortá-lo
     no meio;
-  - caminho relativo com barra, inclusive cortado no fim. Ficam número,
+  - trecho entre aspas com barra e caminho relativo com barra, inclusive
+    cortado no fim. Ficam número,
     data, fração e unidade (`1/612`, `2026/10/26`, `3MB/s`) e `I/O`,
     `TCP/IP`, `UDP/IP`, `N/A`, `S/N`;
   - outro caminho absoluto e todo caminho em `~/`, inclusive `~/.config`;
@@ -136,11 +137,20 @@ construção.
   O texto depois de um caminho sem aspas e sem extensão se perde até o
   `: ` ou o fim da linha, também outro caminho de sistema na mesma linha:
   privacidade vence.
-  Até duas palavras antes de um caminho
-  relativo entram quando começam com maiúscula ou algarismo
-  (`Demanda CEBRAP/pipeline`). Palavra minúscula fica: em
-  `minha pasta/dados.xlsx` sobra `minha`. Uma palavra maiúscula do log colada
-  ao caminho sai junto (`ERROR Demanda CEBRAP/x`): privacidade vence.
+- **Começo do caminho:** também sem contar palavras:
+  - trecho entre aspas simples ou duplas na mesma linha que tem barra ou
+    documento (extensões da lista acima) some por inteiro, antes de separar as palavras
+    (`"Cliente Projeto Sigiloso/dados.xlsx"` vira
+    `"<arquivo-de-projeto>.xlsx"`); fica visível só o caminho absoluto sob as
+    pastas de sistema, sem espaço (`"/etc/x.conf"`), e de URL fica o esquema
+    (`"https://<arquivo-de-projeto>"`). Um apóstrofo do texto pode formar par
+    com outro e esconder o que está entre eles: privacidade vence;
+  - caminho relativo sem aspas volta até o `: ` anterior, `(`, `[`, `=` ou o
+    início da linha, o que vier primeiro
+    (`proc[12]: falhou Cliente Sigiloso/dados.xlsx agora` vira
+    `proc[12]: <arquivo-de-projeto>.xlsx agora`). As palavras do log entre
+    esse ponto e o caminho saem junto (`Failed to open Demanda CEBRAP/x`
+    some inteiro).
 - **O que se perde e o que ainda passa:** o bloqueio também esconde ponto de
   montagem fora da lista (`/mnt`, `/home`), arquivo de configuração em
   `~/.config`, endereço de URL e texto com barra como `AMD/ATI`, com o resto
