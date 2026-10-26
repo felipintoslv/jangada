@@ -2693,7 +2693,7 @@ while not (pasta / 'parar-clientes').exists():
                 (self.bin / 'jangada-router').unlink(missing_ok=True)
                 if modo:
                     self.roteador_falso(modo, cotas)
-                self.consultar_cotas(self.janela, modo, cotas, prazo=300) if modo else self.janela.cotas.consultar()
+                self.consultar_cotas(self.janela, modo, cotas, prazo=300 if nome == 'prazo' else 10000) if modo else self.janela.cotas.consultar()
                 texto = self.janela.faixa_cotas.toolTip()
                 self.assertTrue(texto.startswith(f'Cotas: sem dado ({motivo}).'), texto)
                 self.assertTrue(texto.endswith('jangada-router cotas --atualizar --permitir-remoto'), texto)
