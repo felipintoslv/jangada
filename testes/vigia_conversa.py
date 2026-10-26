@@ -127,9 +127,9 @@ with tempfile.TemporaryDirectory() as pasta:
     for segredo in ('pesquisa-secreta', 'dados-rais', 'Tese final', 'capitulo', 'extrato-banco',
                     'segredo-cliente', 'planilha-orcamento', 'rais/tarefa-x', 'main.py'):
         conferir(f'mascaramento: {segredo} não vai ao agy', segredo not in enviado)
-    for marca in ('<arquivo-de-projeto>.xlsx: sem acesso', '<arquivo-de-projeto>.docx ao salvar',
+    for marca in ('<arquivo-de-projeto>.xlsx: sem acesso', 'app[2]: erro em <arquivo-de-projeto>\n',
                   '<arquivo-de-projeto>.pdf, lido por /usr/lib/libfoo.so',
-                  '<arquivo-de-projeto>.csv aberto', 'file://<arquivo-de-projeto> lido',
+                  '<arquivo-de-projeto>.csv aberto', 'app[5]: file://<arquivo-de-projeto>\n',
                   'worktree <arquivo-de-projeto>.py'):
         conferir(f'mascaramento preserva o resto: {marca}', marca in enviado)
     conferir('abertura leva a instrução fixa e marca o retrato como dado',
@@ -152,10 +152,10 @@ with tempfile.TemporaryDirectory() as pasta:
              saida == 'abriu <arquivo-de-projeto>.ODS, <arquivo-de-projeto>.RData e '
                       '<arquivo-de-projeto>.tex; leu /etc/x.conf e /usr/lib/y.so')
     saida = motor.mascarar_projetos('falhou em Tese final/cap 1.docx e x.document ao salvar', env)
-    conferir('documento com espaço na pasta e no nome mascarado inteiro',
-             saida == 'falhou em <arquivo-de-projeto>.document ao salvar')
-    # Nome com várias palavras: até 6 palavras adiante, até a última com barra
-    # ou extensão
+    conferir('documento com espaço na pasta e no nome mascarado até o fim da linha',
+             saida == 'falhou em <arquivo-de-projeto>')
+    # Nome com espaço: entre aspas até a aspa; sem aspas, para no espaço só
+    # quando o pedaço termina em extensão, e senão vai até ": " ou o fim da linha
     for caminho, ext in (('~/Documentos/Cliente Projeto Sigiloso.txt', 'txt'),
                          ('~/Projetos/Demanda CEBRAP/a b/c d.xlsx', 'xlsx'),
                          ('/srv/Cliente Projeto Muito Grande Sigiloso Final.csv', 'csv')):
@@ -165,6 +165,23 @@ with tempfile.TemporaryDirectory() as pasta:
     saida = motor.mascarar_projetos('~/Documentos/x.txt falhou ao abrir\nlinha 2', env)
     conferir('caminho seguido de texto comum preserva o texto',
              saida == '<arquivo-de-projeto>.txt falhou ao abrir\nlinha 2')
+    for aspa in '"\'':
+        saida = motor.mascarar_projetos(f'{aspa}~/Documentos/Relatório confidencial{aspa} falhou', env)
+        conferir(f'caminho entre aspas {aspa} vai até a aspa e preserva o resto',
+                 saida == f'{aspa}<arquivo-de-projeto>{aspa} falhou')
+    saida = motor.mascarar_projetos('HOME_URL="https://exemplo.org/" e BUG="https://x.org/a b" ok', env)
+    conferir('URL entre aspas vai até a aspa',
+             saida == 'HOME_URL="https://<arquivo-de-projeto>.org" e BUG="https://<arquivo-de-projeto>" ok')
+    saida = motor.mascarar_projetos(
+        'erro: ~/Documentos/Relatório confidencial muito longo com nove palavras aqui\nlinha 2', env)
+    conferir('caminho sem aspas nem extensão vai até o fim da linha',
+             saida == 'erro: <arquivo-de-projeto>\nlinha 2')
+    saida = motor.mascarar_projetos('~/Documentos/Cliente Projeto Sigiloso.txt', env)
+    conferir('nome com várias palavras e extensão no fim mascarado inteiro',
+             'Projeto' not in saida and 'Sigiloso' not in saida)
+    saida = motor.mascarar_projetos('ERRO ~/Projetos/a b: sem permissão', env)
+    conferir('caminho sem extensão para no próximo ": "',
+             saida == 'ERRO <arquivo-de-projeto>: sem permissão')
     # Bloqueio por padrão: objeto do rclone cortado, relativo e absoluto fora
     # das pastas de sistema
     for linha in ('out 26 <maquina> rclone[973]: ERROR : Demanda CEBRAP/pipeline/fontes/rais/'
@@ -183,13 +200,17 @@ with tempfile.TemporaryDirectory() as pasta:
              saida == 'rclone[5]: NOTICE: <arquivo-de-projeto>: Duplicate object found\n'
                       'rclone[5]: INFO  : <arquivo-de-projeto>\n')
     saida = motor.mascarar_projetos(
-        'leu /usr/lib/x.so e /etc/y.conf; Failed to open Demanda CEBRAP/fontes/rais_ceara agora; '
-        '/srv/dados/a ~/.config/b/c.conf /mnt/x/y file://~/z/w http://<ip>:1/api; '
+        'leu /usr/lib/x.so e /etc/y.conf; ok\n'
+        'Failed to open Demanda CEBRAP/fontes/rais_ceara agora\n'
+        '/srv/dados/a.txt ~/.config/b/c.conf /mnt/x/y.img file://~/z/w.html http://<ip>:1/api.json\n'
+        'url http://<ip>:1/api; fim\n'
         'Mounted on / em /dev/nvme0n1p2 0.31 1/612 2026/10/26 I/O error 3MB/s', env)
     conferir('caminho de sistema visível, relativo e outro absoluto mascarados',
-             saida == 'leu /usr/lib/x.so e /etc/y.conf; Failed to open <arquivo-de-projeto> agora; '
-                      '<arquivo-de-projeto> <arquivo-de-projeto>.conf <arquivo-de-projeto> '
-                      'file://<arquivo-de-projeto> http://<arquivo-de-projeto>; '
+             saida == 'leu /usr/lib/x.so e /etc/y.conf; ok\n'
+                      'Failed to open <arquivo-de-projeto>\n'
+                      '<arquivo-de-projeto>.txt <arquivo-de-projeto>.conf <arquivo-de-projeto>.img '
+                      'file://<arquivo-de-projeto>.html http://<arquivo-de-projeto>.json\n'
+                      'url http://<arquivo-de-projeto>\n'
                       'Mounted on / em /dev/nvme0n1p2 0.31 1/612 2026/10/26 I/O error 3MB/s')
 
     # Pergunta com aspas, $() e crase chega intacta, com --conversation do JSON
@@ -281,6 +302,21 @@ with tempfile.TemporaryDirectory() as pasta:
     conferir(f'muitas seções de nome longo: abertura até LIMITE_ENVIO ({len(abertura.encode())} bytes)',
              len(abertura.encode()) <= motor.LIMITE_ENVIO and 'seções cortadas' in abertura
              and abertura.count('cortada, enviados') == 150)
+    # Orçamento menor que o número de seções: seção com cota zero vai vazia,
+    # também no log, que guarda o fim
+    conferir('corte com cota zero devolve vazio',
+             motor._cortar('segredo', 0, True) == '' and motor._cortar('segredo', 0, False) == '')
+    poucas = {'versao': 1, 'gerado_em': 'x',
+              'log_sistema': {f'e{k:02d}': f'segredo{k:02d}' for k in range(40)}}
+    for limite in range(1, 20000):
+        try:
+            abertura = motor.montar_abertura('instrução', poucas, limite=limite)
+            break
+        except motor.ErroConversa:
+            continue
+    conferir(f'orçamento mínimo ({limite} bytes): seções de log com cota zero vão vazias',
+             len(abertura.encode()) <= limite and 'segredo' not in abertura
+             and abertura.count('cortada, enviados 0 de') >= 39)
 
     # agy ausente
     c = motor.Conversa(pasta_propostas=propostas, pasta_conversas=conversas, ambiente=dict(env, PATH='/nada'))

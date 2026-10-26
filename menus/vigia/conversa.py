@@ -30,8 +30,6 @@ PASTAS_PESSOAIS = ("Documentos", "Documents", "Downloads", "GoogleDrive",
                    "Área de Trabalho", "Projetos")
 ID_CONVERSA = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")
 EXTENSAO = re.compile(r"\.([A-Za-z0-9]{1,8})$")
-OLHAR_ADIANTE = 6
-ESPACO = re.compile(r"[ \t]+")
 PARADA = set("\n\"'<>|`")
 # Documento ou dado: mascarado em qualquer lugar, também em caminho relativo
 # (o rclone escreve o caminho a partir do remoto) e em nome solto.
@@ -104,23 +102,24 @@ def _pastas_projeto(ambiente):
     return sorted(formas, key=len, reverse=True)
 
 
-def _fim_do_caminho(texto, i):
+def _fim_do_caminho(texto, inicio, i):
+    """Fim do caminho lido a partir de i, no pedaço que começa em inicio."""
+    fim_linha = texto.find("\n", i)
+    fim_linha = len(texto) if fim_linha < 0 else fim_linha
+    # Nome com espaço, sem janela de palavras: entre aspas vai até a aspa de
+    # fechamento; sem aspas para no espaço só quando o pedaço termina em
+    # extensão, e senão vai até o próximo ": " ou o fim da linha. Perder texto
+    # depois de um caminho ambíguo é aceitável.
+    if inicio > 0 and texto[inicio - 1] in "\"'":
+        fecho = texto.find(texto[inicio - 1], i, fim_linha)
+        if fecho >= 0:
+            return fecho
     m = TOKEN.match(texto, i)
-    fim = j = m.end() if m else i
-    # Nome com espaço: das OLHAR_ADIANTE palavras seguintes na mesma linha, a
-    # última com barra ou extensão fecha o caminho, e tudo até ela entra
-    # ("Cliente Projeto Sigiloso.txt", "Tese final/cap 1.docx"). Mascarar a
-    # mais é aceitável. Outro caminho, URL ou ":;)]}" antes do espaço param.
-    for _ in range(OLHAR_ADIANTE):
-        espaco = ESPACO.match(texto, j)
-        m = espaco and j > i and texto[j - 1] not in ":;)]}" and TOKEN.match(texto, espaco.end())
-        if not m or m.group()[0] in "/~" or ESQUEMA.match(m.group()):
-            break
-        nome = m.group().rstrip(".,:;)]}")
-        if not SEM_CAMINHO.fullmatch(nome) and ("/" in nome or EXTENSAO.search(nome)):
-            fim = m.end()
-        j = m.end()
-    while fim > i and texto[fim - 1] in ".,:;)]}":
+    fim = m.end() if m else i
+    if not EXTENSAO.search(texto[inicio:fim].rstrip(".,:;)]}")):
+        dois_pontos = texto.find(": ", i, fim_linha)
+        fim = fim_linha if dois_pontos < 0 else dois_pontos
+    while fim > i and texto[fim - 1] in ".,:;)]} \t":
         fim -= 1
     return fim
 
@@ -171,7 +170,7 @@ def _mascarar_caminhos(texto):
         sozinho = token[corte:].rstrip(".,:;)]}")
         if "/" not in sozinho or _visivel(sozinho):
             continue
-        fim = _fim_do_caminho(texto, inicio)
+        fim = _fim_do_caminho(texto, m.start(), inicio)
         caminho = texto[inicio:fim]
         if corte == 0 and caminho[0] not in "/~":
             inicio = _palavras_de_pasta(texto, inicio, pos)
@@ -234,10 +233,8 @@ def mascarar_projetos(texto, ambiente=None):
     if formas:
         raiz = re.compile(r"(?<![A-Za-z0-9_.-])(?:" + "|".join(map(re.escape, formas)) + r")(?=/)")
         while (m := raiz.search(texto, pos)):
-            fim = _fim_do_caminho(texto, m.end())
-            ultimo = texto[m.end():fim].rstrip("/").rsplit("/", 1)[-1]
-            ext = EXTENSAO.search(ultimo)
-            partes += [texto[pos:m.start()], MASCARA + (f".{ext.group(1)}" if ext else "")]
+            fim = _fim_do_caminho(texto, m.start(), m.end())
+            partes += [texto[pos:m.start()], _mascara(texto[m.start():fim])]
             pos = fim
     partes.append(texto[pos:])
     return _mascarar_documentos(_mascarar_caminhos("".join(partes)))
@@ -253,6 +250,8 @@ def _secoes(retrato, prefixo=""):
 
 
 def _cortar(texto, limite, do_fim):
+    if limite <= 0:
+        return ""
     dados = texto.encode()
     dados = dados[-limite:] if do_fim else dados[:limite]
     return dados.decode(errors="ignore")

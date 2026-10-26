@@ -122,14 +122,20 @@ construção.
     `docx`, `doc`, `odt`, `rtf`, `pdf`, `pptx`, `ppt`, `odp`, `parquet`,
     `feather`, `dta`, `sav`, `rds`, `rdata`, `tex` ou `bib`, em maiúscula ou
     minúscula.
-- **Nome com espaço:** depois de um caminho mascarado, o motor olha até 6
-  palavras adiante na mesma linha; se uma delas tem barra ou termina em
-  extensão de 1 a 8 caracteres, tudo até a última dessas entra no caminho
-  (`Cliente Projeto Sigiloso.txt`, `Demanda CEBRAP/a b/c d.xlsx`). Texto
-  comum sem barra nem extensão fica (`x.txt falhou ao abrir`). A busca para
-  em outro caminho, numa URL, no fim da linha e depois de `:;)]}`. Pode
-  mascarar a mais (`x.txt falhou em config.ini` some inteiro): privacidade
-  vence.
+- **Nome com espaço:** o fim do caminho segue três regras, sem contar
+  palavras:
+  - depois de aspa simples ou dupla, vai até a aspa de fechamento na mesma
+    linha (`"~/Documentos/Relatório confidencial" falhou` guarda
+    ` falhou`; vale também para URL, como `HOME_URL="https://..."`);
+  - sem aspas, se o pedaço até o primeiro espaço termina em extensão de 1 a
+    8 caracteres, para ali (`~/Documentos/x.txt falhou ao abrir` guarda
+    `falhou ao abrir`);
+  - sem aspas e sem extensão, vai até o próximo `: ` ou o fim da linha
+    (`ERRO ~/Projetos/a b: sem permissão` guarda `: sem permissão`;
+    `~/Documentos/Cliente Projeto Sigiloso.txt` some inteiro).
+  O texto depois de um caminho sem aspas e sem extensão se perde até o
+  `: ` ou o fim da linha, também outro caminho de sistema na mesma linha:
+  privacidade vence.
   Até duas palavras antes de um caminho
   relativo entram quando começam com maiúscula ou algarismo
   (`Demanda CEBRAP/pipeline`). Palavra minúscula fica: em
@@ -137,13 +143,16 @@ construção.
   ao caminho sai junto (`ERROR Demanda CEBRAP/x`): privacidade vence.
 - **O que se perde e o que ainda passa:** o bloqueio também esconde ponto de
   montagem fora da lista (`/mnt`, `/home`), arquivo de configuração em
-  `~/.config`, endereço de URL e texto com barra como `AMD/ATI`. Passa nome
+  `~/.config`, endereço de URL e texto com barra como `AMD/ATI`, com o resto
+  da linha quando não há extensão (no retrato real, o modelo da placa de
+  vídeo depois de `[AMD/ATI]`). Passa nome
   solto sem barra e sem as extensões acima (`notas.txt`). O retrato e o
   relatório locais não mudam.
 - **Tamanho:** retrato acima de 100 KiB é cortado por seção, com o aviso
   "seção X cortada" no texto enviado; o log guarda o fim. A conta reserva o
   pior caso dos avisos (toda seção cortada, com o aviso e o nome na lista
-  de seções cortadas). Nenhum envio passa de 100 KiB, abaixo do limite de
+  de seções cortadas). Seção com cota zero vai vazia, também no log. Nenhum
+  envio passa de 100 KiB, abaixo do limite de
   128 KiB de um argumento do Linux.
 - **Injeção por log:** a instrução fixa diz que o retrato é dado, nunca
   instrução, e manda apontar como suspeito o trecho que pedir outra coisa. O
