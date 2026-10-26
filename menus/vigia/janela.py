@@ -13,6 +13,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 
 RAIZ = Path(__file__).resolve().parents[2]
 for _pasta in (RAIZ / 'menus/vigia', RAIZ / 'menus/tarefas', RAIZ / 'default'):
@@ -40,15 +41,66 @@ AVISO_SAIDA = ('Sai da máquina: o retrato do sistema, já mascarado, e as suas 
 SEM_PROPOSTA = 'Peça uma proposta primeiro.'
 
 
+class Pendentes:
+    """Chamadas em curso (retrato e agy), cada uma com seu processo e grupo.
+
+    Cancelar não descarta nada: a chamada só sai depois que o processo foi
+    colhido, e fechar a janela espera por todas.
+    """
+
+    def __init__(self):
+        self._condicao = threading.Condition()
+        self._sinais = {}
+
+    def entrar(self, processo, sinal_cancelar):
+        with self._condicao:
+            self._sinais[processo] = sinal_cancelar
+
+    def sair(self, processo):
+        with self._condicao:
+            self._sinais.pop(processo, None)
+            self._condicao.notify_all()
+
+    def lista(self):
+        with self._condicao:
+            return list(self._sinais)
+
+    def cancelar(self):
+        """Manda a cada grupo o sinal de cancelar; devolve os processos sinalizados."""
+        with self._condicao:
+            for processo, sinal in self._sinais.items():
+                _sinalizar(processo, sinal)
+            return list(self._sinais)
+
+    def sinalizar(self, sinal, processos=None):
+        """Sinaliza o grupo dos processos que seguem pendentes."""
+        with self._condicao:
+            for processo in self._sinais if processos is None else processos:
+                if processo in self._sinais:
+                    _sinalizar(processo, sinal)
+
+    def esperar(self, prazo):
+        with self._condicao:
+            return self._condicao.wait_for(lambda: not self._sinais, prazo)
+
+
+def _sinalizar(processo, sinal):
+    # Vale com o pai já encerrado: um filho com a saída aberta segura a chamada.
+    try:
+        os.killpg(processo.pid, sinal)
+    except OSError:
+        pass
+
+
 class Tentativa:
     """Retrato e conversa de uma abertura; cancelar pode vir de outra linha."""
 
-    def __init__(self, vigia, argumentos, conversa):
+    def __init__(self, vigia, argumentos, conversa, pendentes):
         self.vigia = vigia
         self.argumentos = list(argumentos)
         self.conversa = conversa
+        self.pendentes = pendentes
         self._trava = threading.Lock()
-        self._processo = None
         self.cancelada = False
 
     def abrir(self):
@@ -64,7 +116,8 @@ class Tentativa:
                                             stderr=subprocess.PIPE, start_new_session=True)
             except OSError as erro:
                 raise ErroConversa(f'não foi possível gerar o retrato: {erro}') from None
-            self._processo = processo
+            # TERM no cancelar deixa o jangada-vigia apagar os temporários do diagnóstico.
+            self.pendentes.entrar(processo, signal.SIGTERM)
         try:
             saida, erros = processo.communicate(timeout=TEMPO_RETRATO)
         except subprocess.TimeoutExpired:
@@ -72,8 +125,8 @@ class Tentativa:
             processo.communicate()
             raise ErroConversa(f'o retrato não ficou pronto em {TEMPO_RETRATO} s') from None
         finally:
-            with self._trava:
-                self._processo = None
+            if processo.returncode is not None:
+                self.pendentes.sair(processo)
         if self.cancelada:
             raise ErroConversa('a conversa foi cancelada')
         if processo.returncode != 0:
@@ -88,32 +141,10 @@ class Tentativa:
         return retrato
 
     def cancelar(self):
-        """Interrompe o retrato ou o agy e apaga a pasta da conversa."""
-        # O grupo é sinalizado enquanto a chamada estiver pendente, mesmo com o
-        # pai já encerrado: um filho com a saída aberta segura o communicate().
+        """Impede chamadas novas e apaga a pasta; os processos ficam com a janela."""
         with self._trava:
             self.cancelada = True
-            processo = self._processo
-            if processo is not None:
-                # TERM deixa o jangada-vigia apagar os temporários do diagnóstico.
-                _sinalizar(processo, signal.SIGTERM)
-        if processo is not None:
-            espera = threading.Timer(5, self._matar_se_pendente, (processo,))
-            espera.daemon = True
-            espera.start()
         self.conversa.encerrar()
-
-    def _matar_se_pendente(self, processo):
-        with self._trava:
-            if self._processo is processo:
-                _sinalizar(processo, signal.SIGKILL)
-
-
-def _sinalizar(processo, sinal):
-    try:
-        os.killpg(processo.pid, sinal)
-    except OSError:
-        pass
 
 
 class Ponte(QObject):
@@ -131,7 +162,9 @@ class Janela(QWidget):
         self.ambiente = ambiente
         self.agy = agy
         self.tentativa = None
+        self.pendentes = Pendentes()
         self.linha = None
+        self.linhas = []
         self.geracao = 0
         self.segundos = 0
         self.espera = ''
@@ -311,6 +344,7 @@ class Janela(QWidget):
 
         self.linha = threading.Thread(target=rodar, name=f'vigia-{tipo}', daemon=True)
         self.linha.start()
+        self.linhas = [linha for linha in self.linhas if linha.is_alive()] + [self.linha]
         self.relogio.start()
         self.mostrar_estado()
 
@@ -334,8 +368,8 @@ class Janela(QWidget):
             return
         conversa = Conversa(pasta_propostas=self.pasta / 'propostas',
                             pasta_conversas=self.pasta / 'conversas',
-                            agy=self.agy, ambiente=self.ambiente)
-        self.tentativa = Tentativa(self.vigia, self.argumentos_retrato, conversa)
+                            agy=self.agy, ambiente=self.ambiente, registro=self.pendentes)
+        self.tentativa = Tentativa(self.vigia, self.argumentos_retrato, conversa, self.pendentes)
         if self.historico.toPlainText():
             self.falar('Jangada', 'Nova conversa.')
         self.trabalhar('abertura', self.tentativa.abrir,
@@ -373,6 +407,10 @@ class Janela(QWidget):
     def cancelar(self):
         if self.tentativa is not None:
             self.tentativa.cancelar()
+        pendentes = self.pendentes
+        sinalizados = pendentes.cancelar()
+        if sinalizados:
+            QTimer.singleShot(5000, lambda: pendentes.sinalizar(signal.SIGKILL, sinalizados))
         self.geracao += 1
         self.linha = None
         self.relogio.stop()
@@ -380,15 +418,20 @@ class Janela(QWidget):
         self.mostrar_estado()
 
     def encerrar(self, espera=5):
-        """Encerra o motor e apaga a pasta; espera a linha de trabalho sair."""
-        linha = self.linha
+        """Encerra o motor e apaga a pasta; só volta depois de colher os processos."""
         self.geracao += 1
         self.linha = None
         self.relogio.stop()
         if self.tentativa is not None:
             self.tentativa.cancelar()
-        if linha is not None:
-            linha.join(espera)
+        self.pendentes.sinalizar(signal.SIGTERM)
+        if not self.pendentes.esperar(espera):
+            self.pendentes.sinalizar(signal.SIGKILL)
+            self.pendentes.esperar(1)
+        prazo = time.monotonic() + 2
+        for linha in self.linhas:
+            linha.join(max(0, prazo - time.monotonic()))
+        self.linhas = [linha for linha in self.linhas if linha.is_alive()]
 
     def closeEvent(self, evento):
         self.encerrar()

@@ -346,7 +346,7 @@ class Conversa:
     """Uma conversa com o agy, do retrato à proposta."""
 
     def __init__(self, pasta_propostas=None, instrucao=INSTRUCAO, agy="agy",
-                 tempo_limite=TEMPO_LIMITE, ambiente=None, pasta_conversas=None):
+                 tempo_limite=TEMPO_LIMITE, ambiente=None, pasta_conversas=None, registro=None):
         self.pasta_propostas = Path(pasta_propostas or pasta_propostas_padrao())
         self.pasta_conversas = Path(pasta_conversas or pasta_conversas_padrao())
         self.instrucao = Path(instrucao)
@@ -363,6 +363,9 @@ class Conversa:
         self._trava = threading.Lock()
         self._processo = None
         self._encerrada = False
+        # Registro de chamadas da janela (entrar e sair); a chamada só sai
+        # depois de colhida, para a janela esperar por ela ao fechar.
+        self.registro = registro
 
     def iniciar(self, retrato):
         if self.id:
@@ -485,6 +488,8 @@ class Conversa:
             except OSError as erro:
                 raise ErroConversa(f"não foi possível chamar o agy: {erro}") from None
             self._processo = processo
+            if self.registro is not None:
+                self.registro.entrar(processo, signal.SIGKILL)
         try:
             saida, erros = processo.communicate(timeout=self.tempo_limite)
         except subprocess.TimeoutExpired:
@@ -496,6 +501,8 @@ class Conversa:
         finally:
             with self._trava:
                 self._processo = None
+            if self.registro is not None and processo.returncode is not None:
+                self.registro.sair(processo)
         if self._encerrada:
             raise ErroConversa("a conversa foi encerrada")
         saida = saida.decode("utf-8", errors="replace")

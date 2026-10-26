@@ -72,7 +72,36 @@ if modo == "orfao":
     with open(os.path.join(pasta, "vigia.log"), "a") as f:
         f.write(json.dumps({"filho": filho.pid}) + "\n")
     sys.exit(0)
+if modo == "teimoso":
+    import signal, subprocess
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    filho = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    with open(os.path.join(pasta, "vigia.log"), "a") as f:
+        f.write(json.dumps({"filho": filho.pid, "grupo": os.getpgid(0)}) + "\n")
+    time.sleep(60)
 print(json.dumps({"versao": 1, "gerado_em": "2026-10-26T10:00:00-03:00", "servicos": {"falhas": "nenhuma"}}))
+'''
+
+# Abre a janela em processo próprio, espera o retrato deixar o filho,
+# opcionalmente clica em Cancelar e fecha; o processo sai em seguida.
+MOTORISTA = r'''
+import os, sys, time
+from pathlib import Path
+os.environ["QT_QPA_PLATFORM"] = "offscreen"
+sys.path.insert(0, sys.argv[1])
+from PyQt6.QtWidgets import QApplication
+app = QApplication([])
+import janela
+vigia, estado, log, modo = sys.argv[2:6]
+j = janela.Janela(vigia, estado)
+j.show()
+limite = time.monotonic() + 20
+while time.monotonic() < limite and not (Path(log).exists() and '"filho"' in Path(log).read_text()):
+    app.processEvents()
+    time.sleep(0.01)
+if modo == "cancelar":
+    j.cancelar_botao.click()
+j.close()
 '''
 
 falhas = 0
@@ -95,6 +124,21 @@ def aguardar(condicao, prazo=15):
         time.sleep(0.01)
     APP.processEvents()
     return condicao()
+
+
+def membros_do_grupo(grupo):
+    """Processos vivos (não zumbis) cujo grupo é o indicado."""
+    membros = []
+    for entrada in Path('/proc').iterdir():
+        if not entrada.name.isdigit():
+            continue
+        try:
+            campos = (entrada / 'stat').read_text().split(')')[-1].split()
+        except OSError:
+            continue
+        if campos[0] != 'Z' and int(campos[2]) == grupo:
+            membros.append(int(entrada.name))
+    return membros
 
 
 def vivo(pid):
@@ -321,6 +365,30 @@ with tempfile.TemporaryDirectory() as pasta:
     conferir('--retrato segue para o retrato-conversa',
              chamadas(log_vigia)[0]['argv'] == ['retrato-conversa', '--retrato', 'retrato-20261026-100000-abc.json'])
     j.close()
+
+    # Retrato que ignora TERM e deixa um filho: depois que o processo da
+    # janela sai, nada do grupo segue vivo, com ou sem Cancelar antes
+    for acao in ('cancelar', 'fechar'):
+        log_vigia.unlink(missing_ok=True)
+        motorista = subprocess.run(
+            [sys.executable, '-I', '-c', MOTORISTA, str(pasta_vigia), str(vigia), str(estado), str(log_vigia), acao],
+            env=dict(os.environ, PATH=f'{bin_falso}:/usr/bin:/bin', VIGIA_FALSO_MODO='teimoso'),
+            capture_output=True, text=True, timeout=60)
+        registros = chamadas(log_vigia)
+        if len(registros) < 2:
+            conferir(f'retrato teimoso começou ({acao})', False)
+            continue
+        pid_vigia, filho, grupo = registros[0]['pid'], registros[1]['filho'], registros[1]['grupo']
+        conferir(f'janela sai sem erro depois de {acao} com retrato teimoso',
+                 motorista.returncode == 0 and 'Traceback' not in motorista.stderr)
+        conferir(f'{acao} com retrato teimoso: pai e filho encerrados ao sair',
+                 not vivo(pid_vigia) and not vivo(filho))
+        conferir(f'{acao} com retrato teimoso: nenhum processo do grupo segue vivo',
+                 grupo == pid_vigia and membros_do_grupo(grupo) == [])
+        for pid in (pid_vigia, filho):
+            if vivo(pid):
+                os.kill(pid, signal.SIGKILL)
+        conferir(f'{acao} com retrato teimoso não deixa pasta', conversa_vazia())
 
     # Uma segunda janela não abre: a trava avisa e a primeira continua
     ambiente = dict(os.environ, PATH=f'{bin_falso}:{os.environ["PATH"]}', AGY_FALSO_LOG=str(log_agy),
