@@ -4,6 +4,7 @@ import fcntl
 import json
 import os
 from pathlib import Path
+import shutil
 import signal
 import subprocess
 import sys
@@ -301,9 +302,26 @@ with tempfile.TemporaryDirectory() as pasta:
         except FileNotFoundError:
             return False
     conferir('primeira janela segura a trava', aguardar(lambda: travada() and chamadas(log_vigia), 20))
-    segunda = subprocess.run(comando, env=ambiente, capture_output=True, text=True, timeout=20)
+    log_hyprctl = tmp / 'hyprctl.log'
+    hyprctl = bin_falso / 'hyprctl'
+    hyprctl.write_text('#!/usr/bin/env python3\nimport json, os, sys\n'
+                       'with open(os.environ["HYPRCTL_FALSO_LOG"], "a") as arq:\n'
+                       '    arq.write(json.dumps(sys.argv[1:]) + "\\n")\n')
+    hyprctl.chmod(0o755)
+    segunda = subprocess.run(comando, env=dict(ambiente, HYPRLAND_INSTANCE_SIGNATURE='teste',
+                                               HYPRCTL_FALSO_LOG=str(log_hyprctl)),
+                             capture_output=True, text=True, timeout=20)
     conferir('segunda chamada não abre outra janela e avisa',
              segunda.returncode == 0 and 'já está aberto' in segunda.stderr and primeira.poll() is None)
+    expressao = 'hl.dsp.focus({ window = "class:^(org\\\\.jangada\\\\.vigia)$" })'
+    conferir('segunda chamada traz a janela por expressão Lua do hyprctl',
+             chamadas(log_hyprctl) == [['dispatch', expressao]])
+    lua = shutil.which('lua5.4') or shutil.which('lua')
+    if lua:
+        foco = subprocess.run([lua, '-e', 'hl = { dsp = { focus = function(t) io.write(t.window) end } }; '
+                               + expressao], capture_output=True, text=True, timeout=10)
+        conferir('expressão de foco é Lua válida e chega com a classe escapada',
+                 foco.returncode == 0 and foco.stdout == 'class:^(org\\.jangada\\.vigia)$')
     pid_vigia = chamadas(log_vigia)[0]['pid']
     primeira.send_signal(signal.SIGTERM)
     try:

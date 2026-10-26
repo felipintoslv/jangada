@@ -31,6 +31,9 @@ from visual.fichas import carregar as carregar_fichas  # noqa: E402
 LOGO = RAIZ / 'default/logo/jangada-symbolic.svg'
 RISCOS = RAIZ / 'docs/vigia/riscos.md'
 CLASSE = 'org.jangada.vigia'
+# hyprctl dispatch só aceita expressão Lua; na string Lua a barra vai dobrada
+# para chegar como \. na expressão regular da classe.
+FOCO_LUA = 'hl.dsp.focus({ window = "class:^(' + CLASSE.replace('.', '\\\\.') + ')$" })'
 TEMPO_RETRATO = 300
 AVISO_SAIDA = ('Sai da máquina: o retrato do sistema, já mascarado, e as suas perguntas, '
                'enviados ao agy (serviço do Google). Nada é aplicado no sistema.')
@@ -400,7 +403,7 @@ def trazer_existente():
     if not os.environ.get('HYPRLAND_INSTANCE_SIGNATURE'):
         return
     try:
-        subprocess.run(['hyprctl', 'dispatch', 'focuswindow', f'class:^({CLASSE.replace(".", chr(92) + ".")})$'],
+        subprocess.run(['hyprctl', 'dispatch', FOCO_LUA],
                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                        timeout=2, check=False)
     except (OSError, subprocess.TimeoutExpired):
