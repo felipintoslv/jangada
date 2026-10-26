@@ -49,8 +49,8 @@ Vigia. Na simulação da Central o botão fica desligado.
   higienizado como na conversa do terminal) e manda a primeira mensagem.
   Retrato e agy rodam fora da linha da interface; a janela mostra a espera
   com os segundos e o botão **Cancelar**.
-- O histórico é texto simples: HTML ou sequência de controle vinda do agy ou
-  do retrato aparece como texto. Um aviso fixo diz o que sai da máquina, com
+- O histórico é texto simples: HTML vindo do agy ou do retrato aparece como
+  texto, e sequências de controle são removidas. Um aviso fixo diz o que sai da máquina, com
   link para [Riscos e contenção](riscos.md).
 - **Enviar** (Ctrl+Enter) manda a pergunta; **Pedir proposta** equivale a
   `/proposta`; **Salvar proposta** só fica ativo com proposta e grava em

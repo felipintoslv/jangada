@@ -43,6 +43,12 @@ if modo == "falha":
     sys.exit(3)
 if modo == "lento":
     time.sleep(30)
+if modo == "orfao":
+    import subprocess
+    filho = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    with open(log, "a") as f:
+        f.write(json.dumps({"filho": filho.pid}) + "\n")
+    sys.exit(0)
 resposta = f"resposta {n + 1}"
 if modo == "html":
     resposta = "<b>negrito</b> <img src='file:///etc/passwd'> \x1b[31mvermelho\x1b[0m \x1b]0;titulo\x07fim"
@@ -60,6 +66,12 @@ if modo == "falha":
     sys.exit(1)
 if modo == "lento":
     time.sleep(30)
+if modo == "orfao":
+    import subprocess
+    filho = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    with open(os.path.join(pasta, "vigia.log"), "a") as f:
+        f.write(json.dumps({"filho": filho.pid}) + "\n")
+    sys.exit(0)
 print(json.dumps({"versao": 1, "gerado_em": "2026-10-26T10:00:00-03:00", "servicos": {"falhas": "nenhuma"}}))
 '''
 
@@ -226,6 +238,32 @@ with tempfile.TemporaryDirectory() as pasta:
     conferir('Cancelar no retrato encerra o jangada-vigia', aguardar(lambda: not vivo(pid_vigia), 5))
     aguardar(lambda: j.tentativa.conversa.pasta is not None, 0.5)
     conferir('Cancelar no retrato não chama o agy nem deixa pasta', chamadas() == [] and conversa_vazia())
+    j.close()
+
+    # Pai que sai deixando um filho com a saída aberta: Cancelar mata o grupo
+    j = nova('ok,orfao')
+    aguardar(lambda: 'resposta 1' in texto(j))
+    j.pergunta.setPlainText('pergunta com filho')
+    j.enviar_botao.click()
+    conferir('agy que deixa filho foi chamado', aguardar(lambda: len(chamadas()) == 3))
+    pid, filho = chamadas()[1]['pid'], chamadas()[2]['filho']
+    pasta_conversa = chamadas()[1]['cwd']
+    conferir('agy sai e o filho segura a espera',
+             aguardar(lambda: not vivo(pid), 5) and vivo(filho) and j.linha is not None)
+    j.cancelar_botao.click()
+    conferir('Cancelar com o agy já encerrado mata o filho', aguardar(lambda: not vivo(filho), 5))
+    conferir('Cancelar com filho apaga a pasta temporária', not os.path.exists(pasta_conversa) and conversa_vazia())
+    j.close()
+
+    j = nova(modo_vigia='orfao')
+    conferir('retrato que deixa filho foi pedido', aguardar(lambda: len(chamadas(log_vigia)) == 2))
+    pid_vigia, filho = chamadas(log_vigia)[0]['pid'], chamadas(log_vigia)[1]['filho']
+    conferir('retrato sai e o filho segura a espera',
+             aguardar(lambda: not vivo(pid_vigia), 5) and vivo(filho) and j.linha is not None)
+    j.cancelar_botao.click()
+    conferir('Cancelar com o retrato já encerrado mata o filho', aguardar(lambda: not vivo(filho), 5))
+    aguardar(lambda: j.linha is None, 5)
+    conferir('Cancelar no retrato com filho não chama o agy nem deixa pasta', chamadas() == [] and conversa_vazia())
     j.close()
 
     # Fechar durante a espera do agy

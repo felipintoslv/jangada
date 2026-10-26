@@ -439,7 +439,9 @@ class Conversa:
         with self._trava:
             self._encerrada = True
             processo = self._processo
-            if processo is not None and processo.poll() is None:
+            # Chamada pendente: o grupo morre mesmo com o agy já encerrado,
+            # porque um filho com a saída aberta segura o communicate().
+            if processo is not None:
                 try:
                     os.killpg(processo.pid, signal.SIGKILL)
                 except OSError:

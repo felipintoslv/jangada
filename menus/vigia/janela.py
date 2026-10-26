@@ -89,24 +89,31 @@ class Tentativa:
 
     def cancelar(self):
         """Interrompe o retrato ou o agy e apaga a pasta da conversa."""
+        # O grupo é sinalizado enquanto a chamada estiver pendente, mesmo com o
+        # pai já encerrado: um filho com a saída aberta segura o communicate().
         with self._trava:
             self.cancelada = True
             processo = self._processo
-        if processo is not None and processo.poll() is None:
-            # TERM deixa o jangada-vigia apagar os temporários do diagnóstico.
-            _sinalizar(processo, signal.SIGTERM)
-            espera = threading.Timer(5, _sinalizar, (processo, signal.SIGKILL))
+            if processo is not None:
+                # TERM deixa o jangada-vigia apagar os temporários do diagnóstico.
+                _sinalizar(processo, signal.SIGTERM)
+        if processo is not None:
+            espera = threading.Timer(5, self._matar_se_pendente, (processo,))
             espera.daemon = True
             espera.start()
         self.conversa.encerrar()
 
+    def _matar_se_pendente(self, processo):
+        with self._trava:
+            if self._processo is processo:
+                _sinalizar(processo, signal.SIGKILL)
+
 
 def _sinalizar(processo, sinal):
-    if processo.poll() is None:
-        try:
-            os.killpg(processo.pid, sinal)
-        except OSError:
-            pass
+    try:
+        os.killpg(processo.pid, sinal)
+    except OSError:
+        pass
 
 
 class Ponte(QObject):
