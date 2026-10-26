@@ -450,7 +450,7 @@ class Janela(QMainWindow):
         self.novo_projeto = QPushButton('Novo projeto')
         self.novo_projeto.setToolTip('Cria a pasta ou escolhe uma existente e cadastra o projeto. Depois vêm o coordenador e a tarefa.')
         self.novo_projeto.clicked.connect(self.abrir_novo_projeto)
-        self.nova = QPushButton('Nova tarefa')
+        self.nova = definir_tipo(QPushButton('Nova tarefa'), 'principal')
         self.nova.clicked.connect(self.nova_tarefa)
         self.painel = QPushButton('Painel de indicadores')
         self.painel.clicked.connect(self.abrir_indicadores)

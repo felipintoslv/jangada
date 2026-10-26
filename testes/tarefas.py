@@ -3838,6 +3838,9 @@ while not (pasta / 'parar-clientes').exists():
         textos = [layout.itemAt(i).widget().text() for i in range(layout.count()) if layout.itemAt(i).widget()]
         self.assertEqual(textos, ['Atualizar', 'Novo projeto', 'Novo coordenador', 'Nova tarefa', 'Painel de indicadores'])
 
+    def test_nova_tarefa_e_o_botao_principal_do_topo(self):
+        self.assertEqual(self.janela.nova.property('tipo'), 'principal')
+
     def test_novo_projeto_cria_so_a_pasta_vazia_e_nao_cria_git(self):
         base = self.raiz / 'projetos'
         with self.git_falso() as registro:
