@@ -114,17 +114,17 @@ permitem escolher revisor e delegação. A opção antiga **Sem isolamento**
 continua no formulário, mas é ignorada com aviso: o agente roda isolado.
 Alterar um controle seleciona o modo Personalizado; recolher a área preserva as escolhas.
 A barra do topo segue a ordem do trabalho: **Novo projeto**, **Novo coordenador**
-e **Nova tarefa**. **Novo projeto** pede o nome (ou uma pasta existente), cria a pasta
-em `JANGADA_PROJETOS`, inicia o Git com um commit vazio quando a pasta ainda não é
-repositório e cadastra o projeto; depois oferece abrir o coordenador nele. O Git roda
-fora da linha da interface. Pasta que já é repositório com commit só é cadastrada;
-repositório sem commit ganha só o commit vazio. Pasta existente dentro de outro
-repositório é recusada, e `.git` ou commit só nascem dentro de `JANGADA_PROJETOS`.
-Nenhum arquivo é apagado ou sobrescrito.
+e **Nova tarefa**. **Novo projeto** pede o nome (ou uma pasta existente) e cria a
+pasta vazia em `JANGADA_PROJETOS`. A Central não inicia o git nem faz commit: só
+lê o repositório. Pasta que já é repositório com commit é cadastrada, e a Central
+oferece abrir o coordenador nela. Pasta sem repositório mostra o aviso "Esta pasta
+ainda não é um repositório git. Rode no terminal:" com os dois comandos
+(`git -C PASTA init` e `git -C PASTA commit --allow-empty -m "Inicia repositório"`),
+**Copiar comandos** e **Já rodei, conferir**, que cadastra a pasta quando ela já
+tem ao menos um commit. Nenhum arquivo é apagado ou sobrescrito.
 **Nova pasta**, no formulário, usa o mesmo caminho e deixa a pasta selecionada.
-Uma pasta escolhida que não é repositório Git mostra um aviso com **Preparar como
-projeto**, em vez de seguir para uma abertura que falharia. Fora de `JANGADA_PROJETOS`
-o botão recusa com a razão.
+Uma pasta escolhida que não é repositório git mostra o mesmo aviso, em vez de
+seguir para uma abertura que falharia.
 **Iniciar tarefa** abre o agente num terminal da Central. Se ele falhar, o terminal
 fica aberto com a mensagem, e a Central mostra as últimas linhas do erro quando a
 tarefa não entra na lista em 20 segundos: a Central reconsulta aos 15 e conclui aos 20.

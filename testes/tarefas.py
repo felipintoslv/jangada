@@ -10,15 +10,16 @@ try:
 except ImportError:
     print('PyQt6 ausente; testes gráficos da central ignorados')
     sys.exit(1 if os.environ.get('CI') else 0)
+import contextlib
 from datetime import datetime, timezone
 import json
 import fcntl
 import re
+import shlex
 import shutil
 import signal
 import subprocess
 import tempfile
-import threading
 import time
 import unittest
 import uuid
@@ -39,6 +40,7 @@ from central import encaminhar, receber
 from dados import LIMITE, barra, idade, ler_lista, ler_observacao, pasta_sessoes, resumo_barra
 from argparse import Namespace
 APP = QApplication([])
+GIT = shutil.which('git')
 
 def aguardar(condicao):
     limite = time.monotonic() + 4
@@ -285,7 +287,7 @@ class Interface(unittest.TestCase):
         self.assertTrue(any(r.text() == 'Mensagem para o coordenador' for r in coluna.painel.findChildren(QLabel)))
 
     def git(self, pasta, *argumentos):
-        return subprocess.run(['git', '-C', str(pasta), *argumentos], capture_output=True, text=True, check=True).stdout.strip()
+        return subprocess.run([GIT, '-C', str(pasta), *argumentos], capture_output=True, text=True, check=True).stdout.strip()
 
     def repositorio(self, pasta):
         pasta.mkdir()
@@ -300,6 +302,7 @@ class Interface(unittest.TestCase):
         return [l for l in linhas if l[-1:] == ['cadastrar']]
 
     def abrir_projeto(self, base):
+        self.janela.e_git = projeto.e_git
         with patch.dict(os.environ, {'JANGADA_PROJETOS': str(base)}):
             self.janela.novo_projeto.click()
         return self.janela.dialogo_projeto
@@ -3763,16 +3766,45 @@ while not (pasta / 'parar-clientes').exists():
         self.assertEqual(form.pedido.toPlainText(), 'Meu pedido')
         self.assertFalse((self.raiz / 'acao.json').exists())
 
-    def test_nova_pasta_cria_o_projeto_e_preenche_o_campo(self):
+    @contextlib.contextmanager
+    def git_falso(self):
+        """git no PATH que registra cada chamada e repassa ao git de verdade."""
+        pasta = self.raiz / 'git-falso'
+        pasta.mkdir(exist_ok=True)
+        registro = pasta / 'chamadas.json'
+        script = pasta / 'git'
+        script.write_text(f"#!/usr/bin/env python3\nimport json, os, sys\n"
+                          f"open({str(registro)!r}, 'a').write(json.dumps(sys.argv[1:]) + '\\n')\n"
+                          f"os.execv({GIT!r}, [{GIT!r}, *sys.argv[1:]])\n")
+        script.chmod(448)
+        with patch.dict(os.environ, {'PATH': f'{pasta}{os.pathsep}{os.environ["PATH"]}'}):
+            yield registro
+
+    def exigir_so_leitura(self, registro):
+        chamadas = [json.loads(l) for l in registro.read_text().splitlines()] if registro.exists() else []
+        self.assertTrue(chamadas)
+        for chamada in chamadas:
+            self.assertEqual(chamada[0], '-C')
+            self.assertEqual(chamada[2], 'rev-parse', chamada)
+            self.assertNotIn(chamada[2], ('init', 'commit', 'add', 'config'))
+
+    def rodar_comandos(self, aviso):
+        """Faz o que o usuário faz: roda o texto do aviso num shell de verdade."""
+        ambiente = {**os.environ, 'GIT_AUTHOR_NAME': 'T', 'GIT_AUTHOR_EMAIL': 't@t',
+                    'GIT_COMMITTER_NAME': 'T', 'GIT_COMMITTER_EMAIL': 't@t'}
+        subprocess.run(['sh', '-c', aviso.comandos.toPlainText()], check=True, capture_output=True, env=ambiente)
+
+    def test_nova_pasta_cria_so_a_pasta_vazia_e_preenche_o_campo(self):
         base = self.raiz / 'projetos'
         with patch.dict(os.environ, {'JANGADA_PROJETOS': str(base)}):
             self.janela.nova_tarefa()
         form = self.janela.formulario
         form.criar_pasta(' novo ')
-        aguardar(lambda: form.projeto.text() == str(base / 'novo'))
         self.assertTrue((base / 'novo').is_dir())
-        self.assertIn('Projeto pronto', form.erro.text())
-        self.assertEqual(self.git(base / 'novo', 'rev-list', '--count', 'HEAD'), '1')
+        self.assertEqual(list((base / 'novo').iterdir()), [])
+        self.assertEqual(form.projeto.text(), str(base / 'novo'))
+        self.assertFalse(form.aviso_git.isHidden())
+        self.assertIn('ainda não é um repositório git', form.aviso_git.texto.text())
         form.projeto.clear()
         form.criar_pasta('novo')
         self.assertIn('já existe', form.erro.text())
@@ -3782,67 +3814,130 @@ while not (pasta / 'parar-clientes').exists():
             self.assertIn('não pode', form.erro.text())
         self.assertEqual([p.name for p in base.iterdir()], ['novo'])
         self.assertFalse((self.raiz / 'fora').exists())
+        self.assertEqual(self.cadastros(), [])
 
     def test_botoes_do_topo_na_ordem_projeto_coordenador_tarefa(self):
         layout = self.janela.comandos.layout()
         textos = [layout.itemAt(i).widget().text() for i in range(layout.count()) if layout.itemAt(i).widget()]
         self.assertEqual(textos, ['Atualizar', 'Novo projeto', 'Novo coordenador', 'Nova tarefa', 'Painel de indicadores'])
 
-    def test_novo_projeto_cria_pasta_git_cadastra_e_alimenta_o_coordenador(self):
-        self.coordenador_falso()
-        self.coordenadores_falsos()
-        coluna = self.carregar_coordenadores()
+    def test_novo_projeto_cria_so_a_pasta_vazia_e_nao_cria_git(self):
         base = self.raiz / 'projetos'
-        dialogo = self.abrir_projeto(base)
-        dialogo.nome.setText(' alfa ')
-        dialogo.criar.click()
-        self.esperar_projeto(dialogo)
-        pasta = base / 'alfa'
-        self.assertEqual(dialogo.caminho, str(pasta))
-        self.assertEqual(self.git(pasta, 'rev-list', '--count', 'HEAD'), '1')
-        self.assertEqual(self.git(pasta, 'log', '-1', '--format=%s'), 'início do projeto')
-        self.assertEqual(self.git(pasta, 'status', '--porcelain'), '')
-        self.assertEqual(self.cadastros(), [['--projeto', str(pasta), 'cadastrar']])
-        self.assertFalse(dialogo.coordenador.isHidden())
-        self.assertFalse(dialogo.criar.isEnabled())
-        dialogo.coordenador.click()
-        self.assertEqual(coluna.dialogo.projeto.currentData(), str(pasta))
-        self.assertIn('alfa', coluna.dialogo.projeto.currentText())
+        with self.git_falso() as registro:
+            dialogo = self.abrir_projeto(base)
+            dialogo.nome.setText(' alfa ')
+            dialogo.criar.click()
+            self.esperar_projeto(dialogo)
+            pasta = base / 'alfa'
+            self.assertTrue(pasta.is_dir())
+            self.assertEqual(list(pasta.iterdir()), [])
+            self.assertFalse((pasta / '.git').exists())
+            self.assertIsNone(dialogo.caminho)
+            self.assertFalse(dialogo.aviso.isHidden())
+            self.assertTrue(dialogo.criar.isEnabled())
+            self.assertEqual(self.cadastros(), [])
+            self.assertTrue(dialogo.coordenador.isHidden())
+            dialogo.aviso.rodei.click()
+            self.assertIn('Ainda não é um repositório git', dialogo.aviso.texto.text())
+            self.exigir_so_leitura(registro)
 
-    def test_nova_tarefa_lista_o_projeto_novo_sem_passar_pela_aba_projetos(self):
-        self.janela.nova_tarefa()
+    def test_aviso_cita_o_caminho_com_espaco_e_aspas_e_o_comando_funciona(self):
+        base = self.raiz / 'meus projetos'
+        dialogo = self.abrir_projeto(base)
+        dialogo.nome.setText('o "dono\'s" $HOME')
+        dialogo.criar.click()
+        pasta = base / 'o "dono\'s" $HOME'
+        alvo = shlex.quote(str(pasta))
+        self.assertEqual(dialogo.aviso.texto.text(), 'Esta pasta ainda não é um repositório git. Rode no terminal:')
+        comandos = dialogo.aviso.comandos.toPlainText()
+        self.assertEqual(comandos, f'git -C {alvo} init\n'
+                                   f'git -C {alvo} commit --allow-empty -m "Inicia repositório"')
+        dialogo.aviso.copiar.click()
+        self.assertEqual(QApplication.clipboard().text(), comandos)
+        self.rodar_comandos(dialogo.aviso)
+        self.assertEqual(self.git(pasta, 'log', '-1', '--format=%s'), 'Inicia repositório')
+
+    def test_ja_rodei_conferir_cadastra_com_commit_e_mantem_o_aviso_sem_ele(self):
         base = self.raiz / 'projetos'
         dialogo = self.abrir_projeto(base)
         dialogo.nome.setText('beta')
         dialogo.criar.click()
-        self.esperar_projeto(dialogo)
-        self.assertEqual([c for _, c in self.janela.coordenadores.projetos()], [str(base / 'beta')])
+        pasta = base / 'beta'
+        dialogo.aviso.rodei.click()
+        self.assertFalse(dialogo.aviso.isHidden())
+        self.git(pasta, 'init', '--quiet')
+        dialogo.aviso.rodei.click()
+        self.assertFalse(dialogo.aviso.isHidden())
+        self.assertIn('ao menos um commit', dialogo.aviso.texto.text())
+        self.assertEqual(self.cadastros(), [])
+        self.rodar_comandos(dialogo.aviso)
+        dialogo.aviso.rodei.click()
+        aguardar(lambda: dialogo.caminho is not None)
+        self.assertEqual(dialogo.caminho, str(pasta.resolve()))
+        self.assertTrue(dialogo.aviso.isHidden())
+        self.assertFalse(dialogo.coordenador.isHidden())
+        self.assertEqual(self.cadastros(), [['--projeto', str(pasta.resolve()), 'cadastrar']])
 
-    def test_novo_projeto_em_pasta_que_ja_e_git_nao_ganha_commit(self):
+    def test_pasta_git_existente_e_so_cadastrada_e_alimenta_o_coordenador(self):
+        self.coordenador_falso()
+        self.coordenadores_falsos()
+        coluna = self.carregar_coordenadores()
         existente = self.raiz / 'existente'
         self.repositorio(existente)
         antes = self.git(existente, 'rev-parse', 'HEAD')
-        dialogo = self.abrir_projeto(self.raiz / 'projetos')
-        dialogo.nome.setText(str(existente))
-        dialogo.criar.click()
-        self.esperar_projeto(dialogo)
+        with self.git_falso() as registro:
+            dialogo = self.abrir_projeto(self.raiz / 'projetos')
+            dialogo.nome.setText(str(existente))
+            dialogo.criar.click()
+            aguardar(lambda: dialogo.caminho is not None)
+            self.exigir_so_leitura(registro)
         self.assertEqual(dialogo.caminho, str(existente.resolve()))
         self.assertEqual(self.git(existente, 'rev-parse', 'HEAD'), antes)
         self.assertEqual(self.git(existente, 'rev-list', '--count', 'HEAD'), '1')
-        self.assertIn('já era um repositório', dialogo.resultado.text())
+        self.assertTrue(dialogo.aviso.isHidden())
         self.assertEqual(self.cadastros(), [['--projeto', str(existente.resolve()), 'cadastrar']])
+        self.assertFalse(dialogo.coordenador.isHidden())
+        dialogo.coordenador.click()
+        self.assertEqual(coluna.dialogo.projeto.currentData(), str(existente.resolve()))
+        self.assertIn('existente', coluna.dialogo.projeto.currentText())
 
-    def test_novo_projeto_em_pasta_com_arquivos_inicia_git_sem_tocar_nos_arquivos(self):
-        existente = self.raiz / 'projetos' / 'com-arquivos'
-        existente.mkdir(parents=True)
-        (existente / 'a.txt').write_text('meu texto\n')
+    def test_nova_tarefa_lista_o_projeto_novo_sem_passar_pela_aba_projetos(self):
+        self.janela.nova_tarefa()
+        existente = self.raiz / 'beta'
+        self.repositorio(existente)
         dialogo = self.abrir_projeto(self.raiz / 'projetos')
         dialogo.nome.setText(str(existente))
         dialogo.criar.click()
-        self.esperar_projeto(dialogo)
+        aguardar(lambda: dialogo.caminho is not None)
+        self.assertEqual([c for _, c in self.janela.coordenadores.projetos()], [str(existente.resolve())])
+
+    def test_pasta_com_arquivos_e_sem_git_nao_e_tocada(self):
+        existente = self.raiz / 'projetos' / 'com-arquivos'
+        existente.mkdir(parents=True)
+        (existente / 'a.txt').write_text('meu texto\n')
+        with self.git_falso() as registro:
+            dialogo = self.abrir_projeto(self.raiz / 'projetos')
+            dialogo.nome.setText(str(existente))
+            dialogo.criar.click()
+            self.exigir_so_leitura(registro)
+        self.assertEqual(sorted(p.name for p in existente.iterdir()), ['a.txt'])
         self.assertEqual((existente / 'a.txt').read_text(), 'meu texto\n')
-        self.assertEqual(self.git(existente, 'rev-list', '--count', 'HEAD'), '1')
-        self.assertEqual(self.git(existente, 'status', '--porcelain'), '?? a.txt')
+        self.assertFalse(dialogo.aviso.isHidden())
+        self.assertEqual(self.cadastros(), [])
+
+    def test_pasta_dentro_de_outro_repositorio_pede_o_git_proprio(self):
+        externo = self.raiz / 'externo'
+        self.repositorio(externo)
+        sub = externo / 'sub'
+        sub.mkdir()
+        self.assertFalse(projeto.e_git(sub))
+        self.assertTrue(projeto.e_git(externo))
+        dialogo = self.abrir_projeto(self.raiz / 'projetos')
+        dialogo.nome.setText(str(sub))
+        dialogo.criar.click()
+        self.assertFalse(dialogo.aviso.isHidden())
+        self.assertFalse((sub / '.git').exists())
+        self.assertEqual(self.cadastros(), [])
 
     def test_novo_projeto_com_nome_de_pasta_existente_nao_sobrescreve(self):
         base = self.raiz / 'projetos'
@@ -3862,9 +3957,10 @@ while not (pasta / 'parar-clientes').exists():
 
     def test_novo_projeto_mostra_a_recusa_do_cadastro(self):
         (self.raiz / 'projeto-recusa').touch()
-        base = self.raiz / 'projetos'
-        dialogo = self.abrir_projeto(base)
-        dialogo.nome.setText('delta')
+        existente = self.raiz / 'existente'
+        self.repositorio(existente)
+        dialogo = self.abrir_projeto(self.raiz / 'projetos')
+        dialogo.nome.setText(str(existente))
         dialogo.criar.click()
         aguardar(lambda: dialogo.criar.isEnabled())
         self.assertIn('recusou o cadastro', dialogo.resultado.text())
@@ -3892,109 +3988,6 @@ while not (pasta / 'parar-clientes').exists():
             self.assertEqual(self.cadastros(), [])
         finally:
             demo.close()
-
-    def pasta_do_projeto(self, nome='p'):
-        pasta = self.raiz / 'projetos' / nome
-        pasta.mkdir(parents=True)
-        return pasta
-
-    def preparar_em(self, pasta, base=None):
-        dialogo = self.abrir_projeto(base or self.raiz / 'projetos')
-        dialogo.nome.setText(str(pasta))
-        dialogo.criar.click()
-        aguardar(lambda: dialogo.caminho is not None or dialogo.criar.isEnabled())
-        return dialogo
-
-    def test_pasta_fora_de_jangada_projetos_nao_ganha_git_nem_cadastro(self):
-        fora = self.raiz / 'fora'
-        fora.mkdir()
-        (fora / 'a.txt').write_text('meu texto\n')
-        dialogo = self.preparar_em(fora)
-        self.assertIn('fora de', dialogo.resultado.text())
-        self.assertIn('JANGADA_PROJETOS', dialogo.resultado.text())
-        self.assertFalse((fora / '.git').exists())
-        self.assertEqual(self.cadastros(), [])
-        sem_commit = self.raiz / 'fora-sem-commit'
-        sem_commit.mkdir()
-        self.git(sem_commit, 'init', '--quiet')
-        dialogo = self.preparar_em(sem_commit)
-        self.assertIn('fora de', dialogo.resultado.text())
-        with self.assertRaises(subprocess.CalledProcessError):
-            self.git(sem_commit, 'rev-parse', '--verify', 'HEAD')
-        self.assertEqual(self.cadastros(), [])
-
-    def test_git_sem_commit_na_pasta_recebe_so_o_commit_vazio(self):
-        pasta = self.pasta_do_projeto()
-        self.git(pasta, 'init', '--quiet')
-        (pasta / 'a.txt').write_text('meu texto\n')
-        dialogo = self.preparar_em(pasta)
-        self.assertEqual(self.git(pasta, 'rev-list', '--count', 'HEAD'), '1')
-        self.assertEqual(self.git(pasta, 'log', '-1', '--format=%s'), 'início do projeto')
-        self.assertEqual(self.git(pasta, 'status', '--porcelain'), '?? a.txt')
-        self.assertIn('não tinha commit', dialogo.resultado.text())
-        self.assertEqual(self.cadastros(), [['--projeto', str(pasta.resolve()), 'cadastrar']])
-
-    def test_falha_no_primeiro_commit_nao_cadastra_e_nova_tentativa_termina(self):
-        pasta = self.pasta_do_projeto()
-        original = projeto._git
-
-        def falha_no_commit(destino, *argumentos, **opcoes):
-            if 'commit' in argumentos:
-                return subprocess.CompletedProcess(argumentos, 1, '', 'sem identidade')
-            return original(destino, *argumentos, **opcoes)
-
-        with patch.object(projeto, '_git', falha_no_commit):
-            dialogo = self.preparar_em(pasta)
-        self.assertIn('primeiro commit falhou', dialogo.resultado.text())
-        self.assertEqual(self.cadastros(), [])
-        self.assertFalse(projeto.e_git(pasta))
-        dialogo = self.preparar_em(pasta)
-        self.assertEqual(dialogo.caminho, str(pasta.resolve()))
-        self.assertEqual(self.git(pasta, 'rev-list', '--count', 'HEAD'), '1')
-        self.assertEqual(self.cadastros(), [['--projeto', str(pasta.resolve()), 'cadastrar']])
-
-    def test_pasta_nova_dentro_de_outro_repositorio_ganha_repositorio_proprio(self):
-        externo = self.raiz / 'externo'
-        self.repositorio(externo)
-        base = externo / 'projetos'
-        base.mkdir()
-        dialogo = self.abrir_projeto(base)
-        dialogo.nome.setText('filho')
-        dialogo.criar.click()
-        self.esperar_projeto(dialogo)
-        filho = base / 'filho'
-        self.assertEqual(Path(self.git(filho, 'rev-parse', '--show-toplevel')), filho.resolve())
-        self.assertEqual(self.git(filho, 'rev-list', '--count', 'HEAD'), '1')
-        self.assertEqual(self.git(externo, 'rev-list', '--count', 'HEAD'), '1')
-        self.assertEqual(self.cadastros(), [['--projeto', str(filho), 'cadastrar']])
-
-    def test_pasta_existente_de_outro_repositorio_e_recusada(self):
-        externo = self.raiz / 'externo'
-        self.repositorio(externo)
-        sub = externo / 'projetos' / 'sub'
-        sub.mkdir(parents=True)
-        dialogo = self.preparar_em(sub, externo / 'projetos')
-        self.assertIn('fica dentro do repositório', dialogo.resultado.text())
-        self.assertFalse((sub / '.git').exists())
-        self.assertEqual(self.git(externo, 'rev-list', '--count', 'HEAD'), '1')
-        self.assertEqual(self.cadastros(), [])
-
-    def test_git_do_preparo_roda_fora_da_linha_da_interface(self):
-        linhas = []
-        original = projeto._git
-
-        def registra(destino, *argumentos, **opcoes):
-            linhas.append(threading.get_ident())
-            return original(destino, *argumentos, **opcoes)
-
-        with patch.object(projeto, '_git', registra):
-            dialogo = self.abrir_projeto(self.raiz / 'projetos')
-            dialogo.nome.setText('zeta')
-            dialogo.criar.click()
-            self.assertTrue(dialogo.preparo.ocupado())
-            self.esperar_projeto(dialogo)
-        self.assertTrue(linhas)
-        self.assertNotIn(threading.get_ident(), linhas)
 
     def abertura_sem_sessao(self, consulta_presa):
         self.janela.prazo_tarefa_ms = 600
@@ -4031,17 +4024,28 @@ while not (pasta / 'parar-clientes').exists():
         aguardar(lambda: form.perfis.state() == QProcess.ProcessState.NotRunning)
         form.projeto.setText(str(pasta))
         form.pedido.setPlainText('Fazer algo')
-        form.criar()
-        self.assertIn('ainda não é um projeto Git', form.erro.text())
-        self.assertFalse(form.preparar_projeto.isHidden())
+        with self.git_falso() as registro:
+            form.criar()
+            self.exigir_so_leitura(registro)
+        self.assertIn('A tarefa não foi aberta', form.erro.text())
+        self.assertFalse(form.aviso_git.isHidden())
+        self.assertIn('Rode no terminal', form.aviso_git.texto.text())
+        self.assertIn(' init', form.aviso_git.comandos.toPlainText())
         self.assertFalse((self.raiz / 'terminal.json').exists())
         self.assertEqual(self.janela.aberturas, {})
-        form.preparar_projeto.click()
-        aguardar(lambda: form.projeto.text() == str(pasta.resolve()) and 'Projeto pronto' in form.erro.text())
-        self.assertTrue(form.preparar_projeto.isHidden())
-        self.assertEqual(self.git(pasta, 'rev-list', '--count', 'HEAD'), '1')
+        self.assertEqual(self.cadastros(), [])
+        form.aviso_git.rodei.click()
+        self.assertFalse(form.aviso_git.isHidden())
+        self.assertIn('Ainda não', form.aviso_git.texto.text())
+        self.assertEqual(self.cadastros(), [])
+        self.rodar_comandos(form.aviso_git)
+        form.aviso_git.rodei.click()
+        aguardar(lambda: 'Projeto pronto' in form.erro.text())
+        self.assertTrue(form.aviso_git.isHidden())
+        self.assertEqual(form.projeto.text(), str(pasta.resolve()))
+        self.assertEqual(self.cadastros(), [['--projeto', str(pasta.resolve()), 'cadastrar']])
         form.criar()
-        aguardar((self.raiz / 'terminal.json').exists)
+        aguardar((self.raiz / 'terminal-saida.json').exists)
         self.assertIn('Abertura solicitada', form.erro.text())
 
     def test_abertura_usa_terminal_proprio_e_nao_o_modo_janela(self):
@@ -4103,18 +4107,18 @@ while not (pasta / 'parar-clientes').exists():
         self.assertNotIn('não abriu', form.erro.text())
 
     def test_arquivo_de_erros_recusa_link_e_limpa_o_texto(self):
-        pasta = projeto.pasta_de_erros()
+        pasta = janela.pasta_de_erros()
         self.assertEqual(pasta.stat().st_mode & 0o777, 0o700)
         with self.assertRaises(ValueError):
-            projeto.criar_arquivo_de_erros('../fora')
+            janela.criar_arquivo_de_erros('../fora')
         alvo = self.raiz / 'alvo'
         alvo.write_text('segredo')
         (pasta / 'ligado.erro').symlink_to(alvo)
         with self.assertRaises(OSError):
-            projeto.criar_arquivo_de_erros('ligado')
+            janela.criar_arquivo_de_erros('ligado')
         self.assertEqual(alvo.read_text(), 'segredo')
         self.assertEqual(projeto.ultimas_linhas(pasta / 'ligado.erro'), '')
-        arquivo = projeto.criar_arquivo_de_erros('limpo')
+        arquivo = janela.criar_arquivo_de_erros('limpo')
         arquivo.write_text('\n'.join(f'linha {i}' for i in range(20)) + '\n\x1b[1mfim\x1b[0m\x07\n')
         linhas = projeto.ultimas_linhas(arquivo).splitlines()
         self.assertEqual(len(linhas), 8)

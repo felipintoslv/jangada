@@ -6,6 +6,7 @@ import html
 import json
 import os
 import re
+import stat
 import sys
 from pathlib import Path
 import time
@@ -34,8 +35,48 @@ from rodadas import Rodadas
 from coordenadores import FAIXA, Coordenadores
 from cotas import SIMULACAO, ConsultaCotas, FaixaCotas
 from aparencia import CartaoResumo, InspetorRolavel, LinhaTempo, cores_interacao, misturar
-from projeto import (ROTEIRO, SEM_ERRO, NovoProjeto, Preparo, criar_arquivo_de_erros, e_git,
-                     pasta_base, ultimas_linhas)
+from projeto import SEM_ERRO, AvisoGit, NovoProjeto, Preparo, e_git, pasta_base, ultimas_linhas
+
+# Roda o agente num terminal e, se ele sair com erro, segura a janela aberta.
+# O arquivo de erros, o programa e os argumentos chegam como parâmetros posicionais.
+ROTEIRO = """arquivo=$1; shift
+"$@" 2> >(tee -a -- "$arquivo" >&2)
+resultado=$?
+wait
+if ((resultado != 0)); then
+  printf '\\nA tarefa não abriu. Enter fecha.\\n' >&2
+  read -r _
+fi
+exit "$resultado"
+"""
+
+
+def _pasta_privada(pasta):
+    pasta.mkdir(mode=0o700, exist_ok=True)
+    dados = pasta.lstat()
+    if not stat.S_ISDIR(dados.st_mode) or dados.st_uid != os.getuid() or dados.st_mode & 0o077:
+        raise ValueError('A pasta de erros deve pertencer ao usuário e ter permissão 0700.')
+    return pasta
+
+
+def pasta_de_erros():
+    """`$XDG_RUNTIME_DIR/jangada-tarefas/aberturas`, fora do runtime visível ao agente isolado.
+
+    Recusa link, dono diferente e permissão aberta, na pasta e na subpasta.
+    """
+    runtime = os.environ.get('XDG_RUNTIME_DIR')
+    if not runtime or not os.path.isabs(runtime):
+        raise ValueError('XDG_RUNTIME_DIR deve indicar a pasta da sessão gráfica.')
+    return _pasta_privada(_pasta_privada(Path(runtime) / 'jangada-tarefas') / 'aberturas')
+
+
+def criar_arquivo_de_erros(nome):
+    """Arquivo vazio e novo para a saída de erro de uma abertura; nunca reaproveita um existente."""
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', nome):
+        raise ValueError('Nome de tarefa inválido.')
+    arquivo = pasta_de_erros() / (nome + '.erro')
+    os.close(os.open(arquivo, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600))
+    return arquivo
 
 # Só para a janela simulada e para quando a consulta falha: o catálogo vem do
 # jangada-agente --capacidades-json, que também é quem valida a escolha.
@@ -113,14 +154,13 @@ class NovaTarefa(QDialog):
         self.erro.setTextFormat(Qt.TextFormat.PlainText)
         self.erro.setWordWrap(True)
         layout.addWidget(self.erro)
-        self.preparar_projeto = QPushButton('Preparar como projeto')
-        self.preparar_projeto.setToolTip('Inicia o Git na pasta, se faltar, e cadastra o projeto. Nenhum arquivo é alterado.')
-        self.preparar_projeto.clicked.connect(self.preparar_pasta)
-        self.preparar_projeto.hide()
-        layout.addWidget(self.preparar_projeto, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.aviso_git = AvisoGit()
+        layout.addWidget(self.aviso_git)
         self.preparo = Preparo(janela)
         self.preparo.pronto.connect(self.projeto_pronto)
         self.preparo.falhou.connect(self.erro.setText)
+        self.preparo.sem_git.connect(self.pedir_git)
+        self.aviso_git.conferir.connect(self.preparo.preparar)
         botoes = QHBoxLayout()
         fechar = QPushButton('Fechar')
         fechar.clicked.connect(self.hide)
@@ -198,12 +238,14 @@ class NovaTarefa(QDialog):
     def criar_pasta(self, nome):
         self.preparo.criar(nome, self.base)
 
-    def preparar_pasta(self):
-        self.preparo.preparar(self.projeto.text(), self.base)
+    def pedir_git(self, caminho):
+        self.projeto.setText(caminho)
+        self.aviso_git.mostrar(caminho)
+        self.erro.setText('A tarefa não foi aberta: a pasta ainda não é um projeto git.')
 
     def projeto_pronto(self, caminho, situacao):
         self.projeto.setText(caminho)
-        self.preparar_projeto.hide()
+        self.aviso_git.hide()
         self.enviar.setEnabled(True)
         self.erro.setText(f'Projeto pronto em {caminho}. {situacao}')
 
@@ -221,9 +263,7 @@ class NovaTarefa(QDialog):
             return
         projeto = Path(pasta).expanduser().resolve()
         if self.janela.real and not self.janela.e_git(projeto):
-            self.erro.setText(f'{projeto} ainda não é um projeto Git, e a tarefa precisa de um worktree próprio. '
-                              'Use Preparar como projeto para iniciar o Git e cadastrar a pasta; nenhum arquivo seu é alterado.')
-            self.preparar_projeto.show()
+            self.pedir_git(str(projeto))
             return
         agente = self.agente.currentText()
         perfil = self.agente.currentData()
@@ -265,7 +305,7 @@ class NovaTarefa(QDialog):
     def reeditar(self, *_):
         self.enviar.setEnabled(True)
         self.erro.clear()
-        self.preparar_projeto.hide()
+        self.aviso_git.hide()
 
     def mostrar_falha(self, nome, texto):
         if nome != self.abertura:
@@ -341,7 +381,7 @@ class Janela(QMainWindow):
         self.atualizar_botao = QPushButton('Atualizar' if real else 'Avançar simulação')
         self.atualizar_botao.clicked.connect(self.avancar)
         self.novo_projeto = QPushButton('Novo projeto')
-        self.novo_projeto.setToolTip('Cria a pasta, inicia o Git e cadastra o projeto. Depois vêm o coordenador e a tarefa.')
+        self.novo_projeto.setToolTip('Cria a pasta ou escolhe uma existente e cadastra o projeto. Depois vêm o coordenador e a tarefa.')
         self.novo_projeto.clicked.connect(self.abrir_novo_projeto)
         self.nova = QPushButton('Nova tarefa')
         self.nova.setProperty('principal', True)
@@ -769,6 +809,22 @@ class Janela(QMainWindow):
             self.observadas.pop(nome, None)
             self.eventos.pop(nome, None)
             self.previas.pop(nome, None)
+
+    def criar_pasta_vazia(self, pasta):
+        """Cria a pasta de um projeto novo; devolve o erro, ou None se criou. Nunca reaproveita pasta existente."""
+        try:
+            pasta.mkdir(parents=True)
+        except FileExistsError:
+            return f'{pasta} já existe. Escolha essa pasta em vez de digitar o nome.'
+        except OSError as erro:
+            return f'Não foi possível criar {pasta}: {erro.strerror}.'
+        return None
+
+    def iniciar_cadastro(self, pasta):
+        processo = QProcess(self)
+        self.preparar(processo, ['--projeto', str(pasta), 'cadastrar'], 'jangada-projeto')
+        processo.start()
+        return processo
 
     def abrir_novo_projeto(self):
         if self.dialogo_projeto is None:
