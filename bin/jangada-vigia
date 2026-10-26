@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Coleta diagnóstico determinístico do sistema e do Jangada Shell sob pedido,
-# somente leitura e sem uso de rede ou modelo de IA.
+# somente leitura e sem uso de rede ou modelo de IA. A conversa manda o
+# retrato, com mascaramento extra, ao agy; é a única saída para a rede.
 #
 # Uso:
 #   jangada-vigia diagnostico
 #   jangada-vigia lista
 #   jangada-vigia apagar [--todos | ARQUIVO]
+#   jangada-vigia conversa [--retrato ARQUIVO]
 set -euo pipefail
 export LC_ALL=C.UTF-8
 export SYSTEMD_PAGER=cat PAGER=cat
@@ -16,7 +18,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/jangada-shell-config"
 PASTA_VIGIA="$JANGADA_ESTADO/vigia"
 
 uso() {
-  sed -n '2,8s/^# \{0,1\}//p' "$0"
+  sed -n '2,9s/^# \{0,1\}//p' "$0"
 }
 
 garantir_pasta() {
@@ -514,6 +516,36 @@ subcomando_lista() {
   shopt -u nullglob
 }
 
+# Imprime o nome de um retrato (retrato-*.json ou .md) que está direto na
+# pasta do Vigia; recusa "..", link simbólico, subpasta e caminho de fora.
+nome_retrato() {
+  local alvo="$1" pasta_real="$2" candidato dir_real nome_base
+  if [[ "$alvo" == *".."* ]]; then
+    echo "erro: caminho recusado fora de $PASTA_VIGIA: $alvo" >&2
+    return 1
+  fi
+  if [[ "$alvo" == */* ]]; then
+    candidato="$alvo"
+  else
+    candidato="$pasta_real/$alvo"
+  fi
+  if [[ -L "$candidato" ]]; then
+    echo "erro: link simbólico recusado: $alvo" >&2
+    return 1
+  fi
+  dir_real="$(realpath -e "$(dirname "$candidato")" 2>/dev/null || true)"
+  nome_base="$(basename "$candidato")"
+  if [[ "$dir_real" != "$pasta_real" || ! "$nome_base" =~ ^retrato-[A-Za-z0-9_.-]+\.(json|md)$ ]]; then
+    echo "erro: caminho fora de $PASTA_VIGIA ou nome inválido: $alvo" >&2
+    return 1
+  fi
+  if [[ ! -f "$pasta_real/$nome_base" ]]; then
+    echo "erro: retrato não encontrado: $alvo" >&2
+    return 1
+  fi
+  printf '%s\n' "$nome_base"
+}
+
 subcomando_apagar() {
   local alvo="${1:-}"
   if [[ -z "$alvo" ]]; then
@@ -529,36 +561,8 @@ subcomando_apagar() {
     return 0
   fi
 
-  if [[ "$alvo" == *".."* ]]; then
-    echo "erro: caminho recusado fora de $PASTA_VIGIA: $alvo" >&2
-    exit 1
-  fi
-
-  local candidato dir_cand dir_real nome_base
-  if [[ "$alvo" == */* ]]; then
-    candidato="$alvo"
-  else
-    candidato="$pasta_real/$alvo"
-  fi
-
-  if [[ -L "$candidato" ]]; then
-    echo "erro: link simbólico recusado: $alvo" >&2
-    exit 1
-  fi
-
-  dir_cand="$(dirname "$candidato")"
-  dir_real="$(realpath -e "$dir_cand" 2>/dev/null || true)"
-  nome_base="$(basename "$candidato")"
-
-  if [[ "$dir_real" != "$pasta_real" || ! "$nome_base" =~ ^retrato-[A-Za-z0-9_.-]+\.(json|md)$ ]]; then
-    echo "erro: caminho fora de $PASTA_VIGIA ou nome inválido: $alvo" >&2
-    exit 1
-  fi
-
-  if [[ ! -f "$pasta_real/$nome_base" ]]; then
-    echo "erro: retrato não encontrado: $alvo" >&2
-    exit 1
-  fi
+  local nome_base
+  nome_base="$(nome_retrato "$alvo" "$pasta_real")" || exit 1
 
   local prefixo="${nome_base%.*}"
   rm -f -- "$pasta_real/$nome_base"
@@ -568,6 +572,39 @@ subcomando_apagar() {
   if [[ -f "$pasta_real/$prefixo.md" && ! -L "$pasta_real/$prefixo.md" ]]; then
     rm -f -- "$pasta_real/$prefixo.md"
   fi
+}
+
+# Abre a conversa com o agy sobre um retrato novo ou, com --retrato, sobre um
+# que já está na pasta do Vigia. O retrato passa de novo pelo mascaramento do
+# Vigia; o motor em menus/vigia/conversa.py acrescenta o dos arquivos de
+# projeto e conversa com o agy a partir de uma pasta temporária vazia.
+subcomando_conversa() {
+  local alvo="" retrato nome_base pasta_real
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --retrato)
+        [[ $# -ge 2 ]] || { echo "uso: jangada-vigia conversa [--retrato ARQUIVO]" >&2; exit 1; }
+        alvo="$2"
+        shift 2
+        ;;
+      *) echo "erro: argumento inesperado: $1" >&2; exit 1 ;;
+    esac
+  done
+  command -v agy >/dev/null 2>&1 || { echo "erro: o agy não foi encontrado no PATH" >&2; exit 1; }
+  if [[ -z "$alvo" ]]; then
+    alvo="$("${BASH_SOURCE[0]}" diagnostico)"
+  fi
+  garantir_pasta
+  pasta_real="$(realpath -e "$PASTA_VIGIA")"
+  nome_base="$(nome_retrato "$alvo" "$pasta_real")" || exit 1
+  retrato="$pasta_real/${nome_base%.*}.json"
+  if [[ ! -f "$retrato" || -L "$retrato" ]]; then
+    echo "erro: retrato JSON não encontrado: ${nome_base%.*}.json" >&2
+    exit 1
+  fi
+  python3 -I "$JANGADA_PATH/menus/vigia/conversa.py" \
+    --retrato <(higienizar 0 0 head <"$retrato") \
+    --propostas "$pasta_real/propostas"
 }
 
 case "${1:-}" in
@@ -589,6 +626,10 @@ case "${1:-}" in
     shift
     [[ $# -eq 1 ]] || { echo "uso: jangada-vigia apagar [--todos | ARQUIVO]" >&2; exit 1; }
     subcomando_apagar "$1"
+    ;;
+  conversa)
+    shift
+    subcomando_conversa "$@"
     ;;
   "")
     uso >&2

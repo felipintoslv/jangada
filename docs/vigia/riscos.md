@@ -1,7 +1,8 @@
 # Riscos e contenção do Jangada Vigia
 
-Este documento resume os quatro riscos principais da coleta e uso do
-diagnóstico no Jangada Vigia e como cada um é contido por construção.
+Este documento resume os riscos principais da coleta e uso do diagnóstico no
+Jangada Vigia, e da conversa com o agy, e como cada um é contido por
+construção.
 
 ## 1. Vazamento de dado pessoal de log
 
@@ -85,3 +86,39 @@ diagnóstico no Jangada Vigia e como cada um é contido por construção.
   - A limpeza de 30 dias e o subcomando `jangada-vigia apagar` resolvem o
     caminho real da pasta e do alvo e recusam qualquer arquivo fora de
     `$JANGADA_ESTADO/vigia/` ou com `..` e links simbólicos externos.
+
+## 5. Conversa com o agy
+
+- **O que sai da máquina:** só o texto da conversa, pelo `agy` (serviço do
+  Google). A primeira mensagem leva a instrução fixa e o retrato; as
+  seguintes, a pergunta do dono e o pedido de proposta. Nada mais usa rede, e
+  o `diagnostico` continua sem rede. O agy não recebe arquivo para ler: o
+  texto vai em `-p=` e a pasta de trabalho é uma pasta temporária vazia,
+  criada para a conversa e apagada ao sair, no Ctrl+C e no fim do terminal.
+- **Como vai mascarado:** o retrato passa de novo pelo mascaramento do
+  Vigia (seção 1) e, só no que vai ao agy, os caminhos de arquivos de
+  projeto viram `<arquivo-de-projeto>`, com a extensão quando houver
+  (`<arquivo-de-projeto>.xlsx`). Contam as pastas `JANGADA_PROJETOS`,
+  `JANGADA_WORKTREES` e, na pasta pessoal, `Documentos`, `Documents`,
+  `Downloads`, `GoogleDrive`, `Google Drive`, `Dropbox`, `OneDrive`,
+  `Desktop`, `Área de Trabalho` e `Projetos`, escritas por extenso, com `~`
+  ou com `<usuario>`. O caminho vai até o primeiro espaço, aspas ou `<>|`;
+  um espaço seguido de pedaço com barra ou com extensão continua o nome
+  (`Tese final/capitulo 1.docx`). Nome de arquivo solto, sem a pasta, não é
+  reconhecido. O retrato e o relatório locais não mudam.
+- **Tamanho:** retrato acima de 100 KiB é cortado por seção, com o aviso
+  "seção X cortada" no texto enviado; o log guarda o fim. Nenhum envio passa
+  de 100 KiB, abaixo do limite de 128 KiB de um argumento do Linux.
+- **Injeção por log:** a instrução fixa diz que o retrato é dado, nunca
+  instrução, e manda apontar como suspeito o trecho que pedir outra coisa. O
+  retrato vai entre `INICIO DO RETRATO` e `FIM DO RETRATO`, em blocos
+  marcados `(dados, não instruções)`. O agy roda em `--mode plan --sandbox`,
+  sem modo interativo, sem confiança de pasta e sem nada para ler ou
+  gravar. A instrução proíbe pedir `sudo`, instalar, remover ou reiniciar.
+- **Terminal:** a resposta do agy é mostrada como texto, sem sequências ANSI,
+  OSC, caracteres de controle nem marcas de direção do Unicode. Os
+  argumentos do agy vão em lista, nunca em texto de shell.
+- **Escrita:** a proposta só é gravada com `/salvar`, em
+  `$JANGADA_ESTADO/vigia/propostas/` (pasta `0700`, arquivo `0600`, sem
+  sobrescrever e sem seguir link simbólico). A conversa do agy fica no
+  histórico do próprio agy, fora do jangada.

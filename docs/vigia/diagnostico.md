@@ -18,6 +18,10 @@ sem modelo de IA.
   Markdown correspondente), recusando qualquer caminho que saia de
   `$JANGADA_ESTADO/vigia/` (como `..`, links simbólicos ou caminhos fora da
   pasta).
+- `jangada-vigia conversa [--retrato ARQUIVO]`: abre a conversa com o agy
+  sobre um retrato novo ou existente. O mascaramento extra dos arquivos de
+  projeto vale só para o texto enviado ao agy; o retrato e o relatório deste
+  contrato não mudam ([riscos](riscos.md#5-conversa-com-o-agy)).
 
 ## Coletores, comandos exatos e caminhos lidos
 

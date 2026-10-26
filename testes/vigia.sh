@@ -353,6 +353,84 @@ conferir "caso 12: quatro arquivos do mesmo segundo" \
   bash -c 'shopt -s nullglob; a=("$1"/retrato-20261017-120000*); [ "${#a[@]}" -eq 4 ]' _ "$XDG_STATE_HOME/jangada/vigia"
 "$repo/bin/jangada-vigia" apagar --todos
 
+# Caso 16: conversa com um agy falso. Ele registra argumentos, pasta de
+# trabalho e conteúdo dela; o log traz um arquivo de projeto que não pode ir
+# ao agy e fica intacto no relatório local.
+cp -a "$tmp/bin-cheio" "$tmp/bin-conversa"
+mkdir -p "$tmp/tmp-conversa"
+cat >"$tmp/bin-conversa/agy" <<FIM
+#!/usr/bin/env python3
+import json, os, sys
+with open("$tmp/agy.log", "a") as f:
+    f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(), "conteudo": os.listdir(".")}) + "\n")
+print(json.dumps({"conversation_id": "conv-abc123", "status": "SUCCESS",
+                  "response": "resposta \x1b[31mlimpa\x1b[0m\x07 do agy"}))
+FIM
+chmod +x "$tmp/bin-conversa/agy"
+cat >"$tmp/bin-conversa/journalctl" <<FIM
+#!/bin/sh
+echo "out 26 10:00:00 maquinateste soffice[7]: falhou ao abrir $HOME/Projetos/pesquisa-secreta/dados-rais.xlsx"
+FIM
+jq_sim() { jq -se "$@" >/dev/null; }
+conversar() {
+  PATH="$tmp/bin-conversa" TMPDIR="$tmp/tmp-conversa" JANGADA_PATH="$repo" "$repo/bin/jangada-vigia" conversa "$@"
+}
+pergunta='o que houve com "isso" e '"'"'aquilo'"'"'? $(id) `id` $HOME'
+rm -f "$tmp/agy.log"
+printf '%s\n/salvar\n/proposta\n/salvar\n/sair\n' "$pergunta" | conversar >"$tmp/conversa.out" 2>"$tmp/conversa.err"
+rc=$?
+conferir "caso 16: conversa termina com código 0 (atual: $rc)" [ "$rc" = 0 ]
+conferir "caso 16: três chamadas ao agy (abertura, pergunta, proposta)" \
+  bash -c '[ "$(wc -l <"$1")" = 3 ]' _ "$tmp/agy.log"
+conferir "caso 16: toda chamada com --mode plan, --sandbox e -p= por último" \
+  jq_sim 'all(.argv as $a | ($a | index("--mode")) as $i | $i != null and $a[$i + 1] == "plan"
+    and ($a | index("--sandbox")) != null and ($a[-1] | startswith("-p=")))' "$tmp/agy.log"
+conferir "caso 16: abertura sem --conversation; as seguintes com o id do JSON" \
+  jq_sim '(.[0].argv | index("--conversation")) == null and
+    all(.[1:][]; .argv as $a | $a[($a | index("--conversation")) + 1] == "conv-abc123")' "$tmp/agy.log"
+conferir "caso 16: pasta de trabalho do agy vazia, a mesma nas três chamadas" \
+  jq_sim '(map(.cwd) | unique | length) == 1 and all(.conteudo == [])' "$tmp/agy.log"
+cwd_agy="$(jq -r '.cwd' <(head -n 1 "$tmp/agy.log"))"
+conferir "caso 16: pasta de trabalho apagada ao sair" \
+  bash -c '[[ "$1" == "$2"/* && ! -e "$1" ]] && [ -z "$(ls -A "$2")" ]' _ "$cwd_agy" "$tmp/tmp-conversa"
+conferir "caso 16: pergunta com aspas, \$() e crase chega intacta" \
+  bash -c '[ "$(jq -sr ".[1].argv[-1]" "$1")" = "-p=$2" ]' _ "$tmp/agy.log" "$pergunta"
+conferir "caso 16: arquivo de projeto mascarado no que vai ao agy" \
+  bash -c 'p="$(jq -sr ".[0].argv[-1]" "$1")"; ! grep -qE "pesquisa-secreta|dados-rais|usuarioteste|maquinateste" <<<"$p" && grep -q "<arquivo-de-projeto>.xlsx" <<<"$p"' _ "$tmp/agy.log"
+md_conversa="$(ls -t "$XDG_STATE_HOME"/jangada/vigia/retrato-*.md | head -n 1)"
+conferir "caso 16: arquivo de projeto intacto no relatório local" \
+  grep -q '[~]/Projetos/pesquisa-secreta/dados-rais\.xlsx' "$md_conversa"
+conferir "caso 16: resposta do agy sem sequência de controle" \
+  bash -c 'grep -q "resposta limpa do agy" "$1" && ! LC_ALL=C grep -q "[[:cntrl:]]" <(tr -d "\n\t" <"$1")' _ "$tmp/conversa.out"
+conferir "caso 16: /salvar antes da proposta recusa" grep -q 'ainda não há proposta' "$tmp/conversa.err"
+conferir "caso 16: /salvar grava uma proposta em vigia/propostas" \
+  bash -c 'a=("$1"/*.md); [ "${#a[@]}" = 1 ] && [[ "${a[0]##*/}" =~ ^[0-9]{8}-[0-9]{6}\.md$ ]] && grep -q "resposta limpa do agy" "${a[0]}" && grep -q "proposta salva em ${a[0]}" "$2"' \
+  _ "$XDG_STATE_HOME/jangada/vigia/propostas" "$tmp/conversa.out"
+conferir "caso 16: conversa sem traceback" bash -c '! grep -q Traceback "$1"' _ "$tmp/conversa.err"
+conferir "caso 9: a conversa não chamou o curl" test ! -e "$tmp/curl-chamado"
+
+# --retrato usa um retrato que já existe, sem gerar outro, e recusa o de fora
+rm -f "$tmp/agy.log"
+antes_retratos="$(ls "$XDG_STATE_HOME"/jangada/vigia/retrato-*.json | wc -l)"
+printf '/sair\n' | conversar --retrato "$(basename "${md_conversa%.md}.json")" >/dev/null 2>&1
+conferir "caso 16: --retrato abre a conversa sem gerar retrato novo" \
+  bash -c '[ "$(ls "$1"/retrato-*.json | wc -l)" = "$2" ] && [ "$(wc -l <"$3")" = 1 ]' \
+  _ "$XDG_STATE_HOME/jangada/vigia" "$antes_retratos" "$tmp/agy.log"
+cp "${md_conversa%.md}.json" "$tmp/retrato-fora.json"
+rm -f "$tmp/agy.log"
+printf '/sair\n' | conversar --retrato "$tmp/retrato-fora.json" >/dev/null 2>"$tmp/conversa.err"
+rc=$?
+conferir "caso 16: --retrato recusa arquivo fora da pasta do Vigia (código $rc)" \
+  bash -c '[ "$1" != 0 ] && grep -q "fora de" "$2"' _ "$rc" "$tmp/conversa.err"
+conferir "caso 16: --retrato recusado não chama o agy" test ! -e "$tmp/agy.log"
+rm -f "$tmp/bin-conversa/agy"
+printf '/sair\n' | conversar >/dev/null 2>"$tmp/conversa.err"
+rc=$?
+conferir "caso 16: sem agy no PATH, mensagem e código 1 (atual: $rc)" \
+  bash -c '[ "$1" = 1 ] && grep -q "agy não foi encontrado" "$2"' _ "$rc" "$tmp/conversa.err"
+rm -rf "$XDG_STATE_HOME/jangada/vigia/propostas"
+"$repo/bin/jangada-vigia" apagar --todos
+
 # Caso 8: nenhuma escrita fora de $JANGADA_ESTADO
 depois_home="$(find "$HOME" "$XDG_CONFIG_HOME" -printf '%p %m %s\n' 2>/dev/null | sort)"
 conferir "caso 8: nenhuma escrita em HOME ou XDG_CONFIG_HOME" [ "$antes_home" = "$depois_home" ]

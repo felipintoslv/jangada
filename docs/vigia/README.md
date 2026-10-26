@@ -13,6 +13,29 @@ Os contratos detalhados da primeira versão estão em:
 - [Riscos e contenção](riscos.md): proteção contra vazamento de dados pessoais,
   injeção de instruções por logs ou títulos de janela, comandos fora da lista
   e escritas fora de `~/.local/state/jangada`.
+- [Instrução fixa da conversa](conversa-instrucao.md): texto que abre toda
+  conversa com o agy, antes do retrato.
+
+## Conversa com o agy (fase 2b)
+
+`jangada-vigia conversa` gera um retrato novo com o mesmo coletor do
+`diagnostico` e abre no terminal uma conversa só de leitura com o agy sobre
+ele. Com `--retrato ARQUIVO` usa um retrato que já está em
+`~/.local/state/jangada/vigia/` (o nome que `jangada-vigia lista` mostra).
+
+- A primeira mensagem leva a [instrução fixa](conversa-instrucao.md) e o
+  retrato mascarado. Cada resposta leva de 20 a 35 s.
+- Comandos: `/proposta` pede a proposta final (o que mudar, por quê, o que
+  testar, como desfazer); `/salvar` grava a última proposta em
+  `~/.local/state/jangada/vigia/propostas/AAAAMMDD-HHMMSS.md`; `/sair` (ou
+  Ctrl+D, ou Ctrl+C) encerra. Nenhuma proposta é salva sem `/salvar`.
+- O agy roda em `--mode plan --sandbox`, sem modo interativo e sem confiança
+  de pasta, a partir de uma pasta temporária vazia apagada ao sair. Cada
+  pergunta segue com `--conversation` e o identificador da primeira resposta.
+- O motor fica em `menus/vigia/conversa.py`, sem Qt e sem terminal, para a
+  janela da Central (fase 2c) usar o mesmo código.
+- O que sai da máquina e como vai mascarado está em
+  [Riscos e contenção](riscos.md#5-conversa-com-o-agy).
 
 ## Princípios
 
@@ -110,7 +133,8 @@ a Waybar e a Central de Tarefas já mostram tarefas e indicadores.
 | 0 | Base 3.0 estável, M3-19 e período de uso | Suíte passando, sem regressão conhecida |
 | 1 | Planejamento | Documentos em `docs/vigia/` aprovados pelo Felipe |
 | 2 | Diagnóstico, primeira versão | Comando `jangada-vigia` sob pedido, retrato JSON e relatório de fatos em `~/.local/state/jangada/vigia/`, nenhuma escrita fora |
-| 2b | Conversa sobre o sistema e o fluxo de trabalho | Skill do `agy`, abertura da conversa lendo o retrato do diagnóstico e saída em proposta escrita |
+| 2b | Conversa sobre o sistema e o fluxo de trabalho | Feita: `jangada-vigia conversa`, com instrução fixa no lugar da skill do `agy` (sem confiança de pasta), abertura lendo o retrato do diagnóstico e saída em proposta escrita |
+| 2c | Janela da conversa | Janela Qt aberta por botão na Central, sobre o mesmo motor |
 | 3 | Contrato das peças | Manifesto de 12 campos, instalação, desinstalação e reversão testados com peça de exemplo |
 | 4 | Três peças feitas à mão (rede passiva, saúde do sistema e GPU) | Funcionam sem chamada externa e sem processos órfãos; servem de molde para a oficina |
 | 5 | Oficina supervisionada | Gera, isola com `jangada-isolar`, mostra no Hyprland aninhado com barra, revisa e instala peça nova |
