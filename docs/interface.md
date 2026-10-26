@@ -138,6 +138,9 @@ Central, sem mudar o diálogo.
 fica aberto com a mensagem, e a Central mostra as últimas linhas do erro quando a
 tarefa não entra na lista em 20 segundos: a Central reconsulta aos 15 e conclui aos 20.
 **Painel de indicadores** leva à aba Indicadores.
+**Vigia** abre `jangada-vigia janela` em processo próprio, que segue aberto
+quando a Central fecha; na simulação o botão fica desligado
+(veja [Jangada Vigia](vigia/README.md#janela-da-conversa-fase-2c)).
 Aprovações nativas e envio de respostas ficam fora desta versão.
 
 Na Waybar, `custom/agentes` passa a contar tarefas, andamento, pendências e

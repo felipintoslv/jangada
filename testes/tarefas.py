@@ -667,6 +667,31 @@ class Interface(unittest.TestCase):
             self.assertIs(self.janela.centrais.currentWidget(), self.janela.indicadores)
             self.assertEqual(iniciar.call_count, 0)
 
+    def test_botao_vigia_lanca_o_comando_em_processo_proprio(self):
+        self.assertIn(self.janela.vigia, self.janela.comandos.findChildren(QPushButton))
+        self.assertTrue(self.janela.vigia.isEnabled())
+        vigia = self.bin / 'jangada-vigia'
+        vigia.write_text("#!/usr/bin/env python3\nimport json, os, pathlib, sys\n"
+                         "pasta = pathlib.Path(__file__).resolve().parent.parent\n"
+                         "dados = {'argv': sys.argv[1:], 'pai': os.getppid(), 'jangada': os.environ.get('JANGADA_PATH')}\n"
+                         "(pasta / 'vigia.json').write_text(json.dumps(dados))\n")
+        vigia.chmod(0o700)
+        self.janela.vigia.click()
+        registro = self.raiz / 'vigia.json'
+        aguardar(registro.exists)
+        dados = json.loads(registro.read_text())
+        self.assertEqual(dados['argv'], ['janela'])
+        self.assertEqual(dados['jangada'], str(self.janela.jangada))
+        self.assertNotEqual(dados['pai'], os.getpid())
+        self.assertEqual(self.janela.status.text(), 'Abrindo o Vigia.')
+        vigia.unlink()
+        self.janela.vigia.click()
+        self.assertIn('Não foi possível abrir o Vigia', self.janela.status.text())
+        simulada = Janela(False, self.raiz, self.estado)
+        self.addCleanup(simulada.close)
+        self.assertFalse(simulada.vigia.isEnabled())
+        self.assertIn('Simulação', simulada.vigia.toolTip())
+
     def indicadores_falso(self, saida, espera=0):
         (self.raiz / 'indicadores-saida').write_text(saida if isinstance(saida, str) else json.dumps(saida))
         comando = self.bin / 'jangada-indicadores'
@@ -3836,7 +3861,7 @@ while not (pasta / 'parar-clientes').exists():
     def test_botoes_do_topo_na_ordem_projeto_coordenador_tarefa(self):
         layout = self.janela.comandos.layout()
         textos = [layout.itemAt(i).widget().text() for i in range(layout.count()) if layout.itemAt(i).widget()]
-        self.assertEqual(textos, ['Atualizar', 'Novo projeto', 'Novo coordenador', 'Nova tarefa', 'Painel de indicadores'])
+        self.assertEqual(textos, ['Atualizar', 'Novo projeto', 'Novo coordenador', 'Nova tarefa', 'Painel de indicadores', 'Vigia'])
 
     def test_nova_tarefa_e_o_botao_principal_do_topo(self):
         self.assertEqual(self.janela.nova.property('tipo'), 'principal')

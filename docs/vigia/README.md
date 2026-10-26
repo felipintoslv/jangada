@@ -33,10 +33,35 @@ ele. Com `--retrato ARQUIVO` usa um retrato que já está em
   de pasta, a partir de uma pasta vazia em `vigia/conversas/`, apagada ao
   sair. Cada pergunta segue com `--conversation` e o identificador da
   primeira resposta.
-- O motor fica em `menus/vigia/conversa.py`, sem Qt e sem terminal, para a
-  janela da Central (fase 2c) usar o mesmo código.
+- O motor fica em `menus/vigia/conversa.py`, sem Qt e sem terminal, e a
+  janela da fase 2c usa o mesmo código.
 - O que sai da máquina e como vai mascarado está em
   [Riscos e contenção](riscos.md#5-conversa-com-o-agy).
+
+## Janela da conversa (fase 2c)
+
+`jangada-vigia janela` abre a mesma conversa numa janela Qt, sobre o motor
+de `menus/vigia/conversa.py`. O botão **Vigia**, no topo da Central de
+tarefas, roda esse comando em processo próprio: fechar a Central não fecha o
+Vigia. Na simulação da Central o botão fica desligado.
+
+- Ao abrir, a janela roda `jangada-vigia retrato-conversa` (retrato novo,
+  higienizado como na conversa do terminal) e manda a primeira mensagem.
+  Retrato e agy rodam fora da linha da interface; a janela mostra a espera
+  com os segundos e o botão **Cancelar**.
+- O histórico é texto simples: HTML ou sequência de controle vinda do agy ou
+  do retrato aparece como texto. Um aviso fixo diz o que sai da máquina, com
+  link para [Riscos e contenção](riscos.md).
+- **Enviar** (Ctrl+Enter) manda a pergunta; **Pedir proposta** equivale a
+  `/proposta`; **Salvar proposta** só fica ativo com proposta e grava em
+  `vigia/propostas/` apenas quando clicado.
+- **Cancelar** e **Fechar** encerram o retrato e o agy em curso e apagam a
+  pasta temporária em `vigia/conversas/`. Depois de cancelar, **Nova
+  conversa** recomeça. Erro do retrato ou do agy aparece na janela, sem
+  fechá-la.
+- Só uma janela por vez: a trava fica em `vigia/janela.trava`. Uma segunda
+  chamada avisa "O Vigia já está aberto." e, no Hyprland, traz a janela
+  existente para a frente.
 
 ## Princípios
 
@@ -135,7 +160,7 @@ a Waybar e a Central de Tarefas já mostram tarefas e indicadores.
 | 1 | Planejamento | Documentos em `docs/vigia/` aprovados pelo Felipe |
 | 2 | Diagnóstico, primeira versão | Comando `jangada-vigia` sob pedido, retrato JSON e relatório de fatos em `~/.local/state/jangada/vigia/`, nenhuma escrita fora |
 | 2b | Conversa sobre o sistema e o fluxo de trabalho | Feita: `jangada-vigia conversa`, com instrução fixa no lugar da skill do `agy` (sem confiança de pasta), abertura lendo o retrato do diagnóstico e saída em proposta escrita |
-| 2c | Janela da conversa | Janela Qt aberta por botão na Central, sobre o mesmo motor |
+| 2c | Janela da conversa | Feita: `jangada-vigia janela`, aberta pelo botão Vigia da Central, sobre o mesmo motor |
 | 3 | Contrato das peças | Manifesto de 12 campos, instalação, desinstalação e reversão testados com peça de exemplo |
 | 4 | Três peças feitas à mão (rede passiva, saúde do sistema e GPU) | Funcionam sem chamada externa e sem processos órfãos; servem de molde para a oficina |
 | 5 | Oficina supervisionada | Gera, isola com `jangada-isolar`, mostra no Hyprland aninhado com barra, revisa e instala peça nova |

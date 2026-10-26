@@ -358,6 +358,11 @@ class Conversa:
         self.gerado_em = None
         self.ultima_proposta = None
         self._ocupada = threading.Lock()
+        # A janela encerra pela linha principal enquanto outra linha chama o
+        # agy: a trava protege o processo em curso e a marca de encerrada.
+        self._trava = threading.Lock()
+        self._processo = None
+        self._encerrada = False
 
     def iniciar(self, retrato):
         if self.id:
@@ -369,21 +374,24 @@ class Conversa:
         abertura = montar_abertura(instrucao, retrato, self.ambiente)
         self.gerado_em = retrato.get("gerado_em")
         if self.pasta is None:
-            self.pasta = self._criar_pasta()
+            self._criar_pasta()
         return self._enviar(abertura)
 
     def _criar_pasta(self):
         """Pasta de trabalho vazia do agy, dentro da pasta do Vigia (regra 1)."""
         base = self.pasta_conversas
-        try:
-            if base.parent.is_symlink() or base.is_symlink():
-                raise ErroConversa(f"{base} não pode ser link simbólico")
-            base.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-            base.mkdir(mode=0o700, exist_ok=True)
-            os.chmod(base, 0o700)
-            return tempfile.mkdtemp(prefix="conversa-", dir=base)
-        except OSError as erro:
-            raise ErroConversa(f"não foi possível criar a pasta da conversa: {erro}") from None
+        with self._trava:
+            if self._encerrada:
+                raise ErroConversa("a conversa foi encerrada")
+            try:
+                if base.parent.is_symlink() or base.is_symlink():
+                    raise ErroConversa(f"{base} não pode ser link simbólico")
+                base.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                base.mkdir(mode=0o700, exist_ok=True)
+                os.chmod(base, 0o700)
+                self.pasta = tempfile.mkdtemp(prefix="conversa-", dir=base)
+            except OSError as erro:
+                raise ErroConversa(f"não foi possível criar a pasta da conversa: {erro}") from None
 
     def perguntar(self, texto):
         if not self.id:
@@ -427,10 +435,19 @@ class Conversa:
         raise ErroConversa("não foi possível escolher um nome livre para a proposta")
 
     def encerrar(self):
-        if self.pasta:
-            shutil.rmtree(self.pasta, ignore_errors=True)
-            self.pasta = None
-        self.id = None
+        """Interrompe a chamada em curso e apaga a pasta; pode vir de outra linha."""
+        with self._trava:
+            self._encerrada = True
+            processo = self._processo
+            if processo is not None and processo.poll() is None:
+                try:
+                    os.killpg(processo.pid, signal.SIGKILL)
+                except OSError:
+                    pass
+            if self.pasta:
+                shutil.rmtree(self.pasta, ignore_errors=True)
+                self.pasta = None
+            self.id = None
 
     def _enviar(self, texto):
         if len(texto.encode()) > LIMITE_ENVIO:
@@ -455,18 +472,34 @@ class Conversa:
         if self.id:
             comando += ["--conversation", self.id]
         comando.append(argumento)
+        # Grupo próprio: encerrar() e o Ctrl+C matam o agy e os filhos dele.
+        with self._trava:
+            if self._encerrada:
+                raise ErroConversa("a conversa foi encerrada")
+            try:
+                processo = subprocess.Popen(comando, cwd=self.pasta, env=self.ambiente,
+                                            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                            stderr=subprocess.PIPE, start_new_session=True)
+            except OSError as erro:
+                raise ErroConversa(f"não foi possível chamar o agy: {erro}") from None
+            self._processo = processo
         try:
-            feito = subprocess.run(comando, cwd=self.pasta, env=self.ambiente,
-                                   stdin=subprocess.DEVNULL, capture_output=True,
-                                   timeout=self.tempo_limite)
+            saida, erros = processo.communicate(timeout=self.tempo_limite)
         except subprocess.TimeoutExpired:
+            self._matar(processo)
             raise ErroConversa(f"o agy não respondeu em {self.tempo_limite} s") from None
-        except OSError as erro:
-            raise ErroConversa(f"não foi possível chamar o agy: {erro}") from None
-        saida = feito.stdout.decode("utf-8", errors="replace")
-        if feito.returncode != 0:
-            detalhe = filtrar(feito.stderr.decode("utf-8", errors="replace"))[-300:]
-            raise ErroConversa(f"o agy terminou com código {feito.returncode}"
+        except BaseException:
+            self._matar(processo)
+            raise
+        finally:
+            with self._trava:
+                self._processo = None
+        if self._encerrada:
+            raise ErroConversa("a conversa foi encerrada")
+        saida = saida.decode("utf-8", errors="replace")
+        if processo.returncode != 0:
+            detalhe = filtrar(erros.decode("utf-8", errors="replace"))[-300:]
+            raise ErroConversa(f"o agy terminou com código {processo.returncode}"
                                + (f": {detalhe}" if detalhe else ""))
         dados = None
         for candidato in (saida, *reversed(saida.strip().splitlines())):
@@ -488,6 +521,14 @@ class Conversa:
                 raise ErroConversa("o agy devolveu JSON sem identificador de conversa válido")
             self.id = ident
         return filtrar(resposta) or "(resposta vazia)"
+
+    @staticmethod
+    def _matar(processo):
+        try:
+            os.killpg(processo.pid, signal.SIGKILL)
+        except OSError:
+            pass
+        processo.communicate()
 
 
 AJUDA = """Comandos: /proposta pede a proposta final, /salvar grava a última

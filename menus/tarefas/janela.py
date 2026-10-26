@@ -454,6 +454,11 @@ class Janela(QMainWindow):
         self.nova.clicked.connect(self.nova_tarefa)
         self.painel = QPushButton('Painel de indicadores')
         self.painel.clicked.connect(self.abrir_indicadores)
+        self.vigia = QPushButton('Vigia')
+        self.vigia.setToolTip('Abre a conversa com o Vigia sobre o retrato do sistema.' if real
+                              else 'Simulação: o Vigia não abre.')
+        self.vigia.setEnabled(real)
+        self.vigia.clicked.connect(self.abrir_vigia)
         self.topo.addWidget(self.modo)
         layout.addWidget(self.cabecalho)
         self.comandos = QWidget()
@@ -462,7 +467,7 @@ class Janela(QMainWindow):
         comandos.setContentsMargins(0, 0, 0, 0)
         comandos.setSpacing(8)
         comandos.addStretch()
-        for botao in (self.atualizar_botao, self.novo_projeto, self.nova, self.painel):
+        for botao in (self.atualizar_botao, self.novo_projeto, self.nova, self.painel, self.vigia):
             comandos.addWidget(botao)
         layout.addWidget(self.comandos)
         self.cotas = ConsultaCotas(self)
@@ -909,6 +914,18 @@ class Janela(QMainWindow):
         self.preparar(processo, ['--projeto', str(pasta), 'cadastrar'], 'jangada-projeto')
         processo.start()
         return processo
+
+    def abrir_vigia(self):
+        """Abre o Vigia em processo próprio: fechar a Central não fecha a conversa."""
+        processo = QProcess(self)
+        ambiente = QProcessEnvironment.systemEnvironment()
+        ambiente.insert('JANGADA_PATH', str(self.jangada))
+        processo.setProcessEnvironment(ambiente)
+        processo.setProgram(str(self.jangada / 'bin/jangada-vigia'))
+        processo.setArguments(['janela'])
+        iniciado, _ = processo.startDetached()
+        processo.deleteLater()
+        self.status.setText('Abrindo o Vigia.' if iniciado else 'Não foi possível abrir o Vigia. Confira --jangada.')
 
     def abrir_novo_projeto(self):
         if self.dialogo_projeto is None:

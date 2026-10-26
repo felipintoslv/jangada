@@ -8,6 +8,8 @@
 #   jangada-vigia lista
 #   jangada-vigia apagar [--todos | ARQUIVO]
 #   jangada-vigia conversa [--retrato ARQUIVO]
+#   jangada-vigia janela [--retrato ARQUIVO]
+#   jangada-vigia retrato-conversa [--retrato ARQUIVO]  (uso da janela)
 set -euo pipefail
 export LC_ALL=C.UTF-8
 export SYSTEMD_PAGER=cat PAGER=cat
@@ -18,7 +20,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/jangada-shell-config"
 PASTA_VIGIA="$JANGADA_ESTADO/vigia"
 
 uso() {
-  sed -n '2,10s/^# \{0,1\}//p' "$0"
+  sed -n '2,12s/^# \{0,1\}//p' "$0"
 }
 
 garantir_pasta() {
@@ -574,39 +576,76 @@ subcomando_apagar() {
   fi
 }
 
-# Abre a conversa com o agy sobre um retrato novo ou, com --retrato, sobre um
-# que já está na pasta do Vigia. O retrato passa de novo pelo mascaramento do
-# Vigia; o motor em menus/vigia/conversa.py acrescenta o dos arquivos de
-# projeto e conversa com o agy a partir de uma pasta vazia em conversas/,
-# apagada ao sair.
-subcomando_conversa() {
-  local alvo="" retrato nome_base pasta_real
+# Escolhe o retrato da conversa: um novo ou, com --retrato, um que já está na
+# pasta do Vigia. Deixa o caminho em RETRATO_CONVERSA.
+escolher_retrato() {
+  local uso="$1" alvo="" nome_base pasta_real
+  shift
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --retrato)
-        [[ $# -ge 2 ]] || { echo "uso: jangada-vigia conversa [--retrato ARQUIVO]" >&2; exit 1; }
+        [[ $# -ge 2 ]] || { echo "uso: jangada-vigia $uso [--retrato ARQUIVO]" >&2; exit 1; }
         alvo="$2"
         shift 2
         ;;
       *) echo "erro: argumento inesperado: $1" >&2; exit 1 ;;
     esac
   done
-  command -v agy >/dev/null 2>&1 || { echo "erro: o agy não foi encontrado no PATH" >&2; exit 1; }
   if [[ -z "$alvo" ]]; then
     alvo="$("${BASH_SOURCE[0]}" diagnostico)"
   fi
   garantir_pasta
   pasta_real="$(realpath -e "$PASTA_VIGIA")"
   nome_base="$(nome_retrato "$alvo" "$pasta_real")" || exit 1
-  retrato="$pasta_real/${nome_base%.*}.json"
-  if [[ ! -f "$retrato" || -L "$retrato" ]]; then
+  RETRATO_CONVERSA="$pasta_real/${nome_base%.*}.json"
+  if [[ ! -f "$RETRATO_CONVERSA" || -L "$RETRATO_CONVERSA" ]]; then
     echo "erro: retrato JSON não encontrado: ${nome_base%.*}.json" >&2
     exit 1
   fi
+}
+
+# Abre no terminal a conversa com o agy sobre o retrato. O retrato passa de
+# novo pelo mascaramento do Vigia; o motor em menus/vigia/conversa.py
+# acrescenta o dos arquivos de projeto e conversa com o agy a partir de uma
+# pasta vazia em conversas/, apagada ao sair.
+subcomando_conversa() {
+  command -v agy >/dev/null 2>&1 || { echo "erro: o agy não foi encontrado no PATH" >&2; exit 1; }
+  escolher_retrato conversa "$@"
+  local pasta_real
+  pasta_real="$(realpath -e "$PASTA_VIGIA")"
   python3 -I "$JANGADA_PATH/menus/vigia/conversa.py" \
-    --retrato <(higienizar 0 0 head <"$retrato") \
+    --retrato <(higienizar 0 0 head <"$RETRATO_CONVERSA") \
     --propostas "$pasta_real/propostas" \
     --conversas "$pasta_real/conversas"
+}
+
+# Imprime o retrato com o mesmo mascaramento da conversa no terminal. A janela
+# chama este subcomando na própria linha de execução, para poder cancelar.
+subcomando_retrato_conversa() {
+  escolher_retrato retrato-conversa "$@"
+  higienizar 0 0 head <"$RETRATO_CONVERSA"
+}
+
+# Abre a janela Qt da conversa. A janela gera o retrato pelo
+# retrato-conversa e recusa uma segunda cópia aberta.
+subcomando_janela() {
+  local argumentos=() pasta_real
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --retrato)
+        [[ $# -ge 2 ]] || { echo "uso: jangada-vigia janela [--retrato ARQUIVO]" >&2; exit 1; }
+        argumentos+=(--retrato "$2")
+        shift 2
+        ;;
+      *) echo "erro: argumento inesperado: $1" >&2; exit 1 ;;
+    esac
+  done
+  garantir_pasta
+  pasta_real="$(realpath -e "$PASTA_VIGIA")"
+  exec python3 -I "$JANGADA_PATH/menus/vigia/janela.py" \
+    --vigia "$(realpath -e "${BASH_SOURCE[0]}")" \
+    --pasta "$pasta_real" \
+    "${argumentos[@]}"
 }
 
 case "${1:-}" in
@@ -632,6 +671,14 @@ case "${1:-}" in
   conversa)
     shift
     subcomando_conversa "$@"
+    ;;
+  janela)
+    shift
+    subcomando_janela "$@"
+    ;;
+  retrato-conversa)
+    shift
+    subcomando_retrato_conversa "$@"
     ;;
   "")
     uso >&2
