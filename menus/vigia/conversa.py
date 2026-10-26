@@ -39,6 +39,19 @@ EXT_DOCUMENTO = re.compile(
     r"|parquet|feather|dta|sav|rds|rdata|tex|bib)(?![A-Za-z0-9_])", re.I)
 INICIO_DE_NOME = PARADA | set(":=([{,;")
 PALAVRA_DE_PASTA = re.compile(r"[A-Z0-9À-Ý][\w.-]*")
+# Pedaço de texto que pode ser caminho; <usuario> e <ip> do Vigia ficam dentro.
+TOKEN = re.compile(r"(?:<[a-z-]+>|[^\s\"'`|<>])+")
+ESQUEMA = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://")
+# Só fica visível caminho absoluto sob estas pastas; o resto é bloqueado.
+SISTEMA = {"etc", "usr", "proc", "sys", "dev", "run", "var", "opt", "boot", "lib",
+           "lib64", "bin", "sbin", "tmp", "nix", "snap"}
+# Barra que não é caminho: número, data, fração e unidade.
+SEM_CAMINHO = re.compile(r"[\d.,:/+-]+|I/O|TCP/IP|UDP/IP|[Nn]/[Aa]|[YySs]/[Nn]"
+                         r"|[\d.,]*[kKMGTP]?i?(?:B|b|bit)/s")
+# rclone[PID]: NIVEL : OBJETO: mensagem. O OBJETO é caminho do remoto, sem
+# pasta conhecida e às vezes cortado no fim da seção.
+RCLONE = re.compile(r"(rclone(?:\[\d+\])?:[ \t]*(?:\d{4}/\d\d/\d\d \d\d:\d\d:\d\d(?:\.\d+)?[ \t]+)?"
+                    r"(?:ERROR|NOTICE|INFO|DEBUG)[ \t]*:[ \t]*)([^\n]*?)(?=: |\n|$)")
 PEDIDO_PROPOSTA = (
     "Escreva agora a proposta final, curta, nas quatro partes combinadas: "
     "O que mudar, Por quê (com os FATOS e as seções do retrato), O que testar "
@@ -91,24 +104,78 @@ def _pastas_projeto(ambiente):
 
 
 def _fim_do_caminho(texto, i):
-    def fim_token(j):
-        while j < len(texto) and texto[j] not in PARADA and not texto[j].isspace():
-            j += 1
-        return j
-    fim = fim_token(i)
+    m = TOKEN.match(texto, i)
+    fim = m.end() if m else i
     # Nome com espaço: o pedaço seguinte continua o caminho quando tem barra
     # sem começar outro caminho ("Tese final/cap1.docx") ou termina em
-    # extensão ("capitulo 1.docx").
-    while fim < len(texto) and texto[fim] == " ":
-        prox = fim_token(fim + 1)
-        pedaco = texto[fim + 1:prox]
-        if pedaco and (("/" in pedaco and pedaco[0] not in "/~") or FIM_DE_NOME.fullmatch(pedaco)):
-            fim = prox
+    # extensão ("capitulo 1.docx"). Pontuação antes do espaço fecha o caminho.
+    while fim < len(texto) and texto[fim] == " " and texto[fim - 1] not in ".,:;)]}":
+        m = TOKEN.match(texto, fim + 1)
+        pedaco = m.group() if m else ""
+        nome = pedaco[:1].isalnum() and not SEM_CAMINHO.fullmatch(pedaco) and not ESQUEMA.match(pedaco)
+        if nome and ("/" in pedaco or FIM_DE_NOME.fullmatch(pedaco)):
+            fim = m.end()
         else:
             break
     while fim > i and texto[fim - 1] in ".,:;)]}":
         fim -= 1
     return fim
+
+
+def _mascara(caminho):
+    ext = EXTENSAO.search(caminho.rstrip("/").rsplit("/", 1)[-1])
+    return MASCARA + (f".{ext.group(1)}" if ext else "")
+
+
+def _palavras_de_pasta(texto, inicio, limite):
+    """Junta até duas palavras de pasta antes do caminho ("Demanda CEBRAP/x")."""
+    for _ in range(2):
+        if inicio - 1 < limite or texto[inicio - 1] != " ":
+            break
+        ant = inicio - 1
+        while ant > limite and not texto[ant - 1].isspace() and texto[ant - 1] not in INICIO_DE_NOME:
+            ant -= 1
+        if not PALAVRA_DE_PASTA.fullmatch(texto[ant:inicio - 1]):
+            break
+        inicio = ant
+    return inicio
+
+
+def _visivel(caminho):
+    if caminho.startswith("/"):
+        return not caminho.strip("/") or caminho.split("/", 2)[1] in SISTEMA
+    return not caminho.startswith("~") and bool(SEM_CAMINHO.fullmatch(caminho))
+
+
+def _mascarar_rclone(texto):
+    return RCLONE.sub(lambda m: m.group(1) + (_mascara(m.group(2)) if m.group(2).strip() else m.group(2)),
+                      texto)
+
+
+def _mascarar_caminhos(texto):
+    partes, pos = [], 0
+    for m in TOKEN.finditer(texto):
+        token = m.group()
+        if m.start() < pos or "/" not in token:
+            continue
+        esquema = ESQUEMA.match(token)
+        if esquema:
+            corte = esquema.end()
+        else:
+            barra = token.index("/")
+            corte = max(token.rfind(c, 0, barra) for c in "=([{,;:") + 1
+        inicio = m.start() + corte
+        sozinho = token[corte:].rstrip(".,:;)]}")
+        if "/" not in sozinho or _visivel(sozinho):
+            continue
+        fim = _fim_do_caminho(texto, inicio)
+        caminho = texto[inicio:fim]
+        if corte == 0 and caminho[0] not in "/~":
+            inicio = _palavras_de_pasta(texto, inicio, pos)
+        partes += [texto[pos:inicio], _mascara(caminho)]
+        pos = fim
+    partes.append(texto[pos:])
+    return "".join(partes)
 
 
 def _inicio_do_nome(texto, fim):
@@ -153,10 +220,12 @@ def _mascarar_documentos(texto):
 def mascarar_projetos(texto, ambiente=None):
     """Troca caminhos de arquivos de projeto por <arquivo-de-projeto>[.ext].
 
-    Primeiro os caminhos sob as pastas de projeto, depois qualquer documento ou
-    dado (EXT_DOCUMENTO), mesmo relativo ou solto. Caminho de sistema sem essas
-    extensões fica visível.
+    Bloqueio por padrão: o objeto das linhas do rclone, os caminhos sob as
+    pastas de projeto, todo caminho relativo com barra, todo absoluto fora de
+    SISTEMA e, por fim, qualquer documento ou dado (EXT_DOCUMENTO), mesmo
+    solto. Fica visível só caminho de sistema sem essas extensões.
     """
+    texto = _mascarar_rclone(texto)
     formas = _pastas_projeto(os.environ if ambiente is None else ambiente)
     partes, pos = [], 0
     if formas:
@@ -168,7 +237,7 @@ def mascarar_projetos(texto, ambiente=None):
             partes += [texto[pos:m.start()], MASCARA + (f".{ext.group(1)}" if ext else "")]
             pos = fim
     partes.append(texto[pos:])
-    return _mascarar_documentos("".join(partes))
+    return _mascarar_documentos(_mascarar_caminhos("".join(partes)))
 
 
 def _secoes(retrato, prefixo=""):

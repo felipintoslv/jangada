@@ -96,30 +96,39 @@ construção.
   texto vai em `-p=` e a pasta de trabalho é uma pasta temporária vazia,
   criada para a conversa e apagada ao sair, no Ctrl+C e no fim do terminal.
 - **Como vai mascarado:** o retrato passa de novo pelo mascaramento do
-  Vigia (seção 1) e, só no que vai ao agy, os caminhos de arquivos de
-  projeto viram `<arquivo-de-projeto>`, com a extensão quando houver
-  (`<arquivo-de-projeto>.xlsx`). Contam as pastas `JANGADA_PROJETOS`,
-  `JANGADA_WORKTREES` e, na pasta pessoal, `Documentos`, `Documents`,
-  `Downloads`, `GoogleDrive`, `Google Drive`, `Dropbox`, `OneDrive`,
-  `Desktop`, `Área de Trabalho` e `Projetos`, escritas por extenso, com `~`
-  ou com `<usuario>`. O caminho vai até o primeiro espaço, aspas ou `<>|`;
-  um espaço seguido de pedaço com barra ou com extensão continua o nome
-  (`Tese final/capitulo 1.docx`).
-- **Documento ou dado em qualquer lugar:** caminho relativo, como o que o
-  `rclone` escreve a partir do remoto, e nome solto também viram
-  `<arquivo-de-projeto>.ext` quando terminam em extensão de documento ou dado
-  (`xlsx`, `xls`, `xlsm`, `ods`, `csv`, `tsv`, `docx`, `doc`, `odt`, `rtf`,
-  `pdf`, `pptx`, `ppt`, `odp`, `parquet`, `feather`, `dta`, `sav`, `rds`,
-  `rdata`, `tex`, `bib`, em maiúscula ou minúscula). O nome vai para trás
-  até espaço, aspas, `<>|` ou `:=([{,;`. Pasta com espaço entra quando a
-  palavra antes do caminho começa com maiúscula ou algarismo, até duas
-  palavras (`Demanda CEBRAP/pipeline/dados.xlsx`); palavra minúscula fica,
-  e por isso pode vazar (`minha pasta/dados.xlsx` deixa `minha`). Uma
-  palavra maiúscula do log colada ao caminho sai junto
-  (`ERROR Demanda CEBRAP/x.csv`): privacidade vence. Caminho de sistema sem
-  essas extensões (`/etc/x.conf`, `/usr/lib/y.so`) fica visível, e um
-  arquivo de projeto com outra extensão fora das pastas acima também.
-  O retrato e o relatório locais não mudam.
+  Vigia (seção 1) e, só no que vai ao agy, vale bloqueio por padrão: todo
+  caminho vira `<arquivo-de-projeto>`, com a extensão quando houver
+  (`<arquivo-de-projeto>.xlsx`), menos caminho absoluto sob `/etc`, `/usr`,
+  `/proc`, `/sys`, `/dev`, `/run`, `/var`, `/opt`, `/boot`, `/lib`,
+  `/lib64`, `/bin`, `/sbin`, `/tmp`, `/nix` e `/snap`. Cai no bloqueio:
+  - o objeto das linhas do `rclone` (`rclone[PID]: NIVEL : OBJETO:
+    mensagem`, com `NIVEL` entre `ERROR`, `NOTICE`, `INFO` e `DEBUG`), até o
+    próximo `: ` ou o fim da linha, com ou sem extensão e com espaços. O
+    rclone escreve o caminho a partir do remoto, e o retrato pode cortá-lo
+    no meio;
+  - caminho relativo com barra, inclusive cortado no fim. Ficam número,
+    data, fração e unidade (`1/612`, `2026/10/26`, `3MB/s`) e `I/O`,
+    `TCP/IP`, `UDP/IP`, `N/A`, `S/N`;
+  - outro caminho absoluto e todo caminho em `~/`, inclusive `~/.config`;
+  - o caminho de uma URL (`https://exemplo.org/` vira
+    `https://<arquivo-de-projeto>.org`);
+  - documento ou dado em qualquer lugar, também sob as pastas de sistema e
+    em nome solto, com extensão `xlsx`, `xls`, `xlsm`, `ods`, `csv`, `tsv`,
+    `docx`, `doc`, `odt`, `rtf`, `pdf`, `pptx`, `ppt`, `odp`, `parquet`,
+    `feather`, `dta`, `sav`, `rds`, `rdata`, `tex` ou `bib`, em maiúscula ou
+    minúscula.
+- **Nome com espaço:** o caminho vai até espaço, aspas ou `<>|`. Um espaço
+  seguido de pedaço com barra ou com extensão continua o nome
+  (`Tese final/capitulo 1.docx`), e até duas palavras antes de um caminho
+  relativo entram quando começam com maiúscula ou algarismo
+  (`Demanda CEBRAP/pipeline`). Palavra minúscula fica: em
+  `minha pasta/dados.xlsx` sobra `minha`. Uma palavra maiúscula do log colada
+  ao caminho sai junto (`ERROR Demanda CEBRAP/x`): privacidade vence.
+- **O que se perde e o que ainda passa:** o bloqueio também esconde ponto de
+  montagem fora da lista (`/mnt`, `/home`), arquivo de configuração em
+  `~/.config`, endereço de URL e texto com barra como `AMD/ATI`. Passa nome
+  solto sem barra e sem as extensões acima (`notas.txt`). O retrato e o
+  relatório locais não mudam.
 - **Tamanho:** retrato acima de 100 KiB é cortado por seção, com o aviso
   "seção X cortada" no texto enviado; o log guarda o fim. Nenhum envio passa
   de 100 KiB, abaixo do limite de 128 KiB de um argumento do Linux.

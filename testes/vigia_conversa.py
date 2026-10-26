@@ -150,6 +150,32 @@ with tempfile.TemporaryDirectory() as pasta:
     saida = motor.mascarar_projetos('falhou em Tese final/cap 1.docx e x.document ao salvar', env)
     conferir('documento com espaço na pasta e no nome mascarado inteiro',
              saida == 'falhou em <arquivo-de-projeto>.docx e x.document ao salvar')
+    # Bloqueio por padrão: objeto do rclone cortado, relativo e absoluto fora
+    # das pastas de sistema
+    for linha in ('out 26 <maquina> rclone[973]: ERROR : Demanda CEBRAP/pipeline/fontes/rais/'
+                  'consultas/rais_ceara_estabs_vinculos_por_cnae_subclasse_',
+                  'rclone[973]: ERROR : Demanda CEBRAP/pipeline/fontes/rais/consultas/'
+                  'rais_ceara_estabs_vinculos_por_cnae_subclasse_2006_2025.xlsx: Failed to ...'):
+        saida = motor.mascarar_projetos(linha, env)
+        for segredo in ('Demanda', 'CEBRAP', 'pipeline', 'rais_ceara'):
+            conferir(f'rclone ({len(linha)} car.): {segredo} não vai ao agy', segredo not in saida)
+        conferir(f'rclone ({len(linha)} car.): "rclone[973]: ERROR :" fica',
+                 'rclone[973]: ERROR : <arquivo-de-projeto>' in saida)
+    saida = motor.mascarar_projetos(
+        'rclone[5]: NOTICE: Meu Drive/a b: Duplicate object found\n'
+        'rclone[5]: INFO  : 2026/10/26 10:00:00 sem nome\n', env)
+    conferir('rclone: NOTICE e INFO com espaços variáveis, objeto com espaço',
+             saida == 'rclone[5]: NOTICE: <arquivo-de-projeto>: Duplicate object found\n'
+                      'rclone[5]: INFO  : <arquivo-de-projeto>\n')
+    saida = motor.mascarar_projetos(
+        'leu /usr/lib/x.so e /etc/y.conf; Failed to open Demanda CEBRAP/fontes/rais_ceara agora; '
+        '/srv/dados/a ~/.config/b/c.conf /mnt/x/y file://~/z/w http://<ip>:1/api; '
+        'Mounted on / em /dev/nvme0n1p2 0.31 1/612 2026/10/26 I/O error 3MB/s', env)
+    conferir('caminho de sistema visível, relativo e outro absoluto mascarados',
+             saida == 'leu /usr/lib/x.so e /etc/y.conf; Failed to open <arquivo-de-projeto> agora; '
+                      '<arquivo-de-projeto> <arquivo-de-projeto>.conf <arquivo-de-projeto> '
+                      'file://<arquivo-de-projeto> http://<arquivo-de-projeto>; '
+                      'Mounted on / em /dev/nvme0n1p2 0.31 1/612 2026/10/26 I/O error 3MB/s')
 
     # Pergunta com aspas, $() e crase chega intacta, com --conversation do JSON
     pergunta = 'por que "isso" e \'aquilo\'? $(rm -rf ~) `id` ; echo $HOME | cat & \\n'
