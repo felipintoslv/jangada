@@ -4183,6 +4183,13 @@ while not (pasta / 'parar-clientes').exists():
                 self.assertTrue(form.conferindo)
                 self.assertFalse(form.enviar.isEnabled())
                 self.assertEqual(self.janela.aberturas, {})
+                for controle in (form.projeto, form.escolher, form.nova, form.pedido, form.modo,
+                                 form.avancadas, form.opcoes, form.aviso_git):
+                    self.assertFalse(controle.isEnabled())
+                QTest.keyClicks(form.pedido, 'Outro pedido')
+                QTest.keyClicks(form.projeto, '/outra')
+                self.assertEqual(form.pedido.toPlainText(), 'Fazer')
+                self.assertEqual(form.projeto.text(), str(self.raiz / 'repo'))
                 aguardar(lambda: not form.conferindo)
                 fim = time.monotonic()
         finally:
@@ -4190,8 +4197,42 @@ while not (pasta / 'parar-clientes').exists():
         durante = [b for b in batidas if inicio <= b <= fim]
         self.assertGreater(len(durante), 20)
         self.assertLess(max(b - a for a, b in zip(durante, durante[1:])), 0.25)
+        for controle in (form.projeto, form.escolher, form.nova, form.pedido, form.modo, form.avancadas, form.opcoes):
+            self.assertTrue(controle.isEnabled())
         aguardar((self.raiz / 'terminal-saida.json').exists)
         self.assertEqual(len(self.janela.aberturas), 1)
+        vetor = json.loads((self.raiz / 'terminal.json').read_text())
+        self.assertEqual(vetor[vetor.index('--projeto') + 1], str(self.raiz / 'repo'))
+        self.assertEqual(vetor[vetor.index('--prompt') + 1], 'Fazer')
+
+    def test_fechar_o_formulario_durante_a_conferencia_destrava_e_nao_abre_a_tarefa(self):
+        self.repositorio(self.raiz / 'repo')
+        self.janela.e_git = projeto.e_git
+        self.janela.nova_tarefa()
+        form = self.janela.formulario
+        aguardar(lambda: form.perfis.state() == QProcess.ProcessState.NotRunning)
+        form.projeto.setText(str(self.raiz / 'repo'))
+        form.pedido.setPlainText('Fazer')
+        real = projeto._git
+
+        def lento(*args, **kwargs):
+            time.sleep(0.3)
+            return real(*args, **kwargs)
+
+        with patch.object(projeto, '_git', lento):
+            form.criar()
+            self.assertTrue(form.conferindo)
+            form.hide()
+            self.assertFalse(form.conferindo)
+            for controle in (form.projeto, form.escolher, form.nova, form.pedido, form.modo, form.avancadas, form.opcoes):
+                self.assertTrue(controle.isEnabled())
+            self.assertTrue(form.enviar.isEnabled())
+            fim = time.monotonic() + 1
+            while time.monotonic() < fim:
+                APP.processEvents()
+                time.sleep(0.01)
+        self.assertEqual(self.janela.aberturas, {})
+        self.assertFalse((self.raiz / 'terminal.json').exists())
 
     def test_arquivo_de_erros_recusa_link_e_limpa_o_texto(self):
         pasta = janela.pasta_de_erros()

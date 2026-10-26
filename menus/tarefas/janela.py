@@ -116,7 +116,7 @@ class NovaTarefa(QDialog):
             self.projeto.setText(s.raiz or s.dir)
         elif not janela.real:
             self.projeto.setText(str(Path.cwd()))
-        escolher = QPushButton('Escolher pasta')
+        escolher = self.escolher = QPushButton('Escolher pasta')
         escolher.clicked.connect(self.escolher_pasta)
         linha = QHBoxLayout()
         linha.addWidget(self.projeto)
@@ -124,7 +124,8 @@ class NovaTarefa(QDialog):
         self.base = pasta_base()
         self.abertura = None
         self.conferindo = False
-        nova = QPushButton('Nova pasta')
+        self.geracao = 0
+        nova = self.nova = QPushButton('Nova pasta')
         nova.setToolTip(f'Cria a pasta de um projeto novo em {self.base}' if janela.real else 'Simulação: nenhuma pasta é criada.')
         nova.setEnabled(janela.real)
         nova.clicked.connect(self.nova_pasta)
@@ -283,17 +284,36 @@ class NovaTarefa(QDialog):
             self.abrir(projeto, pedido)
             return
         self.conferindo = True
-        self.enviar.setEnabled(False)
+        self.geracao += 1
+        geracao = self.geracao
+        self.travar(True)
         self.erro.setText('Conferindo o repositório git da pasta...')
-        self.janela.git.consultar(projeto, lambda ok: self.conferido(projeto, pedido, ok))
+        self.janela.git.consultar(projeto, lambda ok: self.conferido(geracao, projeto, pedido, ok))
 
-    def conferido(self, projeto, pedido, e_git):
+    def travar(self, travado):
+        """Congela o que entra na abertura enquanto o git responde, para a tarefa sair com o que o formulário mostra."""
+        self.enviar.setEnabled(not travado)
+        for controle in (self.projeto, self.escolher, self.pedido, self.modo, self.avancadas, self.opcoes, self.aviso_git):
+            controle.setEnabled(not travado)
+        self.nova.setEnabled(not travado and self.janela.real)
+
+    def conferido(self, geracao, projeto, pedido, e_git):
+        if geracao != self.geracao:
+            return
         self.conferindo = False
+        self.travar(False)
         if e_git:
             self.abrir(projeto, pedido)
         else:
-            self.enviar.setEnabled(True)
             self.pedir_git(str(projeto))
+
+    def hideEvent(self, evento):
+        if self.conferindo:
+            self.geracao += 1
+            self.conferindo = False
+            self.travar(False)
+            self.erro.clear()
+        super().hideEvent(evento)
 
     def abrir(self, projeto, pedido):
         agente = self.agente.currentText()
