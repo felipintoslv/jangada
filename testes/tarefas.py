@@ -115,6 +115,7 @@ class Interface(unittest.TestCase):
             "#!/usr/bin/env python3\nimport json, pathlib, sys\n"
             "pasta = pathlib.Path(__file__).resolve().parent.parent\n"
             "with (pasta / 'projeto.log').open('a') as f:\n    f.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+            "if (pasta / 'projeto-atraso').exists():\n    import time\n    time.sleep(float((pasta / 'projeto-atraso').read_text()))\n"
             "if (pasta / 'projeto-recusa').exists():\n    print('cadastro recusado', file=sys.stderr)\n    sys.exit(2)\n")
         self.projeto_comando.chmod(448)
         self.lista = Lista(self.raiz / 'lista')
@@ -4432,6 +4433,31 @@ while not (pasta / 'parar-clientes').exists():
         self.assertTrue(dialogo.aviso.isHidden())
         self.assertTrue(dialogo.criar.isEnabled())
         self.assertEqual(len(self.cadastros()), 1)
+
+    def test_fechar_com_o_cadastro_em_curso_deixa_o_core_terminar_sem_mudar_o_dialogo(self):
+        (self.raiz / 'projeto-atraso').write_text('0.6')
+        existente = self.raiz / 'existente'
+        self.repositorio(existente)
+        dialogo = self.abrir_projeto(self.raiz / 'projetos')
+        dialogo.nome.setText(str(existente))
+        dialogo.criar.click()
+        aguardar(lambda: dialogo.conferencia.processos)
+        self.assertTrue(dialogo.conferindo)
+        dialogo.hide()
+        self.assertFalse(dialogo.conferindo)
+        self.janela.novo_projeto.click()
+        self.exigir_destravado(dialogo, dialogo.nome, dialogo.escolher, dialogo.criar, dialogo.aviso)
+        self.assertEqual(dialogo.resultado.text(), '')
+        aguardar(lambda: not dialogo.conferencia.processos)
+        self.esperar_eventos(0.1)
+        self.assertEqual(self.cadastros(), [['--projeto', str(existente.resolve()), 'cadastrar']])
+        self.assertEqual(self.janela.projetos_novos, {str(existente.resolve()): 'existente'})
+        self.assertIsNone(dialogo.caminho)
+        self.assertEqual(dialogo.nome.text(), str(existente))
+        self.assertEqual(dialogo.resultado.text(), '')
+        self.assertTrue(dialogo.coordenador.isHidden())
+        self.assertTrue(dialogo.criar.isEnabled())
+        self.assertFalse(dialogo.conferindo)
 
     def test_cadastro_que_nao_inicia_destrava_o_novo_projeto(self):
         self.projeto_comando.chmod(0o600)

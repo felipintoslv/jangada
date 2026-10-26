@@ -131,7 +131,8 @@ desligado até a resposta, menos Fechar, e a janela segue respondendo; o prazo d
 (Iniciar tarefa, Escolher pasta, Nova pasta, "Já rodei, conferir" e os de Novo
 projeto) passam pela mesma conferência, uma por vez, e só o resultado da
 conferência atual muda o campo. Fechar o diálogo cancela a conferência e
-descarta o resultado.
+descarta o resultado; um cadastro já pedido ao Core termina e o projeto entra na
+Central, sem mudar o diálogo.
 **Iniciar tarefa** abre o agente num terminal da Central. Se ele falhar, o terminal
 fica aberto com a mensagem, e a Central mostra as últimas linhas do erro quando a
 tarefa não entra na lista em 20 segundos: a Central reconsulta aos 15 e conclui aos 20.
