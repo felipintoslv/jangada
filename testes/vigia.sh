@@ -541,6 +541,11 @@ conferir "caso 15: serial false anula o false de outro campo e da lista no Markd
   bash -c '[ -n "$1" ] && ! grep -q "false" <<<"$1" && grep -q "2560" <<<"$1"' _ "$sec_bool"
 "$repo/bin/jangada-vigia" apagar --todos
 
+# Caso 17: --ajuda mostra a linha de uso de cada subcomando, conversa inclusive.
+ajuda_out="$("$repo/bin/jangada-vigia" --ajuda)"
+conferir "caso 17: --ajuda lista os quatro subcomandos" \
+  bash -c 'for s in diagnostico lista apagar "conversa \[--retrato"; do grep -q "jangada-vigia $s" <<<"$1" || exit 1; done' _ "$ajuda_out"
+
 if ((falhas)); then
   echo "$falhas teste(s) do vigia falharam"
   exit 1

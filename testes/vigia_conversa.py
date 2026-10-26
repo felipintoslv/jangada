@@ -196,6 +196,15 @@ with tempfile.TemporaryDirectory() as pasta:
                           ('proc[3]: abriu orcamento.xlsx agora', 'proc[3]: abriu <arquivo-de-projeto>.xlsx agora')):
         saida = motor.mascarar_projetos(antes, env)
         conferir(f'nome solto de documento: começo em {antes!r}', saida == depois)
+    for antes, depois in (('leu /etc/../srv/ClienteSigiloso/main.py ok', 'leu <arquivo-de-projeto>.py ok'),
+                          ('leu "/etc/../srv/ClienteSigiloso/main.py" ok', 'leu "<arquivo-de-projeto>.py" ok'),
+                          ("leu '/usr/./lib/ClienteSigiloso' ok", "leu '<arquivo-de-projeto>' ok"),
+                          ('leu /usr//ClienteSigiloso/x.so ok', 'leu <arquivo-de-projeto>.so ok'),
+                          ('erro Cliente Projeto Sigiloso:/dados.xlsx agora', '<arquivo-de-projeto>.xlsx agora'),
+                          ('proc[3]: erro Cliente Sigiloso,~/x.txt agora', 'proc[3]: <arquivo-de-projeto>.txt agora'),
+                          ('leu x=/etc/y.conf e (/usr/lib/z.so) ok', 'leu x=/etc/y.conf e (/usr/lib/z.so) ok')):
+        saida = motor.mascarar_projetos(antes, env)
+        conferir(f'caminho com .., . ou //, ou colado ao nome: {antes!r}', saida == depois)
     saida = motor.mascarar_projetos('leu "/etc/x.conf" e \'/usr/lib/y.so\'; "sem barra" fica', env)
     conferir('caminho de sistema entre aspas continua visível',
              saida == 'leu "/etc/x.conf" e \'/usr/lib/y.so\'; "sem barra" fica')

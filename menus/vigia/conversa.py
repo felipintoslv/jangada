@@ -144,7 +144,10 @@ def _comeco_relativo(texto, inicio, limite):
 
 def _visivel(caminho):
     if caminho.startswith("/"):
-        return not caminho.strip("/") or caminho.split("/", 2)[1] in SISTEMA
+        # "..", "." e "//" escondem para onde o caminho aponta (/etc/../srv/x).
+        pedacos = caminho.rstrip("/").split("/")[1:]
+        return not pedacos or (pedacos[0] in SISTEMA
+                               and not any(p in ("", ".", "..") for p in pedacos))
     return not caminho.startswith("~") and bool(SEM_CAMINHO.fullmatch(caminho))
 
 
@@ -183,11 +186,14 @@ def _mascarar_caminhos(texto):
             corte = max(token.rfind(c, 0, barra) for c in "=([{,;:") + 1
         inicio = m.start() + corte
         sozinho = token[corte:].rstrip(".,:;)]}")
-        if "/" not in sozinho or _visivel(sozinho):
+        # Absoluto só depois de espaço, aspas, início da linha, "(", "[" ou "=":
+        # em "Cliente Sigiloso:/dados.xlsx" a barra continua o nome.
+        colado = not esquema and corte > 0 and token[corte - 1] not in "=([" and sozinho[:1] in "/~"
+        if "/" not in sozinho or (not colado and _visivel(sozinho)):
             continue
         fim = _fim_do_caminho(texto, m.start(), inicio)
         caminho = texto[inicio:fim]
-        if not esquema and caminho[0] not in "/~":
+        if not esquema and (colado or caminho[0] not in "/~"):
             inicio = _comeco_relativo(texto, inicio, pos)
         partes += [texto[pos:inicio], _mascara(caminho)]
         pos = fim

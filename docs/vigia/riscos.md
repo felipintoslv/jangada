@@ -116,6 +116,12 @@ construção.
     data, fração e unidade (`1/612`, `2026/10/26`, `3MB/s`) e `I/O`,
     `TCP/IP`, `UDP/IP`, `N/A`, `S/N`;
   - outro caminho absoluto e todo caminho em `~/`, inclusive `~/.config`;
+  - caminho sob as pastas de sistema com `..`, `.` ou `//` no meio
+    (`/etc/../srv/x` aponta para fora delas);
+  - caminho com `/` ou `~/` colado ao texto anterior por `:`, `,`, `;` ou
+    `{`: só é absoluto o que vem depois de espaço, aspas, início da linha,
+    `(`, `[` ou `=`. O resto conta como relativo e o começo recua
+    (`erro Cliente Sigiloso:/dados.xlsx` some inteiro);
   - o caminho de uma URL (`https://exemplo.org/` vira
     `https://<arquivo-de-projeto>.org`);
   - documento ou dado em qualquer lugar, também sob as pastas de sistema e
