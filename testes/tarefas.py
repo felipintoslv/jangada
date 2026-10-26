@@ -20,6 +20,7 @@ import shutil
 import signal
 import subprocess
 import tempfile
+import threading
 import time
 import unittest
 import uuid
@@ -28,7 +29,8 @@ from PyQt6.QtCore import QProcess, QTimer, Qt
 from PyQt6.QtNetwork import QLocalServer
 from PyQt6.QtGui import QTextDocument, QKeySequence
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QLabel, QMessageBox, QPushButton
+from PyQt6.QtWidgets import (QAbstractButton, QApplication, QComboBox, QLabel, QLineEdit, QMessageBox,
+                             QPlainTextEdit, QPushButton)
 import dados
 import janela
 import projeto
@@ -310,7 +312,7 @@ class Interface(unittest.TestCase):
         return self.janela.dialogo_projeto
 
     def esperar_preparo(self, alvo):
-        aguardar(lambda: not alvo.preparo.ocupado())
+        aguardar(lambda: not alvo.conferindo)
 
     def esperar_projeto(self, dialogo):
         aguardar(lambda: dialogo.caminho is not None or dialogo.criar.isEnabled())
@@ -3806,10 +3808,12 @@ while not (pasta / 'parar-clientes').exists():
 
     def test_nova_pasta_cria_so_a_pasta_vazia_e_preenche_o_campo(self):
         base = self.raiz / 'projetos'
+        self.janela.e_git = projeto.e_git
         with patch.dict(os.environ, {'JANGADA_PROJETOS': str(base)}):
             self.janela.nova_tarefa()
         form = self.janela.formulario
         form.criar_pasta(' novo ')
+        self.esperar_preparo(form)
         self.assertTrue((base / 'novo').is_dir())
         self.assertEqual(list((base / 'novo').iterdir()), [])
         self.assertEqual(form.projeto.text(), str(base / 'novo'))
@@ -3857,6 +3861,7 @@ while not (pasta / 'parar-clientes').exists():
         dialogo = self.abrir_projeto(base)
         dialogo.nome.setText('o "dono\'s" $HOME')
         dialogo.criar.click()
+        self.esperar_preparo(dialogo)
         pasta = base / 'o "dono\'s" $HOME'
         alvo = shlex.quote(str(pasta))
         self.assertEqual(dialogo.aviso.texto.text(), 'Esta pasta ainda não é um repositório git. Rode no terminal:')
@@ -4233,6 +4238,213 @@ while not (pasta / 'parar-clientes').exists():
                 time.sleep(0.01)
         self.assertEqual(self.janela.aberturas, {})
         self.assertFalse((self.raiz / 'terminal.json').exists())
+
+    @contextlib.contextmanager
+    def git_preso(self):
+        """git lento sob controle do teste: a consulta de uma pasta presa espera até ser solta."""
+        presas = {}
+        real = projeto._git
+
+        def lento(pasta, *argumentos):
+            evento = presas.get(Path(pasta).resolve())
+            if evento is not None:
+                evento.wait(5)
+            return real(pasta, *argumentos)
+
+        def prender(pasta):
+            return presas.setdefault(Path(pasta).resolve(), threading.Event())
+        try:
+            with patch.object(projeto, '_git', lento):
+                yield prender
+        finally:
+            for evento in presas.values():
+                evento.set()
+
+    def esperar_eventos(self, segundos=0.4):
+        fim = time.monotonic() + segundos
+        while time.monotonic() < fim:
+            APP.processEvents()
+            time.sleep(0.01)
+
+    def exigir_travado(self, dialogo):
+        controles = [c for tipo in (QAbstractButton, QLineEdit, QPlainTextEdit, QComboBox)
+                     for c in dialogo.findChildren(tipo) if c is not dialogo.fechar]
+        self.assertGreater(len(controles), 3)
+        for controle in controles:
+            self.assertFalse(controle.isEnabled(), controle.accessibleName() or getattr(controle, 'text', str)())
+        self.assertTrue(dialogo.fechar.isEnabled())
+
+    def exigir_destravado(self, dialogo, *controles):
+        for controle in controles:
+            self.assertTrue(controle.isEnabled())
+        self.assertFalse(dialogo.conferindo)
+
+    def formulario_real(self):
+        self.janela.e_git = projeto.e_git
+        with patch.dict(os.environ, {'JANGADA_PROJETOS': str(self.raiz / 'projetos')}):
+            self.janela.nova_tarefa()
+        form = self.janela.formulario
+        aguardar(lambda: form.perfis.state() == QProcess.ProcessState.NotRunning)
+        return form
+
+    def test_ja_rodei_e_iniciar_passam_pela_mesma_conferencia(self):
+        a = self.raiz / 'projetos' / 'a'
+        b = self.raiz / 'b'
+        a.mkdir(parents=True)
+        self.repositorio(b)
+        form = self.formulario_real()
+        form.projeto.setText(str(a))
+        form.pedido.setPlainText('Fazer')
+        form.criar()
+        self.esperar_preparo(form)
+        self.assertFalse(form.aviso_git.isHidden())
+        self.rodar_comandos(form.aviso_git)
+        with self.git_preso() as prender:
+            solta = prender(a)
+            form.aviso_git.rodei.click()
+            self.assertTrue(form.conferindo)
+            self.exigir_travado(form)
+            QTest.keyClicks(form.projeto, '/b')
+            form.enviar.click()
+            form.criar()
+            form.criar_pasta('outra')
+            form.aviso_git.rodei.click()
+            self.esperar_eventos(0.2)
+            self.assertTrue(form.conferindo)
+            self.assertEqual(form.projeto.text(), str(a.resolve()))
+            self.assertEqual(form.pedido.toPlainText(), 'Fazer')
+            self.assertFalse((self.raiz / 'projetos' / 'outra').exists())
+            self.assertEqual(self.cadastros(), [])
+            self.assertEqual(self.janela.aberturas, {})
+            solta.set()
+            aguardar(lambda: 'Projeto pronto' in form.erro.text())
+        self.exigir_destravado(form, form.projeto, form.pedido, form.enviar, form.aviso_git)
+        self.assertEqual(form.projeto.text(), str(a.resolve()))
+        self.assertEqual(self.cadastros(), [['--projeto', str(a.resolve()), 'cadastrar']])
+        form.criar()
+        aguardar((self.raiz / 'terminal-saida.json').exists)
+        vetor = json.loads((self.raiz / 'terminal.json').read_text())
+        self.assertEqual(vetor[vetor.index('--projeto') + 1], str(a.resolve()))
+        self.assertEqual(vetor[vetor.index('--prompt') + 1], 'Fazer')
+        self.assertEqual(len(self.janela.aberturas), 1)
+
+    def test_resultado_de_geracao_antiga_nao_altera_campo_nem_abre_tarefa(self):
+        a, b = self.raiz / 'a', self.raiz / 'b'
+        self.repositorio(a)
+        self.repositorio(b)
+        form = self.formulario_real()
+        form.pedido.setPlainText('Fazer')
+        with self.git_preso() as prender:
+            solta = prender(a)
+            form.projeto.setText(str(a))
+            form.criar()
+            self.assertTrue(form.conferindo)
+            antiga = form.conferencia.geracao
+            form.hide()
+            self.janela.nova_tarefa()
+            form.projeto.setText(str(b))
+            form.criar()
+            aguardar((self.raiz / 'terminal-saida.json').exists)
+            texto = form.erro.text()
+            self.assertIn('Abertura solicitada', texto)
+            solta.set()
+            self.esperar_eventos()
+            form.conferencia.fim.emit(antiga, False)
+            self.esperar_eventos(0.1)
+        self.assertEqual(form.projeto.text(), str(b))
+        self.assertEqual(form.erro.text(), texto)
+        self.assertTrue(form.aviso_git.isHidden())
+        self.assertEqual(len(self.janela.aberturas), 1)
+        vetor = json.loads((self.raiz / 'terminal.json').read_text())
+        self.assertEqual(vetor[vetor.index('--projeto') + 1], str(b))
+
+    def test_fechar_durante_a_conferencia_nao_abre_nem_cadastra_e_reabre_destravado(self):
+        a = self.raiz / 'a'
+        self.repositorio(a)
+        form = self.formulario_real()
+        form.projeto.setText(str(a))
+        form.pedido.setPlainText('Fazer')
+        with self.git_preso() as prender:
+            solta = prender(a)
+            form.criar()
+            form.hide()
+            solta.set()
+            self.esperar_eventos()
+            self.janela.nova_tarefa()
+            self.exigir_destravado(form, form.projeto, form.escolher, form.nova, form.pedido, form.modo,
+                                   form.avancadas, form.enviar, form.aviso_git)
+            self.assertEqual(form.erro.text(), '')
+            self.assertEqual(self.janela.aberturas, {})
+            self.assertFalse((self.raiz / 'terminal.json').exists())
+            solta = prender(self.raiz / 'sem-git')
+            (self.raiz / 'sem-git').mkdir()
+            form.aviso_git.mostrar(self.raiz / 'sem-git')
+            form.aviso_git.rodei.click()
+            self.assertTrue(form.conferindo)
+            form.hide()
+            self.rodar_comandos(form.aviso_git)
+            solta.set()
+            self.esperar_eventos()
+        self.assertEqual(self.cadastros(), [])
+        self.janela.nova_tarefa()
+        form.criar()
+        aguardar((self.raiz / 'terminal-saida.json').exists)
+        self.assertEqual(len(self.janela.aberturas), 1)
+
+    def test_novo_projeto_confere_por_uma_porta_so(self):
+        a, c = self.raiz / 'a', self.raiz / 'c'
+        self.repositorio(a)
+        self.repositorio(c)
+        dialogo = self.abrir_projeto(self.raiz / 'projetos')
+        with self.git_preso() as prender:
+            solta = prender(a)
+            dialogo.nome.setText(str(a))
+            dialogo.criar.click()
+            self.assertTrue(dialogo.conferindo)
+            self.exigir_travado(dialogo)
+            QTest.keyClicks(dialogo.nome, 'x')
+            dialogo.criar.click()
+            dialogo.confirmar()
+            dialogo.aviso.rodei.click()
+            self.esperar_eventos(0.2)
+            self.assertEqual(dialogo.nome.text(), str(a))
+            self.assertEqual(self.cadastros(), [])
+            solta.set()
+            aguardar(lambda: dialogo.caminho is not None)
+        self.exigir_destravado(dialogo, dialogo.nome, dialogo.escolher, dialogo.aviso)
+        self.assertEqual(self.cadastros(), [['--projeto', str(a.resolve()), 'cadastrar']])
+        with self.git_preso() as prender:
+            solta = prender(c)
+            dialogo.nome.setText(str(c))
+            dialogo.criar.click()
+            antiga = dialogo.conferencia.geracao
+            dialogo.hide()
+            self.janela.novo_projeto.click()
+            self.exigir_destravado(dialogo, dialogo.nome, dialogo.escolher, dialogo.criar)
+            self.assertEqual(dialogo.resultado.text(), '')
+            dialogo.nome.setText('delta')
+            solta.set()
+            self.esperar_eventos()
+            dialogo.conferencia.fim.emit(antiga, True)
+            self.esperar_eventos(0.1)
+        self.assertEqual(dialogo.nome.text(), 'delta')
+        self.assertIsNone(dialogo.caminho)
+        self.assertTrue(dialogo.aviso.isHidden())
+        self.assertTrue(dialogo.criar.isEnabled())
+        self.assertEqual(len(self.cadastros()), 1)
+
+    def test_cadastro_que_nao_inicia_destrava_o_novo_projeto(self):
+        self.projeto_comando.chmod(0o600)
+        existente = self.raiz / 'existente'
+        self.repositorio(existente)
+        dialogo = self.abrir_projeto(self.raiz / 'projetos')
+        dialogo.nome.setText(str(existente))
+        dialogo.criar.click()
+        aguardar(lambda: not dialogo.conferindo)
+        self.assertIn('Não foi possível executar jangada-projeto', dialogo.resultado.text())
+        self.exigir_destravado(dialogo, dialogo.nome, dialogo.escolher, dialogo.criar)
+        self.assertIsNone(dialogo.caminho)
+        self.assertEqual(dialogo.conferencia.processos, {})
 
     def test_arquivo_de_erros_recusa_link_e_limpa_o_texto(self):
         pasta = janela.pasta_de_erros()

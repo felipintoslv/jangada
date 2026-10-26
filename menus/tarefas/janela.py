@@ -35,7 +35,8 @@ from rodadas import Rodadas
 from coordenadores import FAIXA, Coordenadores
 from cotas import SIMULACAO, ConsultaCotas, FaixaCotas
 from aparencia import CartaoResumo, InspetorRolavel, LinhaTempo, cores_interacao, misturar
-from projeto import SEM_ERRO, AvisoGit, ConsultaGit, NovoProjeto, Preparo, e_git, pasta_base, ultimas_linhas
+from projeto import (SEM_ERRO, AvisoGit, Conferencia, NovoProjeto, e_git, pasta_base, ultimas_linhas,
+                     validar_nome)
 
 IDADE_ERRO = 60
 
@@ -107,7 +108,13 @@ class NovaTarefa(QDialog):
         self.janela = janela
         self.setWindowTitle('Nova tarefa' + ('' if janela.real else ' · Simulação'))
         self.resize(600, 440)
-        layout = QVBoxLayout(self)
+        externo = QVBoxLayout(self)
+        # Travar o corpo e o grupo de ações guarda o estado próprio de cada
+        # controle (Nova pasta na simulação, Iniciar sem agente), que volta ao destravar.
+        self.corpo = QWidget()
+        layout = QVBoxLayout(self.corpo)
+        layout.setContentsMargins(0, 0, 0, 0)
+        externo.addWidget(self.corpo)
         formulario = QFormLayout()
         self.projeto = QLineEdit()
         self.projeto.setPlaceholderText('Pasta do projeto')
@@ -123,8 +130,6 @@ class NovaTarefa(QDialog):
         linha.addWidget(escolher)
         self.base = pasta_base()
         self.abertura = None
-        self.conferindo = False
-        self.geracao = 0
         nova = self.nova = QPushButton('Nova pasta')
         nova.setToolTip(f'Cria a pasta de um projeto novo em {self.base}' if janela.real else 'Simulação: nenhuma pasta é criada.')
         nova.setEnabled(janela.real)
@@ -169,28 +174,29 @@ class NovaTarefa(QDialog):
         self.erro = QLabel()
         self.erro.setTextFormat(Qt.TextFormat.PlainText)
         self.erro.setWordWrap(True)
-        layout.addWidget(self.erro)
+        externo.addWidget(self.erro)
         self.aviso_git = AvisoGit()
-        layout.addWidget(self.aviso_git)
-        self.preparo = Preparo(janela)
-        self.preparo.pronto.connect(self.projeto_pronto)
-        self.preparo.falhou.connect(self.erro.setText)
-        self.preparo.sem_git.connect(self.pedir_git)
-        self.aviso_git.conferir.connect(self.preparo.preparar)
+        externo.addWidget(self.aviso_git)
+        self.conferencia = Conferencia(self, janela, self.travar)
+        self.aviso_git.conferir.connect(self.ja_rodei)
         botoes = QHBoxLayout()
-        fechar = QPushButton('Fechar')
-        fechar.clicked.connect(self.hide)
+        self.fechar = QPushButton('Fechar')
+        self.fechar.clicked.connect(self.hide)
         self.enviar = QPushButton('Iniciar tarefa' if janela.real else 'Criar tarefa simulada')
         self.enviar.clicked.connect(self.criar)
+        self.acoes = QWidget()
+        acoes = QHBoxLayout(self.acoes)
+        acoes.setContentsMargins(0, 0, 0, 0)
+        acoes.addWidget(self.enviar)
         self.projeto.textChanged.connect(self.reeditar)
         self.pedido.textChanged.connect(self.reeditar)
         self.modo.currentTextChanged.connect(self.reeditar)
         for controle in (self.agente, self.revisor, self.seguranca, self.delegacao):
             controle.currentTextChanged.connect(self.personalizar)
-        botoes.addWidget(fechar)
+        botoes.addWidget(self.fechar)
         botoes.addStretch()
-        botoes.addWidget(self.enviar)
-        layout.addLayout(botoes)
+        botoes.addWidget(self.acoes)
+        externo.addLayout(botoes)
 
         if janela.real:
             self.perfis = QProcess(self)
@@ -241,10 +247,31 @@ class NovaTarefa(QDialog):
             self.aviso.setText('Nenhum agente instalado: instale o claude ou o codex.')
             self.enviar.setEnabled(False)
 
+    @property
+    def conferindo(self):
+        return self.conferencia.ocupada()
+
+    def travar(self, travado):
+        """Congela pasta, pedido, opções e ações enquanto o git responde; só Fechar fica livre."""
+        for controle in (self.corpo, self.aviso_git, self.acoes):
+            controle.setEnabled(not travado)
+
+    def conferir(self, pasta, ao_terminar, cadastrar=False):
+        """Porta única de toda conferência do git neste formulário."""
+        self.erro.setText('Conferindo o repositório git da pasta...')
+
+        def fim(pasta, situacao, mensagem):
+            self.erro.clear()
+            if situacao == 'falhou':
+                self.erro.setText(mensagem)
+            else:
+                ao_terminar(pasta, situacao, mensagem)
+        self.conferencia.conferir(pasta, fim, cadastrar)
+
     def escolher_pasta(self):
         pasta = QFileDialog.getExistingDirectory(self, 'Escolher projeto', self.projeto.text())
         if pasta:
-            self.projeto.setText(pasta)
+            self.conferir(pasta, self.pasta_conferida)
 
     def nova_pasta(self):
         nome, aceito = QInputDialog.getText(self, 'Nova pasta', f'Nome do projeto, criado em {self.base}')
@@ -252,18 +279,33 @@ class NovaTarefa(QDialog):
             self.criar_pasta(nome)
 
     def criar_pasta(self, nome):
-        self.preparo.criar(nome, self.base)
+        if self.conferindo:
+            return
+        nome = nome.strip()
+        erro = validar_nome(nome)
+        pasta = self.base / nome
+        if not erro and self.janela.real:
+            erro = self.janela.criar_pasta_vazia(pasta)
+        if erro:
+            self.erro.setText(erro)
+            return
+        self.conferir(pasta, self.pasta_conferida)
 
-    def pedir_git(self, caminho):
-        self.projeto.setText(caminho)
-        self.aviso_git.mostrar(caminho)
+    def ja_rodei(self, pasta):
+        self.conferir(pasta, self.pasta_conferida, cadastrar=True)
+
+    def pasta_conferida(self, pasta, situacao, mensagem):
+        self.projeto.setText(str(pasta))
+        if situacao == 'sem_git':
+            self.pedir_git(pasta)
+        elif situacao == 'cadastrado':
+            self.aviso_git.hide()
+            self.enviar.setEnabled(True)
+            self.erro.setText(f'Projeto pronto em {pasta}. {mensagem}')
+
+    def pedir_git(self, pasta):
+        self.aviso_git.mostrar(pasta)
         self.erro.setText('A tarefa não foi aberta: a pasta ainda não é um projeto git.')
-
-    def projeto_pronto(self, caminho, situacao):
-        self.projeto.setText(caminho)
-        self.aviso_git.hide()
-        self.enviar.setEnabled(True)
-        self.erro.setText(f'Projeto pronto em {caminho}. {situacao}')
 
     def criar(self):
         if self.conferindo:
@@ -279,39 +321,18 @@ class NovaTarefa(QDialog):
         if len(pedido) > 16000:
             self.erro.setText('O pedido pode ter até 16.000 caracteres.')
             return
-        projeto = Path(pasta).expanduser().resolve()
-        if not self.janela.real:
-            self.abrir(projeto, pedido)
-            return
-        self.conferindo = True
-        self.geracao += 1
-        geracao = self.geracao
-        self.travar(True)
-        self.erro.setText('Conferindo o repositório git da pasta...')
-        self.janela.git.consultar(projeto, lambda ok: self.conferido(geracao, projeto, pedido, ok))
+        self.conferir(Path(pasta).expanduser().resolve(),
+                      lambda projeto, situacao, _: self.conferido(projeto, pedido, situacao))
 
-    def travar(self, travado):
-        """Congela o que entra na abertura enquanto o git responde, para a tarefa sair com o que o formulário mostra."""
-        self.enviar.setEnabled(not travado)
-        for controle in (self.projeto, self.escolher, self.pedido, self.modo, self.avancadas, self.opcoes, self.aviso_git):
-            controle.setEnabled(not travado)
-        self.nova.setEnabled(not travado and self.janela.real)
-
-    def conferido(self, geracao, projeto, pedido, e_git):
-        if geracao != self.geracao:
-            return
-        self.conferindo = False
-        self.travar(False)
-        if e_git:
+    def conferido(self, projeto, pedido, situacao):
+        if situacao == 'git':
             self.abrir(projeto, pedido)
         else:
-            self.pedir_git(str(projeto))
+            self.projeto.setText(str(projeto))
+            self.pedir_git(projeto)
 
     def hideEvent(self, evento):
-        if self.conferindo:
-            self.geracao += 1
-            self.conferindo = False
-            self.travar(False)
+        if self.conferencia.cancelar():
             self.erro.clear()
         super().hideEvent(evento)
 
@@ -389,12 +410,11 @@ class Janela(QMainWindow):
         self.formulario = None
         self.dialogo_projeto = None
         self.projetos_novos = {}
-        self.preparos = []
+        self.conferencias = []
         self.aberturas = {}
         self.prazo_tarefa_ms = 20000
         self.confirmacao_tarefa_ms = 5000
         self.e_git = e_git
-        self.git = ConsultaGit(self)
         self.previas = {}
         self.atividade_sessao = None
         self.previa_alvo = None
@@ -1802,9 +1822,8 @@ exit "$resultado"
         self.rodadas.fechar()
         self.coordenadores.fechar()
         self.cotas.fechar()
-        self.git.fechar()
-        for preparo in self.preparos:
-            preparo.fechar()
+        for conferencia in self.conferencias:
+            conferencia.fechar()
         for nome in list(self.aberturas):
             self.encerrar_abertura(nome)
         for timer in (self.timer, self.evento_estado, self.limite_evento, self.observacao_limite,

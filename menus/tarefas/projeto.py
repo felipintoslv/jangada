@@ -64,43 +64,6 @@ def texto_dos_comandos(pasta):
     return f'git -C {alvo} init\ngit -C {alvo} commit --allow-empty -m "{MENSAGEM_COMMIT}"'
 
 
-class ConsultaGit(QObject):
-    """Roda `janela.e_git` fora da linha da interface e entrega o resultado por sinal."""
-    fim = pyqtSignal(int, bool)
-
-    def __init__(self, janela):
-        super().__init__(janela)
-        self.janela = janela
-        self.pendentes = {}
-        self.ultimo = 0
-        self.fechando = False
-        self.fim.connect(self.entregar)
-
-    def consultar(self, pasta, retorno):
-        self.ultimo += 1
-        self.pendentes[self.ultimo] = retorno
-        threading.Thread(target=self.rodar, args=(self.ultimo, pasta), daemon=True).start()
-
-    def rodar(self, numero, pasta):
-        try:
-            resultado = bool(self.janela.e_git(pasta))
-        except Exception:
-            resultado = False
-        try:
-            self.fim.emit(numero, resultado)
-        except RuntimeError:
-            pass
-
-    def entregar(self, numero, resultado):
-        retorno = self.pendentes.pop(numero, None)
-        if retorno is not None and not self.fechando:
-            retorno(resultado)
-
-    def fechar(self):
-        self.fechando = True
-        self.pendentes.clear()
-
-
 class AvisoGit(QWidget):
     """Aviso de pasta sem repositório: os comandos para o terminal, copiar e conferir."""
     conferir = pyqtSignal(str)
@@ -145,127 +108,153 @@ class AvisoGit(QWidget):
             QApplication.clipboard().setText(texto_dos_comandos(self.pasta))
 
 
-class Preparo(QObject):
-    """Do nome ou da pasta ao cadastro, sem tocar no Git.
+class Conferencia(QObject):
+    """Porta única de um diálogo para conferir o git de uma pasta e, se pedido, cadastrá-la pelo Core.
 
-    A pasta nova é criada por `janela.criar_pasta_vazia`. Pasta que já é
-    repositório com commit é cadastrada pelo Core; as demais pedem os comandos
-    do terminal (`sem_git`). Na simulação não há pasta, git nem processo.
+    Cada chamada abre uma geração e trava o diálogo. Só o resultado da geração
+    atual, com o diálogo visível, destrava e chega a `ao_terminar(pasta,
+    situacao, mensagem)`, com a pasta guardada na chamada; o resto é descartado
+    sem tocar no diálogo. Situações: `git`, `sem_git`, `cadastrado` e `falhou`.
+    Na simulação não há git nem processo: toda pasta conta como repositório.
     """
-    pronto = pyqtSignal(str, str)
-    falhou = pyqtSignal(str)
-    sem_git = pyqtSignal(str)
+    fim = pyqtSignal(int, bool)
 
-    def __init__(self, janela):
-        super().__init__(janela)
+    def __init__(self, dialogo, janela, travar):
+        super().__init__(dialogo)
+        self.dialogo = dialogo
         self.janela = janela
-        self.processo = None
-        self.pasta = None
-        self.conferindo = False
-        self.expirou = False
+        self.travar = travar
+        self.geracao = 0
+        self.ativa = False
         self.fechando = False
-        self.prazo = QTimer(self)
-        self.prazo.setSingleShot(True)
-        self.prazo.timeout.connect(self.expirar)
-        janela.preparos.append(self)
+        self.pasta = None
+        self.ao_terminar = None
+        self.cadastrar = False
+        self.processos = {}
+        self.fim.connect(self.conferido)
+        janela.conferencias.append(self)
 
-    def ocupado(self):
-        return self.conferindo or self.processo is not None
+    def ocupada(self):
+        return self.ativa
 
-    def criar(self, nome, base):
-        nome = nome.strip()
-        erro = validar_nome(nome)
-        if erro:
-            self.falhou.emit(erro)
-            return
-        pasta = Path(base) / nome
+    def conferir(self, pasta, ao_terminar, cadastrar=False):
+        """Devolve False, sem fazer nada, se já há uma conferência em curso ou o diálogo está escondido."""
+        if self.ativa or self.fechando or self.dialogo.isHidden():
+            return False
+        self.geracao += 1
+        self.ativa, self.ao_terminar, self.cadastrar = True, ao_terminar, cadastrar
+        self.pasta = Path(pasta).expanduser()
+        self.travar(True)
         if not self.janela.real:
-            self.simular(pasta)
-            return
-        if self.ocupado():
-            self.falhou.emit('Outro projeto está sendo conferido ou cadastrado.')
-            return
-        erro = self.janela.criar_pasta_vazia(pasta)
-        if erro:
-            self.falhou.emit(erro)
+            self.conferido(self.geracao, True)
+        elif not self.pasta.is_dir():
+            self.terminar('falhou', f'{self.pasta} não é uma pasta existente.')
         else:
-            self.sem_git.emit(str(pasta))
+            self.pasta = self.pasta.resolve()
+            threading.Thread(target=self.rodar, args=(self.geracao, self.pasta), daemon=True).start()
+        return True
 
-    def preparar(self, pasta):
-        pasta = Path(str(pasta).strip()).expanduser()
-        if not pasta.is_dir():
-            self.falhou.emit(f'{pasta} não é uma pasta existente.')
+    def rodar(self, geracao, pasta):
+        try:
+            resultado = bool(self.janela.e_git(pasta))
+        except Exception:
+            resultado = False
+        try:
+            self.fim.emit(geracao, resultado)
+        except RuntimeError:
+            pass
+
+    def atual(self, geracao):
+        return geracao == self.geracao and self.ativa and not self.fechando and not self.dialogo.isHidden()
+
+    def conferido(self, geracao, e_git):
+        if not self.atual(geracao):
+            return
+        if not e_git:
+            self.terminar('sem_git', '')
+        elif not self.cadastrar:
+            self.terminar('git', '')
         elif not self.janela.real:
-            self.simular(pasta)
-        elif self.ocupado():
-            self.falhou.emit('Outro projeto está sendo conferido ou cadastrado.')
+            self.janela.projetos_novos[str(self.pasta)] = self.pasta.name
+            self.terminar('cadastrado', 'Simulação: nenhuma pasta, git ou cadastro foi criado.')
         else:
-            pasta = pasta.resolve()
-            self.conferindo = True
-            self.janela.git.consultar(pasta, lambda ok: self.conferido(pasta, ok))
+            self.iniciar_cadastro(geracao, self.pasta)
 
-    def conferido(self, pasta, e_git):
-        self.conferindo = False
-        if self.fechando:
-            return
-        if e_git:
-            self.cadastrar(pasta)
-        else:
-            self.sem_git.emit(str(pasta))
+    def terminar(self, situacao, mensagem):
+        self.ativa = False
+        self.travar(False)
+        self.ao_terminar(self.pasta, situacao, mensagem)
 
-    def simular(self, pasta):
-        self.janela.projetos_novos[str(pasta)] = pasta.name
-        self.pronto.emit(str(pasta), 'Simulação: nenhuma pasta, git ou cadastro foi criado.')
+    def cancelar(self):
+        """Invalida a conferência em curso e destrava; um cadastro já pedido ao Core segue até o fim."""
+        if not self.ativa:
+            return False
+        self.geracao += 1
+        self.ativa = False
+        self.travar(False)
+        return True
 
-    def cadastrar(self, pasta):
-        self.pasta, self.expirou = pasta, False
+    def iniciar_cadastro(self, geracao, pasta):
         processo = self.janela.iniciar_cadastro(pasta)
-        processo.finished.connect(self.cadastro_fim)
-        processo.errorOccurred.connect(self.cadastro_erro)
-        self.processo = processo
-        self.prazo.start(PRAZO_CADASTRO_MS)
+        prazo = QTimer(self)
+        prazo.setSingleShot(True)
+        registro = {'geracao': geracao, 'pasta': pasta, 'prazo': prazo, 'expirou': False}
+        prazo.timeout.connect(lambda: self.expirar(processo, registro))
+        processo.finished.connect(lambda codigo, tipo: self.cadastro_fim(processo, registro, codigo, tipo))
+        processo.errorOccurred.connect(lambda erro: self.cadastro_erro(processo, registro, erro))
+        self.processos[processo] = registro
+        prazo.start(PRAZO_CADASTRO_MS)
+        # A falha de início pode ter saído dentro de start(), antes das ligações acima.
+        if processo.state() == QProcess.ProcessState.NotRunning:
+            self.cadastro_erro(processo, registro, QProcess.ProcessError.FailedToStart)
 
-    def liberar(self):
-        self.prazo.stop()
-        processo, self.processo = self.processo, None
-        if processo is not None:
-            processo.deleteLater()
-        return processo
+    def liberar(self, processo, registro):
+        registro['prazo'].stop()
+        registro['prazo'].deleteLater()
+        if self.processos.pop(processo, None) is None:
+            return False
+        processo.deleteLater()
+        return True
 
-    def cadastro_erro(self, erro):
-        if erro != QProcess.ProcessError.FailedToStart or self.processo is None:
+    def expirar(self, processo, registro):
+        registro['expirou'] = True
+        processo.kill()
+
+    def cadastro_erro(self, processo, registro, erro):
+        if erro != QProcess.ProcessError.FailedToStart or processo not in self.processos:
             return
-        self.liberar()
-        if not self.fechando:
-            self.falhou.emit('Não foi possível executar jangada-projeto; '
-                             'cadastre a pasta pela aba Projetos e fila.')
+        self.liberar(processo, registro)
+        if self.atual(registro['geracao']):
+            self.terminar('falhou', 'Não foi possível executar jangada-projeto; '
+                                    'cadastre a pasta pela aba Projetos e fila.')
 
-    def cadastro_fim(self, codigo, tipo):
-        processo = self.liberar()
-        if processo is None or self.fechando:
+    def cadastro_fim(self, processo, registro, codigo, tipo):
+        if not self.liberar(processo, registro) or self.fechando:
             return
         detalhe = _resumo(bytes(processo.readAllStandardError()).decode('utf-8', 'replace'), 500)
-        if self.expirou:
-            self.falhou.emit('O cadastro passou do prazo. Confira a pasta e tente de novo.')
+        pasta = registro['pasta']
+        if registro['expirou']:
+            situacao = 'falhou', 'O cadastro passou do prazo. Confira a pasta e tente de novo.'
         elif codigo != 0 or tipo != QProcess.ExitStatus.NormalExit:
-            self.falhou.emit(f'O Core recusou o cadastro. {detalhe}'.strip())
+            situacao = 'falhou', f'O Core recusou o cadastro. {detalhe}'.strip()
         else:
-            self.janela.projetos_novos[str(self.pasta)] = self.pasta.name
+            # O projeto vale para a Central mesmo que o diálogo tenha fechado durante o cadastro.
+            self.janela.projetos_novos[str(pasta)] = pasta.name
             self.janela.operacional.atualizar()
-            self.pronto.emit(str(self.pasta), 'Projeto cadastrado.')
-
-    def expirar(self):
-        self.expirou = True
-        if self.processo is not None:
-            self.processo.kill()
+            situacao = 'cadastrado', 'Projeto cadastrado.'
+        if self.atual(registro['geracao']):
+            self.terminar(*situacao)
 
     def fechar(self):
         self.fechando = True
-        self.prazo.stop()
-        if self.processo is not None:
-            self.processo.blockSignals(True)
-            self.processo.kill()
-            self.processo.waitForFinished(1000)
+        self.geracao += 1
+        self.ativa = False
+        for processo, registro in list(self.processos.items()):
+            registro['prazo'].stop()
+            processo.blockSignals(True)
+            processo.kill()
+            processo.waitForFinished(1000)
+        self.processos.clear()
 
 
 class NovoProjeto(QDialog):
@@ -283,11 +272,11 @@ class NovoProjeto(QDialog):
         self.nome = QLineEdit()
         self.nome.setAccessibleName('Nome do projeto novo ou pasta existente')
         self.nome.setPlaceholderText('Nome da pasta nova')
-        escolher = QPushButton('Escolher pasta existente')
-        escolher.clicked.connect(self.escolher_pasta)
+        self.escolher = QPushButton('Escolher pasta existente')
+        self.escolher.clicked.connect(self.escolher_pasta)
         linha = QHBoxLayout()
         linha.addWidget(self.nome)
-        linha.addWidget(escolher)
+        linha.addWidget(self.escolher)
         formulario.addRow('Projeto', linha)
         layout.addLayout(formulario)
         orientacao = QLabel(
@@ -306,68 +295,101 @@ class NovoProjeto(QDialog):
         layout.addWidget(self.aviso)
         layout.addStretch()
         botoes = QHBoxLayout()
-        fechar = QPushButton('Fechar')
-        fechar.clicked.connect(self.hide)
+        self.fechar = QPushButton('Fechar')
+        self.fechar.clicked.connect(self.hide)
         self.coordenador = QPushButton('Abrir coordenador neste projeto')
         self.coordenador.clicked.connect(self.abrir_coordenador)
         self.coordenador.hide()
         self.criar = QPushButton('Criar projeto')
         self.criar.setDefault(True)
         self.criar.clicked.connect(self.confirmar)
-        botoes.addWidget(fechar)
+        # Travar o grupo guarda o estado próprio de cada botão de ação, que volta ao destravar.
+        self.acoes = QWidget()
+        acoes = QHBoxLayout(self.acoes)
+        acoes.setContentsMargins(0, 0, 0, 0)
+        acoes.addWidget(self.coordenador)
+        acoes.addWidget(self.criar)
+        botoes.addWidget(self.fechar)
         botoes.addStretch()
-        botoes.addWidget(self.coordenador)
-        botoes.addWidget(self.criar)
+        botoes.addWidget(self.acoes)
         layout.addLayout(botoes)
-        self.preparo = Preparo(janela)
-        self.preparo.pronto.connect(self.concluido)
-        self.preparo.falhou.connect(self.recusado)
-        self.preparo.sem_git.connect(self.pedir_git)
-        self.aviso.conferir.connect(self.conferir)
+        self.conferencia = Conferencia(self, janela, self.travar)
+        self.aviso.conferir.connect(self.ja_rodei)
         self.nome.textChanged.connect(self.reeditar)
         self.nome.returnPressed.connect(self.confirmar)
+
+    @property
+    def conferindo(self):
+        return self.conferencia.ocupada()
+
+    def travar(self, travado):
+        for controle in (self.nome, self.escolher, self.aviso, self.acoes):
+            controle.setEnabled(not travado)
+
+    def conferir(self, pasta, ao_terminar, cadastrar=False):
+        """Porta única de toda conferência do git neste diálogo."""
+        self.resultado.setText('Conferindo o repositório git da pasta...')
+
+        def fim(pasta, situacao, mensagem):
+            self.resultado.clear()
+            ao_terminar(pasta, situacao, mensagem)
+        self.conferencia.conferir(pasta, fim, cadastrar)
 
     def escolher_pasta(self):
         pasta = QFileDialog.getExistingDirectory(self, 'Escolher projeto', str(self.base if self.base.is_dir() else Path.home()))
         if pasta:
-            self.nome.setText(pasta)
+            self.conferir(pasta, self.escolhida)
+
+    def escolhida(self, pasta, situacao, mensagem):
+        self.nome.setText(str(pasta))
+        if situacao == 'sem_git':
+            self.aviso.mostrar(pasta)
+        elif situacao == 'falhou':
+            self.resultado.setText(mensagem)
 
     def confirmar(self):
-        texto = self.nome.text().strip()
-        if not self.criar.isEnabled():
+        if self.conferindo or not self.criar.isEnabled():
             return
+        texto = self.nome.text().strip()
         self.resultado.clear()
-        self.criar.setEnabled(False)
-        if texto.startswith('~') or '/' in texto:
-            self.preparo.preparar(texto)
+        if not (texto.startswith('~') or '/' in texto):
+            erro = validar_nome(texto)
+            pasta = self.base / texto
+            if not erro and self.janela.real:
+                erro = self.janela.criar_pasta_vazia(pasta)
+            if erro:
+                self.resultado.setText(erro)
+                return
+            texto = str(pasta)
+        self.conferir(texto, self.conferido, cadastrar=True)
+
+    def ja_rodei(self, pasta):
+        self.conferir(pasta, self.conferido, cadastrar=True)
+
+    def conferido(self, pasta, situacao, mensagem):
+        if situacao == 'cadastrado':
+            self.caminho = str(pasta)
+            self.aviso.hide()
+            self.resultado.setText(f'Projeto pronto em {pasta}. {mensagem}')
+            self.coordenador.setEnabled(self.janela.coordenadores.novo.isEnabled())
+            self.coordenador.show()
+            self.criar.setEnabled(False)
+        elif situacao == 'sem_git':
+            self.aviso.mostrar(pasta)
         else:
-            self.preparo.criar(texto, self.base)
-
-    def conferir(self, pasta):
-        self.resultado.clear()
-        self.preparo.preparar(pasta)
-
-    def pedir_git(self, pasta):
-        self.aviso.mostrar(pasta)
-        self.criar.setEnabled(True)
-
-    def concluido(self, caminho, situacao):
-        self.caminho = caminho
-        self.aviso.hide()
-        self.resultado.setText(f'Projeto pronto em {caminho}. {situacao}')
-        self.coordenador.setEnabled(self.janela.coordenadores.novo.isEnabled())
-        self.coordenador.show()
-
-    def recusado(self, mensagem):
-        self.resultado.setText(mensagem)
-        self.criar.setEnabled(True)
+            self.resultado.setText(mensagem)
 
     def reeditar(self, *_):
         self.caminho = None
         self.resultado.clear()
         self.aviso.hide()
         self.coordenador.hide()
-        self.criar.setEnabled(not self.preparo.ocupado())
+        self.criar.setEnabled(True)
+
+    def hideEvent(self, evento):
+        if self.conferencia.cancelar():
+            self.resultado.clear()
+        super().hideEvent(evento)
 
     def abrir_coordenador(self):
         if self.caminho:

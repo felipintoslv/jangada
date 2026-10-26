@@ -126,8 +126,12 @@ tem ao menos um commit. Nenhum arquivo é apagado ou sobrescrito.
 Uma pasta escolhida que não é repositório git mostra o mesmo aviso, em vez de
 seguir para uma abertura que falharia. A conferência do git roda fora da linha da
 interface: o formulário mostra "Conferindo o repositório git da pasta...", fica
-desligado até a resposta (fechá-lo cancela a conferência) e a janela segue
-respondendo; o prazo de 20 segundos da abertura só começa depois dela.
+desligado até a resposta, menos Fechar, e a janela segue respondendo; o prazo de
+20 segundos da abertura só começa depois dela. Todos os botões que conferem o git
+(Iniciar tarefa, Escolher pasta, Nova pasta, "Já rodei, conferir" e os de Novo
+projeto) passam pela mesma conferência, uma por vez, e só o resultado da
+conferência atual muda o campo. Fechar o diálogo cancela a conferência e
+descarta o resultado.
 **Iniciar tarefa** abre o agente num terminal da Central. Se ele falhar, o terminal
 fica aberto com a mensagem, e a Central mostra as últimas linhas do erro quando a
 tarefa não entra na lista em 20 segundos: a Central reconsulta aos 15 e conclui aos 20.
