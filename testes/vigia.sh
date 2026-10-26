@@ -391,8 +391,9 @@ conferir "caso 16: abertura sem --conversation; as seguintes com o id do JSON" \
 conferir "caso 16: pasta de trabalho do agy vazia, a mesma nas três chamadas" \
   jq_sim '(map(.cwd) | unique | length) == 1 and all(.conteudo == [])' "$tmp/agy.log"
 cwd_agy="$(jq -r '.cwd' <(head -n 1 "$tmp/agy.log"))"
-conferir "caso 16: pasta de trabalho apagada ao sair" \
-  bash -c '[[ "$1" == "$2"/* && ! -e "$1" ]] && [ -z "$(ls -A "$2")" ]' _ "$cwd_agy" "$tmp/tmp-conversa"
+conferir "caso 16: pasta de trabalho em conversas/, apagada ao sair, nada em TMPDIR" \
+  bash -c '[[ "$1" == "$2"/conversa-* && ! -e "$1" ]] && [ -z "$(ls -A "$2")" ] && [ -z "$(ls -A "$3")" ] && [ "$(stat -c %a "$2")" = 700 ]' \
+  _ "$cwd_agy" "$XDG_STATE_HOME/jangada/vigia/conversas" "$tmp/tmp-conversa"
 conferir "caso 16: pergunta com aspas, \$() e crase chega intacta" \
   bash -c '[ "$(jq -sr ".[1].argv[-1]" "$1")" = "-p=$2" ]' _ "$tmp/agy.log" "$pergunta"
 conferir "caso 16: arquivo de projeto mascarado no que vai ao agy" \

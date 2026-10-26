@@ -577,7 +577,8 @@ subcomando_apagar() {
 # Abre a conversa com o agy sobre um retrato novo ou, com --retrato, sobre um
 # que já está na pasta do Vigia. O retrato passa de novo pelo mascaramento do
 # Vigia; o motor em menus/vigia/conversa.py acrescenta o dos arquivos de
-# projeto e conversa com o agy a partir de uma pasta temporária vazia.
+# projeto e conversa com o agy a partir de uma pasta vazia em conversas/,
+# apagada ao sair.
 subcomando_conversa() {
   local alvo="" retrato nome_base pasta_real
   while [[ $# -gt 0 ]]; do
@@ -604,7 +605,8 @@ subcomando_conversa() {
   fi
   python3 -I "$JANGADA_PATH/menus/vigia/conversa.py" \
     --retrato <(higienizar 0 0 head <"$retrato") \
-    --propostas "$pasta_real/propostas"
+    --propostas "$pasta_real/propostas" \
+    --conversas "$pasta_real/conversas"
 }
 
 case "${1:-}" in

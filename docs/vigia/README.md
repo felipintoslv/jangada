@@ -30,8 +30,9 @@ ele. Com `--retrato ARQUIVO` usa um retrato que já está em
   `~/.local/state/jangada/vigia/propostas/AAAAMMDD-HHMMSS.md`; `/sair` (ou
   Ctrl+D, ou Ctrl+C) encerra. Nenhuma proposta é salva sem `/salvar`.
 - O agy roda em `--mode plan --sandbox`, sem modo interativo e sem confiança
-  de pasta, a partir de uma pasta temporária vazia apagada ao sair. Cada
-  pergunta segue com `--conversation` e o identificador da primeira resposta.
+  de pasta, a partir de uma pasta vazia em `vigia/conversas/`, apagada ao
+  sair. Cada pergunta segue com `--conversation` e o identificador da
+  primeira resposta.
 - O motor fica em `menus/vigia/conversa.py`, sem Qt e sem terminal, para a
   janela da Central (fase 2c) usar o mesmo código.
 - O que sai da máquina e como vai mascarado está em

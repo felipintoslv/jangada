@@ -78,6 +78,7 @@ with tempfile.TemporaryDirectory() as pasta:
     log = tmp / 'agy.log'
     estado = tmp / 'estado'
     propostas = estado / 'jangada/vigia/propostas'
+    conversas = estado / 'jangada/vigia/conversas'
     (estado / 'jangada/vigia').mkdir(parents=True, mode=0o700)
     env = {'PATH': f'{bin_falso}:/usr/bin:/bin', 'HOME': str(home), 'USER': 'usuarioteste',
            'LOGNAME': 'usuarioteste', 'JANGADA_PROJETOS': '/srv/usuarioteste/proj',
@@ -92,7 +93,8 @@ with tempfile.TemporaryDirectory() as pasta:
 
     def nova(**extra):
         log.unlink(missing_ok=True)
-        return motor.Conversa(pasta_propostas=propostas, ambiente=dict(env, **extra))
+        return motor.Conversa(pasta_propostas=propostas, pasta_conversas=conversas,
+                              ambiente=dict(env, **extra))
 
     retrato = {
         'versao': 1, 'gerado_em': '2026-10-26T10:00:00-03:00',
@@ -118,7 +120,9 @@ with tempfile.TemporaryDirectory() as pasta:
     conferir('abertura: -p= por último e sem --conversation',
              argv[-1].startswith('-p=') and '--conversation' not in argv and argv.count('-p') == 0)
     conferir('abertura: pasta de trabalho é a temporária, vazia',
-             ch[0]['cwd'] == c.pasta and ch[0]['conteudo'] == [] and c.pasta.startswith(str(tmp / 'tmp')))
+             ch[0]['cwd'] == c.pasta and ch[0]['conteudo'] == [] and c.pasta.startswith(str(conversas) + '/'))
+    conferir('abertura: pasta das conversas em 0700 e nada criado em TMPDIR',
+             conversas.stat().st_mode & 0o777 == 0o700 and list((tmp / 'tmp').iterdir()) == [])
     enviado = argv[-1]
     for segredo in ('pesquisa-secreta', 'dados-rais', 'Tese final', 'capitulo', 'extrato-banco',
                     'segredo-cliente', 'planilha-orcamento', 'rais/tarefa-x', 'main.py'):
@@ -149,7 +153,18 @@ with tempfile.TemporaryDirectory() as pasta:
                       '<arquivo-de-projeto>.tex; leu /etc/x.conf e /usr/lib/y.so')
     saida = motor.mascarar_projetos('falhou em Tese final/cap 1.docx e x.document ao salvar', env)
     conferir('documento com espaço na pasta e no nome mascarado inteiro',
-             saida == 'falhou em <arquivo-de-projeto>.docx e x.document ao salvar')
+             saida == 'falhou em <arquivo-de-projeto>.document ao salvar')
+    # Nome com várias palavras: até 6 palavras adiante, até a última com barra
+    # ou extensão
+    for caminho, ext in (('~/Documentos/Cliente Projeto Sigiloso.txt', 'txt'),
+                         ('~/Projetos/Demanda CEBRAP/a b/c d.xlsx', 'xlsx'),
+                         ('/srv/Cliente Projeto Muito Grande Sigiloso Final.csv', 'csv')):
+        saida = motor.mascarar_projetos(f'erro em {caminho}: sem acesso', env)
+        conferir(f'nome com várias palavras mascarado inteiro: {caminho}',
+                 saida == f'erro em <arquivo-de-projeto>.{ext}: sem acesso')
+    saida = motor.mascarar_projetos('~/Documentos/x.txt falhou ao abrir\nlinha 2', env)
+    conferir('caminho seguido de texto comum preserva o texto',
+             saida == '<arquivo-de-projeto>.txt falhou ao abrir\nlinha 2')
     # Bloqueio por padrão: objeto do rclone cortado, relativo e absoluto fora
     # das pastas de sistema
     for linha in ('out 26 <maquina> rclone[973]: ERROR : Demanda CEBRAP/pipeline/fontes/rais/'
@@ -258,9 +273,17 @@ with tempfile.TemporaryDirectory() as pasta:
              'carga pequena' in enviado and 'seção recursos.loadavg cortada' not in enviado)
     conferir('retrato grande: log guarda o fim', 'recente' in enviado and 'antigo' not in enviado)
     c.encerrar()
+    # Muitas seções grandes de nome longo: a lista de seções cortadas entra no
+    # orçamento
+    muitas = {'versao': 1, 'gerado_em': 'x',
+              'grupo': {f'secao_de_nome_bem_comprido_{k:03d}_' + 'n' * 60: 'S' * 2048 for k in range(150)}}
+    abertura = motor.montar_abertura('instrução', muitas)
+    conferir(f'muitas seções de nome longo: abertura até LIMITE_ENVIO ({len(abertura.encode())} bytes)',
+             len(abertura.encode()) <= motor.LIMITE_ENVIO and 'seções cortadas' in abertura
+             and abertura.count('cortada, enviados') == 150)
 
     # agy ausente
-    c = motor.Conversa(pasta_propostas=propostas, ambiente=dict(env, PATH='/nada'))
+    c = motor.Conversa(pasta_propostas=propostas, pasta_conversas=conversas, ambiente=dict(env, PATH='/nada'))
     msg = erro_de(c.iniciar, retrato)
     conferir('agy ausente vira mensagem clara', msg is not None and 'não foi encontrado' in msg)
     c.encerrar()
@@ -272,7 +295,7 @@ with tempfile.TemporaryDirectory() as pasta:
         log.unlink(missing_ok=True)
         proc = subprocess.Popen(
             [sys.executable, '-I', str(pasta_motor / 'conversa.py'), '--retrato', str(arq_retrato),
-             '--propostas', str(propostas)],
+             '--propostas', str(propostas), '--conversas', str(conversas)],
             env=dict(env, AGY_FALSO_MODOS=modos), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True,
             preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))
@@ -294,15 +317,16 @@ with tempfile.TemporaryDirectory() as pasta:
     # Laço do terminal: falha do agy na abertura encerra sem traceback
     log.unlink(missing_ok=True)
     r = subprocess.run([sys.executable, '-I', str(pasta_motor / 'conversa.py'), '--retrato', str(arq_retrato),
-                        '--propostas', str(propostas)], env=dict(env, AGY_FALSO_MODOS='falha'),
+                        '--propostas', str(propostas), '--conversas', str(conversas)], env=dict(env, AGY_FALSO_MODOS='falha'),
                        input='', capture_output=True, text=True, timeout=30)
     conferir('falha na abertura: código 1, mensagem e sem traceback',
              r.returncode == 1 and 'erro: o agy terminou com código 3' in r.stderr and 'Traceback' not in r.stderr)
     conferir('falha na abertura: pasta temporária apagada', not os.path.exists(chamadas()[0]['cwd']))
     r = subprocess.run([sys.executable, '-I', str(pasta_motor / 'conversa.py'), '--retrato', str(tmp / 'nada.json'),
-                        '--propostas', str(propostas)], env=env, input='', capture_output=True, text=True)
+                        '--propostas', str(propostas), '--conversas', str(conversas)], env=env, input='', capture_output=True, text=True)
     conferir('retrato ilegível: mensagem sem traceback', r.returncode == 1 and 'Traceback' not in r.stderr)
-    conferir('nenhuma pasta temporária sobrou', list((tmp / 'tmp').iterdir()) == [])
+    conferir('nenhuma pasta de conversa sobrou e nada em TMPDIR',
+             list(conversas.iterdir()) == [] and list((tmp / 'tmp').iterdir()) == [])
 
 if falhas:
     print(f'{falhas} teste(s) da conversa do vigia falharam')

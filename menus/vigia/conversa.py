@@ -30,7 +30,8 @@ PASTAS_PESSOAIS = ("Documentos", "Documents", "Downloads", "GoogleDrive",
                    "Área de Trabalho", "Projetos")
 ID_CONVERSA = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")
 EXTENSAO = re.compile(r"\.([A-Za-z0-9]{1,8})$")
-FIM_DE_NOME = re.compile(r"[^/\s]*\.[A-Za-z0-9]{1,8}[.,:;)\]}]*")
+OLHAR_ADIANTE = 6
+ESPACO = re.compile(r"[ \t]+")
 PARADA = set("\n\"'<>|`")
 # Documento ou dado: mascarado em qualquer lugar, também em caminho relativo
 # (o rclone escreve o caminho a partir do remoto) e em nome solto.
@@ -105,18 +106,20 @@ def _pastas_projeto(ambiente):
 
 def _fim_do_caminho(texto, i):
     m = TOKEN.match(texto, i)
-    fim = m.end() if m else i
-    # Nome com espaço: o pedaço seguinte continua o caminho quando tem barra
-    # sem começar outro caminho ("Tese final/cap1.docx") ou termina em
-    # extensão ("capitulo 1.docx"). Pontuação antes do espaço fecha o caminho.
-    while fim < len(texto) and texto[fim] == " " and texto[fim - 1] not in ".,:;)]}":
-        m = TOKEN.match(texto, fim + 1)
-        pedaco = m.group() if m else ""
-        nome = pedaco[:1].isalnum() and not SEM_CAMINHO.fullmatch(pedaco) and not ESQUEMA.match(pedaco)
-        if nome and ("/" in pedaco or FIM_DE_NOME.fullmatch(pedaco)):
-            fim = m.end()
-        else:
+    fim = j = m.end() if m else i
+    # Nome com espaço: das OLHAR_ADIANTE palavras seguintes na mesma linha, a
+    # última com barra ou extensão fecha o caminho, e tudo até ela entra
+    # ("Cliente Projeto Sigiloso.txt", "Tese final/cap 1.docx"). Mascarar a
+    # mais é aceitável. Outro caminho, URL ou ":;)]}" antes do espaço param.
+    for _ in range(OLHAR_ADIANTE):
+        espaco = ESPACO.match(texto, j)
+        m = espaco and j > i and texto[j - 1] not in ":;)]}" and TOKEN.match(texto, espaco.end())
+        if not m or m.group()[0] in "/~" or ESQUEMA.match(m.group()):
             break
+        nome = m.group().rstrip(".,:;)]}")
+        if not SEM_CAMINHO.fullmatch(nome) and ("/" in nome or EXTENSAO.search(nome)):
+            fim = m.end()
+        j = m.end()
     while fim > i and texto[fim - 1] in ".,:;)]}":
         fim -= 1
     return fim
@@ -268,29 +271,32 @@ def montar_abertura(instrucao, retrato, ambiente=None, limite=LIMITE_ENVIO):
     def bloco(nome, texto, aviso=""):
         return f"\n### {nome}\n{aviso}```\n{texto}\n```\n"
 
-    # Reserva para os avisos de corte, que só se sabem depois de cortar.
-    fixo = len((cabeca + rodape).encode()) + sum(
-        len(bloco(n, "", f"aviso: seção {n} cortada, enviados 0000000 de 0000000 bytes.\n").encode())
-        for n, _ in secoes) + 200
+    def aviso_corte(k, enviados):
+        return f"aviso: seção {secoes[k][0]} cortada, enviados {enviados} de {tamanhos[k]} bytes.\n"
+
+    def lista_cortes(nomes):
+        return f"aviso: o retrato passou de {limite // 1024} KiB; seções cortadas: {', '.join(nomes)}.\n"
+
+    tamanhos = [len(t.encode()) for _, t in secoes]
+    # Reserva para os avisos, que só se sabem depois de cortar: o pior caso é
+    # toda seção cortada, com o aviso dela e o nome na lista.
+    fixo = len((cabeca + rodape + lista_cortes([n for n, _ in secoes])).encode()) + sum(
+        len(bloco(n, "", aviso_corte(k, tamanhos[k])).encode()) for k, (n, _) in enumerate(secoes))
     orcamento = limite - fixo
     if orcamento <= 0:
         raise ErroConversa("a instrução fixa não cabe no limite de envio ao agy")
-    tamanhos = {n: len(t.encode()) for n, t in secoes}
     cotas, resto = {}, orcamento
-    for k, (nome, tam) in enumerate(sorted(tamanhos.items(), key=lambda x: x[1])):
-        cotas[nome] = min(tam, resto // (len(tamanhos) - k))
-        resto -= cotas[nome]
-    cortadas = [n for n, _ in secoes if cotas[n] < tamanhos[n]]
+    for k, (indice, tam) in enumerate(sorted(enumerate(tamanhos), key=lambda x: x[1])):
+        cotas[indice] = min(tam, resto // (len(tamanhos) - k))
+        resto -= cotas[indice]
+    cortadas = [k for k in range(len(secoes)) if cotas[k] < tamanhos[k]]
     corpo = cabeca
     if cortadas:
-        corpo += (f"aviso: o retrato passou de {limite // 1024} KiB; seções cortadas: "
-                  f"{', '.join(cortadas)}.\n")
-    for nome, texto in secoes:
-        if nome in cortadas:
-            parte = _cortar(texto, cotas[nome], nome.startswith("log_"))
-            aviso = (f"aviso: seção {nome} cortada, enviados {len(parte.encode())} "
-                     f"de {tamanhos[nome]} bytes.\n")
-            corpo += bloco(nome, parte, aviso)
+        corpo += lista_cortes([secoes[k][0] for k in cortadas])
+    for k, (nome, texto) in enumerate(secoes):
+        if k in cortadas:
+            parte = _cortar(texto, cotas[k], nome.startswith("log_"))
+            corpo += bloco(nome, parte, aviso_corte(k, len(parte.encode())))
         else:
             corpo += bloco(nome, texto)
     return corpo + rodape
@@ -312,12 +318,17 @@ def pasta_propostas_padrao():
     return Path(estado) / "jangada/vigia/propostas"
 
 
+def pasta_conversas_padrao():
+    return pasta_propostas_padrao().parent / "conversas"
+
+
 class Conversa:
     """Uma conversa com o agy, do retrato à proposta."""
 
     def __init__(self, pasta_propostas=None, instrucao=INSTRUCAO, agy="agy",
-                 tempo_limite=TEMPO_LIMITE, ambiente=None):
+                 tempo_limite=TEMPO_LIMITE, ambiente=None, pasta_conversas=None):
         self.pasta_propostas = Path(pasta_propostas or pasta_propostas_padrao())
+        self.pasta_conversas = Path(pasta_conversas or pasta_conversas_padrao())
         self.instrucao = Path(instrucao)
         self.agy = agy
         self.tempo_limite = tempo_limite
@@ -338,8 +349,21 @@ class Conversa:
         abertura = montar_abertura(instrucao, retrato, self.ambiente)
         self.gerado_em = retrato.get("gerado_em")
         if self.pasta is None:
-            self.pasta = tempfile.mkdtemp(prefix="jangada-vigia-conversa-")
+            self.pasta = self._criar_pasta()
         return self._enviar(abertura)
+
+    def _criar_pasta(self):
+        """Pasta de trabalho vazia do agy, dentro da pasta do Vigia (regra 1)."""
+        base = self.pasta_conversas
+        try:
+            if base.parent.is_symlink() or base.is_symlink():
+                raise ErroConversa(f"{base} não pode ser link simbólico")
+            base.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            base.mkdir(mode=0o700, exist_ok=True)
+            os.chmod(base, 0o700)
+            return tempfile.mkdtemp(prefix="conversa-", dir=base)
+        except OSError as erro:
+            raise ErroConversa(f"não foi possível criar a pasta da conversa: {erro}") from None
 
     def perguntar(self, texto):
         if not self.id:
@@ -458,11 +482,12 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="jangada-vigia conversa")
     ap.add_argument("--retrato", required=True)
     ap.add_argument("--propostas")
+    ap.add_argument("--conversas")
     args = ap.parse_args(argv)
     signal.signal(signal.SIGINT, signal.default_int_handler)
     signal.signal(signal.SIGTERM, _sinal)
     signal.signal(signal.SIGHUP, _sinal)
-    conversa = Conversa(pasta_propostas=args.propostas)
+    conversa = Conversa(pasta_propostas=args.propostas, pasta_conversas=args.conversas)
     codigo = 0
     try:
         retrato = carregar_retrato(args.retrato)

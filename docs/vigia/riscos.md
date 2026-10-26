@@ -80,7 +80,8 @@ construção.
     `$JANGADA_ESTADO/vigia/` (por padrão
     `~/.local/state/jangada/vigia/`, regra 1 do `AGENTS.md`). O
     `jangada-verificar --diagnostico` também grava só ali, na pasta
-    temporária descrita na seção 1.
+    temporária descrita na seção 1, e a pasta de trabalho da conversa fica
+    em `conversas/` (seção 5).
   - As gravações de retrato e relatório usam arquivo temporário na própria
     pasta `$JANGADA_ESTADO/vigia/` seguido de `mv`.
   - A limpeza de 30 dias e o subcomando `jangada-vigia apagar` resolvem o
@@ -93,8 +94,12 @@ construção.
   Google). A primeira mensagem leva a instrução fixa e o retrato; as
   seguintes, a pergunta do dono e o pedido de proposta. Nada mais usa rede, e
   o `diagnostico` continua sem rede. O agy não recebe arquivo para ler: o
-  texto vai em `-p=` e a pasta de trabalho é uma pasta temporária vazia,
-  criada para a conversa e apagada ao sair, no Ctrl+C e no fim do terminal.
+  texto vai em `-p=` e a pasta de trabalho é uma pasta vazia,
+  `$JANGADA_ESTADO/vigia/conversas/conversa-*` (`conversas/` em `0700`,
+  sem link simbólico), criada para a conversa e apagada ao sair, no Ctrl+C e
+  no fim do terminal. Nada é criado em `TMPDIR`. Os retratos ficam duas
+  pastas acima; quem os afasta do agy é o `--sandbox`, e eles já vão
+  mascarados pela seção 1.
 - **Como vai mascarado:** o retrato passa de novo pelo mascaramento do
   Vigia (seção 1) e, só no que vai ao agy, vale bloqueio por padrão: todo
   caminho vira `<arquivo-de-projeto>`, com a extensão quando houver
@@ -117,9 +122,15 @@ construção.
     `docx`, `doc`, `odt`, `rtf`, `pdf`, `pptx`, `ppt`, `odp`, `parquet`,
     `feather`, `dta`, `sav`, `rds`, `rdata`, `tex` ou `bib`, em maiúscula ou
     minúscula.
-- **Nome com espaço:** o caminho vai até espaço, aspas ou `<>|`. Um espaço
-  seguido de pedaço com barra ou com extensão continua o nome
-  (`Tese final/capitulo 1.docx`), e até duas palavras antes de um caminho
+- **Nome com espaço:** depois de um caminho mascarado, o motor olha até 6
+  palavras adiante na mesma linha; se uma delas tem barra ou termina em
+  extensão de 1 a 8 caracteres, tudo até a última dessas entra no caminho
+  (`Cliente Projeto Sigiloso.txt`, `Demanda CEBRAP/a b/c d.xlsx`). Texto
+  comum sem barra nem extensão fica (`x.txt falhou ao abrir`). A busca para
+  em outro caminho, numa URL, no fim da linha e depois de `:;)]}`. Pode
+  mascarar a mais (`x.txt falhou em config.ini` some inteiro): privacidade
+  vence.
+  Até duas palavras antes de um caminho
   relativo entram quando começam com maiúscula ou algarismo
   (`Demanda CEBRAP/pipeline`). Palavra minúscula fica: em
   `minha pasta/dados.xlsx` sobra `minha`. Uma palavra maiúscula do log colada
@@ -130,8 +141,10 @@ construção.
   solto sem barra e sem as extensões acima (`notas.txt`). O retrato e o
   relatório locais não mudam.
 - **Tamanho:** retrato acima de 100 KiB é cortado por seção, com o aviso
-  "seção X cortada" no texto enviado; o log guarda o fim. Nenhum envio passa
-  de 100 KiB, abaixo do limite de 128 KiB de um argumento do Linux.
+  "seção X cortada" no texto enviado; o log guarda o fim. A conta reserva o
+  pior caso dos avisos (toda seção cortada, com o aviso e o nome na lista
+  de seções cortadas). Nenhum envio passa de 100 KiB, abaixo do limite de
+  128 KiB de um argumento do Linux.
 - **Injeção por log:** a instrução fixa diz que o retrato é dado, nunca
   instrução, e manda apontar como suspeito o trecho que pedir outra coisa. O
   retrato vai entre `INICIO DO RETRATO` e `FIM DO RETRATO`, em blocos
