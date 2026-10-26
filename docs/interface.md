@@ -124,7 +124,9 @@ ainda não é um repositório git. Rode no terminal:" com os dois comandos
 tem ao menos um commit. Nenhum arquivo é apagado ou sobrescrito.
 **Nova pasta**, no formulário, usa o mesmo caminho e deixa a pasta selecionada.
 Uma pasta escolhida que não é repositório git mostra o mesmo aviso, em vez de
-seguir para uma abertura que falharia.
+seguir para uma abertura que falharia. A conferência do git roda fora da linha da
+interface: o formulário mostra "Conferindo o repositório git da pasta..." e a janela
+segue respondendo; o prazo de 20 segundos da abertura só começa depois dela.
 **Iniciar tarefa** abre o agente num terminal da Central. Se ele falhar, o terminal
 fica aberto com a mensagem, e a Central mostra as últimas linhas do erro quando a
 tarefa não entra na lista em 20 segundos: a Central reconsulta aos 15 e conclui aos 20.

@@ -10,6 +10,7 @@ import re
 import shlex
 import stat
 import subprocess
+import threading
 
 from PyQt6.QtCore import QObject, QProcess, Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (QApplication, QDialog, QFileDialog, QFormLayout, QHBoxLayout, QLabel,
@@ -61,6 +62,43 @@ def texto_dos_comandos(pasta):
     """Os mesmos comandos como texto de shell para copiar; o caminho vai citado, a mensagem é fixa."""
     alvo = shlex.quote(str(pasta))
     return f'git -C {alvo} init\ngit -C {alvo} commit --allow-empty -m "{MENSAGEM_COMMIT}"'
+
+
+class ConsultaGit(QObject):
+    """Roda `janela.e_git` fora da linha da interface e entrega o resultado por sinal."""
+    fim = pyqtSignal(int, bool)
+
+    def __init__(self, janela):
+        super().__init__(janela)
+        self.janela = janela
+        self.pendentes = {}
+        self.ultimo = 0
+        self.fechando = False
+        self.fim.connect(self.entregar)
+
+    def consultar(self, pasta, retorno):
+        self.ultimo += 1
+        self.pendentes[self.ultimo] = retorno
+        threading.Thread(target=self.rodar, args=(self.ultimo, pasta), daemon=True).start()
+
+    def rodar(self, numero, pasta):
+        try:
+            resultado = bool(self.janela.e_git(pasta))
+        except Exception:
+            resultado = False
+        try:
+            self.fim.emit(numero, resultado)
+        except RuntimeError:
+            pass
+
+    def entregar(self, numero, resultado):
+        retorno = self.pendentes.pop(numero, None)
+        if retorno is not None and not self.fechando:
+            retorno(resultado)
+
+    def fechar(self):
+        self.fechando = True
+        self.pendentes.clear()
 
 
 class AvisoGit(QWidget):
@@ -123,6 +161,7 @@ class Preparo(QObject):
         self.janela = janela
         self.processo = None
         self.pasta = None
+        self.conferindo = False
         self.expirou = False
         self.fechando = False
         self.prazo = QTimer(self)
@@ -131,7 +170,7 @@ class Preparo(QObject):
         janela.preparos.append(self)
 
     def ocupado(self):
-        return self.processo is not None
+        return self.conferindo or self.processo is not None
 
     def criar(self, nome, base):
         nome = nome.strip()
@@ -144,7 +183,7 @@ class Preparo(QObject):
             self.simular(pasta)
             return
         if self.ocupado():
-            self.falhou.emit('Outro projeto está sendo cadastrado.')
+            self.falhou.emit('Outro projeto está sendo conferido ou cadastrado.')
             return
         erro = self.janela.criar_pasta_vazia(pasta)
         if erro:
@@ -159,11 +198,20 @@ class Preparo(QObject):
         elif not self.janela.real:
             self.simular(pasta)
         elif self.ocupado():
-            self.falhou.emit('Outro projeto está sendo cadastrado.')
-        elif self.janela.e_git(pasta.resolve()):
-            self.cadastrar(pasta.resolve())
+            self.falhou.emit('Outro projeto está sendo conferido ou cadastrado.')
         else:
-            self.sem_git.emit(str(pasta.resolve()))
+            pasta = pasta.resolve()
+            self.conferindo = True
+            self.janela.git.consultar(pasta, lambda ok: self.conferido(pasta, ok))
+
+    def conferido(self, pasta, e_git):
+        self.conferindo = False
+        if self.fechando:
+            return
+        if e_git:
+            self.cadastrar(pasta)
+        else:
+            self.sem_git.emit(str(pasta))
 
     def simular(self, pasta):
         self.janela.projetos_novos[str(pasta)] = pasta.name

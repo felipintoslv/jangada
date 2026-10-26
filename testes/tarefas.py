@@ -103,6 +103,8 @@ class Interface(unittest.TestCase):
             "#!/usr/bin/env python3\nimport json, pathlib, subprocess, sys\n"
             "pasta = pathlib.Path(__file__).resolve().parent.parent\nargs = sys.argv[1:]\n"
             "(pasta / 'terminal.json').write_text(json.dumps(args))\n"
+            "import time\n"
+            "if (pasta / 'terminal-atraso').exists():\n    time.sleep(float((pasta / 'terminal-atraso').read_text()))\n"
             "r = subprocess.run(args[args.index('-e') + 1:], stdin=subprocess.DEVNULL, capture_output=True, text=True)\n"
             "(pasta / 'terminal-saida.json').write_text(json.dumps([r.returncode, r.stdout, r.stderr]))\n")
         self.terminal.chmod(448)
@@ -306,6 +308,9 @@ class Interface(unittest.TestCase):
         with patch.dict(os.environ, {'JANGADA_PROJETOS': str(base)}):
             self.janela.novo_projeto.click()
         return self.janela.dialogo_projeto
+
+    def esperar_preparo(self, alvo):
+        aguardar(lambda: not alvo.preparo.ocupado())
 
     def esperar_projeto(self, dialogo):
         aguardar(lambda: dialogo.caminho is not None or dialogo.criar.isEnabled())
@@ -3016,6 +3021,10 @@ while not (pasta / 'parar-clientes').exists():
     def tearDown(self):
         self.janela.close()
         APP.processEvents()
+        limite = time.monotonic() + 4
+        while (self.raiz / 'terminal.json').exists() and not (self.raiz / 'terminal-saida.json').exists() \
+                and time.monotonic() < limite:
+            time.sleep(0.01)
         if self.runtime_anterior is None:
             os.environ.pop('XDG_RUNTIME_DIR', None)
         else:
@@ -3417,6 +3426,7 @@ while not (pasta / 'parar-clientes').exists():
         form.delegacao.setCurrentText('local')
         with patch.object(QProcess, 'startDetached', return_value=(True, 123)), patch.object(self.janela, 'preparar') as preparar:
             form.criar()
+            aguardar(lambda: not form.conferindo)
         args = preparar.call_args.args[1]
         self.assertEqual(args[-5:], ['--revisor', 'agy', '--sem-isolar', '--delegacao', 'local'])
 
@@ -3838,6 +3848,7 @@ while not (pasta / 'parar-clientes').exists():
             self.assertEqual(self.cadastros(), [])
             self.assertTrue(dialogo.coordenador.isHidden())
             dialogo.aviso.rodei.click()
+            self.esperar_preparo(dialogo)
             self.assertIn('Ainda não é um repositório git', dialogo.aviso.texto.text())
             self.exigir_so_leitura(registro)
 
@@ -3864,14 +3875,17 @@ while not (pasta / 'parar-clientes').exists():
         dialogo.criar.click()
         pasta = base / 'beta'
         dialogo.aviso.rodei.click()
+        self.esperar_preparo(dialogo)
         self.assertFalse(dialogo.aviso.isHidden())
         self.git(pasta, 'init', '--quiet')
         dialogo.aviso.rodei.click()
+        self.esperar_preparo(dialogo)
         self.assertFalse(dialogo.aviso.isHidden())
         self.assertIn('ao menos um commit', dialogo.aviso.texto.text())
         self.assertEqual(self.cadastros(), [])
         self.rodar_comandos(dialogo.aviso)
         dialogo.aviso.rodei.click()
+        self.esperar_preparo(dialogo)
         aguardar(lambda: dialogo.caminho is not None)
         self.assertEqual(dialogo.caminho, str(pasta.resolve()))
         self.assertTrue(dialogo.aviso.isHidden())
@@ -3919,6 +3933,7 @@ while not (pasta / 'parar-clientes').exists():
             dialogo = self.abrir_projeto(self.raiz / 'projetos')
             dialogo.nome.setText(str(existente))
             dialogo.criar.click()
+            self.esperar_preparo(dialogo)
             self.exigir_so_leitura(registro)
         self.assertEqual(sorted(p.name for p in existente.iterdir()), ['a.txt'])
         self.assertEqual((existente / 'a.txt').read_text(), 'meu texto\n')
@@ -3935,6 +3950,7 @@ while not (pasta / 'parar-clientes').exists():
         dialogo = self.abrir_projeto(self.raiz / 'projetos')
         dialogo.nome.setText(str(sub))
         dialogo.criar.click()
+        self.esperar_preparo(dialogo)
         self.assertFalse(dialogo.aviso.isHidden())
         self.assertFalse((sub / '.git').exists())
         self.assertEqual(self.cadastros(), [])
@@ -4026,6 +4042,7 @@ while not (pasta / 'parar-clientes').exists():
         form.pedido.setPlainText('Fazer algo')
         with self.git_falso() as registro:
             form.criar()
+            aguardar(lambda: not form.conferindo)
             self.exigir_so_leitura(registro)
         self.assertIn('A tarefa não foi aberta', form.erro.text())
         self.assertFalse(form.aviso_git.isHidden())
@@ -4035,11 +4052,13 @@ while not (pasta / 'parar-clientes').exists():
         self.assertEqual(self.janela.aberturas, {})
         self.assertEqual(self.cadastros(), [])
         form.aviso_git.rodei.click()
+        self.esperar_preparo(form)
         self.assertFalse(form.aviso_git.isHidden())
         self.assertIn('Ainda não', form.aviso_git.texto.text())
         self.assertEqual(self.cadastros(), [])
         self.rodar_comandos(form.aviso_git)
         form.aviso_git.rodei.click()
+        self.esperar_preparo(form)
         aguardar(lambda: 'Projeto pronto' in form.erro.text())
         self.assertTrue(form.aviso_git.isHidden())
         self.assertEqual(form.projeto.text(), str(pasta.resolve()))
@@ -4105,6 +4124,74 @@ while not (pasta / 'parar-clientes').exists():
         self.assertEqual(self.janela.aberturas, {})
         self.assertFalse(arquivo.exists())
         self.assertNotIn('não abriu', form.erro.text())
+
+    def test_terminal_atrasado_apos_fechar_a_central_recria_o_erro_so_com_dono_e_e_varrido(self):
+        (self.raiz / 'terminal-atraso').write_text('0.5')
+        self.criar_comando.write_text(
+            "#!/usr/bin/env python3\nimport sys\n"
+            "if sys.argv[1] == '--capacidades-json':\n    print('{\"principais\": [{\"nome\": \"claude\", \"instalado\": true}], \"perfis\": []}')\n"
+            "else:\n    print('falha de teste', file=sys.stderr)\n    sys.exit(3)\n")
+        self.janela.nova_tarefa()
+        form = self.janela.formulario
+        aguardar(lambda: form.perfis.state() == QProcess.ProcessState.NotRunning)
+        form.projeto.setText(str(self.raiz))
+        form.pedido.setPlainText('Fazer')
+        antigo = os.umask(0o022)
+        try:
+            form.criar()
+            aguardar((self.raiz / 'terminal.json').exists)
+            pasta = janela.pasta_de_erros()
+            arquivo = next(pasta.glob('*.erro'))
+            self.janela.close()
+            self.assertFalse(arquivo.exists())
+            aguardar((self.raiz / 'terminal-saida.json').exists)
+        finally:
+            os.umask(antigo)
+        self.assertTrue(arquivo.exists())
+        self.assertEqual(arquivo.stat().st_mode & 0o777, 0o600)
+        self.assertIn('falha de teste', arquivo.read_text())
+        velho = time.time() - 2 * janela.IDADE_ERRO
+        os.utime(arquivo, (velho, velho))
+        novo = janela.criar_arquivo_de_erros('outra-tarefa')
+        self.assertFalse(arquivo.exists())
+        self.assertTrue(novo.exists())
+        novo.unlink()
+
+    def test_conferencia_git_lenta_nao_trava_a_interface_nem_o_prazo_da_abertura(self):
+        self.repositorio(self.raiz / 'repo')
+        self.janela.e_git = projeto.e_git
+        self.janela.nova_tarefa()
+        form = self.janela.formulario
+        aguardar(lambda: form.perfis.state() == QProcess.ProcessState.NotRunning)
+        form.projeto.setText(str(self.raiz / 'repo'))
+        form.pedido.setPlainText('Fazer')
+        real = projeto._git
+
+        def lento(*args, **kwargs):
+            time.sleep(0.6)
+            return real(*args, **kwargs)
+
+        batidas = []
+        relogio = QTimer()
+        relogio.timeout.connect(lambda: batidas.append(time.monotonic()))
+        relogio.start(20)
+        try:
+            with patch.object(projeto, '_git', lento):
+                inicio = time.monotonic()
+                form.criar()
+                self.assertLess(time.monotonic() - inicio, 0.2)
+                self.assertTrue(form.conferindo)
+                self.assertFalse(form.enviar.isEnabled())
+                self.assertEqual(self.janela.aberturas, {})
+                aguardar(lambda: not form.conferindo)
+                fim = time.monotonic()
+        finally:
+            relogio.stop()
+        durante = [b for b in batidas if inicio <= b <= fim]
+        self.assertGreater(len(durante), 20)
+        self.assertLess(max(b - a for a, b in zip(durante, durante[1:])), 0.25)
+        aguardar((self.raiz / 'terminal-saida.json').exists)
+        self.assertEqual(len(self.janela.aberturas), 1)
 
     def test_arquivo_de_erros_recusa_link_e_limpa_o_texto(self):
         pasta = janela.pasta_de_erros()
@@ -4225,6 +4312,7 @@ while not (pasta / 'parar-clientes').exists():
         form.projeto.setText(str(self.raiz))
         form.pedido.setPlainText('Pedido preservado')
         form.criar()
+        aguardar(lambda: not form.conferindo)
         self.assertIn('Não foi possível iniciar', form.erro.text())
         self.assertEqual(form.pedido.toPlainText(), 'Pedido preservado')
         self.assertTrue(form.enviar.isEnabled())

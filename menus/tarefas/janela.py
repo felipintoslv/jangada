@@ -35,12 +35,14 @@ from rodadas import Rodadas
 from coordenadores import FAIXA, Coordenadores
 from cotas import SIMULACAO, ConsultaCotas, FaixaCotas
 from aparencia import CartaoResumo, InspetorRolavel, LinhaTempo, cores_interacao, misturar
-from projeto import SEM_ERRO, AvisoGit, NovoProjeto, Preparo, e_git, pasta_base, ultimas_linhas
+from projeto import SEM_ERRO, AvisoGit, ConsultaGit, NovoProjeto, Preparo, e_git, pasta_base, ultimas_linhas
+
+IDADE_ERRO = 60
 
 # Roda o agente num terminal e, se ele sair com erro, segura a janela aberta.
 # O arquivo de erros, o programa e os argumentos chegam como parâmetros posicionais.
 ROTEIRO = """arquivo=$1; shift
-"$@" 2> >(tee -a -- "$arquivo" >&2)
+"$@" 2> >(umask 077; tee -a -- "$arquivo" >&2)
 resultado=$?
 wait
 if ((resultado != 0)); then
@@ -70,11 +72,23 @@ def pasta_de_erros():
     return _pasta_privada(_pasta_privada(Path(runtime) / 'jangada-tarefas') / 'aberturas')
 
 
+def varrer_erros(pasta, idade=IDADE_ERRO):
+    """Remove arquivos de erro velhos, inclusive os recriados por um terminal que subiu depois da limpeza."""
+    for velho in pasta.glob('*.erro'):
+        try:
+            if time.time() - velho.lstat().st_mtime > idade:
+                velho.unlink()
+        except OSError:
+            pass
+
+
 def criar_arquivo_de_erros(nome):
     """Arquivo vazio e novo para a saída de erro de uma abertura; nunca reaproveita um existente."""
     if not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', nome):
         raise ValueError('Nome de tarefa inválido.')
-    arquivo = pasta_de_erros() / (nome + '.erro')
+    pasta = pasta_de_erros()
+    varrer_erros(pasta)
+    arquivo = pasta / (nome + '.erro')
     os.close(os.open(arquivo, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600))
     return arquivo
 
@@ -109,6 +123,7 @@ class NovaTarefa(QDialog):
         linha.addWidget(escolher)
         self.base = pasta_base()
         self.abertura = None
+        self.conferindo = False
         nova = QPushButton('Nova pasta')
         nova.setToolTip(f'Cria a pasta de um projeto novo em {self.base}' if janela.real else 'Simulação: nenhuma pasta é criada.')
         nova.setEnabled(janela.real)
@@ -250,6 +265,8 @@ class NovaTarefa(QDialog):
         self.erro.setText(f'Projeto pronto em {caminho}. {situacao}')
 
     def criar(self):
+        if self.conferindo:
+            return
         pedido = self.pedido.toPlainText().strip()
         pasta = self.projeto.text().strip()
         if not pasta or not Path(pasta).expanduser().is_dir():
@@ -262,14 +279,29 @@ class NovaTarefa(QDialog):
             self.erro.setText('O pedido pode ter até 16.000 caracteres.')
             return
         projeto = Path(pasta).expanduser().resolve()
-        if self.janela.real and not self.janela.e_git(projeto):
-            self.pedir_git(str(projeto))
+        if not self.janela.real:
+            self.abrir(projeto, pedido)
             return
+        self.conferindo = True
+        self.enviar.setEnabled(False)
+        self.erro.setText('Conferindo o repositório git da pasta...')
+        self.janela.git.consultar(projeto, lambda ok: self.conferido(projeto, pedido, ok))
+
+    def conferido(self, projeto, pedido, e_git):
+        self.conferindo = False
+        if e_git:
+            self.abrir(projeto, pedido)
+        else:
+            self.enviar.setEnabled(True)
+            self.pedir_git(str(projeto))
+
+    def abrir(self, projeto, pedido):
         agente = self.agente.currentText()
         perfil = self.agente.currentData()
         if self.modo.currentText() == 'Recomendado':
             if not self.recomendado:
                 self.erro.setText('Nenhum executor recomendado disponível. Confira o catálogo ou escolha nas opções avançadas.')
+                self.enviar.setEnabled(True)
                 return
             agente, perfil = self.recomendado, None
         nome = 'tarefa-' + uuid.uuid4().hex[:12]
@@ -292,6 +324,7 @@ class NovaTarefa(QDialog):
             falha = self.janela.abrir_tarefa(nome, argumentos)
             if falha:
                 self.erro.setText(falha)
+                self.enviar.setEnabled(True)
                 return
             self.abertura = nome
             self.erro.setText(f'Abertura solicitada. Se a tarefa não aparecer na lista em '
@@ -341,6 +374,7 @@ class Janela(QMainWindow):
         self.prazo_tarefa_ms = 20000
         self.confirmacao_tarefa_ms = 5000
         self.e_git = e_git
+        self.git = ConsultaGit(self)
         self.previas = {}
         self.atividade_sessao = None
         self.previa_alvo = None
@@ -1748,6 +1782,7 @@ exit "$resultado"
         self.rodadas.fechar()
         self.coordenadores.fechar()
         self.cotas.fechar()
+        self.git.fechar()
         for preparo in self.preparos:
             preparo.fechar()
         for nome in list(self.aberturas):
