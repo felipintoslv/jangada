@@ -185,6 +185,17 @@ with tempfile.TemporaryDirectory() as pasta:
     saida = motor.mascarar_projetos('erro "Cliente Sigiloso.xlsx" e \'Cliente Final.pdf\' agora', env)
     conferir('documento entre aspas sem barra mascarado inteiro',
              saida == 'erro "<arquivo-de-projeto>.xlsx" e \'<arquivo-de-projeto>.pdf\' agora')
+    for antes, depois in (('proc[3]: erro Cliente Projeto Sigiloso.xlsx agora',
+                           'proc[3]: <arquivo-de-projeto>.xlsx agora'),
+                          ('erro Cliente Projeto Muito Sigiloso Final Revisado.pdf agora',
+                           '<arquivo-de-projeto>.pdf agora'),
+                          ('lista (a Cliente Sigiloso.csv) e [Relatório Final.docx]',
+                           'lista (<arquivo-de-projeto>.csv) e [<arquivo-de-projeto>.docx]'),
+                          ('proc[3]: abriu notas.tex e 2026 Cliente.ods',
+                           'proc[3]: abriu <arquivo-de-projeto>.tex <arquivo-de-projeto>.ods'),
+                          ('proc[3]: abriu orcamento.xlsx agora', 'proc[3]: abriu <arquivo-de-projeto>.xlsx agora')):
+        saida = motor.mascarar_projetos(antes, env)
+        conferir(f'nome solto de documento: começo em {antes!r}', saida == depois)
     saida = motor.mascarar_projetos('leu "/etc/x.conf" e \'/usr/lib/y.so\'; "sem barra" fica', env)
     conferir('caminho de sistema entre aspas continua visível',
              saida == 'leu "/etc/x.conf" e \'/usr/lib/y.so\'; "sem barra" fica')

@@ -195,26 +195,26 @@ def _mascarar_caminhos(texto):
     return "".join(partes)
 
 
-def _inicio_do_nome(texto, fim):
+def _inicio_do_nome(texto, fim, limite):
     def inicio_token(j):
-        while j > 0 and texto[j - 1] not in INICIO_DE_NOME and not texto[j - 1].isspace():
+        while j > limite and texto[j - 1] not in INICIO_DE_NOME and not texto[j - 1].isspace():
             j -= 1
         return j
     inicio = inicio_token(fim)
     # Pasta com espaço: junta o pedaço anterior com barra quando o atual é só o
-    # nome ("Tese final/cap 1.xlsx") e até duas palavras de pasta antes do
-    # caminho ("Demanda CEBRAP/pipeline/x.xlsx"). Palavra que começa com
-    # minúscula fica, para não engolir o texto do log.
-    palavras = 0
-    while inicio > 0 and texto[inicio - 1] == " ":
+    # nome ("Tese final/cap 1.xlsx"). Nome com espaço: palavra anterior que
+    # começa com maiúscula ou algarismo leva o começo até ": ", "(", "[", "="
+    # ou o início da linha ("erro Cliente Sigiloso.xlsx"). Palavra que começa
+    # com minúscula fica, para não engolir o texto do log ("abriu notas.tex").
+    while inicio > limite and texto[inicio - 1] == " ":
         ant = inicio_token(inicio - 1)
         pedaco, atual = texto[ant:inicio - 1], texto[inicio:fim]
         if not pedaco:
             break
         if "/" in pedaco and "/" not in atual:
             inicio = ant
-        elif palavras < 2 and "/" in atual and PALAVRA_DE_PASTA.fullmatch(pedaco):
-            inicio, palavras = ant, palavras + 1
+        elif PALAVRA_DE_PASTA.fullmatch(pedaco):
+            return _comeco_relativo(texto, ant, limite)
         else:
             break
     return inicio
@@ -225,7 +225,7 @@ def _mascarar_documentos(texto):
     for m in EXT_DOCUMENTO.finditer(texto):
         if m.start() < pos:
             continue
-        inicio = _inicio_do_nome(texto, m.start())
+        inicio = _inicio_do_nome(texto, m.start(), pos)
         if inicio >= m.start() or inicio < pos:
             continue
         partes += [texto[pos:inicio], f"{MASCARA}.{m.group(1)}"]

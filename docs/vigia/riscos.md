@@ -150,7 +150,14 @@ construção.
     (`proc[12]: falhou Cliente Sigiloso/dados.xlsx agora` vira
     `proc[12]: <arquivo-de-projeto>.xlsx agora`). As palavras do log entre
     esse ponto e o caminho saem junto (`Failed to open Demanda CEBRAP/x`
-    some inteiro).
+    some inteiro);
+  - nome solto de documento ou dado, sem barra e sem aspas, volta do mesmo
+    jeito quando a palavra antes dele começa com maiúscula ou algarismo
+    (`proc[3]: erro Cliente Projeto Sigiloso.xlsx agora` vira
+    `proc[3]: <arquivo-de-projeto>.xlsx agora`). Palavra que começa com
+    minúscula fica (`abriu notas.tex` vira `abriu <arquivo-de-projeto>.tex`),
+    e por isso um nome com espaço só de minúsculas deixa as palavras antes
+    da última (`erro minha planilha.xlsx` guarda `erro minha`).
 - **O que se perde e o que ainda passa:** o bloqueio também esconde ponto de
   montagem fora da lista (`/mnt`, `/home`), arquivo de configuração em
   `~/.config`, endereço de URL e texto com barra como `AMD/ATI`, com o resto
