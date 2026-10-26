@@ -104,8 +104,22 @@ construção.
   `Desktop`, `Área de Trabalho` e `Projetos`, escritas por extenso, com `~`
   ou com `<usuario>`. O caminho vai até o primeiro espaço, aspas ou `<>|`;
   um espaço seguido de pedaço com barra ou com extensão continua o nome
-  (`Tese final/capitulo 1.docx`). Nome de arquivo solto, sem a pasta, não é
-  reconhecido. O retrato e o relatório locais não mudam.
+  (`Tese final/capitulo 1.docx`).
+- **Documento ou dado em qualquer lugar:** caminho relativo, como o que o
+  `rclone` escreve a partir do remoto, e nome solto também viram
+  `<arquivo-de-projeto>.ext` quando terminam em extensão de documento ou dado
+  (`xlsx`, `xls`, `xlsm`, `ods`, `csv`, `tsv`, `docx`, `doc`, `odt`, `rtf`,
+  `pdf`, `pptx`, `ppt`, `odp`, `parquet`, `feather`, `dta`, `sav`, `rds`,
+  `rdata`, `tex`, `bib`, em maiúscula ou minúscula). O nome vai para trás
+  até espaço, aspas, `<>|` ou `:=([{,;`. Pasta com espaço entra quando a
+  palavra antes do caminho começa com maiúscula ou algarismo, até duas
+  palavras (`Demanda CEBRAP/pipeline/dados.xlsx`); palavra minúscula fica,
+  e por isso pode vazar (`minha pasta/dados.xlsx` deixa `minha`). Uma
+  palavra maiúscula do log colada ao caminho sai junto
+  (`ERROR Demanda CEBRAP/x.csv`): privacidade vence. Caminho de sistema sem
+  essas extensões (`/etc/x.conf`, `/usr/lib/y.so`) fica visível, e um
+  arquivo de projeto com outra extensão fora das pastas acima também.
+  O retrato e o relatório locais não mudam.
 - **Tamanho:** retrato acima de 100 KiB é cortado por seção, com o aviso
   "seção X cortada" no texto enviado; o log guarda o fim. Nenhum envio passa
   de 100 KiB, abaixo do limite de 128 KiB de um argumento do Linux.

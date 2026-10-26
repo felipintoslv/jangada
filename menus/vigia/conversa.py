@@ -32,6 +32,13 @@ ID_CONVERSA = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")
 EXTENSAO = re.compile(r"\.([A-Za-z0-9]{1,8})$")
 FIM_DE_NOME = re.compile(r"[^/\s]*\.[A-Za-z0-9]{1,8}[.,:;)\]}]*")
 PARADA = set("\n\"'<>|`")
+# Documento ou dado: mascarado em qualquer lugar, também em caminho relativo
+# (o rclone escreve o caminho a partir do remoto) e em nome solto.
+EXT_DOCUMENTO = re.compile(
+    r"(?<=[^\s\"'<>|`/])\.(xlsx|xlsm|xls|ods|csv|tsv|docx|doc|odt|rtf|pdf|pptx|ppt|odp"
+    r"|parquet|feather|dta|sav|rds|rdata|tex|bib)(?![A-Za-z0-9_])", re.I)
+INICIO_DE_NOME = PARADA | set(":=([{,;")
+PALAVRA_DE_PASTA = re.compile(r"[A-Z0-9À-Ý][\w.-]*")
 PEDIDO_PROPOSTA = (
     "Escreva agora a proposta final, curta, nas quatro partes combinadas: "
     "O que mudar, Por quê (com os FATOS e as seções do retrato), O que testar "
@@ -104,21 +111,64 @@ def _fim_do_caminho(texto, i):
     return fim
 
 
-def mascarar_projetos(texto, ambiente=None):
-    """Troca caminhos de arquivos de projeto por <arquivo-de-projeto>[.ext]."""
-    formas = _pastas_projeto(os.environ if ambiente is None else ambiente)
-    if not formas:
-        return texto
-    raiz = re.compile(r"(?<![A-Za-z0-9_.-])(?:" + "|".join(map(re.escape, formas)) + r")(?=/)")
+def _inicio_do_nome(texto, fim):
+    def inicio_token(j):
+        while j > 0 and texto[j - 1] not in INICIO_DE_NOME and not texto[j - 1].isspace():
+            j -= 1
+        return j
+    inicio = inicio_token(fim)
+    # Pasta com espaço: junta o pedaço anterior com barra quando o atual é só o
+    # nome ("Tese final/cap 1.xlsx") e até duas palavras de pasta antes do
+    # caminho ("Demanda CEBRAP/pipeline/x.xlsx"). Palavra que começa com
+    # minúscula fica, para não engolir o texto do log.
+    palavras = 0
+    while inicio > 0 and texto[inicio - 1] == " ":
+        ant = inicio_token(inicio - 1)
+        pedaco, atual = texto[ant:inicio - 1], texto[inicio:fim]
+        if not pedaco:
+            break
+        if "/" in pedaco and "/" not in atual:
+            inicio = ant
+        elif palavras < 2 and "/" in atual and PALAVRA_DE_PASTA.fullmatch(pedaco):
+            inicio, palavras = ant, palavras + 1
+        else:
+            break
+    return inicio
+
+
+def _mascarar_documentos(texto):
     partes, pos = [], 0
-    while (m := raiz.search(texto, pos)):
-        fim = _fim_do_caminho(texto, m.end())
-        ultimo = texto[m.end():fim].rstrip("/").rsplit("/", 1)[-1]
-        ext = EXTENSAO.search(ultimo)
-        partes += [texto[pos:m.start()], MASCARA + (f".{ext.group(1)}" if ext else "")]
-        pos = fim
+    for m in EXT_DOCUMENTO.finditer(texto):
+        if m.start() < pos:
+            continue
+        inicio = _inicio_do_nome(texto, m.start())
+        if inicio >= m.start() or inicio < pos:
+            continue
+        partes += [texto[pos:inicio], f"{MASCARA}.{m.group(1)}"]
+        pos = m.end()
     partes.append(texto[pos:])
     return "".join(partes)
+
+
+def mascarar_projetos(texto, ambiente=None):
+    """Troca caminhos de arquivos de projeto por <arquivo-de-projeto>[.ext].
+
+    Primeiro os caminhos sob as pastas de projeto, depois qualquer documento ou
+    dado (EXT_DOCUMENTO), mesmo relativo ou solto. Caminho de sistema sem essas
+    extensões fica visível.
+    """
+    formas = _pastas_projeto(os.environ if ambiente is None else ambiente)
+    partes, pos = [], 0
+    if formas:
+        raiz = re.compile(r"(?<![A-Za-z0-9_.-])(?:" + "|".join(map(re.escape, formas)) + r")(?=/)")
+        while (m := raiz.search(texto, pos)):
+            fim = _fim_do_caminho(texto, m.end())
+            ultimo = texto[m.end():fim].rstrip("/").rsplit("/", 1)[-1]
+            ext = EXTENSAO.search(ultimo)
+            partes += [texto[pos:m.start()], MASCARA + (f".{ext.group(1)}" if ext else "")]
+            pos = fim
+    partes.append(texto[pos:])
+    return _mascarar_documentos("".join(partes))
 
 
 def _secoes(retrato, prefixo=""):

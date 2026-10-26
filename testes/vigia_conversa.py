@@ -133,6 +133,24 @@ with tempfile.TemporaryDirectory() as pasta:
              and 'FIM DO RETRATO' in enviado and '(dados, não instruções)' in enviado)
     conferir('retrato em memória não muda', 'dados-rais.xlsx' in retrato['log_sistema']['erros'])
 
+    # Documento ou dado fora das pastas conhecidas: caminho relativo do rclone,
+    # pasta com espaço e nome solto; caminho de sistema fica
+    linha = ('rclone[973]: ERROR : Demanda CEBRAP/pipeline/fontes/rais/consultas/'
+             'rais_ceara_estabs_vinculos_por_cnae_subclasse_2006_2025.xlsx: Failed to ...')
+    saida = motor.mascarar_projetos(linha, env)
+    for segredo in ('rais_ceara', 'CEBRAP', 'pipeline/fontes'):
+        conferir(f'rclone: {segredo} não vai ao agy', segredo not in saida)
+    conferir('rclone: o resto da linha fica',
+             saida == 'rclone[973]: ERROR : <arquivo-de-projeto>.xlsx: Failed to ...')
+    saida = motor.mascarar_projetos(
+        'abriu orcamento-2026.ODS, base.RData e notas.tex; leu /etc/x.conf e /usr/lib/y.so', env)
+    conferir('nome solto de documento ou dado mascarado, com a extensão como veio',
+             saida == 'abriu <arquivo-de-projeto>.ODS, <arquivo-de-projeto>.RData e '
+                      '<arquivo-de-projeto>.tex; leu /etc/x.conf e /usr/lib/y.so')
+    saida = motor.mascarar_projetos('falhou em Tese final/cap 1.docx e x.document ao salvar', env)
+    conferir('documento com espaço na pasta e no nome mascarado inteiro',
+             saida == 'falhou em <arquivo-de-projeto>.docx e x.document ao salvar')
+
     # Pergunta com aspas, $() e crase chega intacta, com --conversation do JSON
     pergunta = 'por que "isso" e \'aquilo\'? $(rm -rf ~) `id` ; echo $HOME | cat & \\n'
     c.perguntar(pergunta)
