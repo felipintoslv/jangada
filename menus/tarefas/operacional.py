@@ -7,6 +7,7 @@ from PyQt6.QtGui import QKeySequence, QShortcut, QTextCursor
 from PyQt6.QtWidgets import (QFileDialog, QGridLayout, QInputDialog, QLabel, QMessageBox,
                             QLineEdit, QPlainTextEdit, QPushButton, QScrollArea, QSplitter, QTreeWidget, QTreeWidgetItem,
                             QVBoxLayout, QWidget)
+from aparencia import definir_tipo
 from dados import resolver_comando
 from visual.fichas import ICONES
 
@@ -75,7 +76,7 @@ class Operacional(QWidget):
         for i, acao in enumerate(('pausar', 'retomar', 'cancelar', 'repetir')):
             botao = QPushButton(acao.capitalize())
             botao.clicked.connect(lambda _, a=acao: self.agir(a))
-            self.botoes[acao] = botao
+            self.botoes[acao] = definir_tipo(botao, 'perigo') if acao == 'cancelar' else botao
             linha.addWidget(self.com_motivo(acao, botao), i // 3, i % 3)
         self.revisar = QPushButton('Instruções de revisão')
         self.revisar.clicked.connect(self.revisao)

@@ -13,6 +13,7 @@ from PyQt6.QtCore import QProcess, QTimer, Qt
 from PyQt6.QtGui import QColor, QGuiApplication, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QPlainTextEdit,
                              QMessageBox, QPushButton, QScrollArea, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
+from aparencia import definir_tipo
 from cotas import ATUALIZAR_COTA, COTA_MINIMA, cota_argon, texto_percentual
 from dados import LIMITE, NOME, ROTULOS, comando_disponivel, estado_exibido
 from indicadores import SEM_DADO
@@ -269,7 +270,7 @@ class NovoCoordenador(QDialog):
         botoes = QHBoxLayout()
         fechar = QPushButton('Fechar')
         fechar.clicked.connect(self.hide)
-        self.abrir = QPushButton('Abrir coordenador')
+        self.abrir = definir_tipo(QPushButton('Abrir coordenador'), 'principal')
         self.abrir.clicked.connect(self.confirmar)
         botoes.addWidget(fechar)
         botoes.addStretch()
@@ -421,7 +422,7 @@ class Coordenadores(QWidget):
         self.caixa.textChanged.connect(self.editar)
         painel.addWidget(self.caixa)
         botoes = QVBoxLayout()
-        self.copiar = QPushButton('Copiar e ir para a janela')
+        self.copiar = definir_tipo(QPushButton('Copiar e ir para a janela'), 'principal')
         self.copiar.setToolTip('Põe o texto na área de transferência e foca a janela. Nada é enviado. '
                                'Atalho: Ctrl+Enter na caixa.')
         self.copiar.clicked.connect(self.copiar_e_ir)

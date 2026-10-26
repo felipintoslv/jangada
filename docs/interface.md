@@ -60,6 +60,7 @@ e por isso inclui também os que você definiu em
 ## Central de tarefas v0.1
 
 `jangada-tarefas`, `SUPER + SHIFT + A` e `SUPER + CTRL + A` abrem a central.
+A aparência segue o guia [`identidade-visual.md`](identidade-visual.md).
 Cada sessão representa uma tarefa. Pendências aparecem primeiro, seguidas
 por interrupções, trabalho em andamento e tarefas prontas para conferir.
 

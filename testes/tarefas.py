@@ -30,9 +30,10 @@ from PyQt6.QtNetwork import QLocalServer
 from PyQt6.QtGui import QTextDocument, QKeySequence
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (QAbstractButton, QApplication, QComboBox, QLabel, QLineEdit, QMessageBox,
-                             QPlainTextEdit, QPushButton)
+                             QPlainTextEdit, QPushButton, QVBoxLayout, QWidget)
 import dados
 import janela
+import aparencia
 import projeto
 from aparencia import misturar
 from janela import Janela
@@ -342,10 +343,10 @@ class Interface(unittest.TestCase):
                   if rotulo.accessibleName() == 'Jangada']
         self.assertEqual(len(marcas), 2)
         imagem = marcas[0].pixmap().toImage()
-        self.assertEqual((imagem.width(), imagem.height()), (24, 24))
+        self.assertEqual((imagem.width(), imagem.height()), (40, 40))
         self.assertEqual(imagem.pixelColor(0, 0).alpha(), 0)
         self.assertTrue((janela.RAIZ / 'default/logo/jangada-symbolic.svg').is_file())
-        with patch.object(janela, 'QPixmap', return_value=janela.QPixmap()):
+        with patch.object(aparencia, 'QPixmap', return_value=aparencia.QPixmap()):
             central_sem_marca = Janela(False, self.raiz, self.estado)
         try:
             central_sem_marca.show()
@@ -2361,7 +2362,8 @@ while not (pasta / 'parar-clientes').exists():
         self.assertLess(texto.index('Codex'), texto.index('Claude'))
         self.assertEqual(central.faixa_cotas.toolTip(), texto)
         self.assertTrue(central.faixa_cotas.isVisible())
-        self.assertLessEqual(central.faixa_cotas.geometry().bottom(), central.cartoes['aguardando'].geometry().top())
+        self.assertLessEqual(central.faixa_cotas.mapTo(central, central.faixa_cotas.rect().bottomLeft()).y(),
+                             central.cartoes['aguardando'].mapTo(central, central.cartoes['aguardando'].rect().topLeft()).y())
         self.assertEqual([json.loads(l) for l in (self.raiz / 'roteador.log').read_text().splitlines()], [['cotas']])
 
     def test_alerta_da_faixa_tem_texto_glifo_e_cor_das_fichas(self):
@@ -4715,6 +4717,102 @@ while not (pasta / 'parar-clientes').exists():
             except subprocess.TimeoutExpired:
                 processo.kill()
                 processo.wait(timeout=4)
+
+
+class Aparencia(unittest.TestCase):
+    """Componentes de aparencia.py, montados sem a Central."""
+
+    CORDEL = dict(superficie='#141311', superficie_elevada='#211f1d', texto='#e6e2de', texto_suave='#c1c7ce',
+                  primaria='#e6d9be', texto_primario='#37301d', atencao='#dbd8e9')
+
+    def paletas(self):
+        from visual.fichas import PADRAO
+        return [('dark', self.CORDEL)] + list(PADRAO.items())
+
+    def test_componentes_montam_sem_a_central(self):
+        raiz = Path(__file__).resolve().parents[1]
+        codigo = """
+import sys
+from pathlib import Path
+from PyQt6.QtWidgets import QApplication, QPushButton, QVBoxLayout, QWidget
+import aparencia
+from visual.fichas import PADRAO
+app = QApplication([])
+tela = QWidget()
+tela.setStyleSheet(aparencia.folha_de_estilo(PADRAO['dark'], 'dark'))
+layout = QVBoxLayout(tela)
+cabecalho = aparencia.Cabecalho('Outra janela', Path(sys.argv[1]))
+faixa = aparencia.FaixaResumo()
+faixa.adicionar('a', 'Bloqueada', '||').contar(2)
+celula = aparencia.BotaoComMotivo(aparencia.botao('Seguir', 'principal'))
+rotulo = aparencia.RotuloEstado()
+rotulo.mostrar('Falhou', 'Falhou', PADRAO['dark'], 'dark')
+for parte in (cabecalho, faixa, celula, aparencia.Cartao(), aparencia.separador(), rotulo,
+              aparencia.botao('Voltar'), aparencia.botao('Apagar', 'perigo')):
+    layout.addWidget(parte)
+assert cabecalho.pintar(PADRAO['dark']) is not None
+tela.show()
+app.processEvents()
+centrais = {'janela', 'dados', 'coordenadores', 'operacional', 'cotas', 'indicadores', 'central', 'projeto'}
+print(sorted(centrais & set(sys.modules)))
+"""
+        ambiente = dict(os.environ, QT_QPA_PLATFORM='offscreen',
+                        PYTHONPATH=os.pathsep.join([str(raiz / 'menus/tarefas'), str(raiz / 'default')]))
+        saida = subprocess.run([sys.executable, '-c', codigo, str(raiz / 'default/logo/jangada-symbolic.svg')],
+                               env=ambiente, capture_output=True, text=True, timeout=60)
+        self.assertEqual(saida.returncode, 0, saida.stderr)
+        self.assertEqual(saida.stdout.strip(), '[]')
+
+    def test_botao_principal_usa_primaria_e_texto_primario(self):
+        from PyQt6.QtGui import QPalette
+        for modo, c in self.paletas():
+            with self.subTest(modo=modo, primaria=c['primaria']):
+                tela = QWidget()
+                tela.setStyleSheet(aparencia.folha_de_estilo(c, modo))
+                layout = QVBoxLayout(tela)
+                principal = aparencia.botao('Abrir terminal', 'principal')
+                layout.addWidget(principal)
+                tela.resize(320, 80)
+                tela.show()
+                APP.processEvents()
+                imagem = principal.grab().toImage()
+                self.assertEqual(imagem.pixelColor(6, imagem.height() // 2).name(), c['primaria'])
+                self.assertEqual(principal.palette().color(QPalette.ColorRole.ButtonText).name(), c['texto_primario'])
+                tela.close()
+
+    def test_botao_indisponivel_mostra_o_motivo_ao_lado(self):
+        c = self.CORDEL
+        folha = aparencia.folha_de_estilo(c, 'dark')
+        self.assertRegex(folha, r'QPushButton:disabled \{[^}]*dashed')
+        tela = QWidget()
+        tela.setStyleSheet(folha)
+        layout = QVBoxLayout(tela)
+        celula = aparencia.BotaoComMotivo(aparencia.botao('Conferir e integrar', 'principal'))
+        layout.addWidget(celula)
+        tela.resize(600, 80)
+        tela.show()
+        celula.indisponivel('Sem entrega para conferir.')
+        APP.processEvents()
+        self.assertFalse(celula.botao.isEnabled())
+        self.assertTrue(celula.motivo.isVisible())
+        self.assertEqual(celula.motivo.text(), 'Sem entrega para conferir.')
+        self.assertEqual(celula.botao.accessibleDescription(), 'Sem entrega para conferir.')
+        self.assertGreaterEqual(celula.motivo.geometry().left(), celula.botao.geometry().right())
+        celula.disponivel()
+        APP.processEvents()
+        self.assertTrue(celula.botao.isEnabled())
+        self.assertFalse(celula.motivo.isVisible())
+        tela.close()
+
+    def test_contorno_dos_controles_alcanca_3_para_1(self):
+        from visual.fichas import contraste
+        for modo, c in self.paletas():
+            with self.subTest(modo=modo, superficie=c['superficie']):
+                self.assertGreaterEqual(contraste(aparencia.contorno(c), c['superficie']), 3)
+
+    def test_tipo_de_botao_desconhecido_e_recusado(self):
+        with self.assertRaises(ValueError):
+            aparencia.botao('Seguir', 'verde')
 
 
 class RaizDoCore(unittest.TestCase):
