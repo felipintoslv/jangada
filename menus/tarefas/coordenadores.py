@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabe
                              QMessageBox, QPushButton, QScrollArea, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 from aparencia import definir_tipo
 from cotas import ATUALIZAR_COTA, COTA_MINIMA, cota_argon, texto_percentual
-from dados import LIMITE, NOME, ROTULOS, comando_disponivel, estado_exibido
+from dados import LIMITE, NOME, ROTULOS, comando_disponivel, estado_exibido, idade
 from indicadores import SEM_DADO
 from rodadas import CONTROLE, Consulta, data
 from visual.fichas import ESTADOS, ICONES
@@ -62,6 +62,12 @@ AVISOS = {'aguardando': 'O coordenador espera resposta no terminal.',
 DESATUALIZADO = ('Não foi possível confirmar a situação agora. O que está na tela é a última '
                  'situação conhecida. Use Atualizar para consultar de novo.')
 SEM_CONSULTA = 'Nenhuma consulta válida desde que a Central abriu.'
+# Esc, erro do provedor e, no agy, /exit e pedido de permissão não chamam hook:
+# o registro fica em trabalhando com a sessão viva. Passado este prazo sem
+# sinal, a Central mostra a idade do último sinal em vez de afirmar atividade.
+SEM_SINAL_MIN = 15
+SEM_SINAL = ('O último sinal do coordenador foi {idade}. O cliente pode ter parado sem avisar '
+             '(Esc ou erro do provedor); confira a janela.')
 HORA = '%d/%m/%Y %H:%M'
 
 
@@ -142,6 +148,28 @@ def estado_coordenador(c):
     if estado in ('trabalhando', 'iniciado'):
         return 'trabalhando'
     return estado if estado in ('aguardando', 'concluido') else 'sem'
+
+
+def idade_sem_sinal(c, agora=None):
+    """Idade do último sinal ("há N min") de um coordenador trabalhando, se passou do prazo."""
+    if estado_coordenador(c) != 'trabalhando' or not isinstance(c.get('atualizado'), str):
+        return None
+    try:
+        quando = datetime.fromisoformat(c['atualizado'])
+        agora = agora or datetime.now().astimezone()
+        if quando.tzinfo is None or (agora - quando).total_seconds() < SEM_SINAL_MIN * 60:
+            return None
+    except (ValueError, OverflowError):
+        return None
+    return idade(c['atualizado'], agora).lower()
+
+
+def rotulo_coordenador(c):
+    """Chave, glifo e rótulo da situação, com a idade do sinal quando ele está antigo."""
+    chave = estado_coordenador(c)
+    _, glifo, rotulo = ESTADOS_COORD[chave]
+    sinal = idade_sem_sinal(c)
+    return chave, glifo, (f'{rotulo} · sem sinal {sinal}' if sinal else rotulo), sinal
 
 
 def nome_projeto(c):
@@ -594,8 +622,7 @@ class Coordenadores(QWidget):
         self.arvore.clear()
         self.itens = {}
         for c in lista:
-            chave = estado_coordenador(c)
-            _, glifo, rotulo = ESTADOS_COORD[chave]
+            chave, glifo, rotulo, _ = rotulo_coordenador(c)
             item = QTreeWidgetItem(self.arvore, [f'{nome_projeto(c)} · {provedor(c)}', f'{glifo} {rotulo}'])
             item.setData(0, Qt.ItemDataRole.UserRole, ('coord', c['sessao']))
             item.setData(1, Qt.ItemDataRole.UserRole, chave)
@@ -726,8 +753,7 @@ class Coordenadores(QWidget):
             self.retomar.setEnabled(False)
             self.finalizar.setEnabled(False)
             return
-        chave = estado_coordenador(c)
-        _, glifo, rotulo = ESTADOS_COORD[chave]
+        chave, glifo, rotulo, sinal = rotulo_coordenador(c)
         self.nome.setText(f'{nome_projeto(c)} · {provedor(c)}')
         projeto = linha_limpa(c.get('projeto'), 4096) or SEM_DADO
         antigo = self.desatualizado
@@ -737,7 +763,7 @@ class Coordenadores(QWidget):
         self.atualizado.setText('Atualizado em ' + data(c.get('atualizado')))
         self.consultada.setText('Última consulta válida: ' + self.ultima_valida.strftime(HORA)
                                 if self.ultima_valida else SEM_CONSULTA)
-        base = DESATUALIZADO if antigo else AVISOS[chave]
+        base = DESATUALIZADO if antigo else SEM_SINAL.format(idade=sinal) if sinal else AVISOS[chave]
         self.avisar(self.aviso, base)
         self.caixa.setEnabled(True)
         ocupado = self.foco.state() != QProcess.ProcessState.NotRunning or self.ocupada()

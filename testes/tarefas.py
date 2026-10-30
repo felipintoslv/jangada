@@ -1936,6 +1936,43 @@ while not (pasta / 'parar-clientes').exists():
             textos += [item.child(j).text(k) for j in range(item.childCount()) for k in (0, 1)]
         return textos
 
+    def test_coordenador_vivo_sem_sinal_antigo_mostra_idade(self):
+        """Esc ou erro do provedor não chamam hook: o registro fica em trabalhando."""
+        from coordenadores import SEM_SINAL_MIN, idade_sem_sinal
+        agora = datetime(2026, 10, 30, 12, 0, tzinfo=timezone.utc)
+        base = dict(estado='trabalhando', viva=True, ciclo='aberta', atuacao_id='a', retomavel=False)
+        for atualizado, esperado in (('2026-10-30T11:50:00+00:00', None),
+                                     (f'2026-10-30T11:{60 - SEM_SINAL_MIN:02d}:00+00:00', f'há {SEM_SINAL_MIN} min'),
+                                     ('2026-10-30T09:00:00+00:00', 'há 3 h'),
+                                     ('2026-10-27T12:00:00+00:00', 'há 3 dias'),
+                                     ('2026-10-30T13:00:00+00:00', None),
+                                     ('2026-10-30T09:00:00', None), ('sem data', None), (None, None)):
+            with self.subTest(atualizado=atualizado):
+                self.assertEqual(idade_sem_sinal(dict(base, atualizado=atualizado), agora), esperado)
+        antigo = '2026-10-30T09:00:00+00:00'
+        for campos in (dict(estado='aguardando'), dict(estado='concluido'), dict(viva=False, retomavel=True),
+                       dict(ciclo='encerrada')):
+            with self.subTest(campos=campos):
+                self.assertIsNone(idade_sem_sinal(dict(base, atualizado=antigo, **campos), agora))
+        self.assertEqual(idade_sem_sinal(dict(base, estado='iniciado', atualizado=antigo), agora), 'há 3 h')
+
+        self.coordenador_falso()
+        self.coordenadores_falsos('trabalhando', atualizado='2026-10-17T10:00:00-03:00')
+        coluna = self.escolher_coordenador(self.carregar_coordenadores(), 'horta--coordenador')
+        item = coluna.itens[('coord', 'horta--coordenador')]
+        self.assertRegex(item.text(1), r'^↻ trabalhando · sem sinal há \d+ dias$')
+        self.assertEqual(item.data(1, Qt.ItemDataRole.UserRole), 'trabalhando')
+        self.assertIn('sem sinal há', coluna.situacao.text())
+        self.assertIn('O cliente pode ter parado sem avisar', coluna.aviso.text())
+        self.assertNotIn('O coordenador está trabalhando.', coluna.aviso.text())
+        self.assertTrue(coluna.ir.isEnabled() and coluna.caixa.isEnabled())
+        self.assertEqual(coluna.itens[('coord', 'caderno--coordenador')].text(1), '↻ trabalhando')
+        recente = datetime.now().astimezone().isoformat()
+        self.coordenadores_falsos('trabalhando', atualizado=recente)
+        self.carregar_coordenadores()
+        self.assertEqual(coluna.itens[('coord', 'horta--coordenador')].text(1), '↻ trabalhando')
+        self.assertIn('O coordenador está trabalhando.', coluna.aviso.text())
+
     def test_coordenadores_com_tarefas_e_aviso_por_estado(self):
         self.coordenador_falso()
         self.coordenadores_falsos()

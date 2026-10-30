@@ -194,6 +194,12 @@ Com `ciclo=aberta` e sem processo, mostra **aguardando retomada** e mantém as
 tarefas. Resposta pronta (`concluido`) e hook encerrado não finalizam a atuação.
 O ciclo só termina por fechamento explícito no Core.
 
+Esc, erro do provedor e, no agy, `/exit` e pedido de permissão não chamam
+hook, e o registro de uma sessão viva fica em `trabalhando`. Quando o último
+sinal tem 15 minutos ou mais, a Central mostra **trabalhando · sem sinal há N
+min** (ou horas, ou dias) e avisa que o cliente pode ter parado sem avisar. Ela
+não troca o estado: só a janela do coordenador confirma se ainda há trabalho.
+
 **Retomar** usa projeto e provedor registrados. Em **Novo coordenador**, um
 projeto com atuação aberta oferece retomada, com escolha explícita do provedor.
 Ambos chamam `jangada-coordenador --projeto CAMINHO --provedor P --janela`;
